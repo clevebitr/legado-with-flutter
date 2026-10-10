@@ -39,6 +39,8 @@
 |---|---|
 | `LICENSE` | GNU GPL-3.0 官方全文（项目许可证） |
 | `NOTICE.md` | 版权、与上游 Legado 的关系、免责声明、GPL 合规义务、第三方依赖许可清单 |
+| `.gitignore` | 忽略构建缓存与 IDE 文件；**生成文件仍需提交** |
+| `.gitattributes` | 统一 LF，保证 `dart format` 门禁跨平台一致 |
 | `pubspec.yaml` | 依赖声明；**唯一**依赖来源 |
 | `analysis_options.yaml` | 静态分析与 lint；**唯一** lint 来源 |
 | `l10n.yaml` | 国际化生成配置 |

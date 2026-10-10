@@ -37,6 +37,11 @@ analyzer:
     # 类型安全（docs/dev/constraints.md C-TYPE-1）
     avoid_dynamic_calls: warning
 
+    # 未使用代码（C-BAN-1）：这三项是 analyzer 诊断而非 lint 规则，在此提升为 error
+    unused_element: error
+    unused_local_variable: error
+    unused_import: error
+
     # 文档注释（docs/dev/naming.md §7）
     public_member_api_docs: warning
     slash_for_doc_comments: warning
@@ -81,10 +86,10 @@ linter:
     prefer_final_in_for_each: true
 
     # --- 文档与注释（docs/dev/naming.md §7） ---
+    # 注意：不存在 `prefer_doc_comments` 规则；`///` 偏好由 slash_for_doc_comments 覆盖。
     public_member_api_docs: true
     slash_for_doc_comments: true
     comment_references: true
-    prefer_doc_comments: true
 
     # --- 错误处理与异步（docs/dev/constraints.md §3） ---
     avoid_print: true
@@ -96,7 +101,6 @@ linter:
 
     # --- 类型安全（docs/dev/constraints.md §11） ---
     avoid_dynamic_calls: true
-    avoid_returning_null: true
     avoid_returning_null_for_void: true
     avoid_void_async: true
     avoid_annotating_with_dynamic: true
@@ -109,7 +113,6 @@ linter:
 
     # --- Flutter 特定 ---
     avoid_unnecessary_containers: true
-    avoid_expanded_in_flex: true
     sort_child_properties_last: true
     use_key_in_widget_constructors: true
 
@@ -124,10 +127,9 @@ linter:
     avoid_web_libraries_in_flutter: true
 
     # --- 代码质量 ---
+    # 注意：`unused_element` / `unused_local_variable` / `unused_import` 不是 lint 规则，
+    # 而是 analyzer 诊断，已提升为 error，见上方 analyzer.errors。
     prefer_single_quotes: true
-    unused_element: true
-    unused_local_variable: true
-    unused_import: true
     unnecessary_lambdas: true
     unnecessary_parenthesis: true
     unnecessary_brace_in_string_interps: true

@@ -26,12 +26,34 @@
 Flutter 与 Dart 的版本基线见 [`docs/dev/tech-stack.md`](docs/dev/tech-stack.md) §1。
 其他工具链要求见 [`CONTRIBUTING.md`](CONTRIBUTING.md) §3.1。
 
-### 构建与运行
+### 首次初始化
+
+仓库当前**只包含规范与配置**，尚无平台工程目录，因此必须先脚手架：
 
 ```bash
+# 1) 生成 Android / iOS / Windows 平台工程与 app 骨架
+#    已存在的文件不会被覆盖（仍在第 2 步核实）
+flutter create --platforms=android,ios,windows .
+
+# 2) 确认配置文件未被模板覆盖（应当无任何 diff）
+git diff --stat -- pubspec.yaml analysis_options.yaml l10n.yaml .gitignore
+
+# 3) 安装依赖并生成代码
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 
+# 4) 生成国际化代码（引用 AppLocalizations 前必须执行）
+flutter gen-l10n
+```
+
+> 第 2 步如果出现 diff，跑 `git checkout -- pubspec.yaml analysis_options.yaml l10n.yaml .gitignore` 恢复。
+>
+> `flutter create` 还会写入模板 `lib/main.dart` 与 `test/widget_test.dart`：
+前者需替换为真实入口，后者需删除或替换，否则本地与 CI 测试会失败。
+
+### 运行
+
+```bash
 flutter run -d windows     # 或 -d android / -d ios
 ```
 

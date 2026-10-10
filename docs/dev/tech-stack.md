@@ -17,6 +17,7 @@
 | 依赖版本写法 | `^` 或精确版本，**禁止 `any`**（C-DEP-2） |
 | 锁文件 | 提交 `pubspec.lock`；升级依赖必须单独 PR |
 | 许可证 | 必须 GPL-3.0 兼容（C-DEP-7）；清单见 `NOTICE.md` §5 |
+| lint 规则名基准 | 以 Dart **3.13.3** 的官方清单为准（`https://dart.dev/tools/linter-rules/all`）。`analysis_options.yaml` 中全部规则名已与该清单逐一机器比对通过 |
 
 **版本号必须同步的四处**（改任一处必须同时改其余三处）：
 
@@ -213,7 +214,7 @@ m3e.spacing.md;
 | `camel_case_types` / `camel_case_extensions` / `file_names` / `library_names` | error | `naming.md` §2/§3 |
 | `non_constant_identifier_names` / `constant_identifier_names` | error | `naming.md` §5 |
 | `always_declare_return_types` | error | `naming.md` §4 |
-| `public_member_api_docs` / `slash_for_doc_comments` / `comment_references` / `prefer_doc_comments` | warning | C-DOC-1、C-DOC-3 |
+| `public_member_api_docs` / `slash_for_doc_comments` / `comment_references` | warning | C-DOC-1、C-DOC-3 |
 | `avoid_catches_without_on_clauses` / `avoid_catching_errors` / `only_throw_errors` | error | C-ERR-2、C-ERR-3 |
 | `unawaited_futures` | error | C-ERR-6 |
 | `use_build_context_synchronously` | error | C-ERR-4、C-BAN-9 |
@@ -221,11 +222,11 @@ m3e.spacing.md;
 | `avoid_dynamic_calls` / `avoid_annotating_with_dynamic` | warning | C-TYPE-1、C-BAN-7 |
 | `avoid_relative_lib_imports` / `always_use_package_imports` | — | C-ARCH-1 |
 | `directives_ordering` | warning | `naming.md` §1 导入顺序 |
-| `unused_element` / `unused_local_variable` / `unused_import` | — | C-BAN-1 |
+| `unused_element` / `unused_local_variable` / `unused_import`（**analyzer 诊断，配在 `analyzer.errors` 而非 `linter.rules`**） | error | C-BAN-1 |
 | `prefer_final_locals` / `prefer_final_fields` | warning | C-TYPE-4 |
 | `prefer_const_constructors` / `prefer_const_declarations` / `prefer_const_constructors_in_immutables` | — | C-PERF-1、C-TYPE-4 |
 | `avoid_slow_async_io` / `avoid_web_libraries_in_flutter` | — | C-PERF-5、C-SEC-2 |
-| `avoid_expanded_in_flex` / `use_key_in_widget_constructors` / `sort_child_properties_last` | — | `constraints.md` §6 |
+| `use_key_in_widget_constructors` / `sort_child_properties_last` | — | `constraints.md` §6 |
 | `riverpod_lint` 全部规则 | — | C-STATE-2、C-STATE-6 |
 
 **当前无法 lint、只能人工 + 测试保障的约束**（必须写进 PR 自查）：
@@ -246,6 +247,12 @@ m3e.spacing.md;
 |---|---|
 | `avoid_non_null_assertion` | 不是 Dart 官方核心 lint（属 DCM / `fd_lints` 等第三方）；写入 `linter.rules` 会产生 "invalid rule" 警告。禁止 `!` 由 C-TYPE-2 + review 保障（ADR-0010） |
 | `require_trailing_commas` | 与 Dart ≥3.7 的 tall-style 格式化冲突（ADR-0010） |
+| `prefer_doc_comments` | **该规则在 Dart 3.13.3 中不存在**；`///` 偏好已由 `slash_for_doc_comments` 覆盖 |
+| `avoid_returning_null` | 已被 Dart 移除；`avoid_returning_null_for_void` 仍有效并已启用 |
+| `avoid_expanded_in_flex` | **该规则在 Dart 3.13.3 中不存在** |
+
+> **维护要求：** 升级 Dart SDK 后必须用同一份官方清单重新比对（§13 第 7 步），
+> 不得凭记忆添加规则名。
 
 ---
 
@@ -258,6 +265,9 @@ m3e.spacing.md;
 5. 若该依赖改变了架构决定，必须先写 ADR 再改依赖（`docs/README.md` §6.5）。
 6. 运行门禁：`flutter pub get` → `dart run build_runner build --delete-conflicting-outputs`
    → `AGENTS.md` §4 全部命令。
+7. 核对 `analysis_options.yaml` 中的规则名：逐个对照
+   `https://dart.dev/tools/linter-rules/all`（当前基准 Dart 3.13.3）。
+   未使用代码类的 `unused_*` 属于 analyzer 诊断，必须放在 `analyzer.errors`。
 
 ---
 

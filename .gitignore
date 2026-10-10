@@ -1,0 +1,37 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# 代码生成结果由构建产生，但本项目**提交**生成文件（docs/dev/constraints.md C-DEP-5）。
+# 因此这里只忽略生成缓存，不忽略 *.g.dart / *.freezed.dart / *.gr.dart。
+*.iml
+*.log
+*.lock.bak
+
+# l10n 生成物：由 flutter gen-l10n 产生，但需提交以便 CI 与本地一致
+# （analysis_options.yaml 已排除该目录的分析）。此处故意不忽略。
+
+# 覆盖率与测试产物
+coverage/
+l10n_untranslated.json
+test/**/failures/
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Windows / Android / iOS 平台目录的构建产物由 Flutter 模板自带的 .gitignore 覆盖，
+# 运行 `flutter create --platforms=android,ios,windows .` 后会生成各平台内的 .gitignore。

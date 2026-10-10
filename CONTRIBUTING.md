@@ -93,9 +93,22 @@ Flutter / Dart 的**版本基线以 [`docs/dev/tech-stack.md`](./docs/dev/tech-s
 git clone <repo-url>
 cd <repo-dir>
 
+# 1) 生成平台工程（仓库中尚未包含 android/ ios/ windows/）
+flutter create --platforms=android,ios,windows .
+
+# 2) 确认模板没有覆盖项目配置（应无 diff）
+git diff --stat -- pubspec.yaml analysis_options.yaml l10n.yaml .gitignore
+
+# 3) 依赖与代码生成
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
+flutter gen-l10n
 ```
+
+> - 第 2 步若有 diff：`git checkout -- pubspec.yaml analysis_options.yaml l10n.yaml .gitignore`。
+> - `flutter create` 生成的 `test/widget_test.dart` 引用模板 `MyApp`，必须删除或替换，
+>   否则 `flutter test` 与 CI 会直接失败（且覆盖率门禁会因缺少 lcov 报告而以退出码 2 失败）。
+> - 首个 PR 必须包含至少一个真实测试，CI 才会变绿，见 `docs/dev/testing.md` §2。
 
 ### 3.3 运行检查
 

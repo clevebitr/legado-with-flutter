@@ -17,6 +17,11 @@
 4. 文档声称「门禁 = `flutter analyze`」，但同时又要求跑 `dart run custom_lint`，
    两处对「谁来执行插件规则」的说法不一致。
 5. `analysis_options.yaml` 只以文档代码块形式存在，项目根目录没有真实文件。
+6. 后续用 Dart **3.13.3** 官方规则清单逐名比对时，又发现 **6 个无效条目**：
+   `prefer_doc_comments`、`avoid_returning_null`、`avoid_expanded_in_flex`
+   三个规则**根本不存在**（或已被移除），而 `unused_element` /
+   `unused_local_variable` / `unused_import` 是 **analyzer 诊断**，
+   不是 lint，写在 `linter.rules` 里同样无效。
 
 **后续核实（修订原因）：** `riverpod_lint` 自 **3.1.9** 起**不再基于 `custom_lint`**，
 改为 `analysis_server_plugin` 实现，通过 `analysis_options.yaml` 的 `analyzer.plugins`
@@ -32,8 +37,11 @@
    `analyzer.plugins`。门禁中的插件规则由 `flutter analyze` 执行。
 6. CI 门禁不再包含 `dart run custom_lint` 步骤。
 7. **待验证项：** `pubspec.yaml` 的版本约束尚未在本机 `flutter pub get` 验证
-   （编写环境无 Flutter SDK）。首次解析后必须核对并回写 `tech-stack.md`；
-   若某个 lint 规则名在目标 Dart 版本中无效，必须新开 ADR 而不是静默删除。
+   （编写环境无 Flutter SDK）。首次解析后必须核对并回写 `tech-stack.md`。
+8. **lint 规则名验证方法（已执行）：** 从 Dart 3.13.3 的官方
+   "All linter rules" 清单提取全部 250 条规则名，与 `analysis_options.yaml`
+   逐名机器比对；`linter.rules` 中 53 条已全部通过，不符合项已按第 5 条修正。
+   升级 Dart 后必须重跑此比对。
 
 ## 后果
 
