@@ -76,12 +76,12 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；
 **GPL-2.0-only、无许可证、专有许可一律禁止引入**（GPL-2.0-only 与 GPL-3.0 不兼容）。
 
-**核实结果（2026-10-10）：** 对 `pubspec.lock` 中全部 **151 个包**逐个读取其
+**核实结果（2026-10-10，引擎切换后重扫）：** 对 `pubspec.lock` 中全部 **150 个包**逐个读取其
 `LICENSE` / `COPYING` 文件并分类，结果：
 
 | 许可证 | 数量 |
 |---|---|
-| BSD-2-Clause | 99 |
+| BSD-2-Clause | 98 |
 | MIT | 36 |
 | Apache-2.0 | 10 |
 | BSD-3-Clause | 1 |
@@ -99,7 +99,7 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 | `html` | 0.15.7 | MIT |
 | `cascadia` | 0.8.0 | BSD-3-Clause |
 | `json_path` | 0.9.0 | MIT |
-| `flutter_js_plus` | 0.0.4 | MIT |
+| `flutter_qjs_next` | 1.5.2 | MIT |
 | `betto_charset_detector` | 0.1.0 | Apache-2.0 |
 | `dio` | 5.11.1 | MIT |
 | `cached_network_image` | 3.4.1 | MIT |

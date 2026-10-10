@@ -79,7 +79,7 @@
 | 11 | `&&` 串联多级 | `class.list&&tag.li@text` | 所有字段 | M0 | 待验证 |
 | 12 | `@css:` 标准 CSS 选择器 | `@css:.book-list li@text` | 所有字段 | M0 | 待验证 |
 | 13 | `@json:` JSONPath（以 `$.` 开头时可省略标志） | `@json:$.data.list[*].name` | 所有字段 | M0 | 待验证 |
-| 14 | `@js:` JavaScript | `@js:result.replace(/\\s/g,'')` | 所有字段 | **M0（受阻）** | 引擎待选型 |
+| 14 | `@js:` JavaScript | `@js:result.replace(/\\s/g,'')` | 所有字段 | **M0** | 待验证 |
 | 15 | `@@` 默认规则标志（在 `{{}}` 内使用时必填） | `@@class.odd.0@text` | 所有字段 | M1 | 待验证 |
 | 16 | `@put:{key:rule}` / `@get:{key}`（**仅限 js 以外**的规则；`@put` 内 JSONPath 不加引号，其他规则加引号） | `@put:{bid:"//*[@bid-data]/@bid-data"}` | 所有字段 | M1 | 待验证 |
 | 17 | `java.put(key,value)` / `java.get(key)`（**仅限 js 内**，js 中不能使用 `@get`） | — | 所有字段 | M1 | 待验证 |
@@ -178,10 +178,13 @@
 
 JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）：
 
-> ⚠️ **引擎未定：** 下表所列绑定已在 `flutter_js_plus` 上实测可行（含后台 Isolate 中的回调桥），
-> 但该库本身不可用，引擎选型待裁决（ADR-0008 已标为部分失效）。见 `tool/spike/README.md`。
-> 另：**5 秒超时必须由调用方用 `Isolate.kill` 实现**（引擎 `timeout` 参数实测无效），
-> **32 MB 内存上限不可实现**，需在 ADR 中记录降级方式。
+> **引擎已选定（ADR-0015）：** 下表绑定已在 `flutter_qjs_next 1.5.2` 上实测可行，
+> 含后台 Isolate 中的回调桥。配额均真实生效：`QuickJsRuntime2(timeout: 5000)` 中断死循环、
+> `memoryLimit: 32 * 1024 * 1024` 阻止超额分配；调用方仍须持有硬预算并 `Isolate.kill` 兜底。
+>
+> **载荷必须是合法 JSON：** 桥接层用 `jsonDecode` 解析 `sendMessage` 的第二个参数，
+> 传裸字符串（如 `'ping'`）会抛 `FormatException`；必须写 `JSON.stringify(value)`。
+> 详见 `tool/spike/README.md` §4。
 
 | 绑定 | 形态 | 说明 | 分期 |
 |---|---|---|---|

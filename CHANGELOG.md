@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Engine selection (2026-10-10)
+
+- Replaced `flutter_js_plus` with `flutter_qjs_next ^1.5.2` (MIT) and superseded ADR-0008 with
+  ADR-0015. The same nine probes now pass end to end, and the two quotas that were previously
+  impossible are real: a 2s engine timeout aborts a runaway script in 2012ms with the runtime
+  still usable, and an 8MB cap raises a JS error in 99ms.
+- Removed the `kotlin.jvm.target.validation.mode=warning` Gradle workaround, which existed only
+  for that plugin. `kotlin.incremental=false` stays: it is a Kotlin 2.4 / Windows cache-locking
+  issue unrelated to any plugin. Both `flutter build apk --debug` and
+  `flutter build windows --debug` succeed.
+- `@js:` returns to M0 in the book-source matrix; no dependency source patching is needed any
+  more, so the spike now runs against the normal build output via `FLUTTER_QJS_NEXT_LIBRARY`.
+
 ### Spike 1 — JS engine in a background Isolate (2026-10-10)
 
 - Added `tool/spike/js_isolate_spike_test.dart` (9 probes) and

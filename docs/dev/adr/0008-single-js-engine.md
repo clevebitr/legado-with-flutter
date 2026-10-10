@@ -1,6 +1,6 @@
 # ADR-0008 JS 引擎只保留 `flutter_js_plus`
 
-- **状态：** ⚠️ **部分失效（待裁决）** —— 2026-10-10 实测：架构假设成立，但依赖本身在本工具链上不可用
+- **状态：** **Superseded by ADR-0015**（2026-10-10）—— 核心架构假设经实测成立，但所选依赖不可用，已改用 `flutter_qjs_next`
 - **日期：** 2026-10-10
 - **关联：** C-SRC-2、C-SRC-3、`docs/dev/book-source.md` §6、`docs/dev/tech-stack.md` §5、`tool/spike/README.md`
 

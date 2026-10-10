@@ -350,14 +350,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.4.5"
-  flutter_js_plus:
-    dependency: "direct main"
-    description:
-      name: flutter_js_plus
-      sha256: ac3b468186f333a1725e6c097edbfd6fad6f5dab878ae783fed117d44752a064
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.4"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -371,6 +363,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_qjs_next:
+    dependency: "direct main"
+    description:
+      name: flutter_qjs_next
+      sha256: e5fd66c5abdb3cb81cb6700e3cc203abb5353b244ec8e6a16ba0304faf1f21b5
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.5.2"
   flutter_riverpod:
     dependency: "direct main"
     description:
@@ -1074,14 +1074,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
-  sync_http:
-    dependency: transitive
-    description:
-      name: sync_http
-      sha256: "7f0cd72eca000d2e026bcd6f990b81d0ca06022ef4e32fb257b30d3d1014a961"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.1"
   synchronized:
     dependency: transitive
     description:

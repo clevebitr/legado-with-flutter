@@ -43,7 +43,7 @@ Please enable Developer Mode in your system settings.
 或执行 `start ms-settings:developers`。
 
 > 本项目依赖多个带原生代码的插件（`drift_flutter`、`path_provider`、`shared_preferences`、
-> `dynamic_color`、`cached_network_image`、`flutter_js_plus`），因此该开关是 Windows 开发的
+> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`），因此该开关是 Windows 开发的
 > **硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
 
 ---
@@ -162,11 +162,11 @@ pageTransitionsTheme: const PageTransitionsTheme(
 
 | 位置 | 设置 | 原因 |
 |---|---|---|
-| `android/gradle.properties` | `kotlin.incremental=false` | Kotlin 增量编译缓存在 Windows 上偶发文件锁定，报 `Could not close incremental caches` 并中断构建 |
-| `android/gradle.properties` | `kotlin.jvm.target.validation.mode=warning` | `flutter_js_plus 0.0.4`（2019 年插件）固定 `kotlin 1.7.20` / `jvmTarget 1.8`，与 AGP 9 默认的 Java 11 不一致；Kotlin 2.4 默认按 error 中断 `assembleDebug` |
+| `android/gradle.properties` | `kotlin.incremental=false` | Kotlin 2.4 的增量编译缓存在 Windows 上偶发文件锁定，报 `Could not close incremental caches` 并中断构建（最近复现于 `dynamic_color` 模块）。**这是工具链问题，与任何插件无关，不要因更换插件而删除。** |
 
-> 两者都是**对第三方插件老化的补偿**。一旦升级或替换 `flutter_js_plus`（ADR-0008），
-> 必须重新评估并删除，删除后重新跑一次 `flutter build apk --debug` 验证。
+> 另一条曾经的变通 `kotlin.jvm.target.validation.mode=warning` **已删除**：它只为已移除的
+> `flutter_js_plus`（固定 `kotlin 1.7.20` / `jvmTarget 1.8`，与 AGP 9 默认的 Java 11 不一致）而加。
+> 删除后实测：`flutter build apk --debug` 与 `flutter build windows --debug` 均成功（ADR-0015）。
 
 ### 8.2 发布前必须处理的待办
 

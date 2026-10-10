@@ -1,16 +1,18 @@
-// SPIKE 1 — Can `flutter_js_plus` drive the QuickJS engine from a background
-// Isolate, and can a runaway `@js:` rule be contained? These are the
-// assumptions behind ADR-0008 and C-SRC-2.
+// SPIKE 1 (re-run, engine A) — Can `flutter_qjs_next` drive QuickJS from a
+// background Isolate, and are the timeout / memory caps from ADR-0008 real?
 //
 // Deliberately NOT under `test/` so it never runs in CI: it needs the plugin's
-// prebuilt native library on the loader path.
+// compiled native library. Unlike the previous engine, no source patch is
+// required — the library is built by `flutter build windows`.
 //
 // Run on Windows:
-//   PATH="$PATH:$HOME/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_js_plus-0.0.4/windows/shared" \
+//   flutter build windows --debug
+//   FLUTTER_QJS_NEXT_LIBRARY="<repo>/build/windows/x64/runner/Debug/flutter_qjs_next_plugin.dll" \
 //     flutter test tool/spike/js_isolate_spike_test.dart
 //
 // Run on Linux:
-//   LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/.pub-cache/hosted/pub.dev/flutter_js_plus-0.0.4/linux/shared" \
+//   flutter build linux --debug
+//   FLUTTER_QJS_NEXT_LIBRARY="<repo>/build/linux/x64/debug/bundle/lib/libflutter_qjs_next_plugin.so" \
 //     flutter test tool/spike/js_isolate_spike_test.dart
 
 import 'dart:async';
@@ -18,7 +20,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:flutter_js_plus/flutter_js.dart';
+import 'package:flutter_qjs_next/flutter_qjs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// A realistic Legado `@js:` rule: split a list, collapse whitespace, drop empties.
@@ -38,6 +40,9 @@ const String _sampleInput = '  第一章   开始  ###  第二章\n换行  ###\n
 
 /// JSON expected from [_legadoRule] applied to [_sampleInput].
 const String _expected = '["第一章 开始","第二章 换行","第三章"]';
+
+/// Budget given to each background isolate before it is killed.
+const Duration _defaultBudget = Duration(seconds: 20);
 
 /// Entry point; see the file header for how to run it.
 void main() {
@@ -123,7 +128,7 @@ void main() {
   }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('06_runtimeReuseCost_100Evaluations', () {
-    final JavascriptRuntime runtime = getJavascriptRuntime(xhr: false);
+    final JavascriptRuntime runtime = getJavascriptRuntime();
     final Stopwatch sw = Stopwatch()..start();
     for (int i = 0; i < 100; i++) {
       runtime.evaluate('var result = ${jsonEncode(_sampleInput)};');
@@ -139,57 +144,64 @@ void main() {
     expect(sw.elapsedMilliseconds, lessThan(20000));
   }, timeout: const Timeout(Duration(seconds: 60)));
 
-  // Finding: passing `timeout` to QuickJsRuntime2 has NO effect — the script runs
-  // until the isolate is killed. This test documents that limitation; the 5s
-  // wall-clock budget required by ADR-0008 must be enforced by the caller.
-  test('07_engineLevelTimeout_isIneffective_isolateKillIsRequired', () async {
+  // ADR-0008 requires a 5s wall-clock budget. With this engine the timeout is a
+  // first-class constructor argument; this probe checks whether it actually
+  // aborts a runaway script (the previous engine's did not).
+  test('07_engineLevelTimeout_abortsRunawayScript', () async {
     final Stopwatch sw = Stopwatch()..start();
     final Map<String, Object?> out = await _runInBackground(<String, Object?>{
       'mode': 'engine-timeout',
-    }, budget: const Duration(seconds: 6));
+    }, budget: const Duration(seconds: 12));
     sw.stop();
     stdout.writeln(
       '  [engine-timeout] status=${out['status']} '
-      'isError=${out['isError']} elapsed=${sw.elapsedMilliseconds}ms '
+      'isError=${out['isError']} elapsed=${out['elapsed']}ms '
+      'afterValue=${out['afterValue']} afterError=${out['afterError']} '
       'error=${out['error']}',
     );
     expect(
       out['status'],
-      'killed',
-      reason:
-          'documents that the engine timeout does not abort the script; '
-          'the caller-side isolate kill is the only containment',
+      'completed',
+      reason: 'the engine timeout must abort the script, not hang the isolate',
     );
-    expect(sw.elapsedMilliseconds, lessThan(10000));
+    expect(
+      out['isError'],
+      isTrue,
+      reason: 'expected the QuickJS interrupt handler to abort the script',
+    );
+    expect(out['elapsed'], lessThan(10000));
+    expect(
+      out['afterValue'],
+      '2',
+      reason: 'the runtime must remain usable after an aborted script',
+    );
   }, timeout: const Timeout(Duration(seconds: 40)));
 
-  // Finding: the shipped quickjs_c_bridge.dll is older than the Dart code and
-  // does not export `jsSetMemoryLimit`, so the 32MB cap from ADR-0008 (C-SRC-3)
-  // cannot be enforced by this library.
-  test('08_memoryLimitSymbol_missingFromShippedLibrary', () async {
+  // ADR-0008 requires a 32MB cap. Check that the limit is not only accepted but
+  // actually enforced: allocating far more than the cap must raise a JS error.
+  test('08_memoryLimit_isEnforced', () async {
     final Map<String, Object?> out = await _runInBackground(<String, Object?>{
       'mode': 'memory-limit',
-    }, budget: const Duration(seconds: 15));
+    }, budget: const Duration(seconds: 20));
     stdout.writeln(
       '  [memory-limit] status=${out['status']} '
-      'supported=${out['supported']} error=${out['error']}',
+      'isError=${out['isError']} elapsed=${out['elapsed']}ms '
+      'error=${out['error']}',
     );
     expect(out['status'], 'completed');
     expect(
-      out['supported'],
-      isFalse,
-      reason:
-          'documents the missing jsSetMemoryLimit symbol in the '
-          'prebuilt native library',
+      out['isError'],
+      isTrue,
+      reason: 'allocating beyond the memory limit must raise a JS error',
     );
-  }, timeout: const Timeout(Duration(seconds: 40)));
+  }, timeout: const Timeout(Duration(seconds: 45)));
 }
 
 /// Runs the Legado rule once in the current isolate.
 Map<String, Object?> _runRuleOnce(String input) {
   JavascriptRuntime? runtime;
   try {
-    runtime = getJavascriptRuntime(xhr: false);
+    runtime = getJavascriptRuntime();
     runtime.evaluate('var result = ${jsonEncode(input)};');
     final JsEvalResult res = runtime.evaluate(_legadoRule);
     if (res.isError) {
@@ -204,10 +216,12 @@ Map<String, Object?> _runRuleOnce(String input) {
 }
 
 /// Runs the JS -> Dart bridge probe once in the current isolate.
+///
+/// The message must be valid JSON: the bridge decodes it with `jsonDecode`.
 Map<String, Object?> _runBridgeOnce() {
   JavascriptRuntime? runtime;
   try {
-    runtime = getJavascriptRuntime(xhr: false);
+    runtime = getJavascriptRuntime();
     String? dartReceived;
     runtime.onMessage('SpikeBridge', (args) {
       dartReceived = '$args';
@@ -227,14 +241,13 @@ Map<String, Object?> _runBridgeOnce() {
   }
 }
 
-/// Drives a runaway script on the default runtime (no engine timeout).
+/// Drives a runaway script on a default runtime (no engine timeout).
 void _runRunaway() {
-  final JavascriptRuntime runtime = getJavascriptRuntime(xhr: false);
+  final JavascriptRuntime runtime = getJavascriptRuntime();
   runtime.evaluate('while (true) { var x = 1; }');
 }
 
-/// Probes the engine-level interrupt handler (timeout only; the shipped DLL
-/// does not export the memory-limit symbol).
+/// Probes the engine-level interrupt handler: 2s budget, then reused.
 Map<String, Object?> _runEngineTimeoutOnce() {
   final QuickJsRuntime2 runtime = QuickJsRuntime2(timeout: 2000);
   final Stopwatch sw = Stopwatch()..start();
@@ -250,17 +263,24 @@ Map<String, Object?> _runEngineTimeoutOnce() {
   };
 }
 
-/// Probes whether the shipped native library exports `jsSetMemoryLimit`.
+/// Probes whether an allocation beyond the 8MB cap raises a JS error.
 Map<String, Object?> _runMemoryLimitOnce() {
-  try {
-    final QuickJsRuntime2 runtime = QuickJsRuntime2(
-      memoryLimit: 32 * 1024 * 1024,
-    );
-    runtime.dispose();
-    return <String, Object?>{'supported': true, 'error': null};
-  } on Object catch (error) {
-    return <String, Object?>{'supported': false, 'error': '$error'};
-  }
+  final QuickJsRuntime2 runtime = QuickJsRuntime2(
+    timeout: 3000,
+    memoryLimit: 8 * 1024 * 1024,
+  );
+  final Stopwatch sw = Stopwatch()..start();
+  final JsEvalResult res = runtime.evaluate(
+    'var chunks = [];'
+    'while (true) { chunks.push(new Array(500000).fill("xxxxxxxxxx")); }',
+  );
+  sw.stop();
+  runtime.dispose();
+  return <String, Object?>{
+    'isError': res.isError,
+    'elapsed': sw.elapsedMilliseconds,
+    'message': res.stringResult,
+  };
 }
 
 /// Reports a completed 'rule' job.
@@ -273,13 +293,6 @@ void _sendRuleResult(SendPort send) {
 /// Reports a completed 'bridge' job.
 void _sendBridgeResult(SendPort send) {
   final Map<String, Object?> result = _runBridgeOnce();
-  result['status'] = 'completed';
-  send.send(result);
-}
-
-/// Reports a completed 'engine-timeout' job.
-void _sendEngineTimeoutResult(SendPort send) {
-  final Map<String, Object?> result = _runEngineTimeoutOnce();
   result['status'] = 'completed';
   send.send(result);
 }
@@ -304,7 +317,9 @@ void _isolateEntry(List<Object?> args) {
       return;
     }
     if (mode == 'engine-timeout') {
-      _sendEngineTimeoutResult(send);
+      final Map<String, Object?> result = _runEngineTimeoutOnce();
+      result['status'] = 'completed';
+      send.send(result);
       return;
     }
     if (mode == 'memory-limit') {
@@ -327,7 +342,7 @@ void _isolateEntry(List<Object?> args) {
 /// Spawns a background isolate, runs one job, and kills it after [budget].
 Future<Map<String, Object?>> _runInBackground(
   Map<String, Object?> job, {
-  Duration budget = const Duration(seconds: 20),
+  Duration budget = _defaultBudget,
 }) async {
   final ReceivePort port = ReceivePort();
   final Completer<Map<String, Object?>> done =
