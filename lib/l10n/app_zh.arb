@@ -1,0 +1,15 @@
+{
+  "@@locale": "zh",
+  "appTitle": "阅读",
+  "bookSourceListTitle": "书源列表",
+  "actionRetry": "重试",
+  "actionImport": "导入",
+  "failureNetworkTimeout": "请求超时，请稍后重试。",
+  "failureNetworkFailed": "连接失败，请检查网络后重试。",
+  "failureNetworkForbidden": "站点拒绝访问（403），书源可能需要更新。",
+  "failureNotFound": "请求的页面不存在（404），书源可能已失效。",
+  "failureEncodingFailed": "无法识别页面编码。",
+  "failureParseFailed": "解析失败，书源规则可能已失效。",
+  "failureInvalidBookSource": "该文件不是有效的书源。",
+  "failureUnsupportedRule": "该书源使用了暂不支持的规则类型。"
+}

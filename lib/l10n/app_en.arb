@@ -1,0 +1,51 @@
+{
+  "@@locale": "en",
+  "appTitle": "Reader",
+  "@appTitle": {
+    "description": "Application name shown in the task switcher and app bar."
+  },
+  "bookSourceListTitle": "Book sources",
+  "@bookSourceListTitle": {
+    "description": "Title of the book source list page."
+  },
+  "actionRetry": "Retry",
+  "@actionRetry": {
+    "description": "Label of the retry action shown after a recoverable failure."
+  },
+  "actionImport": "Import",
+  "@actionImport": {
+    "description": "Label of the book source import action."
+  },
+  "failureNetworkTimeout": "Request timed out. Please try again later.",
+  "@failureNetworkTimeout": {
+    "description": "User-facing message for ParseFailureKind.networkTimeout."
+  },
+  "failureNetworkFailed": "Connection failed. Check your network and try again.",
+  "@failureNetworkFailed": {
+    "description": "User-facing message for ParseFailureKind.networkFailed."
+  },
+  "failureNetworkForbidden": "The site refused access (403). The book source may need an update.",
+  "@failureNetworkForbidden": {
+    "description": "User-facing message for ParseFailureKind.networkForbidden."
+  },
+  "failureNotFound": "The requested page was not found (404). The book source may be broken.",
+  "@failureNotFound": {
+    "description": "User-facing message for ParseFailureKind.notFound."
+  },
+  "failureEncodingFailed": "The page encoding could not be detected.",
+  "@failureEncodingFailed": {
+    "description": "User-facing message for ParseFailureKind.encodingFailed."
+  },
+  "failureParseFailed": "Parsing failed. The book source rules may be out of date.",
+  "@failureParseFailed": {
+    "description": "User-facing message for ParseFailureKind.parseFailed."
+  },
+  "failureInvalidBookSource": "This file is not a valid book source.",
+  "@failureInvalidBookSource": {
+    "description": "User-facing message for ParseFailureKind.invalidBookSource."
+  },
+  "failureUnsupportedRule": "This book source uses a rule type that is not supported yet.",
+  "@failureUnsupportedRule": {
+    "description": "User-facing message for ParseFailureKind.unsupportedRule."
+  }
+}

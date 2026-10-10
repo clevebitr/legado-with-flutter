@@ -1,0 +1,91 @@
+name: Bug report
+description: 报告一个可复现的缺陷
+title: "[Bug] "
+labels:
+  - bug
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先搜索是否已有相同 Issue。
+        如果是**安全漏洞**，请改用仓库的 Security → Report a vulnerability 私密报告。
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 用一两句话说明发生了什么。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 '...'
+        2. 点击 '...'
+        3. 观察到 '...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: 应用版本
+      description: 见「设置 → 关于」，或 commit 短哈希。
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options:
+        - Android
+        - Windows
+        - iOS
+    validations:
+      required: true
+
+  - type: input
+    id: platform-version
+    attributes:
+      label: 系统版本与设备
+      placeholder: "例如：Android 14 / Pixel 7，或 Windows 11 23H2"
+    validations:
+      required: true
+
+  - type: input
+    id: book-source
+    attributes:
+      label: 相关书源
+      description: 若问题与某个书源有关，请提供书源名称与站点域名（**请勿粘贴含凭据的 Cookie**）。
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: |
+        请附上相关日志。粘贴前必须自行删除 Cookie、Token、账号等敏感信息
+        （见 docs/dev/constraints.md C-SEC-4）。
+      render: shell
+    validations:
+      required: false

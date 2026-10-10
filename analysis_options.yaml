@@ -1,0 +1,148 @@
+# =============================================================================
+# analysis_options.yaml
+# 规范来源（唯一权威）：docs/dev/naming.md、docs/dev/constraints.md
+# 规则与约束 ID 的对应关系见 docs/dev/tech-stack.md
+# =============================================================================
+
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+  errors:
+    # 命名规范（docs/dev/naming.md §2-§5）
+    camel_case_types: error
+    camel_case_extensions: error
+    library_names: error
+    file_names: error
+    non_constant_identifier_names: error
+    constant_identifier_names: error
+    always_declare_return_types: error
+
+    # 错误处理（docs/dev/constraints.md C-ERR-2：禁止裸 catch）
+    avoid_catches_without_on_clauses: error
+    avoid_catching_errors: error
+    only_throw_errors: error
+
+    # 异步安全（docs/dev/constraints.md C-ERR-4）
+    unawaited_futures: error
+    use_build_context_synchronously: error
+
+    # 日志（docs/dev/constraints.md C-ERR-5）
+    avoid_print: error
+
+    # 类型安全（docs/dev/constraints.md C-TYPE-1）
+    avoid_dynamic_calls: warning
+
+    # 文档注释（docs/dev/naming.md §7）
+    public_member_api_docs: warning
+    slash_for_doc_comments: warning
+    comment_references: warning
+
+    prefer_final_locals: warning
+    directives_ordering: warning
+
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - windows/**
+    - macos/**
+    - linux/**
+    - web/**
+    - .dart_tool/**
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "**/*.gr.dart"
+    - "**/*.mocks.dart"
+    - lib/l10n/generated/**
+
+  # 需要 `dart run custom_lint` 才会执行，`flutter analyze` 不会运行这些规则。
+  # 因此 CI 门禁必须同时执行两者，见 docs/dev/testing.md。
+  plugins:
+    riverpod_lint: ^3.0.0
+    custom_lint: ^0.7.0
+
+linter:
+  rules:
+    # --- 命名规范（docs/dev/naming.md） ---
+    camel_case_types: true
+    camel_case_extensions: true
+    library_names: true
+    file_names: true
+    non_constant_identifier_names: true
+    constant_identifier_names: true
+    always_declare_return_types: true
+    avoid_types_as_parameter_names: true
+    prefer_final_locals: true
+    prefer_final_fields: true
+    prefer_final_in_for_each: true
+
+    # --- 文档与注释（docs/dev/naming.md §7） ---
+    public_member_api_docs: true
+    slash_for_doc_comments: true
+    comment_references: true
+    prefer_doc_comments: true
+
+    # --- 错误处理与异步（docs/dev/constraints.md §3） ---
+    avoid_print: true
+    unawaited_futures: true
+    avoid_catches_without_on_clauses: true
+    avoid_catching_errors: true
+    only_throw_errors: true
+    use_build_context_synchronously: true
+
+    # --- 类型安全（docs/dev/constraints.md §11） ---
+    avoid_dynamic_calls: true
+    avoid_returning_null: true
+    avoid_returning_null_for_void: true
+    avoid_void_async: true
+    avoid_annotating_with_dynamic: true
+
+    # --- 分层与导入（docs/dev/constraints.md C-ARCH-1） ---
+    avoid_relative_lib_imports: true
+    always_use_package_imports: true
+    directives_ordering: true
+    depend_on_referenced_packages: true
+
+    # --- Flutter 特定 ---
+    avoid_unnecessary_containers: true
+    avoid_expanded_in_flex: true
+    sort_child_properties_last: true
+    use_key_in_widget_constructors: true
+
+    # --- 常量与不可变 ---
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    prefer_const_constructors_in_immutables: true
+    prefer_const_literals_to_create_immutables: true
+
+    # --- 安全与性能（docs/dev/constraints.md §10） ---
+    avoid_slow_async_io: true
+    avoid_web_libraries_in_flutter: true
+
+    # --- 代码质量 ---
+    prefer_single_quotes: true
+    unused_element: true
+    unused_local_variable: true
+    unused_import: true
+    unnecessary_lambdas: true
+    unnecessary_parenthesis: true
+    unnecessary_brace_in_string_interps: true
+    unnecessary_this: true
+    unnecessary_string_escapes: true
+    prefer_collection_literals: true
+    prefer_spread_collections: true
+    prefer_for_elements_to_map_fromIterable: true
+    prefer_if_elements_to_conditional_expressions: true
+    prefer_generic_function_type_aliases: true
+
+custom_lint:
+  rules:
+    - avoid_manual_providers_as_generated_provider_dependency
+    - avoid_public_notifier_properties
+    - provider_dependencies
+    - missing_provider_scope
