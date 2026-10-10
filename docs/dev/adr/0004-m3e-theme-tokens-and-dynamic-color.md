@@ -56,7 +56,12 @@ Container(
 
 - `constraints.md` §6 示例与 `tech-stack.md` §3.1 已按官方 API 重写，
   并显式列出两个**不存在的成员**作为反例，避免再次被误用。
-- `pubspec.yaml` 使用 `m3e_design: ^0.2.1`（最新版）与 `dynamic_color: ^2.1.0`。
+- `pubspec.yaml` 使用 `m3e_design: ^0.2.1` 与 **`dynamic_color: ^1.9.0`**。
+  `m3e_design 0.2.1` 声明 `dynamic_color: ^1.8.1`，因此取色库**只能停在 1.x**；
+  升到 2.x 会直接导致版本求解失败（已实测）。
+- 读取入口推荐 `context.m3e`（`BuildContextM3EX` 扩展，自带 fallback，已用于 `lib/app.dart`）；
+  `Theme.of(context).m3e` 亦可。所有 API 名称已对着 pub cache 中的**真实源码**逐项核对，
+  不再依赖文档或记忆。
 - Golden 测试必须固定种子色并禁用动态取色（`docs/dev/testing.md` §5）。
 - 许可证：`m3e_design` 为 MIT、`dynamic_color` 为 Apache-2.0，均与 GPL-3.0 兼容（C-DEP-7）。
 

@@ -34,10 +34,13 @@
 3. **不启用** `avoid_non_null_assertion`：禁止 `!` 由 C-TYPE-2 + Code review 保障。
 4. **不启用** `require_trailing_commas`：交给 `dart format` 决定。
 5. **移除 `custom_lint` 依赖与配置**；`riverpod_lint: ^3.1.9` 只出现在
-   `analyzer.plugins`。门禁中的插件规则由 `flutter analyze` 执行。
+   `analysis_options.yaml` 的 `analyzer.plugins`（**安装位置已在第 8 条修正为顶层
+   `plugins:`**）。门禁中的插件规则由 `flutter analyze` 执行。
 6. CI 门禁不再包含 `dart run custom_lint` 步骤。
-7. **待验证项：** `pubspec.yaml` 的版本约束尚未在本机 `flutter pub get` 验证
-   （编写环境无 Flutter SDK）。首次解析后必须核对并回写 `tech-stack.md`。
+7. **已闭环（2026-10-10）：** `flutter pub get` 已在真实环境（Flutter 3.47.7 / Dart 3.13.5）解析通过（151 个包）
+   ，并暴露/修正了 3 处互斥约束（见 `tech-stack.md` §1.1）。`flutter analyze` 实测 **No issues found**。
+8. **插件安装位置修正：** `analyzer: plugins:` 已弃用（触发 `analysis_options_deprecated_plugins`）；
+   必须写在 `analysis_options.yaml` 的**顶层** `plugins:` 段。已实测固化。
 8. **lint 规则名验证方法（已执行）：** 从 Dart 3.13.3 的官方
    "All linter rules" 清单提取全部 250 条规则名，与 `analysis_options.yaml`
    逐名机器比对；`linter.rules` 中 53 条已全部通过，不符合项已按第 5 条修正。

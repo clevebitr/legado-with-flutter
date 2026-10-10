@@ -60,9 +60,9 @@ dart run build_runner build --delete-conflicting-outputs
 git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'  # 生成物与源码同步
 ```
 
-> `riverpod_lint` 自 3.1.9 起改用 `analysis_server_plugin` 实现，通过
-> `analysis_options.yaml` 的 `analyzer.plugins` 安装，**由 `flutter analyze` 执行**。
-> 不再需要 `custom_lint`（ADR-0010）。
+> `riverpod_lint` 自 3.1.9 起改用 `analysis_server_plugin` 实现，必须写在
+> `analysis_options.yaml` 的**顶层** `plugins:` 段（`analyzer: plugins:` 已弃用），
+> 由 `flutter analyze` 执行。不再需要 `custom_lint`（ADR-0010）。
 
 ---
 

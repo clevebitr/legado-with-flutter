@@ -9,12 +9,42 @@
 
 | 平台 | 最低版本 | 目标版本 | 依据 |
 |---|---|---|---|
-| Android | `minSdk 26`（Android 8.0） | `targetSdk 35` | `flutter_js_plus` 要求 Android 8+；预测性返回要求 `targetSdk ≥ 34` |
-| iOS | `13.0` | 跟随 Flutter 3.47 默认 | Flutter 3.47 支持下限 |
-| Windows | Windows 10 1809+ | — | Flutter 桌面基线 |
+| Android | **`minSdk 26`**（Android 8.0，已在 `android/app/build.gradle.kts` 显式固定） | `targetSdk 36`（= `flutter.targetSdkVersion`） | `flutter_js_plus` 要求 Android 8+；Flutter 3.47 的默认 minSdk 为 24，低于该要求，因此显式提升到 26 |
+| iOS | **`15.0`**（`IPHONEOS_DEPLOYMENT_TARGET`） | 跟随 Flutter 3.47 默认 | 模板生成值，已核对 |
+| Windows | Windows 10 1809+；CMake ≥ 3.14 | — | Flutter 桌面基线 |
 
-> **验证状态：** 上表数值需在首次 `flutter create --platforms` 生成对应平台工程后核对，
-> 并把实际值回写到本表。核对前不得在其他文档引用这些数值。
+`compileSdk` 跟随 `flutter.compileSdkVersion`（当前 36）。
+
+> **验证状态：** ✅ 已核对生成后的平台工程与构建产物（APK 的 merged manifest 原先为
+> `minSdkVersion=24 / targetSdkVersion=36`，现已显式将 minSdk 改为 26），数值不再是推测值。
+
+### 1.1 本机工具链实测版本
+
+| 组件 | 版本 |
+|---|---|
+| Flutter / Dart | 3.47.7 stable / 3.13.5 |
+| Android SDK / build-tools | 37.0.0 |
+| AGP / Kotlin Gradle Plugin | 9.1.0 / 2.4.0 |
+| Gradle JVM | JDK 21（Temurin 21.0.12） |
+| Visual Studio（Windows 构建） | Community 2022 17.11.0 |
+| CMake（原生插件） | 由 Flutter 自动装入 3.22.1 |
+
+### 1.2 Windows 桌面构建的前置条件
+
+`flutter build windows` / `flutter run -d windows` **要求系统开启「开发者模式」**，
+否则 Flutter 无法为插件创建符号链接并直接失败：
+
+```
+Building with plugins requires symlink support.
+Please enable Developer Mode in your system settings.
+```
+
+开启方式（需要管理员权限）：`设置 → 系统 → 开发者选项 → 开发人员模式`，
+或执行 `start ms-settings:developers`。
+
+> 本项目依赖多个带原生代码的插件（`drift_flutter`、`path_provider`、`shared_preferences`、
+> `dynamic_color`、`cached_network_image`、`flutter_js_plus`），因此该开关是 Windows 开发的
+> **硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
 
 ---
 
@@ -123,6 +153,28 @@ pageTransitionsTheme: const PageTransitionsTheme(
 2. **降级必须可见**：无法提供的能力要么给出种子色/静态转场，要么在设置页说明，禁止静默半残。
 3. **不影响核心链路**：书源解析、阅读、书架在无动态取色、无预测性返回的平台上必须功能完整。
 4. **新增平台**：必须新增 `core/platform/` 实现并补齐 §6 清单，不得在业务层加 `Platform.isXxx`。
+
+---
+
+## 8. 已知构建变通与待办
+
+### 8.1 已写入仓库的构建变通
+
+| 位置 | 设置 | 原因 |
+|---|---|---|
+| `android/gradle.properties` | `kotlin.incremental=false` | Kotlin 增量编译缓存在 Windows 上偶发文件锁定，报 `Could not close incremental caches` 并中断构建 |
+| `android/gradle.properties` | `kotlin.jvm.target.validation.mode=warning` | `flutter_js_plus 0.0.4`（2019 年插件）固定 `kotlin 1.7.20` / `jvmTarget 1.8`，与 AGP 9 默认的 Java 11 不一致；Kotlin 2.4 默认按 error 中断 `assembleDebug` |
+
+> 两者都是**对第三方插件老化的补偿**。一旦升级或替换 `flutter_js_plus`（ADR-0008），
+> 必须重新评估并删除，删除后重新跑一次 `flutter build apk --debug` 验证。
+
+### 8.2 发布前必须处理的待办
+
+| 项 | 说明 |
+|---|---|
+| `applicationId` | 当前为 Flutter 默认的 `com.example.flutter_reader`；`com.example.*` 无法上架。改动点：`android/app/build.gradle.kts` 的 `namespace` 与 `applicationId`、`ios/Runner.xcodeproj` 中的 `PRODUCT_BUNDLE_IDENTIFIER`（共 3 处配置） |
+| 发布签名 | `android/app/build.gradle.kts` 的 release 构建当前复用 debug 签名 |
+| Windows 开发者模式 | 见 §1.2，需在每台开发机开启（管理员） |
 
 ---
 

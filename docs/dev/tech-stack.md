@@ -4,7 +4,8 @@
 > 平台支持与许可证」（C-DEP-6）。本文档不复制 `pubspec.yaml` 与
 > `analysis_options.yaml` 的正文。
 >
-> 版本已对标 pub.dev 现状核实（2026-10-10），下表版本与 `pubspec.yaml` 一致。
+> 版本已用真实的 `flutter pub get` 解析验证（2026-10-10，Flutter 3.47.7 / Dart 3.13.5），
+> 下表版本与 `pubspec.yaml` 及 `pubspec.lock` 三者一致。
 
 ---
 
@@ -12,27 +13,41 @@
 
 | 项 | 结论 |
 |---|---|
-| Flutter | `3.47.0`（`environment: flutter: ^3.47.0`） |
-| Dart SDK | `^3.13.0`（随 Flutter 3.47 附带） |
+| **约束**（`pubspec.yaml` 声明） | `sdk: ^3.13.0`、`flutter: ^3.47.0` |
+| **实测工具链**（本机与 CI 使用） | Flutter **3.47.7**（stable）· Dart **3.13.5** |
 | 依赖版本写法 | `^` 或精确版本，**禁止 `any`**（C-DEP-2） |
 | 锁文件 | 提交 `pubspec.lock`；升级依赖必须单独 PR |
 | 许可证 | 必须 GPL-3.0 兼容（C-DEP-7）；清单见 `NOTICE.md` §5 |
-| lint 规则名基准 | 以 Dart **3.13.3** 的官方清单为准（`https://dart.dev/tools/linter-rules/all`）。`analysis_options.yaml` 中全部规则名已与该清单逐一机器比对通过 |
+| lint 规则名基准 | Dart **3.13.x** 官方清单（`https://dart.dev/tools/linter-rules/all`）。`analysis_options.yaml` 的 47 条规则已逐名机器比对通过 |
+| 分析器插件安装位置 | **顶层 `plugins:`**，不是 `analyzer: plugins:`（后者已弃用，见 §12） |
 
 **版本号必须同步的四处**（改任一处必须同时改其余三处）：
 
 | 位置 | 形式 |
 |---|---|
-| 本节（权威定义） | `3.47.0` / `^3.13.0` |
-| `pubspec.yaml` 的 `environment:` | `sdk: ^3.13.0`、`flutter: ^3.47.0` |
-| `.github/workflows/ci.yml` 的 `flutter-version` | `'3.47.0'` |
+| 本节（权威定义） | `3.47.7` / `3.13.5` |
+| `pubspec.yaml` 的 `environment:` | `sdk: ^3.13.0`、`flutter: ^3.47.0`（区间约束，不必随补丁号改动） |
+| `.github/workflows/ci.yml` 的 `flutter-version` | `'3.47.7'` |
 | `docs/dev/platform.md` §1 的平台基线 | 与上述版本对应 |
 
-### 已知可升级但**故意未升**的依赖
+### 1.1 依赖版本的确定方式（重要）
 
-| 依赖 | 当前 | 最新 | 原因 |
-|---|---|---|---|
-| `freezed` / `freezed_annotation` | `3.x` | `4.0.2` | 跨大版本迁移需要独立 PR + ADR；`^3.2.5` 不会自动跳到 4.x |
+本项目的依赖版本**不是**逐个挑选的，而是由 `pub` 求解器在满足以下**硬约束**后得出的
+唯一一致解，再回填为精确约束：
+
+| 硬约束 | 由谁决定 |
+|---|---|
+| `dynamic_color` 必须是 **1.x** | `m3e_design 0.2.1` 声明 `dynamic_color: ^1.8.1` |
+| `riverpod_annotation` / `riverpod_generator` 必须与 `riverpod` **精确同版** | `flutter_riverpod 3.4.3` 与 `riverpod_lint 3.1.9` 都精确锁定 `riverpod: 3.4.3` |
+| `freezed` 必须 ≥ **4.x** | `riverpod_lint 3.1.9` 要求 `analyzer >=13 <15`，而 `freezed 3.2.5` 要求 `analyzer <11`，二者无交集 |
+| `json_annotation` 必须 **4.12.x** | `json_serializable 6.14.1` 要求 `>=4.12.0 <4.13.0` |
+| `drift_dev` 只能 **2.35.1** | 该包版本落后 `drift` 本体一个补丁，`^2.35.2` 不存在 |
+
+> 因此**不要**单独手动升降其中任何一个版本：它们互相咬合。
+> 需要升级时必须整组处理，并用 `flutter pub get` + 门禁复验。
+
+**验证状态：** ✅ 已用 `flutter pub get` 实测解析通过（151 个包），
+并通过 `flutter analyze`（零问题）、`flutter test`、`flutter build apk --debug` 三项验证。
 
 ---
 
@@ -48,7 +63,12 @@
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |
 |---|---|---|---|---|
 | `m3e_design` | `^0.2.1` | MD3E 设计令牌（`M3ETheme` ThemeExtension） | MIT | C-UI-1、C-UI-2 |
-| `dynamic_color` | `^2.1.0` | Android 壁纸种子色取色（`DynamicColorBuilder`） | Apache-2.0 | C-UI-3、C-PLT-2 |
+| `dynamic_color` | `^1.9.0` | Android 壁纸种子色取色（`DynamicColorBuilder`） | Apache-2.0 | C-UI-3、C-PLT-2 |
+
+> **`dynamic_color` 只能是 1.x：** `m3e_design 0.2.1` 声明 `dynamic_color: ^1.8.1`，
+> 升到 2.x 会导致版本求解失败。要升级 `dynamic_color` 必须先升级 `m3e_design`。
+> `DynamicColorBuilder` 内部使用 `OptionalMethodChannel` + try/catch，因此在单元测试
+> 环境下不会抛异常（已验证）。
 
 ### 3.1 `m3e_design` 0.2.1 官方 API（已核实）
 
@@ -69,7 +89,7 @@ class M3ETheme extends ThemeExtension<M3ETheme> {
 | API | 说明 |
 |---|---|
 | 安装 | `withM3ETheme(ThemeData base, {M3ETheme? override})` 或 `ColorScheme.toM3EThemeData()` |
-| 读取 | `Theme.of(context).m3e`（`ThemeData` 扩展；debug 下 assert，release 下回退默认值） |
+| 读取 | `context.m3e`（`BuildContext` 扩展，自带 fallback，**推荐**）；或 `Theme.of(context).m3e`（`ThemeData` 扩展，debug 下 assert） |
 | `M3EColors` | 包装 `ColorScheme` 并补充语义色：`surface`、`onSurface`、`surfaceStrong`、`onSurfaceStrong`、`outlineStrong`、`emphasis`、`onEmphasis`、`info`、`success`、`warning`、`danger`、`primary`/`onPrimary`、`primaryContainer`/`onPrimaryContainer`、`secondary`/`onSecondary`、container 层级、`outline`、`inverse` |
 | `M3ESpacing` | 六阶间距：`xs=4`、`sm=8`、`md=12`、`lg=16`、`xl=24`、`xxl=32`；`M3ESpacing.regular()` |
 | `M3ETypography` | `{required TextTheme base, required M3EEmphasized emphasized}`；`M3ETypography.defaultFor(Brightness, {String? brandFontFamily, ...})` |
@@ -102,9 +122,13 @@ m3e.spacing.md;
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |
 |---|---|---|---|---|
 | `flutter_riverpod` | `^3.4.3` | 唯一状态管理方案 | MIT | C-STATE-1 |
-| `riverpod_annotation` | `^3.0.0` | `@riverpod` 注解 | MIT | C-STATE-2 |
-| `riverpod_generator`（dev） | `^3.0.0` | Provider 代码生成 | MIT | C-STATE-2 |
+| `riverpod_annotation` | `^4.0.7` | `@riverpod` 注解（必须与 `riverpod` 精确同版） | MIT | C-STATE-2 |
+| `riverpod_generator`（dev） | `^4.0.9` | Provider 代码生成 | MIT | C-STATE-2 |
 | `riverpod_lint`（dev） | `^3.1.9` | 禁止手写 Provider 等规则 | MIT | C-STATE-2 |
+
+> 注意版本号"错位"：`flutter_riverpod` 与 `riverpod_lint` 在 **3.x** 线，而
+> `riverpod_annotation` / `riverpod_generator` 在 **4.x** 线。这不是笔误 ——
+> 两者都精确锁定 `riverpod: 3.4.3`，所以只有这两组组合能共存（见 §1.1）。
 
 > Riverpod 3 的统一引用类型是 `Ref`（不再有 `XxxRef`）。
 
@@ -125,6 +149,10 @@ m3e.spacing.md;
 > **约束：** 不得在后台 Isolate 中使用依赖 platform channel 的回调桥
 > （如 `JavascriptRuntime.onMessage`）；需要双向通信时必须使用
 > `BackgroundIsolateBinaryMessenger`，并补 `book-source.md` 的测试用例。
+>
+> **已知构建影响：** `flutter_js_plus 0.0.4` 是 2019 年的老插件，其 Android 编译脚本
+> 固定 `kotlin 1.7.20` 与 `jvmTarget 1.8`，与 AGP 9 默认的 Java 11 目标不一致，
+> 会导致 `assembleDebug` 失败。变通方法见 `docs/dev/platform.md` 的「已知构建变通」。
 
 ## 6. 网络与持久化
 
@@ -137,10 +165,12 @@ m3e.spacing.md;
 | `shared_preferences` | `^2.5.3` | 仅轻量开关（主题模式、字号） | BSD-3-Clause | C-NET-9 |
 | `path_provider` | `^2.1.6` | 跨平台路径（唯一来源） | BSD-3-Clause | C-PLT-3 |
 
-> **禁止使用 `sqlite3_flutter_libs`**：上游已标记 EOL（`0.6.0+eol`），
-> 在新版 Android 工具链上不再正确打包原生库，会在启动时抛
-> `DriftRemoteException: dlopen failed: libsqlite3.so not found`。
-> 官方替代方案是 `drift_flutter`（见 ADR-0003）。
+> **关于 `sqlite3_flutter_libs`：** 不要**直接**声明它。
+> `drift_flutter 0.3.1` 自己会传递依赖 `sqlite3_flutter_libs: ^0.6.0+eol`
+> （以及 `sqlcipher_flutter_libs: ^0.7.0+eol`），由它统一管理原生库版本；
+> 直接依赖旧写法（如 `^0.5.x`）才会在新版 Android 工具链上丢库、启动时报
+> `DriftRemoteException: dlopen failed: libsqlite3.so not found`（ADR-0003）。
+> 已实测：`flutter build apk --debug` 成功，锁文件中的传递版本为 `0.6.0+eol`。
 
 ## 7. 观测
 
@@ -152,10 +182,13 @@ m3e.spacing.md;
 
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |
 |---|---|---|---|---|
-| `freezed_annotation` / `freezed` | `^3.1.0` / `^3.2.5` | 不可变数据类与密封类 | MIT | C-DEP-3 |
-| `json_annotation` / `json_serializable` | `^4.9.0` / `^6.14.1` | JSON 序列化 | MIT | C-DEP-3 |
+| `freezed_annotation` / `freezed` | `^3.1.0` / `^4.0.2` | 不可变数据类与密封类 | MIT | C-DEP-3 |
+| `json_annotation` / `json_serializable` | `^4.12.0` / `^6.14.1` | JSON 序列化 | MIT | C-DEP-3 |
 | `build_runner` | `^2.16.2` | 生成器运行器 | MIT | C-DEP-4 |
-| `drift_dev` | `^2.35.2` | Drift 表与 DAO 生成 | MIT | C-DEP-3 |
+| `drift_dev` | `^2.35.1` | Drift 表与 DAO 生成 | MIT | C-DEP-3 |
+
+> `freezed` 与 `freezed_annotation` 可以不同大版本：`freezed 4.0.2` 仍依赖
+> `freezed_annotation 3.1.0`。
 
 ## 9. 开发与测试
 
@@ -168,7 +201,8 @@ m3e.spacing.md;
 
 | 依赖 | 状态 | 原因 |
 |---|---|---|
-| `sqlite3_flutter_libs` | **移除（EOL）** | 上游 `0.6.0+eol`，改用 `drift_flutter`（ADR-0003） |
+| `sqlite3_flutter_libs` | **禁止直接依赖** | 只有作为 `drift_flutter` 的传递依赖才正确（见 §6 说明、ADR-0003） |
+| `drift_flutter 0.3.1` | 已采用 | 替代直接依赖 `sqlite3_flutter_libs` 的旧做法 |
 | `custom_lint` | **移除** | `riverpod_lint` 自 3.1.9 起改用 `analysis_server_plugin`，不再需要它（ADR-0010） |
 | `golden_toolkit` | **移除** | 已停止维护；改用 Flutter 内置 `matchesGoldenFile`（ADR-0009） |
 | `material_you_dynamic_theme` | **禁止引入** | 与 `dynamic_color` + `m3e_design` 职责重叠，会出现两个取色真源（ADR-0004） |
@@ -205,9 +239,10 @@ m3e.spacing.md;
 
 ## 12. lint 规则与约束 ID 的映射
 
-**执行方式：** `riverpod_lint ≥3.1.9` 通过 `analysis_options.yaml` 的
-`analyzer.plugins` 安装，由 `flutter analyze` 执行（ADR-0010）。
-项目**不再使用 `custom_lint`**。
+**执行方式：** `riverpod_lint ≥3.1.9` 基于 `analysis_server_plugin` 实现，
+必须写在 `analysis_options.yaml` 的**顶层** `plugins:` 段（**不是** `analyzer: plugins:`，
+后者已弃用并会触发 `analysis_options_deprecated_plugins`），由 `flutter analyze` 执行。
+项目**不使用 `custom_lint`**（ADR-0010）。
 
 | lint 规则 | 强制级别 | 约束 ID |
 |---|---|---|

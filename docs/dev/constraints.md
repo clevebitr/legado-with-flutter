@@ -153,7 +153,7 @@ class BookSource with _$BookSource {
 
 | ID | 约束 |
 |---|---|
-| C-UI-1 | 颜色、排版、形状、间距、动效令牌一律取自 `Theme.of(context).m3e`；禁止硬编码 `Color(0xFF...)`、`EdgeInsets.all(16)`、字号与圆角。 |
+| C-UI-1 | 颜色、排版、形状、间距、动效令牌一律取自 `context.m3e`（或 `Theme.of(context).m3e`）；禁止硬编码 `Color(0xFF...)`、`EdgeInsets.all(16)`、字号与圆角。**唯一例外**：`lib/core/theme/app_theme.dart` 中的种子色常量 `defaultSeedColor` —— 它是生成令牌的输入，不是令牌本身。 |
 | C-UI-2 | `M3ETheme` 的安装必须经 `withM3ETheme(...)` 或 `ColorScheme.toM3EThemeData()`；取值用 `Theme.of(context).m3e`（非空，自带 fallback）。**禁止** `Theme.of(context).extension<M3ETheme>()!` 这类强制解包。 |
 | C-UI-3 | 动态取色必须经 `dynamic_color` 的 `DynamicColorBuilder` 获取 `ColorScheme`，再交给 `m3e_design` 的和声工具协调；Windows / iOS 必须提供种子色 fallback（见 ADR-0004）。 |
 | C-UI-4 | 预测性返回必须启用 `PredictiveBackPageTransitionsBuilder`，并按 `docs/dev/platform.md` 配置 `AndroidManifest.xml`。 |
@@ -300,7 +300,7 @@ Container(
 | C-BAN-12 | 使用明文 HTTP（除非用户显式允许）。 |
 | C-BAN-13 | 在 `build` 中执行重计算。 |
 | C-BAN-14 | 一次性把大文件加载到内存。 |
-| C-BAN-15 | 忽略 `flutter analyze` 警告（含 `analyzer.plugins` 中的 riverpod_lint 规则）。 |
+| C-BAN-15 | 忽略 `flutter analyze` 警告（含 `analysis_options.yaml` 顶层 `plugins:` 中 riverpod_lint 的规则）。 |
 
 ---
 

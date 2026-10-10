@@ -93,27 +93,20 @@ Flutter / Dart 的**版本基线以 [`docs/dev/tech-stack.md`](./docs/dev/tech-s
 git clone <repo-url>
 cd <repo-dir>
 
-# 1) 生成平台工程（仓库中尚未包含 android/ ios/ windows/）
-flutter create --platforms=android,ios,windows .
-
-# 2) 确认模板没有覆盖项目配置（应无 diff）
-git diff --stat -- pubspec.yaml analysis_options.yaml l10n.yaml .gitignore
-
-# 3) 依赖与代码生成
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 flutter gen-l10n
 ```
 
-> - 第 2 步若有 diff：`git checkout -- pubspec.yaml analysis_options.yaml l10n.yaml .gitignore`。
-> - `flutter create` 生成的 `test/widget_test.dart` 引用模板 `MyApp`，必须删除或替换，
->   否则 `flutter test` 与 CI 会直接失败（且覆盖率门禁会因缺少 lcov 报告而以退出码 2 失败）。
-> - 首个 PR 必须包含至少一个真实测试，CI 才会变绿，见 `docs/dev/testing.md` §2。
+> 平台工程目录与 `lib/main.dart` 已在版本控制中，不需要 `flutter create`。
+> **Windows 桌面开发需先开启「开发者模式」**（管理员），否则 `flutter run -d windows`
+> 会因插件符号链接失败而直接退出，见 `docs/dev/platform.md` §1.2。
+> 首个 PR 必须包含至少一个真实测试，CI 才会变绿，见 `docs/dev/testing.md` §2。
 
 ### 3.3 运行检查
 
 门禁命令以 [`AGENTS.md`](./AGENTS.md) §4 为准。
-`riverpod_lint` 插件规则由 `flutter analyze` 执行（`analyzer.plugins`，ADR-0010），
+`riverpod_lint` 插件规则由 `flutter analyze` 执行（`analysis_options.yaml` 顶层 `plugins:`，ADR-0010），
 不需要额外的 lint 运行器。
 
 ---

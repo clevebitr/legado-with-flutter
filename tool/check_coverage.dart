@@ -100,11 +100,14 @@ void main(List<String> arguments) {
 
   if (failed) {
     stdout.writeln('Files below their layer threshold:');
-    final List<_FileCoverage> offenders = files.values
-        .where((_FileCoverage file) => _isBelow(file, thresholds))
-        .toList()
-      ..sort((_FileCoverage a, _FileCoverage b) =>
-          a.percent.compareTo(b.percent));
+    final List<_FileCoverage> offenders =
+        files.values
+            .where((_FileCoverage file) => _isBelow(file, thresholds))
+            .toList()
+          ..sort(
+            (_FileCoverage a, _FileCoverage b) =>
+                a.percent.compareTo(b.percent),
+          );
     for (final _FileCoverage file in offenders) {
       stdout.writeln(
         '  ${file.percent.toStringAsFixed(1).padLeft(6)}%  ${file.path}',

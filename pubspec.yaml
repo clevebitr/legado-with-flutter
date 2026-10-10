@@ -15,11 +15,11 @@ dependencies:
 
   # UI 与主题：设计令牌的唯一来源（C-UI-1、ADR-0004）
   m3e_design: ^0.2.1
-  dynamic_color: ^2.1.0
+  dynamic_color: ^1.9.0
 
   # 状态管理：唯一方案 + 强制代码生成（C-STATE-1/2、ADR-0001）
   flutter_riverpod: ^3.4.3
-  riverpod_annotation: ^3.0.0
+  riverpod_annotation: ^4.0.7
 
   # 书源解析引擎（book-source.md、ADR-0008）
   html: ^0.15.6
@@ -45,24 +45,24 @@ dependencies:
 
   # 代码生成注解
   freezed_annotation: ^3.1.0
-  json_annotation: ^4.9.0
+  json_annotation: ^4.12.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   # Lint：riverpod_lint ≥3.1.9 已改为 analysis_server_plugin 实现，
-  # 通过 analysis_options.yaml 的 analyzer.plugins 安装，由 flutter analyze 执行；
+  # 通过 analysis_options.yaml 顶层 plugins: 安装，由 flutter analyze 执行；
   # 不再需要 custom_lint（ADR-0010）。
   flutter_lints: ^6.0.0
   riverpod_lint: ^3.1.9
 
   # 代码生成
   build_runner: ^2.16.2
-  freezed: ^3.2.5
+  freezed: ^4.0.2
   json_serializable: ^6.14.1
-  riverpod_generator: ^3.0.0
-  drift_dev: ^2.35.2
+  riverpod_generator: ^4.0.9
+  drift_dev: ^2.35.1
 
   # 测试
   mocktail: ^1.0.5

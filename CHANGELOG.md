@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Toolchain (2026-10-10)
+
+- Installed Flutter 3.47.7 / Dart 3.13.5; scaffolded `android/`, `ios/`, `windows/`.
+- Added the app bootstrap (`lib/main.dart`, `lib/app.dart`, `lib/core/theme/app_theme.dart`)
+  plus a widget smoke test, replacing the Flutter template files.
+- Dependency set fixed to the pub-solver-determined coherent solution (see `Changed` below).
+- Android: `minSdk` pinned to 26 — Flutter's default of 24 is below `flutter_js_plus`'s
+  Android 8+ requirement. Build workarounds for that legacy plugin are recorded in
+  `docs/dev/platform.md` §8.
+- Verified end to end: `flutter analyze` reports no issues, `flutter test --coverage` passes,
+  the coverage gate exits 0, and `flutter build apk --debug` succeeds.
+- `LICENSE` verified byte-identical to the canonical GPL-3.0 text; all 151 locked packages
+  license-scanned with zero findings (`NOTICE.md` §5).
+
 ### Added
 
 - `LICENSE` (GNU GPL-3.0) and `NOTICE.md`: copyright, upstream relationship, disclaimer,
@@ -36,7 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State management is Riverpod with mandatory `@riverpod` code generation; the `XxxViewModel`
   naming and `presentation/viewmodels/` path are deprecated.
 - Logging goes through a `core/logging` facade backed by `logger`.
-- Dependency versions pinned to the current pub.dev releases; see `docs/dev/tech-stack.md` §1.
+- Dependency versions pinned to the pub-solver-determined coherent set:
+  `dynamic_color` 1.9.0, `riverpod_annotation` 4.0.7, `riverpod_generator` 4.0.9,
+  `freezed` 4.0.2, `json_annotation` 4.12.0, `drift_dev` 2.35.1.
+  See `docs/dev/tech-stack.md` §1.1 for the hard constraints that force this combination.
+- `analysis_options.yaml`: analyzer plugin moved to the **top-level** `plugins:` key;
+  `analyzer: plugins:` is deprecated and emitted `analysis_options_deprecated_plugins`.
+- CI `flutter-version` pinned to `3.47.7` to match the local toolchain.
 
 ### Fixed
 
@@ -48,6 +68,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   via `m3e.typography.base.titleLarge`; spacing is `m3e.spacing.{xs,sm,md,lg,xl,xxl}`.
 - `riverpod_lint` 3.1.9 switched from `custom_lint` to `analysis_server_plugin`, so
   `custom_lint` was removed and the gate is now plain `flutter analyze`.
+- Analyzer plugin config moved to the top-level `plugins:` key (the `analyzer: plugins:`
+  form is deprecated in Dart 3.13).
+- Android build blockers resolved and documented: `kotlin.incremental=false` (Kotlin cache
+  locking on Windows) and `kotlin.jvm.target.validation.mode=warning` (`flutter_js_plus`
+  still targets Kotlin 1.8 while AGP 9 defaults Java to 11).
+- Flutter template `TODO`s in `android/app/build.gradle.kts` replaced with documented
+  pre-release items (`applicationId`, release signing).
 
 ### Removed
 
@@ -59,10 +86,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pending decisions
 
-- Version constraints in `pubspec.yaml` are not yet verified with `flutter pub get`;
-  see `docs/dev/adr/0010-lint-baseline-and-gates.md`.
-- Third-party license verification is incomplete; see `NOTICE.md` §5.
-- The bundled GPL-3.0 text should be diffed against the canonical copy once network
-  access is available; see `docs/dev/adr/0007-license.md`.
+- Third-party license scanning is complete for **source** dependencies. A binary-level
+  scan of the release artifacts (APK/EXE: Flutter engine, native libs, AOT output) is still
+  required at release time; see `NOTICE.md` §4.
 - Grammar rows in `docs/dev/book-source.md` §3 are still marked 待验证 and require
   regression against real book sources before the first importable release.
+- `applicationId` is still the Flutter default `com.example.flutter_reader` and the release
+  build reuses the debug signing config; both must be replaced before release
+  (`docs/dev/platform.md` §8.2).

@@ -10,16 +10,18 @@
 但 `TECH_STACK.md` 的依赖清单里只有 `shared_preferences` —— 约束强制的能力在依赖层面不存在。
 同时「缓存必须带 TTL」「缓存键 = 书源 ID + 参数摘要」隐式要求可查询的存储。
 
-初版决策原计划使用 `sqlite3_flutter_libs` 提供原生库。后续核实发现该包已被上游标记
-**EOL（`0.6.0+eol`）**，官方说明为「不再使用，请改用 `sqlite3` 3.x」，并且社区已报告
-在新版 Android 工具链上不再正确打包原生库，会在启动时抛
+初版决策原计划**直接**依赖 `sqlite3_flutter_libs` 提供原生库。实测（`flutter pub get` +
+`flutter build apk --debug`）表明正确做法是改用 **`drift_flutter`**：它自己会传递引入
+`sqlite3_flutter_libs ^0.6.0+eol` 与 `sqlcipher_flutter_libs ^0.7.0+eol` 并统一管理
+原生库版本。问题出在**直接**依赖 `sqlite3_flutter_libs`（尤其旧版本 `^0.5.x`）——
+那会在新版 Android 工具链上丢库，启动时抛
 `DriftRemoteException: dlopen failed: libsqlite3.so not found`。
 
 ## 决策
 
 1. 结构化数据（书源、章节缓存、阅读进度、正文缓存）使用 **Drift（SQLite）**。
 2. 原生库与数据库路径由 **`drift_flutter`** 提供（Drift 官方推荐的当前方案）。
-3. **禁止使用 `sqlite3_flutter_libs`**（EOL）。
+3. **不直接依赖 `sqlite3_flutter_libs`**；它由 `drift_flutter` 传递引入并统一管理。
 4. `shared_preferences` **仅**用于轻量开关（主题模式、字号、上次同步时间）。
 5. DAO 与表定义位于 `lib/core/storage/`，仓储实现位于 `lib/features/<f>/data/`。
 6. 需要 TTL 的表必须显式声明 `expireAt` 列，并在查询时过滤过期行；缓存键为稳定哈希列。
@@ -43,6 +45,8 @@ dev_dependencies:
 - 数据库 schema 变更必须带迁移，且迁移必须有测试。
 - Drift 会推进到 `sqlite3` 3.x（当前 `3.7.0`），Web 端如启用需同步更新 `sqlite3.wasm`。
 - 新增依赖均已核实为 MIT 许可，与项目的 GPL-3.0 兼容（C-DEP-7）。
+- 已实测：锁定 `sqlite3_flutter_libs 0.6.0+eol`、`sqlite3 3.5.2`，
+  `flutter build apk --debug` 构建成功（无需任何手工干预）。
 
 ## 备选方案
 

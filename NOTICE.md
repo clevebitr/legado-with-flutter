@@ -20,8 +20,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ```
 
-完整许可证文本见仓库根目录 [`LICENSE`](./LICENSE)（GNU GPL-3.0，非“或更高版本”）。
+完整许可证文本见仓库根目录 [`LICENSE`](./LICENSE)（GNU GPL-3.0，version 3 only）。
 
+> **已校验：** `LICENSE` 与官方文本 `https://www.gnu.org/licenses/gpl-3.0.txt`
+> 逐字节一致（35149 字节，`diff` 零差异，2026-10-10）。
+>
 > 版权持有人名称 `Clevebitr` 取自仓库既有文档的维护者字段与 git 提交身份，
 > 若需要改为组织名或实名，请在 ADR-0007 中更新并同步修改本节与 `LICENSE` 的
 > “How to Apply”示例。
@@ -62,43 +65,76 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 | 不得附加进一步限制 | §10 | 不得对衍生分发增加额外限制条款 |
 
 > **发布前检查：** 任何打 tag / 上传应用商店的流程都必须确认上述五项，并记录检查人。
+> 另需在发布时对**二进制产物**再做一次许可证扫描（`flutter build` 会把原生库、
+> Flutter 引擎与 Dart AOT 产物打包进 APK/EXE，本节的源码级扫描不覆盖它们）。
 
 ---
 
-## 5. 第三方依赖许可
+## 5. 第三方依赖许可（已核实）
 
 **硬性规则（C-DEP-7）：** 所有直接依赖必须与 GPL-3.0 兼容。
 宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；
 **GPL-2.0-only、无许可证、专有许可一律禁止引入**（GPL-2.0-only 与 GPL-3.0 不兼容）。
 
-| 依赖 | 许可证 | 核实状态 |
+**核实结果（2026-10-10）：** 对 `pubspec.lock` 中全部 **151 个包**逐个读取其
+`LICENSE` / `COPYING` 文件并分类，结果：
+
+| 许可证 | 数量 |
+|---|---|
+| BSD-2-Clause | 99 |
+| MIT | 36 |
+| Apache-2.0 | 10 |
+| BSD-3-Clause | 1 |
+| Flutter SDK 自带（未在 pub cache 中） | 5 |
+| **GPL / LGPL / AGPL / MPL / 无许可证 / 未识别** | **0** |
+
+**直接依赖明细：**
+
+| 依赖 | 版本 | 许可证 |
 |---|---|---|
-| `m3e_design` | MIT | 已核实 |
-| `dynamic_color` | Apache-2.0 | 已核实 |
-| `cascadia` | BSD-3-Clause | 已核实 |
-| `flutter_js_plus` | MIT | 已核实 |
-| `betto_charset_detector` | Apache-2.0 | 已核实 |
-| `flutter_riverpod` / `riverpod_annotation` / `riverpod_generator` / `riverpod_lint` | MIT | 待核实 |
-| `html` | BSD-3-Clause | 待核实 |
-| `json_path` | MIT | 待核实 |
-| `dio` | MIT | 待核实 |
-| `drift` / `drift_dev` / `drift_flutter` | MIT | 待核实 |
-| `cached_network_image` | MIT | 待核实 |
-| `shared_preferences` / `path_provider` | BSD-3-Clause | 待核实 |
-| `logger` | MIT | 待核实 |
-| `freezed` / `freezed_annotation` / `json_serializable` / `json_annotation` / `build_runner` | MIT | 待核实 |
-| `flutter_lints` | BSD-3-Clause | 待核实 |
-| `mocktail` | MIT | 待核实 |
+| `m3e_design` | 0.2.1 | MIT |
+| `dynamic_color` | 1.9.0 | Apache-2.0 |
+| `flutter_riverpod` | 3.4.3 | MIT |
+| `riverpod_annotation` | 4.0.7 | MIT |
+| `html` | 0.15.7 | MIT |
+| `cascadia` | 0.8.0 | BSD-3-Clause |
+| `json_path` | 0.9.0 | MIT |
+| `flutter_js_plus` | 0.0.4 | MIT |
+| `betto_charset_detector` | 0.1.0 | Apache-2.0 |
+| `dio` | 5.11.1 | MIT |
+| `cached_network_image` | 3.4.1 | MIT |
+| `drift` | 2.35.2 | MIT |
+| `drift_flutter` | 0.3.1 | MIT |
+| `shared_preferences` | 2.5.6 | BSD-2-Clause |
+| `path_provider` | 2.1.6 | BSD-2-Clause |
+| `logger` | 2.8.0 | MIT |
+| `freezed_annotation` | 3.1.0 | MIT |
+| `json_annotation` | 4.12.0 | BSD-2-Clause |
+| `flutter_lints`（dev） | 6.0.0 | BSD-2-Clause |
+| `riverpod_lint`（dev） | 3.1.9 | MIT |
+| `build_runner`（dev） | 2.16.2 | BSD-2-Clause |
+| `freezed`（dev） | 4.0.2 | MIT |
+| `json_serializable`（dev） | 6.14.1 | BSD-2-Clause |
+| `riverpod_generator`（dev） | 4.0.9 | MIT |
+| `drift_dev`（dev） | 2.35.1 | MIT |
+| `mocktail`（dev） | 1.0.5 | MIT |
+| `flutter` / `flutter_localizations` / `flutter_test`（SDK） | 3.47.7 | BSD-3-Clause（Flutter SDK） |
 
-**核实方法（有 Flutter SDK 的环境执行）：**
+---
 
-```bash
-flutter pub deps --json > /tmp/deps.json
-# 逐个核对 pub.dev 上的 license 字段，或使用许可证扫描工具；
-# 任何非宽松许可都必须先开 ADR 再决定是否引入。
-```
+## 6. 如何重新执行许可证扫描
 
-核实完成后，把上表「待核实」改为「已核实」，并追加传递依赖中出现的新许可类型。
+扫描只依赖本地 pub cache，不需要联网：
+
+1. 从 `pubspec.lock` 取出全部包名与版本；
+2. 逐个读取 `%LOCALAPPDATA%\Pub\Cache\hosted\pub.dev\<name>-<version>\` 下的
+   `LICENSE*` / `COPYING*`；
+3. 按特征串分类（`Permission is hereby granted` → MIT；`Apache License` + `Version 2.0`
+   → Apache-2.0；`Redistribution and use in source and binary forms` + `3. Neither the name`
+   → BSD-3-Clause；`GNU ...` → GPL 系）；
+4. 出现 GPL 系 / MPL / 无许可证文件 / 无法识别任一情况时，**先开 ADR 再决定**是否引入。
+
+**触发时机：** 新增依赖、升级依赖、以及**每次发布前**（发布时还需覆盖二进制产物）。
 
 ---
 

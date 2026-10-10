@@ -26,30 +26,21 @@
 Flutter 与 Dart 的版本基线见 [`docs/dev/tech-stack.md`](docs/dev/tech-stack.md) §1。
 其他工具链要求见 [`CONTRIBUTING.md`](CONTRIBUTING.md) §3.1。
 
-### 首次初始化
-
-仓库当前**只包含规范与配置**，尚无平台工程目录，因此必须先脚手架：
+### 环境准备（只需一次）
 
 ```bash
-# 1) 生成 Android / iOS / Windows 平台工程与 app 骨架
-#    已存在的文件不会被覆盖（仍在第 2 步核实）
-flutter create --platforms=android,ios,windows .
-
-# 2) 确认配置文件未被模板覆盖（应当无任何 diff）
-git diff --stat -- pubspec.yaml analysis_options.yaml l10n.yaml .gitignore
-
-# 3) 安装依赖并生成代码
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
-
-# 4) 生成国际化代码（引用 AppLocalizations 前必须执行）
 flutter gen-l10n
 ```
 
-> 第 2 步如果出现 diff，跑 `git checkout -- pubspec.yaml analysis_options.yaml l10n.yaml .gitignore` 恢复。
+> 平台工程（`android/`、`ios/`、`windows/`）、`lib/main.dart` 与 `test/` 已生成并纳入
+> 版本控制，**不需要**再执行 `flutter create`。
 >
-> `flutter create` 还会写入模板 `lib/main.dart` 与 `test/widget_test.dart`：
-前者需替换为真实入口，后者需删除或替换，否则本地与 CI 测试会失败。
+> **Windows 桌面开发必须先开启「开发者模式」**（需要管理员）：
+> `设置 → 系统 → 开发者选项 → 开发人员模式`，或执行 `start ms-settings:developers`。
+> 否则 `flutter run -d windows` 会因插件符号链接失败而直接退出，
+> 详见 [`docs/dev/platform.md`](docs/dev/platform.md) §1.2。
 
 ### 运行
 
@@ -67,7 +58,7 @@ dart run tool/check_coverage.dart
 ```
 
 完整门禁定义见 [`AGENTS.md`](AGENTS.md) §4。`riverpod_lint` 插件规则由
-`flutter analyze` 执行（`analysis_options.yaml` 的 `analyzer.plugins`）。
+`flutter analyze` 执行（`analysis_options.yaml` 顶层 `plugins:`）。
 
 ---
 
