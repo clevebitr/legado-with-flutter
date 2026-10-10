@@ -1,0 +1,22 @@
+# Keep line endings LF everywhere so `dart format --set-exit-if-changed` behaves
+# identically on Windows and in CI, and generated files never show CRLF churn.
+* text=auto eol=lf
+
+# Windows native projects own their line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets must never be normalised.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ttf binary
+*.otf binary
+
+# Generated files are committed (see docs/dev/testing.md) but excluded from
+# language statistics and diff noise reduction.
+*.g.dart linguist-generated=true
+*.freezed.dart linguist-generated=true
+*.gr.dart linguist-generated=true
+lib/l10n/generated/** linguist-generated=true

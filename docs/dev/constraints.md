@@ -342,7 +342,7 @@ docs/dev/testing.md、docs/dev/platform.md、docs/dev/tech-stack.md。
 - 主题：令牌取自 Theme.of(context).m3e（m3e_design）；禁止硬编码颜色/尺寸/字符串。
 - 平台：差异代码只放 core/platform/，经抽象接口注入；Windows/iOS 提供 fallback。
 - 持久化：结构化数据用 Drift，轻量开关用 shared_preferences。
-- 测试：core/ 与 domain/ 100% 覆盖，data/ ≥80%；Golden 用内置 matchesGoldenFile。
+- 测试：覆盖率门禁见 docs/dev/testing.md §2；Golden 用内置 matchesGoldenFile。
 - 依赖：使用 freezed + json_serializable；生成文件不手改。
 - 安全：禁止硬编码密钥；强制 HTTPS；JS 沙箱。
 - 性能：重计算放入 Isolate；列表懒加载。
