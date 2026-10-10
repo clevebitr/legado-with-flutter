@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation (2026-10-10)
+
+- Added `PLAN.md`: implementation order, per-phase acceptance criteria, gate checkpoints,
+  a rework-pitfall list distilled from this session, and a routing index for "I want to
+  build X, where do I read first". It owns *sequencing* only — scope stays in ADR-0014 and
+  rules stay in `docs/dev/*`.
+- Registered it in `docs/README.md` §1 and the `AGENTS.md` §2 map so it is not an orphan
+  document.
+
 ### Engine selection (2026-10-10)
 
 - Replaced `flutter_js_plus` with `flutter_qjs_next ^1.5.2` (MIT) and superseded ADR-0008 with
