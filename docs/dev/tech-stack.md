@@ -140,6 +140,12 @@ m3e.spacing.md;
 | `cascadia` | `^0.8.0` | CSS 选择器（唯一） | 全平台 | BSD-3-Clause | C-SRC-6 |
 | `json_path` | `^0.9.0` | JSONPath（唯一） | 全平台 | MIT | C-SRC-6 |
 | `flutter_js_plus` | `^0.0.4` | JS 引擎（FFI：Android/Linux/Windows 走 QuickJS，iOS/macOS 走 JavaScriptCore） | Android/iOS/Windows | MIT | C-SRC-2、C-SRC-3 |
+
+> ⚠️ **该依赖已实测不可用（2026-10-10）**：`0.0.4` 在 Dart 3.13 下
+> **编译失败**（4 处 `Pointer.fromFunction` 可空返回），Windows 上还有 CMake 目标名错误；
+> `timeout` 参数无效、DLL 缺 `jsSetMemoryLimit`。Isolate 架构本身经验证**成立**。
+> 引擎选型待裁决（ADR-0008 已标为部分失效），候选与建议见 `tool/spike/README.md`。
+> **在候选中选定前，本行不得视为可用的依赖承诺。**
 | `betto_charset_detector` | `^0.1.0` | 字符编码检测（唯一，纯 Dart） | 全平台 | Apache-2.0 | C-NET-3 |
 
 > **`betto_charset_detector` 的当前版本是 `0.1.0`**（尚未发布 1.x）。
@@ -207,7 +213,7 @@ m3e.spacing.md;
 | `golden_toolkit` | **移除** | 已停止维护；改用 Flutter 内置 `matchesGoldenFile`（ADR-0009） |
 | `material_you_dynamic_theme` | **禁止引入** | 与 `dynamic_color` + `m3e_design` 职责重叠，会出现两个取色真源（ADR-0004） |
 | `get_it` | **禁止引入** | 与 Riverpod 职责重叠（ADR-0005） |
-| `flutter_qjs` | **禁止引入** | 与 `flutter_js_plus` 重复；引擎只允许一个（ADR-0008） |
+| `flutter_qjs` | **待重新评估** | 原因「与 `flutter_js_plus` 重复」而禁止；现因 ADR-0008 部分失效，其维护中的后继 `flutter_qjs_next` 已成为首选候选（见 `tool/spike/README.md` §4） |
 | `Isar` / `Hive` | **未采用** | 持久化方案已定为 Drift（ADR-0003） |
 | `bloc` / `flutter_bloc` / `get` / `provider` | **禁止引入** | 状态管理唯一方案为 Riverpod（C-STATE-1） |
 | 任何 GPL-2.0-only / 无许可 / 专有许可的包 | **禁止引入** | 与 GPL-3.0 不兼容（C-DEP-7） |

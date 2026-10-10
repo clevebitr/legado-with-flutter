@@ -1,8 +1,26 @@
 # ADR-0008 JS 引擎只保留 `flutter_js_plus`
 
-- **状态：** Accepted
+- **状态：** ⚠️ **部分失效（待裁决）** —— 2026-10-10 实测：架构假设成立，但依赖本身在本工具链上不可用
 - **日期：** 2026-10-10
-- **关联：** C-SRC-2、C-SRC-3、`docs/dev/book-source.md` §6、`docs/dev/tech-stack.md` §5
+- **关联：** C-SRC-2、C-SRC-3、`docs/dev/book-source.md` §6、`docs/dev/tech-stack.md` §5、`tool/spike/README.md`
+
+> ## ⚠️ 实测结论（2026-10-10，见 `tool/spike/README.md`）
+>
+> 本 ADR 的**核心架构假设成立**：QuickJS 可在后台 Isolate 中创建、求值，
+> 且 JS→Dart 回调桥在 Isolate 内同样可用；runaway 脚本可由 `Isolate.kill` 终止且
+> 不污染原生库；复用运行时下 100 次求值仅 11ms（0.11ms/次）。
+>
+> 但以下部分**已被证据推翻，等待新 ADR 取代**：
+>
+> | 本 ADR 的结论 | 实测 |
+> |---|---|
+> | 采用 `flutter_js_plus 0.0.4` | ❌ 该版本在 Dart 3.13 下**编译失败**（4 处 `Pointer.fromFunction` 可空返回），Windows 上还有 CMake 目标名错误 |
+> | 单次 JS 超时 5 秒（引擎中断器） | ❌ `timeout` 参数**无效**；必须由调用方用「预算到期 `Isolate.kill`」实现 |
+> | 内存上限 32 MB | ❌ 预编译 DLL 未导出 `jsSetMemoryLimit` |
+> | 禁止在后台 Isolate 使用回调桥 | ✅ **担忧不成立**：回调桥在 Isolate 内正常工作 |
+>
+> **引擎选型未定**：候选与建议见 `tool/spike/README.md` §4–5（首选 `flutter_qjs_next`）。
+> 在选定前，`@js:` 不得计入 M0 完成判定。
 
 ## 背景
 

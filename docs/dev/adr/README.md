@@ -29,7 +29,7 @@
 | [0005](0005-no-get-it.md) | 不引入 `get_it`，依赖注入统一 Riverpod | Accepted | D6 |
 | [0006](0006-logging-facade.md) | 日志统一 `logger` + `core/logging` 门面 | Accepted | D8 |
 | [0007](0007-license.md) | 许可证：GNU GPL-3.0 | Accepted | D15 |
-| [0008](0008-single-js-engine.md) | JS 引擎只保留 `flutter_js_plus` | Accepted | D10 |
+| [0008](0008-single-js-engine.md) | JS 引擎只保留 `flutter_js_plus` | ⚠️ **部分失效（待裁决）** | D10 |
 | [0009](0009-golden-testing-builtin.md) | Golden 测试使用内置 `matchesGoldenFile` | Accepted | D12 |
 | [0010](0010-lint-baseline-and-gates.md) | lint 基线、无效规则清理与门禁入口 | Accepted | D13、D14 |
 | [0011](0011-builtin-navigator-routing.md) | 路由使用内置 `Navigator`，暂不引入 `go_router` | Accepted | 本次新增 |

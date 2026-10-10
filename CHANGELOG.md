@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Spike 1 — JS engine in a background Isolate (2026-10-10)
+
+- Added `tool/spike/js_isolate_spike_test.dart` (9 probes) and
+  `tool/spike/README.md` (evidence + engine option matrix).
+- **Confirmed:** QuickJS runs in a background Isolate, the JS -> Dart callback bridge works
+  there too, a runaway script is containable by `Isolate.kill` without poisoning the native
+  library, and a reused runtime evaluates in ~0.11 ms.
+- **Refuted:** `flutter_js_plus 0.0.4` fails to compile on Dart 3.13 (4 nullable `Pointer`
+  returns in `Pointer.fromFunction`), its Windows CMake target name mismatches the package
+  name, its `timeout` parameter has no effect, and the shipped DLL lacks `jsSetMemoryLimit`.
+- ADR-0008 marked **部分失效（待裁决）**; `@js:` is no longer counted toward M0 until an engine
+  is chosen. Preferred candidate: `flutter_qjs_next`.
+
 ### Toolchain (2026-10-10)
 
 - Installed Flutter 3.47.7 / Dart 3.13.5; scaffolded `android/`, `ios/`, `windows/`.

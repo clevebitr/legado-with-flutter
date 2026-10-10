@@ -118,7 +118,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | ID | 约束 |
 |---|---|
 | C-SRC-1 | 解析引擎必须为纯 Dart，且无 Flutter / UI 依赖（受 C-ARCH-7 约束）。 |
-| C-SRC-2 | JS 规则必须在**独立 Isolate** 中执行，禁止阻塞 UI 线程（见 ADR-0008）。 |
+| C-SRC-2 | JS 规则必须在**独立 Isolate** 中执行，禁止阻塞 UI 线程（见 ADR-0008）。超时必须由调用方实现：预算到期 `Isolate.kill(priority: immediate)`（引擎级 `timeout` 实测无效，见 `tool/spike/README.md`）。 |
 | C-SRC-3 | JS 桥接只暴露 `book-source.md` 声明的白名单 API；禁止暴露文件系统、进程、网络与原生日志。 |
 | C-SRC-4 | 不支持的规则类型必须返回 `ParseFailure(unsupportedRule)` 并记录日志；**禁止静默忽略**。 |
 | C-SRC-5 | URL 模板必须统一经 `renderUrlTemplate` 渲染；禁止手写字符串拼接。 |
