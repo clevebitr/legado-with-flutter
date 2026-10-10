@@ -161,6 +161,7 @@ class BookSource with _$BookSource {
 | C-UI-6 | 响应式布局必须使用 `LayoutBuilder` / `MediaQuery`；禁止固定宽高与非流式约束。 |
 | C-UI-7 | 所有交互组件必须提供 `Semantics` 标签；图片必须提供 `semanticLabel`。 |
 | C-UI-8 | 禁止在 `build` 中构造可常量化对象（`TextStyle`、`BoxDecoration`、`EdgeInsets`）；主题相关对象必须来自令牌。 |
+| C-UI-9 | 必须提供「关于 → 法律声明」页面，显示版权、无担保声明、GPL-3.0 全文查看入口与源代码获取入口（GPL-3.0 §0/§5d/§6）。文案键：`legalNoticesTitle`、`legalNoticesCopyright`、`legalNoticesNoWarranty`、`legalNoticesViewLicense`、`legalNoticesCorrespondingSource`。 |
 
 ```dart
 // ✅ 正确（已核实 m3e_design 0.2.1 API）
@@ -170,7 +171,7 @@ Container(
   padding: EdgeInsets.all(tokens.spacing.md),
   child: Text(
     AppLocalizations.of(context).bookSourceListTitle,
-    style: tokens.typography.titleLarge,
+    style: tokens.typography.base.titleLarge,
   ),
 );
 
@@ -182,8 +183,10 @@ Container(
 );
 ```
 
-> `M3ESpacing` 与 `M3ETypography` 的具体成员名以 `m3e_design` 0.2.1 的 IDE 补全为准。
-> 首次接入时必须在 PR 中把实际使用的成员名回写到本示例（ADR-0004 的待办项）。
+> `M3ESpacing` 成员已核实：`xs=4`、`sm=8`、`md=12`、`lg=16`、`xl=24`、`xxl=32`。
+> `M3ETypography` 是 `{TextTheme base, M3EEmphasized emphasized}`，取文本样式**必须经 `base`**
+> （`typography.base.titleLarge`，不存在 `typography.titleLarge`）。完整 API 清单见
+> `docs/dev/tech-stack.md` §3.1。
 
 ---
 
@@ -227,6 +230,7 @@ Container(
 | C-DEP-4 | 生成命令固定为 `dart run build_runner build --delete-conflicting-outputs`。 |
 | C-DEP-5 | 生成文件（`*.g.dart`、`*.freezed.dart`、`*.gr.dart`）禁止手改；冲突必须重新生成。 |
 | C-DEP-6 | `pubspec.yaml` 是依赖的唯一来源；`docs/dev/tech-stack.md` 的说明表必须与其同步，禁止只在其中一处新增依赖。 |
+| C-DEP-7 | 新增依赖必须与 GPL-3.0 兼容：宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；**禁止引入 GPL-2.0-only、无许可证或专有许可的依赖**。核实结果记入 `NOTICE.md` §5。 |
 
 ---
 
@@ -296,7 +300,7 @@ Container(
 | C-BAN-12 | 使用明文 HTTP（除非用户显式允许）。 |
 | C-BAN-13 | 在 `build` 中执行重计算。 |
 | C-BAN-14 | 一次性把大文件加载到内存。 |
-| C-BAN-15 | 忽略 `flutter analyze` 警告或跳过 `dart run custom_lint`。 |
+| C-BAN-15 | 忽略 `flutter analyze` 警告（含 `analyzer.plugins` 中的 riverpod_lint 规则）。 |
 
 ---
 
@@ -321,7 +325,7 @@ Container(
 - [ ] 使用 `freezed` / `json_serializable`，未手改生成文件（C-DEP-3/5）？
 - [ ] 无硬编码密钥、无明文 HTTP、无性能陷阱（C-SEC-1/2、C-PERF-1..5）？
 - [ ] 无未使用代码、无 TODO 占位、未修改生成文件（C-BAN-1/2/3）？
-- [ ] 已通过 `AGENTS.md` §4 的全部门禁命令（含 `dart run custom_lint`）？
+- [ ] 已通过 `AGENTS.md` §4 的全部门禁命令（`flutter analyze` 已包含 analyzer 插件规则）？
 - [ ] 若偏离了某条约束，已在 PR 描述中说明原因并获得用户确认？
 
 ---
@@ -343,15 +347,14 @@ docs/dev/testing.md、docs/dev/platform.md、docs/dev/tech-stack.md。
 - 平台：差异代码只放 core/platform/，经抽象接口注入；Windows/iOS 提供 fallback。
 - 持久化：结构化数据用 Drift，轻量开关用 shared_preferences。
 - 测试：覆盖率门禁见 docs/dev/testing.md §2；Golden 用内置 matchesGoldenFile。
-- 依赖：使用 freezed + json_serializable；生成文件不手改。
+- 依赖：使用 freezed + json_serializable；生成文件不手改；新依赖必须 GPL-3.0 兼容。
 - 安全：禁止硬编码密钥；强制 HTTPS；JS 沙箱。
 - 性能：重计算放入 Isolate；列表懒加载。
 
 禁止：未使用代码、TODO 占位、dynamic、! 强制解包、硬编码字符串/颜色、
 未声明的依赖、跳过 dart run custom_lint。
 
-必须通过：dart format --set-exit-if-changed . / flutter analyze（零警告）/
-dart run custom_lint / flutter test。
+必须通过：dart format --set-exit-if-changed . / flutter analyze（零警告）/ flutter test。
 ```
 
 ---

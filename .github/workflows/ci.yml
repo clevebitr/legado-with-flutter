@@ -34,9 +34,6 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Custom lint
-        run: dart run custom_lint
-
       - name: Test
         run: flutter test --coverage
 

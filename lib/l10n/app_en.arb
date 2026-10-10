@@ -44,6 +44,26 @@
   "@failureInvalidBookSource": {
     "description": "User-facing message for ParseFailureKind.invalidBookSource."
   },
+  "legalNoticesTitle": "Legal notices",
+  "@legalNoticesTitle": {
+    "description": "Title of the legal notices screen required by GPL-3.0 section 0."
+  },
+  "legalNoticesCopyright": "flutter_reader, Copyright (C) 2026 Clevebitr.",
+  "@legalNoticesCopyright": {
+    "description": "Copyright line shown on the legal notices screen."
+  },
+  "legalNoticesNoWarranty": "This program comes with ABSOLUTELY NO WARRANTY. It is free software licensed under the GNU GPL-3.0, and you are welcome to redistribute it under certain conditions.",
+  "@legalNoticesNoWarranty": {
+    "description": "No-warranty and redistribution notice required by GPL-3.0 section 5d."
+  },
+  "legalNoticesViewLicense": "View the full license",
+  "@legalNoticesViewLicense": {
+    "description": "Action that opens the bundled GPL-3.0 license text."
+  },
+  "legalNoticesCorrespondingSource": "Corresponding source code",
+  "@legalNoticesCorrespondingSource": {
+    "description": "Action that opens the source code location required by GPL-3.0 section 6."
+  },
   "failureUnsupportedRule": "This book source uses a rule type that is not supported yet.",
   "@failureUnsupportedRule": {
     "description": "User-facing message for ParseFailureKind.unsupportedRule."

@@ -28,13 +28,14 @@
 | [0004](0004-m3e-theme-tokens-and-dynamic-color.md) | 主题令牌以 `m3e_design` 为准，取色用 `dynamic_color` | Accepted | D4、D5 |
 | [0005](0005-no-get-it.md) | 不引入 `get_it`，依赖注入统一 Riverpod | Accepted | D6 |
 | [0006](0006-logging-facade.md) | 日志统一 `logger` + `core/logging` 门面 | Accepted | D8 |
-| [0007](0007-license.md) | 许可证选择 | **Proposed（待裁决）** | D15 |
+| [0007](0007-license.md) | 许可证：GNU GPL-3.0 | Accepted | D15 |
 | [0008](0008-single-js-engine.md) | JS 引擎只保留 `flutter_js_plus` | Accepted | D10 |
 | [0009](0009-golden-testing-builtin.md) | Golden 测试使用内置 `matchesGoldenFile` | Accepted | D12 |
 | [0010](0010-lint-baseline-and-gates.md) | lint 基线、无效规则清理与门禁入口 | Accepted | D13、D14 |
 | [0011](0011-builtin-navigator-routing.md) | 路由使用内置 `Navigator`，暂不引入 `go_router` | Accepted | 本次新增 |
 | [0012](0012-docs-single-source-of-truth.md) | 文档单一来源（SSOT）与约束条目 ID 方案 | Accepted | 本次审计 |
 | [0013](0013-single-source-for-gates-and-versions.md) | 门禁阈值与版本基线各自只有一处定义 | Accepted | D11、D16 |
+| [0014](0014-book-source-minimal-scope.md) | 书源功能范围：对标原版阅读的最小实现分期 | Accepted | 本次新增 |
 
 ---
 

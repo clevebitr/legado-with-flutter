@@ -54,15 +54,15 @@
 
 ```bash
 dart format --set-exit-if-changed .
-flutter analyze                                            # 必须零警告
-dart run custom_lint                                       # analyze 不会执行插件规则
+flutter analyze                                            # 必须零警告（含 analyzer 插件规则）
 flutter test
 dart run build_runner build --delete-conflicting-outputs
 git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'  # 生成物与源码同步
 ```
 
-> `analysis_options.yaml` 里的 `analyzer.plugins` 规则**只在 `dart run custom_lint` 中执行**。
-> 只跑 `flutter analyze` 视为门禁未通过。
+> `riverpod_lint` 自 3.1.9 起改用 `analysis_server_plugin` 实现，通过
+> `analysis_options.yaml` 的 `analyzer.plugins` 安装，**由 `flutter analyze` 执行**。
+> 不再需要 `custom_lint`（ADR-0010）。
 
 ---
 
@@ -76,6 +76,7 @@ git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'  # 生成物与源码�
 - 硬编码颜色、尺寸、用户可见字符串、API Key
 - 明文 HTTP；跨 `await` 使用 `context` 不检查 `mounted`
 - 在 `build` 中执行重计算；一次性把大文件读进内存
+- 引入与 GPL-3.0 不兼容的依赖（GPL-2.0-only / 无许可 / 专有许可）
 
 ---
 

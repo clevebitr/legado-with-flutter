@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `LICENSE` (GNU GPL-3.0) and `NOTICE.md`: copyright, upstream relationship, disclaimer,
+  GPL compliance obligations and a third-party license inventory.
 - `docs/README.md` as the single authoritative index for every documentation path.
 - `docs/dev/architecture.md`: directory tree, layer boundaries, Riverpod DI, routing, and the
   `ParseResult` / `ParseFailureKind` contract.
@@ -34,6 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State management is Riverpod with mandatory `@riverpod` code generation; the `XxxViewModel`
   naming and `presentation/viewmodels/` path are deprecated.
 - Logging goes through a `core/logging` facade backed by `logger`.
+- Dependency versions pinned to the current pub.dev releases; see `docs/dev/tech-stack.md` §1.
+
+### Fixed
+
+- `betto_charset_detector` constraint corrected to `^0.1.0` (the previously documented
+  `^1.0.0` does not exist).
+- Replaced the EOL `sqlite3_flutter_libs` with `drift_flutter` (drift's current
+  recommendation; the former fails to bundle native SQLite on newer Android toolchains).
+- Theme API corrected against the official `m3e_design` 0.2.1 surface: text styles are read
+  via `m3e.typography.base.titleLarge`; spacing is `m3e.spacing.{xs,sm,md,lg,xl,xxl}`.
+- `riverpod_lint` 3.1.9 switched from `custom_lint` to `analysis_server_plugin`, so
+  `custom_lint` was removed and the gate is now plain `flutter analyze`.
 
 ### Removed
 
@@ -45,6 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pending decisions
 
-- License selection (MIT vs GPL-3.0) — see `docs/dev/adr/0007-license.md`.
 - Version constraints in `pubspec.yaml` are not yet verified with `flutter pub get`;
   see `docs/dev/adr/0010-lint-baseline-and-gates.md`.
+- Third-party license verification is incomplete; see `NOTICE.md` §5.
+- The bundled GPL-3.0 text should be diffed against the canonical copy once network
+  access is available; see `docs/dev/adr/0007-license.md`.
+- Grammar rows in `docs/dev/book-source.md` §3 are still marked 待验证 and require
+  regression against real book sources before the first importable release.

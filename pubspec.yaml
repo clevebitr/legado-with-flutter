@@ -13,33 +13,35 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # UI 与主题（唯一设计令牌来源，见 docs/dev/constraints.md C-UI-1）
-  m3e_design: ^0.2.0
+  # UI 与主题：设计令牌的唯一来源（C-UI-1、ADR-0004）
+  m3e_design: ^0.2.1
   dynamic_color: ^2.1.0
 
-  # 状态管理（唯一方案 + 强制代码生成，见 ADR-0001）
+  # 状态管理：唯一方案 + 强制代码生成（C-STATE-1/2、ADR-0001）
   flutter_riverpod: ^3.4.3
   riverpod_annotation: ^3.0.0
 
-  # 书源解析引擎
+  # 书源解析引擎（book-source.md、ADR-0008）
   html: ^0.15.6
   cascadia: ^0.8.0
   json_path: ^0.9.0
   flutter_js_plus: ^0.0.4
-  betto_charset_detector: ^1.0.0
+  betto_charset_detector: ^0.1.0
 
   # 网络
   dio: ^5.7.0
   cached_network_image: ^3.4.1
 
-  # 持久化（Drift 为主库，见 ADR-0003）
-  drift: ^2.20.0
-  sqlite3_flutter_libs: ^0.5.0
+  # 持久化：Drift 为主库，drift_flutter 提供各平台原生 SQLite（ADR-0003）
+  # 禁止使用 sqlite3_flutter_libs：上游已 EOL（0.6.0+eol），在新版 Android 工具链上
+  # 不再正确打包原生库，会在启动时抛 DriftRemoteException。
+  drift: ^2.35.2
+  drift_flutter: ^0.3.1
   shared_preferences: ^2.5.3
-  path_provider: ^2.1.5
+  path_provider: ^2.1.6
 
-  # 观测
-  logger: ^2.0.0
+  # 观测：业务侧只允许经 core/logging 使用（C-ERR-5、ADR-0006）
+  logger: ^2.8.0
 
   # 代码生成注解
   freezed_annotation: ^3.1.0
@@ -49,20 +51,21 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # Lint
+  # Lint：riverpod_lint ≥3.1.9 已改为 analysis_server_plugin 实现，
+  # 通过 analysis_options.yaml 的 analyzer.plugins 安装，由 flutter analyze 执行；
+  # 不再需要 custom_lint（ADR-0010）。
   flutter_lints: ^6.0.0
-  custom_lint: ^0.7.0
-  riverpod_lint: ^3.0.0
+  riverpod_lint: ^3.1.9
 
   # 代码生成
-  build_runner: ^2.15.0
+  build_runner: ^2.16.2
   freezed: ^3.2.5
-  json_serializable: ^6.12.0
+  json_serializable: ^6.14.1
   riverpod_generator: ^3.0.0
-  drift_dev: ^2.20.0
+  drift_dev: ^2.35.2
 
   # 测试
-  mocktail: ^1.0.4
+  mocktail: ^1.0.5
 
 flutter:
   uses-material-design: true

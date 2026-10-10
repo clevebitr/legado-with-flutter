@@ -30,8 +30,7 @@ Closes #
 <!-- 逐条粘贴实际结果，不要只写「已通过」。 -->
 
 - [ ] `dart format --set-exit-if-changed .`
-- [ ] `flutter analyze` 零警告
-- [ ] `dart run custom_lint`
+- [ ] `flutter analyze` 零警告（含 `analyzer.plugins` 的 riverpod_lint 规则）
 - [ ] `flutter test --coverage`
 - [ ] `dart run tool/check_coverage.dart`
 - [ ] `dart run build_runner build --delete-conflicting-outputs` 后无生成物差异

@@ -37,6 +37,8 @@
 
 | 路径 | 职责 |
 |---|---|
+| `LICENSE` | GNU GPL-3.0 官方全文（项目许可证） |
+| `NOTICE.md` | 版权、与上游 Legado 的关系、免责声明、GPL 合规义务、第三方依赖许可清单 |
 | `pubspec.yaml` | 依赖声明；**唯一**依赖来源 |
 | `analysis_options.yaml` | 静态分析与 lint；**唯一** lint 来源 |
 | `l10n.yaml` | 国际化生成配置 |

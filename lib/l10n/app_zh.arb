@@ -11,5 +11,10 @@
   "failureEncodingFailed": "无法识别页面编码。",
   "failureParseFailed": "解析失败，书源规则可能已失效。",
   "failureInvalidBookSource": "该文件不是有效的书源。",
+  "legalNoticesTitle": "法律声明",
+  "legalNoticesCopyright": "flutter_reader，版权所有 (C) 2026 Clevebitr。",
+  "legalNoticesNoWarranty": "本程序不提供任何担保。它是以 GNU GPL-3.0 许可发布的自由软件，你可以在特定条件下自由再分发。",
+  "legalNoticesViewLicense": "查看完整许可证",
+  "legalNoticesCorrespondingSource": "对应源代码",
   "failureUnsupportedRule": "该书源使用了暂不支持的规则类型。"
 }

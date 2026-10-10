@@ -40,13 +40,12 @@ flutter run -d windows     # 或 -d android / -d ios
 ```bash
 dart format --set-exit-if-changed .
 flutter analyze
-dart run custom_lint
 flutter test --coverage
 dart run tool/check_coverage.dart
 ```
 
-完整门禁定义见 [`AGENTS.md`](AGENTS.md) §4。**注意：** `flutter analyze`
-不会执行 `custom_lint` 插件规则，两者必须都跑。
+完整门禁定义见 [`AGENTS.md`](AGENTS.md) §4。`riverpod_lint` 插件规则由
+`flutter analyze` 执行（`analysis_options.yaml` 的 `analyzer.plugins`）。
 
 ---
 
@@ -74,14 +73,28 @@ dart run tool/check_coverage.dart
 |---|---|
 | 文档规范体系 | v2.0，已按单一来源（SSOT）重构 |
 | 应用代码 | 尚未实现（当前仓库以规范与配置为主） |
-| 书源规格 | v0.1 提案，尚需真实书源回归验证 |
+| 书源规格 | v1.0，对标原版阅读（Legado）；语法行状态待真实书源回归逐行确认 |
 | 覆盖率门禁 | 已可执行（`tool/check_coverage.dart`） |
-| 许可证 | **待裁决**，见 [`docs/dev/adr/0007-license.md`](docs/dev/adr/0007-license.md) |
+| 许可证 | **GNU GPL-3.0**，见 [`LICENSE`](LICENSE) 与 [`NOTICE.md`](NOTICE.md) |
+| 依赖许可核实 | 部分依赖仍为「待核实」，见 [`NOTICE.md`](NOTICE.md) §5 |
+
+---
+
+## 许可证
+
+本项目采用 **GNU GPL-3.0**（version 3 only）。完整文本见 [`LICENSE`](LICENSE)。
+
+分发本程序的任何形式（包括二进制与应用商店包）都必须同时提供对应源代码，
+并保留版权与许可证声明；应用内「关于 → 法律声明」提供许可证全文入口。
+详见 [`NOTICE.md`](NOTICE.md) §4 的合规义务清单。
 
 ---
 
 ## 免责声明
 
-本项目是独立的阅读客户端实现，**不提供、不托管、不传播任何书源或阅读内容**。
+本项目是独立的阅读客户端实现，**不提供、不托管、不传播、不索引任何书源或阅读内容**。
 用户自行导入的第三方书源及其内容由用户自行承担合规责任。
-本项目与 Legado 项目及其作者无隶属关系。
+本项目不绕过任何付费、登录或版权保护机制。
+本项目与 Legado 项目及其作者**无隶属关系**，也未经其背书。
+
+软件按“现状”提供，**不提供任何担保**（GPL-3.0 §15、§16）。

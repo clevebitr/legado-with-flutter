@@ -99,8 +99,9 @@ dart run build_runner build --delete-conflicting-outputs
 
 ### 3.3 运行检查
 
-门禁命令以 [`AGENTS.md`](./AGENTS.md) §4 为准。**注意：**
-`flutter analyze` 不会执行 `custom_lint` 插件规则，必须额外运行 `dart run custom_lint`。
+门禁命令以 [`AGENTS.md`](./AGENTS.md) §4 为准。
+`riverpod_lint` 插件规则由 `flutter analyze` 执行（`analyzer.plugins`，ADR-0010），
+不需要额外的 lint 运行器。
 
 ---
 
@@ -235,16 +236,19 @@ Reviewer 必须检查 PR 是否满足自查清单
 
 ## 8. 许可证
 
-> **状态：待裁决。** 旧版本本文档曾声明 MIT，与上游 Legado 的 GPL-3.0 存在潜在冲突，
-> 详见 [`docs/dev/adr/0007-license.md`](./docs/dev/adr/0007-license.md)。
+本项目采用 **GNU GPL-3.0**（version 3 only），完整文本见 [`LICENSE`](./LICENSE)。
 
-在裁决完成前，请不要假设本项目采用某一具体许可证。裁决完成后，
-本节会写明许可证名称并链接到根目录的 `LICENSE` 与 `NOTICE.md`。
+- 版权、与上游 Legado 的关系声明、免责声明与 **GPL 合规义务清单**见 [`NOTICE.md`](./NOTICE.md)。
+- **贡献即同意**在相同许可证下发布你的贡献。
+- 提交 PR 时若新增依赖，必须确认其许可与 GPL-3.0 兼容
+  （见 `docs/dev/constraints.md` C-DEP-7），并把结论写入 `NOTICE.md` §5。
+- 分发（含应用商店）必须同时提供对应源代码；不得附加额外限制条款。
 
 ### 免责声明
 
-本项目是独立的阅读客户端实现，**不提供、不托管、不传播任何书源或阅读内容**。
+本项目是独立的阅读客户端实现，**不提供、不托管、不传播、不索引任何书源或阅读内容**。
 用户自行导入的第三方书源及其内容由用户自行承担合规责任。
+本项目与 Legado 项目及其作者无隶属关系。
 
 ---
 

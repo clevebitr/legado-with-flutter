@@ -126,7 +126,6 @@ dart run build_runner build --delete-conflicting-outputs
 git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart' '**/*.gr.dart'
 dart format --set-exit-if-changed .
 flutter analyze
-dart run custom_lint
 flutter test --coverage
 dart run tool/check_coverage.dart
 ```
@@ -135,7 +134,9 @@ dart run tool/check_coverage.dart
 
 - **生成物一致性检查**（第 3 步）保证 `*.g.dart` / `*.freezed.dart` 与源码同步，
   防止手改或忘记重新生成（C-DEP-5）。
-- `flutter analyze` **不会**执行 `custom_lint` 插件规则，两者必须都跑（ADR-0010）。
+- `riverpod_lint` 自 3.1.9 起改用 `analysis_server_plugin`，经
+  `analysis_options.yaml` 的 `analyzer.plugins` 安装并**由 `flutter analyze` 执行**，
+  不再需要 `custom_lint`（ADR-0010）。
 - Golden 测试在 CI 中必须固定平台（`runs-on: ubuntu-latest`），
   禁止在有字体差异的多个平台上跑同一套基线。
 
