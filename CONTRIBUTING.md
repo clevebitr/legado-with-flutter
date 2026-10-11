@@ -174,7 +174,7 @@ refactor: extract network layer into separate service
 | 关联 Issue | 使用 `Closes #123` |
 | 门禁 | 请求 Review 前必须通过 `AGENTS.md` §4 全部命令 |
 | ADR | 若改变了既有决策，必须附带新增的 ADR |
-| Reviewer | 至少指定 1 名 Reviewer；作者不能自行 Approve 或 Merge |
+| Reviewer | **存在第二名维护者时**至少指定 1 名 Reviewer；作者不能自行 Approve 或 Merge（单人维护期见 §5.4 的适用条件） |
 
 ### 5.2 PR 描述模板
 
@@ -188,7 +188,7 @@ refactor: extract network layer into separate service
 
 | 维度 | 要求 |
 |---|---|
-| 批准条件 | 至少 1 名其他成员 Approve |
+| 批准条件 | **存在第二名维护者时**，至少 1 名其他成员 Approve；单人维护期不适用（见下方适用条件） |
 | PR 作者 | 不能自行 Approve 或 Merge |
 | Review 语气 | 建设性、具体、解释原因、提供替代方案 |
 | 关注优先级 | 正确性 > 可维护性 > 性能 > 风格 |
@@ -196,6 +196,18 @@ refactor: extract network layer into separate service
 Reviewer 必须检查 PR 是否满足自查清单
 （[`docs/dev/constraints.md`](./docs/dev/constraints.md) §15），
 而不是只依赖 CI 结果。
+
+> **「他人 Approve」的适用条件（2026-10-11）：** §5.1 / §5.4 的「至少 1 名其他成员 Approve」
+> 以**存在第二名维护者**为前提，它是条件规则而不是绝对要求。GitHub 禁止自我批准，单人维护期
+> 若强制要求 1 个批准，会让**每一个 PR 永久无法合并**。因此 `main` 的保护规则集当前把
+> `required_approving_review_count` 设为 `0`；其余各项（必须走 PR、CI `verify` 必须通过且分支
+> 须与 `main` 同步、只允许 Squash、禁止强推与删除、无 bypass 名单——**包括仓库所有者本人**）
+> 一律照常生效。
+>
+> **触发条件（不得省略）：** 一旦有第二名维护者取得 write 权限，**必须立即**把该值改为 `1`，
+> 否则本节形同虚设。改动方式：`gh api repos/<owner>/<repo>/rulesets` 取 `main` 规则集的 `id`，
+> GET 该规则集后把 `pull_request.parameters.required_approving_review_count` 改为 `1` 再 PUT 回去
+> （该接口为整体替换），或在仓库 Settings → Rules 中编辑。
 
 ---
 
