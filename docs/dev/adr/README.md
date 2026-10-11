@@ -42,6 +42,8 @@
 | [0018](0018-android-min-sdk-baseline.md) | Android 平台基线：保留 `minSdk 26`，并重建其依据 | Accepted | 本次新增 |
 | [0019](0019-coverage-gate-must-detect-unmeasured-files.md) | 覆盖率门禁必须检测「未出现在报告中的源文件」 | Accepted | 本次新增 |
 | [0020](0020-dynamic-color-provider-builder-shape.md) | 动态取色接口以 builder 包装形态提供，并在根部注入 | Accepted | 本次新增 |
+| [0021](0021-book-source-models-live-in-domain.md) | 书源模型位于 domain 实体，并携带 JSON 序列化注解 | Accepted | 本次新增 |
+| [0022](0022-json-serializable-checked-mode.md) | 书源 JSON 解析启用 json_serializable 的 `checked` 模式 | Accepted（架构师复审裁决） | 本次新增 |
 
 ---
 

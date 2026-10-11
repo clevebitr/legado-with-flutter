@@ -1,0 +1,23 @@
+# =============================================================================
+# build.yaml —— 代码生成器配置
+#
+# 规范来源：docs/dev/constraints.md C-DEP-3 / C-DEP-4、docs/dev/adr/0022-*.md
+# 生成命令的唯一出处是 C-DEP-4，本文件不重复声明。
+#
+# 为什么必须开 `checked`（ADR-0022）：
+#   json_serializable 6.14.1 的默认值是 `checked: false`（已核实
+#   `lib/src/type_helpers/config_types.dart` 的 `ClassConfig.defaults.checked = false`）。
+#   未检查模式下，缺必填键抛 `TypeError`、非法枚举值抛 `ArgumentError`——都是 `Error`，
+#   而 C-ERR-2（`avoid_catching_errors`，error 级）禁止捕获 `Error`，
+#   于是 `book-source.md` §7 规定的 `ParseFailureKind.invalidBookSource` 无法实现。
+#   开启后抛的是 `CheckedFromJsonException implements Exception`，并且自带
+#   `key` / `badKey` / `innerError`，正好是 C-SRC-8 需要的 `rulePath` 来源。
+#
+# 影响面：所有 `*.g.dart` 的 fromJson 形态都会变化，切换必须在同一个 PR 内重生成。
+# =============================================================================
+targets:
+  $default:
+    builders:
+      json_serializable:
+        options:
+          checked: true

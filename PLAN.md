@@ -15,10 +15,12 @@
 
 | 已完成 | 尚未开始 |
 |---|---|
-| Flutter 3.47.7 工具链、Android/Windows 双目标可构建 | `lib/` 下的业务代码（目前只有 `main.dart` / `app.dart` / `core/theme/`） |
-| 规范体系（103 条约束 ID）、15 条 ADR | 书源解析引擎 |
-| 门禁全链路 + GitHub CI（全绿） | 阅读器、书架、设置等任何 UI |
-| 引擎选型（ADR-0015，已实测） | 持久化（Drift 表尚未定义） |
+| Flutter 3.47.7 工具链、Android/Windows 双目标可构建 | 书源解析引擎（Phase 2） |
+| 规范体系（103 条约束 ID）、15 条 ADR | 阅读器、书架、设置等任何 UI（Phase 5） |
+| 门禁全链路 + GitHub CI（全绿） | 业务数据表（书源、章节、阅读进度） |
+| 引擎选型（ADR-0015，已实测） | 缓存、限速等运行时策略 |
+
+> 本节记录的是 **Phase 0 结束时的起点**，不再随进度更新；各阶段的完成状态与交接事项见 §3。
 
 ---
 
@@ -42,10 +44,11 @@
 ```
 Phase 0  环境与规范                      ✅ 已完成
    │
-Phase 1  core 基础设施                    ← 从这里开始
+Phase 1  core 基础设施                    ✅ 已完成（记录见 §3）
    │     ParseResult → logging → platform → network → storage
    │
-Phase 2  书源引擎【竖切】                  1 个书源 + 默认 CSS 规则，全链路打通
+Phase 2  书源引擎【竖切】                  ← 从这里开始
+   │     1 个书源 + 默认 CSS 规则，全链路打通
    │     模型 → RuleEngine(最小) → UseCase → 最小 UI
    │
 Phase 3  M0 横向铺开                     矩阵 #1–#14（含 @js: 与 JsBridge）
@@ -84,6 +87,35 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 **完成判定：** `AGENTS.md` §4 的全部门禁（含覆盖率门禁）全绿，且 `lib/core/**` 覆盖率 100%。
 
+#### Phase 1 完成记录（2026-10-11）
+
+**状态：** ✅ 已完成，**G1 达成** —— `AGENTS.md` §4 的六条门禁命令全绿（命令清单归该节，
+阈值归 `docs/dev/testing.md` §2），`lib/core/**` 行覆盖率 100%。本阶段交付的能力多数
+**尚无生产消费方**（只有测试消费方）：第一个生产消费方在 Phase 2 的书源链路里出现。
+
+**本阶段产出 / 修订的 ADR：** 0016（密封层级子类形态以编译器产物为准）、0017（测试文件在
+`test/` 下镜像 `lib/`）、0019（覆盖率门禁必须检测未测量源文件；阶段末把 allowlist 理由扩为
+三类）、0020（动态取色接口以 builder 包装形态提供，并在根部注入）；0013 因
+`build_runner 2.16` 移除 `--delete-conflicting-outputs` 而修订。
+
+**依赖变化：** 1.2 引入 `crypto`（日志摘要）、1.4 引入 `charset`（解码 —— `betto_charset_detector`
+只检测不解码）；`pubspec.yaml`、`docs/dev/tech-stack.md`、`NOTICE.md` §5 三处已同步（C-DEP-6/7）。
+
+**覆盖率豁免：** `tool/coverage_allowlist.txt` 现有两条，理由分别属 ADR-0019 的第二类
+（原生库 + 后台 isolate，`flutter test` 不可达）与第三类（代码生成器输入，运行时不可达）。
+
+**交接给后续阶段（不得静默丢弃）：**
+
+| 事项 | 去向 |
+|---|---|
+| `rulePath` 非空断言 + 失败构造唯一入口 `failureAt` | 已登记 **2.7** |
+| 同一书源并发上限 3 + 章节正文有限并发 | 已登记 **3.8** |
+| charset 检测结果缓存（`book-source.md` §5 要求「书源 ID + URL」两维） | Phase 2 决定接口形状：现有 `CacheDao` 的键是四维（含规则字段与页码） |
+| 按书源清理缓存 | 未实现（C-NET-6 只要求 TTL + 稳定键）；若需要则加列并走 schema dump 流程 |
+| 文件型数据库（后台 isolate + 原生库） | 无自动化覆盖：需 `flutter run` 或 `integration_test`（验证命令见 `database_executor_provider.dart` 文档） |
+| Big5 / Big5-HKSCS 解码 | 已知缺口，见 `book-source.md` §5.1，待排期 |
+| `NOTICE.md` §5 许可证分类（§6 的标记匹配不到项目符号写法） | 待裁决 |
+
 ---
 
 ### Phase 2 — 书源引擎【竖切】
@@ -106,6 +138,28 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 **完成判定：** 1 个真实书源完成「搜索 → 详情 → 目录 → 正文」**离线回放**，
 且手动跑通一次真实链路。
 
+#### Phase 2 完成记录 / 交接（进行中：2.1 已完成）
+
+**2.1 状态：** ✅ 已完成 —— 模型落在
+`lib/features/book_source/domain/entities/book_source.dart`（`BookSourceType`、`BookSource`、
+`SearchRule`、`BookInfoRule`、`TocRule`、`ContentRule`）；验收「能用真实书源 JSON 反序列化」
+由**真实导出语料**达成：`test/fixtures/book_sources/legado_export_sanitized.json`
+（公开合集取 1 条，脱敏主机与名称、规则串逐字保留；27 个顶层键里 16 个未建模，
+正是 `extra` 的验证对象，来源与脱敏记录见该目录的 `README.md`）。
+
+**本步产出 / 修订的 ADR：** 0021（书源模型位于 domain 实体并携带 JSON 注解；架构师复审追认）、
+0022（`json_serializable` 开 `checked: true`；架构师复审裁决）。
+
+**交接给后续步骤（不得静默丢弃）：**
+
+| 事项 | 去向 |
+|---|---|
+| `json_serializable` 未检查模式的错误不可捕获 → `invalidBookSource` | 已按架构师裁决落 **ADR-0022**（根 `build.yaml` + `checked: true`），本期收口 |
+| `replaceRegex`（M0）无阶段归属 | 并入 **3.5** |
+| `lastUpdateTime` / `respondTime` / `weight` / `customOrder`（M0，仅展示与排序） | 并入 **Phase 5.4** |
+| `extra` 的导出合并（`toLegadoJson`） | 随导入 / 导出功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出 |
+| Big5 / Big5-HKSCS 解码缺口 | 承 Phase 1，仍待排期（`book-source.md` §5.1） |
+
 ---
 
 ### Phase 3 — M0 横向铺开
@@ -118,7 +172,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 3.2 | `\|\|`（#10）、`&&`（#11）、`@css:`（#12）、`@json:`（#13） | 同上 |
 | 3.3 | `JsBridge`：专用 Isolate + **复用运行时** + `timeout: 5000` + `memoryLimit: 32MB` + `Isolate.kill` 兜底 | ADR-0015、C-SRC-2；`sendMessage` 载荷必须是合法 JSON |
 | 3.4 | `@js:` 规则接入（#14）+ JS 白名单绑定（`baseUrl`/`result`/`parse.*`/`http.*`/`log.*`） | `book-source.md` §6 白名单逐项有测试；越权访问被拒绝 |
-| 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定 | 各 1 条单测 |
+| 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定、`replaceRegex` 批量替换（含建模 `ContentRule.replaceRegex`） | 各 1 条单测 |
 | 3.6 | 失败语义全量：9 个 `ParseFailureKind` 各有触发路径 | 每个 kind ≥1 条单测 |
 | 3.7 | **真实书源验证记录** | 按 `book-source.md` §10 格式写入 PR，并把矩阵状态列改为「已确认」 |
 | 3.8 | 同一书源并发上限（默认 3）+ 章节正文串行/有限并发 | `book-source.md` §8 | 并发上限可配且有单测；超限请求排队而非并发发出；M1 的 `concurrentRate` 覆盖留到 Phase 4 |
@@ -145,6 +199,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 5.1 | 预测性返回接线：`PredictiveBackSupport` → `PageTransitionsTheme` + `AndroidManifest.xml` 的 `enableOnBackInvokedCallback`（C-UI-4、C-PLT-2） | Android 13+ 侧滑返回出现预览动画 |
 | 5.2 | `SystemUiController`：状态栏透明与 edge-to-edge 适配 | edge-to-edge 下内容不被遮挡 |
 | 5.3 | `HapticsController`：触感反馈能力探测与降级 | 不支持的平台 no-op 且不抛异常 |
+| 5.4 | 书源展示与排序字段建模：`lastUpdateTime` / `respondTime` / `weight` / `customOrder`（M0，`book-source.md` §2「仅用于展示与排序」，现落在 `extra`） | 书源列表按 `weight` / `customOrder` 排序，`respondTime` 参与展示；四个字段有排序 / 展示单测 |
 
 完成判定：`C-UI-9` 页面存在且可达（widget 测试断言）；三端平台验收清单（`platform.md` §6）逐项通过。
 

@@ -79,11 +79,11 @@ flutter run -d windows     # 或 -d android / -d ios
 | 项 | 状态 |
 |---|---|
 | 文档规范体系 | v2.0，已按单一来源（SSOT）重构 |
-| 应用代码 | 尚未实现（当前仓库以规范与配置为主） |
+| 实现进度 | **Phase 1（`core` 基础设施：error / logging / platform / network / storage）已完成**；Phase 2（书源引擎）未开始。阶段状态与验收标准的唯一出处：[`PLAN.md`](PLAN.md) §3 |
 | 书源规格 | v1.0，对标原版阅读（Legado）；语法行状态待真实书源回归逐行确认 |
-| 覆盖率门禁 | 已可执行（`tool/check_coverage.dart`） |
-| 许可证 | **GNU GPL-3.0**，见 [`LICENSE`](LICENSE) 与 [`NOTICE.md`](NOTICE.md) |
-| 依赖许可核实 | 部分依赖仍为「待核实」，见 [`NOTICE.md`](NOTICE.md) §5 |
+| 覆盖率门禁 | 已可执行（`tool/check_coverage.dart`）；阈值与判定规则见 [`docs/dev/testing.md`](docs/dev/testing.md) §2 |
+| 许可证 | **GNU GPL-3.0**（version 3 only），见 [`LICENSE`](LICENSE) 与 [`NOTICE.md`](NOTICE.md) |
+| 依赖许可核实 | ✅ 已完成：`pubspec.lock` 中 150 个包全部扫描，零风险项，见 [`NOTICE.md`](NOTICE.md) §5 |
 
 ---
 

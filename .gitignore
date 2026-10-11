@@ -27,6 +27,7 @@ test/**/failures/
 !.vscode/tasks.json
 !.vscode/extensions.json
 *.code-workspace
+anget_payload.txt
 
 # OS
 .DS_Store

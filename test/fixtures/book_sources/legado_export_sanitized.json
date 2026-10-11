@@ -1,0 +1,56 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "",
+  "bookSourceName": "示例书源（真实导出结构，已脱敏）",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://example-novel.test",
+  "bookUrlPattern": "https://example-novel.test/\\d.*",
+  "concurrentRate": "",
+  "customOrder": 60,
+  "enabled": true,
+  "enabledCookieJar": false,
+  "enabledExplore": false,
+  "enabledReview": false,
+  "exploreUrl": "",
+  "header": "",
+  "lastUpdateTime": 1676448109528,
+  "loginCheckJs": "",
+  "loginUi": "",
+  "loginUrl": "https://example-novel.test/",
+  "respondTime": 180000,
+  "ruleBookInfo": {
+    "author": "@css:meta[property=\"og:novel:author\"] @content",
+    "coverUrl": "@css:meta[property=\"og:image\"] @content",
+    "intro": "@css:meta[property=\"og:description\"] @content",
+    "kind": "{{@css:meta[property=\"og:novel:status\"] @content}}\n{{@css:meta[property=\"og:novel:category\"] @content}}",
+    "lastChapter": "{{@css:meta[property=\"og:novel:latest_chapter_name\"] @content}} ({{@css:meta[property=\"og:novel:update_time\"] @content}})",
+    "name": "@css:meta[property=\"og:novel:book_name\"] @content",
+    "tocUrl": "@css:a.chapterlist @href",
+    "wordCount": "@css:div#info > p:eq(3) @text ##字数："
+  },
+  "ruleContent": {
+    "content": "@css:div#booktxt @html",
+    "nextContentUrl": "@css:div.bottem2 > a#next_url:contains(下一页) @href",
+    "replaceRegex": "##本章未完，点击下一页继续阅读。"
+  },
+  "ruleExplore": {},
+  "ruleReview": {},
+  "ruleSearch": {
+    "author": "@css:dl > div.btm > a @text",
+    "bookList": "@css:div.item",
+    "bookUrl": "@css:dl > dt > a @href",
+    "coverUrl": "@css:div.image > a > img @data-original",
+    "intro": "@css:dl > dd @html",
+    "lastChapter": "@css:dl > div.btm > em:eq(2) @text",
+    "name": "@css:dl > dt > a @text",
+    "wordCount": "@css:dl > div.btm > em:eq(1) @text"
+  },
+  "ruleToc": {
+    "chapterList": "@css:div#list a[rel=\"chapter\"]",
+    "chapterName": "text",
+    "chapterUrl": "href",
+    "nextTocUrl": "@css:div#list > dl > dt:eq(0) a:containsOwn(下一页) @href"
+  },
+  "searchUrl": "/search/?searchkey={{key}}",
+  "weight": 0
+}

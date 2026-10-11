@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Book source models (2026-10-11)
+
+- Added the Phase 2.1 book source models: `lib/features/book_source/domain/entities/book_source.dart`
+  with `BookSourceType`, `BookSource`, `SearchRule`, `BookInfoRule`, `TocRule` and
+  `ContentRule`, all `freezed` + `json_serializable` as C-SRC-7 requires. The field set is
+  deliberately limited to what the Phase 2 vertical slice consumes; the paging rules
+  (`nextTocUrl` / `nextContentUrl`), `replaceRegex`, `isVip` / `updateTime` and the
+  display-only counters stay unmodelled for now, with their phase ownership now written into
+  `PLAN.md` (`replaceRegex` joins 3.5, the counters join Phase 5).
+- ADR-0021 records the one exception this needs: the models live in `domain/` **and** carry
+  JSON annotations, which `architecture.md` §3 forbids for that layer. The exception is scoped
+  to the book source models — Legado JSON *is* the domain rule language, and a parallel `data/`
+  DTO would have duplicated every model for a consumer that does not exist yet.
+  `architecture.md` §3, `constraints.md` C-SRC-7 and `book-source.md` §2 back-link it.
+- `book-source.md` §2's "unknown fields must be kept, not dropped" is implemented per object:
+  each model carries an `extra` map filled by a named `fromLegadoJson` factory that diffs the
+  raw JSON against the generated `toJson`, so importing a real Legado export keeps
+  `bookSourceComment`, `exploreUrl`, `customOrder` and every other unmodelled key — including
+  the keys nested inside `ruleToc` / `ruleContent` — while the generated `fromJson` stays the
+  single implementation of the field mapping (C-SRC-7 forbids hand-written `fromJson`).
+  The retained keys live **in memory only**: `toJson` does not write them back, so merging them
+  into an exported file still has to be built together with the import/export feature
+  (ADR-0021 §后果). No claim of lossless export is made before that exists.
+- The Legado `header` field is a JSON *string*; a field-level `JsonConverter` turns it (or an
+  already-parsed object) into `Map<String, String>?`, keeps "absent" and "empty" distinct, and
+  raises `FormatException` instead of silently dropping a malformed header. `bookSourceType`
+  maps through `BookSourceType` with `@JsonValue`; the original keys
+  (`bookSourceName`, `ruleSearch`, ...) are restored on `toJson`, so an import round-trips.
+  Writing back normalises `header` to Legado's string form even when the input was an object,
+  so the round trip is value-preserving rather than byte-exact.
+- Added the offline corpus `test/fixtures/book_sources/legado_export_sanitized.json`: a **real**
+  Legado export (taken from a public book source collection, trimmed to one source, host and name
+  sanitised to the reserved `.test` TLD, every rule string kept verbatim). Its 27 top-level keys
+  include 16 that the model does not know yet, which is what makes it the acceptance corpus for
+  `PLAN.md` 2.1; provenance and sanitising are recorded in
+  `test/fixtures/book_sources/README.md`. 19 unit tests in
+  `test/features/book_source/domain/entities/book_source_test.dart` cover the mapping, the
+  defaults, the header forms and the per-level retention — including one test that asserts every
+  key of the real export is accounted for either as a modelled field or in `extra`. No test
+  touches the network (C-NET-8); domain coverage stays at 100% and the new file is measured, as
+  ADR-0019 requires.
+- **Malformed input is now catchable** (ADR-0022, decided by the architect in review): the root
+  `build.yaml` turns on `json_serializable`'s `checked: true`, so a missing required key, a wrong
+  type, an invalid `header` and an unknown `bookSourceType` all surface as
+  `CheckedFromJsonException implements Exception` — carrying `key` (the `rulePath` source C-SRC-8
+  needs) and `innerError` (the cause). Unchecked mode raised `TypeError` / `ArgumentError`, i.e.
+  `Error`s, which `avoid_catching_errors` (C-ERR-2) forbids catching, so
+  `ParseFailureKind.invalidBookSource` used to be unreachable. An unknown `bookSourceType`
+  rejects the whole source instead of falling back to `text`. The three `throwsFormatException`
+  assertions and the two `throwsA(anything)` ones were tightened to assert that exception, its
+  `key` and its `innerError`; `book_source.g.dart` was regenerated in the same change (C-DEP-5).
+
+### Documentation consistency (2026-10-11)
+
+- Fixed six documentation defects found while establishing the code-review baseline. **None of
+  them changes a decision** — each aligns a document with an already Accepted ADR, so no new
+  ADR is needed (ADR-0012 §6):
+  - `NOTICE.md` §1 no longer carries the GPL appendix clause "or (at your option) any later
+    version"; ADR-0007 rules **version 3 only**, and the section now says so explicitly and
+    warns against re-adding the clause from the upstream template.
+  - `tool/coverage_allowlist.txt` now lists all **three** exemption categories of ADR-0019 §2
+    (it said two, omitting the code-generator-input category that its own two entries use).
+  - `README.md`'s status table no longer claims the application code is unimplemented or that
+    dependency licences are still unverified; phase progress now points at `PLAN.md` §3.
+  - ADR-0010 §9 and `tech-stack.md` §13 stopped restating the lint-rule count and the Dart
+    baseline, which now live only in `tech-stack.md` §1 (ADR-0013 §2); the superseded numbers
+    are kept in the ADR as a dated revision note.
+  - `docs/README.md` §4 now indexes `tool/check_coverage.dart`, `tool/scan_licenses.dart`,
+    `tool/spike/` and `.github/workflows/ci.yml` (ADR-0012 §1 requires new paths in the index).
+
 ### Storage layer (2026-10-11)
 
 - Added the Phase 1.5 storage layer: `lib/core/storage/` with `ReaderDatabase` (schema

@@ -44,13 +44,18 @@
 | `.gitattributes` | 统一 LF，保证 `dart format` 门禁跨平台一致 |
 | `pubspec.yaml` | 依赖声明；**唯一**依赖来源 |
 | `analysis_options.yaml` | 静态分析与 lint；**唯一** lint 来源 |
+| `build.yaml` | 代码生成器选项（当前只设 `json_serializable.checked: true`，理由见 ADR-0022）；**唯一**生成器选项来源 |
 | `drift_schemas/` | `drift_dev schema dump` 出的历史 schema，供迁移测试逐列比对；改表后必须重新 dump（命令见 `docs/dev/tech-stack.md` §8） |
 | `tool/coverage_allowlist.txt` | 覆盖率门禁豁免名单（ADR-0019），每条必须写明原因 |
+| `tool/check_coverage.dart` | 覆盖率门禁脚本：阈值 + 「未测量源文件」两项判定（ADR-0019；阈值归 `docs/dev/testing.md` §2） |
+| `tool/scan_licenses.dart` | 依赖许可证扫描脚本（重扫流程见 `NOTICE.md` §6） |
+| `tool/spike/` | JS 引擎架构可行性探针与已知坑（ADR-0015；**不进入** `flutter test` 默认发现路径） |
 | `l10n.yaml` | 国际化生成配置 |
 | `lib/l10n/app_en.arb` | 英文文案模板（新增字符串的入口） |
 | `lib/l10n/app_zh.arb` | 中文文案 |
 | `.github/ISSUE_TEMPLATE/` | Issue 模板 |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR 描述模板 |
+| `.github/workflows/ci.yml` | CI 流水线；执行**顺序**与 CI 特有步骤归 `docs/dev/testing.md` §7（命令本体归 `AGENTS.md` §4） |
 
 ---
 

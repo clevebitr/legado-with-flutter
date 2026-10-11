@@ -123,7 +123,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-SRC-4 | 不支持的规则类型必须返回 `ParseFailure(unsupportedRule)` 并记录日志；**禁止静默忽略**。 |
 | C-SRC-5 | URL 模板必须统一经 `renderUrlTemplate` 渲染；禁止手写字符串拼接。 |
 | C-SRC-6 | CSS 选择器统一 `cascadia`；JSONPath 统一 `json_path`；禁止自研选择器或手写 JSON 遍历。 |
-| C-SRC-7 | `BookSource` 及全部子规则必须使用 `freezed` + `json_serializable`；禁止手写 `fromJson` / `toJson`。 |
+| C-SRC-7 | `BookSource` 及全部子规则必须使用 `freezed` + `json_serializable`；禁止手写 `fromJson` / `toJson`。模型位于 `domain/entities/`，该层归属的例外见 ADR-0021。 |
 | C-SRC-8 | 失败必须可定位到规则路径：`ParseFailure.rulePath` 必填，供 UI 与日志定位失效规则。 |
 | C-SRC-9 | 同一书源的解析不得共享可变全局状态；`RuleEngine` 必须可并发调用且线程安全。 |
 
