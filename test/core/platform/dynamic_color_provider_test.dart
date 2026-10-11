@@ -10,19 +10,20 @@ void main() {
       'resolveDynamicColorProvider_whenPlatformIsAndroid_returnsSystemProvider',
       () {
         expect(
-          resolveDynamicColorProvider(
-            const FakePlatformInfo(isAndroid: true, isDesktop: false),
-          ),
+          resolveDynamicColorProvider(const FakePlatformInfo.android()),
           isA<SystemDynamicColorProvider>(),
         );
       },
     );
 
+    test('resolveDynamicColorProvider_whenPlatformIsIos_returnsNull', () {
+      // platform.md §3：iOS 不支持动态取色，走默认种子色（C-PLT-4）。
+      expect(resolveDynamicColorProvider(const FakePlatformInfo.ios()), isNull);
+    });
+
     test('resolveDynamicColorProvider_whenPlatformIsDesktop_returnsNull', () {
       expect(
-        resolveDynamicColorProvider(
-          const FakePlatformInfo(isAndroid: false, isDesktop: true),
-        ),
+        resolveDynamicColorProvider(const FakePlatformInfo.desktop()),
         isNull,
       );
     });

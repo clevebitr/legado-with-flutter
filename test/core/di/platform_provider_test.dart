@@ -22,7 +22,7 @@ void main() {
         final ProviderContainer container = ProviderContainer.test(
           overrides: <Override>[
             platformInfoProvider.overrideWithValue(
-              const FakePlatformInfo(isAndroid: true, isDesktop: false),
+              const FakePlatformInfo.android(),
             ),
           ],
         );
@@ -38,7 +38,7 @@ void main() {
       final ProviderContainer container = ProviderContainer.test(
         overrides: <Override>[
           platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo(isAndroid: false, isDesktop: true),
+            const FakePlatformInfo.desktop(),
           ),
         ],
       );

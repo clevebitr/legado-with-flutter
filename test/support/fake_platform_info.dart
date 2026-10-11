@@ -1,16 +1,36 @@
 import 'package:flutter_reader/core/platform/platform_info.dart';
 
-/// 测试替身：用构造参数固定平台事实，使测试不依赖宿主机的真实平台（testing.md §4）。
+/// Test double reporting fixed platform facts, so tests never depend on the
+/// host platform (`docs/dev/testing.md` §4).
+///
+/// All three facts are required and only reachable through the named
+/// constructors, so a contradictory combination such as "Android on desktop"
+/// cannot be built.
 final class FakePlatformInfo implements PlatformInfo {
-  /// Creates a fake that reports the given facts.
-  const FakePlatformInfo({required this.isAndroid, required this.isDesktop});
+  const FakePlatformInfo._({
+    required this.isMobile,
+    required this.isDesktop,
+    required this.isAndroid,
+  });
+
+  /// Creates a fake reporting an Android phone or tablet.
+  const FakePlatformInfo.android()
+    : this._(isMobile: true, isDesktop: false, isAndroid: true);
+
+  /// Creates a fake reporting an iPhone or iPad.
+  const FakePlatformInfo.ios()
+    : this._(isMobile: true, isDesktop: false, isAndroid: false);
+
+  /// Creates a fake reporting a desktop OS (Windows, macOS or Linux).
+  const FakePlatformInfo.desktop()
+    : this._(isMobile: false, isDesktop: true, isAndroid: false);
 
   @override
-  final bool isAndroid;
+  final bool isMobile;
 
   @override
   final bool isDesktop;
 
   @override
-  bool get isMobile => !isDesktop;
+  final bool isAndroid;
 }

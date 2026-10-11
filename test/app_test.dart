@@ -48,7 +48,7 @@ void main() {
         // 这里断言的是接线不会崩溃、也不会出现空屏（C-PLT-3/4）。
         overrides: <Override>[
           platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo(isAndroid: true, isDesktop: false),
+            const FakePlatformInfo.android(),
           ),
         ],
         child: const ReaderApp(),
