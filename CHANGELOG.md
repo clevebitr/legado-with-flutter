@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### CSS selection for the 3.2 slice: the `@css:` flag and the jsoup index pseudos (2026-10-11)
+
+- **Matrix #12 (`@css:`) is implemented.** The rest of the segment goes to cascadia
+  unchanged (C-SRC-6), so standard CSS works — combinators, attribute selectors and the
+  pseudo-classes cascadia has (`:contains`, `:containsOwn`, `:matches`, `:has`, `:not`,
+  `:nth-child`, `:first-child`) — and a `@css:` segment mixes with default segments in either
+  direction (`@css:ul > li@tag.a@href`, `class.result-list@css:li`). The flag is
+  case-insensitive like every other flag. The selector is parsed while the rule is read,
+  which is the only layer that can turn a bad selector into the right `ParseResult`: malformed
+  CSS is `parseFailed` with the field path instead of an unlocatable throw from the matcher
+  (C-SRC-8).
+- **Matrix #29 (new row) implements jsoup's index pseudo-classes** `:eq` / `:gt` / `:lt`,
+  which cascadia does not have. Their meaning is jsoup's **sibling index**: `:eq(0)` is the
+  first child of *each* parent, not the first element of the result set (jsoup's own
+  `SelectorTest.testPseudoEquals`, `div p:eq(0)` → two elements, is the reference). They are
+  therefore rewritten onto cascadia's `:nth-child` — `:eq(1)` → `:nth-child(2)`, `:gt(1)` →
+  `:nth-child(n+3)`, `:lt(3)` → `:nth-child(-n+3)` — rather than sliced after matching, so
+  every match still happens inside cascadia (C-SRC-6). Negative arguments are refused by name
+  (`unsupported::eq(-1)`): jsoup's public documentation defines these pseudo-classes as 0-based
+  and says nothing about negatives, so the behaviour is not guessed. The row has in-repo
+  evidence — the sanitized real export uses `:eq(1)` and `:eq(3)`.
+- **Matrix #30 (new row, M2 / not implemented) names the nested rule in the extraction
+  segment** (`class.a@css:.b`). It stays rejected, but under its own `rulePath`
+  (`unsupported:nested-rule`), so it is no longer confusable with a middle-segment `@css:`,
+  which this slice turned from rejected into usable. Registering it keeps the ledger honest
+  instead of leaving a real upstream form unaccounted for.
+- **The `&&` wording was a spec defect and is corrected.** Matrix row #11 and the
+  `book-source.md` §3.2 order block said `&&` "chains levels"; the upstream rule
+  documentation, in several independent mirrors, and a third-party implementation of the
+  dialect all say `&&` **merges both sides** (union), `||` takes the first non-empty side and
+  `%%` interleaves — and that the three connectors only join rules of the same kind, never
+  `@js:` or regex rules. The upstream example
+  `class.odd.0@tag.a.0@text&&tag.dd.0@tag.h1@text` is empty under the chaining reading, so the
+  old wording could not have been right. The dated note next to the matrix carries the
+  evidence; `||` / `&&` / `%%` are still to be implemented in this slice, and `PLAN.md` 3.2 now
+  requires the grouping and the cross-kind rejection to have tests.
+- Registered while implementing: state pseudo-classes (`:hover`, `:visited`, `:focus`) parse
+  and then never match a static DOM — the correct answer for a snapshot, so it stays a success
+  with an empty result rather than an `unsupportedRule` — plus two cascadia-vs-jsoup
+  differences (`:containsOwn(a b)` needs quotes in cascadia; `:matches(x)` must be written
+  `:matches(/x/)`). Both differences are loud failures (`parseFailed`), not silent ones.
+- The "unsupported syntax" fixtures of the use case and page tests moved from `@css:` to
+  `@js:`, which still belongs to a later phase. The suite is now **324** tests (was 310) and
+  `dart run tool/check_coverage.dart` exits 0 with `core` 342/342 and `domain` 683/683, every
+  file measured (ADR-0019). No new dependency: `cascadia` was already declared. The matrix
+  status column stays 待验证 — only a real book source regression may change it
+  (`book-source.md` §10), which is 3.7's job.
+
 ### Default rule syntaxes for the 3.1 slice (2026-10-11)
 
 - The rule engine (`lib/features/book_source/domain/rule_engine/rule_engine.dart`) now implements
