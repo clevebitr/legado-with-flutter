@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review follow-up: routing, F6 ruling and hardening (2026-10-11)
+
+- ADR-0011 §决策 1 now carries a dated revision: routing is split three ways (mechanism in
+  `core/router/`, page table in the composition root, typed arguments in the feature's
+  `presentation/`), because `core/` must not import `features/`; C-ARCH-2 is **not** relaxed.
+- ADR-0026 records the F6 ruling: a rejected **top-level** rule (`bookList` / `chapterList` /
+  `content`) still fails the whole stage, while a rejected **non-top-level field** is cleared
+  with a warning. The code lands together with the `@css:` work in 3.2, and both
+  `book-source.md` §7 and `constraints.md` C-SRC-4 state that transition explicitly, so no
+  reader mistakes the ruling for shipped behaviour.
+- The search no longer hangs when a collaborator throws an `Exception` instead of answering
+  with a `ParseResult`: the state degrades to the generic failure message and logs the book
+  source, never the keyword. An `Error` is still not caught (C-ERR-2).
+- C-UI-7 is decidable now: an interactive widget needs an accessible name, which Material
+  derives from `tooltip` / visible text, and the rule is registered in `tech-stack.md` §12.
+  `testing.md` §4 states that `test/support/` holds doubles *and* shared harnesses, and
+  `architecture.md` §1 notes that a feature's derived providers sit next to its notifiers.
+
 ### Minimal book source UI (2026-10-11)
 
 - Added the Phase 2.5 vertical slice: search form → hit list → book detail with its

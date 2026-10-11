@@ -294,6 +294,7 @@ dart run drift_dev schema generate drift_schemas/ test/core/storage/generated_mi
 |---|---|
 | C-UI-1 禁止硬编码颜色/尺寸 | Code review + Golden 测试 |
 | C-UI-5 禁止硬编码用户可见字符串 | Code review；ARB 是唯一文案来源 |
+| C-UI-7 交互组件的可访问名称 | Widget 测试断言 `tooltip` / 可见文本存在（Material 派生语义即满足，无需显式 `Semantics`） |
 | C-UI-9 法律声明页面存在 | Widget 测试断言页面可达 |
 | C-PLT-1 禁止 UI 直接判断平台 | Code review（`grep 'Platform.is'` 排除 `core/platform/`） |
 | C-ERR-1 必须返回 `ParseResult` | 单元测试 + Code review |

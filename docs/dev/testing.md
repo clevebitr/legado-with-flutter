@@ -91,8 +91,9 @@ test('parseHtml_givenExcludedRule_dropsMatchingNodes', () { /* ... */ });
 `mocktail` 只用于验证「是否被调用」的边界场景；能用 Fake 的地方禁止用 Mock
 （Mock 会让测试耦合实现细节）。
 
-**共享替身放 `test/support/`**，命名 `fake_<subject>.dart`（例如 `fake_platform_info.dart`）；
-该目录只放替身，不放测试用例（测试文件仍按 §3 镜像到 `test/` 下）。
+**共享替身与测试装置放 `test/support/`**：替身命名 `fake_<subject>.dart`（例如
+`fake_platform_info.dart`），共享装置（语料加载、provider 装配等 harness）按内容命名
+（例如 `offline_corpus.dart`）；该目录只放这两类，不放测试用例（测试文件仍按 §3 镜像到 `test/` 下）。
 
 ---
 

@@ -12,7 +12,17 @@
 
 ## 决策
 
-1. 使用 Flutter 内置 `Navigator` + `onGenerateRoute`，路由表集中在 `lib/core/router/`。
+1. 使用 Flutter 内置 `Navigator` + `onGenerateRoute`；路由职责**三分**：机制（`RouteSettings`
+   → 页面、唯一 push 入口）在 `lib/core/router/`，页面表（哪条类型化路由构建哪个页面）在装配根
+   `lib/app.dart`，类型化参数与其路径在各 feature 的 `presentation/`。
+
+   > **2026-10-11 修订（架构师裁决 R1）：** 本项原文是「路由表集中在 `lib/core/router/`」，
+   > 该措辞已废止。原因是 C-ARCH-2：`core/` **不得 import `features/`**，而类型化路由参数携带的
+   > 正是 feature 实体（`Book` / `Chapter`），因此页面表只能放在装配根，`app.dart` 的职责本就
+   > 包含「路由装配」。**不放宽 C-ARCH-2**（不让 `core/router/` import feature 页面）：它是分层
+   > 唯一的地基，为一张表松掉它等于让后续所有阶段的分层检查作废。
+   > `architecture.md` §6 已同步；本 ADR §决策 4「路由表是唯一的路由来源」不变——页面仍只经
+   > `AppRouter.push` 推送类型化路由，不自己 `Navigator.push` 硬编码下一跳。
 2. 路由参数必须是类型化的 `freezed` 对象，禁止传递裸 `Map<String, Object?>`。
 3. 预测性返回通过 `PageTransitionsTheme` 接线（`docs/dev/platform.md` §4），
    不依赖任何第三方路由库的能力。

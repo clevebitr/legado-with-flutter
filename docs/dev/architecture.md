@@ -27,7 +27,7 @@ lib/
 │   └── <feature>/                # book_source / reader / bookshelf / settings ...
 │       ├── data/                 # DTO(freezed) + DataSource + RepositoryImpl
 │       ├── domain/               # Entity + Repository 接口 + UseCase
-│       ├── presentation/         # pages / widgets / notifiers
+│       ├── presentation/         # pages / widgets / notifiers（Notifier 与该 feature 的派生 provider 同放 notifiers/）
 │       └── di.dart               # 该 feature 的仓储与用例 Provider
 └── l10n/                         # ARB 与生成物
 ```
