@@ -194,6 +194,12 @@ m3e.spacing.md;
 > `freezed` 与 `freezed_annotation` 可以不同大版本：`freezed 4.0.2` 仍依赖
 > `freezed_annotation 3.1.0`。
 
+> **生成器选项的唯一来源是根目录 `build.yaml`**（索引见 `docs/README.md` §4）。当前只设
+> 一项：`json_serializable.checked: true` —— 理由与影响见 ADR-0022（未检查模式下缺键 / 类型错
+> 抛的是 `Error`，而 C-ERR-2 禁止捕获 `Error`，导入层就无法产出
+> `ParseFailureKind.invalidBookSource`）。该选项是**全局**的，改变所有 JSON 模型的畸形输入
+> 行为；升级 `json_serializable` 后必须复验 ADR-0022，因为包装行为随版本变化。
+
 **Drift schema 与迁移测试（改表结构后必须做）：** 表定义一旦变动，必须重新 dump 并生成
 迁移辅助文件，否则 `test/core/storage/migration_test.dart` 会失败：
 
@@ -319,7 +325,7 @@ dart run drift_dev schema generate drift_schemas/ test/core/storage/generated_mi
 6. 运行门禁：`flutter pub get` → `dart run build_runner build`
    → `AGENTS.md` §4 全部命令。
 7. 核对 `analysis_options.yaml` 中的规则名：逐个对照
-   `https://dart.dev/tools/linter-rules/all`（当前基准 Dart 3.13.3）。
+   `https://dart.dev/tools/linter-rules/all`（版本基线见 §1，此处不复述）。
    未使用代码类的 `unused_*` 属于 analyzer 诊断，必须放在 `analyzer.errors`。
 
 ---

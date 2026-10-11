@@ -57,6 +57,9 @@
 模型必须使用 `freezed` + `json_serializable`（C-SRC-7）。未知字段必须**保留而非丢弃**：
 在 `extra` 中承载，以便导出时不丢信息。
 
+> **层归属与 `extra` 的落地形态**见 ADR-0021（模型位于 `domain/entities/`；`extra` 由
+> `fromLegadoJson` 逐层填充）。本表只拥有字段映射与分期。
+
 ---
 
 ## 3. 规则语法支持矩阵（对标原版阅读）

@@ -40,10 +40,15 @@
    ，并暴露/修正了 3 处互斥约束（见 `tech-stack.md` §1.1）。`flutter analyze` 实测 **No issues found**。
 8. **插件安装位置修正：** `analyzer: plugins:` 已弃用（触发 `analysis_options_deprecated_plugins`）；
    必须写在 `analysis_options.yaml` 的**顶层** `plugins:` 段。已实测固化。
-9. **lint 规则名验证方法（已执行）：** 从 Dart 3.13.3 的官方
-   "All linter rules" 清单提取全部 250 条规则名，与 `analysis_options.yaml`
-   逐名机器比对；`linter.rules` 中 53 条已全部通过，不符合项已按第 5 条修正。
-   升级 Dart 后必须重跑此比对。
+9. **lint 规则名验证方法（已执行）：** 从 Dart 官方 “All linter rules” 清单提取全部
+   规则名，与 `analysis_options.yaml` 逐名机器比对，`linter.rules` 中的条目已全部通过，
+   不符合项已按第 5 条修正。升级 Dart 后必须重跑此比对。
+
+   > **2026-10-11 修订：** 本项原写「从 Dart 3.13.3 的官方清单提取全部 250 条规则名 …
+   > `linter.rules` 中 53 条已全部通过」。该数值已经漂移（`unused_*` 属 `analyzer.errors`，
+   > 不是 lint 规则，不应计入），且与 `tech-stack.md` §1 的计数重复。
+   > 规则**条数**与 **Dart 基准版本**的唯一出处为 `docs/dev/tech-stack.md` §1（ADR-0013），
+   > 本文不再复述具体数值。
 
 ## 后果
 

@@ -68,6 +68,10 @@ features/<f>/presentation ──► features/<f>/domain ──► features/<f>/d
 
 DTO ↔ Entity 转换必须放在 `data/` 的 Mapper 中，禁止在 `presentation/` 做转换。
 
+> **唯一例外（ADR-0021）：** 书源模型（`BookSource` 及其子规则）允许在 `domain/` 中携带
+> `freezed` + `json_serializable` 注解：Legado JSON 的键名就是本项目的领域规则语言，
+> `RuleEngine` 与 UseCase 直接消费它（C-SRC-7）。其它 `domain/` 类型仍禁止 JSON 序列化注解。
+
 ---
 
 ## 4. 依赖注入

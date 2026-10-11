@@ -8,8 +8,7 @@ Copyright (C) 2026 Clevebitr
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, version 3 of the License.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,6 +20,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ```
 
 完整许可证文本见仓库根目录 [`LICENSE`](./LICENSE)（GNU GPL-3.0，version 3 only）。
+
+> **声明措辞说明（勿“补回”）：** 上一段**刻意省略**了 GPL 附录 “How to Apply” 模板里的
+> “or (at your option) any later version” 子句，因为本项目采用 **version 3 only**，
+> 不接受 “or later” 授权（裁决见 [`docs/dev/adr/0007-license.md`](docs/dev/adr/0007-license.md)）。
+> 本节与官方附录模板的**唯一**差异就是这一处；若将来要改为 “or later”，属于放宽条款，
+> 必须先新增 ADR 并同步本节、`LICENSE` 与 `README.md`/`CONTRIBUTING.md` 的表述。
 
 > **已校验：** `LICENSE` 与官方文本 `https://www.gnu.org/licenses/gpl-3.0.txt`
 > 逐字节一致（35149 字节，`diff` 零差异，2026-10-10）。
