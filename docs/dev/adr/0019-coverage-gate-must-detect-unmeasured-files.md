@@ -30,9 +30,17 @@ Phase 1.1 实测发现覆盖率门禁存在**静默绕过**：
    Dart 源文件（排除生成物与 `generated/`），逐个确认其出现在覆盖率报告中；
    缺失即判失败。
 2. 引入**显式 allowlist**：`tool/coverage_allowlist.txt`，每行一个仓库相对路径，
-   `#` 起注释。仅允许两类文件进入 allowlist，且必须在该文件的 `#` 注释里写明原因：
+   `#` 起注释。仅允许三类文件进入 allowlist，且必须在该文件的 `#` 注释里写明原因：
    - 仅在特定平台/条件编译下可达的文件（例如 `Platform.isXxx` 分支的独立实现文件）；
-   - 依赖真实设备或原生库、只能在 `integration_test` 中执行的入口文件。
+   - 依赖真实设备或原生库、只能在 `integration_test` 中执行的入口文件
+     （例：`lib/core/di/database_executor_provider.dart`——drift_flutter 的后台 isolate
+     在 `flutter test` 里必然报 `Channel was closed`）；
+   - **代码生成器的输入文件**：其中的声明只在生成期被分析、运行时不可达
+     （例：`lib/core/storage/cache_entries.dart`——drift 官方在 `columns.dart` 里明确说
+     列构建器的方法「not meant to be called at runtime」，`ColumnBuilder` 是空标记类）。
+     此类文件必须用 `// coverage:ignore-file` 使 lcov 将其整体移除，否则仍会因
+     阈值失败；其正确性必须由别的测试保证（例：drift 表结构由 `drift_schemas/`
+     与 `migration_test.dart` 逐列比对）。
    allowlist **不得**用于「暂时没写测试」的文件；新增条目必须在 PR 描述中说明。
    （同样适用于使用了 `// coverage:ignore-file` 的手写文件：lcov 会把它整体移除，
    因而必须登记才能通过门禁。）

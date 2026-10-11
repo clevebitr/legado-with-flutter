@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Storage layer (2026-10-11)
+
+- Added the Phase 1.5 storage layer: `lib/core/storage/` with `ReaderDatabase` (schema
+  version 1), the `CacheEntries` table, `cache_key.dart` (SHA-256 over book source ID +
+  rule field + URL + page, so neither the URL nor a search keyword is stored in cleartext)
+  and `CacheDao` (expiry written on every put, expired reads count as misses,
+  `deleteExpired()` bounds the table — C-NET-6), plus `lib/core/utils/clock.dart` and the
+  providers in `lib/core/di/` (`clock`, `databaseFilePath`, `databaseExecutor`,
+  `readerDatabase`, `cacheDao`).
+- Time comes from the injected `Clock` and never from `DateTime.now()`, so the TTL tests
+  move a fake clock instead of sleeping (`testing.md` §3/§4); the database path is built
+  with `Uri.resolve` instead of string concatenation, so no platform separator is ever
+  hard-coded (C-PLT-3).
+- Schema changes are guarded: `drift_schemas/drift_schema_v1.json` and
+  `test/core/storage/generated_migrations/` are committed, and `migration_test.dart` uses
+  `drift_dev`'s `SchemaVerifier` to compare the created schema against the dumped v1, so
+  changing a table without re-dumping fails the suite. The dump/generate commands live in
+  `tech-stack.md` §8.
+- ADR-0019 gained a third allowlist category for **code-generator input files**, with two
+  entries: `database_executor_provider.dart` (drift_flutter's background isolate cannot be
+  reached from `flutter test` — `Channel was closed`) and `cache_entries.dart` (drift's
+  column getters and `primaryKey` are shadowed by the generated table class and never run
+  at runtime, so they are unreachable by design; the schema comparison above guarantees
+  them). Both carry `// coverage:ignore-file`, and `testing.md` §2 documents the rule.
+- Fixed the three P1.4 follow-ups: malformed or scheme-less URLs are rejected before dio is
+  called (dio's internal `Uri.parse` could otherwise surface a `FormatException` that was
+  reported as `encodingFailed`), the `FormatException` clause now covers decoding only, and
+  `HttpPolicy.timeout`'s positivity requirement is documented for the settings phase that
+  will own it.
+- `book-source.md` §5.1 was consolidated into a single section (the label table plus the
+  Big5 gap and the sniffing caveat), because the P1.4 and P1.5 rounds had each added a
+  section with that number.
+
 ### Network layer (2026-10-11)
 
 - Added the Phase 1.4 network layer: `HttpClient` (interface) with `DioHttpClient`,

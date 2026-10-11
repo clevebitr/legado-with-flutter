@@ -30,6 +30,11 @@ final class HttpPolicy {
   }) : assert(maxRetries >= 0, 'Retries must be bounded and non-negative.');
 
   /// Time to wait for connect, send and receive, applied to every attempt.
+  ///
+  /// Must be positive: dio treats `Duration.zero` as "no timeout", which C-NET-2
+  /// forbids. The value is validated where user input enters — the settings phase
+  /// that overrides `httpPolicyProvider` — because a `const` constructor cannot
+  /// assert on `Duration` (see the constructor documentation).
   final Duration timeout;
 
   /// Upper bound of additional attempts after the first one (C-NET-2).

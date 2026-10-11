@@ -173,7 +173,7 @@
 - 解码失败返回 `ParseFailure(encodingFailed)`，
   禁止用 `utf8.decode(allowMalformed: true)` 静默吞掉。
 
-### 5.1 可解码的编码集（实测 2026-10-11）
+### 5.1 可解码的编码集与已知缺口（实测 2026-10-11）
 
 检测得到的是 IANA 标签，解码由 `charset` 把标签变成 `Encoding`（`tech-stack.md` §5）。
 标签空间比解码器空间大，**未支持的标签会回落到 UTF-8**，通常接着以
@@ -187,9 +187,15 @@
 | `shift-jis`、`euc-jp`、`euc-kr`、`us-ascii` | ✅ |
 | `big5`、`big5-hkscs`、`euc-cn`、`sjis`、`windows-31j`、`iso-2022-jp`、`koi8-r` | ❌ 回落 UTF-8 → 通常 `encodingFailed` |
 
-**已知缺口：** 繁体中文书源（`big5` / `big5-hkscs`）当前不可解码；补齐需要引入
-Big5 解码器（新依赖，受 C-DEP-1 / C-DEP-7 约束，必须先开 ADR）。
-`gb18030` 按 GBK 解码，四字节扩展区字符会失败，属 M0 已知限制。
+**已知缺口：Big5 / Big5-HKSCS。** 当前依赖树**既不能检测也不能解码** Big5 系编码
+（已核实：`betto_charset_detector 0.1.0` 的候选表只有 windows-1252 / iso-8859-1/2/15 /
+shift-jis / euc-jp / euc-kr / gbk；`charset 2.0.1` 未注册任何 Big5 编解码器）。
+实际行为：`Content-Type` 声明 `big5` → `Charset.getByName('big5')` 返回 `null` → 按本节顺序
+回退 UTF-8 → 繁体内容通常随即解码失败 → `ParseFailure(encodingFailed)`。
+补齐需新增 Big5 解码依赖（走 C-DEP-1 评审 + C-DEP-7 许可核实 + ADR），或在 `core/network/`
+内自带码表（体积与维护成本更高）。**状态：已知缺口，未排期；是否覆盖繁体书源由排期决定。**
+
+**其它已知限制：** `gb18030` 按 GBK 解码，四字节扩展区字符会失败，属 M0 已知限制。
 
 **嗅探的样本下限：** 字节嗅探只看前 8 KB；样本极短时（几个字节）可能误判为
 `shift-jis` 等其他 CJK 编码，因此**不得**跳过前两步去信任嗅探结果。

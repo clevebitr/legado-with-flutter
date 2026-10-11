@@ -64,6 +64,9 @@ analyzer:
     - "**/*.gr.dart"
     - "**/*.mocks.dart"
     - lib/l10n/generated/**
+    # drift_dev 生成的迁移辅助文件（文件头写明 DO NOT MODIFY）：它自带
+    # `ignore_for_file: type=lint`，但挡不住 analyzer 的 strict-raw-types 警告。
+    - test/**/generated_migrations/**
 
 # =============================================================================
 # 分析器插件（新版机制，必须位于顶层）

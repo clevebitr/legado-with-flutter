@@ -44,6 +44,8 @@
 | `.gitattributes` | 统一 LF，保证 `dart format` 门禁跨平台一致 |
 | `pubspec.yaml` | 依赖声明；**唯一**依赖来源 |
 | `analysis_options.yaml` | 静态分析与 lint；**唯一** lint 来源 |
+| `drift_schemas/` | `drift_dev schema dump` 出的历史 schema，供迁移测试逐列比对；改表后必须重新 dump（命令见 `docs/dev/tech-stack.md` §8） |
+| `tool/coverage_allowlist.txt` | 覆盖率门禁豁免名单（ADR-0019），每条必须写明原因 |
 | `l10n.yaml` | 国际化生成配置 |
 | `lib/l10n/app_en.arb` | 英文文案模板（新增字符串的入口） |
 | `lib/l10n/app_zh.arb` | 中文文案 |

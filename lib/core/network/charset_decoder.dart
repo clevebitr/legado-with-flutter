@@ -34,6 +34,10 @@ final RegExp _charsetParameter = RegExp(
 /// Throws [FormatException] when the bytes are invalid for the chosen charset.
 /// Callers map that to `ParseFailureKind.encodingFailed` and must not hide it
 /// behind `allowMalformed` (C-NET-3).
+///
+/// Big5 pages cannot be decoded at all: neither the detector nor the decoder
+/// knows that family, which is recorded as a known gap in
+/// `docs/dev/book-source.md` §5.1.
 String decodeBody(List<int> bytes, {String? contentType}) {
   final String? declared =
       _charsetFromContentType(contentType) ?? _charsetFromMeta(bytes);

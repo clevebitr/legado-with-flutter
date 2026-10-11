@@ -232,6 +232,36 @@ void main() {
       }
     });
 
+    test('get_whenUrlIsMalformed_returnsNetworkFailedWithoutSending', () async {
+      final _Fixture fixture = _buildClient();
+
+      // dio 内部还会再 Uri.parse 一次，这里必须提前拒绝，否则它的 FormatException
+      // 会被当成解码失败（encodingFailed），桶就错了。
+      expect(
+        _expectFailure(
+          await fixture.client.get('http://[bad', rulePath: 'searchUrl'),
+        ),
+        ParseFailureKind.networkFailed,
+      );
+      expect(fixture.adapter.requests, isEmpty);
+      expect(
+        fixture.printer.events.single.message,
+        contains('<unparsable-url>'),
+      );
+    });
+
+    test('get_whenUrlHasNoSupportedScheme_returnsNetworkFailed', () async {
+      final _Fixture fixture = _buildClient();
+
+      expect(
+        _expectFailure(
+          await fixture.client.get('example.com/a', rulePath: 'searchUrl'),
+        ),
+        ParseFailureKind.networkFailed,
+      );
+      expect(fixture.adapter.requests, isEmpty);
+    });
+
     test('get_whenUrlIsPlainHttp_rejectsItWithoutSending', () async {
       final _Fixture fixture = _buildClient();
 

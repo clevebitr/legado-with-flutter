@@ -72,7 +72,19 @@ final class DioHttpClient implements HttpClient {
     String? keyword,
   }) async {
     final Uri? uri = Uri.tryParse(url);
-    if (uri != null && uri.scheme == 'http' && !_policy.allowPlainHttp) {
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      // 畸形 URL 与不支持的 scheme 在这里就拒绝：dio 内部还会再 Uri.parse 一次，
+      // 它抛出的 FormatException 若落到解码分支就会被误报成 encodingFailed（桶错了）。
+      _logger.warning(
+        'Unsupported request URL rejected: rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
+      );
+
+      return ParseFailure<HttpResponse>(
+        kind: ParseFailureKind.networkFailed,
+        rulePath: rulePath,
+      );
+    }
+    if (uri.scheme == 'http' && !_policy.allowPlainHttp) {
       // C-SEC-2：明文 HTTP 必须由用户显式开启。9 个 ParseFailureKind 里没有
       // 「策略拒绝」桶，故用 networkFailed 承载，原因写进日志。
       _logger.warning(
@@ -118,33 +130,14 @@ final class DioHttpClient implements HttpClient {
     required Map<String, String>? headers,
     required String? keyword,
   }) async {
+    final Response<List<int>> response;
     try {
-      final Response<List<int>> response = await _dio.get<List<int>>(
+      response = await _dio.get<List<int>>(
         url,
         options: Options(headers: headers),
       );
-      final int status = response.statusCode ?? 0;
-      final ParseFailureKind? statusKind = _failureKindForStatus(status);
-
-      if (statusKind != null) {
-        _logger.warning(
-          'HTTP $status for rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
-        );
-
-        return ParseFailure<HttpResponse>(kind: statusKind, rulePath: rulePath);
-      }
-
-      return ParseSuccess<HttpResponse>(
-        HttpResponse(
-          statusCode: status,
-          headers: response.headers.map,
-          body: decodeBody(
-            response.data ?? const <int>[],
-            contentType: response.headers.value(HttpHeaders.contentTypeHeader),
-          ),
-        ),
-      );
     } on DioException catch (error, stackTrace) {
+      // 只有 dio 自己的异常到这里：URL 已在 get() 里校验，解码在 _decode 里单独处理。
       _logger.warning(
         'Request failed for rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
         describeError(error),
@@ -154,6 +147,47 @@ final class DioHttpClient implements HttpClient {
       return ParseFailure<HttpResponse>(
         kind: _failureKindForDioError(error),
         rulePath: rulePath,
+      );
+    }
+
+    final int status = response.statusCode ?? 0;
+    final ParseFailureKind? statusKind = _failureKindForStatus(status);
+
+    if (statusKind != null) {
+      _logger.warning(
+        'HTTP $status for rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
+      );
+
+      return ParseFailure<HttpResponse>(kind: statusKind, rulePath: rulePath);
+    }
+
+    return _decode(
+      response,
+      status: status,
+      rulePath: rulePath,
+      keyword: keyword,
+      url: url,
+    );
+  }
+
+  /// Decodes a 2xx body; the only place a [FormatException] is expected.
+  ParseResult<HttpResponse> _decode(
+    Response<List<int>> response, {
+    required int status,
+    required String rulePath,
+    required String? keyword,
+    required String url,
+  }) {
+    try {
+      return ParseSuccess<HttpResponse>(
+        HttpResponse(
+          statusCode: status,
+          headers: response.headers.map,
+          body: decodeBody(
+            response.data ?? const <int>[],
+            contentType: response.headers.value(HttpHeaders.contentTypeHeader),
+          ),
+        ),
       );
     } on FormatException catch (error, stackTrace) {
       // 解码失败必须显式失败，禁止用 allowMalformed 静默吞掉（C-NET-3）。

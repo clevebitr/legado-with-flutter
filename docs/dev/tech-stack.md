@@ -194,6 +194,19 @@ m3e.spacing.md;
 > `freezed` 与 `freezed_annotation` 可以不同大版本：`freezed 4.0.2` 仍依赖
 > `freezed_annotation 3.1.0`。
 
+**Drift schema 与迁移测试（改表结构后必须做）：** 表定义一旦变动，必须重新 dump 并生成
+迁移辅助文件，否则 `test/core/storage/migration_test.dart` 会失败：
+
+```bash
+mkdir -p test/core/storage/generated_migrations   # 生成器不会自建输出目录
+dart run drift_dev schema dump lib/core/storage/database.dart drift_schemas/
+dart run drift_dev schema generate drift_schemas/ test/core/storage/generated_migrations/
+```
+
+`drift_schemas/` 与 `test/core/storage/generated_migrations/` 都是**生成物且需提交**
+（C-DEP-5 精神）；后者在 `analysis_options.yaml` 中被排除（它自带的
+`ignore_for_file: type=lint` 挡不住 analyzer 的 `strict-raw-types` 警告）。
+
 ## 9. 开发与测试
 
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |
