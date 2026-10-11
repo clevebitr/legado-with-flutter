@@ -67,6 +67,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get legalNoticesCorrespondingSource => 'Corresponding source code';
 
   @override
+  String get legalNoticesProhibitedUse =>
+      'Do not use this app to infringe copyright. Scraping, aggregating or redistributing unauthorised content through book sources is prohibited, and anyone doing so bears the full legal responsibility.';
+
+  @override
   String get failureUnsupportedRule =>
       'This book source uses a rule type that is not supported yet.';
 }

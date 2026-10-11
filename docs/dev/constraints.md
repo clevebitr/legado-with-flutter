@@ -161,7 +161,7 @@ class BookSource with _$BookSource {
 | C-UI-6 | 响应式布局必须使用 `LayoutBuilder` / `MediaQuery`；禁止固定宽高与非流式约束。 |
 | C-UI-7 | 所有交互组件必须提供 `Semantics` 标签；图片必须提供 `semanticLabel`。 |
 | C-UI-8 | 禁止在 `build` 中构造可常量化对象（`TextStyle`、`BoxDecoration`、`EdgeInsets`）；主题相关对象必须来自令牌。 |
-| C-UI-9 | 必须提供「关于 → 法律声明」页面，显示版权、无担保声明、GPL-3.0 全文查看入口与源代码获取入口（GPL-3.0 §0/§5d/§6）。文案键：`legalNoticesTitle`、`legalNoticesCopyright`、`legalNoticesNoWarranty`、`legalNoticesViewLicense`、`legalNoticesCorrespondingSource`。 |
+| C-UI-9 | 必须提供「关于 → 法律声明」页面，显示版权、无担保声明、**禁止侵权用途声明（见 ADR-0023）**、GPL-3.0 全文查看入口与源代码获取入口（GPL-3.0 §0/§5d/§6）。文案键：`legalNoticesTitle`、`legalNoticesCopyright`、`legalNoticesNoWarranty`、`legalNoticesViewLicense`、`legalNoticesCorrespondingSource`、`legalNoticesProhibitedUse`。 |
 
 ```dart
 // ✅ 正确（已核实 m3e_design 0.2.1 API）

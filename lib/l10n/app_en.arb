@@ -64,6 +64,10 @@
   "@legalNoticesCorrespondingSource": {
     "description": "Action that opens the source code location required by GPL-3.0 section 6."
   },
+  "legalNoticesProhibitedUse": "Do not use this app to infringe copyright. Scraping, aggregating or redistributing unauthorised content through book sources is prohibited, and anyone doing so bears the full legal responsibility.",
+  "@legalNoticesProhibitedUse": {
+    "description": "Prohibited-use notice shown on the legal notices screen; records the stance of ADR-0023."
+  },
   "failureUnsupportedRule": "This book source uses a rule type that is not supported yet.",
   "@failureUnsupportedRule": {
     "description": "User-facing message for ParseFailureKind.unsupportedRule."

@@ -194,6 +194,12 @@ abstract class AppLocalizations {
   /// **'Corresponding source code'**
   String get legalNoticesCorrespondingSource;
 
+  /// Prohibited-use notice shown on the legal notices screen; records the stance of ADR-0023.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not use this app to infringe copyright. Scraping, aggregating or redistributing unauthorised content through book sources is prohibited, and anyone doing so bears the full legal responsibility.'**
+  String get legalNoticesProhibitedUse;
+
   /// User-facing message for ParseFailureKind.unsupportedRule.
   ///
   /// In en, this message translates to:

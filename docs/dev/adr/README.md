@@ -44,6 +44,7 @@
 | [0020](0020-dynamic-color-provider-builder-shape.md) | 动态取色接口以 builder 包装形态提供，并在根部注入 | Accepted | 本次新增 |
 | [0021](0021-book-source-models-live-in-domain.md) | 书源模型位于 domain 实体，并携带 JSON 序列化注解 | Accepted | 本次新增 |
 | [0022](0022-json-serializable-checked-mode.md) | 书源 JSON 解析启用 json_serializable 的 `checked` 模式 | Accepted（架构师复审裁决） | 本次新增 |
+| [0023](0023-legal-stance-after-upstream-shutdown.md) | 上游停运后的法律立场：方言兼容继续、真实语料最小化脱敏、免责与用途限制加强 | Accepted（架构师裁决三件事） | 本次新增 |
 
 ---
 

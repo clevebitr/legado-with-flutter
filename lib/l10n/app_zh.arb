@@ -16,5 +16,6 @@
   "legalNoticesNoWarranty": "本程序不提供任何担保。它是以 GNU GPL-3.0 许可发布的自由软件，你可以在特定条件下自由再分发。",
   "legalNoticesViewLicense": "查看完整许可证",
   "legalNoticesCorrespondingSource": "对应源代码",
+  "legalNoticesProhibitedUse": "禁止将本应用用于侵犯著作权。通过书源抓取、聚合或传播未经授权的内容属被禁止用途，实施者自行承担全部法律责任。",
   "failureUnsupportedRule": "该书源使用了暂不支持的规则类型。"
 }

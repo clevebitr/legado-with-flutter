@@ -59,5 +59,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get legalNoticesCorrespondingSource => '对应源代码';
 
   @override
+  String get legalNoticesProhibitedUse =>
+      '禁止将本应用用于侵犯著作权。通过书源抓取、聚合或传播未经授权的内容属被禁止用途，实施者自行承担全部法律责任。';
+
+  @override
   String get failureUnsupportedRule => '该书源使用了暂不支持的规则类型。';
 }

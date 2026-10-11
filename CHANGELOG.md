@@ -33,17 +33,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cache cannot compile the pattern.
 - Everything outside this phase's matrix is **rejected** as `ParseFailureKind.unsupportedRule`
   instead of being silently mis-parsed (C-SRC-4), with `rulePath` naming the syntax
-  (`unsupported:@css:`, `unsupported:||`, `unsupported:!`, `unsupported:###`, …). That includes
-  mid-rule flags (`class.a@css:.b`) and flag-like extraction segments, which upstream treats as
-  nested rules, and unknown selector types, which upstream degrades to raw CSS. Structurally
-  broken rules (a missing name, a non-numeric position, an empty extraction) are `parseFailed`
-  with the field path, so a failure still points at the book source field (C-SRC-8). A blank rule
-  and a rule without a match are **successes with no values**, because real exports use `""` for
-  absent fields and only the caller knows whether a top-level rule had to match (`book-source.md`
-  §7).
-- 39 unit tests in `test/features/book_source/domain/rule_engine/rule_engine_test.dart`; domain
+  (`unsupported:<syntax>`). The full set, so the rejection surface stays auditable:
+
+  | Syntax | `rulePath` | Owner |
+  |---|---|---|
+  | `@css:` `@json:` `@js:` `@xpath:` `@put:` `@get:` `@webJs` `@@` `{{` `//` `$.` `$[` `{` `:` (leading) | the flag as written | matrix #12–#20 |
+  | `\|\|` `&&` `%%` | `unsupported:\|\|` etc. | #10 / #11 / #27 |
+  | leading `-` (reverse) | `unsupported:-` | #7 |
+  | `!` (exclude) | `unsupported:!` | #6 |
+  | `:` inside a position segment | `unsupported::` | #6 (its index-list form) |
+  | `[]` index lists | `unsupported:[]` | #26 |
+  | `children` / `text` segment types | `unsupported:children` / `unsupported:text` | #3 / #4 |
+  | any other segment type | `unsupported:<type>` | #12 (upstream degrades it to raw CSS) |
+
+  Mid-rule flags (`class.a@css:.b`) and flag-like extraction segments are rejected too, because
+  upstream treats them as nested rules; an `@@` anywhere in the body is rejected **before** the
+  `@`-split, because the split would otherwise leave an empty segment that would be misreported as
+  a malformed rule (matrix #15 is M1, not a broken rule). Structurally broken rules (a missing
+  name, a non-numeric position, an empty extraction) are `parseFailed` with the field path, so a
+  failure still points at the book source field (C-SRC-8). A blank rule and a rule without a match
+  are **successes with no values**, because real exports use `""` for absent fields and only the
+  caller knows whether a top-level rule had to match (`book-source.md` §7).
+- The `##` family also covers upstream's four-part form `##match##replace###` (matrix #25, newly
+  recorded in the matrix). Its upstream semantics are **not** "replace the first occurrence":
+  upstream takes the first **match** and applies the replacement *inside it*, returns an empty
+  string when nothing matches, and returns the replacement as-is when the pattern cannot be
+  compiled (`AnalyzeRule.kt:497`). Implemented exactly, because a real source using `###` has to
+  produce upstream's output.
+- 42 unit tests in `test/features/book_source/domain/rule_engine/rule_engine_test.dart`; domain
   coverage stays at 100% and both new files are measured, as ADR-0019 requires. No new dependency:
   `cascadia` and `html` were already declared (C-SRC-6 keeps every CSS match inside cascadia).
+
+### Legal stance after the upstream shutdown (2026-10-11)
+
+- ADR-0023 records the architect's three rulings after the upstream repository was emptied by a
+  criminal judgment (the operators were convicted of copyright infringement, with the court
+  finding that "book source" files plus deep linking served nearly 4000 unauthorised works and
+  earned over 1 million yuan). The rulings: keep the Legado dialect and its field names as the
+  interoperability contract; keep only **sanitised, minimal** real corpus in the repository
+  (neutral name, `.test` hosts, rule strings verbatim, provenance in
+  `test/fixtures/**/README.md`); and strengthen the disclaimers.
+- `NOTICE.md` §2 now records the upstream status and the judgment; §3 gained an explicit
+  **prohibited-use** clause (no scraping, aggregating or redistributing unauthorised content
+  through book sources, and no profiting from it) plus the matching risk notice. The same stance
+  reaches the C-UI-9 legal-notices screen through the new `legalNoticesProhibitedUse` ARB key (the
+  page itself still lands in Phase 5). The ADR states plainly that it is not legal advice.
+- The matrix gained the three rows it was missing (`%%`, `###`, `[]` index lists) — they existed
+  only in upstream code, so the engine was rejecting them correctly while the ledger stayed silent.
+  They are appended as #25–#27 rather than inserted, because `PLAN.md` and ADR-0014 reference
+  `#1–#14` / `#15–#19` / `#20–#24` and inserting would renumber them. ADR-0014 carries the
+  matching factual addendum.
 
 ### Book source models (2026-10-11)
 
