@@ -30,17 +30,14 @@ const List<String> _deferredOperators = <String>['||', '&&', '%%'];
 /// The `@css:` flag of matrix #12, lower-cased for a case-insensitive compare.
 const String _cssFlag = '@css:';
 
-/// jsoup's index pseudo-classes, which cascadia does not implement.
+/// jsoup's index pseudo-classes and the cascadia form each maps onto (matrix #29).
 ///
-/// `book-source.md` §3 row #12 declares **standard** CSS selectors, so these are
-/// named as unsupported instead of being handed to cascadia, where they would come
-/// back as an unlocatable parse failure (C-SRC-4). Requiring the `(` keeps standard
-/// pseudos such as `:first-child` out of the match.
-/// jsoup's index pseudo-classes (matrix #29) and the cascadia form each maps onto.
-///
-/// The replacement receives the argument jsoup was given and returns the
-/// `:nth-child` form with the same **sibling-index** meaning. Immutable on purpose:
-/// the engine holds no shared mutable state (C-SRC-9).
+/// cascadia does not implement `:eq` / `:gt` / `:lt`, and rewriting them keeps the
+/// matching itself inside cascadia (C-SRC-6). The replacement receives the argument
+/// jsoup was given and returns the `:nth-child` form with the same **sibling-index**
+/// meaning. Requiring an integer in parentheses keeps standard pseudos such as
+/// `:first-child` out of the rewrite. Immutable on purpose: the engine holds no
+/// shared mutable state (C-SRC-9).
 final Map<String, String Function(int)> _indexPseudoRewrites =
     Map<String, String Function(int)>.unmodifiable(
       <String, String Function(int)>{
@@ -89,11 +86,12 @@ final RegExp _whitespace = RegExp(r'\s+');
 /// | #12 | the `@css:` flag, handing the rest of the segment to cascadia |
 /// | #26 | the `[...]` index list, with ranges, steps and `[!...]` exclusion |
 /// | #28 | an index as the first rule of a segment (`.1` / `[1]` / `children[1]`) |
+/// | #29 | the jsoup index pseudo-classes `:eq` / `:gt` / `:lt`, rewritten onto `:nth-child` |
 ///
 /// Everything else in the matrix is reported as
 /// [ParseFailureKind.unsupportedRule] — never silently mis-parsed (C-SRC-4) — with
-/// `rulePath` naming the syntax, e.g. `unsupported:@css:`. A rule that is
-/// structurally broken (a missing name, a non-numeric position) is reported as
+/// `rulePath` naming the syntax, e.g. `unsupported:nested-rule` (matrix #30). A rule
+/// that is structurally broken (a missing name, a non-numeric position) is reported as
 /// [ParseFailureKind.parseFailed] with the field path as `rulePath`.
 ///
 /// The engine is stateless, so one instance can evaluate rules concurrently

@@ -1214,7 +1214,7 @@ void main() {
       );
     });
 
-    test('selectAll_givenAnIndexPseudo_matchesTheSiblingIndex', () {
+    test('extractAll_givenAnIndexPseudo_matchesTheSiblingIndex', () {
       // 矩阵 #29：jsoup 的 `:eq(n)` 是**兄弟索引**，不是结果集索引。镜像 jsoup 自己的
       // SelectorTest.testPseudoEquals（`div p:eq(0)` 每个 div 各取一个 p）。
       final Document document = _document(
@@ -1233,25 +1233,28 @@ void main() {
       );
     });
 
-    test('selectAll_givenTheGreaterAndLessThanPseudos_takeTheSiblingRange', () {
-      // jsoup 文档：`td:lt(3)` = 每行的前三个单元格，`td:gt(1)` = 跳过前两个。
-      final Document document = _document(
-        '<table><tr><td>1</td><td>2</td><td>3</td><td>4</td></tr></table>',
-      );
+    test(
+      'extractAll_givenTheGreaterAndLessThanPseudos_takeTheSiblingRange',
+      () {
+        // jsoup 文档：`td:lt(3)` = 每行的前三个单元格，`td:gt(1)` = 跳过前两个。
+        final Document document = _document(
+          '<table><tr><td>1</td><td>2</td><td>3</td><td>4</td></tr></table>',
+        );
 
-      expect(
-        _values(
-          _engine().extractAll('@css:td:lt(3)@text', document, rulePath: 'x'),
-        ),
-        <String>['1', '2', '3'],
-      );
-      expect(
-        _values(
-          _engine().extractAll('@css:td:gt(1)@text', document, rulePath: 'x'),
-        ),
-        <String>['3', '4'],
-      );
-    });
+        expect(
+          _values(
+            _engine().extractAll('@css:td:lt(3)@text', document, rulePath: 'x'),
+          ),
+          <String>['1', '2', '3'],
+        );
+        expect(
+          _values(
+            _engine().extractAll('@css:td:gt(1)@text', document, rulePath: 'x'),
+          ),
+          <String>['3', '4'],
+        );
+      },
+    );
 
     test('selectAll_givenANegativeIndexPseudo_returnsUnsupportedRule', () {
       // jsoup 文档把索引伪类定义为 0-based 且未定义负索引 → 本仓不猜，点名拒绝。
