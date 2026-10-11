@@ -305,14 +305,16 @@ final class RuleEngine {
   }) {
     final String body = parsed.body;
 
-    if (parsed.replacementParts.length > 3) {
-      return _unsupported('###');
-    }
     for (final String flag in _deferredFlags) {
       if (body.toLowerCase().startsWith(flag)) {
         // 用原文截取，保留作者写的 `@webJs` 这类大小写（book-source.md §3 前缀大小写不敏感）。
         return _unsupported(body.substring(0, flag.length));
       }
+    }
+    if (body.contains('@@')) {
+      // 矩阵 #15：`@@` 默认规则标志。`@` 切分后中段的 `@@` 会留下一个空段，
+      // 因此必须在切段之前判掉，否则会被误报成畸形规则。
+      return _unsupported('@@');
     }
     for (final String operator in _deferredOperators) {
       if (body.contains(operator)) {
@@ -375,9 +377,14 @@ final class RuleEngine {
       // 例如 `class.a@css:.b`：原版把这种段当作嵌套规则，Phase 3.2 实现。
       return _unsupported(flag);
     }
-    if (segment.contains('!') || segment.contains(':')) {
-      // 矩阵 #6：`!` 排除与 `:` 分隔的序号列表，Phase 3.1 实现。
+    if (segment.contains('!')) {
+      // 矩阵 #6：`!` 位置排除，Phase 3.1 实现。
       return _unsupported('!');
+    }
+    if (segment.contains(':')) {
+      // 矩阵 #6 的「序号用 `:` 分隔」形式（如 `tag.li.-1:2`），Phase 3.1 实现。
+      // 与 `!` 分开报，否则会把两种语法混成一个 token。
+      return _unsupported(':');
     }
     if (segment.contains('[') || segment.contains(']')) {
       // 原版的 `[]` 索引列表写法不在本仓矩阵内，显式拒绝而不是当作选择器。
@@ -519,6 +526,9 @@ Element _withoutScripts(Element element) {
 }
 
 /// Applies the `##` replacements of a rule to every extracted value (matrix #9).
+///
+/// Four parts (`##match##replace###`) select upstream's `replaceFirst` form
+/// (`AnalyzeRule.kt:497`).
 List<String> _applyReplacement(
   List<String> values,
   List<String> replacementParts,
@@ -531,18 +541,38 @@ List<String> _applyReplacement(
   final String replacement = replacementParts.length > 2
       ? replacementParts[2]
       : '';
+  final bool firstOnly = replacementParts.length > 3;
 
   return values
-      .map((String value) => _replace(value, pattern, replacement))
+      .map(
+        (String value) =>
+            _replace(value, pattern, replacement, firstOnly: firstOnly),
+      )
       .toList(growable: false);
 }
 
-/// Replaces every match of [pattern] in [value] with [replacement].
+/// Applies one `##` replacement, matching upstream (Java / Kotlin) semantics.
 ///
-/// An unparsable pattern degrades to a literal replacement, which is what
-/// upstream does when its regex cache cannot compile the pattern.
-String _replace(String value, String pattern, String replacement) {
+/// `firstOnly` is upstream's `##match##replace###` form, and it does **not** mean
+/// "replace the first occurrence in the value": upstream takes the first **match**
+/// and applies the replacement *inside it*, returning an empty string when nothing
+/// matches, and returning the replacement as-is when the pattern cannot be compiled
+/// (`AnalyzeRule.kt:497`). Matching that exactly matters more than the simpler
+/// reading, because a real source using `###` must produce upstream's output.
+String _replace(
+  String value,
+  String pattern,
+  String replacement, {
+  required bool firstOnly,
+}) {
   final RegExp? regex = _compile(pattern);
+
+  if (firstOnly) {
+    return regex == null
+        ? replacement
+        : _replaceInsideFirstMatch(regex, value, replacement);
+  }
+
   if (regex == null) {
     return value.replaceAll(pattern, replacement);
   }
@@ -551,6 +581,25 @@ String _replace(String value, String pattern, String replacement) {
     regex,
     (Match match) => _expand(match, replacement),
   );
+}
+
+/// Applies [replacement] inside the first match of [regex] in [value].
+///
+/// Returns an empty string when [value] does not match at all, which is upstream
+/// behaviour for the `###` form.
+String _replaceInsideFirstMatch(
+  RegExp regex,
+  String value,
+  String replacement,
+) {
+  final String? matched = regex.firstMatch(value)?.group(0);
+
+  return matched == null
+      ? ''
+      : matched.replaceFirstMapped(
+          regex,
+          (Match match) => _expand(match, replacement),
+        );
 }
 
 /// Compiles [pattern], or returns `null` when it is not a valid regular

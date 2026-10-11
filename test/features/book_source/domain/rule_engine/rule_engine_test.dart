@@ -59,7 +59,8 @@ const Map<String, String> _unsupportedRules = <String, String>{
   'class.a&&class.b': 'unsupported:&&',
   'class.a%%class.b': 'unsupported:%%',
   '-class.a@text': 'unsupported:-',
-  'class.a@text##x##y###z': 'unsupported:###',
+  // 矩阵 #15：中段 `@@`（`@` 切分后留空段，必须在切段前判掉，否则误报畸形）。
+  'class.a@@class.b@text': 'unsupported:@@',
 };
 
 /// Selector segments that carry syntax a later phase of the matrix owns.
@@ -69,7 +70,8 @@ const Map<String, String> _unsupportedRules = <String, String>{
 const Map<String, String> _unsupportedSelectors = <String, String>{
   'css:.b': 'unsupported:@css:',
   'tag.li!0': 'unsupported:!',
-  'tag.li.-1:2': 'unsupported:!',
+  // 矩阵 #6 的「序号用 `:` 分隔」形式，与 `!` 分开报（不得合并成一个 token）。
+  'tag.li.-1:2': 'unsupported::',
   'tag.li[-1]': 'unsupported:[]',
   'children': 'unsupported:children',
   'text.x': 'unsupported:text',
@@ -699,6 +701,52 @@ void main() {
       );
 
       expect(values, <String>['One', 'Two', 'Three']);
+    });
+
+    test('extractAll_givenFourPartReplacement_returnsTheFirstMatchOnly', () {
+      // 上游 `##match##replace###`（AnalyzeRule.kt:497）不是「替换整串里的第一个」：
+      // 它取第一个**匹配**，只在该匹配内部做替换，因此结果是 `123` 而不是 `共 123 字`。
+      expect(
+        _values(
+          _engine().extractAll(
+            r'class.count@text##共\s*(\d+)\s*字##$1###',
+            _document(_countHtml),
+            rulePath: 'searchRule.wordCount',
+          ),
+        ),
+        <String>['123'],
+      );
+    });
+
+    test(
+      'extractAll_givenFourPartReplacementWithoutMatch_keepsAnEmptyValue',
+      () {
+        // 上游：无匹配时该分支返回空串；空串是「替换后的结果」，不再是提取阶段能丢掉的东西。
+        expect(
+          _values(
+            _engine().extractAll(
+              'class.count@text##absent##X###',
+              _document(_countHtml),
+              rulePath: 'searchRule.wordCount',
+            ),
+          ),
+          <String>[''],
+        );
+      },
+    );
+
+    test('extractAll_givenFourPartReplacementWithAnUncompilablePattern_returnsTheReplacement', () {
+      // 上游：正则不可编译时，`replaceFirst` 分支直接返回替换串本身。
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.raw@text##a(b##X###',
+            _document(_countHtml),
+            rulePath: 'searchRule.wordCount',
+          ),
+        ),
+        <String>['X'],
+      );
     });
   });
 
