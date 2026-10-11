@@ -7,6 +7,200 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review follow-up: routing, F6 ruling and hardening (2026-10-11)
+
+- ADR-0011 §决策 1 now carries a dated revision: routing is split three ways (mechanism in
+  `core/router/`, page table in the composition root, typed arguments in the feature's
+  `presentation/`), because `core/` must not import `features/`; C-ARCH-2 is **not** relaxed.
+- ADR-0026 records the F6 ruling: a rejected **top-level** rule (`bookList` / `chapterList` /
+  `content`) still fails the whole stage, while a rejected **non-top-level field** is cleared
+  with a warning. The code lands together with the `@css:` work in 3.2, and both
+  `book-source.md` §7 and `constraints.md` C-SRC-4 state that transition explicitly, so no
+  reader mistakes the ruling for shipped behaviour.
+- The search no longer hangs when a collaborator throws an `Exception` instead of answering
+  with a `ParseResult`: the state degrades to the generic failure message and logs the book
+  source, never the keyword. An `Error` is still not caught (C-ERR-2).
+- C-UI-7 is decidable now: an interactive widget needs an accessible name, which Material
+  derives from `tooltip` / visible text, and the rule is registered in `tech-stack.md` §12.
+  `testing.md` §4 states that `test/support/` holds doubles *and* shared harnesses, and
+  `architecture.md` §1 notes that a feature's derived providers sit next to its notifiers.
+
+### Minimal book source UI (2026-10-11)
+
+- Added the Phase 2.5 vertical slice: search form → hit list → book detail with its
+  chapter list → plain-text reader, in `lib/features/book_source/presentation/`. Every
+  string comes from the ARB files (en/zh in this same change) and every colour, spacing
+  and text style from the `m3e_design` tokens. Each page has a smoke test, and one test
+  walks the whole chain (search → detail → chapters → text) through the real pipeline on
+  the sanitized offline corpus, so the UI evidence is not a page rendering a stub.
+- The app now routes through `AppRouter` in `lib/core/router/`: typed `freezed` route
+  arguments, one push entry point, and the page table in the composition root because
+  `core/` must not import `features/`. `PLAN.md` 2.5 is closed; the manual live-site run
+  stays G2b (ADR-0024).
+- The selected book source is still a seam: `currentBookSourceProvider` answers `null`
+  until importing book sources lands in Phase 5, so the pages show an empty state
+  instead of requesting pages with an empty rule set.
+
+### Documentation and architecture audit (2026-10-11)
+
+- `isVip` is M0 (`book-source.md` §2/§4.1, `PLAN.md` 3.5) and `updateTime` is M1 because
+  it needs the M1 `java.timeFormat`: the M1 rows of `book-source.md` §3.1 and ADR-0014
+  carried a copy-paste error, now corrected with a dated revision note, and `PLAN.md`
+  Phase 4 names `updateTime`.
+- ADR-0025 registers the domain-service deviation (review F1), and `architecture.md` §3
+  gained the matching allowlist entry with its criteria; ADR-0019 §2 gained the
+  "no measurable lines" sub-case for pure freezed entities, with `testing.md` §2 and the
+  allowlist comment following.
+- ADR-0023 §4 records that the offline pages are constructed when the site is gone
+  (ADR-0024 §2, `book-source.md` §10); the original wording stays for traceability.
+- `architecture.md` §6 states where each part of routing lives (mechanism, page table,
+  typed arguments), which is what the code does without breaking C-ARCH-2.
+- Stale references corrected: `PLAN.md` no longer points at the deleted
+  `offline_replay_test.dart` and its unit-test count is the measured 42; the two closed
+  handover rows carry a closure marker and the open optional-field ruling is registered;
+  `AGENTS.md` §5 points at `constraints.md` §14; `l10n.yaml` at `naming.md` §8;
+  `README.md` no longer restates the phase status it delegates to `PLAN.md`;
+  `pubspec.yaml` cites ADR-0015 instead of the superseded ADR-0008; the shared
+  log-printer test double is `fake_log_printer.dart`; `naming.md` §4 carries the real
+  `renderUrlTemplate` signature; `constraints.md` §15 gained the doc-versus-behaviour
+  self-check item.
+
+### Rule engine (2026-10-11)
+
+- Added the Phase 2.2 minimal `RuleEngine`
+  (`lib/features/book_source/domain/rule_engine/rule_engine.dart`) covering matrix #1/#2/#5/#8/#9:
+  the `class` / `id` / `tag` selector segments, the position segment with positive and negative
+  indexes, the extraction `text` / `textNodes` / `ownText` / `html` / `all` or an attribute name,
+  and the `##regex##replacement` tail. Its shape follows upstream's three entry points:
+  `selectAll` (list rules — every segment is a selector), `extractAll` (value rules — the last
+  segment is the extraction) and `extractFirst`.
+- The upstream semantics were pinned against a maintained fork
+  (`hapelee/legado-with-MD3`'s `AnalyzeRule.kt` / `AnalyzeByJSoup.kt`) because `gedoor/legado`
+  itself has been emptied; that fact is now recorded in `book-source.md` and ADR-0014. Three
+  behaviours that `package:html` + `cascadia` do not give for free were implemented to match it:
+  matching includes the scope element (jsoup does, `cascadia.queryAll` deliberately does not),
+  `text` / `ownText` collapse whitespace the way jsoup normalises it (the Dart DOM only
+  concatenates text nodes), and `textNodes` / `ownText` are the *direct* text nodes.
+- `html` drops `script` / `style` like upstream, but on a **clone**, so the engine never mutates
+  the caller's document (C-SRC-9); attribute extraction skips blanks and duplicate values, and an
+  out-of-range index yields no match instead of an error — all upstream behaviour.
+- `##` replacement expands `$1` / `${name}` group references: Dart's `replaceAll` writes `$1`
+  literally (verified: `'abc'.replaceAll(RegExp(r'a(b)'), r'[$1]')` → `[$1]c`) while upstream
+  substitutes the capture group, and real book sources rely on it (`##.*共(.*字).*##$1`). An
+  unparsable pattern degrades to a literal replacement, which is what upstream does when its regex
+  cache cannot compile the pattern.
+- Everything outside this phase's matrix is **rejected** as `ParseFailureKind.unsupportedRule`
+  instead of being silently mis-parsed (C-SRC-4), with `rulePath` naming the syntax
+  (`unsupported:<syntax>`). The full set, so the rejection surface stays auditable:
+
+  | Syntax | `rulePath` | Owner |
+  |---|---|---|
+  | `@css:` `@json:` `@js:` `@xpath:` `@put:` `@get:` `@webJs` `@@` `{{` `//` `$.` `$[` `{` `:` (leading) | the flag as written | matrix #12–#20 |
+  | `\|\|` `&&` `%%` | `unsupported:\|\|` etc. | #10 / #11 / #27 |
+  | leading `-` (reverse) | `unsupported:-` | #7 |
+  | `!` (exclude) | `unsupported:!` | #6 |
+  | `:` inside a position segment | `unsupported::` | #6 (its index-list form) |
+  | `[]` index lists | `unsupported:[]` | #26 |
+  | `children` / `text` segment types | `unsupported:children` / `unsupported:text` | #3 / #4 |
+  | any other segment type | `unsupported:<type>` | #12 (upstream degrades it to raw CSS) |
+
+  Mid-rule flags (`class.a@css:.b`) and flag-like extraction segments are rejected too, because
+  upstream treats them as nested rules; an `@@` anywhere in the body is rejected **before** the
+  `@`-split, because the split would otherwise leave an empty segment that would be misreported as
+  a malformed rule (matrix #15 is M1, not a broken rule). Structurally broken rules (a missing
+  name, a non-numeric position, an empty extraction) are `parseFailed` with the field path, so a
+  failure still points at the book source field (C-SRC-8). A blank rule and a rule without a match
+  are **successes with no values**, because real exports use `""` for absent fields and only the
+  caller knows whether a top-level rule had to match (`book-source.md` §7).
+- The `##` family also covers upstream's four-part form `##match##replace###` (matrix #25, newly
+  recorded in the matrix). Its upstream semantics are **not** "replace the first occurrence":
+  upstream takes the first **match** and applies the replacement *inside it*, returns an empty
+  string when nothing matches, and returns the replacement as-is when the pattern cannot be
+  compiled (`AnalyzeRule.kt:497`). Implemented exactly, because a real source using `###` has to
+  produce upstream's output.
+- 42 unit tests in `test/features/book_source/domain/rule_engine/rule_engine_test.dart`; domain
+  coverage stays at 100% and both new files are measured, as ADR-0019 requires. No new dependency:
+  `cascadia` and `html` were already declared (C-SRC-6 keeps every CSS match inside cascadia).
+
+### Legal stance after the upstream shutdown (2026-10-11)
+
+- ADR-0023 records the architect's three rulings after the upstream repository was emptied by a
+  criminal judgment (the operators were convicted of copyright infringement, with the court
+  finding that "book source" files plus deep linking served nearly 4000 unauthorised works and
+  earned over 1 million yuan). The rulings: keep the Legado dialect and its field names as the
+  interoperability contract; keep only **sanitised, minimal** real corpus in the repository
+  (neutral name, `.test` hosts, rule strings verbatim, provenance in
+  `test/fixtures/**/README.md`); and strengthen the disclaimers.
+- `NOTICE.md` §2 now records the upstream status and the judgment; §3 gained an explicit
+  **prohibited-use** clause (no scraping, aggregating or redistributing unauthorised content
+  through book sources, and no profiting from it) plus the matching risk notice. The same stance
+  reaches the C-UI-9 legal-notices screen through the new `legalNoticesProhibitedUse` ARB key (the
+  page itself still lands in Phase 5). The ADR states plainly that it is not legal advice.
+- The matrix gained the three rows it was missing (`%%`, `###`, `[]` index lists) — they existed
+  only in upstream code, so the engine was rejecting them correctly while the ledger stayed silent.
+  They are appended as #25–#27 rather than inserted, because `PLAN.md` and ADR-0014 reference
+  `#1–#14` / `#15–#19` / `#20–#24` and inserting would renumber them. ADR-0014 carries the
+  matching factual addendum.
+
+### URL templates, use cases and the failure factory (2026-10-11)
+
+- **2.3** `renderUrlTemplate` (`lib/features/book_source/domain/url_template.dart`) renders `{{key}}` /
+  `{{page}}` / `{{baseUrl}}` with the "encode once, never twice" rule pinned against upstream
+  (`AnalyzeUrl.appendEncoded` + `NetworkUtils.encodedForm`, whose accepted set is `[A-Za-z0-9*._-]`
+  plus valid `%XX`): the keyword is form-encoded the way Java's `URLEncoder` does (space → `+`,
+  upper-case `%XX`, `!` / `'` / `~` escaped) while an already-encoded keyword passes through. An
+  undefined variable renders as an empty string and is reported through the logger — naming only the
+  variables, never the template, because a template may already carry the search keyword (C-ERR-8,
+  C-SEC-4). Nested `{{}}` rules (matrix #18) are M1 and are treated as undefined variables for now;
+  the boundary is registered in `PLAN.md`.
+- The same module gained `resolveAbsoluteUrl` / `resolveAbsoluteUrlOrNull` (§4's "a relative URL must
+  be resolved against the page it was found on"), which return the input unchanged when it cannot be
+  parsed instead of throwing (C-ERR-1).
+- **2.4** the four use cases (`domain/usecases/`): `SearchBooks`, `FetchBookInfo`, `FetchToc` and
+  `FetchContent`, each with the fixed `execute()` shape of C-ARCH-4, built on one shared
+  `PageFetchService` that owns §7's failure rules — a top-level `bookList` / `chapterList` / `content`
+  that matched nothing is `parseFailed`, an empty optional field is a success, and a rejected rule
+  keeps travelling as `unsupportedRule` (C-SRC-4). The new entities `Book` / `BookInfo` / `Chapter`
+  carry **no** JSON annotations (ADR-0021 §决策 3), and `features/book_source/di.dart` provides the
+  engine, the service and the four use cases through `@riverpod` (C-STATE-2). A hit or chapter without
+  a URL is skipped with a warning instead of failing the page (§9).
+- **2.7** `failureAt<T>` (`lib/core/error/parse_result.dart`) is now the single construction point for
+  failures: it asserts a non-empty `rulePath` (C-SRC-8), and every failure path of the rule engine and
+  of the use cases goes through it.
+- The offline replay now drives the **production chain** — use case → `renderUrlTemplate` →
+  `HttpClient` → `RuleEngine`, with a hand-written `FakeHttpClient` — and lives in
+  `test/features/book_source/domain/usecases/search_books_test.dart`, so it satisfies ADR-0017's
+  file-level mirror rule and asserts the exact URLs and `rulePath`s requested per stage. The previous
+  test-only chain, which never touched the template or the HTTP layer, was deleted: a Gate must not
+  accept a chain that production code never runs (`PLAN.md` §6 trap #1).
+- Docs and process: ADR-0024 splits `PLAN.md`'s G2 into **G2a** (offline replay through the production
+  chain — achieved) and **G2b** (live link, after `@css:` lands in 3.2) with the 242 → 20 → 4 → 0
+  measurements as evidence; ADR-0023's status line now records that the ruling happened at review time
+  rather than in the round it was written, and its corpus rule carries a re-review trigger;
+  `book-source.md` §10 now says pages are **preferably captured** and may be constructed with
+  provenance when the site is gone; `%%` is explicitly **M0 → Phase 3.2** instead of falling into M2
+  through the fallback rule; and `CONTRIBUTING.md` gained the one-writer-per-worktree rule that B1's
+  root cause called for.
+
+### Offline corpus for the default-rule slice (2026-10-11)
+
+- Added the corpus pair the vertical slice needs: `test/fixtures/book_sources/legado_default_rules_source.json`
+  (a real export whose four rule objects use **only** the default syntax, trimmed to one entry and
+  sanitised per ADR-0023) plus `test/fixtures/html/{search_result,book_page,chapter_page}.html`, and
+  a replay that drives the **production chain** (see the next section). The first half of `PLAN.md`
+  G2 — now G2a — is therefore reachable.
+- **The pages are constructed to satisfy the real source's selectors, not captured** — a documented
+  deviation from the ruling, which asked for captured HTML. Measured evidence: of 242 sampled
+  sources only 20 (8%) use the default syntax throughout; only 4 of those sites are still up; and
+  **none** of the four still resolves its search path (404, redirect to the home page, or zero
+  selector matches — the 2021 rules no longer fit today's sites); the 12k-entry collection's release
+  asset is gone. `test/fixtures/html/README.md` records the measurements and states that no real
+  work's text is included, which also keeps ADR-0023's stance. Swapping in captured pages later needs
+  no test change.
+- The other half of G2 — "run the real link manually once" — cannot be satisfied in Phase 2 either:
+  every live source needs `@css:`, which is Phase 3.2. It is registered in `PLAN.md` for a ruling
+  instead of being dropped silently.
+
 ### Book source models (2026-10-11)
 
 - Added the Phase 2.1 book source models: `lib/features/book_source/domain/entities/book_source.dart`

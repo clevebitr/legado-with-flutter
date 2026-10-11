@@ -93,8 +93,19 @@ Future<ParseResult<List<Book>>> searchBooks(String keyword, {int page = 1});
 Future<ParseResult<BookInfo>> fetchBookInfo(String url);
 Future<ParseResult<List<Chapter>>> fetchToc(String url);
 Future<ParseResult<String>> fetchContent(String url);
-String renderUrlTemplate(String template, Map<String, String> params);
+String renderUrlTemplate(
+  String template,
+  Map<String, String> params, {
+  required AppLogger logger,
+});
 ```
+
+`renderUrlTemplate` 的 `logger` 必须由调用方注入（未定义变量要记 warning）——项目禁止
+全局 logger，也禁止在 `domain/` 里 `ref.watch`（C-ARCH-7）。
+
+> **归属说明（2026-10-11）：** `renderUrlTemplate` 是纯函数（实现位于
+> `lib/features/book_source/domain/url_template.dart`），命名由**本节**管；§6 只列
+> 类型与分层命名模式，因此**不为它另立一行**。
 
 ---
 

@@ -37,9 +37,10 @@
    每个源文件都必须出现在报告中。lcov 只统计**运行期被加载过**的库，因此
    「新增了生产代码但没写测试」不会拉低百分比，而是直接命中本项。
    确需豁免的文件（仅特定平台可达、只能跑在 `integration_test` 的入口，或代码生成器的
-   输入文件如 drift 表定义）逐行写入 `tool/coverage_allowlist.txt` 并在行内注释原因；
+   输入文件如 drift 表定义、以及纯 `freezed` 实体这类**源文件无可测量行**的声明式输入）
+   逐行写入 `tool/coverage_allowlist.txt` 并在行内注释原因；
    代码生成器输入类的文件还必须加 `// coverage:ignore-file`（否则仍会因阈值失败），
-   其正确性由别的测试保证。
+   其正确性由别的测试保证。子情形的完整定义与 2026-10-11 修订见 ADR-0019 §2。
    allowlist **不得**用于「暂时没写测试」，且条目若**出现在**报告中同样判失败。
    手写文件若使用 `// coverage:ignore-file`，会被 lcov 从报告中整体移除，
    因此同样需要在 allowlist 中登记并说明原因。
@@ -90,8 +91,9 @@ test('parseHtml_givenExcludedRule_dropsMatchingNodes', () { /* ... */ });
 `mocktail` 只用于验证「是否被调用」的边界场景；能用 Fake 的地方禁止用 Mock
 （Mock 会让测试耦合实现细节）。
 
-**共享替身放 `test/support/`**，命名 `fake_<subject>.dart`（例如 `fake_platform_info.dart`）；
-该目录只放替身，不放测试用例（测试文件仍按 §3 镜像到 `test/` 下）。
+**共享替身与测试装置放 `test/support/`**：替身命名 `fake_<subject>.dart`（例如
+`fake_platform_info.dart`），共享装置（语料加载、provider 装配等 harness）按内容命名
+（例如 `offline_corpus.dart`）；该目录只放这两类，不放测试用例（测试文件仍按 §3 镜像到 `test/` 下）。
 
 ---
 

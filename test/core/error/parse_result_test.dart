@@ -162,6 +162,99 @@ void main() {
     });
   });
 
+  group('failureAt', () {
+    test('failureAt_givenAnEmptyRulePath_throwsAssertionError', () {
+      // C-SRC-8：没有 rulePath 的失败无法定位，因此这是编程错误而不是运行时状况。
+      expect(
+        () => failureAt<void>(kind: ParseFailureKind.parseFailed, rulePath: ''),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('failureAt_givenAFailure_carriesKindPathAndCause', () {
+      final ParseFailure<void> failure = failureAt<void>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'unsupported:@css:',
+      );
+
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@css:');
+      expect(failure.cause, isNull);
+      expect(failure.stackTrace, isNull);
+    });
+  });
+
+  group('firstFailure', () {
+    test('firstFailure_givenOnlySuccesses_returnsNull', () {
+      final ParseFailure<String>? failure = firstFailure<String>(
+        <ParseResult<Object?>>[
+          const ParseSuccess<String?>('§1'),
+          const ParseSuccess<String?>(null),
+        ],
+      );
+
+      expect(failure, isNull);
+    });
+
+    test('firstFailure_givenNoResults_returnsNull', () {
+      expect(firstFailure<String>(const <ParseResult<Object?>>[]), isNull);
+    });
+
+    test(
+      'firstFailure_givenAFailureAfterSuccesses_returnsItForTheCallerType',
+      () {
+        final ParseFailure<String>? failure = firstFailure<String>(
+          <ParseResult<Object?>>[
+            const ParseSuccess<String?>('§1'),
+            const ParseFailure<String?>(
+              kind: ParseFailureKind.unsupportedRule,
+              rulePath: 'unsupported:@css:',
+            ),
+          ],
+        );
+
+        expect(failure, isNotNull);
+        expect(failure!.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'unsupported:@css:');
+      },
+    );
+
+    test('firstFailure_givenSeveralFailures_returnsTheFirstOne', () {
+      // 一个条目有多个字段时，报告最先把搜索打断的那个字段才有定位价值。
+      final ParseFailure<String>? failure = firstFailure<String>(
+        <ParseResult<Object?>>[
+          const ParseFailure<String?>(
+            kind: ParseFailureKind.parseFailed,
+            rulePath: 'searchRule.name',
+          ),
+          const ParseFailure<String?>(
+            kind: ParseFailureKind.unsupportedRule,
+            rulePath: 'unsupported:@css:',
+          ),
+        ],
+      );
+
+      expect(failure?.rulePath, 'searchRule.name');
+    });
+
+    test('firstFailure_givenDiagnostics_doesNotCarryThemOver', () {
+      final ParseFailure<String>? failure = firstFailure<String>(
+        <ParseResult<Object?>>[
+          const ParseFailure<String?>(
+            kind: ParseFailureKind.networkTimeout,
+            rulePath: 'searchUrl',
+            cause: FormatException('broken payload'),
+            stackTrace: StackTrace.empty,
+          ),
+        ],
+      );
+
+      expect(failure?.kind, ParseFailureKind.networkTimeout);
+      expect(failure?.cause, isNull);
+      expect(failure?.stackTrace, isNull);
+    });
+  });
+
   group('resolveFailureArbKey', () {
     test('resolveFailureArbKey_whenEveryNonSilentKindIsMapped_producesDistinctKeys', () {
       final List<String> keys = ParseFailureKind.values

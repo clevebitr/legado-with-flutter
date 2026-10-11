@@ -22,6 +22,48 @@ class AppLocalizationsZh extends AppLocalizations {
   String get actionImport => '导入';
 
   @override
+  String get bookSourceSearchTitle => '搜索';
+
+  @override
+  String get bookSourceSearchHint => '书名或作者';
+
+  @override
+  String get bookSourceSearchAction => '搜索';
+
+  @override
+  String get bookSourceSearchPrompt => '输入关键词开始搜索该书源。';
+
+  @override
+  String get bookSourceSearchEmpty => '没有匹配该关键词的书。';
+
+  @override
+  String get bookSourceMissingSource => '尚未选择书源。书源导入将在后续版本提供。';
+
+  @override
+  String get bookSourceDetailTitle => '书籍详情';
+
+  @override
+  String get bookSourceTocTitle => '目录';
+
+  @override
+  String get bookSourceReaderTitle => '正文';
+
+  @override
+  String bookSourceAuthorLine(String author) {
+    return '作者：$author';
+  }
+
+  @override
+  String bookSourceKindLine(String kind) {
+    return '分类：$kind';
+  }
+
+  @override
+  String bookSourceLastChapterLine(String chapter) {
+    return '最新章节：$chapter';
+  }
+
+  @override
   String get failureNetworkTimeout => '请求超时，请稍后重试。';
 
   @override
@@ -57,6 +99,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get legalNoticesCorrespondingSource => '对应源代码';
+
+  @override
+  String get legalNoticesProhibitedUse =>
+      '禁止将本应用用于侵犯著作权。通过书源抓取、聚合或传播未经授权的内容属被禁止用途，实施者自行承担全部法律责任。';
 
   @override
   String get failureUnsupportedRule => '该书源使用了暂不支持的规则类型。';

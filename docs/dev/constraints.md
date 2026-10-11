@@ -120,7 +120,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-SRC-1 | 解析引擎必须为纯 Dart，且无 Flutter / UI 依赖（受 C-ARCH-7 约束）。 |
 | C-SRC-2 | JS 规则必须在**独立 Isolate** 中执行，禁止阻塞 UI 线程（ADR-0015）。超时、内存上限与调用次数配额见 `docs/dev/book-source.md` §6（本文档不复述数值）；`Isolate.kill(priority: immediate)` 必须保留为硬预算兜底。 |
 | C-SRC-3 | JS 桥接只暴露 `book-source.md` 声明的白名单 API；禁止暴露文件系统、进程、网络与原生日志。 |
-| C-SRC-4 | 不支持的规则类型必须返回 `ParseFailure(unsupportedRule)` 并记录日志；**禁止静默忽略**。 |
+| C-SRC-4 | 不支持的规则类型必须返回 `ParseFailure(unsupportedRule)` 并记录日志；**禁止静默忽略**。顶层规则（`bookList` / `chapterList` / `content`）被拒时必须整次失败；非顶层字段被拒时的降级语义（置空 + warning）见 **ADR-0026**。 |
 | C-SRC-5 | URL 模板必须统一经 `renderUrlTemplate` 渲染；禁止手写字符串拼接。 |
 | C-SRC-6 | CSS 选择器统一 `cascadia`；JSONPath 统一 `json_path`；禁止自研选择器或手写 JSON 遍历。 |
 | C-SRC-7 | `BookSource` 及全部子规则必须使用 `freezed` + `json_serializable`；禁止手写 `fromJson` / `toJson`。模型位于 `domain/entities/`，该层归属的例外见 ADR-0021。 |
@@ -159,9 +159,9 @@ class BookSource with _$BookSource {
 | C-UI-4 | 预测性返回必须启用 `PredictiveBackPageTransitionsBuilder`，并按 `docs/dev/platform.md` 配置 `AndroidManifest.xml`。 |
 | C-UI-5 | 所有用户可见字符串必须来自 `AppLocalizations`（`nullable-getter: false`，取值不需要 `!`）；禁止硬编码中英文字符串。 |
 | C-UI-6 | 响应式布局必须使用 `LayoutBuilder` / `MediaQuery`；禁止固定宽高与非流式约束。 |
-| C-UI-7 | 所有交互组件必须提供 `Semantics` 标签；图片必须提供 `semanticLabel`。 |
+| C-UI-7 | 所有交互组件必须提供**可访问名称**，不得只靠图标传达含义；Material 派生语义即满足（`IconButton` 的 `tooltip`、`ListTile` 的标题/副标题文本、`TextField` 的 `hintText` 等），显式 `Semantics` 包装不是硬性要求（保障方式见 `docs/dev/tech-stack.md` §12）；图片必须提供 `semanticLabel`。 |
 | C-UI-8 | 禁止在 `build` 中构造可常量化对象（`TextStyle`、`BoxDecoration`、`EdgeInsets`）；主题相关对象必须来自令牌。 |
-| C-UI-9 | 必须提供「关于 → 法律声明」页面，显示版权、无担保声明、GPL-3.0 全文查看入口与源代码获取入口（GPL-3.0 §0/§5d/§6）。文案键：`legalNoticesTitle`、`legalNoticesCopyright`、`legalNoticesNoWarranty`、`legalNoticesViewLicense`、`legalNoticesCorrespondingSource`。 |
+| C-UI-9 | 必须提供「关于 → 法律声明」页面，显示版权、无担保声明、**禁止侵权用途声明（见 ADR-0023）**、GPL-3.0 全文查看入口与源代码获取入口（GPL-3.0 §0/§5d/§6）。文案键：`legalNoticesTitle`、`legalNoticesCopyright`、`legalNoticesNoWarranty`、`legalNoticesViewLicense`、`legalNoticesCorrespondingSource`、`legalNoticesProhibitedUse`。 |
 
 ```dart
 // ✅ 正确（已核实 m3e_design 0.2.1 API）
@@ -325,6 +325,7 @@ Container(
 - [ ] 使用 `freezed` / `json_serializable`，未手改生成文件（C-DEP-3/5）？
 - [ ] 无硬编码密钥、无明文 HTTP、无性能陷阱（C-SEC-1/2、C-PERF-1..5）？
 - [ ] 无未使用代码、无 TODO 占位、未修改生成文件（C-BAN-1/2/3）？
+- [ ] 公共 API 的 `///` 宣称的行为与实现一致（必填字段、规则未匹配时的回退值、「跳过条目」还是「整次失败」）？
 - [ ] 已通过 `AGENTS.md` §4 的全部门禁命令（`flutter analyze` 已包含 analyzer 插件规则）？
 - [ ] 若偏离了某条约束，已在 PR 描述中说明原因并获得用户确认？
 

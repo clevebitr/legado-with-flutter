@@ -4,6 +4,19 @@
 - **日期：** 2026-10-10
 - **关联：** C-SRC-1..9、`docs/dev/book-source.md` §3、ADR-0008
 
+> **2026-10-11 事实附注（不改变任何决策）：** 上游 `gedoor/legado` 仓库已**清空**
+> （默认分支只剩侵权公告，无源码）。因此决策 1 的「逐条对标原版公开规则说明」此后只能依据
+> **本仓 `docs/dev/book-source.md` §3 的规格**与仍在维护的 fork（本次核对用
+> `hapelee/legado-with-MD3`）。矩阵的「状态」列仍按原规则由真实书源回归逐行确认，
+> M0 / M1 / M2 的范围划分不变。
+>
+> **2026-10-11 矩阵补录（回执 B3，同样不改变分期口径）：** `book-source.md` §3 补录了三行
+> 此前只存在于上游实现、本仓矩阵无行的语法——#25 `##match##replace###`（M0，Phase 2.2 已实现）、
+> #26 `[]` 索引列表（M0 → Phase 3.1，与 #5 / #6 同组）、#27 `%%` 并行交叉合并
+> （**M0 → Phase 3.2**：它与 #10 / #11 同族，复用同一套连接符切分机制，因此不适用「未列入者归 M2」
+> 的兜底规则；初版曾靠兜底归入 M2，经复审改为显式定档）。行号追加在表尾，
+> 以保持 `#1–#14` / `#15–#19` / `#20–#24` 的既有引用不变。
+
 ## 背景
 
 `book-source.md` 初版（v0.1）把规则语法按 P0/P1/P2 排序，但**没有与上游
@@ -23,7 +36,14 @@
 | 阶段 | 范围 | 完成判定 |
 |---|---|---|
 | **M0**（首个可导入版本） | 默认规则（`class`/`id`/`tag`/`children`/`text` + 位置 + `!` 排除 + 首字符 `-` 反序）、属性提取（`text`/`textNodes`/`ownText`/`href`/`src`/`html`/`all`）、`##` 替换、`\|\|`、`&&`、`@css:`、`@json:`、`@js:`、`{{key}}`/`{{page}}`、搜索/详情/目录/正文四段完整字段、`nextTocUrl`、`nextContentUrl` | 至少 2 个真实书源完成「搜索→详情→目录→正文」离线回放 |
-| **M1** | `@put:`/`@get:`、`java.put`/`java.get`、`{{}}` 内嵌规则、`{}` （阅读 2.0）规则、`exploreUrl` 发现页、`canReName`、`isVip`、`java.timeFormat` | 每个语法至少 1 条真实书源验证记录 |
+| **M1** | `@put:`/`@get:`、`java.put`/`java.get`、`{{}}` 内嵌规则、`{}` （阅读 2.0）规则、`exploreUrl` 发现页、`canReName`、`java.timeFormat` | 每个语法至少 1 条真实书源验证记录 |
+
+> **2026-10-11 修订（架构师裁决）：** 本表的 M1 行原包含 `isVip`，属**复制错误**——它照抄了
+> `book-source.md` §3.1 的同一处笔误。§2 的字段模型表与 §4.1 的语义表都把 `isVip` 定为
+> **M0**，`PLAN.md` 3.5 也把它放在 Phase 3（M0 横向铺开）；`isVip` 语义简单
+> （`null` / `false` / `0` / `""` → 非 VIP），不依赖 JS 与网络，推进 M1 会把一个 M0
+> 字段模型的字段挤出首版范围。**故 `isVip` 归 M0**（原 M1 行已删去），并按同一裁决把
+> `updateTime`（依赖 M1 的 `java.timeFormat`）在 §3.1 与 `PLAN.md` Phase 4 中点名。
 | **M2 / 暂不实现** | `@xpath:`、`:` 正则规则、`webJs`、`sourceRegex`、字体反爬、登录脚本/登录 UI | 命中时必须返回 `ParseFailure(unsupportedRule)` |
 
 3. **命中 M2 语法时禁止静默失败**：必须返回 `ParseFailure(unsupportedRule)`

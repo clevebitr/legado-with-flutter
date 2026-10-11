@@ -101,8 +101,10 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 **依赖变化：** 1.2 引入 `crypto`（日志摘要）、1.4 引入 `charset`（解码 —— `betto_charset_detector`
 只检测不解码）；`pubspec.yaml`、`docs/dev/tech-stack.md`、`NOTICE.md` §5 三处已同步（C-DEP-6/7）。
 
-**覆盖率豁免：** `tool/coverage_allowlist.txt` 现有两条，理由分别属 ADR-0019 的第二类
-（原生库 + 后台 isolate，`flutter test` 不可达）与第三类（代码生成器输入，运行时不可达）。
+**覆盖率豁免：** `tool/coverage_allowlist.txt` 现有三条，理由分别属 ADR-0019 的第二类
+（原生库 + 后台 isolate，`flutter test` 不可达）与第三类（代码生成器输入，运行时不可达；
+第三条为 Phase 2 新增的 `lib/features/book_source/domain/entities/book.dart`，属该类的
+「无可测量行」子情形，见 ADR-0019 §2 的 2026-10-11 修订）。
 
 **交接给后续阶段（不得静默丢弃）：**
 
@@ -114,7 +116,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 按书源清理缓存 | 未实现（C-NET-6 只要求 TTL + 稳定键）；若需要则加列并走 schema dump 流程 |
 | 文件型数据库（后台 isolate + 原生库） | 无自动化覆盖：需 `flutter run` 或 `integration_test`（验证命令见 `database_executor_provider.dart` 文档） |
 | Big5 / Big5-HKSCS 解码 | 已知缺口，见 `book-source.md` §5.1，待排期 |
-| `NOTICE.md` §5 许可证分类（§6 的标记匹配不到项目符号写法） | 待裁决 |
+| `NOTICE.md` §5 许可证分类（§6 的标记匹配不到项目符号写法） | ✅ **已闭环**：分类特征串已改为项目符号写法，重扫结果记入 `NOTICE.md` §5，并由可重复执行的 `tool/scan_licenses.dart` 保证（见 `NOTICE.md` §6） |
 
 ---
 
@@ -138,7 +140,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 **完成判定：** 1 个真实书源完成「搜索 → 详情 → 目录 → 正文」**离线回放**，
 且手动跑通一次真实链路。
 
-#### Phase 2 完成记录 / 交接（进行中：2.1 已完成）
+#### Phase 2 完成记录 / 交接（2.1–2.7 已完成）
 
 **2.1 状态：** ✅ 已完成 —— 模型落在
 `lib/features/book_source/domain/entities/book_source.dart`（`BookSourceType`、`BookSource`、
@@ -147,8 +149,47 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 （公开合集取 1 条，脱敏主机与名称、规则串逐字保留；27 个顶层键里 16 个未建模，
 正是 `extra` 的验证对象，来源与脱敏记录见该目录的 `README.md`）。
 
+**2.2 状态：** ✅ 已完成 —— `RuleEngine` 最小版位于
+`lib/features/book_source/domain/rule_engine/rule_engine.dart`，实现矩阵 #1/#2/#5/#8/#9：
+`class` / `id` / `tag` 选择、正负索引、`text` / `textNodes` / `ownText` / `html` / `all` /
+属性提取、`##` 替换（含 `$1` 组引用），对外形状为 `selectAll` / `extractAll` / `extractFirst`
+（对齐上游 `getElements` / `getStringList` / `getString`），共 42 条单测。本阶段未实现的
+语法一律**显式拒绝**为 `unsupportedRule`（C-SRC-4），`rulePath` 写 `unsupported:<语法名>`。
+
+**2.6 状态（部分完成）：** 离线语料已建立——`test/fixtures/book_sources/` 两份真实书源
+（脱敏）+ `test/fixtures/html/` 三页，四段离线回放由
+`test/features/book_source/domain/usecases/search_books_test.dart` 的
+`chain_givenRealSourceAndCorpusPages_replaysEveryStage` 驱动**生产链路**跑通搜索 → 详情 →
+目录 → 正文（每条规则均未被拒绝；G2a 证据见 ADR-0024 §决策 1）。页面是**按真实
+选择器构造**的，原因与实测证据见 `test/fixtures/html/README.md`。
+
+**2.3 状态：** ✅ 已完成 —— `renderUrlTemplate`（`domain/url_template.dart`）实现 `{{key}}` /
+`{{page}}` / `{{baseUrl}}`，关键词只编码一次（上游 `appendEncoded` + `encodedForm`），未定义变量
+→ 空串 + warning（warning 只写变量名，不写模板）；同模块提供 `resolveAbsoluteUrl`。
+
+**2.4 状态：** ✅ 已完成 —— 四个 UseCase（`SearchBooks` / `FetchBookInfo` / `FetchToc` / `FetchContent`）
++ 共享 `PageFetchService`（§7 的失败规则唯一实现）+ 实体 `Book` / `BookInfo` / `Chapter` +
+`features/book_source/di.dart`（`@riverpod`）。
+
+**2.7 状态：** ✅ 已完成 —— `failureAt<T>`（`core/error/parse_result.dart`）为失败的唯一构造入口，
+空 `rulePath` 抛 `AssertionError`；引擎与四个 UseCase 的失败路径均经它。
+
+**2.5 状态：** ✅ 已完成 —— 落地于 `lib/features/book_source/presentation/`
+（`pages/` × 3 + `notifiers/` + `widgets/` + `book_source_route.dart`）与 `lib/core/router/app_router.dart`：
+搜索框 → 结果列表 → 目录 → 正文（纯文本）；文案全部经 ARB（en/zh 同 PR）、令牌全部经
+`context.m3e`；页面到页面的跳转只经类型化路由（ADR-0011）。书源来源为
+`currentBookSourceProvider` 的**空态 seam**（无导入 UI 时返回 `null`，页面走空态而不是拿空规则集发请求）；
+C-UI-9 的法律声明页不在本阶段。页面级 smoke 测试见 `test/features/book_source/presentation/pages/`，
+其中搜索 → 详情 → 目录 → 正文的**整链**由真实脱敏语料驱动（`test/support/offline_corpus.dart`）。
+
+**阶段收尾状态：** 2.1–2.7 全部完成；Phase 2 的出口条件为 **G2a**（已达成）与 2.5（已完成），
+而「手动跑通一次真实链路」（**G2b**）依赖矩阵 #12（`@css:`，3.2），按 ADR-0024 移至 3.2 之后。
+
 **本步产出 / 修订的 ADR：** 0021（书源模型位于 domain 实体并携带 JSON 注解；架构师复审追认）、
-0022（`json_serializable` 开 `checked: true`；架构师复审裁决）。
+0022（`json_serializable` 开 `checked: true`；架构师复审裁决）、0023（上游停运后的法律立场；
+架构师**复审时**裁决，初版归因已更正）、0024（G2 拆分为 G2a / G2b）、0025（domain 允许
+无状态领域服务与解析构件；架构师 PR 评审指令裁决 F1）、0026（非顶层字段被拒时降级为 warning；
+架构师裁决 F6）。
 
 **交接给后续步骤（不得静默丢弃）：**
 
@@ -159,6 +200,11 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `lastUpdateTime` / `respondTime` / `weight` / `customOrder`（M0，仅展示与排序） | 并入 **Phase 5.4** |
 | `extra` 的导出合并（`toLegadoJson`） | 随导入 / 导出功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出 |
 | Big5 / Big5-HKSCS 解码缺口 | 承 Phase 1，仍待排期（`book-source.md` §5.1） |
+| 上游 `gedoor/legado` 已清空（无源码） | 已记入 `book-source.md` 顶部与 ADR-0014 事实附注；法律立场见 **ADR-0023**；语义参照改为本仓 §3 + 仍在维护的 fork |
+| B4 语料形态偏差：页面是**按真实选择器构造**而非抓取 | ✅ **已闭环（ADR-0024 §决策 2）**：页面优先真实抓取，站点不可达时允许按该书源的真实选择器构造，但必须在 `test/fixtures/**/README.md` 标注来源与构造依据。实测依据：242 份抽样仅 20 份（8%）全用默认规则，其中 4 份站点存活、**0 份搜索路径仍有效**（2021 规则已失效）；证据见 `test/fixtures/html/README.md`。抓取页面仍是矩阵「已确认」与 3.7 的**目标** |
+| 非顶层字段被拒的降级语义（F6） | ✅ **已裁决（ADR-0026）**：非顶层字段 → **置空 + warning**（含 `rulePath` 与书源 ID），顶层 `bookList` / `chapterList` / `content` 仍**整次失败**。**实现与 `book-source.md` §7 的措辞同批并入 3.2**（3.2 之前没有大量可选字段会命中该路径）；唯一实现点为 `PageFetchService`，两类各 ≥1 条测试 |
+| G2 的「手动真实链路跑通一次」在 Phase 2 不可达成 | 存活书源的规则都需 `@css:`（Phase 3.2）。**已裁决（ADR-0024）**：拆成 **G2a**（离线回放，且必须驱动生产链路——**已达成**）/ **G2b**（真实链路，移至 3.2 之后） |
+| `{{}}` 内嵌规则（矩阵 #18）在 2.3 被当作「未定义变量」→ 空串 + warning | Phase 4 落地 #18 时改为求值，并同步 §3 矩阵状态列 |
 
 ---
 
@@ -169,7 +215,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 步骤 | 内容 | 验收 |
 |---|---|---|
 | 3.1 | 补齐默认规则语法：#3（`text` 类型）、#4（`children`）、#6（`!` 排除）、#7（首字符 `-` 倒置） | 每条 1 条单测 |
-| 3.2 | `\|\|`（#10）、`&&`（#11）、`@css:`（#12）、`@json:`（#13） | 同上 |
+| 3.2 | `\|\|`（#10）、`&&`（#11）、`@css:`（#12）、`@json:`（#13）；并落地 **ADR-0026** 的非顶层字段降级语义（顶层不降级） | 同上；降级语义顶层 / 非顶层各 ≥1 条单测 |
 | 3.3 | `JsBridge`：专用 Isolate + **复用运行时** + `timeout: 5000` + `memoryLimit: 32MB` + `Isolate.kill` 兜底 | ADR-0015、C-SRC-2；`sendMessage` 载荷必须是合法 JSON |
 | 3.4 | `@js:` 规则接入（#14）+ JS 白名单绑定（`baseUrl`/`result`/`parse.*`/`http.*`/`log.*`） | `book-source.md` §6 白名单逐项有测试；越权访问被拒绝 |
 | 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定、`replaceRegex` 批量替换（含建模 `ContentRule.replaceRegex`） | 各 1 条单测 |
@@ -183,8 +229,10 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 ### Phase 4 — M1
 
-矩阵 #15–#19 + `exploreUrl` 发现页 + `canReName` + `java.timeFormat` + `concurrentRate`。
-每条语法同样需要真实书源验证记录。完成判定：M1 行状态列全部为「已确认」。
+矩阵 #15–#19 + `exploreUrl` 发现页 + `canReName` + **`updateTime`（依赖 `java.timeFormat`）** +
+`java.timeFormat` + `concurrentRate`。`isVip` **不在**本阶段（架构师 2026-10-11 裁决：归 M0 /
+Phase 3.5，见 ADR-0014 的修订注记）。每条语法同样需要真实书源验证记录。
+完成判定：M1 行状态列全部为「已确认」。
 
 ---
 
@@ -212,7 +260,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | Gate | 条件 |
 |---|---|
 | **G1** | `lib/core/**` 覆盖率 100%；`AGENTS.md` §4 的全部命令退出码均为 0 |
-| **G2** | 1 个书源全链路离线回放通过；手动真实链路跑通一次 |
+| **G2a** | 1 个**真实书源**的「搜索 → 详情 → 目录 → 正文」**离线回放**通过，且回放必须驱动**生产链路**（UseCase → `renderUrlTemplate` → `HttpClient` → `RuleEngine`）；**已达成**（ADR-0024） |
+| **G2b** | 手动跑通一次**真实站点**链路；依赖矩阵 #12（`@css:`，Phase 3.2），因此排在 3.2 之后（ADR-0024） |
 | **G3** | 2 个书源全链路离线回放；矩阵 M0 状态列全部「已确认」；9 个失败 kind 均有测试 |
 | **G4** | 矩阵 M1 状态列全部「已确认」 |
 | **G5** | C-UI-9 可达；无 `TODO` 占位；无未使用代码 |

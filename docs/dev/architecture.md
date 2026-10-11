@@ -19,7 +19,7 @@ lib/
 │   ├── logging/                  # Logger 门面（唯一日志入口）
 │   ├── network/                  # HttpClient、CookieManager、超时与重试策略
 │   ├── platform/                 # 平台抽象接口 + 各平台实现 + fallback
-│   ├── router/                   # 路由表与类型化路由参数
+│   ├── router/                   # 路由机制（RouteSettings → 页面）与唯一 push 入口；页面表见 §6
 │   ├── storage/                  # Drift 数据库、DAO、键值存储封装
 │   ├── theme/                    # M3ETheme 安装、动态取色接线
 │   └── utils/                    # 纯函数工具（禁止 IO，禁止依赖 Flutter）
@@ -27,7 +27,7 @@ lib/
 │   └── <feature>/                # book_source / reader / bookshelf / settings ...
 │       ├── data/                 # DTO(freezed) + DataSource + RepositoryImpl
 │       ├── domain/               # Entity + Repository 接口 + UseCase
-│       ├── presentation/         # pages / widgets / notifiers
+│       ├── presentation/         # pages / widgets / notifiers（Notifier 与该 feature 的派生 provider 同放 notifiers/）
 │       └── di.dart               # 该 feature 的仓储与用例 Provider
 └── l10n/                         # ARB 与生成物
 ```
@@ -62,15 +62,23 @@ features/<f>/presentation ──► features/<f>/domain ──► features/<f>/d
 
 | 层 | 允许包含 | 禁止包含 |
 |---|---|---|
-| `domain/` | Entity、Value Object、Repository 接口、UseCase、领域异常 | Flutter import、`dio`、Drift、平台 API、JSON 序列化注解 |
+| `domain/` | Entity、Value Object、Repository 接口、UseCase、领域异常、**无状态领域服务与解析构件**（判据见下方例外二） | Flutter import、`dio`、Drift、平台 API、JSON 序列化注解 |
 | `data/` | DTO（freezed + json_serializable）、DataSource、`RepositoryImpl`、Mapper | Flutter Widget、`BuildContext` |
 | `presentation/` | Page、Widget、`@riverpod` Notifier、ViewModel 级格式化逻辑 | 直接 import `data/`、直接调用 `dio`、写在 `build` 里的业务判断 |
 
 DTO ↔ Entity 转换必须放在 `data/` 的 Mapper 中，禁止在 `presentation/` 做转换。
 
-> **唯一例外（ADR-0021）：** 书源模型（`BookSource` 及其子规则）允许在 `domain/` 中携带
+> **例外一（ADR-0021）：** 书源模型（`BookSource` 及其子规则）允许在 `domain/` 中携带
 > `freezed` + `json_serializable` 注解：Legado JSON 的键名就是本项目的领域规则语言，
 > `RuleEngine` 与 UseCase 直接消费它（C-SRC-7）。其它 `domain/` 类型仍禁止 JSON 序列化注解。
+>
+> **例外二（ADR-0025）：** `domain/` 允许**无状态领域服务与解析构件**，即
+> `XxxService`（例如 `PageFetchService`：编排 `core/` 抽象与规则引擎）、`XxxEngine`
+> （例如 `RuleEngine`，C-SRC-1 要求的纯 Dart 解析引擎）与纯函数模块（例如
+> `url_template.dart`）。判据**逐条**为：无跨调用的可变状态（C-SRC-9）；只依赖 `core/`
+> 抽象与纯 Dart 依赖；不 import Flutter / 平台 API / `data/`；不承担仓储职责（C-NET-8）。
+> `lib/features/book_source/` 目前没有 `data/` 层，是该例外的直接结果，复审触发条件见
+> ADR-0025 §后果。
 
 ---
 
@@ -152,7 +160,16 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 
 ## 6. 路由
 
-- 使用 Flutter 内置 `Navigator` + `onGenerateRoute`，路由表集中在 `core/router/`。
+- 使用 Flutter 内置 `Navigator` + `onGenerateRoute`；路由职责**三分**（2026-10-11 澄清，原因见 C-ARCH-2）：
+
+  | 部分 | 位置 |
+  |---|---|
+  | 机制：`RouteSettings` → 页面、唯一的 push 入口 | `core/router/`（`AppRouter`） |
+  | 页面表：哪条类型化路由构建哪个页面 | 装配根 `lib/app.dart` |
+  | 类型化参数与其路径 | 各 feature 的 `presentation/`（例如 `book_source_route.dart`） |
+
+  页面表之所以不在 `core/router/`：`core/` **不得 import `features/`**（§2），而类型化路由
+  参数携带的正是 feature 实体（`Book` / `Chapter`）；`app.dart` 的职责已包含「路由装配」。
 - 路由参数必须为**类型化对象**（`freezed`），禁止传递裸 `Map<String, Object?>`。
 - 页面间传参不得传递 Entity 之外的未序列化状态；需要跨页共享的数据放入 Notifier。
 - 预测性返回接线见 `docs/dev/platform.md`（C-UI-4、C-PLT-2）。

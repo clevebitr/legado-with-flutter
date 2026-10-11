@@ -126,6 +126,12 @@ flutter gen-l10n
 
 分支从 `main` 创建，PR 合并后立即删除。
 
+> **多写入者约定（2026-10-11 补，起因见回执 B1）：** 同一工作树内**禁止**在未声明的情况下
+> 切换分支或刷新 HEAD（`git switch` / `git checkout` / `git pull` / `git reset`）——它会从其他
+> 写入者脚下换走 HEAD，使其提交落到错误分支（本仓已发生过一次：2.2 的提交落在 `main` 上）。
+> 需要并行开发时，每位写入者使用**独立的 `git worktree` 或独立 clone**；确需在同一工作树内
+> 切换时，必须先声明并确认无人正在提交。
+
 ### 4.2 Commit 规范
 
 所有 Commit 必须使用 **Conventional Commits**：

@@ -44,6 +44,10 @@
 | [0020](0020-dynamic-color-provider-builder-shape.md) | 动态取色接口以 builder 包装形态提供，并在根部注入 | Accepted | 本次新增 |
 | [0021](0021-book-source-models-live-in-domain.md) | 书源模型位于 domain 实体，并携带 JSON 序列化注解 | Accepted | 本次新增 |
 | [0022](0022-json-serializable-checked-mode.md) | 书源 JSON 解析启用 json_serializable 的 `checked` 模式 | Accepted（架构师复审裁决） | 本次新增 |
+| [0023](0023-legal-stance-after-upstream-shutdown.md) | 上游停运后的法律立场：方言兼容继续、真实语料最小化脱敏、免责与用途限制加强 | Accepted（架构师裁决三件事） | 本次新增 |
+| [0024](0024-g2-split-offline-replay-vs-live-link.md) | G2 拆分为 G2a（离线回放）与 G2b（真实链路） | Accepted（架构师复审裁决） | 本次新增 |
+| [0025](0025-domain-services-and-parsing-components.md) | domain 允许无状态领域服务与解析构件（登记 F1 偏离） | Accepted（架构师 PR 评审指令裁决（F1）） | 本次新增 |
+| [0026](0026-optional-field-rejection-degrades-to-warning.md) | 非顶层字段被拒时降级为 warning，顶层规则仍整次失败（登记 F6 裁决） | Accepted（架构师裁决 F6） | 本次新增 |
 
 ---
 

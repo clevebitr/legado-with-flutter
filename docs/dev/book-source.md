@@ -6,7 +6,13 @@
 >
 > **对标原则：** 支持矩阵逐条对标**原版阅读（Legado）**公开规则说明，
 > 不做方言扩展、不自造语法。每条语法的「状态」一律从 `待验证` 起步，
-> 只能由**真实书源回归记录**（§11）改为 `已确认`。
+> 只能由**真实书源回归记录**（§10）改为 `已确认`。
+>
+> **上游状态（2026-10-11 核实）：** `gedoor/legado` 仓库已**清空**——默认分支只剩一份侵权公告，
+> 上游源码不再可得。因此「对标原版」此后只能以**本仓 §3 的规格**与**仍在维护的 fork**
+> 为准（本次实现矩阵 #1/#2/#5/#8/#9 时核对的是 `hapelee/legado-with-MD3` 的
+> `AnalyzeRule.kt` / `AnalyzeByJSoup.kt`）；§3 矩阵的「状态」列仍按原规则由真实书源回归
+> 逐行确认。ADR-0014 已加同一事实的附注。
 
 ---
 
@@ -50,7 +56,7 @@
 |---|---|---|
 | `SearchRule` | `bookList`、`name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl` | M0 |
 | `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName` | M0（`canReName` 为 M1） |
-| `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0 |
+| `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
 | `ContentRule` | `webJs`、`sourceRegex`、`imageStyle` | **M2** |
 
@@ -93,6 +99,16 @@
 | 22 | `@webJs` 网页 JS | — | 正文规则 | **M2** | 不支持 |
 | 23 | `sourceRegex` 源码正则 | — | 正文规则 | **M2** | 不支持 |
 | 24 | 字体反爬字形映射 | — | 正文替换规则 | **M2** | 不支持 |
+| 25 | `##match##replace###`：只取**第一个匹配**并在其内部替换（矩阵 #9 的补充语义） | `##match##replace###`（上游注释原文） | 所有字段 | **M0**（Phase 2.2 已实现） | 待验证 |
+| 26 | `[]` 索引列表：`[-1, 3:-2:-10, 2]`、`[-1:0]` 可在任意位置反向（与 #5 / #6 同组） | `tag.div[-1, 3:-2:-10, 2]` | 所有字段 | **M0** → Phase 3.1 | 待验证 |
+| 27 | `%%` 并行交叉合并（与 `\|\|`、`&&` 同级的选择器连接符） | — | 所有字段 | **M0** → Phase 3.2（与 #10 / #11 同族，复用同一套连接符切分） | 待验证 |
+
+> **#25–#27 为 2026-10-11 补录（回执 B3）：** 这三条语法此前只存在于上游实现里，本仓矩阵没有行，
+> 于是出现「引擎拒绝得对、账本却没记」的缺口。补录时**追加在表尾而不是插在中间**：`PLAN.md`
+> 与 ADR-0014 都按 `#1–#14` / `#15–#19` / `#20–#24` 引用矩阵，插入会打乱既有编号
+> （与 `docs/README.md` §5 的 ID 稳定性同一原则）。上游证据：`AnalyzeRule.kt:497`（`###`）、
+> `AnalyzeByJSoup.kt` 的 `ElementsSingle` 注释（`[]`）、`AnalyzeByJSoup.kt:88` 的
+> `splitRule("&&", "||", "%%")` 与 `:110` 的交叉合并实现（`%%`）。
 
 **大小写处理：** 原版文档同时出现 `@css:` / `@CSS:`、`@json:` / `@Json:` 等写法。
 本项目按**前缀大小写不敏感**实现，并为每种前缀补一条测试（状态：待验证）。
@@ -101,8 +117,8 @@
 
 | 阶段 | 范围 | 完成判定 |
 |---|---|---|
-| **M0** | 矩阵 #1–#14；搜索 / 详情 / 目录 / 正文四段完整字段；`nextTocUrl`；`nextContentUrl`；`{{key}}`、`{{page}}`、`{{baseUrl}}` | 至少 2 个真实书源完成「搜索 → 详情 → 目录 → 正文」离线回放 |
-| **M1** | 矩阵 #15–#19；`exploreUrl` 发现页；`canReName`；`isVip`；`java.timeFormat`；`concurrentRate` | 每条语法至少 1 条真实书源验证记录 |
+| **M0** | 矩阵 #1–#14、#25、#26、#27；搜索 / 详情 / 目录 / 正文四段完整字段；`nextTocUrl`；`nextContentUrl`；`{{key}}`、`{{page}}`、`{{baseUrl}}` | 至少 2 个真实书源完成「搜索 → 详情 → 目录 → 正文」离线回放 |
+| **M1** | 矩阵 #15–#19；`exploreUrl` 发现页；`canReName`；`updateTime`；`java.timeFormat`；`concurrentRate` | 每条语法至少 1 条真实书源验证记录 |
 | **M2 / 暂不实现** | 矩阵 #20–#24；登录脚本与登录 UI；RSS / 订阅源；朗读规则 | 命中时返回 `ParseFailure(unsupportedRule)` |
 
 **M0 未全部通过前，不得发布「支持导入书源」的版本。**
@@ -277,6 +293,13 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 
 ---
 
+> **2026-10-11 裁决（ADR-0026；实现与 §3.1 的 3.2 同批落地）：** 「命中未实现语法」分两类——
+> **顶层规则**（`bookList` / `chapterList` / `content`）被拒仍**整次失败**；**非顶层字段**被拒时
+> 该字段**置空 + warning**（含 `rulePath` 与书源 ID，C-ERR-8 / C-SRC-8），结果照常返回。
+> C-SRC-4 的「禁止静默忽略」由「显式降级 + 记录」满足（§9 的健康度统计是同一模式）。
+> **在 3.2 落地之前，代码对此仍返回整次失败**——这是一次**登记型过渡**，与矩阵 #18 `{{}}` 的
+> 处理同一形式，不得当作已实现的规格引用。
+
 ## 8. 并发与限速
 
 | 项 | 值 | 分期 |
@@ -303,7 +326,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 
 | 项 | 要求 |
 |---|---|
-| 固定语料 | `test/fixtures/book_sources/*.json`（书源）+ `test/fixtures/html/*.html`（已抓取页面） |
+| 固定语料 | `test/fixtures/book_sources/*.json`（书源）+ `test/fixtures/html/*.html`（页面：**优先真实抓取**；站点已不可达时允许**按该书源的真实选择器构造**，但必须在 `test/fixtures/**/README.md` 标注来源与构造依据。抓取页面仍是 §3 矩阵「已确认」与 Phase 3.7 真实回归的目标） |
 | 语法单测 | §3 矩阵中每个 **M0** 语法至少 1 条单测；M1 语法在实现时同步补 |
 | 前缀大小写 | `@css:`/`@CSS:`、`@json:`/`@Json:`、`@js:`/`@JS:` 各 1 条 |
 | 失败单测 | §7 表中每个 `ParseFailureKind` 至少 1 条单测 |
