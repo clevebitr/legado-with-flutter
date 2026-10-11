@@ -16,7 +16,6 @@ const List<String> _deferredFlags = <String>[
   '{',
   ':',
   '@@',
-  '@css:',
   '@json:',
   '@js:',
   '@xpath:',
@@ -25,8 +24,22 @@ const List<String> _deferredFlags = <String>[
   '@webjs',
 ];
 
-/// Operators that join several rules; matrix #10 / #11 own them.
+/// Operators that join several rules; matrix #10 / #11 / #27 own them.
 const List<String> _deferredOperators = <String>['||', '&&', '%%'];
+
+/// The `@css:` flag of matrix #12, lower-cased for a case-insensitive compare.
+const String _cssFlag = '@css:';
+
+/// jsoup's index pseudo-classes, which cascadia does not implement.
+///
+/// `book-source.md` §3 row #12 declares **standard** CSS selectors, so these are
+/// named as unsupported instead of being handed to cascadia, where they would come
+/// back as an unlocatable parse failure (C-SRC-4). Requiring the `(` keeps standard
+/// pseudos such as `:first-child` out of the match.
+final Map<String, RegExp> _jsoupIndexPseudos = <String, RegExp>{
+  for (final String name in <String>['eq', 'gt', 'lt'])
+    name: RegExp(':$name\\s*\\('),
+};
 
 /// Selector types this phase implements: matrix #2 (`class` / `id` / `tag`),
 /// #3 (`text`) and #4 (`children`).
@@ -64,6 +77,7 @@ final RegExp _whitespace = RegExp(r'\s+');
 /// | #7 | a leading `-`, reversing the result list |
 /// | #8 | extraction `text`, `textNodes`, `ownText`, `html`, `all`, or an attribute name |
 /// | #9 | `##regex##replacement`, with `$1` / `${name}` group references |
+/// | #12 | the `@css:` flag, handing the rest of the segment to cascadia |
 /// | #26 | the `[...]` index list, with ranges, steps and `[!...]` exclusion |
 /// | #28 | an index as the first rule of a segment (`.1` / `[1]` / `children[1]`) |
 ///
@@ -389,6 +403,8 @@ final class RuleEngine {
   /// Builds the CSS selector of [step]; `class` / `id` / `tag` map onto CSS so the
   /// matching itself goes through cascadia (C-SRC-6).
   String _selectorFor(_SelectorStep step) => switch (step.type) {
+    // 矩阵 #12：`@css:` 的选择器原样交给 cascadia，不做任何改写。
+    'css' => step.name,
     'class' => '.${cascadia.escapeCssIdent(step.name)}',
     'id' => '#${cascadia.escapeCssIdent(step.name)}',
     _ => cascadia.escapeCssIdent(step.name),
@@ -406,12 +422,20 @@ final class RuleEngine {
     // 切段之前摘掉，否则它会变成一个空段，后面的标志头也会被切错。
     final bool reverse = rawBody.startsWith('-');
     final String body = (reverse ? rawBody.substring(1) : rawBody).trim();
+    // `@css:…` 这类规则以标志头开头，按 `@` 切段会在最前面留一个空段（`''`），
+    // 它会被当成畸形段。摘掉这个 `@`，让第一段正好是标志头本身；只在确实是标志头时
+    // 才摘，避免把 `@foo` 这种非标志写法当成正常规则。`body` 保留原样，供
+    // [_check] 做 body 级标志判定。
+    final String segmentBody =
+        body.startsWith('@') && _flagSegment.hasMatch(body.substring(1))
+        ? body.substring(1)
+        : body;
 
     return _ParsedRule(
       body: body,
       replacementParts: replacementParts,
       reverse: reverse,
-      segments: body
+      segments: segmentBody
           .split('@')
           .map((String segment) => segment.trim())
           .toList(),
@@ -490,7 +514,12 @@ final class RuleEngine {
     }
     final String? flag = _flagOf(segment);
     if (flag != null) {
-      // 例如 `class.a@css:.b`：原版把这种段当作嵌套规则，Phase 3.2 实现。
+      if (flag.toLowerCase() == _cssFlag) {
+        // 矩阵 #12：`@css:` 的其余部分是交给 cascadia 的 CSS 选择器（C-SRC-6）。
+        // `_flagOf` 返回的 flag 把被 `@` 切分吃掉的 `@` 补了回来，所以这里要少取一位。
+        return _readCss(segment.substring(flag.length - 1), field: field);
+      }
+      // `@json:` / `@js:` / `@xpath:` … 仍属后续阶段（矩阵 #13 / #14 / #21）。
       return _ParsedFailure<_SelectorStep>(_unsupported(flag));
     }
 
@@ -696,6 +725,46 @@ final class RuleEngine {
     }
 
     return _ParsedValue<List<_IndexPart>>(parts);
+  }
+
+  /// Reads the `@css:` form of matrix #12: the rest of the segment is a CSS
+  /// selector that goes to cascadia unchanged (C-SRC-6).
+  ///
+  /// The selector is parsed once here instead of being handed to cascadia during
+  /// evaluation, because only this layer can turn a bad selector into the right
+  /// [ParseResult]: malformed CSS is [ParseFailureKind.parseFailed], while jsoup's
+  /// index pseudo-classes — not standard CSS, not in cascadia, not in the matrix —
+  /// are named as [ParseFailureKind.unsupportedRule] so the missing capability
+  /// stays visible (C-SRC-4) instead of surfacing as an unlocatable throw.
+  _Parsed<_SelectorStep> _readCss(String selector, {required String field}) {
+    final String trimmed = selector.trim();
+    if (trimmed.isEmpty) {
+      return _ParsedFailure<_SelectorStep>(_malformed(field));
+    }
+    final String? pseudo = _jsoupIndexPseudo(trimmed);
+    if (pseudo != null) {
+      return _ParsedFailure<_SelectorStep>(_unsupported(':$pseudo'));
+    }
+    try {
+      cascadia.parse(trimmed);
+    } on FormatException {
+      return _ParsedFailure<_SelectorStep>(_malformed(field));
+    }
+
+    return _ParsedValue<_SelectorStep>(
+      _SelectorStep(type: 'css', name: trimmed),
+    );
+  }
+
+  /// Returns the jsoup index pseudo-class [selector] uses, or `null`.
+  String? _jsoupIndexPseudo(String selector) {
+    for (final MapEntry<String, RegExp> entry in _jsoupIndexPseudos.entries) {
+      if (entry.value.hasMatch(selector)) {
+        return entry.key;
+      }
+    }
+
+    return null;
   }
 
   /// Returns the index expression of a segment that stands for `children` plus a

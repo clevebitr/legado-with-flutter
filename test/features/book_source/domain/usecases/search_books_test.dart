@@ -186,16 +186,16 @@ void main() {
             _service(http);
         final BookSource source = _source();
         // 真实书源 + 一条本阶段未实现的规则：整次搜索必须显式失败（C-SRC-4）。
-        final BookSource withCss = source.copyWith(
-          searchRule: source.searchRule.copyWith(name: '@css:h2 @text'),
+        final BookSource withJs = source.copyWith(
+          searchRule: source.searchRule.copyWith(name: '@js:result'),
         );
 
         final ParseFailure<Never> failure = _failure(
-          await SearchBooks(pages: service.pages).execute(withCss, '剑来'),
+          await SearchBooks(pages: service.pages).execute(withJs, '剑来'),
         );
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@css:');
+        expect(failure.rulePath, 'unsupported:@js:');
       },
     );
 
@@ -207,16 +207,16 @@ void main() {
         final ({PageFetchService pages, FakeLogPrinter printer}) service =
             _service(http);
         final BookSource source = _source();
-        final BookSource withCss = source.copyWith(
-          searchRule: source.searchRule.copyWith(bookList: '@css:div.item'),
+        final BookSource withJs = source.copyWith(
+          searchRule: source.searchRule.copyWith(bookList: '@js:result'),
         );
 
         final ParseFailure<Never> failure = _failure(
-          await SearchBooks(pages: service.pages).execute(withCss, '剑来'),
+          await SearchBooks(pages: service.pages).execute(withJs, '剑来'),
         );
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@css:');
+        expect(failure.rulePath, 'unsupported:@js:');
       },
     );
 

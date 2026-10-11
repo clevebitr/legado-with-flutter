@@ -131,16 +131,16 @@ void main() {
         final FakeHttpClient http = FakeHttpClient()
           ..serve(_tocUrl, _page('book_page.html'));
         final BookSource source = _source();
-        final BookSource withCss = source.copyWith(
-          tocRule: source.tocRule.copyWith(chapterName: '@css:a @text'),
+        final BookSource withJs = source.copyWith(
+          tocRule: source.tocRule.copyWith(chapterName: '@js:result'),
         );
 
         final ParseFailure<Never> failure = _failure(
-          await FetchToc(pages: _service(http).pages).execute(withCss, _tocUrl),
+          await FetchToc(pages: _service(http).pages).execute(withJs, _tocUrl),
         );
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@css:');
+        expect(failure.rulePath, 'unsupported:@js:');
       },
     );
   });

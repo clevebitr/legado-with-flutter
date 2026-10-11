@@ -64,7 +64,7 @@ void main() {
     ) async {
       final BookSource source = loadCorpusBookSource();
       final BookSource unsupportedToc = source.copyWith(
-        tocRule: source.tocRule.copyWith(chapterList: '@css:dd'),
+        tocRule: source.tocRule.copyWith(chapterList: '@js:result'),
       );
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 
