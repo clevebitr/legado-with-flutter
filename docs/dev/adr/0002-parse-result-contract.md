@@ -1,8 +1,8 @@
 # ADR-0002 错误契约：`ParseResult` 与 `ParseFailureKind`
 
-- **状态：** Accepted（2026-10-11 修订：第 2 条的子类形态改按 ADR-0016）
+- **状态：** Accepted（2026-10-11 两次修订：第 2 条的子类形态改按 ADR-0016；新增第 6 条的捕获子句边界）
 - **日期：** 2026-10-10
-- **关联：** C-ERR-1..3、C-ERR-7、C-ERR-8、C-SRC-8、ADR-0016、`docs/dev/architecture.md` §5、`docs/dev/book-source.md` §7
+- **关联：** C-ERR-1..3、C-ERR-7、C-ERR-8、C-SRC-8、ADR-0016、ADR-0022、`docs/dev/architecture.md` §5、`docs/dev/book-source.md` §7
 
 ## 背景
 
@@ -27,6 +27,17 @@
 4. **失败对象禁止携带用户可见文案**；文案由 UI 经 ARB 映射，键名规则为
    `failure<PascalCaseKind>`（例如 `failureNetworkTimeout`）。
 5. 可预期失败返回 `ParseResult`；编程错误（`ArgumentError`、断言）直接抛出。
+6. **（2026-10-11 修订注记）捕获子句的边界。** `C-ERR-2` 原文「必须 `on <具体异常类型>`」的严格
+   读法会连 `presentation/` 的 Notifier 兜底一并禁止，而该兜底是 Phase 2.5 已合入并经评审的行为
+   （`lib/features/book_source/presentation/notifiers/search_results_notifier.dart`：协作者违约
+   抛出 `Exception` 时降级为 `parseFailed`，避免界面永久停在 `Searching`）。故在此明确放宽点，
+   其余口径不变：
+   - **允许：** `presentation/` 的 Notifier 兜底可用 `on Exception`（不给更具体的类型），但必须
+     立即转为失败状态并记录日志，不得吞掉；
+   - **不允许：** `domain/` 的引擎与 UseCase 仍必须捕获具体类型；
+   - **不允许：** `Error` 在任何位置都不得捕获（ADR-0022）。
+   - `constraints.md` C-ERR-2 同步登记了扩展规则（本边界只覆盖 `presentation/` 的 Notifier；
+     `data/` 层若也需兜底，必须新增 ADR，不得就地放宽）。
 
 ## 后果
 
