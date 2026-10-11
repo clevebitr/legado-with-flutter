@@ -122,6 +122,78 @@ abstract class AppLocalizations {
   /// **'Import'**
   String get actionImport;
 
+  /// Title of the book source search page.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get bookSourceSearchTitle;
+
+  /// Hint of the search keyword field.
+  ///
+  /// In en, this message translates to:
+  /// **'Title or author'**
+  String get bookSourceSearchHint;
+
+  /// Label of the search action, also used as its semantics label.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get bookSourceSearchAction;
+
+  /// Empty state shown before the first search of a session.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a keyword to search the book source.'**
+  String get bookSourceSearchPrompt;
+
+  /// Empty state shown when a search returned no results.
+  ///
+  /// In en, this message translates to:
+  /// **'No book matched this keyword.'**
+  String get bookSourceSearchEmpty;
+
+  /// Empty state shown while no book source is available (the Phase 2.5 seam of currentBookSourceProvider).
+  ///
+  /// In en, this message translates to:
+  /// **'No book source is selected yet. Importing book sources arrives in a later version.'**
+  String get bookSourceMissingSource;
+
+  /// Title of the book detail page.
+  ///
+  /// In en, this message translates to:
+  /// **'Book details'**
+  String get bookSourceDetailTitle;
+
+  /// Heading of the chapter list on the book detail page.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get bookSourceTocTitle;
+
+  /// Reader title, used when a chapter has an empty name.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get bookSourceReaderTitle;
+
+  /// Author row on the book detail page.
+  ///
+  /// In en, this message translates to:
+  /// **'Author: {author}'**
+  String bookSourceAuthorLine(String author);
+
+  /// Category row on the book detail page.
+  ///
+  /// In en, this message translates to:
+  /// **'Category: {kind}'**
+  String bookSourceKindLine(String kind);
+
+  /// Latest-chapter row on the book detail page.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest chapter: {chapter}'**
+  String bookSourceLastChapterLine(String chapter);
+
   /// User-facing message for ParseFailureKind.networkTimeout.
   ///
   /// In en, this message translates to:

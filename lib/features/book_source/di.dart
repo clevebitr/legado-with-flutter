@@ -1,5 +1,6 @@
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
@@ -9,6 +10,18 @@ import 'package:flutter_reader/features/book_source/domain/usecases/search_books
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'di.g.dart';
+
+/// The book source the UI works with.
+///
+/// This is the **single seam** for "which source is selected": importing book sources
+/// and the book source repository are Phase 5 work, and the feature has no `data/`
+/// layer yet (ADR-0025 §后果). The seam therefore answers `null`, and the pages show
+/// an empty state instead of requesting pages with an empty rule set.
+///
+/// Tests override it with the offline corpus of `test/fixtures/book_sources/`, which
+/// is how the widget tests drive the production chain without a network (C-NET-8).
+@riverpod
+BookSource? currentBookSource(Ref ref) => null;
 
 /// Provides the rule engine every book source use case shares.
 @riverpod

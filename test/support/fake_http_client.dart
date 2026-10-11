@@ -17,12 +17,20 @@ final class FakeHttpClient implements HttpClient {
 
   final Map<String, String> _bodies = <String, String>{};
   final Map<String, ParseFailureKind> _failures = <String, ParseFailureKind>{};
+  final Map<String, Exception> _throws = <String, Exception>{};
 
   /// Serves [body] for [url].
   void serve(String url, String body) => _bodies[url] = body;
 
   /// Makes [url] fail with [kind] instead of being served.
   void failWith(String url, ParseFailureKind kind) => _failures[url] = kind;
+
+  /// Makes [url] **throw** [error] instead of answering with a [ParseResult].
+  ///
+  /// Deliberately out of contract: `HttpClient` answers with a [ParseResult]
+  /// (C-ERR-1), and the pages must still show a message rather than a blank screen
+  /// when a collaborator breaks that contract. This is how that branch is covered.
+  void throwOn(String url, Exception error) => _throws[url] = error;
 
   @override
   Future<ParseResult<HttpResponse>> get(
@@ -33,6 +41,11 @@ final class FakeHttpClient implements HttpClient {
   }) async {
     requestedUrls.add(url);
     requestedRulePaths.add(rulePath);
+
+    final Exception? thrown = _throws[url];
+    if (thrown != null) {
+      throw thrown;
+    }
 
     final ParseFailureKind? kind = _failures[url];
     if (kind != null) {

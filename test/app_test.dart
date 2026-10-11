@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/app.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/search_books_page.dart';
+import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -28,10 +30,14 @@ void main() {
 
     expect(find.byType(MaterialApp), findsOneWidget);
     expect(find.byType(Scaffold), findsOneWidget);
+    // 落地路由是搜索页（`AppRouter.homePath`），标题取自 ARB 的英文模板。
+    expect(find.byType(SearchBooksPage), findsOneWidget);
     expect(
-      find.text('Book sources'),
+      find.text(
+        AppLocalizations.of(tester.element(find.byType(SearchBooksPage)))
+            .bookSourceSearchTitle,
+      ),
       findsOneWidget,
-      reason: 'The English template locale should be used in tests.',
     );
   });
 
@@ -56,6 +62,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Book sources'), findsOneWidget);
+    expect(find.byType(SearchBooksPage), findsOneWidget);
   });
 }

@@ -22,6 +22,50 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionImport => 'Import';
 
   @override
+  String get bookSourceSearchTitle => 'Search';
+
+  @override
+  String get bookSourceSearchHint => 'Title or author';
+
+  @override
+  String get bookSourceSearchAction => 'Search';
+
+  @override
+  String get bookSourceSearchPrompt =>
+      'Enter a keyword to search the book source.';
+
+  @override
+  String get bookSourceSearchEmpty => 'No book matched this keyword.';
+
+  @override
+  String get bookSourceMissingSource =>
+      'No book source is selected yet. Importing book sources arrives in a later version.';
+
+  @override
+  String get bookSourceDetailTitle => 'Book details';
+
+  @override
+  String get bookSourceTocTitle => 'Chapters';
+
+  @override
+  String get bookSourceReaderTitle => 'Text';
+
+  @override
+  String bookSourceAuthorLine(String author) {
+    return 'Author: $author';
+  }
+
+  @override
+  String bookSourceKindLine(String kind) {
+    return 'Category: $kind';
+  }
+
+  @override
+  String bookSourceLastChapterLine(String chapter) {
+    return 'Latest chapter: $chapter';
+  }
+
+  @override
   String get failureNetworkTimeout =>
       'Request timed out. Please try again later.';
 

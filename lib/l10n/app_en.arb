@@ -16,6 +16,69 @@
   "@actionImport": {
     "description": "Label of the book source import action."
   },
+  "bookSourceSearchTitle": "Search",
+  "@bookSourceSearchTitle": {
+    "description": "Title of the book source search page."
+  },
+  "bookSourceSearchHint": "Title or author",
+  "@bookSourceSearchHint": {
+    "description": "Hint of the search keyword field."
+  },
+  "bookSourceSearchAction": "Search",
+  "@bookSourceSearchAction": {
+    "description": "Label of the search action, also used as its semantics label."
+  },
+  "bookSourceSearchPrompt": "Enter a keyword to search the book source.",
+  "@bookSourceSearchPrompt": {
+    "description": "Empty state shown before the first search of a session."
+  },
+  "bookSourceSearchEmpty": "No book matched this keyword.",
+  "@bookSourceSearchEmpty": {
+    "description": "Empty state shown when a search returned no results."
+  },
+  "bookSourceMissingSource": "No book source is selected yet. Importing book sources arrives in a later version.",
+  "@bookSourceMissingSource": {
+    "description": "Empty state shown while no book source is available (the Phase 2.5 seam of currentBookSourceProvider)."
+  },
+  "bookSourceDetailTitle": "Book details",
+  "@bookSourceDetailTitle": {
+    "description": "Title of the book detail page."
+  },
+  "bookSourceTocTitle": "Chapters",
+  "@bookSourceTocTitle": {
+    "description": "Heading of the chapter list on the book detail page."
+  },
+  "bookSourceReaderTitle": "Text",
+  "@bookSourceReaderTitle": {
+    "description": "Reader title, used when a chapter has an empty name."
+  },
+  "bookSourceAuthorLine": "Author: {author}",
+  "@bookSourceAuthorLine": {
+    "description": "Author row on the book detail page.",
+    "placeholders": {
+      "author": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceKindLine": "Category: {kind}",
+  "@bookSourceKindLine": {
+    "description": "Category row on the book detail page.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceLastChapterLine": "Latest chapter: {chapter}",
+  "@bookSourceLastChapterLine": {
+    "description": "Latest-chapter row on the book detail page.",
+    "placeholders": {
+      "chapter": {
+        "type": "String"
+      }
+    }
+  },
   "failureNetworkTimeout": "Request timed out. Please try again later.",
   "@failureNetworkTimeout": {
     "description": "User-facing message for ParseFailureKind.networkTimeout."

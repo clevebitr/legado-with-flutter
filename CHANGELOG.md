@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Minimal book source UI (2026-10-11)
+
+- Added the Phase 2.5 vertical slice: search form → hit list → book detail with its
+  chapter list → plain-text reader, in `lib/features/book_source/presentation/`. Every
+  string comes from the ARB files (en/zh in this same change) and every colour, spacing
+  and text style from the `m3e_design` tokens. Each page has a smoke test, and one test
+  walks the whole chain (search → detail → chapters → text) through the real pipeline on
+  the sanitized offline corpus, so the UI evidence is not a page rendering a stub.
+- The app now routes through `AppRouter` in `lib/core/router/`: typed `freezed` route
+  arguments, one push entry point, and the page table in the composition root because
+  `core/` must not import `features/`. `PLAN.md` 2.5 is closed; the manual live-site run
+  stays G2b (ADR-0024).
+- The selected book source is still a seam: `currentBookSourceProvider` answers `null`
+  until importing book sources lands in Phase 5, so the pages show an empty state
+  instead of requesting pages with an empty rule set.
+
+### Documentation and architecture audit (2026-10-11)
+
+- `isVip` is M0 (`book-source.md` §2/§4.1, `PLAN.md` 3.5) and `updateTime` is M1 because
+  it needs the M1 `java.timeFormat`: the M1 rows of `book-source.md` §3.1 and ADR-0014
+  carried a copy-paste error, now corrected with a dated revision note, and `PLAN.md`
+  Phase 4 names `updateTime`.
+- ADR-0025 registers the domain-service deviation (review F1), and `architecture.md` §3
+  gained the matching allowlist entry with its criteria; ADR-0019 §2 gained the
+  "no measurable lines" sub-case for pure freezed entities, with `testing.md` §2 and the
+  allowlist comment following.
+- ADR-0023 §4 records that the offline pages are constructed when the site is gone
+  (ADR-0024 §2, `book-source.md` §10); the original wording stays for traceability.
+- `architecture.md` §6 states where each part of routing lives (mechanism, page table,
+  typed arguments), which is what the code does without breaking C-ARCH-2.
+- Stale references corrected: `PLAN.md` no longer points at the deleted
+  `offline_replay_test.dart` and its unit-test count is the measured 42; the two closed
+  handover rows carry a closure marker and the open optional-field ruling is registered;
+  `AGENTS.md` §5 points at `constraints.md` §14; `l10n.yaml` at `naming.md` §8;
+  `README.md` no longer restates the phase status it delegates to `PLAN.md`;
+  `pubspec.yaml` cites ADR-0015 instead of the superseded ADR-0008; the shared
+  log-printer test double is `fake_log_printer.dart`; `naming.md` §4 carries the real
+  `renderUrlTemplate` signature; `constraints.md` §15 gained the doc-versus-behaviour
+  self-check item.
+
 ### Rule engine (2026-10-11)
 
 - Added the Phase 2.2 minimal `RuleEngine`

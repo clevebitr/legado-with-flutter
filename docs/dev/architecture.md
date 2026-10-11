@@ -19,7 +19,7 @@ lib/
 │   ├── logging/                  # Logger 门面（唯一日志入口）
 │   ├── network/                  # HttpClient、CookieManager、超时与重试策略
 │   ├── platform/                 # 平台抽象接口 + 各平台实现 + fallback
-│   ├── router/                   # 路由表与类型化路由参数
+│   ├── router/                   # 路由机制（RouteSettings → 页面）与唯一 push 入口；页面表见 §6
 │   ├── storage/                  # Drift 数据库、DAO、键值存储封装
 │   ├── theme/                    # M3ETheme 安装、动态取色接线
 │   └── utils/                    # 纯函数工具（禁止 IO，禁止依赖 Flutter）
@@ -160,7 +160,16 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 
 ## 6. 路由
 
-- 使用 Flutter 内置 `Navigator` + `onGenerateRoute`，路由表集中在 `core/router/`。
+- 使用 Flutter 内置 `Navigator` + `onGenerateRoute`；路由职责**三分**（2026-10-11 澄清，原因见 C-ARCH-2）：
+
+  | 部分 | 位置 |
+  |---|---|
+  | 机制：`RouteSettings` → 页面、唯一的 push 入口 | `core/router/`（`AppRouter`） |
+  | 页面表：哪条类型化路由构建哪个页面 | 装配根 `lib/app.dart` |
+  | 类型化参数与其路径 | 各 feature 的 `presentation/`（例如 `book_source_route.dart`） |
+
+  页面表之所以不在 `core/router/`：`core/` **不得 import `features/`**（§2），而类型化路由
+  参数携带的正是 feature 实体（`Book` / `Chapter`）；`app.dart` 的职责已包含「路由装配」。
 - 路由参数必须为**类型化对象**（`freezed`），禁止传递裸 `Map<String, Object?>`。
 - 页面间传参不得传递 Entity 之外的未序列化状态；需要跨页共享的数据放入 Notifier。
 - 预测性返回接线见 `docs/dev/platform.md`（C-UI-4、C-PLT-2）。

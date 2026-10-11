@@ -8,6 +8,76 @@ part of 'di.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// The book source the UI works with.
+///
+/// This is the **single seam** for "which source is selected": importing book sources
+/// and the book source repository are Phase 5 work, and the feature has no `data/`
+/// layer yet (ADR-0025 §后果). The seam therefore answers `null`, and the pages show
+/// an empty state instead of requesting pages with an empty rule set.
+///
+/// Tests override it with the offline corpus of `test/fixtures/book_sources/`, which
+/// is how the widget tests drive the production chain without a network (C-NET-8).
+
+@ProviderFor(currentBookSource)
+final currentBookSourceProvider = CurrentBookSourceProvider._();
+
+/// The book source the UI works with.
+///
+/// This is the **single seam** for "which source is selected": importing book sources
+/// and the book source repository are Phase 5 work, and the feature has no `data/`
+/// layer yet (ADR-0025 §后果). The seam therefore answers `null`, and the pages show
+/// an empty state instead of requesting pages with an empty rule set.
+///
+/// Tests override it with the offline corpus of `test/fixtures/book_sources/`, which
+/// is how the widget tests drive the production chain without a network (C-NET-8).
+
+final class CurrentBookSourceProvider
+    extends $FunctionalProvider<BookSource?, BookSource?, BookSource?>
+    with $Provider<BookSource?> {
+  /// The book source the UI works with.
+  ///
+  /// This is the **single seam** for "which source is selected": importing book sources
+  /// and the book source repository are Phase 5 work, and the feature has no `data/`
+  /// layer yet (ADR-0025 §后果). The seam therefore answers `null`, and the pages show
+  /// an empty state instead of requesting pages with an empty rule set.
+  ///
+  /// Tests override it with the offline corpus of `test/fixtures/book_sources/`, which
+  /// is how the widget tests drive the production chain without a network (C-NET-8).
+  CurrentBookSourceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'currentBookSourceProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$currentBookSourceHash();
+
+  @$internal
+  @override
+  $ProviderElement<BookSource?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  BookSource? create(Ref ref) {
+    return currentBookSource(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookSource? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookSource?>(value),
+    );
+  }
+}
+
+String _$currentBookSourceHash() => r'4dd4e09cbcee95d949a15967fdf0a862f70e0cec';
+
 /// Provides the rule engine every book source use case shares.
 
 @ProviderFor(ruleEngine)

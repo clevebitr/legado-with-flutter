@@ -140,7 +140,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 **完成判定：** 1 个真实书源完成「搜索 → 详情 → 目录 → 正文」**离线回放**，
 且手动跑通一次真实链路。
 
-#### Phase 2 完成记录 / 交接（进行中：2.1–2.4、2.6、2.7 已完成；2.5 未开始）
+#### Phase 2 完成记录 / 交接（2.1–2.7 已完成）
 
 **2.1 状态：** ✅ 已完成 —— 模型落在
 `lib/features/book_source/domain/entities/book_source.dart`（`BookSourceType`、`BookSource`、
@@ -174,7 +174,16 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 **2.7 状态：** ✅ 已完成 —— `failureAt<T>`（`core/error/parse_result.dart`）为失败的唯一构造入口，
 空 `rulePath` 抛 `AssertionError`；引擎与四个 UseCase 的失败路径均经它。
 
-**2.5 状态：** ⏳ 未开始（最小 UI：搜索框 → 结果列表 → 目录 → 正文；文案走 ARB、令牌走 `context.m3e`）。
+**2.5 状态：** ✅ 已完成 —— 落地于 `lib/features/book_source/presentation/`
+（`pages/` × 3 + `notifiers/` + `widgets/` + `book_source_route.dart`）与 `lib/core/router/app_router.dart`：
+搜索框 → 结果列表 → 目录 → 正文（纯文本）；文案全部经 ARB（en/zh 同 PR）、令牌全部经
+`context.m3e`；页面到页面的跳转只经类型化路由（ADR-0011）。书源来源为
+`currentBookSourceProvider` 的**空态 seam**（无导入 UI 时返回 `null`，页面走空态而不是拿空规则集发请求）；
+C-UI-9 的法律声明页不在本阶段。页面级 smoke 测试见 `test/features/book_source/presentation/pages/`，
+其中搜索 → 详情 → 目录 → 正文的**整链**由真实脱敏语料驱动（`test/support/offline_corpus.dart`）。
+
+**阶段收尾状态：** 2.1–2.7 全部完成；Phase 2 的出口条件为 **G2a**（已达成）与 2.5（已完成），
+而「手动跑通一次真实链路」（**G2b**）依赖矩阵 #12（`@css:`，3.2），按 ADR-0024 移至 3.2 之后。
 
 **本步产出 / 修订的 ADR：** 0021（书源模型位于 domain 实体并携带 JSON 注解；架构师复审追认）、
 0022（`json_serializable` 开 `checked: true`；架构师复审裁决）、0023（上游停运后的法律立场；
