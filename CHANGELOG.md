@@ -84,15 +84,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `#1–#14` / `#15–#19` / `#20–#24` and inserting would renumber them. ADR-0014 carries the
   matching factual addendum.
 
+### URL templates, use cases and the failure factory (2026-10-11)
+
+- **2.3** `renderUrlTemplate` (`lib/features/book_source/domain/url_template.dart`) renders `{{key}}` /
+  `{{page}}` / `{{baseUrl}}` with the "encode once, never twice" rule pinned against upstream
+  (`AnalyzeUrl.appendEncoded` + `NetworkUtils.encodedForm`, whose accepted set is `[A-Za-z0-9*._-]`
+  plus valid `%XX`): the keyword is form-encoded the way Java's `URLEncoder` does (space → `+`,
+  upper-case `%XX`, `!` / `'` / `~` escaped) while an already-encoded keyword passes through. An
+  undefined variable renders as an empty string and is reported through the logger — naming only the
+  variables, never the template, because a template may already carry the search keyword (C-ERR-8,
+  C-SEC-4). Nested `{{}}` rules (matrix #18) are M1 and are treated as undefined variables for now;
+  the boundary is registered in `PLAN.md`.
+- The same module gained `resolveAbsoluteUrl` / `resolveAbsoluteUrlOrNull` (§4's "a relative URL must
+  be resolved against the page it was found on"), which return the input unchanged when it cannot be
+  parsed instead of throwing (C-ERR-1).
+- **2.4** the four use cases (`domain/usecases/`): `SearchBooks`, `FetchBookInfo`, `FetchToc` and
+  `FetchContent`, each with the fixed `execute()` shape of C-ARCH-4, built on one shared
+  `PageFetchService` that owns §7's failure rules — a top-level `bookList` / `chapterList` / `content`
+  that matched nothing is `parseFailed`, an empty optional field is a success, and a rejected rule
+  keeps travelling as `unsupportedRule` (C-SRC-4). The new entities `Book` / `BookInfo` / `Chapter`
+  carry **no** JSON annotations (ADR-0021 §决策 3), and `features/book_source/di.dart` provides the
+  engine, the service and the four use cases through `@riverpod` (C-STATE-2). A hit or chapter without
+  a URL is skipped with a warning instead of failing the page (§9).
+- **2.7** `failureAt<T>` (`lib/core/error/parse_result.dart`) is now the single construction point for
+  failures: it asserts a non-empty `rulePath` (C-SRC-8), and every failure path of the rule engine and
+  of the use cases goes through it.
+- The offline replay now drives the **production chain** — use case → `renderUrlTemplate` →
+  `HttpClient` → `RuleEngine`, with a hand-written `FakeHttpClient` — and lives in
+  `test/features/book_source/domain/usecases/search_books_test.dart`, so it satisfies ADR-0017's
+  file-level mirror rule and asserts the exact URLs and `rulePath`s requested per stage. The previous
+  test-only chain, which never touched the template or the HTTP layer, was deleted: a Gate must not
+  accept a chain that production code never runs (`PLAN.md` §6 trap #1).
+- Docs and process: ADR-0024 splits `PLAN.md`'s G2 into **G2a** (offline replay through the production
+  chain — achieved) and **G2b** (live link, after `@css:` lands in 3.2) with the 242 → 20 → 4 → 0
+  measurements as evidence; ADR-0023's status line now records that the ruling happened at review time
+  rather than in the round it was written, and its corpus rule carries a re-review trigger;
+  `book-source.md` §10 now says pages are **preferably captured** and may be constructed with
+  provenance when the site is gone; `%%` is explicitly **M0 → Phase 3.2** instead of falling into M2
+  through the fallback rule; and `CONTRIBUTING.md` gained the one-writer-per-worktree rule that B1's
+  root cause called for.
+
 ### Offline corpus for the default-rule slice (2026-10-11)
 
 - Added the corpus pair the vertical slice needs: `test/fixtures/book_sources/legado_default_rules_source.json`
   (a real export whose four rule objects use **only** the default syntax, trimmed to one entry and
   sanitised per ADR-0023) plus `test/fixtures/html/{search_result,book_page,chapter_page}.html`, and
-  `test/features/book_source/offline_replay_test.dart`, which replays search → book info → table of
-  contents → chapter body through the engine and asserts that **every** rule of that source is
-  accepted (C-SRC-4's rejection surface does not touch it). The first half of `PLAN.md` G2 is
-  therefore reachable now.
+  a replay that drives the **production chain** (see the next section). The first half of `PLAN.md`
+  G2 — now G2a — is therefore reachable.
 - **The pages are constructed to satisfy the real source's selectors, not captured** — a documented
   deviation from the ruling, which asked for captured HTML. Measured evidence: of 242 sampled
   sources only 20 (8%) use the default syntax throughout; only 4 of those sites are still up; and

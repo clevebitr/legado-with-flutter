@@ -45,6 +45,7 @@
 | [0021](0021-book-source-models-live-in-domain.md) | 书源模型位于 domain 实体，并携带 JSON 序列化注解 | Accepted | 本次新增 |
 | [0022](0022-json-serializable-checked-mode.md) | 书源 JSON 解析启用 json_serializable 的 `checked` 模式 | Accepted（架构师复审裁决） | 本次新增 |
 | [0023](0023-legal-stance-after-upstream-shutdown.md) | 上游停运后的法律立场：方言兼容继续、真实语料最小化脱敏、免责与用途限制加强 | Accepted（架构师裁决三件事） | 本次新增 |
+| [0024](0024-g2-split-offline-replay-vs-live-link.md) | G2 拆分为 G2a（离线回放）与 G2b（真实链路） | Accepted（架构师复审裁决） | 本次新增 |
 
 ---
 

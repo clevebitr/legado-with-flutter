@@ -159,9 +159,22 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 用真实书源的规则跑通搜索 → 详情 → 目录 → 正文四段（每条规则均未被拒绝）。页面是**按真实
 选择器构造**的，原因与实测证据见 `test/fixtures/html/README.md`。
 
+**2.3 状态：** ✅ 已完成 —— `renderUrlTemplate`（`domain/url_template.dart`）实现 `{{key}}` /
+`{{page}}` / `{{baseUrl}}`，关键词只编码一次（上游 `appendEncoded` + `encodedForm`），未定义变量
+→ 空串 + warning（warning 只写变量名，不写模板）；同模块提供 `resolveAbsoluteUrl`。
+
+**2.4 状态：** ✅ 已完成 —— 四个 UseCase（`SearchBooks` / `FetchBookInfo` / `FetchToc` / `FetchContent`）
++ 共享 `PageFetchService`（§7 的失败规则唯一实现）+ 实体 `Book` / `BookInfo` / `Chapter` +
+`features/book_source/di.dart`（`@riverpod`）。
+
+**2.7 状态：** ✅ 已完成 —— `failureAt<T>`（`core/error/parse_result.dart`）为失败的唯一构造入口，
+空 `rulePath` 抛 `AssertionError`；引擎与四个 UseCase 的失败路径均经它。
+
+**2.5 状态：** ⏳ 未开始（最小 UI：搜索框 → 结果列表 → 目录 → 正文；文案走 ARB、令牌走 `context.m3e`）。
+
 **本步产出 / 修订的 ADR：** 0021（书源模型位于 domain 实体并携带 JSON 注解；架构师复审追认）、
 0022（`json_serializable` 开 `checked: true`；架构师复审裁决）、0023（上游停运后的法律立场；
-架构师裁决三件事）。
+架构师**复审时**裁决，初版归因已更正）、0024（G2 拆分为 G2a / G2b）。
 
 **交接给后续步骤（不得静默丢弃）：**
 
@@ -174,7 +187,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | Big5 / Big5-HKSCS 解码缺口 | 承 Phase 1，仍待排期（`book-source.md` §5.1） |
 | 上游 `gedoor/legado` 已清空（无源码） | 已记入 `book-source.md` 顶部与 ADR-0014 事实附注；法律立场见 **ADR-0023**；语义参照改为本仓 §3 + 仍在维护的 fork |
 | B4 语料形态偏差：页面是**按真实选择器构造**而非抓取 | 实测：242 份抽样仅 20 份（8%）全用默认规则，其中 4 份站点存活、**0 份搜索路径仍有效**（2021 规则已失效）。证据与口径见 `test/fixtures/html/README.md`；**待架构师追认**（若要求抓取页面，找到存活默认规则书源后直接替换 `*.html` 即可，测试无需改动） |
-| G2 的「手动真实链路跑通一次」在 Phase 2 不可达成 | 存活书源的规则都需 `@css:`（Phase 3.2）。需裁决：把 G2 拆成 G2a（离线回放，**已可达**）/ G2b（真实链路，移至 3.2 之后），或按 ADR 流程修正验收措辞 |
+| G2 的「手动真实链路跑通一次」在 Phase 2 不可达成 | 存活书源的规则都需 `@css:`（Phase 3.2）。**已裁决（ADR-0024）**：拆成 **G2a**（离线回放，且必须驱动生产链路——**已达成**）/ **G2b**（真实链路，移至 3.2 之后） |
+| `{{}}` 内嵌规则（矩阵 #18）在 2.3 被当作「未定义变量」→ 空串 + warning | Phase 4 落地 #18 时改为求值，并同步 §3 矩阵状态列 |
 
 ---
 
@@ -228,7 +242,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | Gate | 条件 |
 |---|---|
 | **G1** | `lib/core/**` 覆盖率 100%；`AGENTS.md` §4 的全部命令退出码均为 0 |
-| **G2** | 1 个书源全链路离线回放通过；手动真实链路跑通一次 |
+| **G2a** | 1 个**真实书源**的「搜索 → 详情 → 目录 → 正文」**离线回放**通过，且回放必须驱动**生产链路**（UseCase → `renderUrlTemplate` → `HttpClient` → `RuleEngine`）；**已达成**（ADR-0024） |
+| **G2b** | 手动跑通一次**真实站点**链路；依赖矩阵 #12（`@css:`，Phase 3.2），因此排在 3.2 之后（ADR-0024） |
 | **G3** | 2 个书源全链路离线回放；矩阵 M0 状态列全部「已确认」；9 个失败 kind 均有测试 |
 | **G4** | 矩阵 M1 状态列全部「已确认」 |
 | **G5** | C-UI-9 可达；无 `TODO` 占位；无未使用代码 |
