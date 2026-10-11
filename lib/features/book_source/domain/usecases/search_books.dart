@@ -83,6 +83,10 @@ final class SearchBooks {
   }
 
   /// Reads one [Book] per item, dropping the items without a usable URL.
+  ///
+  /// A field whose rule matched nothing falls back to `null` (and to an empty name),
+  /// because only the URL is required to open a hit; a **rejected** rule aborts the
+  /// stage instead of producing a half-filled book (C-SRC-4).
   ParseResult<List<Book>> _books(
     BookSource source,
     String baseUrl,
@@ -92,45 +96,64 @@ final class SearchBooks {
     final List<Book> books = <Book>[];
 
     for (final Element item in items) {
-      final ({String? value, ParseFailure<Never>? failure}) name = _pages.field(
+      final ParseResult<String?> name = _pages.field(
         rules.name,
         item,
         'searchRule.name',
       );
-      final ({String? value, ParseFailure<Never>? failure}) bookUrl = _pages
-          .field(rules.bookUrl, item, 'searchRule.bookUrl');
-      final ({String? value, ParseFailure<Never>? failure}) author = _pages
-          .field(rules.author, item, 'searchRule.author');
-      final ({String? value, ParseFailure<Never>? failure}) kind = _pages.field(
+      final ParseResult<String?> bookUrl = _pages.field(
+        rules.bookUrl,
+        item,
+        'searchRule.bookUrl',
+      );
+      final ParseResult<String?> author = _pages.field(
+        rules.author,
+        item,
+        'searchRule.author',
+      );
+      final ParseResult<String?> kind = _pages.field(
         rules.kind,
         item,
         'searchRule.kind',
       );
-      final ({String? value, ParseFailure<Never>? failure}) coverUrl = _pages
-          .field(rules.coverUrl, item, 'searchRule.coverUrl');
-      final ({String? value, ParseFailure<Never>? failure}) intro = _pages
-          .field(rules.intro, item, 'searchRule.intro');
-      final ({String? value, ParseFailure<Never>? failure}) lastChapter = _pages
-          .field(rules.lastChapter, item, 'searchRule.lastChapter');
-      final ({String? value, ParseFailure<Never>? failure}) wordCount = _pages
-          .field(rules.wordCount, item, 'searchRule.wordCount');
+      final ParseResult<String?> coverUrl = _pages.field(
+        rules.coverUrl,
+        item,
+        'searchRule.coverUrl',
+      );
+      final ParseResult<String?> intro = _pages.field(
+        rules.intro,
+        item,
+        'searchRule.intro',
+      );
+      final ParseResult<String?> lastChapter = _pages.field(
+        rules.lastChapter,
+        item,
+        'searchRule.lastChapter',
+      );
+      final ParseResult<String?> wordCount = _pages.field(
+        rules.wordCount,
+        item,
+        'searchRule.wordCount',
+      );
 
-      for (final ParseFailure<Never>? failure in <ParseFailure<Never>?>[
-        name.failure,
-        bookUrl.failure,
-        author.failure,
-        kind.failure,
-        coverUrl.failure,
-        intro.failure,
-        lastChapter.failure,
-        wordCount.failure,
-      ]) {
-        if (failure != null) {
-          return failure;
-        }
+      final ParseFailure<List<Book>>? failure = firstFailure<List<Book>>(
+        <ParseResult<Object?>>[
+          name,
+          bookUrl,
+          author,
+          kind,
+          coverUrl,
+          intro,
+          lastChapter,
+          wordCount,
+        ],
+      );
+      if (failure != null) {
+        return failure;
       }
 
-      final String? url = bookUrl.value;
+      final String? url = bookUrl.dataOrNull;
       if (url == null || url.isEmpty) {
         // §9：单条失败不中断整页结果，只跳过它并记录。
         _pages.warn('Search hit without URL skipped: source=${source.url}');
@@ -139,14 +162,14 @@ final class SearchBooks {
 
       books.add(
         Book(
-          name: name.value ?? '',
+          name: name.dataOrNull ?? '',
           url: resolveAbsoluteUrl(url, baseUrl),
-          author: author.value,
-          kind: kind.value,
-          coverUrl: resolveAbsoluteUrlOrNull(coverUrl.value, baseUrl),
-          intro: intro.value,
-          lastChapter: lastChapter.value,
-          wordCount: wordCount.value,
+          author: author.dataOrNull,
+          kind: kind.dataOrNull,
+          coverUrl: resolveAbsoluteUrlOrNull(coverUrl.dataOrNull, baseUrl),
+          intro: intro.dataOrNull,
+          lastChapter: lastChapter.dataOrNull,
+          wordCount: wordCount.dataOrNull,
         ),
       );
     }

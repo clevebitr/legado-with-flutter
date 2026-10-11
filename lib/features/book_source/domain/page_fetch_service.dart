@@ -63,36 +63,13 @@ final class PageFetchService {
 
   /// Returns the first value of [rule] in [scope], or the failure that stopped it.
   ///
-  /// A `null` value means the rule matched nothing, which is **not** a failure: the
-  /// caller decides whether that field is required. A rejected or malformed rule
-  /// comes back as `failure`, so the caller can propagate it without inspecting
-  /// kinds itself.
-  ({String? value, ParseFailure<Never>? failure}) field(
-    String? rule,
-    Node scope,
-    String rulePath,
-  ) {
-    final ParseResult<String?> result = _engine.extractFirst(
-      rule ?? '',
-      scope,
-      rulePath: rulePath,
-    );
-
-    return switch (result) {
-      ParseFailure<String?>(
-        :final ParseFailureKind kind,
-        rulePath: final String failedAt,
-      ) =>
-        (
-          value: null,
-          failure: failureAt<Never>(kind: kind, rulePath: failedAt),
-        ),
-      ParseSuccess<String?>(:final String? data) => (
-        value: data,
-        failure: null,
-      ),
-    };
-  }
+  /// A `null` value means the rule matched nothing, which is a **success** here: the
+  /// caller decides whether that field is required, because only the caller knows
+  /// whether the rule is top-level (`book-source.md` §7). A rejected or malformed
+  /// rule comes back as [ParseFailure], so the caller propagates it by switching once
+  /// instead of inspecting kinds itself (C-ERR-1).
+  ParseResult<String?> field(String? rule, Node scope, String rulePath) =>
+      _engine.extractFirst(rule ?? '', scope, rulePath: rulePath);
 
   /// Returns every element matched by a **top-level list** rule.
   ///
@@ -115,20 +92,17 @@ final class PageFetchService {
   ///
   /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7).
   ParseResult<String> content(String? rule, Node scope, String rulePath) {
-    final ({String? value, ParseFailure<Never>? failure}) field = this.field(
-      rule,
-      scope,
-      rulePath,
-    );
-    final ParseFailure<Never>? failure = field.failure;
-    if (failure != null) {
-      return failure;
-    }
-    final String? value = field.value;
+    final ParseResult<String?> parsed = field(rule, scope, rulePath);
 
-    return value == null || value.isEmpty
-        ? _noMatch(rulePath)
-        : ParseSuccess(value);
+    return switch (parsed) {
+      ParseFailure<String?>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ) =>
+        failureAt<String>(kind: kind, rulePath: failedAt),
+      ParseSuccess<String?>(:final String? data) =>
+        data == null || data.isEmpty ? _noMatch(rulePath) : ParseSuccess(data),
+    };
   }
 
   /// Renders a URL template with the well-known variables of `book-source.md` §4.

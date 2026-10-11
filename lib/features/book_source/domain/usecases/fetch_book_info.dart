@@ -41,67 +41,77 @@ final class FetchBookInfo {
     Document document,
   ) {
     final BookInfoRule? rules = source.bookInfoRule;
-    final ({String? value, ParseFailure<Never>? failure}) name = _pages.field(
+    final ParseResult<String?> name = _pages.field(
       rules?.name,
       document,
       'bookInfoRule.name',
     );
-    final ({String? value, ParseFailure<Never>? failure}) author = _pages.field(
+    final ParseResult<String?> author = _pages.field(
       rules?.author,
       document,
       'bookInfoRule.author',
     );
-    final ({String? value, ParseFailure<Never>? failure}) kind = _pages.field(
+    final ParseResult<String?> kind = _pages.field(
       rules?.kind,
       document,
       'bookInfoRule.kind',
     );
-    final ({String? value, ParseFailure<Never>? failure}) coverUrl = _pages
-        .field(rules?.coverUrl, document, 'bookInfoRule.coverUrl');
-    final ({String? value, ParseFailure<Never>? failure}) intro = _pages.field(
+    final ParseResult<String?> coverUrl = _pages.field(
+      rules?.coverUrl,
+      document,
+      'bookInfoRule.coverUrl',
+    );
+    final ParseResult<String?> intro = _pages.field(
       rules?.intro,
       document,
       'bookInfoRule.intro',
     );
-    final ({String? value, ParseFailure<Never>? failure}) lastChapter = _pages
-        .field(rules?.lastChapter, document, 'bookInfoRule.lastChapter');
-    final ({String? value, ParseFailure<Never>? failure}) wordCount = _pages
-        .field(rules?.wordCount, document, 'bookInfoRule.wordCount');
-    final ({String? value, ParseFailure<Never>? failure}) tocUrl = _pages.field(
+    final ParseResult<String?> lastChapter = _pages.field(
+      rules?.lastChapter,
+      document,
+      'bookInfoRule.lastChapter',
+    );
+    final ParseResult<String?> wordCount = _pages.field(
+      rules?.wordCount,
+      document,
+      'bookInfoRule.wordCount',
+    );
+    final ParseResult<String?> tocUrl = _pages.field(
       rules?.tocUrl,
       document,
       'bookInfoRule.tocUrl',
     );
 
-    for (final ParseFailure<Never>? failure in <ParseFailure<Never>?>[
-      name.failure,
-      author.failure,
-      kind.failure,
-      coverUrl.failure,
-      intro.failure,
-      lastChapter.failure,
-      wordCount.failure,
-      tocUrl.failure,
-    ]) {
-      if (failure != null) {
-        return failure;
-      }
+    final ParseFailure<BookInfo>? failure = firstFailure<BookInfo>(
+      <ParseResult<Object?>>[
+        name,
+        author,
+        kind,
+        coverUrl,
+        intro,
+        lastChapter,
+        wordCount,
+        tocUrl,
+      ],
+    );
+    if (failure != null) {
+      return failure;
     }
 
-    final String? toc = tocUrl.value;
+    final String? toc = tocUrl.dataOrNull;
 
     return ParseSuccess<BookInfo>(
       BookInfo(
-        name: name.value ?? '',
+        name: name.dataOrNull ?? '',
         url: url,
         // 上游：`tocUrl` 规则缺失时目录就在书籍页本身，因此回落到书籍 URL。
         tocUrl: resolveAbsoluteUrl(toc == null || toc.isEmpty ? url : toc, url),
-        author: author.value,
-        kind: kind.value,
-        coverUrl: resolveAbsoluteUrlOrNull(coverUrl.value, url),
-        intro: intro.value,
-        lastChapter: lastChapter.value,
-        wordCount: wordCount.value,
+        author: author.dataOrNull,
+        kind: kind.dataOrNull,
+        coverUrl: resolveAbsoluteUrlOrNull(coverUrl.dataOrNull, url),
+        intro: intro.dataOrNull,
+        lastChapter: lastChapter.dataOrNull,
+        wordCount: wordCount.dataOrNull,
       ),
     );
   }

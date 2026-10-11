@@ -68,6 +68,9 @@ final class FetchToc {
   }
 
   /// Reads one [Chapter] per item, dropping the entries without a URL.
+  ///
+  /// A chapter name whose rule matched nothing falls back to an empty string; a
+  /// **rejected** rule aborts the stage (C-SRC-4).
   ParseResult<List<Chapter>> _chapters(
     BookSource source,
     TocRule rules,
@@ -77,27 +80,25 @@ final class FetchToc {
     final List<Chapter> chapters = <Chapter>[];
 
     for (final Element item in items) {
-      final ({String? value, ParseFailure<Never>? failure}) name = _pages.field(
+      final ParseResult<String?> name = _pages.field(
         rules.chapterName,
         item,
         'tocRule.chapterName',
       );
-      final ({String? value, ParseFailure<Never>? failure}) url = _pages.field(
+      final ParseResult<String?> url = _pages.field(
         rules.chapterUrl,
         item,
         'tocRule.chapterUrl',
       );
 
-      for (final ParseFailure<Never>? failure in <ParseFailure<Never>?>[
-        name.failure,
-        url.failure,
-      ]) {
-        if (failure != null) {
-          return failure;
-        }
+      final ParseFailure<List<Chapter>>? failure = firstFailure<List<Chapter>>(
+        <ParseResult<Object?>>[name, url],
+      );
+      if (failure != null) {
+        return failure;
       }
 
-      final String? chapterUrl = url.value;
+      final String? chapterUrl = url.dataOrNull;
       if (chapterUrl == null || chapterUrl.isEmpty) {
         _pages.warn(
           'Chapter without URL skipped: source=${source.url} toc=$baseUrl',
@@ -107,7 +108,7 @@ final class FetchToc {
 
       chapters.add(
         Chapter(
-          name: name.value ?? '',
+          name: name.dataOrNull ?? '',
           url: resolveAbsoluteUrl(chapterUrl, baseUrl),
         ),
       );
