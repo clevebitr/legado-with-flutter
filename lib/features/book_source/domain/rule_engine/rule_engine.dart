@@ -36,10 +36,19 @@ const String _cssFlag = '@css:';
 /// named as unsupported instead of being handed to cascadia, where they would come
 /// back as an unlocatable parse failure (C-SRC-4). Requiring the `(` keeps standard
 /// pseudos such as `:first-child` out of the match.
-final Map<String, RegExp> _jsoupIndexPseudos = <String, RegExp>{
-  for (final String name in <String>['eq', 'gt', 'lt'])
-    name: RegExp(':$name\\s*\\('),
-};
+/// jsoup's index pseudo-classes (matrix #29) and the cascadia form each maps onto.
+///
+/// The replacement receives the argument jsoup was given and returns the
+/// `:nth-child` form with the same **sibling-index** meaning. Immutable on purpose:
+/// the engine holds no shared mutable state (C-SRC-9).
+final Map<String, String Function(int)> _indexPseudoRewrites =
+    Map<String, String Function(int)>.unmodifiable(
+      <String, String Function(int)>{
+        'eq': (int index) => ':nth-child(${index + 1})',
+        'gt': (int index) => ':nth-child(n+${index + 2})',
+        'lt': (int index) => ':nth-child(-n+$index)',
+      },
+    );
 
 /// Selector types this phase implements: matrix #2 (`class` / `id` / `tag`),
 /// #3 (`text`) and #4 (`children`).
@@ -495,8 +504,10 @@ final class RuleEngine {
       }
       final String? flag = _flagOf(extraction);
       if (flag != null) {
-        // `class.a@css:.b`：原版把末段当作嵌套规则，Phase 3.2 实现。
-        return _ParsedFailure<List<_SelectorStep>>(_unsupported(flag));
+        // 末段是提取段，而上游在那里允许**嵌套规则**（矩阵 #30，M2/暂不实现）。
+        // 名字必须与中段的 `@css:` 区分开：中段已支持（矩阵 #12），末段仍未支持，
+        // 否则 UI 与日志分不清两者（架构师 F3）。
+        return _ParsedFailure<List<_SelectorStep>>(_unsupported('nested-rule'));
       }
     }
 
@@ -741,30 +752,86 @@ final class RuleEngine {
     if (trimmed.isEmpty) {
       return _ParsedFailure<_SelectorStep>(_malformed(field));
     }
-    final String? pseudo = _jsoupIndexPseudo(trimmed);
-    if (pseudo != null) {
-      return _ParsedFailure<_SelectorStep>(_unsupported(':$pseudo'));
-    }
+
+    return switch (_rewriteIndexPseudos(trimmed, field: field)) {
+      _ParsedFailure<String>(:final _RuleRejection rejection) =>
+        _ParsedFailure<_SelectorStep>(rejection),
+      _ParsedValue<String>(:final String value) => _compileCss(
+        value,
+        field: field,
+      ),
+    };
+  }
+
+  /// Parses the rewritten [selector] with cascadia, or reports why it cannot be
+  /// evaluated.
+  ///
+  /// Parsing here — while the rule is read — is what turns a bad selector into the
+  /// right [ParseResult]: malformed CSS becomes [ParseFailureKind.parseFailed] with
+  /// the field path, instead of an unlocatable throw from the matcher (C-SRC-8).
+  /// cascadia parses again when matching; that parse is served from its own cache.
+  _Parsed<_SelectorStep> _compileCss(String selector, {required String field}) {
     try {
-      cascadia.parse(trimmed);
+      cascadia.parse(selector);
     } on FormatException {
       return _ParsedFailure<_SelectorStep>(_malformed(field));
     }
 
     return _ParsedValue<_SelectorStep>(
-      _SelectorStep(type: 'css', name: trimmed),
+      _SelectorStep(type: 'css', name: selector),
     );
   }
 
-  /// Returns the jsoup index pseudo-class [selector] uses, or `null`.
-  String? _jsoupIndexPseudo(String selector) {
-    for (final MapEntry<String, RegExp> entry in _jsoupIndexPseudos.entries) {
-      if (entry.value.hasMatch(selector)) {
-        return entry.key;
+  /// Rewrites the jsoup index pseudo-classes of matrix #29 into their cascadia
+  /// equivalent, or reports the one form that cannot be rewritten.
+  ///
+  /// jsoup defines them on the **sibling index** (`elementSiblingIndex()`, 0-based),
+  /// so `:eq(n)` is an equality and becomes `:nth-child({n+1})`: the plain `B` form is
+  /// the only one that means “equals”, while `:nth-child(n+…)` would match every
+  /// later sibling. `:gt(n)` and `:lt(n)` become `:nth-child(n+{n+2})` and
+  /// `:nth-child(-n+{n})`. Rewriting keeps the matching inside cascadia (C-SRC-6).
+  ///
+  /// A negative argument is rejected by name: jsoup's documentation defines the
+  /// indexed pseudo-selectors as 0-based and says nothing about negatives, so the
+  /// behaviour is not guessed here (`book-source.md` §3 row #29).
+  ///
+  /// The scan is textual, so an `:eq(…)` inside a quoted attribute value would be
+  /// rewritten as well. That is the deliberate tolerance boundary of matrix #29: a
+  /// quote-aware scanner buys nothing for real book sources, and the result still
+  /// fails loudly whenever cascadia cannot parse it.
+  _Parsed<String> _rewriteIndexPseudos(
+    String selector, {
+    required String field,
+  }) {
+    String rewritten = selector;
+
+    for (final MapEntry<String, String Function(int)> entry
+        in _indexPseudoRewrites.entries) {
+      final RegExp pattern = RegExp(':${entry.key}\\(\\s*(-?\\d+)\\s*\\)');
+      while (true) {
+        final RegExpMatch? match = pattern.firstMatch(rewritten);
+        if (match == null) {
+          break;
+        }
+        final String argument = match.group(1) ?? '';
+        final int? index = int.tryParse(argument);
+        if (index == null) {
+          return _ParsedFailure<String>(_malformed(field));
+        }
+        if (index < 0) {
+          return _ParsedFailure<String>(
+            _unsupported(':${entry.key}($argument)'),
+          );
+        }
+        rewritten = rewritten.replaceRange(
+          match.start,
+          match.end,
+          entry.value(index),
+        );
       }
     }
 
-    return null;
+    return _ParsedValue<String>(rewritten);
   }
 
   /// Returns the index expression of a segment that stands for `children` plus a

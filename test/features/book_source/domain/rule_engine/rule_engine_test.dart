@@ -566,23 +566,20 @@ void main() {
       }
     });
 
-    test(
-      'extractAll_givenFlagInTheExtractionPosition_returnsUnsupportedRule',
-      () {
-        // 值规则的末段是提取段，上游在那里允许嵌套规则，所以带标志的末段必须拒绝，
-        // 而不能被当成属性名静默取空（C-SRC-4）。
-        final ParseFailure<Never> failure = _failure(
-          _engine().extractAll(
-            'class.a@css:.b',
-            _document(_listHtml),
-            rulePath: 'searchRule.name',
-          ),
-        );
+    test('extractAll_givenANestedRuleInTheExtractionPosition_returnsUnsupportedRule', () {
+      // 值规则的末段是提取段，上游在那里允许嵌套规则（矩阵 #30，M2/暂不实现）。
+      // 它必须报**可区分**的名字：中段的 `@css:` 已支持，末段仍未支持（F3）。
+      final ParseFailure<Never> failure = _failure(
+        _engine().extractAll(
+          'class.a@css:.b',
+          _document(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
 
-        expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@css:');
-      },
-    );
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:nested-rule');
+    });
 
     test('extractAll_givenMalformedRule_returnsParseFailedAtTheField', () {
       final Document document = _document(_listHtml);
@@ -1217,19 +1214,70 @@ void main() {
       );
     });
 
-    test('selectAll_givenAjsoupIndexPseudo_returnsUnsupportedRule', () {
-      // jsoup 的索引伪类不在 cascadia，也不在矩阵 #12 的「标准 CSS」范围内：
-      // 必须点名拒绝（真实语料里有 4 处 `:eq(`，这是已知缺口）。
+    test('selectAll_givenAnIndexPseudo_matchesTheSiblingIndex', () {
+      // 矩阵 #29：jsoup 的 `:eq(n)` 是**兄弟索引**，不是结果集索引。镜像 jsoup 自己的
+      // SelectorTest.testPseudoEquals（`div p:eq(0)` 每个 div 各取一个 p）。
+      final Document document = _document(
+        '<div><p>One</p><p>Two</p></div><div><p>Four</p></div>',
+      );
+
+      expect(
+        _values(
+          _engine().extractAll(
+            '@css:div p:eq(0)@text',
+            document,
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One', 'Four'],
+      );
+    });
+
+    test('selectAll_givenTheGreaterAndLessThanPseudos_takeTheSiblingRange', () {
+      // jsoup 文档：`td:lt(3)` = 每行的前三个单元格，`td:gt(1)` = 跳过前两个。
+      final Document document = _document(
+        '<table><tr><td>1</td><td>2</td><td>3</td><td>4</td></tr></table>',
+      );
+
+      expect(
+        _values(
+          _engine().extractAll('@css:td:lt(3)@text', document, rulePath: 'x'),
+        ),
+        <String>['1', '2', '3'],
+      );
+      expect(
+        _values(
+          _engine().extractAll('@css:td:gt(1)@text', document, rulePath: 'x'),
+        ),
+        <String>['3', '4'],
+      );
+    });
+
+    test('selectAll_givenANegativeIndexPseudo_returnsUnsupportedRule', () {
+      // jsoup 文档把索引伪类定义为 0-based 且未定义负索引 → 本仓不猜，点名拒绝。
       final ParseFailure<Never> failure = _failure(
         _engine().selectAll(
-          '@css:li:eq(1)',
+          '@css:li:eq(-1)',
           _document(_listHtml),
           rulePath: 'searchRule.bookList',
         ),
       );
 
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported::eq');
+      expect(failure.rulePath, 'unsupported::eq(-1)');
+    });
+
+    test('selectAll_givenAnUnparsableIndexArgument_returnsParseFailed', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          '@css:li:eq(99999999999999999999)',
+          _document(_listHtml),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.bookList');
     });
 
     test(
@@ -1273,6 +1321,35 @@ void main() {
 
       expect(failure.kind, ParseFailureKind.parseFailed);
       expect(failure.rulePath, 'searchRule.bookList');
+    });
+
+    test('extractAll_givenTheFlagInAMiddleSegment_chainsThroughIt', () {
+      // 中段的 `@css:`（`class.x@css:.y@text`）本次从 unsupported 变为可用：F1。
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.result-list@css:li@tag.a@href',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        <String>['/book/1', '/book/2', '/book/3'],
+      );
+    });
+
+    test('selectAll_givenAStatePseudoClass_succeedsWithNoMatch', () {
+      // 静态 DOM 下没有元素处于 hover：cascadia 解析成功、匹配恒为 false。这是「正确
+      // 答案」而不是错误，故登记为成功且为空（矩阵 #12 注记，架构师裁决 5）。
+      expect(
+        _elements(
+          _engine().selectAll(
+            '@css:a:hover',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookList',
+          ),
+        ),
+        isEmpty,
+      );
     });
   });
 }
