@@ -2,6 +2,7 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as parser;
@@ -38,12 +39,21 @@ const String _chapterHtml =
 const String _countHtml =
     '<p class="count">共 123 字</p><p class="raw">xa(by</p>';
 
+/// A search response shaped like the target of `@json:` rules (matrix #13).
+///
+/// It carries a string, a number, a boolean, an empty string, `null`, a nested list
+/// and a list of objects, so one fixture reaches every value a JSON rule can return.
+const String _jsonBody =
+    '{"data":{"name":"One","count":3,"adult":false,"tags":["a","b"],'
+    '"empty":"","none":null,"list":[{"name":"One","url":"/book/1"},'
+    '{"name":"Two","url":"/book/2"}]},'
+    '"rows":[{"a":1,"b":2},{"a":1,"b":3}]}';
+
 /// Rules that must be reported as `unsupportedRule` whichever method evaluates
 /// them, with the syntax name `rulePath` has to carry
 /// (`docs/dev/book-source.md` §7).
 const Map<String, String> _unsupportedRules = <String, String>{
   '@js:result': 'unsupported:@js:',
-  '@json:\$.data': 'unsupported:@json:',
   '@xpath://div': 'unsupported:@xpath:',
   '@put:{a:1}': 'unsupported:@put:',
   '@get:{a}': 'unsupported:@get:',
@@ -51,12 +61,8 @@ const Map<String, String> _unsupportedRules = <String, String>{
   '@@class.a': 'unsupported:@@',
   '{{result}}': 'unsupported:{{',
   '//div': 'unsupported://',
-  r'$.data.list': r'unsupported:$.',
   r'{$.data}': 'unsupported:{',
   ':regex': 'unsupported::',
-  'class.a||class.b': 'unsupported:||',
-  'class.a&&class.b': 'unsupported:&&',
-  'class.a%%class.b': 'unsupported:%%',
   // 矩阵 #7 的 `-` 先摘掉再识别标志头，所以标志头的报错保持原样（不能被 `-` 顶掉）。
   '-@js:result': 'unsupported:@js:',
   // 矩阵 #15：中段 `@@`（`@` 切分后留空段，必须在切段前判掉，否则误报畸形）。
@@ -125,13 +131,43 @@ RuleEngine _engine([FakeLogPrinter? printer]) => RuleEngine(
 /// Parses [html]; every rule below is evaluated against the result.
 Document _document(String html) => parser.parse(html);
 
+/// Wraps [node] as the DOM scope the default rules and `@css:` read
+/// (matrix #1..#12).
+RuleScope _scope(Node node) => RuleScope.dom(node);
+
+/// Wraps [body] as a whole-page scope: the parsed DOM **plus** the raw body, which is
+/// what a `@json:` rule reads (matrix #13).
+RuleScope _page(String body) => RuleScope.dom(parser.parse(body), body: body);
+
 /// Returns the data of a successful element result, failing the test otherwise.
-List<Element> _elements(ParseResult<List<Element>> result) => switch (result) {
-  ParseSuccess<List<Element>>(:final List<Element> data) => data,
-  ParseFailure<List<Element>>(:final ParseFailureKind kind) => fail(
-    'Expected a success but got $kind.',
-  ),
-};
+///
+/// The engine returns scopes, so a DOM match is unwrapped back to its node for the
+/// assertions that read attributes and text.
+List<Element> _elements(ParseResult<List<RuleScope>> result) =>
+    switch (result) {
+      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) => <Element>[
+        for (final RuleScope match in data)
+          switch (match) {
+            DomScope(node: final Element element) => element,
+            DomScope() => fail('Expected an element match, got another node.'),
+            JsonScope() => fail('Expected a DOM match but got a JSON one.'),
+          },
+      ],
+      ParseFailure<List<RuleScope>>(:final ParseFailureKind kind) => fail(
+        'Expected a success but got $kind.',
+      ),
+    };
+
+/// Returns the scopes of a successful list result, failing the test otherwise.
+///
+/// Used where the matches are JSON values rather than elements (matrix #13).
+List<RuleScope> _matches(ParseResult<List<RuleScope>> result) =>
+    switch (result) {
+      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) => data,
+      ParseFailure<List<RuleScope>>(:final ParseFailureKind kind) => fail(
+        'Expected a success but got $kind.',
+      ),
+    };
 
 /// Returns the data of a successful value result, failing the test otherwise.
 List<String> _values(ParseResult<List<String>> result) => switch (result) {
@@ -165,7 +201,7 @@ ParseFailure<Never> _failure<T>(ParseResult<T> result) => switch (result) {
 List<String?> _hrefsFor(String segment) => _elements(
   _engine().selectAll(
     'class.result-list@$segment@tag.a',
-    _document(_listHtml),
+    _scope(_document(_listHtml)),
     rulePath: 'searchRule.bookUrl',
   ),
 ).map((Element element) => element.attributes['href']).toList();
@@ -179,7 +215,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'class.result-list@tag.li',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -195,7 +231,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'tag.li',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'tocRule.chapterList',
         ),
       );
@@ -207,7 +243,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'id.content@tag.p',
-          _document(_chapterHtml),
+          _scope(_document(_chapterHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -220,7 +256,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'class.result-list@tag.li.0',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -233,7 +269,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'class.result-list@tag.li.-1',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -249,7 +285,7 @@ void main() {
         _elements(
           _engine().selectAll(
             'class.result-list@tag.li.9',
-            document,
+            _scope(document),
             rulePath: 'searchRule.bookList',
           ),
         ),
@@ -259,7 +295,7 @@ void main() {
         _elements(
           _engine().selectAll(
             'class.result-list@tag.li.-9',
-            document,
+            _scope(document),
             rulePath: 'searchRule.bookList',
           ),
         ),
@@ -273,7 +309,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'class.result',
-          scope,
+          _scope(scope),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -287,7 +323,7 @@ void main() {
         _elements(
           _engine().selectAll(
             '   ',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookList',
           ),
         ),
@@ -300,7 +336,7 @@ void main() {
         _elements(
           _engine().selectAll(
             'class.absent@tag.li',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookList',
           ),
         ),
@@ -321,7 +357,7 @@ void main() {
         final ParseFailure<Never> failure = _failure(
           _engine().selectAll(
             entry.key,
-            document,
+            _scope(document),
             rulePath: 'searchRule.bookList',
           ),
         );
@@ -340,7 +376,11 @@ void main() {
 
       for (final String rule in <String>[..._malformedSelectors, 'class.a@']) {
         final ParseFailure<Never> failure = _failure(
-          _engine().selectAll(rule, document, rulePath: 'searchRule.bookList'),
+          _engine().selectAll(
+            rule,
+            _scope(document),
+            rulePath: 'searchRule.bookList',
+          ),
         );
 
         expect(failure.kind, ParseFailureKind.parseFailed, reason: rule);
@@ -353,7 +393,7 @@ void main() {
 
       _engine(printer).selectAll(
         '@js:result',
-        _document(_listHtml),
+        _scope(_document(_listHtml)),
         rulePath: 'searchRule.name',
       );
 
@@ -375,7 +415,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           'class.result-list@tag.li.0@text',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.name',
         ),
       );
@@ -387,7 +427,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           'class.line.0@textNodes',
-          _document(_chapterHtml),
+          _scope(_document(_chapterHtml)),
           rulePath: 'contentRule.content',
         ),
       );
@@ -399,7 +439,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           'class.line.0@ownText',
-          _document(_chapterHtml),
+          _scope(_document(_chapterHtml)),
           rulePath: 'contentRule.content',
         ),
       );
@@ -411,7 +451,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           'id.content@html',
-          _document(_chapterHtml),
+          _scope(_document(_chapterHtml)),
           rulePath: 'contentRule.content',
         ),
       );
@@ -428,7 +468,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           'id.content@all',
-          _document(_chapterHtml),
+          _scope(_document(_chapterHtml)),
           rulePath: 'contentRule.content',
         ),
       );
@@ -443,7 +483,7 @@ void main() {
       _values(
         _engine().extractAll(
           'id.content@html',
-          document,
+          _scope(document),
           rulePath: 'contentRule.content',
         ),
       );
@@ -457,7 +497,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           'tag.a@href',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookUrl',
         ),
       );
@@ -470,7 +510,7 @@ void main() {
         _values(
           _engine().extractAll(
             'tag.a@src',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.coverUrl',
           ),
         ),
@@ -483,7 +523,7 @@ void main() {
         _values(
           _engine().extractAll(
             'tag.img@alt',
-            _document(_chapterHtml),
+            _scope(_document(_chapterHtml)),
             rulePath: 'searchRule.coverUrl',
           ),
         ),
@@ -495,7 +535,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           'class.dupe@data-x',
-          _document(_chapterHtml),
+          _scope(_document(_chapterHtml)),
           rulePath: 'searchRule.bookUrl',
         ),
       );
@@ -508,7 +548,7 @@ void main() {
         _values(
           _engine().extractAll(
             'class.empty@text',
-            _document(_chapterHtml),
+            _scope(_document(_chapterHtml)),
             rulePath: 'searchRule.name',
           ),
         ),
@@ -520,7 +560,11 @@ void main() {
       final Element scope = _document(_listHtml).querySelectorAll('a').first;
 
       final List<String> values = _values(
-        _engine().extractAll('href', scope, rulePath: 'searchRule.bookUrl'),
+        _engine().extractAll(
+          'href',
+          _scope(scope),
+          rulePath: 'searchRule.bookUrl',
+        ),
       );
 
       expect(values, <String>['/book/1']);
@@ -531,7 +575,7 @@ void main() {
         _values(
           _engine().extractAll(
             'class.absent@text',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.name',
           ),
         ),
@@ -552,7 +596,7 @@ void main() {
         final ParseFailure<Never> failure = _failure(
           _engine().extractAll(
             entry.key,
-            document,
+            _scope(document),
             rulePath: 'searchRule.name',
           ),
         );
@@ -572,7 +616,7 @@ void main() {
       final ParseFailure<Never> failure = _failure(
         _engine().extractAll(
           'class.a@css:.b',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.name',
         ),
       );
@@ -591,7 +635,11 @@ void main() {
 
       for (final String rule in rules) {
         final ParseFailure<Never> failure = _failure(
-          _engine().extractAll(rule, document, rulePath: 'searchRule.name'),
+          _engine().extractAll(
+            rule,
+            _scope(document),
+            rulePath: 'searchRule.name',
+          ),
         );
 
         expect(failure.kind, ParseFailureKind.parseFailed, reason: rule);
@@ -606,7 +654,7 @@ void main() {
         _values(
           _engine().extractAll(
             'class.a.b',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.name',
           ),
         ),
@@ -620,7 +668,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           r'class.count@text##共\s*',
-          _document(_countHtml),
+          _scope(_document(_countHtml)),
           rulePath: 'searchRule.wordCount',
         ),
       );
@@ -634,7 +682,7 @@ void main() {
         final List<String> values = _values(
           _engine().extractAll(
             r'class.count@text##共\s*(\d+)\s*字##$1',
-            _document(_countHtml),
+            _scope(_document(_countHtml)),
             rulePath: 'searchRule.wordCount',
           ),
         );
@@ -647,7 +695,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           r'class.count@text##(?<n>\d+)##[${n}]',
-          _document(_countHtml),
+          _scope(_document(_countHtml)),
           rulePath: 'searchRule.wordCount',
         ),
       );
@@ -661,7 +709,7 @@ void main() {
         final List<String> values = _values(
           _engine().extractAll(
             r'class.count@text##(\d+)##\1',
-            _document(_countHtml),
+            _scope(_document(_countHtml)),
             rulePath: 'searchRule.wordCount',
           ),
         );
@@ -674,7 +722,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           'class.raw@text##a(b##X',
-          _document(_countHtml),
+          _scope(_document(_countHtml)),
           rulePath: 'searchRule.wordCount',
         ),
       );
@@ -689,7 +737,7 @@ void main() {
         _values(
           _engine().extractAll(
             r'class.count@text##123##$',
-            document,
+            _scope(document),
             rulePath: 'searchRule.wordCount',
           ),
         ),
@@ -699,7 +747,7 @@ void main() {
         _values(
           _engine().extractAll(
             r'class.count@text##123##${}',
-            document,
+            _scope(document),
             rulePath: 'searchRule.wordCount',
           ),
         ),
@@ -709,7 +757,7 @@ void main() {
         _values(
           _engine().extractAll(
             r'class.count@text##123##${',
-            document,
+            _scope(document),
             rulePath: 'searchRule.wordCount',
           ),
         ),
@@ -719,7 +767,7 @@ void main() {
         _values(
           _engine().extractAll(
             r'class.count@text##123##$a',
-            document,
+            _scope(document),
             rulePath: 'searchRule.wordCount',
           ),
         ),
@@ -731,7 +779,7 @@ void main() {
       final List<String> values = _values(
         _engine().extractAll(
           r'class.result-list@tag.li@text##\s*Author [ABC]',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.name',
         ),
       );
@@ -746,7 +794,7 @@ void main() {
         _values(
           _engine().extractAll(
             r'class.count@text##共\s*(\d+)\s*字##$1###',
-            _document(_countHtml),
+            _scope(_document(_countHtml)),
             rulePath: 'searchRule.wordCount',
           ),
         ),
@@ -762,7 +810,7 @@ void main() {
           _values(
             _engine().extractAll(
               'class.count@text##absent##X###',
-              _document(_countHtml),
+              _scope(_document(_countHtml)),
               rulePath: 'searchRule.wordCount',
             ),
           ),
@@ -777,7 +825,7 @@ void main() {
         _values(
           _engine().extractAll(
             'class.raw@text##a(b##X###',
-            _document(_countHtml),
+            _scope(_document(_countHtml)),
             rulePath: 'searchRule.wordCount',
           ),
         ),
@@ -792,7 +840,7 @@ void main() {
         _first(
           _engine().extractFirst(
             'tag.a@href',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookUrl',
           ),
         ),
@@ -805,7 +853,7 @@ void main() {
         _first(
           _engine().extractFirst(
             'class.absent@text',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.intro',
           ),
         ),
@@ -817,7 +865,7 @@ void main() {
       final ParseFailure<Never> failure = _failure(
         _engine().extractFirst(
           '@js:result',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.intro',
         ),
       );
@@ -832,7 +880,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'text.Second',
-          _document(_chapterHtml),
+          _scope(_document(_chapterHtml)),
           rulePath: 'tocRule.chapterList',
         ),
       );
@@ -848,7 +896,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'text.bold',
-          _document(_chapterHtml),
+          _scope(_document(_chapterHtml)),
           rulePath: 'tocRule.chapterList',
         ),
       );
@@ -863,7 +911,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'text.First',
-          scope,
+          _scope(scope),
           rulePath: 'tocRule.chapterList',
         ),
       );
@@ -877,7 +925,7 @@ void main() {
         _elements(
           _engine().selectAll(
             'text.SECOND',
-            _document(_chapterHtml),
+            _scope(_document(_chapterHtml)),
             rulePath: 'tocRule.chapterList',
           ),
         ),
@@ -889,7 +937,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           'text.Author.-1',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'tocRule.chapterList',
         ),
       );
@@ -903,7 +951,7 @@ void main() {
       final ParseFailure<Never> failure = _failure(
         _engine().selectAll(
           'text',
-          _document(_chapterHtml),
+          _scope(_document(_chapterHtml)),
           rulePath: 'tocRule.chapterList',
         ),
       );
@@ -918,7 +966,11 @@ void main() {
       final Element scope = _document(_listHtml).querySelectorAll('ul').single;
 
       final List<Element> elements = _elements(
-        _engine().selectAll('children', scope, rulePath: 'tocRule.chapterList'),
+        _engine().selectAll(
+          'children',
+          _scope(scope),
+          rulePath: 'tocRule.chapterList',
+        ),
       );
 
       expect(elements, hasLength(3));
@@ -938,7 +990,7 @@ void main() {
         _elements(
           _engine().selectAll(
             'children.li.0',
-            scope,
+            _scope(scope),
             rulePath: 'tocRule.chapterList',
           ),
         ),
@@ -953,7 +1005,7 @@ void main() {
         _values(
           _engine().extractAll(
             'children@tag.a@href',
-            scope,
+            _scope(scope),
             rulePath: 'searchRule.bookUrl',
           ),
         ),
@@ -982,7 +1034,7 @@ void main() {
         _values(
           _engine().extractAll(
             'class.result-list@tag.li!1@tag.a@href',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookUrl',
           ),
         ),
@@ -996,7 +1048,7 @@ void main() {
       final List<Element> elements = _elements(
         _engine().selectAll(
           '-class.result-list@tag.li',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'tocRule.chapterList',
         ),
       );
@@ -1014,7 +1066,7 @@ void main() {
         _values(
           _engine().extractAll(
             '-class.result-list@tag.a@href',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookUrl',
           ),
         ),
@@ -1027,7 +1079,7 @@ void main() {
         _first(
           _engine().extractFirst(
             '-class.result-list@tag.a@href',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookUrl',
           ),
         ),
@@ -1130,12 +1182,207 @@ void main() {
     );
   });
 
+  group('RuleEngine connectors (#10 || / #11 && / #27 %%)', () {
+    test('extractAll_givenDoublePipe_takesTheFirstCandidateWithValues', () {
+      // 矩阵 #10：依次尝试，首个非空即成功。
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.absent@text||class.result-list@tag.li.0@text',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One Author A'],
+      );
+    });
+
+    test('extractAll_givenOnlyEmptyCandidates_succeedsWithNoValues', () {
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.absent@text||class.alsoAbsent@text',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('extractAll_givenDoubleAmpersand_mergesBothBranchesInRuleOrder', () {
+      // 矩阵 #11：`&&` 合并两侧结果（并集、非串联）。
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.result-list@tag.li.0@text'
+            '&&class.result-list@tag.li.1@text',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One Author A', 'Two Author B'],
+      );
+    });
+
+    test('selectAll_givenDoubleAmpersand_concatenatesTheElements', () {
+      expect(
+        _elements(
+          _engine().selectAll(
+            'class.result-list@tag.li.0&&class.result-list@tag.li.2',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.bookList',
+          ),
+        ),
+        hasLength(2),
+      );
+    });
+
+    test('extractAll_givenDoublePercent_interleavesTheBranches', () {
+      // 矩阵 #27：`%%` 交叉取数（依次从各列表取）。
+      expect(
+        _values(
+          _engine().extractAll(
+            'tag.a@href%%class.result-list@tag.li@text',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        <String>[
+          '/book/1',
+          'One Author A',
+          '/book/2',
+          'Two Author B',
+          '/book/3',
+          'Three Author C',
+        ],
+      );
+    });
+
+    test('extractAll_givenMixedConnectors_groupsAmpersandFirst', () {
+      // `a&&b||c` = `(a&&b)||c`：`||` 最松先切（book-source.md §3.2）。
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.absent@text&&class.alsoAbsent@text'
+            '||class.result-list@tag.li.-1@text',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['Three Author C'],
+      );
+    });
+
+    test('extractAll_givenAConnectorInsideBracketsOrQuotes_keepsItLiteral', () {
+      // `[...]` / `(...)` / 引号内的分隔符属于选择器：若被切开，选择器会残缺而报
+      // parseFailed，所以「成功且为空」恰好证明保护生效。
+      final Document document = _document(_listHtml);
+
+      expect(
+        _values(
+          _engine().extractAll(
+            '@css:a[href="x&&y"]@text',
+            _scope(document),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        isEmpty,
+      );
+      expect(
+        _values(
+          _engine().extractAll(
+            '@css:a:matches(/x&&y/)@text',
+            _scope(document),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('extractAll_givenASeparatorAfterABracketedSelector_stillSplits', () {
+      // 扫描器必须跳过 `[...]` 与引号内的字符，但仍在它们之后的连接符处切分。
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.result-list@tag.li.0@text&&@css:a[href="/book/2"]@text',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One Author A', 'Two'],
+      );
+    });
+
+    test('selectAll_givenAValueBranchInAListRule_returnsParseFailed', () {
+      // 跨类型合并必须显式失败，不得静默拼成异构列表。
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          'class.result-list&&class.result-list@text',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.bookList');
+    });
+
+    test(
+      'selectAll_givenAValueExtractionInAListRule_returnsUnsupportedRule',
+      () {
+        // 与上一条合起来看：把取值段写进列表规则一律**响亮失败**，但落在哪个 kind 取决于
+        // 那一段是不是已实现的类型名——`text` 是（因此借道「段结构畸形」报 parseFailed），
+        // `href` 不是（因此报 unsupported:href）。两条都不是跨类型的**专门检测**，
+        // JSON 与默认规则混用时的专门检测见 `@json:` 组的合并用例。
+        final ParseFailure<Never> failure = _failure(
+          _engine().selectAll(
+            'class.result-list&&class.result-list@href',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+
+        expect(failure.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'unsupported:href');
+      },
+    );
+
+    test('extractAll_givenAnEmptyBranch_returnsParseFailed', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().extractAll(
+          'class.result-list@text||',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test('selectAll_givenADeferredFlagInALaterCandidate_reportsIt', () {
+      // body 级标志检查只覆盖规则开头；后续候选的标志头由选择器层拒绝。
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          'class.result-list||@js:result',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@js:');
+    });
+  });
+
   group('RuleEngine matrix #12 (@css:)', () {
     test('selectAll_givenCssRule_returnsEveryMatch', () {
       final List<Element> elements = _elements(
         _engine().selectAll(
           '@css:ul.result-list > li',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -1153,7 +1400,7 @@ void main() {
         _elements(
           _engine().selectAll(
             '@CSS:ul.result-list > li',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookList',
           ),
         ),
@@ -1167,7 +1414,7 @@ void main() {
         _values(
           _engine().extractAll(
             '@css:ul.result-list > li@tag.a@href',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookUrl',
           ),
         ),
@@ -1180,7 +1427,7 @@ void main() {
         _values(
           _engine().extractAll(
             '@css:a[href="/book/2"]@text',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.name',
           ),
         ),
@@ -1196,7 +1443,7 @@ void main() {
         _values(
           _engine().extractAll(
             '@css:li:contains(Three)@tag.a@href',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookUrl',
           ),
         ),
@@ -1206,7 +1453,7 @@ void main() {
         _values(
           _engine().extractAll(
             '@css:span:containsOwn(Author)@text',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.author',
           ),
         ),
@@ -1225,7 +1472,7 @@ void main() {
         _values(
           _engine().extractAll(
             '@css:div p:eq(0)@text',
-            document,
+            _scope(document),
             rulePath: 'searchRule.name',
           ),
         ),
@@ -1243,13 +1490,21 @@ void main() {
 
         expect(
           _values(
-            _engine().extractAll('@css:td:lt(3)@text', document, rulePath: 'x'),
+            _engine().extractAll(
+              '@css:td:lt(3)@text',
+              _scope(document),
+              rulePath: 'x',
+            ),
           ),
           <String>['1', '2', '3'],
         );
         expect(
           _values(
-            _engine().extractAll('@css:td:gt(1)@text', document, rulePath: 'x'),
+            _engine().extractAll(
+              '@css:td:gt(1)@text',
+              _scope(document),
+              rulePath: 'x',
+            ),
           ),
           <String>['3', '4'],
         );
@@ -1261,7 +1516,7 @@ void main() {
       final ParseFailure<Never> failure = _failure(
         _engine().selectAll(
           '@css:li:eq(-1)',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -1274,7 +1529,7 @@ void main() {
       final ParseFailure<Never> failure = _failure(
         _engine().selectAll(
           '@css:li:eq(99999999999999999999)',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -1291,7 +1546,7 @@ void main() {
           _elements(
             _engine().selectAll(
               '@css:li:first-child',
-              _document(_listHtml),
+              _scope(_document(_listHtml)),
               rulePath: 'searchRule.bookList',
             ),
           ),
@@ -1304,7 +1559,7 @@ void main() {
       final ParseFailure<Never> failure = _failure(
         _engine().selectAll(
           '@css:ul >',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -1317,7 +1572,7 @@ void main() {
       final ParseFailure<Never> failure = _failure(
         _engine().selectAll(
           '@css:',
-          _document(_listHtml),
+          _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
@@ -1332,7 +1587,7 @@ void main() {
         _values(
           _engine().extractAll(
             'class.result-list@css:li@tag.a@href',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookUrl',
           ),
         ),
@@ -1347,12 +1602,342 @@ void main() {
         _elements(
           _engine().selectAll(
             '@css:a:hover',
-            _document(_listHtml),
+            _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookList',
           ),
         ),
         isEmpty,
       );
+    });
+  });
+
+  group('RuleEngine @json: (matrix #13)', () {
+    test('extractAll_givenAJsonFlag_returnsTheValueAtThePath', () {
+      expect(
+        _values(
+          _engine().extractAll(
+            r'@json:$.data.name',
+            _page(_jsonBody),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One'],
+      );
+    });
+
+    test('extractAll_givenABareDollarPath_returnsTheValueAtThePath', () {
+      // 矩阵 #13：以 `$.` 开头时可省略 `@json:` 标志。
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.data.name',
+            _page(_jsonBody),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One'],
+      );
+    });
+
+    test('extractAll_givenAnUpperCasedJsonFlag_returnsTheValueAtThePath', () {
+      expect(
+        _values(
+          _engine().extractAll(
+            r'@Json:$.data.name',
+            _page(_jsonBody),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One'],
+      );
+    });
+
+    test('extractAll_givenAJsonPathFilter_keepsItsAtSignAndAmpersands', () {
+      // 过滤器里有 `@`（若按 `@` 切段会被吃掉）与 `&&`（若按连接符切分会被当成合并），
+      // 所以整条分支必须在切段与切分之前就被识别成 JSONPath。
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.rows[?(@.a==1 && @.b==2)].b',
+            _page(_jsonBody),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['2'],
+      );
+    });
+
+    test('extractAll_givenJsonScalars_returnsTheirJsonText', () {
+      final RuleScope page = _page(_jsonBody);
+
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.data.count',
+            page,
+            rulePath: 'searchRule.wordCount',
+          ),
+        ),
+        <String>['3'],
+      );
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.data.adult',
+            page,
+            rulePath: 'searchRule.kind',
+          ),
+        ),
+        <String>['false'],
+      );
+    });
+
+    test('extractAll_givenAJsonListValue_returnsItAsJsonText', () {
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.data.tags',
+            _page(_jsonBody),
+            rulePath: 'searchRule.kind',
+          ),
+        ),
+        <String>['["a","b"]'],
+      );
+    });
+
+    test('extractAll_givenAJsonObjectValue_returnsItAsJsonText', () {
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.data.list[0]',
+            _page(_jsonBody),
+            rulePath: 'searchRule.intro',
+          ),
+        ),
+        <String>['{"name":"One","url":"/book/1"}'],
+      );
+    });
+
+    test('extractAll_givenAnEmptyOrNullJsonValue_returnsNoValue', () {
+      // 与矩阵 #8 的空提取同口径：空字符串与 null 都不产生值，不报失败。
+      final RuleScope page = _page(_jsonBody);
+
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.data.empty',
+            page,
+            rulePath: 'searchRule.intro',
+          ),
+        ),
+        isEmpty,
+      );
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.data.none',
+            page,
+            rulePath: 'searchRule.intro',
+          ),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('extractAll_givenAMalformedJsonPath_returnsParseFailed', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().extractAll(
+          r'@json:$[',
+          _page(_jsonBody),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test('extractAll_givenAnEmptyJsonPath_returnsParseFailed', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().extractAll(
+          '@json:',
+          _page(_jsonBody),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test('extractAll_givenANonJsonBody_returnsParseFailed', () {
+      // 页面根本不是 JSON：规则本身没错，是这一页回答不了它（≠ 成功且为空）。
+      final ParseFailure<Never> failure = _failure(
+        _engine().extractAll(
+          r'$.data.name',
+          _page(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test('extractAll_givenAJsonRuleOnAnElement_returnsParseFailed', () {
+      // 元素 scope 没有原始 body：元素内部的 JSON 需要提取段嵌套规则（矩阵 #30）。
+      final ParseFailure<Never> failure = _failure(
+        _engine().extractAll(
+          r'$.data.name',
+          _scope(_document(_listHtml).querySelectorAll('li').first),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test('extractAll_givenMixedScopeOr_returnsParseFailed', () {
+      // 已裁决行为，本用例用来**钉住**它：`||` 的候选一旦**失败**就整条终止，不会去试后面的
+      // DOM 候选，也不会回退。HTML 页的 body 不是 JSON，所以 `$.a` 失败、`class.b@text` 根本
+      // 不会被求值。若有人把它「修」成能回退，这里会红。
+      final ParseFailure<Never> failure = _failure(
+        _engine().extractAll(
+          r'$.a||class.b@text',
+          _page(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test('extractAll_givenADomRuleOnAJsonScope_returnsParseFailed', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().extractAll(
+          'class.result@text',
+          const JsonScope(<String, Object?>{'name': 'One'}),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test('extractAll_givenADomRuleOnAJsonPage_returnsAnEmptySuccess', () {
+      // 方向不对称，且是有意的：DOM 规则打在 **JSON 页** 上不是失败——页面仍然是一份解析出来
+      // 的文档，选择器零匹配就是矩阵 #8 的「成功但为空」。只有上面那种「匹配项本身是 JSON 值」
+      // 才连 DOM 都没有，才报 parseFailed。
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.result@text',
+            _page(_jsonBody),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('selectAll_givenAJsonListRule_returnsOneScopePerValue', () {
+      final List<RuleScope> items = _matches(
+        _engine().selectAll(
+          r'$.data.list[*]',
+          _page(_jsonBody),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(items, hasLength(2));
+      // 列表规则的每个匹配都是下一级的 scope，字段规则在它上面读。
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.name',
+            items.first,
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One'],
+      );
+      expect(
+        _values(
+          _engine().extractAll(
+            r'@json:$.url',
+            items.last,
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        <String>['/book/2'],
+      );
+    });
+
+    test('selectAll_givenAReversedJsonListRule_reversesTheMatches', () {
+      final List<RuleScope> items = _matches(
+        _engine().selectAll(
+          r'-$.data.list[*]',
+          _page(_jsonBody),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(
+        _values(
+          _engine().extractAll(
+            r'$.name',
+            items.first,
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['Two'],
+      );
+    });
+
+    test('selectAll_givenADomRuleOnAJsonScope_returnsParseFailed', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          'class.result',
+          const JsonScope(<String, Object?>{'name': 'One'}),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.bookList');
+    });
+
+    test(
+      'selectAll_givenAJsonBranchMergedWithADomBranch_returnsParseFailed',
+      () {
+        // `book-source.md` §3 的 `&&` 注记：连接符只合并同种规则，跨 scope 合并语义未定义。
+        final ParseFailure<Never> failure = _failure(
+          _engine().selectAll(
+            r'$.data.list[*]&&class.result',
+            _page(_jsonBody),
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+
+        expect(failure.kind, ParseFailureKind.parseFailed);
+        expect(failure.rulePath, 'searchRule.bookList');
+      },
+    );
+
+    test('selectAll_givenAJsonRuleInAListScope_returnsParseFailed', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          r'$.data.list[*]',
+          _page(_listHtml),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.bookList');
     });
   });
 }

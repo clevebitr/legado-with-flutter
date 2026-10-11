@@ -1,7 +1,7 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
-import 'package:html/dom.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 
 /// Reads the body of one chapter (`PLAN.md` 2.4, `ruleContent`).
 ///
@@ -19,18 +19,18 @@ final class FetchContent {
   /// (`book-source.md` §7), because "the page has no body where the rules expect one"
   /// is exactly what a stale rule looks like.
   Future<ParseResult<String>> execute(BookSource source, String url) async {
-    final ParseResult<Document> page = await _pages.fetch(
+    final ParseResult<RuleScope> page = await _pages.fetch(
       url,
       rulePath: 'ruleContent',
     );
 
     return switch (page) {
-      ParseFailure<Document>(
+      ParseFailure<RuleScope>(
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
         failureAt<String>(kind: kind, rulePath: failedAt),
-      ParseSuccess<Document>(:final Document data) => _pages.content(
+      ParseSuccess<RuleScope>(:final RuleScope data) => _pages.content(
         source.contentRule.content,
         data,
         'contentRule.content',

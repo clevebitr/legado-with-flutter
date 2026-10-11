@@ -113,7 +113,8 @@ void main() {
     ) async {
       final BookSource source = loadCorpusBookSource();
       final BookSource unsupported = source.copyWith(
-        searchRule: source.searchRule.copyWith(name: '@js:result'),
+        // 顶层规则被拒才是整次失败（ADR-0026 §决策 1）；非顶层字段会降级。
+        searchRule: source.searchRule.copyWith(bookList: '@js:result'),
       );
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 

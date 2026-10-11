@@ -1,0 +1,36 @@
+{
+  "bookSourceComment": "",
+  "bookSourceGroup": "🎉精选",
+  "bookSourceName": "示例书源（JSON 规则，真实导出结构，已脱敏）",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://example-novel.test",
+  "bookUrlPattern": "",
+  "customOrder": 34,
+  "enabled": true,
+  "enabledExplore": false,
+  "exploreUrl": "",
+  "lastUpdateTime": 1612777312843,
+  "ruleBookInfo": {
+    "intro": "@json:$.coverInfo.desc"
+  },
+  "ruleContent": {
+    "content": "@json:$.content"
+  },
+  "ruleExplore": {},
+  "ruleSearch": {
+    "author": "@json:$.author",
+    "bookList": "@json:$.all_book_items[*]||@json:$.guess_like_items[*]",
+    "bookUrl": "@json:$.bookUrl",
+    "coverUrl": "@json:$.imgUrl",
+    "kind": "@json:$.classes",
+    "lastChapter": "@json:$.lastChapterName",
+    "name": "@json:$.name"
+  },
+  "ruleToc": {
+    "chapterList": "@json:$.volumes[*].chapters[*]||$.chapters[*]",
+    "chapterName": "@json:$.chapter_name",
+    "chapterUrl": "@json:$.chapterUrl"
+  },
+  "searchUrl": "https://example-novel.test/api/bookapp/searchdzh.m?word={{key}}&type=0&page_id=1&count=20&sort_type=0&subclass=0&datasource=0&showj=1&wc=0&catalog=0&bookStatus=0&cid=eef_easou_book&version=002&os=android&udid=1FD1EC34C1A1DD11DD61A603B9369449&appverion=1064&ch=blf1298_11982_011&session_id=-nEua-HnRcZlOf2ovVVOOzJ&lastClock=0&dzh=1&scp=0&appid=10001&utype=0&rtype=1&pushid=1a0018970afa6c9bc74&ptype=4&birt=1548574906221&instime=1548574868198",
+  "weight": 0
+}

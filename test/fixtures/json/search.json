@@ -1,0 +1,18 @@
+{
+  "all_book_items": [
+    {
+      "author": "作者甲",
+      "bookUrl": "https://example-novel.test/book/1/",
+      "classes": "武侠",
+      "imgUrl": "/cover/1.jpg",
+      "lastChapterName": "第1章 开端",
+      "name": "书名一"
+    }
+  ],
+  "guess_like_items": [
+    {
+      "bookUrl": "https://example-novel.test/book/9/",
+      "name": "猜你想看"
+    }
+  ]
+}

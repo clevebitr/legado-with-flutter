@@ -1,6 +1,6 @@
 # ADR-0026 非顶层字段被拒时降级为 warning，顶层规则仍整次失败（登记 F6 裁决）
 
-- **状态：** Accepted（2026-10-11 **架构师裁决 F6**；本 ADR 是记录，不是作者自决）
+- **状态：** Accepted（2026-10-11 **架构师裁决 F6**；本 ADR 是记录，不是作者自决；同日复审修订第 2 条：非顶层两类都降级）
 - **日期：** 2026-10-11
 - **关联：** C-SRC-4、C-SRC-8、C-ERR-8、ADR-0002、ADR-0013、ADR-0025、
   `docs/dev/book-source.md` §7/§9、`PLAN.md` 3.2、`PageFetchService`
@@ -22,13 +22,23 @@ PR #2 复审（F6）指出：`PLAN.md` 2.4 的 UseCase 把同一个条目的所�
 1. **顶层规则**（`searchRule.bookList`、`tocRule.chapterList`、`contentRule.content`）被拒 →
    **整次失败** `unsupportedRule`。没有它们就没有结果，降级等于假装成功。
 2. **非顶层字段**（`name` / `author` / `kind` / `coverUrl` / `intro` / `lastChapter` /
-   `wordCount` / `tocUrl` / `chapterName` / `chapterUrl` 等）被拒 → 该字段**置空** +
-   **warning**（含 `rulePath` 与书源 ID，C-SRC-8、C-ERR-8），结果照常返回。
+   `wordCount` / `tocUrl` / `chapterName` / `chapterUrl` 等）被拒**或畸形**
+   （`unsupportedRule` / `parseFailed`）→ 该字段**置空** + **warning**（含 `rulePath`、失败 kind
+   与书源 ID，C-SRC-8、C-ERR-8），结果照常返回。
+
+   > **2026-10-11 复审修订（架构师）：** 本项原措辞只写「被拒」，落地时发现两条必须合并：
+   > （a）若畸形规则（`parseFailed`）在非顶层字段上向上失败，UseCase 只取 `dataOrNull`，它会
+   > **既不上报也不记录**地变成 `null` —— 那是静默吞掉（C-SRC-4）；（b）对调用方而言「语法
+   > 不支持」与「规则写坏了」在这一层的后果完全相同：只该丢这个字段。故两类**都降级**，
+   > 「显式降级 + 记录」由 warning 承担。
 3. C-SRC-4 的「禁止静默忽略」由「**显式降级 + 记录**」满足，而不是被绕过；这与
    `book-source.md` §9「规则失效（0 结果）→ 记录到书源健康度统计」是同一既有模式。
-4. **唯一实现点**是 `PageFetchService`（ADR-0013 §1：一个事实只定义一次）。两类各至少 1 条测试：
+4. **唯一实现点**是 `PageFetchService`（ADR-0013 §1：一个事实只定义一次）。测试矩阵：
    - 顶层规则被拒 → `ParseFailure(unsupportedRule)`，`rulePath` 指向该顶层字段；
-   - 非顶层字段被拒 → `ParseSuccess`，该字段为 `null` / 空串，且有一条带 `rulePath` 的 warning。
+   - 顶层规则畸形 → `ParseFailure(parseFailed)`，`rulePath` 指向该顶层字段；
+   - 非顶层字段被拒 → `ParseSuccess`，该字段为 `null` / 空串，且有一条带 `rulePath` 与书源 ID 的
+     warning；
+   - 非顶层字段畸形 → 同上（两类同口径，见第 2 条的修订注记）。
 5. **实现时机：与 3.2 的 `@css:` 同批落地。** 3.2 才第一次让大量真实书源的 `@css:` 字段可用，
    「可选字段被拒」到那时才真正影响可用率；本 ADR 先把裁决与落地点登记清楚，不再挂「待裁决」。
 

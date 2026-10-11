@@ -31,6 +31,30 @@ const String _bookUrl = 'https://example-novel.test/book/1/';
 /// The first chapter URL, already resolved to absolute.
 const String _chapterUrl = 'https://example-novel.test/book/1/1.html';
 
+/// The real JSON-API source of the offline corpus (matrix #13).
+const String _jsonSourceFixture =
+    'test/fixtures/book_sources/legado_json_source.json';
+
+/// The rendered search URL of the JSON source for the keyword `剑来`.
+///
+/// Written out on purpose: it is the source's real query string, so asserting against
+/// the literal is what pins template rendering, keyword encoding and
+/// "encode once, never twice" (`book-source.md` §4) on a real rule.
+const String _jsonSearchUrl =
+    'https://example-novel.test/api/bookapp/searchdzh.m?word=%E5%89%91%E6%9D%A5'
+    '&type=0&page_id=1&count=20&sort_type=0&subclass=0&datasource=0&showj=1&wc=0'
+    '&catalog=0&bookStatus=0&cid=eef_easou_book&version=002&os=android'
+    '&udid=1FD1EC34C1A1DD11DD61A603B9369449&appverion=1064&ch=blf1298_11982_011'
+    '&session_id=-nEua-HnRcZlOf2ovVVOOzJ&lastClock=0&dzh=1&scp=0&appid=10001'
+    '&utype=0&rtype=1&pushid=1a0018970afa6c9bc74&ptype=4&birt=1548574906221'
+    '&instime=1548574868198';
+
+/// The book URL the JSON search response carries (already absolute).
+const String _jsonBookUrl = 'https://example-novel.test/book/1/';
+
+/// The first chapter URL the JSON toc response carries (already absolute).
+const String _jsonChapterUrl = 'https://example-novel.test/book/1/1.html';
+
 /// Loads the corpus book source.
 BookSource _source() => BookSource.fromLegadoJson(
   jsonDecode(File(_sourceFixture).readAsStringSync()) as Map<String, Object?>,
@@ -39,6 +63,16 @@ BookSource _source() => BookSource.fromLegadoJson(
 /// Reads one page of the offline corpus.
 String _page(String name) =>
     File('test/fixtures/html/$name').readAsStringSync();
+
+/// Loads the JSON corpus book source.
+BookSource _jsonSource() => BookSource.fromLegadoJson(
+  jsonDecode(File(_jsonSourceFixture).readAsStringSync())
+      as Map<String, Object?>,
+);
+
+/// Reads one JSON page of the offline corpus.
+String _jsonPage(String name) =>
+    File('test/fixtures/json/$name').readAsStringSync();
 
 /// Builds the page service under test around [http].
 ({PageFetchService pages, FakeLogPrinter printer}) _service(
@@ -173,7 +207,7 @@ void main() {
     });
 
     test(
-      'execute_givenUnsupportedFieldRule_propagatesUnsupportedRule',
+      'execute_givenUnsupportedFieldRule_degradesToEmptyWithAWarning',
       () async {
         final FakeHttpClient http = FakeHttpClient()
           ..serve(
@@ -185,17 +219,21 @@ void main() {
         final ({PageFetchService pages, FakeLogPrinter printer}) service =
             _service(http);
         final BookSource source = _source();
-        // 真实书源 + 一条本阶段未实现的规则：整次搜索必须显式失败（C-SRC-4）。
+        // ADR-0026 §决策 2：非顶层字段被拒 → 置空 + warning，搜索结果照常返回。
         final BookSource withJs = source.copyWith(
           searchRule: source.searchRule.copyWith(name: '@js:result'),
         );
 
-        final ParseFailure<Never> failure = _failure(
-          await SearchBooks(pages: service.pages).execute(withJs, '剑来'),
-        );
+        final ParseResult<List<Book>> result = await SearchBooks(
+          pages: service.pages,
+        ).execute(withJs, '剑来');
 
-        expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@js:');
+        expect(result.dataOrNull, isNotEmpty);
+        expect(result.dataOrNull?.first.name, isEmpty);
+        expect(
+          service.printer.events.last.message.toString(),
+          allOf(contains('searchRule.name'), contains(source.url)),
+        );
       },
     );
 
@@ -264,6 +302,72 @@ void main() {
         _bookUrl,
         _bookUrl,
         _chapterUrl,
+      ]);
+      expect(http.requestedRulePaths, <String>[
+        'searchUrl',
+        'ruleBookInfo',
+        'ruleToc',
+        'ruleContent',
+      ]);
+    });
+
+    test('chain_givenJsonSourceAndCorpusPages_replaysEveryStage', () async {
+      // 矩阵 #13 的同一件事，只是响应体是 JSON：**生产链路**（UseCase →
+      // renderUrlTemplate → HttpClient → RuleEngine → RuleScope）在真实 JSON 书源上
+      // 跑通搜索 → 详情 → 目录 → 正文。语料的来源与那 2 条 M1 改写见
+      // `test/fixtures/json/README.md`。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_jsonSearchUrl, _jsonPage('search.json'))
+        ..serve(_jsonBookUrl, _jsonPage('book.json'))
+        ..serve(_jsonChapterUrl, _jsonPage('content.json'));
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(http);
+      final BookSource source = _jsonSource();
+
+      final List<Book> books = _data(
+        await SearchBooks(pages: service.pages).execute(source, '剑来'),
+      );
+      // `bookList` 是 `@json:$.all_book_items[*]||@json:$.guess_like_items[*]`：第一个候选
+      // 就有值，所以 `guess_like_items` 根本不会被用到，结果只有 1 条。
+      expect(books, hasLength(1));
+      expect(books.first.name, '书名一');
+      expect(books.first.author, '作者甲');
+      expect(books.first.kind, '武侠');
+      expect(books.first.lastChapter, '第1章 开端');
+      expect(books.first.url, _jsonBookUrl);
+      // JSON 里的相对封面地址仍按当前页解析成绝对地址（C-SRC-5）。
+      expect(books.first.coverUrl, 'https://example-novel.test/cover/1.jpg');
+
+      final BookInfo info = _data(
+        await FetchBookInfo(pages: service.pages)
+            .execute(source, books.first.url),
+      );
+      // 嵌套路径 `$.coverInfo.desc`。
+      expect(info.intro, '简介一。');
+      // `ruleBookInfo` 没有 `tocUrl` 规则 → 回落到书籍页本身（上游行为）。
+      expect(info.tocUrl, _jsonBookUrl);
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: service.pages).execute(source, info.tocUrl),
+      );
+      expect(chapters, hasLength(2));
+      expect(chapters.first.name, '第1章 开端');
+      expect(chapters.first.url, _jsonChapterUrl);
+      expect(chapters.last.name, '第2章 转折');
+
+      final String content = _data(
+        await FetchContent(pages: service.pages)
+            .execute(source, chapters.first.url),
+      );
+      // JSON 里的 `\n` 是转义序列，解出来是一个真正的换行。
+      expect(content, '正文第一段。\n正文第二段。');
+
+      // 四段请求的地址与规则路径，证明 URL 模板、关键词编码与相对地址解析都走了生产代码。
+      expect(http.requestedUrls, <String>[
+        _jsonSearchUrl,
+        _jsonBookUrl,
+        _jsonBookUrl,
+        _jsonChapterUrl,
       ]);
       expect(http.requestedRulePaths, <String>[
         'searchUrl',

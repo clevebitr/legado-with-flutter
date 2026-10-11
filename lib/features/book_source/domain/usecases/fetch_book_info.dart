@@ -2,8 +2,8 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
-import 'package:html/dom.dart';
 
 /// Reads the detail page of one book (`PLAN.md` 2.4, `ruleBookInfo`).
 final class FetchBookInfo {
@@ -14,89 +14,82 @@ final class FetchBookInfo {
 
   /// Fetches [url] and reads the book detail from it.
   ///
-  /// A field whose rule is absent or matched nothing stays `null`, so an absent
-  /// cover or intro is not fatal; a **rejected** rule aborts the stage and travels
-  /// as [ParseFailureKind.unsupportedRule], so a source that needs a later phase is
-  /// reported instead of yielding a half-filled book (C-SRC-4).
+  /// A field whose rule is absent, matched nothing or was **rejected** stays `null`
+  /// (ADR-0026 §决策 2), so an absent cover or intro is not fatal and an unsupported
+  /// optional field no longer costs the whole detail page; the degradation is logged
+  /// with its `rulePath` and the book source id (C-SRC-8, C-ERR-8). A *malformed*
+  /// rule still travels as a failure (C-SRC-4).
   Future<ParseResult<BookInfo>> execute(BookSource source, String url) async {
-    final ParseResult<Document> page = await _pages.fetch(
+    final ParseResult<RuleScope> page = await _pages.fetch(
       url,
       rulePath: 'ruleBookInfo',
     );
 
     return switch (page) {
-      ParseFailure<Document>(
+      ParseFailure<RuleScope>(
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
         failureAt<BookInfo>(kind: kind, rulePath: failedAt),
-      ParseSuccess<Document>(:final Document data) => _read(source, url, data),
+      ParseSuccess<RuleScope>(:final RuleScope data) => _read(
+        source,
+        url,
+        data,
+      ),
     };
   }
 
-  /// Reads every `ruleBookInfo` field out of [document].
-  ParseResult<BookInfo> _read(
-    BookSource source,
-    String url,
-    Document document,
-  ) {
+  /// Reads every `ruleBookInfo` field out of [scope].
+  ParseResult<BookInfo> _read(BookSource source, String url, RuleScope scope) {
     final BookInfoRule? rules = source.bookInfoRule;
     final ParseResult<String?> name = _pages.field(
       rules?.name,
-      document,
+      scope,
       'bookInfoRule.name',
+      sourceId: source.url,
     );
     final ParseResult<String?> author = _pages.field(
       rules?.author,
-      document,
+      scope,
       'bookInfoRule.author',
+      sourceId: source.url,
     );
     final ParseResult<String?> kind = _pages.field(
       rules?.kind,
-      document,
+      scope,
       'bookInfoRule.kind',
+      sourceId: source.url,
     );
     final ParseResult<String?> coverUrl = _pages.field(
       rules?.coverUrl,
-      document,
+      scope,
       'bookInfoRule.coverUrl',
+      sourceId: source.url,
     );
     final ParseResult<String?> intro = _pages.field(
       rules?.intro,
-      document,
+      scope,
       'bookInfoRule.intro',
+      sourceId: source.url,
     );
     final ParseResult<String?> lastChapter = _pages.field(
       rules?.lastChapter,
-      document,
+      scope,
       'bookInfoRule.lastChapter',
+      sourceId: source.url,
     );
     final ParseResult<String?> wordCount = _pages.field(
       rules?.wordCount,
-      document,
+      scope,
       'bookInfoRule.wordCount',
+      sourceId: source.url,
     );
     final ParseResult<String?> tocUrl = _pages.field(
       rules?.tocUrl,
-      document,
+      scope,
       'bookInfoRule.tocUrl',
+      sourceId: source.url,
     );
-
-    final ParseFailure<BookInfo>? failure = firstFailure<BookInfo>(
-      <ParseResult<Object?>>[
-        name,
-        author,
-        kind,
-        coverUrl,
-        intro,
-        lastChapter,
-        wordCount,
-        tocUrl,
-      ],
-    );
-    if (failure != null) {
-      return failure;
-    }
 
     final String? toc = tocUrl.dataOrNull;
 

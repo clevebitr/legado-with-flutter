@@ -119,28 +119,6 @@ ParseFailure<T> failureAt<T>({
   );
 }
 
-/// Returns the first failure among [results], or `null` when all of them succeeded.
-///
-/// The book source use cases read several fields of one item and must propagate a
-/// rejected rule instead of silently dropping it (C-SRC-4). Fanning those results in
-/// here keeps that rule in one place rather than repeating one `switch` per field.
-/// The returned failure is rebuilt for [T] because a `ParseFailure<String?>` is not
-/// assignable to a `ParseResult<List<Book>>`; [ParseFailure.cause] and
-/// [ParseFailure.stackTrace] are diagnostics of the original failure and are not
-/// carried over.
-ParseFailure<T>? firstFailure<T>(Iterable<ParseResult<Object?>> results) {
-  for (final ParseResult<Object?> result in results) {
-    if (result case ParseFailure<Object?>(
-      :final ParseFailureKind kind,
-      rulePath: final String failedAt,
-    )) {
-      return failureAt<T>(kind: kind, rulePath: failedAt);
-    }
-  }
-
-  return null;
-}
-
 /// Convenience accessors for [ParseResult].
 extension ParseResultExtension<T> on ParseResult<T> {
   /// Returns the wrapped data, or `null` when the result is a failure.

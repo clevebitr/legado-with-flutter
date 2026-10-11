@@ -3,8 +3,8 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
-import 'package:html/dom.dart';
 import 'package:html/parser.dart' as parser;
 
 /// Fetches one page of a book source and reads rules from it.
@@ -33,12 +33,17 @@ final class PageFetchService {
   final HttpClient _http;
   final AppLogger _logger;
 
-  /// Fetches [url] and parses the body into a document.
+  /// Fetches [url] and parses the body into a page scope.
+  ///
+  /// The scope carries both the parsed DOM and the raw body, because the **rule**
+  /// decides which of the two it reads (matrix #12 / #13), and one fetched page is
+  /// read by a whole field set whose rules need not agree: a `bookList` of `$.data…`
+  /// and a `content` of `class.content@text` may come from the same response.
   ///
   /// [rulePath] names the book source field the request belongs to, so a failure
   /// stays locatable (C-SRC-8); [keyword] is passed through so the HTTP client can
   /// keep a search keyword out of its failure logs (ADR-0006 §5).
-  Future<ParseResult<Document>> fetch(
+  Future<ParseResult<RuleScope>> fetch(
     String url, {
     required String rulePath,
     String? keyword,
@@ -54,9 +59,9 @@ final class PageFetchService {
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
-        failureAt<Document>(kind: kind, rulePath: failedAt),
+        failureAt<RuleScope>(kind: kind, rulePath: failedAt),
       ParseSuccess<HttpResponse>(:final HttpResponse data) => ParseSuccess(
-        parser.parse(data.body),
+        RuleScope.dom(parser.parse(data.body), body: data.body),
       ),
     };
   }
@@ -65,34 +70,87 @@ final class PageFetchService {
   ///
   /// A `null` value means the rule matched nothing, which is a **success** here: the
   /// caller decides whether that field is required, because only the caller knows
-  /// whether the rule is top-level (`book-source.md` §7). A rejected or malformed
-  /// rule comes back as [ParseFailure], so the caller propagates it by switching once
-  /// instead of inspecting kinds itself (C-ERR-1).
-  ParseResult<String?> field(String? rule, Node scope, String rulePath) =>
-      _engine.extractFirst(rule ?? '', scope, rulePath: rulePath);
+  /// whether the rule is top-level (`book-source.md` §7).
+  ///
+  /// A non-top-level field whose rule was **rejected** or is **malformed** degrades to
+  /// `null` plus a warning carrying `rulePath` and the book source id (ADR-0026
+  /// §决策 2/4): one bad optional field must not cost the whole stage, and for the
+  /// caller “unsupported syntax” and “broken rule” have the same consequence — losing
+  /// that one field. Escalating a malformed rule instead would be worse than useless:
+  /// the callers read `dataOrNull`, so it would turn into a silent `null` with no
+  /// record at all. C-SRC-4 is satisfied by the explicit degradation plus its warning.
+  ParseResult<String?> field(
+    String? rule,
+    RuleScope scope,
+    String rulePath, {
+    required String sourceId,
+  }) {
+    final ParseResult<String?> parsed = _engine.extractFirst(
+      rule ?? '',
+      scope,
+      rulePath: rulePath,
+    );
 
-  /// Returns every element matched by a **top-level list** rule.
+    return switch (parsed) {
+      ParseFailure<String?>(:final ParseFailureKind kind)
+          when kind == ParseFailureKind.unsupportedRule ||
+              kind == ParseFailureKind.parseFailed =>
+        _degrade(sourceId, rulePath, kind),
+      _ => parsed,
+    };
+  }
+
+  /// Logs a degraded optional field and turns it into “no value” (ADR-0026).
+  ///
+  /// The message carries the field, the failure kind and the source, never a page body
+  /// or a keyword (C-ERR-8, C-SEC-4).
+  ParseResult<String?> _degrade(
+    String sourceId,
+    String rulePath,
+    ParseFailureKind kind,
+  ) {
+    _logger.warning(
+      'Field rule degraded to empty: source=$sourceId field=$rulePath '
+      'kind=${kind.name}',
+    );
+
+    return const ParseSuccess<String?>(null);
+  }
+
+  /// Returns every match of a **top-level list** rule.
   ///
   /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7).
-  ParseResult<List<Element>> list(String? rule, Node scope, String rulePath) {
-    final ParseResult<List<Element>> result = _engine.selectAll(
+  ParseResult<List<RuleScope>> list(
+    String? rule,
+    RuleScope scope,
+    String rulePath,
+  ) {
+    final ParseResult<List<RuleScope>> result = _engine.selectAll(
       rule ?? '',
       scope,
       rulePath: rulePath,
     );
 
     return switch (result) {
-      ParseSuccess<List<Element>>(:final List<Element> data) =>
-        data.isEmpty ? _noMatch(rulePath) : ParseSuccess<List<Element>>(data),
-      ParseFailure<List<Element>>() => result,
+      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) =>
+        data.isEmpty ? _noMatch(rulePath) : ParseSuccess<List<RuleScope>>(data),
+      ParseFailure<List<RuleScope>>() => result,
     };
   }
 
   /// Returns the single value of the **top-level content** rule.
   ///
   /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7).
-  ParseResult<String> content(String? rule, Node scope, String rulePath) {
-    final ParseResult<String?> parsed = field(rule, scope, rulePath);
+  ///
+  /// A rejected `content` rule stays a failure: it is top-level, so ADR-0026 §决策 1
+  /// applies and the degradation of [field] deliberately does not. The engine is
+  /// therefore called directly here.
+  ParseResult<String> content(String? rule, RuleScope scope, String rulePath) {
+    final ParseResult<String?> parsed = _engine.extractFirst(
+      rule ?? '',
+      scope,
+      rulePath: rulePath,
+    );
 
     return switch (parsed) {
       ParseFailure<String?>(
