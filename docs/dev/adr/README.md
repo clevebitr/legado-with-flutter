@@ -49,3 +49,4 @@
 | [0025](0025-domain-services-and-parsing-components.md) | domain 允许无状态领域服务与解析构件（登记 F1 偏离） | Accepted（架构师 PR 评审指令裁决（F1）） | 本次新增 |
 | [0026](0026-optional-field-rejection-degrades-to-warning.md) | 非顶层字段被拒时降级为 warning，顶层规则仍整次失败（登记 F6 裁决） | Accepted（架构师裁决 F6） | 本次新增 |
 | [0027](0027-docs-topic-realignment.md) | 文档按主题重排：事实级归属矩阵与去重 | Accepted（2026-10-11 文档审计裁决） | 本次审计 |
+| [0028](0028-rule-scope-and-json-rules.md) | 规则 scope 显式化为 `RuleScope`，`@json:` 与默认 / `@css:` 规则共用一条读取路径 | Accepted（架构师裁决「RuleScope」；细节由本 PR 登记） | 本次新增 |

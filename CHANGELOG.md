@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Rule connectors, field degradation and JSON rules for the 3.2 slice (2026-10-11)
+
+- **The three rule connectors are implemented** (matrix #10 `||`, #11 `&&`, #27 `%%`). `||`
+  splits into candidates, of which the first that produces a value wins; `&&` merges the
+  branches of one candidate as a **union in rule order** and `%%` interleaves them
+  ("交叉取数"), both from the same scope. The splitter is quote-, bracket- and paren-aware, so
+  a separator inside `[...]`, `(...)` or a quoted string does not split. Merging branches of
+  **different** kinds is rejected instead of guessed: a JSON branch merged with a default or
+  `@css:` branch is `parseFailed` at the field (`book-source.md` §3, the `&&` note), which is
+  also what the previous slice's value-branch-in-a-list-rule case relies on.
+- **A rejected or malformed optional field degrades to "no value" plus a warning**
+  (ADR-0026 §决策 2/4, `PageFetchService.field`). Both `unsupportedRule` and `parseFailed`
+  degrade, with `rulePath`, the failure kind and the book source id in the message; the
+  top-level `list()` / `content()` rules still fail the stage (`book-source.md` §7). Degrading
+  the malformed case matters because the callers read `dataOrNull`: escalating it would have
+  produced a `null` with no record at all.
+- **Matrix #13 (`@json:`, including the bare `$.` / `$[` form) is implemented** on a new
+  `RuleScope` (ADR-0028). A branch reads either the DOM or JSON and **the rule decides**,
+  which works because a whole page is a DOM scope that carries the raw body it was parsed
+  from — one fetched page can serve a `bookList` of `$.data…` and a `content` of
+  `class.content@text` at once. List rules return matches as scopes, so a JSON list
+  (`bookList: "$.data.list[*]"`) hands each object to the field rules the same way an element
+  does. A scope that cannot answer a branch is `parseFailed` with the field path — the syntax
+  is supported, this page just cannot answer it — instead of a silent empty result
+  (C-SRC-4).
+- **`@json:` is recognised before the `@`-split, and the path is parsed while the rule is
+  read.** A JSONPath filter carries an `@` of its own (`$[?(@.a==1 && @.b==2)]`), so splitting
+  first would tear the path apart; parsing the path while reading the rule turns a malformed
+  one into a locatable `parseFailed` with the field path rather than an unlocatable throw
+  from the matcher (C-SRC-8), exactly as `@css:` already does for its selector.
+- **JSON values → values:** a string is its own value, a number or boolean is written the way
+  JSON writes it, `null` and an empty string produce **no value** (matrix #8's convention),
+  and an object or array is returned as JSON text. Upstream's Java `toString` of a map
+  (`{a=1}`) is not reproducible and no rule can rely on it, so the lossless form is used
+  **until the real-corpus regression of `book-source.md` §10 says otherwise**.
+- **3.6 (the nine `ParseFailureKind` values and where each is triggered) is accounted for:**
+  `networkTimeout` and `cancelled` in `HttpClient`'s error mapping; `networkFailed` for a
+  transport failure and for the statuses no closer bucket covers; `networkForbidden` (403) and
+  `notFound` (404) by status; `encodingFailed` when charset detection or decoding fails;
+  `parseFailed` for a top-level rule that matched nothing and for a rule that is structurally
+  broken or cannot be answered by the scope; `unsupportedRule` for a syntax a later phase
+  owns; `invalidBookSource` for an import that misses a required field and for a source whose
+  `searchUrl` is absent. The retryable column of `book-source.md` §7 is implemented by
+  `ParseFailureKind.isRetryable`, which `test/core/error/parse_result_test.dart` asserts for
+  the transient and the permanent kinds, so the table and the code cannot drift.
+- **A JSON-API replay corpus closes the second link of G3's two-source requirement.**
+  `test/fixtures/json/` (three constructed response pages) plus the sanitized real export
+  `test/fixtures/book_sources/legado_json_source.json` are driven end to end by
+  `chain_givenJsonSourceAndCorpusPages_replaysEveryStage`, which exercises a nested path
+  (`$.coverInfo.desc`), the first-non-empty `||` candidate, a relative cover URL, a JSON
+  string's `\n`, and the four request URLs against the real query string. To find a source
+  that could be replayed verbatim, 211 public sources were scanned: only **2** use `@json:`,
+  and **0** of them replay under M0, because both build their book URLs with M1's
+  `{$.x}` / `{{$.x}}` / `@put:` / `@get:` templates. The corpus therefore has exactly one
+  registered deviation — `ruleSearch.bookUrl` and `ruleToc.chapterUrl` are rewritten to the
+  equivalent pure JSONPath, with the originals kept in `test/fixtures/json/README.md`. The
+  scan is also the evidence that **#16–#19 should be re-prioritised after 3.3**.
+- **ADR-0028's decision records were corrected after review.** Decision 2 had justified
+  moving the scope choice into branch evaluation with `$.a||class.b`; that reason is false
+  and was removed — a measured `extractAll('$.a||class.b@text', DomScope(html))` returns
+  `parseFailed`, because `||` stops at the first failing candidate (it never falls back to
+  the DOM branch). The mixed-scope boundary is now pinned by
+  `extractAll_givenMixedScopeOr_returnsParseFailed`, and decision 3 was narrowed to the real
+  asymmetry: a JSON rule on a body-less DOM scope, or on a non-JSON body, is `parseFailed`,
+  while a DOM rule on a JSON page is an **empty success** (`extractAll_givenADomRuleOnAJsonPage_returnsAnEmptySuccess`)
+  rather than a failure. The suite is now **353** tests, `core` 336/336 and `domain` 881/881,
+  with the six gate commands green.
+
 ### CSS selection for the 3.2 slice: the `@css:` flag and the jsoup index pseudos (2026-10-11)
 
 - **Matrix #12 (`@css:`) is implemented.** The rest of the segment goes to cascadia

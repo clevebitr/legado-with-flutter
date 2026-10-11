@@ -2,8 +2,8 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
-import 'package:html/dom.dart';
 
 /// Searches one book source for a keyword (`PLAN.md` 2.4, `searchUrl`).
 final class SearchBooks {
@@ -40,41 +40,45 @@ final class SearchBooks {
       'key': keyword,
       'page': '$page',
     });
-    final ParseResult<Document> response = await _pages.fetch(
+    final ParseResult<RuleScope> response = await _pages.fetch(
       url,
       rulePath: 'searchUrl',
       keyword: keyword,
     );
 
     return switch (response) {
-      ParseFailure<Document>(
+      ParseFailure<RuleScope>(
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
         failureAt<List<Book>>(kind: kind, rulePath: failedAt),
-      ParseSuccess<Document>(:final Document data) => _read(source, url, data),
+      ParseSuccess<RuleScope>(:final RuleScope data) => _read(
+        source,
+        url,
+        data,
+      ),
     };
   }
 
-  /// Reads every search hit out of [document].
+  /// Reads every search hit out of [scope].
   ParseResult<List<Book>> _read(
     BookSource source,
     String baseUrl,
-    Document document,
+    RuleScope scope,
   ) {
-    final ParseResult<List<Element>> items = _pages.list(
+    final ParseResult<List<RuleScope>> items = _pages.list(
       source.searchRule.bookList,
-      document,
+      scope,
       'searchRule.bookList',
     );
 
     return switch (items) {
-      ParseFailure<List<Element>>(
+      ParseFailure<List<RuleScope>>(
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
         failureAt<List<Book>>(kind: kind, rulePath: failedAt),
-      ParseSuccess<List<Element>>(:final List<Element> data) => _books(
+      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) => _books(
         source,
         baseUrl,
         data,
@@ -85,73 +89,67 @@ final class SearchBooks {
   /// Reads one [Book] per item, dropping the items without a usable URL.
   ///
   /// A field whose rule matched nothing falls back to `null` (and to an empty name),
-  /// because only the URL is required to open a hit; a **rejected** rule aborts the
-  /// stage instead of producing a half-filled book (C-SRC-4).
+  /// because only the URL is required to open a hit. A **rejected** optional field
+  /// degrades the same way with a warning (ADR-0026 §决策 2): one unsupported field
+  /// must not cost the whole search. A rejected `bookList` is top-level and still
+  /// fails the stage, which happens in [PageFetchService.list].
   ParseResult<List<Book>> _books(
     BookSource source,
     String baseUrl,
-    List<Element> items,
+    List<RuleScope> items,
   ) {
     final SearchRule rules = source.searchRule;
     final List<Book> books = <Book>[];
 
-    for (final Element item in items) {
+    for (final RuleScope item in items) {
       final ParseResult<String?> name = _pages.field(
         rules.name,
         item,
         'searchRule.name',
+        sourceId: source.url,
       );
       final ParseResult<String?> bookUrl = _pages.field(
         rules.bookUrl,
         item,
         'searchRule.bookUrl',
+        sourceId: source.url,
       );
       final ParseResult<String?> author = _pages.field(
         rules.author,
         item,
         'searchRule.author',
+        sourceId: source.url,
       );
       final ParseResult<String?> kind = _pages.field(
         rules.kind,
         item,
         'searchRule.kind',
+        sourceId: source.url,
       );
       final ParseResult<String?> coverUrl = _pages.field(
         rules.coverUrl,
         item,
         'searchRule.coverUrl',
+        sourceId: source.url,
       );
       final ParseResult<String?> intro = _pages.field(
         rules.intro,
         item,
         'searchRule.intro',
+        sourceId: source.url,
       );
       final ParseResult<String?> lastChapter = _pages.field(
         rules.lastChapter,
         item,
         'searchRule.lastChapter',
+        sourceId: source.url,
       );
       final ParseResult<String?> wordCount = _pages.field(
         rules.wordCount,
         item,
         'searchRule.wordCount',
+        sourceId: source.url,
       );
-
-      final ParseFailure<List<Book>>? failure = firstFailure<List<Book>>(
-        <ParseResult<Object?>>[
-          name,
-          bookUrl,
-          author,
-          kind,
-          coverUrl,
-          intro,
-          lastChapter,
-          wordCount,
-        ],
-      );
-      if (failure != null) {
-        return failure;
-      }
 
       final String? url = bookUrl.dataOrNull;
       if (url == null || url.isEmpty) {

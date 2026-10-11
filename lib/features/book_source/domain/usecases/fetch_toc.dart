@@ -2,8 +2,8 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
-import 'package:html/dom.dart';
 
 /// Reads the table of contents of one book (`PLAN.md` 2.4, `ruleToc`).
 ///
@@ -24,41 +24,45 @@ final class FetchToc {
     BookSource source,
     String url,
   ) async {
-    final ParseResult<Document> page = await _pages.fetch(
+    final ParseResult<RuleScope> page = await _pages.fetch(
       url,
       rulePath: 'ruleToc',
     );
 
     return switch (page) {
-      ParseFailure<Document>(
+      ParseFailure<RuleScope>(
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
         failureAt<List<Chapter>>(kind: kind, rulePath: failedAt),
-      ParseSuccess<Document>(:final Document data) => _read(source, url, data),
+      ParseSuccess<RuleScope>(:final RuleScope data) => _read(
+        source,
+        url,
+        data,
+      ),
     };
   }
 
-  /// Reads every chapter entry out of [document].
+  /// Reads every chapter entry out of [scope].
   ParseResult<List<Chapter>> _read(
     BookSource source,
     String baseUrl,
-    Document document,
+    RuleScope scope,
   ) {
     final TocRule rules = source.tocRule;
-    final ParseResult<List<Element>> items = _pages.list(
+    final ParseResult<List<RuleScope>> items = _pages.list(
       rules.chapterList,
-      document,
+      scope,
       'tocRule.chapterList',
     );
 
     return switch (items) {
-      ParseFailure<List<Element>>(
+      ParseFailure<List<RuleScope>>(
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
         failureAt<List<Chapter>>(kind: kind, rulePath: failedAt),
-      ParseSuccess<List<Element>>(:final List<Element> data) => _chapters(
+      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) => _chapters(
         source,
         rules,
         baseUrl,
@@ -69,34 +73,30 @@ final class FetchToc {
 
   /// Reads one [Chapter] per item, dropping the entries without a URL.
   ///
-  /// A chapter name whose rule matched nothing falls back to an empty string; a
-  /// **rejected** rule aborts the stage (C-SRC-4).
+  /// A chapter name whose rule matched nothing or was **rejected** falls back to an
+  /// empty string with a warning (ADR-0026 §决策 2); a rejected `chapterList` is
+  /// top-level and still fails the stage, which happens in [PageFetchService.list].
   ParseResult<List<Chapter>> _chapters(
     BookSource source,
     TocRule rules,
     String baseUrl,
-    List<Element> items,
+    List<RuleScope> items,
   ) {
     final List<Chapter> chapters = <Chapter>[];
 
-    for (final Element item in items) {
+    for (final RuleScope item in items) {
       final ParseResult<String?> name = _pages.field(
         rules.chapterName,
         item,
         'tocRule.chapterName',
+        sourceId: source.url,
       );
       final ParseResult<String?> url = _pages.field(
         rules.chapterUrl,
         item,
         'tocRule.chapterUrl',
+        sourceId: source.url,
       );
-
-      final ParseFailure<List<Chapter>>? failure = firstFailure<List<Chapter>>(
-        <ParseResult<Object?>>[name, url],
-      );
-      if (failure != null) {
-        return failure;
-      }
 
       final String? chapterUrl = url.dataOrNull;
       if (chapterUrl == null || chapterUrl.isEmpty) {

@@ -126,7 +126,7 @@ void main() {
     });
 
     test(
-      'execute_givenUnsupportedFieldRule_propagatesUnsupportedRule',
+      'execute_givenUnsupportedFieldRule_degradesToEmptyWithAWarning',
       () async {
         final FakeHttpClient http = FakeHttpClient()
           ..serve(_tocUrl, _page('book_page.html'));
@@ -134,13 +134,20 @@ void main() {
         final BookSource withJs = source.copyWith(
           tocRule: source.tocRule.copyWith(chapterName: '@js:result'),
         );
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
+            _service(http);
 
-        final ParseFailure<Never> failure = _failure(
-          await FetchToc(pages: _service(http).pages).execute(withJs, _tocUrl),
+        final ParseResult<List<Chapter>> result = await FetchToc(
+          pages: service.pages,
+        ).execute(withJs, _tocUrl);
+
+        // ADR-0026 §决策 2：非顶层字段被拒 → 章节名回落为空串，目录照常返回。
+        expect(result.dataOrNull, isNotEmpty);
+        expect(result.dataOrNull?.first.name, isEmpty);
+        expect(
+          service.printer.events.last.message.toString(),
+          allOf(contains('tocRule.chapterName'), contains(source.url)),
         );
-
-        expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@js:');
       },
     );
   });

@@ -109,7 +109,7 @@ void main() {
     });
 
     test(
-      'execute_givenUnsupportedFieldRule_propagatesUnsupportedRule',
+      'execute_givenUnsupportedFieldRule_degradesToEmptyWithAWarning',
       () async {
         final FakeHttpClient http = FakeHttpClient()
           ..serve(_bookUrl, _page('book_page.html'));
@@ -117,13 +117,66 @@ void main() {
         final BookSource withJs = source.copyWith(
           bookInfoRule: source.bookInfoRule?.copyWith(intro: '@js:result'),
         );
-
-        final ParseFailure<Never> failure = _failure(
-          await FetchBookInfo(pages: _service(http)).execute(withJs, _bookUrl),
+        final FakeLogPrinter printer = FakeLogPrinter();
+        final AppLogger logger = AppLogger(
+          level: LogLevel.debug,
+          printer: printer,
         );
 
-        expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@js:');
+        final ParseResult<BookInfo> result = await FetchBookInfo(
+          pages: PageFetchService(
+            engine: RuleEngine(logger: logger),
+            http: http,
+            logger: logger,
+          ),
+        ).execute(withJs, _bookUrl);
+
+        // ADR-0026 §决策 2：非顶层字段被拒 → 置空 + warning，整页照常返回。
+        expect(result.dataOrNull, isNotNull);
+        expect(result.dataOrNull?.intro, isNull);
+        expect(
+          printer.events.last.message.toString(),
+          allOf(contains('bookInfoRule.intro'), contains(source.url)),
+        );
+      },
+    );
+
+    test(
+      'execute_givenMalformedFieldRule_degradesToEmptyWithAWarning',
+      () async {
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_bookUrl, _page('book_page.html'));
+        final BookSource source = _source();
+        // ADR-0026 §决策 2 的复审修订：非顶层字段**畸形**（`tag@text` 的选择器段缺名称 →
+        // parseFailed）与「被拒」同口径降级 —— 若上抛，调用方只取 dataOrNull，会静默变成 null。
+        // 注意单段值规则（如 `class.`）是**属性名**而不是选择器，不会走到这条路径。
+        final BookSource malformed = source.copyWith(
+          bookInfoRule: source.bookInfoRule?.copyWith(intro: 'tag@text'),
+        );
+        final FakeLogPrinter printer = FakeLogPrinter();
+        final AppLogger logger = AppLogger(
+          level: LogLevel.debug,
+          printer: printer,
+        );
+
+        final ParseResult<BookInfo> result = await FetchBookInfo(
+          pages: PageFetchService(
+            engine: RuleEngine(logger: logger),
+            http: http,
+            logger: logger,
+          ),
+        ).execute(malformed, _bookUrl);
+
+        expect(result.dataOrNull, isNotNull);
+        expect(result.dataOrNull?.intro, isNull);
+        expect(
+          printer.events.last.message.toString(),
+          allOf(
+            contains('bookInfoRule.intro'),
+            contains(ParseFailureKind.parseFailed.name),
+            contains(source.url),
+          ),
+        );
       },
     );
 

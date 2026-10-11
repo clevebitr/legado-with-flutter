@@ -1,0 +1,19 @@
+{
+  "coverInfo": {
+    "desc": "简介一。"
+  },
+  "volumes": [
+    {
+      "chapters": [
+        {
+          "chapterUrl": "https://example-novel.test/book/1/1.html",
+          "chapter_name": "第1章 开端"
+        },
+        {
+          "chapterUrl": "https://example-novel.test/book/1/2.html",
+          "chapter_name": "第2章 转折"
+        }
+      ]
+    }
+  ]
+}

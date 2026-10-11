@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:cascadia/cascadia.dart' as cascadia;
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:html/dom.dart';
+import 'package:json_path/json_path.dart';
 
 /// Prefixes of the rule flags that a later phase of the matrix owns.
 ///
@@ -11,12 +15,9 @@ import 'package:html/dom.dart';
 const List<String> _deferredFlags = <String>[
   '{{',
   '//',
-  r'$.',
-  r'$[',
   '{',
   ':',
   '@@',
-  '@json:',
   '@js:',
   '@xpath:',
   '@put:',
@@ -24,11 +25,11 @@ const List<String> _deferredFlags = <String>[
   '@webjs',
 ];
 
-/// Operators that join several rules; matrix #10 / #11 / #27 own them.
-const List<String> _deferredOperators = <String>['||', '&&', '%%'];
-
 /// The `@css:` flag of matrix #12, lower-cased for a case-insensitive compare.
 const String _cssFlag = '@css:';
+
+/// The `@json:` flag of matrix #13, lower-cased for a case-insensitive compare.
+const String _jsonFlag = '@json:';
 
 /// jsoup's index pseudo-classes and the cascadia form each maps onto (matrix #29).
 ///
@@ -83,10 +84,34 @@ final RegExp _whitespace = RegExp(r'\s+');
 /// | #7 | a leading `-`, reversing the result list |
 /// | #8 | extraction `text`, `textNodes`, `ownText`, `html`, `all`, or an attribute name |
 /// | #9 | `##regex##replacement`, with `$1` / `${name}` group references |
+/// | #10 | `||`, taking the first candidate that produced a value |
+/// | #11 | `&&`, merging the branches of one candidate (union, not chaining) |
+/// | #27 | `%%`, interleaving the branches of one candidate |
 /// | #12 | the `@css:` flag, handing the rest of the segment to cascadia |
+/// | #13 | the `@json:` flag and the bare `$.` / `$[` form, read as JSONPath |
 /// | #26 | the `[...]` index list, with ranges, steps and `[!...]` exclusion |
 /// | #28 | an index as the first rule of a segment (`.1` / `[1]` / `children[1]`) |
 /// | #29 | the jsoup index pseudo-classes `:eq` / `:gt` / `:lt`, rewritten onto `:nth-child` |
+///
+/// A branch reads its scope ([RuleScope]) as DOM or as JSON, and the rule decides
+/// which: the default rules and `@css:` need a [DomScope], `@json:` and the bare
+/// `$.` / `$[` form need JSON. A whole page answers both, because [RuleScope.dom]
+/// carries the raw body it was parsed from.
+///
+/// The two directions do **not** fail alike, and the difference decides what a book
+/// source sees when it no longer matches the site:
+///
+/// * a **JSON** branch against a DOM scope with no body — an element, or one of its
+///   matches — is [ParseFailureKind.parseFailed] with the field path, and so is one
+///   whose page body is not JSON at all: there is nothing to read;
+/// * a **DOM** branch against a page whose body is JSON is **not** a failure: the page
+///   is a parsed document like any other, so a selector that matches nothing is the
+///   ordinary “success with no match” of matrix #8. Only a match that *is* a JSON
+///   value has no DOM at all, and that is [ParseFailureKind.parseFailed] as well.
+///
+/// Reporting those mismatches loudly is what keeps them from becoming a silent empty
+/// result (C-SRC-4): otherwise “the rule is wrong” and “the site changed” look the
+/// same in the UI.
 ///
 /// Everything else in the matrix is reported as
 /// [ParseFailureKind.unsupportedRule] — never silently mis-parsed (C-SRC-4) — with
@@ -114,30 +139,204 @@ final class RuleEngine {
   /// the caller's decision, because only the caller knows whether [rule] is a
   /// top-level rule (`docs/dev/book-source.md` §7). A blank [rule] is also a
   /// success with no elements, since real exports use `""` for absent fields.
-  ParseResult<List<Element>> selectAll(
+  ParseResult<List<RuleScope>> selectAll(
     String rule,
-    Node scope, {
+    RuleScope scope, {
     required String rulePath,
   }) {
     if (rule.trim().isEmpty) {
-      return const ParseSuccess<List<Element>>(<Element>[]);
+      return const ParseSuccess<List<RuleScope>>(<RuleScope>[]);
     }
 
     final _ParsedRule parsed = _parse(rule);
-    final _Parsed<List<_SelectorStep>> check = _check(
+    final _Parsed<List<_CheckedCandidate>> check = _check(
       parsed,
       field: rulePath,
       hasExtraction: false,
     );
 
     return switch (check) {
-      _ParsedFailure<List<_SelectorStep>>(:final _RuleRejection rejection) =>
-        _fail<List<Element>>(rejection, field: rulePath),
-      _ParsedValue<List<_SelectorStep>>(:final List<_SelectorStep> value) =>
-        ParseSuccess<List<Element>>(
-          _run(value, scope, reverse: parsed.reverse),
-        ),
+      _ParsedFailure<List<_CheckedCandidate>>(
+        :final _RuleRejection rejection,
+      ) =>
+        _fail<List<RuleScope>>(rejection, field: rulePath),
+      _ParsedValue<List<_CheckedCandidate>>(
+        :final List<_CheckedCandidate> value,
+      ) =>
+        switch (_selectAll(value, scope, field: rulePath)) {
+          _ParsedFailure<List<RuleScope>>(:final _RuleRejection rejection) =>
+            _fail<List<RuleScope>>(rejection, field: rulePath),
+          _ParsedValue<List<RuleScope>>(:final List<RuleScope> value) =>
+            ParseSuccess<List<RuleScope>>(
+              parsed.reverse ? value.reversed.toList(growable: false) : value,
+            ),
+        },
     };
+  }
+
+  /// Runs the candidates of a list rule and returns the first non-empty one
+  /// (matrix #10's `||`).
+  ///
+  /// A candidate that **fails** ends the rule: later candidates are not tried, because a
+  /// failure says the rule and the page disagree, not that this candidate happened to
+  /// match nothing (C-SRC-4). Only “succeeded but matched nothing” moves on to the next
+  /// candidate — that is what makes `$.a||$.b` a fallback.
+  ///
+  /// Reversing the result (matrix #7) applies to the winning candidate, not to each
+  /// candidate on its own, so `-a||b` reverses whichever one produced matches.
+  _Parsed<List<RuleScope>> _selectAll(
+    List<_CheckedCandidate> candidates,
+    RuleScope scope, {
+    required String field,
+  }) {
+    for (final _CheckedCandidate candidate in candidates) {
+      final _Parsed<List<RuleScope>> matched = _matchCandidate(
+        candidate,
+        scope,
+        field: field,
+      );
+      switch (matched) {
+        case _ParsedFailure<List<RuleScope>>():
+          return matched;
+        case _ParsedValue<List<RuleScope>>(:final List<RuleScope> value):
+          if (value.isNotEmpty) {
+            return matched;
+          }
+      }
+    }
+
+    return const _ParsedValue<List<RuleScope>>(<RuleScope>[]);
+  }
+
+  /// Runs every branch of one candidate from [scope] and merges the matches.
+  _Parsed<List<RuleScope>> _matchCandidate(
+    _CheckedCandidate candidate,
+    RuleScope scope, {
+    required String field,
+  }) {
+    final List<List<RuleScope>> results = <List<RuleScope>>[];
+    for (final _RuleBranch branch in candidate.branches) {
+      final _Parsed<List<RuleScope>> matched = _matches(
+        branch,
+        scope,
+        field: field,
+      );
+      switch (matched) {
+        case _ParsedFailure<List<RuleScope>>():
+          return matched;
+        case _ParsedValue<List<RuleScope>>(:final List<RuleScope> value):
+          results.add(value);
+      }
+    }
+
+    return _ParsedValue<List<RuleScope>>(
+      _merge<RuleScope>(results, candidate.connector),
+    );
+  }
+
+  /// Runs one list-rule branch from [scope] and returns its matches as scopes.
+  ///
+  /// Each match is a scope of its own — a [DomScope] for an element, a [JsonScope]
+  /// for a JSON value — so the next level of rules reads it the way this one read the
+  /// page (`book-source.md` §3.2).
+  _Parsed<List<RuleScope>> _matches(
+    _RuleBranch branch,
+    RuleScope scope, {
+    required String field,
+  }) => switch (branch) {
+    final _DomBranch dom => switch (_matchElements(dom, scope, field: field)) {
+      _ParsedFailure<List<Element>>(:final _RuleRejection rejection) =>
+        _ParsedFailure<List<RuleScope>>(rejection),
+      _ParsedValue<List<Element>>(:final List<Element> value) =>
+        _ParsedValue<List<RuleScope>>(<RuleScope>[
+          for (final Element element in value) RuleScope.dom(element),
+        ]),
+    },
+    final _JsonBranch json => switch (_jsonScopeOf(scope, field: field)) {
+      _ParsedFailure<Object?>(:final _RuleRejection rejection) =>
+        _ParsedFailure<List<RuleScope>>(rejection),
+      _ParsedValue<Object?>(:final Object? value) =>
+        _ParsedValue<List<RuleScope>>(<RuleScope>[
+          for (final JsonPathMatch match in json.path.read(value))
+            RuleScope.json(match.value),
+        ]),
+    },
+  };
+
+  /// Returns the elements one DOM branch matches inside [scope].
+  ///
+  /// A [JsonScope] — a match that is a JSON value — has no DOM at all, so a default or
+  /// `@css:` rule against it is [ParseFailureKind.parseFailed] rather than a silent
+  /// empty result (C-SRC-4). This is **not** the JSON *page* case: a page is a
+  /// [DomScope] whose body was parsed into a document, so the same selector there simply
+  /// matches nothing and stays an ordinary empty result.
+  _Parsed<List<Element>> _matchElements(
+    _DomBranch branch,
+    RuleScope scope, {
+    required String field,
+  }) => switch (scope) {
+    DomScope(:final Node node) => _ParsedValue<List<Element>>(
+      _run(branch.selectors, node),
+    ),
+    JsonScope() => _ParsedFailure<List<Element>>(_malformed(field)),
+  };
+
+  /// The JSON value [scope] offers a `@json:` branch (matrix #13).
+  ///
+  /// A whole page makes its raw body available ([RuleScope.dom]); any other DOM scope
+  /// has none, because reaching JSON inside an element would need a rule in the
+  /// extraction segment (matrix #30, not implemented). A body that is not JSON is
+  /// [ParseFailureKind.parseFailed] with the field path, never a thrown
+  /// `FormatException` (C-ERR-1).
+  ///
+  /// Both of those are the **JSON** side only. A DOM branch read against the very same
+  /// page is unaffected: it reads the parsed document, so it cannot fail because of the
+  /// body's format (see [_matchElements]).
+  _Parsed<Object?> _jsonScopeOf(RuleScope scope, {required String field}) =>
+      switch (scope) {
+        JsonScope(:final Object? value) => _ParsedValue<Object?>(value),
+        DomScope(:final String? body) => switch (body) {
+          null => _ParsedFailure<Object?>(_malformed(field)),
+          final String text => _decodeJson(text, field: field),
+        },
+      };
+
+  /// Decodes a page body, or reports that it is not JSON.
+  _Parsed<Object?> _decodeJson(String body, {required String field}) {
+    try {
+      return _ParsedValue<Object?>(jsonDecode(body));
+    } on FormatException {
+      return _ParsedFailure<Object?>(_malformed(field));
+    }
+  }
+
+  /// Merges the per-branch results of one candidate (matrix #11 / #27).
+  ///
+  /// `&&` concatenates in rule order; `%%` takes one value from each branch in turn,
+  /// which is upstream's “交叉取数”; a single branch is returned as it is.
+  List<T> _merge<T>(List<List<T>> results, _RuleConnector connector) {
+    switch (connector) {
+      case _RuleConnector.single:
+        return results.first;
+      case _RuleConnector.union:
+        return <T>[for (final List<T> result in results) ...result];
+      case _RuleConnector.interleave:
+        final int longest = results.fold(
+          0,
+          (int length, List<T> result) =>
+              result.length > length ? result.length : length,
+        );
+        final List<T> merged = <T>[];
+        for (int index = 0; index < longest; index++) {
+          for (final List<T> result in results) {
+            if (index < result.length) {
+              merged.add(result[index]);
+            }
+          }
+        }
+
+        return merged;
+    }
   }
 
   /// Returns every value extracted by the **value** rule [rule] from [scope].
@@ -148,7 +347,7 @@ final class RuleEngine {
   /// result is a success.
   ParseResult<List<String>> extractAll(
     String rule,
-    Node scope, {
+    RuleScope scope, {
     required String rulePath,
   }) {
     if (rule.trim().isEmpty) {
@@ -156,17 +355,26 @@ final class RuleEngine {
     }
 
     final _ParsedRule parsed = _parse(rule);
-    final _Parsed<List<_SelectorStep>> check = _check(
+    final _Parsed<List<_CheckedCandidate>> check = _check(
       parsed,
       field: rulePath,
       hasExtraction: true,
     );
 
     return switch (check) {
-      _ParsedFailure<List<_SelectorStep>>(:final _RuleRejection rejection) =>
+      _ParsedFailure<List<_CheckedCandidate>>(
+        :final _RuleRejection rejection,
+      ) =>
         _fail<List<String>>(rejection, field: rulePath),
-      _ParsedValue<List<_SelectorStep>>(:final List<_SelectorStep> value) =>
-        ParseSuccess<List<String>>(_extractAll(value, parsed, scope)),
+      _ParsedValue<List<_CheckedCandidate>>(
+        :final List<_CheckedCandidate> value,
+      ) =>
+        switch (_extractAll(value, parsed, scope, field: rulePath)) {
+          _ParsedFailure<List<String>>(:final _RuleRejection rejection) =>
+            _fail<List<String>>(rejection, field: rulePath),
+          _ParsedValue<List<String>>(:final List<String> value) =>
+            ParseSuccess<List<String>>(value),
+        },
     };
   }
 
@@ -177,7 +385,7 @@ final class RuleEngine {
   /// rejected rule still comes back as a [ParseFailure].
   ParseResult<String?> extractFirst(
     String rule,
-    Node scope, {
+    RuleScope scope, {
     required String rulePath,
   }) {
     final ParseResult<List<String>> values = extractAll(
@@ -197,35 +405,93 @@ final class RuleEngine {
     };
   }
 
-  /// Extracts every value of a rule whose selectors already parsed into [steps].
-  List<String> _extractAll(
-    List<_SelectorStep> steps,
+  /// Extracts every value of a rule whose branches already parsed into [candidates].
+  ///
+  /// A candidate that **fails** ends the rule: later candidates are not tried, because a
+  /// failure says the rule and the page disagree (C-SRC-4). Only a candidate that
+  /// succeeded with no value moves on to the next one, which is what makes `||` a
+  /// fallback rather than an error recovery.
+  _Parsed<List<String>> _extractAll(
+    List<_CheckedCandidate> candidates,
     _ParsedRule parsed,
-    Node scope,
-  ) {
-    return _applyReplacement(
-      _extract(
-        parsed.segments.last,
-        _run(steps, scope, reverse: parsed.reverse),
-      ),
-      parsed.replacementParts,
-    );
+    RuleScope scope, {
+    required String field,
+  }) {
+    for (final _CheckedCandidate candidate in candidates) {
+      final List<List<String>> results = <List<String>>[];
+      for (final _RuleBranch branch in candidate.branches) {
+        final _Parsed<List<String>> values = _values(
+          branch,
+          scope,
+          field: field,
+        );
+        switch (values) {
+          case _ParsedFailure<List<String>>():
+            return values;
+          case _ParsedValue<List<String>>(:final List<String> value):
+            results.add(value);
+        }
+      }
+      final List<String> values = _merge<String>(results, candidate.connector);
+      if (values.isNotEmpty) {
+        return _ParsedValue<List<String>>(
+          _applyReplacement(
+            parsed.reverse ? values.reversed.toList(growable: false) : values,
+            parsed.replacementParts,
+          ),
+        );
+      }
+    }
+
+    return const _ParsedValue<List<String>>(<String>[]);
   }
+
+  /// Extracts the values of one value-rule branch from [scope].
+  _Parsed<List<String>> _values(
+    _RuleBranch branch,
+    RuleScope scope, {
+    required String field,
+  }) => switch (branch) {
+    final _DomBranch dom => switch (_matchElements(dom, scope, field: field)) {
+      _ParsedFailure<List<Element>>(:final _RuleRejection rejection) =>
+        _ParsedFailure<List<String>>(rejection),
+      _ParsedValue<List<Element>>(:final List<Element> value) =>
+        _ParsedValue<List<String>>(_extract(dom.extraction, value)),
+    },
+    final _JsonBranch json => switch (_jsonScopeOf(scope, field: field)) {
+      _ParsedFailure<Object?>(:final _RuleRejection rejection) =>
+        _ParsedFailure<List<String>>(rejection),
+      _ParsedValue<Object?>(:final Object? value) => _ParsedValue<List<String>>(
+        <String>[
+          for (final JsonPathMatch match in json.path.read(value))
+            ..._jsonValues(match.value),
+        ],
+      ),
+    },
+  };
+
+  /// The values one JSON match contributes to a value rule (matrix #13).
+  ///
+  /// A JSON string is its own value, a number or a boolean is written the way JSON
+  /// writes it, and `null` — like an empty string — yields no value at all, which is
+  /// the same “no value” an unmatched selector gives (matrix #8). A map or a list is
+  /// handed back as JSON text: upstream's Java `toString` of a map (`{a=1}`) is not
+  /// reproducible and no rule can rely on it, so the lossless form is used until a
+  /// real book source says otherwise (`docs/dev/book-source.md` §10 decides that).
+  Iterable<String> _jsonValues(Object? value) => switch (value) {
+    null => const <String>[],
+    final String text => text.isEmpty ? const <String>[] : <String>[text],
+    final Map<Object?, Object?> map => <String>[jsonEncode(map)],
+    final List<Object?> list => <String>[jsonEncode(list)],
+    _ => <String>[value.toString()],
+  };
 
   /// Runs [steps] from [scope] and returns the elements they matched.
   ///
   /// With no step the scope itself is the single match, which is what makes an
   /// extraction-only rule such as `href` work (upstream applies the extraction to
   /// the current element).
-  ///
-  /// A rule that starts with `-` reverses the whole result list (matrix #7) rather
-  /// than each step's own matches — that is what “列表倒置” means upstream, and a
-  /// reversed chapter list is the case it exists for.
-  List<Element> _run(
-    List<_SelectorStep> steps,
-    Node scope, {
-    required bool reverse,
-  }) {
+  List<Element> _run(List<_SelectorStep> steps, Node scope) {
     List<Node> current = <Node>[scope];
 
     for (final _SelectorStep step in steps) {
@@ -236,9 +502,7 @@ final class RuleEngine {
       current = next;
     }
 
-    final List<Element> matched = current.whereType<Element>().toList();
-
-    return reverse ? matched.reversed.toList(growable: false) : matched;
+    return current.whereType<Element>().toList();
   }
 
   /// Returns the elements [step] matches inside [scope], with its positions
@@ -429,24 +693,64 @@ final class RuleEngine {
     // 切段之前摘掉，否则它会变成一个空段，后面的标志头也会被切错。
     final bool reverse = rawBody.startsWith('-');
     final String body = (reverse ? rawBody.substring(1) : rawBody).trim();
-    // `@css:…` 这类规则以标志头开头，按 `@` 切段会在最前面留一个空段（`''`），
-    // 它会被当成畸形段。摘掉这个 `@`，让第一段正好是标志头本身；只在确实是标志头时
-    // 才摘，避免把 `@foo` 这种非标志写法当成正常规则。`body` 保留原样，供
-    // [_check] 做 body 级标志判定。
-    final String segmentBody =
-        body.startsWith('@') && _flagSegment.hasMatch(body.substring(1))
-        ? body.substring(1)
-        : body;
 
     return _ParsedRule(
       body: body,
       replacementParts: replacementParts,
       reverse: reverse,
-      segments: segmentBody
-          .split('@')
-          .map((String segment) => segment.trim())
-          .toList(),
+      candidates: _candidatesOf(body),
     );
+  }
+
+  /// Splits the rule body into candidates (matrix #10's `||`) and, inside each, into
+  /// branches (matrix #11's `&&` / #27's `%%`).
+  ///
+  /// `||` binds loosest, so it is split first: `a&&b||c` is `(a&&b) || c`
+  /// (`book-source.md` §3.2, architect ruling 1). Inside a candidate `%%` and `&&` are
+  /// the same level, so the first one to occur decides.
+  List<_RuleCandidate> _candidatesOf(String body) => <_RuleCandidate>[
+    for (final String candidate in _splitRule(body, <String>['||']).parts)
+      _candidateOf(candidate),
+  ];
+
+  /// Splits one candidate into its branches.
+  ///
+  /// A branch is kept as the author wrote it: `@json:` has to be recognised **before**
+  /// the `@`-split, because a JSONPath may carry an `@` of its own — the filter form
+  /// `$[?(@.a)]` of matrix #13.
+  _RuleCandidate _candidateOf(String text) {
+    final ({List<String> parts, String? separator}) split = _splitRule(
+      text,
+      <String>['%%', '&&'],
+    );
+    final _RuleConnector connector = switch (split.separator) {
+      '%%' => _RuleConnector.interleave,
+      '&&' => _RuleConnector.union,
+      _ => _RuleConnector.single,
+    };
+
+    return _RuleCandidate(
+      branches: <String>[
+        for (final String branch in split.parts) branch.trim(),
+      ],
+      connector: connector,
+    );
+  }
+
+  /// Splits one branch into its `@`-separated segments.
+  ///
+  /// A branch that starts with a flag (`@js:…`) would otherwise leave an empty first
+  /// segment and be read as malformed — the same trap a rule body has, and now handled
+  /// in one place because a body is just the first branch. The `@` is only dropped when
+  /// a flag really follows, so `@foo` stays a broken rule.
+  List<String> _segmentsOf(String branch) {
+    final String trimmed = branch.trim();
+    final String text =
+        trimmed.startsWith('@') && _flagSegment.hasMatch(trimmed.substring(1))
+        ? trimmed.substring(1)
+        : trimmed;
+
+    return text.split('@').map((String segment) => segment.trim()).toList();
   }
 
   /// Reads [parsed] into the selector steps it runs, or reports the rejection.
@@ -454,7 +758,7 @@ final class RuleEngine {
   /// Validation and evaluation share this one parse, so the two can never disagree
   /// about what a rule means. [hasExtraction] says whether the last segment is the
   /// extraction (value rules) or one more selector (list rules).
-  _Parsed<List<_SelectorStep>> _check(
+  _Parsed<List<_CheckedCandidate>> _check(
     _ParsedRule parsed, {
     required String field,
     required bool hasExtraction,
@@ -464,7 +768,7 @@ final class RuleEngine {
     for (final String flag in _deferredFlags) {
       if (body.toLowerCase().startsWith(flag)) {
         // 用原文截取，保留作者写的 `@webJs` 这类大小写（book-source.md §3 前缀大小写不敏感）。
-        return _ParsedFailure<List<_SelectorStep>>(
+        return _ParsedFailure<List<_CheckedCandidate>>(
           _unsupported(body.substring(0, flag.length)),
         );
       }
@@ -472,15 +776,53 @@ final class RuleEngine {
     if (body.contains('@@')) {
       // 矩阵 #15：`@@` 默认规则标志。`@` 切分后中段的 `@@` 会留下一个空段，
       // 因此必须在切段之前判掉，否则会被误报成畸形规则。
-      return _ParsedFailure<List<_SelectorStep>>(_unsupported('@@'));
-    }
-    for (final String operator in _deferredOperators) {
-      if (body.contains(operator)) {
-        return _ParsedFailure<List<_SelectorStep>>(_unsupported(operator));
-      }
+      return _ParsedFailure<List<_CheckedCandidate>>(_unsupported('@@'));
     }
 
-    final List<String> segments = parsed.segments;
+    final List<_CheckedCandidate> candidates = <_CheckedCandidate>[];
+    for (final _RuleCandidate candidate in parsed.candidates) {
+      final List<_RuleBranch> branches = <_RuleBranch>[];
+      for (final String branchText in candidate.branches) {
+        final _Parsed<_RuleBranch> branch = _readBranch(
+          branchText,
+          field: field,
+          hasExtraction: hasExtraction,
+        );
+        switch (branch) {
+          case _ParsedFailure<_RuleBranch>(:final _RuleRejection rejection):
+            return _ParsedFailure<List<_CheckedCandidate>>(rejection);
+          case _ParsedValue<_RuleBranch>(:final _RuleBranch value):
+            branches.add(value);
+        }
+      }
+      if (_mergesTwoScopes(branches)) {
+        // `book-source.md` §3 的 `&&` 注记：连接符只合并同种规则。JSON 分支与默认 /
+        // `@css:` 分支合并会拼出异构结果，语义未定义，所以显式报畸形而不是猜一种。
+        return _ParsedFailure<List<_CheckedCandidate>>(_malformed(field));
+      }
+      candidates.add(
+        _CheckedCandidate(branches: branches, connector: candidate.connector),
+      );
+    }
+
+    return _ParsedValue<List<_CheckedCandidate>>(candidates);
+  }
+
+  /// Reads one branch: its selector steps plus, for a value rule, its extraction.
+  ///
+  /// A branch that is a JSON rule is recognised first and read on its own (matrix
+  /// #13): its whole text is one JSONPath, not a run of `@`-separated segments.
+  _Parsed<_RuleBranch> _readBranch(
+    String branch, {
+    required String field,
+    required bool hasExtraction,
+  }) {
+    final String? jsonPath = _jsonPathOf(branch);
+    if (jsonPath != null) {
+      return _readJsonBranch(jsonPath, field: field);
+    }
+
+    final List<String> segments = _segmentsOf(branch);
     final List<String> selectorTexts = hasExtraction
         ? segments.sublist(0, segments.length - 1)
         : segments;
@@ -489,27 +831,31 @@ final class RuleEngine {
       final _Parsed<_SelectorStep> read = _readSelector(segment, field: field);
       switch (read) {
         case _ParsedFailure<_SelectorStep>(:final _RuleRejection rejection):
-          return _ParsedFailure<List<_SelectorStep>>(rejection);
+          return _ParsedFailure<_RuleBranch>(rejection);
         case _ParsedValue<_SelectorStep>(:final _SelectorStep value):
           steps.add(value);
       }
     }
 
-    if (hasExtraction) {
-      final String extraction = segments.last;
-      if (extraction.isEmpty) {
-        return _ParsedFailure<List<_SelectorStep>>(_malformed(field));
-      }
-      final String? flag = _flagOf(extraction);
-      if (flag != null) {
-        // 末段是提取段，而上游在那里允许**嵌套规则**（矩阵 #30，M2/暂不实现）。
-        // 名字必须与中段的 `@css:` 区分开：中段已支持（矩阵 #12），末段仍未支持，
-        // 否则 UI 与日志分不清两者（架构师 F3）。
-        return _ParsedFailure<List<_SelectorStep>>(_unsupported('nested-rule'));
-      }
+    if (!hasExtraction) {
+      return _ParsedValue<_RuleBranch>(
+        _DomBranch(selectors: steps, extraction: ''),
+      );
+    }
+    final String extraction = segments.last;
+    if (extraction.isEmpty) {
+      return _ParsedFailure<_RuleBranch>(_malformed(field));
+    }
+    final String? flag = _flagOf(extraction);
+    if (flag != null) {
+      // 末段是提取段，而上游在那里允许**嵌套规则**（矩阵 #30，M2/暂不实现）。
+      // 名字必须与中段的 `@css:` 区分开：中段已支持（矩阵 #12），末段仍未支持。
+      return _ParsedFailure<_RuleBranch>(_unsupported('nested-rule'));
     }
 
-    return _ParsedValue<List<_SelectorStep>>(steps);
+    return _ParsedValue<_RuleBranch>(
+      _DomBranch(selectors: steps, extraction: extraction),
+    );
   }
 
   /// Reads one selector [segment] into the step it stands for (matrix #1..#7,
@@ -528,7 +874,9 @@ final class RuleEngine {
         // `_flagOf` 返回的 flag 把被 `@` 切分吃掉的 `@` 补了回来，所以这里要少取一位。
         return _readCss(segment.substring(flag.length - 1), field: field);
       }
-      // `@json:` / `@js:` / `@xpath:` … 仍属后续阶段（矩阵 #13 / #14 / #21）。
+      // 整条分支的 `@json:` 在 `_readBranch` 已读走（矩阵 #13），能到这里的 `@json:`
+      // 只可能是中段 / 末段，即矩阵 #30 的嵌套规则；`@js:` / `@xpath:` … 仍属后续
+      // 阶段（矩阵 #14 / #21）。
       return _ParsedFailure<_SelectorStep>(_unsupported(flag));
     }
 
@@ -735,6 +1083,59 @@ final class RuleEngine {
 
     return _ParsedValue<List<_IndexPart>>(parts);
   }
+
+  /// The JSONPath of a branch that is a JSON rule, or `null` when it is not one
+  /// (matrix #13).
+  ///
+  /// The flag is case-insensitive like every other flag (`@Json:` works), and it may be
+  /// omitted when the path starts with `$.` or `$[` — the two spellings upstream's rule
+  /// documentation lists. A bare `$` is not one of them, so it stays an unknown rule
+  /// type instead of being guessed.
+  String? _jsonPathOf(String branch) {
+    final String trimmed = branch.trim();
+    if (trimmed.toLowerCase().startsWith(_jsonFlag)) {
+      return trimmed.substring(_jsonFlag.length);
+    }
+    if (trimmed.startsWith(r'$.') || trimmed.startsWith(r'$[')) {
+      return trimmed;
+    }
+
+    return null;
+  }
+
+  /// Reads a `@json:` branch (matrix #13) into the JSONPath it evaluates.
+  ///
+  /// The path is parsed while the rule is read, for the same reason `@css:` parses its
+  /// selector here: a malformed path has to become a locatable
+  /// [ParseFailureKind.parseFailed] carrying the field path, instead of an unlocatable
+  /// throw out of the matcher (C-SRC-8).
+  _Parsed<_RuleBranch> _readJsonBranch(
+    String expression, {
+    required String field,
+  }) {
+    final String trimmed = expression.trim();
+    if (trimmed.isEmpty) {
+      return _ParsedFailure<_RuleBranch>(_malformed(field));
+    }
+
+    try {
+      return _ParsedValue<_RuleBranch>(_JsonBranch(JsonPath(trimmed)));
+    } on FormatException {
+      return _ParsedFailure<_RuleBranch>(_malformed(field));
+    }
+  }
+
+  /// Whether [branches] read two different scopes, i.e. a JSON branch merged with a
+  /// DOM one.
+  ///
+  /// `&&` and `%%` only merge rules of the same kind (`book-source.md` §3, the `&&`
+  /// note), so mixing them has no defined result and is reported instead of being
+  /// guessed. Note that this is a narrower question than “is this branch a value
+  /// rule”: a value rule written inside a **list** rule is still rejected by
+  /// [_readSelector], which reports its segment as unsupported or malformed.
+  bool _mergesTwoScopes(List<_RuleBranch> branches) =>
+      branches.any((_RuleBranch branch) => branch is _JsonBranch) &&
+      branches.any((_RuleBranch branch) => branch is _DomBranch);
 
   /// Reads the `@css:` form of matrix #12: the rest of the segment is a CSS
   /// selector that goes to cascadia unchanged (C-SRC-6).
@@ -995,7 +1396,7 @@ final class _ParsedRule {
     required this.body,
     required this.replacementParts,
     required this.reverse,
-    required this.segments,
+    required this.candidates,
   });
 
   /// The rule itself: everything before the first `##`, without the leading `-`.
@@ -1007,8 +1408,8 @@ final class _ParsedRule {
   /// Whether the rule starts with `-`, i.e. its result list is reversed (matrix #7).
   final bool reverse;
 
-  /// The trimmed segments of the rule body.
-  final List<String> segments;
+  /// The candidates of the body: `||` alternatives, each with its own branches.
+  final List<_RuleCandidate> candidates;
 }
 
 /// A selector name together with the positions written on it (matrix #6 / #26).
@@ -1054,6 +1455,64 @@ final class _IndexSelection {
   final bool isExclude;
 }
 
+/// How the branches of one candidate combine (`book-source.md` §3.2).
+enum _RuleConnector {
+  /// One branch only.
+  single,
+
+  /// Matrix #11: `&&` merges the branches (union), in rule order.
+  union,
+
+  /// Matrix #27: `%%` takes one value from each branch in turn.
+  interleave,
+}
+
+/// One `||` candidate: its branches and how they combine.
+final class _RuleCandidate {
+  const _RuleCandidate({required this.branches, required this.connector});
+
+  /// The branches as written, before the `@`-split.
+  final List<String> branches;
+
+  /// How [branches] combine.
+  final _RuleConnector connector;
+}
+
+/// One candidate whose branches parsed into steps.
+final class _CheckedCandidate {
+  const _CheckedCandidate({required this.branches, required this.connector});
+
+  /// The parsed branches.
+  final List<_RuleBranch> branches;
+
+  /// How [branches] combine.
+  final _RuleConnector connector;
+}
+
+/// One parsed branch: either DOM selectors plus an extraction, or a JSONPath.
+sealed class _RuleBranch {
+  const _RuleBranch();
+}
+
+/// A branch that reads the DOM: the default rules and `@css:` (matrix #1..#12).
+final class _DomBranch extends _RuleBranch {
+  const _DomBranch({required this.selectors, required this.extraction});
+
+  /// The selector steps. Every branch of a candidate runs from the same scope.
+  final List<_SelectorStep> selectors;
+
+  /// The extraction segment of a value rule, or `''` for a list rule.
+  final String extraction;
+}
+
+/// A branch that reads JSON: `@json:` and the bare `$.` / `$[` form (matrix #13).
+final class _JsonBranch extends _RuleBranch {
+  const _JsonBranch(this.path);
+
+  /// The parsed JSONPath this branch applies to the scope.
+  final JsonPath path;
+}
+
 /// A parse outcome: the value the parser produced, or why it was rejected.
 sealed class _Parsed<T> {
   const _Parsed();
@@ -1087,6 +1546,92 @@ final class _RuleRejection {
 
   /// The `rulePath` of the failure: a field path, or `unsupported:<syntax>`.
   final String rulePath;
+}
+
+/// Splits [text] at the top-level occurrences of the first separator of [separators]
+/// that occurs, ignoring separators inside `[...]`, `(...)` or quotes.
+///
+/// Returns the parts and the separator that was used (`null` when none occurred, which
+/// means a single part). Only that one separator is used for the rest of the text, the
+/// way upstream's `splitRule` behaves (`book-source.md` §3.2).
+({List<String> parts, String? separator}) _splitRule(
+  String text,
+  List<String> separators,
+) {
+  final String? separator = _firstSeparator(text, separators);
+  if (separator == null) {
+    return (parts: <String>[text], separator: null);
+  }
+
+  final List<String> parts = <String>[];
+  final StringBuffer current = StringBuffer();
+  var depth = 0;
+  String? quote;
+  var index = 0;
+
+  while (index < text.length) {
+    final String character = text[index];
+    if (quote != null) {
+      current.write(character);
+      if (character == quote) {
+        quote = null;
+      }
+      index++;
+      continue;
+    }
+    if (character == '"' || character == "'") {
+      quote = character;
+    } else if (character == '[' || character == '(') {
+      depth++;
+    } else if (character == ']' || character == ')') {
+      depth--;
+    } else if (depth == 0 && text.startsWith(separator, index)) {
+      parts.add(current.toString());
+      current.clear();
+      index += separator.length;
+      continue;
+    }
+    current.write(character);
+    index++;
+  }
+  parts.add(current.toString());
+
+  return (parts: parts, separator: separator);
+}
+
+/// Returns the first separator of [separators] that occurs outside brackets, parens and
+/// quotes, or `null` when none does.
+String? _firstSeparator(String text, List<String> separators) {
+  var depth = 0;
+  String? quote;
+
+  for (var index = 0; index < text.length; index++) {
+    final String character = text[index];
+    if (quote != null) {
+      if (character == quote) {
+        quote = null;
+      }
+      continue;
+    }
+    switch (character) {
+      case '"' || "'":
+        quote = character;
+      case '[' || '(':
+        depth++;
+      case ']' || ')':
+        depth--;
+      default:
+        if (depth == 0) {
+          for (final String separator in separators) {
+            if (text.startsWith(separator, index)) {
+              return separator;
+            }
+          }
+        }
+    }
+  }
+
+  return null;
 }
 
 /// The direct text-node data of [element] (upstream `textNodes` / `ownText` basis).
