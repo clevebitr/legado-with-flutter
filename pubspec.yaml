@@ -69,7 +69,11 @@ dev_dependencies:
   riverpod_generator: ^4.0.9
   drift_dev: ^2.35.1
 
-  # 测试
+  # 测试：设备级集成测试（Windows / Android 桌面与模拟器），由 Flutter SDK 提供，
+  # 不经 pub.dev 下载（BSD-3-Clause，同 `flutter_test`）。
+  integration_test:
+    sdk: flutter
+
   mocktail: ^1.0.5
 
 flutter:

@@ -95,17 +95,26 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；
 **GPL-2.0-only、无许可证、专有许可一律禁止引入**（GPL-2.0-only 与 GPL-3.0 不兼容）。
 
-**核实结果（2026-10-11，修正分类规则后重扫）：** 对 `pubspec.lock` 中全部 **150 个包**逐个读取其
-`LICENSE` / `COPYING` 文件并分类，结果：
+**核实结果（2026-10-11，新增 `integration_test` 后重扫）：** 对 `pubspec.lock` 中全部 **156 个包**
+逐个读取其 `LICENSE` / `COPYING` 文件并分类，结果：
 
 | 许可证 | 数量 |
 |---|---|
-| BSD-3-Clause | 93 |
+| BSD-3-Clause | 95 |
 | MIT | 37 |
-| Apache-2.0 | 9 |
+| Apache-2.0 | 10 |
 | BSD-2-Clause | 6 |
-| Flutter SDK 自带（未在 pub cache 中） | 5 |
+| Flutter SDK 自带（`source: sdk`，未在 pub cache 中） | 8 |
 | **GPL / LGPL / AGPL / MPL / 无许可证 / 未识别** | **0** |
+
+> **2026-10-11 增量（搭建设备级测试环境）：** 为支持 Windows / Android 的
+> `integration_test`，`dev_dependencies` 新增 SDK 包 `integration_test`（BSD-3-Clause，
+> 同 `flutter_test`），并带入 5 个传递依赖：`flutter_driver`、
+> `fuchsia_remote_debug_protocol`（均为 `source: sdk`）、`process`、`sync_http`（BSD-3-Clause）、
+> `webdriver`（Apache-2.0）。因此基线由 150 包 / BSD-3 93 / Apache 9 / SDK 5
+> 变为 **156 包 / BSD-3 95 / Apache 10 / SDK 8**。
+> 同时 `tool/scan_licenses.dart` 改为按 `pubspec.lock` 的 `source: sdk` 识别 SDK 包
+> （原先按硬编码包名名单，会把这两个新 SDK 包误报为「无许可证文件」）。
 
 > **本次修正了什么：** 旧结果（BSD-2 = 98 / BSD-3 = 1）是因为 §6 的分类特征串写成了
 > `3. Neither the name`。Dart 官方包把 BSD 第三条写成**项目符号** `* Neither the name`，
@@ -145,7 +154,7 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 | `riverpod_generator`（dev） | 4.0.9 | MIT |
 | `drift_dev`（dev） | 2.35.1 | MIT |
 | `mocktail`（dev） | 1.0.5 | MIT |
-| `flutter` / `flutter_localizations` / `flutter_test`（SDK） | 3.47.7 | BSD-3-Clause（Flutter SDK） |
+| `flutter` / `flutter_localizations` / `flutter_test` / `integration_test`（SDK） | 3.47.7 | BSD-3-Clause（Flutter SDK） |
 
 ---
 
@@ -161,7 +170,8 @@ dart run tool/scan_licenses.dart --list     # 额外逐包打印分类，便于�
 
 该脚本等价于以下步骤，人工复核时按此执行：
 
-1. 从 `pubspec.lock` 取出全部包名与版本；
+1. 从 `pubspec.lock` 取出全部包名与版本；`source: sdk`（Flutter SDK 自带，如 `flutter`、
+   `flutter_test`、`integration_test`、`flutter_driver`）的条目只计数、不读许可证文件；
 2. 逐个读取包目录下的 `LICENSE*` / `COPYING*`（pub cache 路径依次探测 `PUB_CACHE`、
    `%LOCALAPPDATA%\Pub\Cache`、`~/.pub-cache`）；**同一文件内的多段许可证以第一段为准**
    ——包自身的许可证在前，随后才是随包分发的第三方声明
@@ -174,10 +184,10 @@ dart run tool/scan_licenses.dart --list     # 额外逐包打印分类，便于�
    - GPL 系：`GNU ...`；MPL 系：`Mozilla Public License`
 
    > **禁止把 `3. Neither the name` 当作特征串。** Dart 官方包把 BSD 第三条写成项目符号
-   > `* Neither the name`；用带序号的形式只能匹配到极少数包。2026-10-11 实测：99 个包含
-   > BSD 特征串，其中 93 个含第三条（仅 `cascadia` 用带序号写法），6 个不含（`sqflite*` 系列）。
-4. **计数校验：** 各许可证数量之和必须等于 `pubspec.lock` 的包数（当前 93 + 37 + 9 + 6 = 145，
-   加 5 个 Flutter SDK 自带包 = 150）。重扫后与 §5 的基线**逐项 diff**：有差异时先判断是
+   > `* Neither the name`；用带序号的形式只能匹配到极少数包。2026-10-11 实测：101 个包含
+   > BSD 特征串，其中 95 个含第三条（仅 `cascadia` 用带序号写法），6 个不含（`sqflite*` 系列）。
+4. **计数校验：** 各许可证数量之和必须等于 `pubspec.lock` 的包数（当前 95 + 37 + 10 + 6 = 148，
+   加 8 个 Flutter SDK 自带包 = 156）。重扫后与 §5 的基线**逐项 diff**：有差异时先判断是
    “新增/升级依赖”还是“分类规则变了”，后者必须先修规则再回写基线。
 5. 出现 GPL 系 / MPL / 无许可证文件 / 无法识别任一情况时，**先开 ADR 再决定**是否引入。
 

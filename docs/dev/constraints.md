@@ -213,7 +213,7 @@ Container(
 | C-TEST-1 | 覆盖率门禁（各层阈值唯一定义在 `docs/dev/testing.md` §2，由 `tool/check_coverage.dart` 强制执行）。 |
 | C-TEST-2 | 所有页面级 Widget 至少一个 smoke test。 |
 | C-TEST-3 | 测试命名格式：`方法名_场景_预期结果`，例如 `searchBooks_whenNetworkFails_returnsParseFailure`。 |
-| C-TEST-4 | 测试文件放在 `test/` 下并**镜像被测文件的 `lib/` 相对路径**（ADR-0017）；`lib/**` 下禁止出现 `*_test.dart`。文件名固定 `*_test.dart`。 |
+| C-TEST-4 | 单元 / Widget / 回放测试文件放在 `test/` 下并**镜像被测文件的 `lib/` 相对路径**（ADR-0017）；**设备级集成测试**（必须依赖真实引擎、平台通道或原生库的用例）放 `integration_test/`，不镜像 `lib/`、不参与覆盖率统计、不进 CI（ADR-0017 §决策 5，运行方式见 `docs/dev/test-environment.md`）。`lib/**` 下禁止出现 `*_test.dart`。文件名固定 `*_test.dart`。 |
 | C-TEST-5 | 禁止 `skip: true` 合入 `main`，除非关联 issue 且在 PR 描述中说明。 |
 | C-TEST-6 | Golden 测试使用 Flutter 内置 `matchesGoldenFile`；**禁止使用已停止维护的 `golden_toolkit`**（见 ADR-0009）。 |
 | C-TEST-7 | CI 必须依次通过 `AGENTS.md` §4 的全部命令；缺任一命令视为未通过。 |

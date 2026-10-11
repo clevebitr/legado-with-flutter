@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Local test environment for Windows and Android (2026-10-11)
+
+- Added `integration_test/` (a device-level smoke test plus a real on-disk Drift
+  write/read round trip) and the `integration_test` SDK dev dependency, so
+  `lib/core/di/database_executor_provider.dart` — allowlisted for coverage under ADR-0019
+  category 2 — now has an automated verification path on Windows and Android instead of a
+  manual `flutter run`.
+- Added `tool/test/`: `run_all` / `run_unit` / `run_windows` / `run_android` PowerShell
+  scripts plus shared `common.ps1`. The Android script starts the `Medium_Phone` AVD
+  (detached from the caller's process tree, otherwise the emulator dies during the Gradle
+  build), waits for `sys.boot_completed`, runs every `integration_test` file separately,
+  and shuts the emulator down again.
+- `docs/dev/test-environment.md` records the environment, its prerequisites, the four
+  platform quirks found while building it (multi-file desktop runs, autoDispose providers
+  in tests, detached emulator launch, blocking crash-report dialog) and a troubleshooting
+  table. iOS is explicitly out of scope on this machine (no macOS/Xcode).
+- Registered the new layer where the rules live, so `main` never carries "the code has
+  `integration_test/`, the spec says tests live under `test/`": ADR-0017 gains a dated
+  revision (§决策 5, with the rejected "put device-level cases in `test/`, mocked" option),
+  C-TEST-4 gains the exception, `testing.md` §1 gains the fifth layer row and §3 / `naming.md`
+  §2 now separate unit-widget-replay tests from device-level ones. Device-level suites stay
+  out of CI; wiring them in still needs its own PR/ADR.
+- `NOTICE.md` §5 and `docs/dev/tech-stack.md` §9 resynced with the new dependency graph
+  (156 locked packages). `tool/scan_licenses.dart` now detects SDK packages from the lock
+  file's `source: sdk` instead of a hard-coded name list, which had mis-reported the two
+  newly pulled SDK packages (`flutter_driver`, `fuchsia_remote_debug_protocol`) as missing
+  a licence file.
+
 ### Review follow-up: routing, F6 ruling and hardening (2026-10-11)
 
 - ADR-0011 §决策 1 now carries a dated revision: routing is split three ways (mechanism in
