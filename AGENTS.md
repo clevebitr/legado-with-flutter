@@ -72,7 +72,7 @@ git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'  # 生成物与源码�
 
 ---
 
-## 5. 硬性红线（违反即回退重做；细则见 `docs/dev/constraints.md` §12）
+## 5. 硬性红线（违反即回退重做；细则见 `docs/dev/constraints.md` §14）
 
 - 生成未使用的类、方法、变量、import
 - 留下 `// TODO` 空实现或占位代码

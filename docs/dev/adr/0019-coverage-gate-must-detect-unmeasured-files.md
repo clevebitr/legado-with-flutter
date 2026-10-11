@@ -41,6 +41,16 @@ Phase 1.1 实测发现覆盖率门禁存在**静默绕过**：
      此类文件必须用 `// coverage:ignore-file` 使 lcov 将其整体移除，否则仍会因
      阈值失败；其正确性必须由别的测试保证（例：drift 表结构由 `drift_schemas/`
      与 `migration_test.dart` 逐列比对）。
+
+     > **2026-10-11 修订（「无可测量行」子情形）：** 本类还有一个子情形——**源文件里不存在
+     > 可测量的行**。纯 `freezed` 声明式实体（例：
+     > `lib/features/book_source/domain/entities/book.dart`）只有重定向工厂声明，方法体由
+     > 生成器内联到 `*.freezed.dart`；它在运行时**是被构造的**（`book_test.dart` 就构造它），
+     > 但源文件本身没有可测量的行，lcov 不收录它，于是同样命中「未测量源文件」。
+     > 登记要求不变：`// coverage:ignore-file` + allowlist 行内理由 + 行为由别的测试保证。
+     > 与 drift 表定义的区别只在「为什么没有可测量的行」：drift 是「运行时不可达」，
+     > freezed 是「无可测量行」。Phase 3 起每新增一个纯 freezed 实体均按本子情形登记，
+     > 不再逐个重新论证。
    allowlist **不得**用于「暂时没写测试」的文件；新增条目必须在 PR 描述中说明。
    （同样适用于使用了 `// coverage:ignore-file` 的手写文件：lcov 会把它整体移除，
    因而必须登记才能通过门禁。）

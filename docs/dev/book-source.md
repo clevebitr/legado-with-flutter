@@ -56,7 +56,7 @@
 |---|---|---|
 | `SearchRule` | `bookList`、`name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl` | M0 |
 | `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName` | M0（`canReName` 为 M1） |
-| `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0 |
+| `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
 | `ContentRule` | `webJs`、`sourceRegex`、`imageStyle` | **M2** |
 
@@ -118,7 +118,7 @@
 | 阶段 | 范围 | 完成判定 |
 |---|---|---|
 | **M0** | 矩阵 #1–#14、#25、#26、#27；搜索 / 详情 / 目录 / 正文四段完整字段；`nextTocUrl`；`nextContentUrl`；`{{key}}`、`{{page}}`、`{{baseUrl}}` | 至少 2 个真实书源完成「搜索 → 详情 → 目录 → 正文」离线回放 |
-| **M1** | 矩阵 #15–#19；`exploreUrl` 发现页；`canReName`；`isVip`；`java.timeFormat`；`concurrentRate` | 每条语法至少 1 条真实书源验证记录 |
+| **M1** | 矩阵 #15–#19；`exploreUrl` 发现页；`canReName`；`updateTime`；`java.timeFormat`；`concurrentRate` | 每条语法至少 1 条真实书源验证记录 |
 | **M2 / 暂不实现** | 矩阵 #20–#24；登录脚本与登录 UI；RSS / 订阅源；朗读规则 | 命中时返回 `ParseFailure(unsupportedRule)` |
 
 **M0 未全部通过前，不得发布「支持导入书源」的版本。**

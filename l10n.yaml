@@ -1,5 +1,5 @@
 # 国际化生成配置。模板语言为英文，必须在同一个 PR 内补齐 zh 翻译。
-# 命名与使用约束见 docs/dev/naming.md §12 与 docs/dev/constraints.md C-UI-5。
+# 命名与使用约束见 docs/dev/naming.md §8 与 docs/dev/constraints.md C-UI-5。
 arb-dir: lib/l10n
 template-arb-file: app_en.arb
 output-localization-file: app_localizations.dart

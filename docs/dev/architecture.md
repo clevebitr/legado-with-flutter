@@ -62,15 +62,23 @@ features/<f>/presentation ──► features/<f>/domain ──► features/<f>/d
 
 | 层 | 允许包含 | 禁止包含 |
 |---|---|---|
-| `domain/` | Entity、Value Object、Repository 接口、UseCase、领域异常 | Flutter import、`dio`、Drift、平台 API、JSON 序列化注解 |
+| `domain/` | Entity、Value Object、Repository 接口、UseCase、领域异常、**无状态领域服务与解析构件**（判据见下方例外二） | Flutter import、`dio`、Drift、平台 API、JSON 序列化注解 |
 | `data/` | DTO（freezed + json_serializable）、DataSource、`RepositoryImpl`、Mapper | Flutter Widget、`BuildContext` |
 | `presentation/` | Page、Widget、`@riverpod` Notifier、ViewModel 级格式化逻辑 | 直接 import `data/`、直接调用 `dio`、写在 `build` 里的业务判断 |
 
 DTO ↔ Entity 转换必须放在 `data/` 的 Mapper 中，禁止在 `presentation/` 做转换。
 
-> **唯一例外（ADR-0021）：** 书源模型（`BookSource` 及其子规则）允许在 `domain/` 中携带
+> **例外一（ADR-0021）：** 书源模型（`BookSource` 及其子规则）允许在 `domain/` 中携带
 > `freezed` + `json_serializable` 注解：Legado JSON 的键名就是本项目的领域规则语言，
 > `RuleEngine` 与 UseCase 直接消费它（C-SRC-7）。其它 `domain/` 类型仍禁止 JSON 序列化注解。
+>
+> **例外二（ADR-0025）：** `domain/` 允许**无状态领域服务与解析构件**，即
+> `XxxService`（例如 `PageFetchService`：编排 `core/` 抽象与规则引擎）、`XxxEngine`
+> （例如 `RuleEngine`，C-SRC-1 要求的纯 Dart 解析引擎）与纯函数模块（例如
+> `url_template.dart`）。判据**逐条**为：无跨调用的可变状态（C-SRC-9）；只依赖 `core/`
+> 抽象与纯 Dart 依赖；不 import Flutter / 平台 API / `data/`；不承担仓储职责（C-NET-8）。
+> `lib/features/book_source/` 目前没有 `data/` 层，是该例外的直接结果，复审触发条件见
+> ADR-0025 §后果。
 
 ---
 
