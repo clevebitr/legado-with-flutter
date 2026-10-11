@@ -25,6 +25,7 @@
 | `docs/dev/architecture.md` | 目录结构、分层边界、依赖注入、路由 | `C-ARCH-*` |
 | `docs/dev/book-source.md` | Legado 书源规则支持矩阵、模板语法、失败语义、测试基线 | `C-SRC-*` |
 | `docs/dev/testing.md` | 测试分层、覆盖率门禁、Golden 策略、CI 流水线 | `C-TEST-*` |
+| `docs/dev/test-environment.md` | 本机（Windows）测试环境：一键脚本、设备级用例、排错与实测证据 | —（门禁与分层仍归 `testing.md`） |
 | `docs/dev/platform.md` | Android / iOS / Windows 平台基线与降级策略 | `C-PLT-*` |
 
 ## 3. 决策记录（`docs/dev/adr/`）
@@ -50,6 +51,8 @@
 | `tool/check_coverage.dart` | 覆盖率门禁脚本：阈值 + 「未测量源文件」两项判定（ADR-0019；阈值归 `docs/dev/testing.md` §2） |
 | `tool/scan_licenses.dart` | 依赖许可证扫描脚本（重扫流程见 `NOTICE.md` §6） |
 | `tool/spike/` | JS 引擎架构可行性探针与已知坑（ADR-0015；**不进入** `flutter test` 默认发现路径） |
+| `tool/test/` | 本机测试脚本：`run_all` / `run_unit` / `run_windows` / `run_android` 与共享 `common.ps1`（见 `docs/dev/test-environment.md`） |
+| `integration_test/` | 设备级用例（Windows 桌面 / Android 模拟器）；不参与覆盖率统计（见 `docs/dev/test-environment.md` §4） |
 | `l10n.yaml` | 国际化生成配置 |
 | `lib/l10n/app_en.arb` | 英文文案模板（新增字符串的入口） |
 | `lib/l10n/app_zh.arb` | 中文文案 |

@@ -2,6 +2,8 @@
 
 > 约束见 `docs/dev/constraints.md` §8（C-TEST-1..7）。
 > 本文档定义测试分层、覆盖率门禁的**可执行实现**与 CI 流水线。
+> 本机（Windows）如何把测试跑起来（一键脚本、Windows/Android 设备级用例、模拟器排错）见
+> `docs/dev/test-environment.md`。
 
 ---
 

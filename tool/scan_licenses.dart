@@ -25,14 +25,14 @@ library;
 
 import 'dart:io';
 
-/// Packages that come from the Flutter SDK instead of the pub cache.
-const Set<String> _sdkPackages = <String>{
-  'flutter',
-  'flutter_test',
-  'flutter_localizations',
-  'sky_engine',
-  'flutter_web_plugins',
-};
+/// `source` value that marks a package as shipped by the Flutter SDK instead of
+/// being downloaded into the pub cache.
+///
+/// Detecting the SDK this way instead of by package name keeps the scan correct
+/// when a dependency pulls in more SDK packages: adding `integration_test`
+/// brought `flutter_driver` and `fuchsia_remote_debug_protocol` along, and a
+/// hard-coded name list silently reported them as unlicensed.
+const String _sdkSource = 'sdk';
 
 /// Marker string per licence family, matched case-insensitively.
 const Map<String, String> _familyMarkers = <String, String>{
@@ -51,10 +51,13 @@ const Set<String> _forbiddenFamilies = <String>{'GPL', 'MPL', 'UNKNOWN'};
 
 /// One entry of `pubspec.lock`.
 final class _LockedPackage {
-  _LockedPackage(this.name, this.version);
+  _LockedPackage(this.name, this.version, this.source);
 
   final String name;
   final String version;
+
+  /// `source` field of the lock entry: `sdk`, `hosted`, `git` or `path`.
+  final String source;
 
   /// Directory name inside `<pub cache>/hosted/pub.dev/`.
   String get directoryName => '$name-$version';
@@ -80,7 +83,7 @@ void main(List<String> arguments) {
   int sdkCount = 0;
 
   for (final _LockedPackage package in packages) {
-    if (_sdkPackages.contains(package.name)) {
+    if (package.source == _sdkSource) {
       sdkCount++;
       continue;
     }
@@ -168,27 +171,37 @@ Directory? _locatePubCache() {
 List<_LockedPackage> _readLockFile(File lockFile) {
   final List<_LockedPackage> packages = <_LockedPackage>[];
   final RegExp namePattern = RegExp(r'^  ([a-z0-9_]+):\s*$');
-  final RegExp fieldPattern = RegExp(r'^    (name|version):\s*"?([^"]+)"?\s*$');
+  final RegExp fieldPattern = RegExp(
+    r'^    (name|version|source):\s*"?([^"]+)"?\s*$',
+  );
 
   String? name;
   String? version;
+  String source = '';
   for (final String line in lockFile.readAsLinesSync()) {
     final Match? header = namePattern.firstMatch(line);
     if (header != null) {
       if (name != null && version != null) {
-        packages.add(_LockedPackage(name, version));
+        packages.add(_LockedPackage(name, version, source));
       }
       name = header.group(1);
       version = null;
+      source = '';
       continue;
     }
     final Match? field = fieldPattern.firstMatch(line);
-    if (field != null && field.group(1) == 'version') {
-      version = field.group(2);
+    if (field == null) {
+      continue;
+    }
+    switch (field.group(1)) {
+      case 'version':
+        version = field.group(2);
+      case 'source':
+        source = field.group(2) ?? '';
     }
   }
   if (name != null && version != null) {
-    packages.add(_LockedPackage(name, version));
+    packages.add(_LockedPackage(name, version, source));
   }
   return packages;
 }

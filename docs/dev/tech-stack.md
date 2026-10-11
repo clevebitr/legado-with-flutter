@@ -219,6 +219,7 @@ dart run drift_dev schema generate drift_schemas/ test/core/storage/generated_mi
 |---|---|---|---|---|
 | `flutter_lints` | `^6.0.0` | 基础 lint 规则集 | BSD-3-Clause | — |
 | `mocktail` | `^1.0.5` | Mock 测试 | MIT | C-TEST-1 |
+| `integration_test` | Flutter SDK | 设备级集成测试（Windows / Android 模拟器） | BSD-3-Clause | C-TEST-7；环境与命令见 `docs/dev/test-environment.md` |
 
 ## 10. 已移除与明确禁止的依赖
 
