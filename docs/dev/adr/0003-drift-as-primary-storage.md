@@ -34,9 +34,13 @@ dependencies:
   drift_flutter: ^0.3.1
   path_provider: ^2.1.6
 dev_dependencies:
-  drift_dev: ^2.35.2
+  drift_dev: ^2.35.1
   build_runner: ^2.16.2
 ```
+
+> **2026-10-11 修订：** 初版此处误写 `drift_dev: ^2.35.2`。该版本不存在
+> （`drift_dev` 落后 `drift` 本体一个补丁），唯一可行解是 `^2.35.1`，
+> 硬约束见 `docs/dev/tech-stack.md` §1.1。
 
 ## 后果
 

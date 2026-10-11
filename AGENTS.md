@@ -53,11 +53,16 @@
 
 ## 4. 合并门禁（缺一不可）
 
+> **本命令清单是门禁命令的唯一出处**（ADR-0013 §5）。CI 的执行顺序见
+> `docs/dev/testing.md` §7；阈值定义见 `docs/dev/testing.md` §2。
+> 其他文档、PR 模板、AI 提示词模板一律回链本节，不得再抄一份。
+
 ```bash
 dart format --set-exit-if-changed .
 flutter analyze                                            # 必须零警告（含 analyzer 插件规则）
-flutter test
-dart run build_runner build --delete-conflicting-outputs
+flutter test --coverage
+dart run tool/check_coverage.dart                          # 必须退出码 0（阈值 + 未测量源文件，见 testing.md §2）
+dart run build_runner build                                # C-DEP-4（ADR-0013 §6）
 git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'  # 生成物与源码同步
 ```
 
@@ -90,4 +95,4 @@ git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'  # 生成物与源码�
 
 ---
 
-**文档版本：** v2.0 · **最后更新：** 2026-10-10 · **适用项目：** Flutter 阅读 App（MD3E、多平台、Dart 书源解析）
+**文档版本：** v2.0 · **最后更新：** 2026-10-11 · **适用项目：** Flutter 阅读 App（MD3E、多平台、Dart 书源解析）

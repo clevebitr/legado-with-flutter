@@ -89,8 +89,8 @@
 2. `AGENTS.md` 与 `CONTRIBUTING.md` 只放地图与流程，**不放规则正文**。
 3. 同一份清单（提示词模板、自查清单、检查项）只保留一处；
    AI 提示词模板位于 `docs/dev/constraints.md` 末尾，其他文档只链接。
-4. 需要机器执行的规则（lint、CI、脚本）必须落到 `analysis_options.yaml`
-   或 `docs/dev/testing.md` 声明的命令中，不允许只存在于散文里。
+4. 需要机器执行的规则（lint、CI、脚本）必须落到 `analysis_options.yaml`、
+   `AGENTS.md` §4 或 `docs/dev/testing.md` 声明的命令中，不允许只存在于散文里。
 5. 修改任何规范时，必须同步检查：`docs/README.md` 索引、
    被引用条目的回链、以及 `docs/dev/adr/` 是否需要一个新决策记录。
 
@@ -108,4 +108,4 @@
 
 ---
 
-**文档版本：** v2.0 · **最后更新：** 2026-10-10
+**文档版本：** v2.0 · **最后更新：** 2026-10-11

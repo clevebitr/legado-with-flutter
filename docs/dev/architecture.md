@@ -15,7 +15,7 @@ lib/
 ├── app.dart                      # MaterialApp 装配：主题、路由、l10n
 ├── core/                         # 无业务语义的共享能力，可被任意层依赖
 │   ├── di/                       # 基础设施 Provider（数据库、HttpClient、Logger）
-│   ├── error/                    # ParseResult / ParseFailureKind
+│   ├── error/                    # ParseResult / ParseFailureKind / ARB 键名助手
 │   ├── logging/                  # Logger 门面（唯一日志入口）
 │   ├── network/                  # HttpClient、CookieManager、超时与重试策略
 │   ├── platform/                 # 平台抽象接口 + 各平台实现 + fallback
@@ -94,10 +94,11 @@ BookSourceRepository bookSourceRepository(Ref ref) =>
 
 ## 5. 跨层契约：`ParseResult`
 
-定义位置：`lib/core/error/parse_result.dart`。
+定义位置：`lib/core/error/parse_result.dart`（类型与契约）；ARB 键名助手
+`lib/core/error/parse_failure_arb_key.dart`（唯一实现 `resolveFailureArbKey`）。
 
 ```dart
-/// Kinds of recoverable failures produced by parsing and network layers.
+/// Kinds of recoverable failures produced by parsing, network and storage layers.
 enum ParseFailureKind {
   networkTimeout,
   networkFailed,
@@ -111,7 +112,8 @@ enum ParseFailureKind {
 }
 
 /// Result of an operation that can fail without throwing.
-@freezed
+// 结果类型构造后不再修改，故关闭 copyWith 生成（ADR-0002 未定义该需求）。
+@Freezed(copyWith: false)
 sealed class ParseResult<T> with _$ParseResult<T> {
   /// Creates a successful result carrying [data].
   const factory ParseResult.success(T data) = ParseSuccess<T>;
@@ -133,7 +135,7 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | 规则 | 说明 |
 |---|---|
 | 不与异常混用 | 可预期失败返回 `ParseResult`；编程错误（`ArgumentError`、断言）直接抛出（C-ERR-1） |
-| 文案在 UI 层 | `ParseFailureKind` → ARB key `failure<PascalCaseKind>`，例如 `failureNetworkTimeout`（C-ERR-7） |
+| 文案在 UI 层 | `ParseFailureKind` → ARB key `failure<PascalCaseKind>`，例如 `failureNetworkTimeout`（C-ERR-7）。键名规则的**规格**出处是 `docs/dev/naming.md` §8，**代码**唯一实现是 `resolveFailureArbKey`；UI 只保留「键 → 文案」的 `switch` |
 | 路径必填 | `rulePath` 使用「书源字段 + 规则片段」描述，如 `searchRule.list`、`contentRule.content`（C-SRC-8） |
 | 穷尽匹配 | 消费方必须 `switch` 穷尽两个分支，禁止 `is` 判断后回退到 `null` |
 
@@ -165,4 +167,4 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 
 ---
 
-**文档版本：** v2.0 · **最后更新：** 2026-10-10
+**文档版本：** v2.0 · **最后更新：** 2026-10-11

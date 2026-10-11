@@ -21,7 +21,7 @@
 |---|---|---|
 | 目录 | `snake_case`，全小写 | `book_source/`、`core/theme/` |
 | Dart 文件 | `snake_case` | `rule_engine.dart`、`book_source_parser.dart` |
-| 测试文件 | `*_test.dart`，与被测文件同目录 | `rule_engine_test.dart` |
+| 测试文件 | `*_test.dart`，放在 `test/` 下并镜像被测文件的 `lib/` 相对路径（ADR-0017） | `test/core/error/parse_result_test.dart` |
 | 生成文件 | 由工具决定，禁止改名、禁止手改 | `book_source.freezed.dart` |
 | ADR | `docs/dev/adr/NNNN-kebab-title.md` | `0001-riverpod-codegen-only.md` |
 | ARB | `app_<locale>.arb` | `app_en.arb`、`app_zh.arb` |
@@ -58,11 +58,15 @@ class HtmlParser { /* ... */ }
 class JsonPathEvaluator { /* ... */ }
 class JsBridge { /* ... */ }
 sealed class ParseResult<T> { /* ... */ }
-final class ParseSuccess<T> extends ParseResult<T> { /* ... */ }
-final class ParseFailure<T> extends ParseResult<T> { /* ... */ }
+class ParseSuccess<T> implements ParseResult<T> { /* ... */ }
+class ParseFailure<T> implements ParseResult<T> { /* ... */ }
 ```
 
-`ParseResult` 的密封层级必须使用 `final class` 子类，以保证 `switch` 穷尽性检查生效。
+`ParseResult` 的密封层级：穷尽性来自 **`sealed` + 子类与基类同库**，
+**不**来自子类是否带 `final`。实际子类由 freezed 生成，形态就是上面这种
+`class X<T> implements ParseResult<T>`；`final class` 不是本项目的硬性要求
+（freezed 也无法生成）。若某个密封层级确实需要禁止外部库二次派生，
+必须弃用 freezed 改为手写 `sealed` + `final class`，并在类型注释中写明理由（ADR-0016）。
 
 ---
 
@@ -200,4 +204,4 @@ Future<ParseResult<List<Book>>> searchBooks(
 
 ---
 
-**文档版本：** v2.0 · **最后更新：** 2026-10-10
+**文档版本：** v2.0 · **最后更新：** 2026-10-11

@@ -17,8 +17,9 @@ android {
     defaultConfig {
         // 发布前必须替换为真实 applicationId（见 docs/dev/platform.md §8「已知待办」）。
         applicationId = "com.example.flutter_reader"
-        // minSdk 显式固定为 26（Android 8.0）：flutter_js_plus 要求 Android 8+，
-        // 而 Flutter 3.47 的默认值为 24，依赖默认值会造成文档与构建不一致。
+        // minSdk 显式固定为 26（Android 8.0）：这是本项目自定的最低测试面，
+        // 与任何第三方包的要求无关（依据与备选方案见 ADR-0018）。
+        // Flutter 3.47 的默认值为 24，保持显式声明以避免“默认值一变基线就变”。
         // 见 docs/dev/platform.md §1（C-PLT-5）。
         minSdk = 26
         targetSdk = flutter.targetSdkVersion

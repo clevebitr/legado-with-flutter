@@ -30,7 +30,7 @@ Flutter 与 Dart 的版本基线见 [`docs/dev/tech-stack.md`](docs/dev/tech-sta
 
 ```bash
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 flutter gen-l10n
 ```
 
@@ -50,14 +50,8 @@ flutter run -d windows     # 或 -d android / -d ios
 
 ### 门禁命令
 
-```bash
-dart format --set-exit-if-changed .
-flutter analyze
-flutter test --coverage
-dart run tool/check_coverage.dart
-```
-
-完整门禁定义见 [`AGENTS.md`](AGENTS.md) §4。`riverpod_lint` 插件规则由
+完整且唯一的门禁命令清单见 [`AGENTS.md`](AGENTS.md) §4（本文档不复述，见 ADR-0013 §5）；
+执行顺序与 CI 特有步骤见 [`docs/dev/testing.md`](docs/dev/testing.md) §7。`riverpod_lint` 插件规则由
 `flutter analyze` 执行（`analysis_options.yaml` 顶层 `plugins:`）。
 
 ---

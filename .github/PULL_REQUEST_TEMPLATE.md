@@ -27,13 +27,15 @@ Closes #
 
 ## 门禁结果
 
-<!-- 逐条粘贴实际结果，不要只写「已通过」。 -->
+<!-- 逐条粘贴实际结果，不要只写「已通过」。命令清单的唯一出处：AGENTS.md §4。 -->
 
-- [ ] `dart format --set-exit-if-changed .`
-- [ ] `flutter analyze` 零警告（含 `analysis_options.yaml` 顶层 `plugins:` 中 riverpod_lint 的规则）
-- [ ] `flutter test --coverage`
-- [ ] `dart run tool/check_coverage.dart`
-- [ ] `dart run build_runner build --delete-conflicting-outputs` 后无生成物差异
+- [ ] 已逐条运行 `AGENTS.md` §4 的全部门禁（含覆盖率门禁的阈值与「未测量源文件」两项判定），结果粘贴如下
+
+```text
+<粘贴 dart format / flutter analyze / flutter test --coverage /
+dart run tool/check_coverage.dart / dart run build_runner build /
+git diff --exit-code 的实际输出>
+```
 
 ## 规范自查
 

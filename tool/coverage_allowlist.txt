@@ -1,0 +1,17 @@
+# 覆盖率门禁豁免名单（见 docs/dev/adr/0019-coverage-gate-must-detect-unmeasured-files.md）
+#
+# 每行一个仓库相对路径，允许行尾用 `#` 注释说明原因。
+# 只允许两类文件进入本表：
+#   1. 仅特定平台或条件编译下可达，单元测试环境无法加载的实现文件；
+#   2. 依赖真实设备/原生库、只能在 integration_test 或 tool/spike 中执行的入口文件。
+#
+# 禁止把「暂时没写测试」的文件写进来：
+# 新增条目必须在 PR 描述中给出理由。
+# 条目若已经出现在覆盖率报告中，或文件已被删除，门禁会以退出码 3 判失败。
+#
+# 注意：手写文件若加了 `// coverage:ignore-file`，lcov 会把它整行从报告里移除，
+# 因此它会被当成「未测量源文件」而失败；确需 ignore 时必须在本表登记并说明原因。
+# 生成物（*.g.dart / *.freezed.dart / *.gr.dart / **/generated/**）无需登记，已自动排除。
+#
+# 示例（当前无豁免项）：
+# lib/core/platform/system_ui_controller_android.dart  # 仅 Android 可达，由平台验收清单覆盖

@@ -2,15 +2,19 @@
 
 - **状态：** **Superseded by ADR-0015**（2026-10-10）—— 核心架构假设经实测成立，但所选依赖不可用，已改用 `flutter_qjs_next`
 - **日期：** 2026-10-10
-- **关联：** C-SRC-2、C-SRC-3、`docs/dev/book-source.md` §6、`docs/dev/tech-stack.md` §5、`tool/spike/README.md`
+- **关联：** C-SRC-2、C-SRC-3、ADR-0015、`docs/dev/book-source.md` §6、`docs/dev/tech-stack.md` §5、`tool/spike/README.md`
 
 > ## ⚠️ 实测结论（2026-10-10，见 `tool/spike/README.md`）
 >
+> **本节是 spike 期的中间状态记录，已被 ADR-0015 完全取代：**
+> 引擎已选定为 `flutter_qjs_next 1.5.2`，`@js:` 已恢复为 **M0**
+> （见 `docs/dev/book-source.md` §3.1）。下文的「引擎选型未定」只是当时的结论，
+> 保留仅为可追溯，不得作为当前规范引用。
 > 本 ADR 的**核心架构假设成立**：QuickJS 可在后台 Isolate 中创建、求值，
 > 且 JS→Dart 回调桥在 Isolate 内同样可用；runaway 脚本可由 `Isolate.kill` 终止且
 > 不污染原生库；复用运行时下 100 次求值仅 11ms（0.11ms/次）。
 >
-> 但以下部分**已被证据推翻，等待新 ADR 取代**：
+> 但以下部分**已被证据推翻，并已由 ADR-0015 取代**：
 >
 > | 本 ADR 的结论 | 实测 |
 > |---|---|
@@ -19,8 +23,8 @@
 > | 内存上限 32 MB | ❌ 预编译 DLL 未导出 `jsSetMemoryLimit` |
 > | 禁止在后台 Isolate 使用回调桥 | ✅ **担忧不成立**：回调桥在 Isolate 内正常工作 |
 >
-> **引擎选型未定**：候选与建议见 `tool/spike/README.md` §4–5（首选 `flutter_qjs_next`）。
-> 在选定前，`@js:` 不得计入 M0 完成判定。
+> **引擎选型未定（今已由 ADR-0015 取代）**：候选与建议见 `tool/spike/README.md` §4–5（首选 `flutter_qjs_next`）。
+> 该中间状态下的限制「`@js:` 不得计入 M0 完成判定」**已失效**。
 
 ## 背景
 

@@ -118,7 +118,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | ID | 约束 |
 |---|---|
 | C-SRC-1 | 解析引擎必须为纯 Dart，且无 Flutter / UI 依赖（受 C-ARCH-7 约束）。 |
-| C-SRC-2 | JS 规则必须在**独立 Isolate** 中执行，禁止阻塞 UI 线程（ADR-0015）。超时用引擎中断器 `QuickJsRuntime2(timeout: 5000)`，并将 `Isolate.kill(priority: immediate)` 保留为硬预算兜底；内存上限用 `memoryLimit: 32 * 1024 * 1024`。 |
+| C-SRC-2 | JS 规则必须在**独立 Isolate** 中执行，禁止阻塞 UI 线程（ADR-0015）。超时、内存上限与调用次数配额见 `docs/dev/book-source.md` §6（本文档不复述数值）；`Isolate.kill(priority: immediate)` 必须保留为硬预算兜底。 |
 | C-SRC-3 | JS 桥接只暴露 `book-source.md` 声明的白名单 API；禁止暴露文件系统、进程、网络与原生日志。 |
 | C-SRC-4 | 不支持的规则类型必须返回 `ParseFailure(unsupportedRule)` 并记录日志；**禁止静默忽略**。 |
 | C-SRC-5 | URL 模板必须统一经 `renderUrlTemplate` 渲染；禁止手写字符串拼接。 |
@@ -213,7 +213,7 @@ Container(
 | C-TEST-1 | 覆盖率门禁（各层阈值唯一定义在 `docs/dev/testing.md` §2，由 `tool/check_coverage.dart` 强制执行）。 |
 | C-TEST-2 | 所有页面级 Widget 至少一个 smoke test。 |
 | C-TEST-3 | 测试命名格式：`方法名_场景_预期结果`，例如 `searchBooks_whenNetworkFails_returnsParseFailure`。 |
-| C-TEST-4 | 测试文件与被测文件同目录，文件名 `*_test.dart`。 |
+| C-TEST-4 | 测试文件放在 `test/` 下并**镜像被测文件的 `lib/` 相对路径**（ADR-0017）；`lib/**` 下禁止出现 `*_test.dart`。文件名固定 `*_test.dart`。 |
 | C-TEST-5 | 禁止 `skip: true` 合入 `main`，除非关联 issue 且在 PR 描述中说明。 |
 | C-TEST-6 | Golden 测试使用 Flutter 内置 `matchesGoldenFile`；**禁止使用已停止维护的 `golden_toolkit`**（见 ADR-0009）。 |
 | C-TEST-7 | CI 必须依次通过 `AGENTS.md` §4 的全部命令；缺任一命令视为未通过。 |
@@ -227,7 +227,7 @@ Container(
 | C-DEP-1 | 新增依赖必须经评审；禁止引入体积过大或维护不活跃的包。 |
 | C-DEP-2 | 版本必须使用 `^` 或精确版本；**禁止 `any`**。 |
 | C-DEP-3 | 代码生成工具固定为 `freezed`、`json_serializable`、`riverpod_generator`、`drift_dev`。 |
-| C-DEP-4 | 生成命令固定为 `dart run build_runner build --delete-conflicting-outputs`。 |
+| C-DEP-4 | 生成命令固定为 `dart run build_runner build`（`--delete-conflicting-outputs` 已在 `build_runner 2.16.2` 中移除并被忽略，见 ADR-0013 §6）。 |
 | C-DEP-5 | 生成文件（`*.g.dart`、`*.freezed.dart`、`*.gr.dart`）禁止手改；冲突必须重新生成。 |
 | C-DEP-6 | `pubspec.yaml` 是依赖的唯一来源；`docs/dev/tech-stack.md` 的说明表必须与其同步，禁止只在其中一处新增依赖。 |
 | C-DEP-7 | 新增依赖必须与 GPL-3.0 兼容：宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；**禁止引入 GPL-2.0-only、无许可证或专有许可的依赖**。核实结果记入 `NOTICE.md` §5。 |
@@ -321,7 +321,7 @@ Container(
 - [ ] 书源解析纯 Dart；JS 在独立 Isolate；不支持规则返回 `unsupportedRule`（C-SRC-1/2/4）？
 - [ ] 主题令牌取自 `Theme.of(context).m3e`，无硬编码颜色/尺寸/字符串（C-UI-1/5）？
 - [ ] 平台差异代码位于 `core/platform/`，UI 未直接判断平台（C-PLT-1）？
-- [ ] 有对应的单元测试 / Widget 测试，覆盖率满足 C-TEST-1？
+- [ ] 有对应的单元测试 / Widget 测试，覆盖率满足 C-TEST-1（含「`lib/**` 下不得出现未测量源文件」，ADR-0019）？
 - [ ] 使用 `freezed` / `json_serializable`，未手改生成文件（C-DEP-3/5）？
 - [ ] 无硬编码密钥、无明文 HTTP、无性能陷阱（C-SEC-1/2、C-PERF-1..5）？
 - [ ] 无未使用代码、无 TODO 占位、未修改生成文件（C-BAN-1/2/3）？
@@ -352,11 +352,11 @@ docs/dev/testing.md、docs/dev/platform.md、docs/dev/tech-stack.md。
 - 性能：重计算放入 Isolate；列表懒加载。
 
 禁止：未使用代码、TODO 占位、dynamic、! 强制解包、硬编码字符串/颜色、
-未声明的依赖、跳过 dart run custom_lint。
+未声明的依赖。
 
-必须通过：dart format --set-exit-if-changed . / flutter analyze（零警告）/ flutter test。
+必须通过：AGENTS.md §4 声明的全部门禁命令（清单唯一出处；本文档不复述）。
 ```
 
 ---
 
-**文档版本：** v2.0 · **最后更新：** 2026-10-10
+**文档版本：** v2.0 · **最后更新：** 2026-10-11

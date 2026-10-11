@@ -1,8 +1,8 @@
 # ADR-0002 错误契约：`ParseResult` 与 `ParseFailureKind`
 
-- **状态：** Accepted
+- **状态：** Accepted（2026-10-11 修订：第 2 条的子类形态改按 ADR-0016）
 - **日期：** 2026-10-10
-- **关联：** C-ERR-1..3、C-ERR-7、C-ERR-8、C-SRC-8、`docs/dev/architecture.md` §5、`docs/dev/book-source.md` §7
+- **关联：** C-ERR-1..3、C-ERR-7、C-ERR-8、C-SRC-8、ADR-0016、`docs/dev/architecture.md` §5、`docs/dev/book-source.md` §7
 
 ## 背景
 
@@ -18,7 +18,11 @@
 ## 决策
 
 1. 可能失败的操作统一返回 `ParseResult<T>`；**不引入 `Result<T, E>`**。
-2. `ParseResult<T>` 为密封类，子类固定为 `ParseSuccess<T>` 与 `ParseFailure<T>`（`final class`）。
+2. `ParseResult<T>` 为密封类，子类固定为 `ParseSuccess<T>` 与 `ParseFailure<T>`。
+   > **2026-10-11 修订：** 本项原写「`（final class）`」。freezed 3 生成的子类形态为
+   > `class X<T> implements ParseResult<T>`，无 `final class` 选项；穷尽性的依据是
+   > **`sealed` + 同库子类**，与 `final` 无关。原措辞已按 ADR-0016 废止，
+   > 保留在此以便追溯。
 3. `ParseFailure` 携带 `kind`（`ParseFailureKind`）、`rulePath`（必填）、`cause`、`stackTrace`。
 4. **失败对象禁止携带用户可见文案**；文案由 UI 经 ARB 映射，键名规则为
    `failure<PascalCaseKind>`（例如 `failureNetworkTimeout`）。

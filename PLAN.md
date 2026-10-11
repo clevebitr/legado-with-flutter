@@ -31,8 +31,9 @@
 
 ### 铁律二：每步都过门禁
 
-每次提交前必须跑 `AGENTS.md` §4 的全部门禁。**覆盖率门禁会在你新增任何 `lib/core/**`
-文件的瞬间变红**，所以测试必须与实现同一个 PR 提交，不能"回头补"。
+每次提交前必须跑 `AGENTS.md` §4 的全部门禁。**新增任何 `lib/core/**` 源文件都会让覆盖率门禁
+报「未测量源文件」并以退出码 3 失败**（ADR-0019），所以测试必须与实现同一个 PR 提交，
+不能“回头补”——这是**脚本判定**，不是提醒。
 
 ---
 
@@ -73,7 +74,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 | 步骤 | 交付物 | 依据 | 验收 |
 |---|---|---|---|
-| 1.1 | `lib/core/error/parse_result.dart` + 单测 | ADR-0002 | `ParseFailureKind` 9 个值均有 ARB 文案键；`switch` 穷尽；core 覆盖率 100% |
+| 1.1 | `lib/core/error/`：`parse_result.dart`（契约）+ `parse_failure_arb_key.dart`（ARB 键名规则）+ 单测 | ADR-0002 | `ParseFailureKind` 9 个值均有 ARB 文案键；`switch` 穷尽；core 覆盖率 100% |
 | 1.2 | `lib/core/logging/`：Logger 门面 + Provider | ADR-0006、C-ERR-5 | 测试断言级别与脱敏（Cookie/Token/正文不入日志，C-SEC-4） |
 | 1.3 | `lib/core/platform/`：`PlatformInfo` / `DynamicColorProvider` 抽象 + 各平台 fallback | C-PLT-1..4 | 把 `lib/app.dart` 里直接用 `DynamicColorBuilder` 的接线收敛到这里 |
 | 1.4 | `lib/core/network/`：`HttpClient`、`CookieManager` | C-NET-1..5 | 替身可注入；超时/重试上限可配；编码走 `betto_charset_detector`（C-NET-3） |
@@ -81,7 +82,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 **本阶段禁止：** 写任何书源相关代码；写 UI 页面。
 
-**完成判定：** `flutter analyze` / `format` / `test` / 覆盖率门禁全绿，且 `lib/core/**` 覆盖率 100%。
+**完成判定：** `AGENTS.md` §4 的全部门禁（含覆盖率门禁）全绿，且 `lib/core/**` 覆盖率 100%。
 
 ---
 
@@ -98,6 +99,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 2.4 | 4 个 UseCase：`SearchBooks` / `FetchBookInfo` / `FetchToc` / `FetchContent` | C-ARCH-4 | 失败路径返回 `ParseResult`，不得抛到 UI |
 | 2.5 | 最小 UI：搜索框 → 结果列表 → 目录 → 正文（纯文本） | C-UI-1..9 | 文案来自 ARB；令牌来自 `context.m3e` |
 | 2.6 | 离线语料：`test/fixtures/book_sources/*.json` + `test/fixtures/html/*.html` | `book-source.md` §10 | 测试**禁止真实联网**（C-NET-8） |
+| 2.7 | `failureAt<T>` 封装：`rulePath` 非空断言 + 失败构造的唯一入口 | C-SRC-8、ADR-0002 | 空 `rulePath` 抛 `AssertionError`（1 条单测）；规则引擎所有失败路径均经此构造 |
 
 **本阶段禁止：** 实现 `@js:`；实现翻页；做任何"以后会用到"的抽象。
 
@@ -144,7 +146,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 | Gate | 条件 |
 |---|---|
-| **G1** | `lib/core/**` 覆盖率 100%；四个门禁命令全绿 |
+| **G1** | `lib/core/**` 覆盖率 100%；`AGENTS.md` §4 的全部命令退出码均为 0 |
 | **G2** | 1 个书源全链路离线回放通过；手动真实链路跑通一次 |
 | **G3** | 2 个书源全链路离线回放；矩阵 M0 状态列全部「已确认」；9 个失败 kind 均有测试 |
 | **G4** | 矩阵 M1 状态列全部「已确认」 |
@@ -180,8 +182,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 4 | 先写 UI 再定模型 | 模型未定就写 UI，必然返工 |
 | 5 | 先铺语法、后拼链路 | 接口形状未经验证，返工成本高一个数量级 |
 | 6 | 靠"杀 Isolate"当唯一超时手段 | 引擎级超时优先，`Isolate.kill` 只作兜底（引擎行为可能随版本变化） |
-| 7 | 新增 `lib/core/**` 文件却不带测试 | 覆盖率门禁立刻变红；实现与测试同 PR |
-| 8 | 手改生成文件 / 忘记重跑生成 | 只用 `dart run build_runner build --delete-conflicting-outputs`（C-DEP-4/5） |
+| 7 | 新增 `lib/core/**` 文件却不带测试 | 覆盖率门禁的「未测量源文件」检查以退出码 3 失败（ADR-0019）；实现与测试同 PR |
+| 8 | 手改生成文件 / 忘记重跑生成 | 只用 `dart run build_runner build`（C-DEP-4/5；`--delete-conflicting-outputs` 已失效，见 ADR-0013 §6） |
 | 9 | 同一数值写在两处（版本、阈值） | 单一来源原则；本项目的"四处同步"清单见 `tech-stack.md` §1 |
 | 10 | 以为 spike 绿了就等于功能已测 | `tool/spike/` 是**架构可行性**验证，不是功能回归；功能测试必须进 `test/` |
 
@@ -220,4 +222,4 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 ---
 
-**文档版本：** v1.0 · **最后更新：** 2026-10-10
+**文档版本：** v1.0 · **最后更新：** 2026-10-11

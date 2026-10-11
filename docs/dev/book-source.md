@@ -218,6 +218,10 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 
 ## 7. 失败语义
 
+> 本表定义的是**触发条件**；「ARB 文案键名规则」（`failure<PascalCaseKind>`）的
+> 唯一出处是 `docs/dev/naming.md` §8，本表只列出具体键值。
+> 「可重试」列由 `ParseFailureKind.isRetryable` 实现，改动任一侧都必须同步另一侧。
+
 | `ParseFailureKind` | 触发条件 | ARB 文案键 | 可重试 |
 |---|---|---|---|
 | `networkTimeout` | 连接/读取超时 | `failureNetworkTimeout` | 是 |
@@ -302,4 +306,4 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 ---
 
 **文档版本：** v1.0（对标原版阅读；语法行状态仍为待验证，需真实书源回归后逐行确认）
-**最后更新：** 2026-10-10
+**最后更新：** 2026-10-11

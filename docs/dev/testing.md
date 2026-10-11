@@ -30,13 +30,26 @@
 
 生成物（`*.g.dart`、`*.freezed.dart`、`*.gr.dart`、`**/generated/**`）不计入门禁。
 
+门禁有两类判定，**任何一类失败即整体失败**（ADR-0019）：
+
+1. **阈值**：上表中每层累计行覆盖率不得低于阈值。
+2. **未测量源文件**：`lib/core/**`、`lib/features/*/domain/**`、`lib/features/*/data/**` 下的
+   每个源文件都必须出现在报告中。lcov 只统计**运行期被加载过**的库，因此
+   「新增了生产代码但没写测试」不会拉低百分比，而是直接命中本项。
+   确需豁免的文件（仅特定平台可达、或只能跑在 `integration_test` 的入口）
+   逐行写入 `tool/coverage_allowlist.txt` 并在行内注释原因；
+   allowlist **不得**用于「暂时没写测试」，且条目若**出现在**报告中同样判失败。
+   手写文件若使用 `// coverage:ignore-file`，会被 lcov 从报告中整体移除，
+   因此同样需要在 allowlist 中登记并说明原因。
+
 ```bash
 flutter test --coverage
-dart run tool/check_coverage.dart                  # 默认读取 coverage/lcov.info
+dart run tool/check_coverage.dart                  # 默认读取 coverage/lcov.info + tool/coverage_allowlist.txt
 dart run tool/check_coverage.dart --file=coverage/lcov.info --data=85
+dart run tool/check_coverage.dart --allowlist=    # 不使用 allowlist（排查用）
 ```
 
-退出码：`0` 通过 · `1` 未达阈值 · `2` 报告缺失。
+退出码：`0` 通过 · `1` 未达阈值 · `2` 报告缺失 · `3` 存在未测量源文件（或 allowlist 已过期）。
 
 阈值可通过 `--core=`、`--domain=`、`--data=` 临时上调，**禁止下调**；
 确需下调必须写 ADR。
@@ -45,7 +58,9 @@ dart run tool/check_coverage.dart --file=coverage/lcov.info --data=85
 
 ## 3. 测试命名
 
-- 文件名：与被测文件同目录，`*_test.dart`（C-TEST-4）。
+- 文件名：`*_test.dart`，放在 `test/` 下并**镜像被测文件的 `lib/` 相对路径**
+  （C-TEST-4、ADR-0017）：`lib/core/error/parse_result.dart` →
+  `test/core/error/parse_result_test.dart`。`lib/**` 下禁止出现 `*_test.dart`。
 - 测试名：`方法名_场景_预期结果`（C-TEST-3）。
 
 ```dart
@@ -110,7 +125,7 @@ await tester.pumpAndSettle();
 | 场景 | 做法 |
 |---|---|
 | 规则引擎 | 纯 Dart 单元测试，语料见 `docs/dev/book-source.md` §10 |
-| JS 桥接 | 单测用假 `JsBridge`；真实 `flutter_js_plus` 走 `integration_test`，标记 `@Tags(['js'])` |
+| JS 桥接 | 单测用假 `JsBridge`；真实引擎探针位于 `tool/spike/`（需先构建原生库后手动运行，见 `tool/spike/README.md`、ADR-0015），**不进入** `flutter test` 的默认发现路径 |
 | Isolate 超时 | 用可注入的 `timeout` 参数把超时压到毫秒级，禁止依赖真实 5 秒等待 |
 | 大文件流 | 用生成器构造分块输入，断言内存不随文件大小线性增长 |
 
@@ -118,25 +133,23 @@ await tester.pumpAndSettle();
 
 ## 7. CI 流水线
 
-`.github/workflows/ci.yml` 必须依次执行（顺序不可调整，先快后慢）：
+`.github/workflows/ci.yml` 必须依次执行（顺序不可调整，先快后慢）。
+**命令本体不在本节重复：唯一出处为 `AGENTS.md` §4**（ADR-0013 §5）。
+本节只定义顺序与 CI 特有项：
 
-```bash
-flutter pub get
-dart run build_runner build --delete-conflicting-outputs
-git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart' '**/*.gr.dart'
-dart format --set-exit-if-changed .
-flutter analyze
-flutter test --coverage
-dart run tool/check_coverage.dart
-```
+| 顺序 | 步骤 | 备注 |
+|---|---|---|
+| 1 | `flutter pub get` | CI 特有（本地常驻） |
+| 2 | 生成代码（C-DEP-4） | 必须先于一致性检查与静态分析 |
+| 3 | 生成物一致性检查 | 保证 `*.g.dart` / `*.freezed.dart` 与源码同步，防手改或忘生成（C-DEP-5） |
+| 4 | `dart format --set-exit-if-changed .` | 快，先跑 |
+| 5 | `flutter analyze` | 含 `analysis_options.yaml` 顶层 `plugins:` 的 riverpod_lint 规则 |
+| 6 | `flutter test --coverage` | 覆盖率报告是第 7 步的输入 |
+| 7 | `dart run tool/check_coverage.dart` | 阈值 + 未测量源文件（§2、ADR-0019） |
 
 要点：
 
-- **生成物一致性检查**（第 3 步）保证 `*.g.dart` / `*.freezed.dart` 与源码同步，
-  防止手改或忘记重新生成（C-DEP-5）。
-- `riverpod_lint` 自 3.1.9 起改用 `analysis_server_plugin`，经
-  `analysis_options.yaml` 的**顶层** `plugins:` 安装并**由 `flutter analyze` 执行**，
-  不再需要 `custom_lint`（ADR-0010）。
+- 第 3 步的路径集比 `AGENTS.md` §4 多包含 `'**/*.gr.dart'`（Drift 生成物），CI 以 CI 侧为准。
 - Golden 测试在 CI 中必须固定平台（`runs-on: ubuntu-latest`），
   禁止在有字体差异的多个平台上跑同一套基线。
 
@@ -152,4 +165,4 @@ dart run tool/check_coverage.dart
 
 ---
 
-**文档版本：** v2.0 · **最后更新：** 2026-10-10
+**文档版本：** v2.0 · **最后更新：** 2026-10-11

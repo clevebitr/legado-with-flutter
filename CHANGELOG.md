@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Spec, gates & consistency audit (2026-10-11)
+
+- Added ADR-0016 (sealed variant form: the compiler/generator shape wins over the literal
+  `final class` wording), ADR-0017 (tests live under `test/`, mirroring the `lib/` path),
+  ADR-0018 (Android baseline stays at `minSdk 26`, with a rebuilt, self-contained rationale),
+  ADR-0019 (the coverage gate must fail on source files missing from the report) and a
+  revision of ADR-0013 (single source for the gate-command list and the generation command).
+- Added the Phase 1.1 error contract under `lib/core/error/`: `parse_result.dart`
+  (`ParseResult` / `ParseFailureKind` per ADR-0002) and `parse_failure_arb_key.dart`
+  (`resolveFailureArbKey`, the single implementation of the `failure<PascalCaseKind>`
+  ARB key rule from `docs/dev/naming.md` §8).
+- The coverage gate now reports exit code `3` when a `lib/` source file never appears in the
+  lcov report, with `tool/coverage_allowlist.txt` for platform-only or integration-only
+  entries. Previously an untested new `lib/core/**` file silently produced `100% 4/4 OK`.
+- The gate command list now has one owner (`AGENTS.md` §4); `docs/dev/testing.md` §7 keeps
+  only CI ordering. Removed stale `custom_lint` and `--coverage`-less variants from the PR
+  template, README, CONTRIBUTING and the AI prompt template.
+- `--delete-conflicting-outputs` removed from C-DEP-4 and all call sites: `build_runner
+  2.16.2` drops it and prints `These options have been removed and were ignored`.
+- Cleared the remaining `flutter_js_plus` residue from `tech-stack.md` §5, `testing.md` §6,
+  `platform.md` §1 and `android/app/build.gradle.kts`; one of those passages still asserted
+  the callback bridge was unusable in a background isolate, which ADR-0015 refuted.
+- Fixed duplicated/ drifted facts: `drift_dev` version in ADR-0003, package count 151 -> 150
+  in ADR-0007/ADR-0010/`tech-stack.md`, `custom_lint` in ADR-0001, stale platform baselines in
+  ADR-0013, the duplicated `8.` item in ADR-0010, and the superseded ADR-0008 banner.
+
 ### Documentation (2026-10-10)
 
 - Added `PLAN.md`: implementation order, per-phase acceptance criteria, gate checkpoints,
@@ -29,18 +55,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@js:` returns to M0 in the book-source matrix; no dependency source patching is needed any
   more, so the spike now runs against the normal build output via `FLUTTER_QJS_NEXT_LIBRARY`.
 
-### Spike 1 — JS engine in a background Isolate (2026-10-10)
+### Spike 1 — JS engine in a background Isolate (2026-10-10, superseded by *Engine selection*)
+
+> This entry records the intermediate state reached during the spike. Its conclusions about
+> the engine choice and about `@js:` are superseded by the *Engine selection* entry below;
+> the measured numbers describe `flutter_js_plus`, not the engine finally adopted.
 
 - Added `tool/spike/js_isolate_spike_test.dart` (9 probes) and
   `tool/spike/README.md` (evidence + engine option matrix).
 - **Confirmed:** QuickJS runs in a background Isolate, the JS -> Dart callback bridge works
   there too, a runaway script is containable by `Isolate.kill` without poisoning the native
-  library, and a reused runtime evaluates in ~0.11 ms.
+  library, and a reused runtime evaluates in ~0.11 ms (`flutter_js_plus`; measured 0.18 ms on
+  `flutter_qjs_next`).
 - **Refuted:** `flutter_js_plus 0.0.4` fails to compile on Dart 3.13 (4 nullable `Pointer`
   returns in `Pointer.fromFunction`), its Windows CMake target name mismatches the package
   name, its `timeout` parameter has no effect, and the shipped DLL lacks `jsSetMemoryLimit`.
-- ADR-0008 marked **部分失效（待裁决）**; `@js:` is no longer counted toward M0 until an engine
-  is chosen. Preferred candidate: `flutter_qjs_next`.
+- ADR-0008 marked **部分失效（待裁决）** at the time; it is now `Superseded by ADR-0015`.
+  Preferred candidate at that moment: `flutter_qjs_next`.
 
 ### Toolchain (2026-10-10)
 
@@ -48,13 +79,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the app bootstrap (`lib/main.dart`, `lib/app.dart`, `lib/core/theme/app_theme.dart`)
   plus a widget smoke test, replacing the Flutter template files.
 - Dependency set fixed to the pub-solver-determined coherent solution (see `Changed` below).
-- Android: `minSdk` pinned to 26 — Flutter's default of 24 is below `flutter_js_plus`'s
-  Android 8+ requirement. Build workarounds for that legacy plugin are recorded in
-  `docs/dev/platform.md` §8.
+- Android: `minSdk` pinned to 26. The original rationale (a requirement of the then-engine)
+  was void once ADR-0015 replaced that engine and has been rebuilt from first principles in
+  ADR-0018; see `docs/dev/platform.md` §1 and §8.
 - Verified end to end: `flutter analyze` reports no issues, `flutter test --coverage` passes,
   the coverage gate exits 0, and `flutter build apk --debug` succeeds.
-- `LICENSE` verified byte-identical to the canonical GPL-3.0 text; all 151 locked packages
-  license-scanned with zero findings (`NOTICE.md` §5).
+- `LICENSE` verified byte-identical to the canonical GPL-3.0 text; all locked packages
+  license-scanned with zero findings (`NOTICE.md` §5; 151 at the time, 150 after the engine
+  switch).
 
 ### Added
 

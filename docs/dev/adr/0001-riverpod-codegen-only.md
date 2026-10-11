@@ -27,7 +27,9 @@
 
 - `AGENT_CONSTRAINTS.md` §2 的手写示例已被替换为 `@riverpod` 示例。
 - `naming.md` §6 注明 ViewModel 命名废弃并回链本 ADR。
-- 新增 `riverpod_generator`、`riverpod_lint`、`custom_lint` 到 `pubspec.yaml`。
+- 新增 `riverpod_generator`、`riverpod_lint` 到 `pubspec.yaml`。
+  > **2026-10-11 修订：** 本项原文还包括 `custom_lint`；它已按 ADR-0010 §5 移除，
+  > `riverpod_lint ≥3.1.9` 改为由 `analysis_options.yaml` 顶层 `plugins:` 安装。
 - 生成物 `*.g.dart` 必须随源码提交，由 CI 的一致性检查保障（ADR-0010）。
 
 ## 备选方案

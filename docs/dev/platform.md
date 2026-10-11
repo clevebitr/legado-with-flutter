@@ -9,7 +9,7 @@
 
 | 平台 | 最低版本 | 目标版本 | 依据 |
 |---|---|---|---|
-| Android | **`minSdk 26`**（Android 8.0，已在 `android/app/build.gradle.kts` 显式固定） | `targetSdk 36`（= `flutter.targetSdkVersion`） | `flutter_js_plus` 要求 Android 8+；Flutter 3.47 的默认 minSdk 为 24，低于该要求，因此显式提升到 26 |
+| Android | **`minSdk 26`**（Android 8.0，已在 `android/app/build.gradle.kts` 显式固定） | `targetSdk 36`（= `flutter.targetSdkVersion`） | 本项目自定的最低测试面（Drift + 原生 SQLite 链路）；**不来自任何第三方包的要求**，依据与备选方案见 ADR-0018 |
 | iOS | **`15.0`**（`IPHONEOS_DEPLOYMENT_TARGET`） | 跟随 Flutter 3.47 默认 | 模板生成值，已核对 |
 | Windows | Windows 10 1809+；CMake ≥ 3.14 | — | Flutter 桌面基线 |
 
@@ -17,6 +17,7 @@
 
 > **验证状态：** ✅ 已核对生成后的平台工程与构建产物（APK 的 merged manifest 原先为
 > `minSdkVersion=24 / targetSdkVersion=36`，现已显式将 minSdk 改为 26），数值不再是推测值。
+> 基线为何保持 26（而不是回到 Flutter 默认 24）见 ADR-0018。
 
 ### 1.1 本机工具链实测版本
 
@@ -178,4 +179,4 @@ pageTransitionsTheme: const PageTransitionsTheme(
 
 ---
 
-**文档版本：** v2.0 · **最后更新：** 2026-10-10
+**文档版本：** v2.0 · **最后更新：** 2026-10-11

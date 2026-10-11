@@ -94,7 +94,7 @@ git clone <repo-url>
 cd <repo-dir>
 
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 flutter gen-l10n
 ```
 

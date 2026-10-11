@@ -28,7 +28,10 @@ ADR-0008 由此被标为「部分失效（待裁决）」，`@js:` 也从 M0 完
 2. 「JS 在独立 Isolate 中执行」保持不变（C-SRC-2），**且引擎级 `timeout` 与 `memoryLimit`
    现在真实可用**，配额按 ADR-0008 的原定值执行：
    - 单次 JS 墙钟超时 **5 秒** → 通过 `QuickJsRuntime2(timeout: 5000)` 实现；
-   - 单次 JS 内存上限 **32 MB** → 通过 `StackSize`/`memoryLimit: 32 * 1024 * 1024` 实现。
+   - 单次 JS 内存上限 **32 MB** → 通过 `memoryLimit: 32 * 1024 * 1024` 实现。
+
+   > 配额数值的**规范出处**是 `docs/dev/book-source.md` §6；本条只记录决策与实测证据，
+   > 其他文档引用时不得再抄一份数字（ADR-0013）。
 3. **`Isolate.kill(priority: immediate)` 保留为兜底**：引擎中断器优先，但调用方仍必须
    持有硬预算，防止未来引擎行为变化导致 UI 线程被拖死。
 4. JS→Dart 回调桥（`parse.*` / `http.*` / `log.*`）保持不变，已在后台 Isolate 中实测可用。
@@ -36,6 +39,10 @@ ADR-0008 由此被标为「部分失效（待裁决）」，`@js:` 也从 M0 完
    仍不进 CI（需要 `flutter build <platform>` 产出的原生库）。
 
 ## 实测证据（2026-10-10，Windows 11 / Flutter 3.47.7）
+
+> **证据范围：** 下表全部数据来自 **Windows 11 + Flutter 3.47.7**。
+> Android / iOS / Linux / macOS 仅由包元数据声明支持，**尚未实测**；
+> 在这四个平台跑过探针之前，不得声称「全域已验证」。
 
 | 探针 | `flutter_js_plus 0.0.4` | **`flutter_qjs_next 1.5.2`** |
 |---|---|---|
@@ -53,8 +60,11 @@ ADR-0008 由此被标为「部分失效（待裁决）」，`@js:` 也从 M0 完
 
 - **ADR-0008 标为 `Superseded by ADR-0015`**（其历史结论与实测发现保留，可追溯）。
 - `book-source.md` 矩阵 #14 `@js:` **恢复为 M0**；§6 移除「引擎未定」与「超时/内存不可实现」的降级说明。
-- `platform.md` §8.1 中为 `flutter_js_plus` 加的两条 Gradle 变通（`kotlin.jvm.target.validation.mode`、
-  `kotlin.incremental`）需重新评估并删除（已实测删除后 `flutter build apk --debug` 仍成功）。
+- `platform.md` §8.1 中为 `flutter_js_plus` 加的两条 Gradle 变通已分别处理：
+  `kotlin.jvm.target.validation.mode=warning` **已删除**（它只服务于该插件，实测删除后
+  `flutter build apk --debug` 与 `flutter build windows --debug` 均成功）；
+  `kotlin.incremental=false` **保留** —— 复核确认它是 Kotlin 2.4 在 Windows 上的缓存锁问题，
+  与任何插件无关（本条初版把两者都判为「应重新评估并删除」，已按 `platform.md` §8.1 修正）。
 - `NOTICE.md` §5 的依赖许可表新增 `flutter_qjs_next`（**MIT**，与 GPL-3.0 兼容，满足 C-DEP-7）；
   `NOTICE.md` §6 的扫描流程会在下次执行时自动覆盖它。
 - 运行 spike 的方式改变：不再需要给 pub cache 打补丁，改为

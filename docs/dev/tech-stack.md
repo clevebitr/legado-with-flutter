@@ -46,7 +46,7 @@
 > 因此**不要**单独手动升降其中任何一个版本：它们互相咬合。
 > 需要升级时必须整组处理，并用 `flutter pub get` + 门禁复验。
 
-**验证状态：** ✅ 已用 `flutter pub get` 实测解析通过（151 个包），
+**验证状态：** ✅ 已用 `flutter pub get` 实测解析通过（150 个包），
 并通过 `flutter analyze`（零问题）、`flutter test`、`flutter build apk --debug` 三项验证。
 
 ---
@@ -140,26 +140,21 @@ m3e.spacing.md;
 | `cascadia` | `^0.8.0` | CSS 选择器（唯一） | 全平台 | BSD-3-Clause | C-SRC-6 |
 | `json_path` | `^0.9.0` | JSONPath（唯一） | 全平台 | MIT | C-SRC-6 |
 | `flutter_qjs_next` | `^1.5.2` | JS 引擎（QuickJS，构建时从 `cxx/` 源码编译） | Android/iOS/Windows/Linux/macOS | MIT | C-SRC-2、C-SRC-3 |
-
-> **该引擎已实测选定（2026-10-10，ADR-0015）**：9 项探针全通过，无预编译库、无需打补丁；
-> 引擎级 `timeout` 与 `memoryLimit` **真实生效**（ADR-0008 要求的 5s / 32MB 均可实现）。
-> 原生库由正常构建产出，探针通过 `FLUTTER_QJS_NEXT_LIBRARY` 指向产物运行；
-> 详见 `tool/spike/README.md`。
->
-> 已废弃的 `flutter_js_plus` 的缺陷记录保留在 ADR-0008 与 `tool/spike/README.md` §2。
 | `betto_charset_detector` | `^0.1.0` | 字符编码检测（唯一，纯 Dart） | 全平台 | Apache-2.0 | C-NET-3 |
 
+> **JS 引擎已实测选定（2026-10-10，ADR-0015）**：9 项探针全通过，无预编译库、无需打补丁；
+> 引擎级 `timeout` 与 `memoryLimit` **真实生效**。配额数值与实测证据分别归
+> `docs/dev/book-source.md` §6 与 `tool/spike/README.md`，**本文档不复述**。
+> 探针运行方式（需先构建原生库）见 `tool/spike/README.md` §3。
+> **实测平台：Windows 11 / Flutter 3.47.7**；Android / iOS / Linux / macOS 仅由包元数据
+> 声明支持（见 `flutter_qjs_next` 的 `pubspec.yaml` 平台列表），尚未实测 ——
+> 在完成实测前不得声称已验证。
+> 已废弃的 `flutter_js_plus` 的缺陷记录保留在 ADR-0008 与 `tool/spike/README.md` §2。
+>
 > **`betto_charset_detector` 的当前版本是 `0.1.0`**（尚未发布 1.x）。
 > 早期文档写作 `^1.0.0` 会导致解析失败。
->
-> `flutter_js_plus` 通过 dart-ffi 运行，因此可在独立 Isolate 中执行（C-SRC-2）。
-> **约束：** 不得在后台 Isolate 中使用依赖 platform channel 的回调桥
-> （如 `JavascriptRuntime.onMessage`）；需要双向通信时必须使用
-> `BackgroundIsolateBinaryMessenger`，并补 `book-source.md` 的测试用例。
->
-> **已知构建影响：** `flutter_js_plus 0.0.4` 是 2019 年的老插件，其 Android 编译脚本
-> 固定 `kotlin 1.7.20` 与 `jvmTarget 1.8`，与 AGP 9 默认的 Java 11 目标不一致，
-> 会导致 `assembleDebug` 失败。变通方法见 `docs/dev/platform.md` 的「已知构建变通」。
+> 后台 Isolate 中的 JS→Dart 回调桥已由 `flutter_qjs_next` 实测可用，
+> 无需 `BackgroundIsolateBinaryMessenger`（ADR-0015 §决策 4）。
 
 ## 6. 网络与持久化
 
@@ -306,7 +301,7 @@ m3e.spacing.md;
 3. **核对许可证与 GPL-3.0 的兼容性**（C-DEP-7）；把结论写入 `NOTICE.md` §5。
 4. 更新 `pubspec.yaml`，并在同一 PR 内更新本文档的对应行。
 5. 若该依赖改变了架构决定，必须先写 ADR 再改依赖（`docs/README.md` §6.5）。
-6. 运行门禁：`flutter pub get` → `dart run build_runner build --delete-conflicting-outputs`
+6. 运行门禁：`flutter pub get` → `dart run build_runner build`
    → `AGENTS.md` §4 全部命令。
 7. 核对 `analysis_options.yaml` 中的规则名：逐个对照
    `https://dart.dev/tools/linter-rules/all`（当前基准 Dart 3.13.3）。
@@ -314,4 +309,4 @@ m3e.spacing.md;
 
 ---
 
-**文档版本：** v2.1 · **最后更新：** 2026-10-10
+**文档版本：** v2.1 · **最后更新：** 2026-10-11
