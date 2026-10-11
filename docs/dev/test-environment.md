@@ -11,7 +11,7 @@
 
 | 目标 | 状态 | 说明 |
 |---|---|---|
-| 主机侧单元 / Widget 测试 | ✅ 已跑通 | `flutter test --coverage` 全部用例通过，`tool/check_coverage.dart` 退出码 0（2026-10-11 实测：**310** 个用例，`core` 342/342、`domain` 643/643）。该计数随每个切片增长，以**最近一次运行**为准，不另设副本 |
+| 主机侧单元 / Widget 测试 | ✅ 已跑通 | `flutter test --coverage` 全部用例通过，`tool/check_coverage.dart` 退出码 0（2026-10-11 最近一次：**324** 个用例，`core` 342/342、`domain` 683/683）。该计数随每个切片增长，以**最近一次运行**为准；本文档其它位置不复述计数 |
 | Windows 桌面设备级用例 | ✅ 已跑通 | `integration_test/` 两个用例文件在 `-d windows` 全部通过 |
 | Android 模拟器设备级用例 | ✅ 已跑通 | AVD `Medium_Phone`（API 37）上两个用例文件全部通过，含文件型 Drift 数据库 |
 | iOS | ❌ **未覆盖** | 本机无 macOS / Xcode，条件不具备；iOS 行为仍按 `docs/dev/platform.md` §6 人工确认 |
@@ -84,11 +84,11 @@ flutter test integration_test/on_disk_database_test.dart -d emulator-5554
 豁免覆盖率。`integration_test/on_disk_database_test.dart` 是它唯一的自动化验证入口，
 Windows 与 Android 两侧都已实测通过。
 
-**规范依据：** 设备级集成测试是独立的一层，由 ADR-0017 §决策 5（2026-10-11 修订）授权，
-C-TEST-4 的例外句、`testing.md` §1 的第五行与 `naming.md` §2 同步；不进 CI，接入需另开 PR/ADR。
+**规范依据：** 设备级集成测试是独立的一层，其分层、位置与是否进 CI 由
+`docs/dev/testing.md` §3 与 C-TEST-4 定义（ADR-0017 §决策 5）；本文档只负责“怎么跑”。
 
 设备级用例**不参与**覆盖率统计：`integration_test/` 不在 `lib/**` 下，`flutter test --coverage`
-也不会加载它，所以覆盖率门禁的输入与结论都不受影响。
+也不会加载它，因此覆盖率门禁的输入与结论不受影响。
 
 ---
 
@@ -142,7 +142,7 @@ C-TEST-4 的例外句、`testing.md` §1 的第五行与 `naming.md` §2 同步�
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 280 passed；覆盖率 core 342/342、domain 482/482；退出码 0 |
+| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过；`tool/check_coverage.dart` 退出码 0（计数与分层覆盖率见 §1） |
 | Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`） |
 | Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | 2 个用例文件全部通过；退出码 0 |
 | Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器自动启动 → 2 个用例文件全部通过 → 自动关闭；退出码 0 |
@@ -150,7 +150,3 @@ C-TEST-4 的例外句、`testing.md` §1 的第五行与 `naming.md` §2 同步�
 
 > `flutter doctor` 的网络项在本机报 `A cryptographic error ... checking https://pub.dev/`
 > （代理/中间人证书问题），但 `flutter pub get` 正常，不影响测试。
-
----
-
-**文档版本：** v1.0 · **最后更新：** 2026-10-11

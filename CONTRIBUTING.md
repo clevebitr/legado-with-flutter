@@ -106,8 +106,8 @@ flutter gen-l10n
 ### 3.3 运行检查
 
 门禁命令以 [`AGENTS.md`](./AGENTS.md) §4 为准。
-`riverpod_lint` 插件规则由 `flutter analyze` 执行（`analysis_options.yaml` 顶层 `plugins:`，ADR-0010），
-不需要额外的 lint 运行器。
+`riverpod_lint` 插件规则的安装位置与 lint 映射见 [`docs/dev/tech-stack.md`](./docs/dev/tech-stack.md) §12
+（ADR-0010），不需要额外的 lint 运行器。
 
 ---
 
@@ -240,13 +240,8 @@ Reviewer 必须检查 PR 是否满足自查清单
 
 ### 7.2 语言约定
 
-| 场景 | 语言 |
-|---|---|
-| 文档注释 `///` | 英文 |
-| 普通注释 `//` | 中文 |
-| Commit message | 英文 |
-| PR 描述 | 中文优先，关键术语保留英文 |
-| CHANGELOG | 英文 |
+文档注释 / 普通注释 / Commit / PR / CHANGELOG 的语言约定见
+[`docs/README.md`](./docs/README.md) §7（单一来源，本文档不复述）。
 
 ### 7.3 国际化
 
@@ -270,9 +265,8 @@ Reviewer 必须检查 PR 是否满足自查清单
 
 ### 免责声明
 
-本项目是独立的阅读客户端实现，**不提供、不托管、不传播、不索引任何书源或阅读内容**。
-用户自行导入的第三方书源及其内容由用户自行承担合规责任。
-本项目与 Legado 项目及其作者无隶属关系。
+版权、与上游 Legado 的关系、免责声明全文、GPL 合规义务清单与第三方依赖许可清单见
+[`NOTICE.md`](./NOTICE.md)（单一来源，本文档不复述）。
 
 ---
 

@@ -22,7 +22,7 @@
 | 目录 | `snake_case`，全小写 | `book_source/`、`core/theme/` |
 | Dart 文件 | `snake_case` | `rule_engine.dart`、`book_source_parser.dart` |
 | 基础设施 Provider 文件（仅 `core/di/`） | `<subject>_provider.dart` | `logger_provider.dart`、`http_client_provider.dart` |
-| 测试文件 | `*_test.dart`；单元 / Widget / 回放测试放 `test/` 下并镜像被测文件的 `lib/` 相对路径（ADR-0017），设备级集成测试放 `integration_test/`（ADR-0017 §决策 5） | `test/core/error/parse_result_test.dart`、`integration_test/app_boot_test.dart` |
+| 测试文件 | `*_test.dart`；位置（镜像 `lib/` / `integration_test/`）见 `docs/dev/testing.md` §3（ADR-0017） | `test/core/error/parse_result_test.dart`、`integration_test/app_boot_test.dart` |
 | 生成文件 | 由工具决定，禁止改名、禁止手改 | `book_source.freezed.dart` |
 | ADR | `docs/dev/adr/NNNN-kebab-title.md` | `0001-riverpod-codegen-only.md` |
 | ARB | `app_<locale>.arb` | `app_en.arb`、`app_zh.arb` |
@@ -214,7 +214,3 @@ Future<ParseResult<List<Book>>> searchBooks(
 | 文档注释 | 英文 `///` | `/// Searches books.` |
 | 普通注释 | 中文 `//` | `// 适配 Rhino 类型转换。` |
 | ARB key | `lowerCamelCase` + feature 前缀 | `bookSourceListTitle` |
-
----
-
-**文档版本：** v2.0 · **最后更新：** 2026-10-11

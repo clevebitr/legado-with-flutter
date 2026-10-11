@@ -67,9 +67,8 @@ dart run build_runner build                                # C-DEP-4（ADR-0013 
 git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'  # 生成物与源码同步
 ```
 
-> `riverpod_lint` 自 3.1.9 起改用 `analysis_server_plugin` 实现，必须写在
-> `analysis_options.yaml` 的**顶层** `plugins:` 段（`analyzer: plugins:` 已弃用），
-> 由 `flutter analyze` 执行。不再需要 `custom_lint`（ADR-0010）。
+> `riverpod_lint` 的安装位置、`custom_lint` 的取舍与全部 lint 规则映射见
+> `docs/dev/tech-stack.md` §12（ADR-0010）；由 `flutter analyze` 执行，本项目不使用 `custom_lint`。
 
 ---
 
@@ -93,7 +92,3 @@ git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'  # 生成物与源码�
 - 新增或重命名规范文档时，只更新 `docs/README.md` 与本文档 §2 地图表，
   **不得把规范正文复制进来**。
 - 发现规范冲突或缺失时，向用户报告并在 `docs/dev/adr/` 记录，不得自行假设。
-
----
-
-**文档版本：** v2.0 · **最后更新：** 2026-10-11 · **适用项目：** Flutter 阅读 App（MD3E、多平台、Dart 书源解析）

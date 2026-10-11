@@ -189,6 +189,3 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 - [ ] 补测试（覆盖率达到 `docs/dev/testing.md` 门禁）。
 - [ ] 若改变了分层或依赖方向，先写 ADR。
 
----
-
-**文档版本：** v2.0 · **最后更新：** 2026-10-11
