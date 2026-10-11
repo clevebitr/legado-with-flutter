@@ -46,7 +46,8 @@
 > 因此**不要**单独手动升降其中任何一个版本：它们互相咬合。
 > 需要升级时必须整组处理，并用 `flutter pub get` + 门禁复验。
 
-**验证状态：** ✅ 已用 `flutter pub get` 实测解析通过（150 个包），
+**验证状态：** ✅ 已用 `flutter pub get` 实测解析通过（**包数与许可基线见 `NOTICE.md` §5**
+—— 本文档不复述计数：复述同一事实正是漂移的来源，见 ADR-0013 §3），
 并通过 `flutter analyze`（零问题）、`flutter test`、`flutter build apk --debug` 三项验证。
 
 ---
