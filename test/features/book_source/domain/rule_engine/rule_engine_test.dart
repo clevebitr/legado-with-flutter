@@ -42,7 +42,6 @@ const String _countHtml =
 /// them, with the syntax name `rulePath` has to carry
 /// (`docs/dev/book-source.md` §7).
 const Map<String, String> _unsupportedRules = <String, String>{
-  '@css:.a@text': 'unsupported:@css:',
   '@js:result': 'unsupported:@js:',
   '@json:\$.data': 'unsupported:@json:',
   '@xpath://div': 'unsupported:@xpath:',
@@ -59,7 +58,7 @@ const Map<String, String> _unsupportedRules = <String, String>{
   'class.a&&class.b': 'unsupported:&&',
   'class.a%%class.b': 'unsupported:%%',
   // 矩阵 #7 的 `-` 先摘掉再识别标志头，所以标志头的报错保持原样（不能被 `-` 顶掉）。
-  '-@css:.a': 'unsupported:@css:',
+  '-@js:result': 'unsupported:@js:',
   // 矩阵 #15：中段 `@@`（`@` 切分后留空段，必须在切段前判掉，否则误报畸形）。
   'class.a@@class.b@text': 'unsupported:@@',
 };
@@ -69,7 +68,8 @@ const Map<String, String> _unsupportedRules = <String, String>{
 /// The tests wrap them into a list rule and into a value rule, because the last
 /// segment of a value rule is the extraction and is therefore never a selector.
 const Map<String, String> _unsupportedSelectors = <String, String>{
-  'css:.b': 'unsupported:@css:',
+  // 段内（非规则开头）的标志头：body 级检查只覆盖规则开头，中间段由选择器层拒绝。
+  'json:\$.data': 'unsupported:@json:',
   // 字母段里的 `!` 不是索引写法（矩阵 #6 的 `!` 只跟在名称后）：整段退化成未知类型。
   'li!0': 'unsupported:li!0',
   // 名称里的 `:` 不属于任何已实现写法（矩阵 #6 的 `:` 只在 `!` 列表与位置段内）。
@@ -352,7 +352,7 @@ void main() {
       final FakeLogPrinter printer = FakeLogPrinter();
 
       _engine(printer).selectAll(
-        '@css:.a@text',
+        '@js:result',
         _document(_listHtml),
         rulePath: 'searchRule.name',
       );
@@ -365,7 +365,7 @@ void main() {
       );
       expect(
         printer.events.single.message.toString(),
-        contains('unsupported:@css:'),
+        contains('unsupported:@js:'),
       );
     });
   });
@@ -566,23 +566,20 @@ void main() {
       }
     });
 
-    test(
-      'extractAll_givenFlagInTheExtractionPosition_returnsUnsupportedRule',
-      () {
-        // 值规则的末段是提取段，上游在那里允许嵌套规则，所以带标志的末段必须拒绝，
-        // 而不能被当成属性名静默取空（C-SRC-4）。
-        final ParseFailure<Never> failure = _failure(
-          _engine().extractAll(
-            'class.a@css:.b',
-            _document(_listHtml),
-            rulePath: 'searchRule.name',
-          ),
-        );
+    test('extractAll_givenANestedRuleInTheExtractionPosition_returnsUnsupportedRule', () {
+      // 值规则的末段是提取段，上游在那里允许嵌套规则（矩阵 #30，M2/暂不实现）。
+      // 它必须报**可区分**的名字：中段的 `@css:` 已支持，末段仍未支持（F3）。
+      final ParseFailure<Never> failure = _failure(
+        _engine().extractAll(
+          'class.a@css:.b',
+          _document(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
 
-        expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@css:');
-      },
-    );
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:nested-rule');
+    });
 
     test('extractAll_givenMalformedRule_returnsParseFailedAtTheField', () {
       final Document document = _document(_listHtml);
@@ -819,14 +816,14 @@ void main() {
     test('extractFirst_givenRejectedRule_returnsTheSameFailure', () {
       final ParseFailure<Never> failure = _failure(
         _engine().extractFirst(
-          '@css:.a@text',
+          '@js:result',
           _document(_listHtml),
           rulePath: 'searchRule.intro',
         ),
       );
 
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@css:');
+      expect(failure.rulePath, 'unsupported:@js:');
     });
   });
 
@@ -1131,5 +1128,231 @@ void main() {
         expect(_hrefsFor('children.li.0'), _hrefsFor('children'));
       },
     );
+  });
+
+  group('RuleEngine matrix #12 (@css:)', () {
+    test('selectAll_givenCssRule_returnsEveryMatch', () {
+      final List<Element> elements = _elements(
+        _engine().selectAll(
+          '@css:ul.result-list > li',
+          _document(_listHtml),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(elements, hasLength(3));
+      expect(
+        elements.map((Element element) => element.localName),
+        everyElement('li'),
+      );
+    });
+
+    test('selectAll_givenAnUppercaseFlag_isTheSameRule', () {
+      // book-source.md §3：前缀大小写不敏感。
+      expect(
+        _elements(
+          _engine().selectAll(
+            '@CSS:ul.result-list > li',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookList',
+          ),
+        ),
+        hasLength(3),
+      );
+    });
+
+    test('extractAll_givenCssRule_chainsIntoDefaultSegments', () {
+      // `@css:` 段与默认规则段可以混用：先按 CSS 选中条目，再在其内部取属性。
+      expect(
+        _values(
+          _engine().extractAll(
+            '@css:ul.result-list > li@tag.a@href',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        <String>['/book/1', '/book/2', '/book/3'],
+      );
+    });
+
+    test('extractAll_givenAnAttributeSelector_usesCascadia', () {
+      expect(
+        _values(
+          _engine().extractAll(
+            '@css:a[href="/book/2"]@text',
+            _document(_listHtml),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['Two'],
+      );
+    });
+
+    test('extractAll_givenAPseudoClassCascadiaSupports_matches', () {
+      // 真实语料用的 `:contains` / `:containsOwn` 都在 cascadia 里，可直接用。
+      // 注意：cascadia 不接受**带空格的不加引号参数**（`containsOwn(Author B)` 会报
+      // Invalid argument），jsoup 则接受；真实语料的 `containsOwn(下一页)` 不带空格。
+      expect(
+        _values(
+          _engine().extractAll(
+            '@css:li:contains(Three)@tag.a@href',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        <String>['/book/3'],
+      );
+      expect(
+        _values(
+          _engine().extractAll(
+            '@css:span:containsOwn(Author)@text',
+            _document(_listHtml),
+            rulePath: 'searchRule.author',
+          ),
+        ),
+        <String>['Author A', 'Author B', 'Author C'],
+      );
+    });
+
+    test('extractAll_givenAnIndexPseudo_matchesTheSiblingIndex', () {
+      // 矩阵 #29：jsoup 的 `:eq(n)` 是**兄弟索引**，不是结果集索引。镜像 jsoup 自己的
+      // SelectorTest.testPseudoEquals（`div p:eq(0)` 每个 div 各取一个 p）。
+      final Document document = _document(
+        '<div><p>One</p><p>Two</p></div><div><p>Four</p></div>',
+      );
+
+      expect(
+        _values(
+          _engine().extractAll(
+            '@css:div p:eq(0)@text',
+            document,
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One', 'Four'],
+      );
+    });
+
+    test(
+      'extractAll_givenTheGreaterAndLessThanPseudos_takeTheSiblingRange',
+      () {
+        // jsoup 文档：`td:lt(3)` = 每行的前三个单元格，`td:gt(1)` = 跳过前两个。
+        final Document document = _document(
+          '<table><tr><td>1</td><td>2</td><td>3</td><td>4</td></tr></table>',
+        );
+
+        expect(
+          _values(
+            _engine().extractAll('@css:td:lt(3)@text', document, rulePath: 'x'),
+          ),
+          <String>['1', '2', '3'],
+        );
+        expect(
+          _values(
+            _engine().extractAll('@css:td:gt(1)@text', document, rulePath: 'x'),
+          ),
+          <String>['3', '4'],
+        );
+      },
+    );
+
+    test('selectAll_givenANegativeIndexPseudo_returnsUnsupportedRule', () {
+      // jsoup 文档把索引伪类定义为 0-based 且未定义负索引 → 本仓不猜，点名拒绝。
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          '@css:li:eq(-1)',
+          _document(_listHtml),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported::eq(-1)');
+    });
+
+    test('selectAll_givenAnUnparsableIndexArgument_returnsParseFailed', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          '@css:li:eq(99999999999999999999)',
+          _document(_listHtml),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.bookList');
+    });
+
+    test(
+      'selectAll_givenAStandardPseudoStartingWithTheSameLetters_isNotMisread',
+      () {
+        // `:first-child` 不能被当成 jsoup 的 `:first`（cascadia 支持标准伪类）。
+        expect(
+          _elements(
+            _engine().selectAll(
+              '@css:li:first-child',
+              _document(_listHtml),
+              rulePath: 'searchRule.bookList',
+            ),
+          ),
+          hasLength(1),
+        );
+      },
+    );
+
+    test('selectAll_givenMalformedCss_returnsParseFailedAtTheField', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          '@css:ul >',
+          _document(_listHtml),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.bookList');
+    });
+
+    test('selectAll_givenAnEmptyCssSelector_returnsParseFailed', () {
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          '@css:',
+          _document(_listHtml),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.bookList');
+    });
+
+    test('extractAll_givenTheFlagInAMiddleSegment_chainsThroughIt', () {
+      // 中段的 `@css:`（`class.x@css:.y@text`）本次从 unsupported 变为可用：F1。
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.result-list@css:li@tag.a@href',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        <String>['/book/1', '/book/2', '/book/3'],
+      );
+    });
+
+    test('selectAll_givenAStatePseudoClass_succeedsWithNoMatch', () {
+      // 静态 DOM 下没有元素处于 hover：cascadia 解析成功、匹配恒为 false。这是「正确
+      // 答案」而不是错误，故登记为成功且为空（矩阵 #12 注记，架构师裁决 5）。
+      expect(
+        _elements(
+          _engine().selectAll(
+            '@css:a:hover',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookList',
+          ),
+        ),
+        isEmpty,
+      );
+    });
   });
 }

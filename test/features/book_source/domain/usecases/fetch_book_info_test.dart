@@ -114,16 +114,16 @@ void main() {
         final FakeHttpClient http = FakeHttpClient()
           ..serve(_bookUrl, _page('book_page.html'));
         final BookSource source = _source();
-        final BookSource withCss = source.copyWith(
-          bookInfoRule: source.bookInfoRule?.copyWith(intro: '@css:p @text'),
+        final BookSource withJs = source.copyWith(
+          bookInfoRule: source.bookInfoRule?.copyWith(intro: '@js:result'),
         );
 
         final ParseFailure<Never> failure = _failure(
-          await FetchBookInfo(pages: _service(http)).execute(withCss, _bookUrl),
+          await FetchBookInfo(pages: _service(http)).execute(withJs, _bookUrl),
         );
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@css:');
+        expect(failure.rulePath, 'unsupported:@js:');
       },
     );
 

@@ -113,7 +113,7 @@ void main() {
     ) async {
       final BookSource source = loadCorpusBookSource();
       final BookSource unsupported = source.copyWith(
-        searchRule: source.searchRule.copyWith(name: '@css:.result-item-title'),
+        searchRule: source.searchRule.copyWith(name: '@js:result'),
       );
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 
