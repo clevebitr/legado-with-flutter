@@ -90,8 +90,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 #### Phase 1 完成记录（2026-10-11）
 
 **状态：** ✅ 已完成，**G1 达成** —— `AGENTS.md` §4 的六条门禁命令全绿（命令清单归该节，
-阈值归 `docs/dev/testing.md` §2），`lib/core/**` 行覆盖率 100%。本阶段交付的能力多数
-**尚无生产消费方**（只有测试消费方）：第一个生产消费方在 Phase 2 的书源链路里出现。
+阈值归 `docs/dev/testing.md` §2），`lib/core/**` 行覆盖率 100%。本阶段交付的能力在 Phase 2
+拿到部分生产消费方（`HttpClient` 等）；存储层（`CacheDao`）**仍无生产消费方**，其第一个
+消费方见 **Phase 3.9**（charset 缓存）与 **Phase 5**（缓存 / 设置）。
 
 **本阶段产出 / 修订的 ADR：** 0016（密封层级子类形态以编译器产物为准）、0017（测试文件在
 `test/` 下镜像 `lib/`）、0019（覆盖率门禁必须检测未测量源文件；阶段末把 allowlist 理由扩为
@@ -112,8 +113,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|
 | `rulePath` 非空断言 + 失败构造唯一入口 `failureAt` | 已登记 **2.7** |
 | 同一书源并发上限 3 + 章节正文有限并发 | 已登记 **3.8** |
-| charset 检测结果缓存（`book-source.md` §5 要求「书源 ID + URL」两维） | Phase 2 决定接口形状：现有 `CacheDao` 的键是四维（含规则字段与页码） |
-| 按书源清理缓存 | 未实现（C-NET-6 只要求 TTL + 稳定键）；若需要则加列并走 schema dump 流程 |
+| charset 检测结果缓存（`book-source.md` §5） | 已登记 **3.9**（架构师裁决 F1：非 M0 项，实现形态与验收见该行） |
+| 按书源清理缓存 | 已登记 **Phase 5** 的登记行（架构师裁决 F2：归属与成本分档写在该行，不再留「若需要」措辞） |
 | 文件型数据库（后台 isolate + 原生库） | 无自动化覆盖：需 `flutter run` 或 `integration_test`（验证命令见 `database_executor_provider.dart` 文档） |
 | Big5 / Big5-HKSCS 解码 | 已知缺口，见 `book-source.md` §5.1，待排期 |
 | `NOTICE.md` §5 许可证分类（§6 的标记匹配不到项目符号写法） | ✅ **已闭环**：分类特征串已改为项目符号写法，重扫结果记入 `NOTICE.md` §5，并由可重复执行的 `tool/scan_licenses.dart` 保证（见 `NOTICE.md` §6） |
@@ -222,8 +223,16 @@ C-UI-9 的法律声明页不在本阶段。页面级 smoke 测试见 `test/featu
 | 3.6 | 失败语义全量：9 个 `ParseFailureKind` 各有触发路径 | 每个 kind ≥1 条单测 |
 | 3.7 | **真实书源验证记录** | 按 `book-source.md` §10 格式写入 PR，并把矩阵状态列改为「已确认」 |
 | 3.8 | 同一书源并发上限（默认 3）+ 章节正文串行/有限并发 | `book-source.md` §8 | 并发上限可配且有单测；超限请求排队而非并发发出；M1 的 `concurrentRate` 覆盖留到 Phase 4 |
+| 3.9 | charset 检测结果缓存：按 `book-source.md` §5 的「书源 ID + URL」维度缓存检测结果；复用 `CacheDao` 的稳定键与 TTL，**不加列、不新建表**（架构师裁决 F1：与 3.8 分开，不折进并发行） | 同 `(书源, URL)` 第二次编码检测**不再嗅探**，有单测；本行同时让 `CacheDao` 拿到第一个生产消费方 |
 
 **完成判定：** 2 个真实书源完成全链路离线回放；矩阵 M0 行的状态列**全部为「已确认」**。
+
+**Phase 3 交接登记（不得静默丢弃；登记此前从 Phase 1 交接表掉出的两项，架构师裁决 F1 / F2）：**
+
+| 事项 | 去向 |
+|---|---|
+| charset 检测结果缓存 | 本阶段 **3.9**（在阶段内闭环，不再向后交接） |
+| 按书源清理缓存 | **Phase 5**（成本分档见该阶段登记行） |
 
 ---
 
@@ -248,6 +257,7 @@ Phase 3.5，见 ADR-0014 的修订注记）。每条语法同样需要真实书�
 | 5.2 | `SystemUiController`：状态栏透明与 edge-to-edge 适配 | edge-to-edge 下内容不被遮挡 |
 | 5.3 | `HapticsController`：触感反馈能力探测与降级 | 不支持的平台 no-op 且不抛异常 |
 | 5.4 | 书源展示与排序字段建模：`lastUpdateTime` / `respondTime` / `weight` / `customOrder`（M0，`book-source.md` §2「仅用于展示与排序」，现落在 `extra`） | 书源列表按 `weight` / `customOrder` 排序，`respondTime` 参与展示；四个字段有排序 / 展示单测 |
+| 5.5 | 缓存清理（架构师裁决 F2；本行**只登记归属与成本分档**，「做全量还是按书源」留待本阶段设计时决定）：**① 全量清空缓存** —— `cache_entries` 现有 `cacheKey` / `payload` / `expiresAt` 三列已够 `DELETE`，**零 schema 变更**（建议先做，覆盖绝大多数用户需求）；**② 按书源清理** —— `cache_entries` **没有** `sourceId` 列，必须加列 → `drift_dev schema dump` → 补迁移测试（`docs/dev/tech-stack.md` §8），成本明显更高，作为有真实需求时的后续项 | 缓存可被用户清空；若实现「按书源清理」，`DELETE WHERE sourceId = ?` 生效且有迁移测试 |
 
 完成判定：`C-UI-9` 页面存在且可达（widget 测试断言）；三端平台验收清单（`platform.md` §6）逐项通过。
 

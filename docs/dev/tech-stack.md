@@ -299,6 +299,7 @@ dart run drift_dev schema generate drift_schemas/ test/core/storage/generated_mi
 | C-UI-9 法律声明页面存在 | Widget 测试断言页面可达 |
 | C-PLT-1 禁止 UI 直接判断平台 | Code review（`grep 'Platform.is'` 排除 `core/platform/`） |
 | C-ERR-1 必须返回 `ParseResult` | 单元测试 + Code review |
+| C-ERR-2 的 `on Exception` 边界（只允许 `presentation/` 的 Notifier 兜底） | Code review（`grep -rn 'on Exception' lib/` 只允许命中 `presentation/` 的 Notifier） |
 | C-ARCH-1 禁止反向依赖 | Code review；可后续用自定义 lint 补强 |
 | C-DEP-7 依赖许可兼容 | `NOTICE.md` §5 核实流程 |
 

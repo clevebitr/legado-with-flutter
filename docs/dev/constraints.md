@@ -62,7 +62,7 @@ class BookSourceList extends _$BookSourceList {
 | ID | 约束 |
 |---|---|
 | C-ERR-1 | 可能失败的操作（网络、解析、IO）必须返回 `ParseResult<T>`；禁止把异常抛到 UI 层。 |
-| C-ERR-2 | 禁止裸 `catch`；必须 `on <具体异常类型>`，并转换为 `ParseFailure`。由 lint `avoid_catches_without_on_clauses` 强制。 |
+| C-ERR-2 | 禁止裸 `catch`；必须 `on <具体异常类型>`，并转换为 `ParseFailure`。由 lint `avoid_catches_without_on_clauses` 强制。**边界补充：** 只有 `presentation/` 的 Notifier 兜底允许 `on Exception`（不给更具体的类型），且必须立即转为失败状态并记录日志，不得吞掉；`domain/` 的引擎与 UseCase 仍必须捕获具体类型，`Error` 在任何位置都不得捕获（ADR-0022）。 |
 | C-ERR-3 | 禁止空 catch 块；异常必须被处理或向上传递。 |
 | C-ERR-4 | 跨 `await` 使用 `BuildContext` 前必须检查 `mounted`（`use_build_context_synchronously`）。 |
 | C-ERR-5 | 禁止 `print()`；统一使用 `core/logging` 暴露的 Logger（`logger` 包封装，见 ADR-0006）。 |

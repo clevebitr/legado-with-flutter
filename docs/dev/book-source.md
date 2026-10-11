@@ -189,6 +189,8 @@
   HTTP `Content-Type` → HTML `<meta charset>` → 字节嗅探 → 回退 UTF-8。
   前两步是**权威声明**：只要有声明就必须用它，嗅探仅用于两者都缺失的页面。
 - 检测结果必须缓存到「书源 ID + URL」维度，避免重复嗅探。
+  **分期：Phase 3.9；M0 不要求**（§3.1 的 M0 枚举不含此项，本标注用于消除本节与 §3.1 的
+  口径不一致；架构师裁决 F1，验收见 `PLAN.md` §3 的 3.9 行）。
 - 解码失败返回 `ParseFailure(encodingFailed)`，
   禁止用 `utf8.decode(allowMalformed: true)` 静默吞掉。
 
