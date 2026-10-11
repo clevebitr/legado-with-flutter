@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Rule engine (2026-10-11)
+
+- Added the Phase 2.2 minimal `RuleEngine`
+  (`lib/features/book_source/domain/rule_engine/rule_engine.dart`) covering matrix #1/#2/#5/#8/#9:
+  the `class` / `id` / `tag` selector segments, the position segment with positive and negative
+  indexes, the extraction `text` / `textNodes` / `ownText` / `html` / `all` or an attribute name,
+  and the `##regex##replacement` tail. Its shape follows upstream's three entry points:
+  `selectAll` (list rules — every segment is a selector), `extractAll` (value rules — the last
+  segment is the extraction) and `extractFirst`.
+- The upstream semantics were pinned against a maintained fork
+  (`hapelee/legado-with-MD3`'s `AnalyzeRule.kt` / `AnalyzeByJSoup.kt`) because `gedoor/legado`
+  itself has been emptied; that fact is now recorded in `book-source.md` and ADR-0014. Three
+  behaviours that `package:html` + `cascadia` do not give for free were implemented to match it:
+  matching includes the scope element (jsoup does, `cascadia.queryAll` deliberately does not),
+  `text` / `ownText` collapse whitespace the way jsoup normalises it (the Dart DOM only
+  concatenates text nodes), and `textNodes` / `ownText` are the *direct* text nodes.
+- `html` drops `script` / `style` like upstream, but on a **clone**, so the engine never mutates
+  the caller's document (C-SRC-9); attribute extraction skips blanks and duplicate values, and an
+  out-of-range index yields no match instead of an error — all upstream behaviour.
+- `##` replacement expands `$1` / `${name}` group references: Dart's `replaceAll` writes `$1`
+  literally (verified: `'abc'.replaceAll(RegExp(r'a(b)'), r'[$1]')` → `[$1]c`) while upstream
+  substitutes the capture group, and real book sources rely on it (`##.*共(.*字).*##$1`). An
+  unparsable pattern degrades to a literal replacement, which is what upstream does when its regex
+  cache cannot compile the pattern.
+- Everything outside this phase's matrix is **rejected** as `ParseFailureKind.unsupportedRule`
+  instead of being silently mis-parsed (C-SRC-4), with `rulePath` naming the syntax
+  (`unsupported:@css:`, `unsupported:||`, `unsupported:!`, `unsupported:###`, …). That includes
+  mid-rule flags (`class.a@css:.b`) and flag-like extraction segments, which upstream treats as
+  nested rules, and unknown selector types, which upstream degrades to raw CSS. Structurally
+  broken rules (a missing name, a non-numeric position, an empty extraction) are `parseFailed`
+  with the field path, so a failure still points at the book source field (C-SRC-8). A blank rule
+  and a rule without a match are **successes with no values**, because real exports use `""` for
+  absent fields and only the caller knows whether a top-level rule had to match (`book-source.md`
+  §7).
+- 39 unit tests in `test/features/book_source/domain/rule_engine/rule_engine_test.dart`; domain
+  coverage stays at 100% and both new files are measured, as ADR-0019 requires. No new dependency:
+  `cascadia` and `html` were already declared (C-SRC-6 keeps every CSS match inside cascadia).
+
 ### Book source models (2026-10-11)
 
 - Added the Phase 2.1 book source models: `lib/features/book_source/domain/entities/book_source.dart`

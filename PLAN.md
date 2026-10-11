@@ -138,7 +138,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 **完成判定：** 1 个真实书源完成「搜索 → 详情 → 目录 → 正文」**离线回放**，
 且手动跑通一次真实链路。
 
-#### Phase 2 完成记录 / 交接（进行中：2.1 已完成）
+#### Phase 2 完成记录 / 交接（进行中：2.1、2.2 已完成）
 
 **2.1 状态：** ✅ 已完成 —— 模型落在
 `lib/features/book_source/domain/entities/book_source.dart`（`BookSourceType`、`BookSource`、
@@ -146,6 +146,13 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 由**真实导出语料**达成：`test/fixtures/book_sources/legado_export_sanitized.json`
 （公开合集取 1 条，脱敏主机与名称、规则串逐字保留；27 个顶层键里 16 个未建模，
 正是 `extra` 的验证对象，来源与脱敏记录见该目录的 `README.md`）。
+
+**2.2 状态：** ✅ 已完成 —— `RuleEngine` 最小版位于
+`lib/features/book_source/domain/rule_engine/rule_engine.dart`，实现矩阵 #1/#2/#5/#8/#9：
+`class` / `id` / `tag` 选择、正负索引、`text` / `textNodes` / `ownText` / `html` / `all` /
+属性提取、`##` 替换（含 `$1` 组引用），对外形状为 `selectAll` / `extractAll` / `extractFirst`
+（对齐上游 `getElements` / `getStringList` / `getString`），共 39 条单测。本阶段未实现的
+语法一律**显式拒绝**为 `unsupportedRule`（C-SRC-4），`rulePath` 写 `unsupported:<语法名>`。
 
 **本步产出 / 修订的 ADR：** 0021（书源模型位于 domain 实体并携带 JSON 注解；架构师复审追认）、
 0022（`json_serializable` 开 `checked: true`；架构师复审裁决）。
@@ -159,6 +166,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `lastUpdateTime` / `respondTime` / `weight` / `customOrder`（M0，仅展示与排序） | 并入 **Phase 5.4** |
 | `extra` 的导出合并（`toLegadoJson`） | 随导入 / 导出功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出 |
 | Big5 / Big5-HKSCS 解码缺口 | 承 Phase 1，仍待排期（`book-source.md` §5.1） |
+| 上游 `gedoor/legado` 已清空（无源码） | 已记入 `book-source.md` 顶部与 ADR-0014 事实附注；语义参照改为本仓 §3 + 仍在维护的 fork |
 
 ---
 
