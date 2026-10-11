@@ -155,7 +155,7 @@ final class RuleEngine {
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
-        ParseFailure<String?>(kind: kind, rulePath: failedAt),
+        failureAt<String?>(kind: kind, rulePath: failedAt),
       ParseSuccess<List<String>>(:final List<String> data) =>
         ParseSuccess<String?>(data.isEmpty ? null : data.first),
     };
@@ -432,7 +432,7 @@ final class RuleEngine {
       'kind=${rejection.kind.name}',
     );
 
-    return ParseFailure<T>(kind: rejection.kind, rulePath: rejection.rulePath);
+    return failureAt<T>(kind: rejection.kind, rulePath: rejection.rulePath);
   }
 
   /// Adds [value] unless it is empty, matching upstream `getResultLast`.

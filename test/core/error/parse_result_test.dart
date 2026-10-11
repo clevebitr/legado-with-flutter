@@ -162,6 +162,28 @@ void main() {
     });
   });
 
+  group('failureAt', () {
+    test('failureAt_givenAnEmptyRulePath_throwsAssertionError', () {
+      // C-SRC-8：没有 rulePath 的失败无法定位，因此这是编程错误而不是运行时状况。
+      expect(
+        () => failureAt<void>(kind: ParseFailureKind.parseFailed, rulePath: ''),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('failureAt_givenAFailure_carriesKindPathAndCause', () {
+      final ParseFailure<void> failure = failureAt<void>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'unsupported:@css:',
+      );
+
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@css:');
+      expect(failure.cause, isNull);
+      expect(failure.stackTrace, isNull);
+    });
+  });
+
   group('resolveFailureArbKey', () {
     test('resolveFailureArbKey_whenEveryNonSilentKindIsMapped_producesDistinctKeys', () {
       final List<String> keys = ParseFailureKind.values

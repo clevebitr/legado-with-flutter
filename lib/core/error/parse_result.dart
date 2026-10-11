@@ -93,6 +93,32 @@ sealed class ParseResult<T> with _$ParseResult<T> {
   }) = ParseFailure<T>;
 }
 
+/// Creates a [ParseFailure], the single construction point for failures (C-SRC-8).
+///
+/// [rulePath] is what makes a failure locatable, so an empty one is a programming
+/// error rather than a runtime condition: it trips an assertion in debug builds
+/// instead of shipping a failure nobody can act on. `PLAN.md` 2.7 introduced this
+/// entry point so that every failure path of the rule engine and of the book source
+/// use cases goes through it.
+ParseFailure<T> failureAt<T>({
+  required ParseFailureKind kind,
+  required String rulePath,
+  Object? cause,
+  StackTrace? stackTrace,
+}) {
+  assert(
+    rulePath.isNotEmpty,
+    'A ParseFailure needs a non-empty rulePath (C-SRC-8).',
+  );
+
+  return ParseFailure<T>(
+    kind: kind,
+    rulePath: rulePath,
+    cause: cause,
+    stackTrace: stackTrace,
+  );
+}
+
 /// Convenience accessors for [ParseResult].
 extension ParseResultExtension<T> on ParseResult<T> {
   /// Returns the wrapped data, or `null` when the result is a failure.
