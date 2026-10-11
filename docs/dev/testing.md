@@ -158,7 +158,7 @@ await tester.pumpAndSettle();
 | 2 | 生成代码（C-DEP-4） | 必须先于一致性检查与静态分析 |
 | 3 | 生成物一致性检查 | 保证 `*.g.dart` / `*.freezed.dart` 与源码同步，防手改或忘生成（C-DEP-5） |
 | 4 | `dart format --set-exit-if-changed .` | 快，先跑 |
-| 5 | `flutter analyze` | 含 `analysis_options.yaml` 顶层 `plugins:` 的 riverpod_lint 规则 |
+| 5 | `flutter analyze` | 含 riverpod_lint 插件规则（安装位置见 `docs/dev/tech-stack.md` §12） |
 | 6 | `flutter test --coverage` | 覆盖率报告是第 7 步的输入 |
 | 7 | `dart run tool/check_coverage.dart` | 阈值 + 未测量源文件（§2、ADR-0019） |
 
@@ -177,7 +177,3 @@ await tester.pumpAndSettle();
 - 用 `pump(Duration)` 代替 `pumpAndSettle` 来规避动画问题。
 - 为了让门禁通过而降低阈值或删除断言。
 - 把生成物加入 `.gitignore` 之外的白名单以绕过一致性检查。
-
----
-
-**文档版本：** v2.0 · **最后更新：** 2026-10-11

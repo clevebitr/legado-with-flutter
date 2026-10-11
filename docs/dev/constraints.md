@@ -127,22 +127,8 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-SRC-8 | 失败必须可定位到规则路径：`ParseFailure.rulePath` 必填，供 UI 与日志定位失效规则。 |
 | C-SRC-9 | 同一书源的解析不得共享可变全局状态；`RuleEngine` 必须可并发调用且线程安全。 |
 
-```dart
-@freezed
-class BookSource with _$BookSource {
-  const factory BookSource({
-    required String name,
-    required String url,
-    required SearchRule searchRule,
-    required BookInfoRule bookInfoRule,
-    required TocRule tocRule,
-    required ContentRule contentRule,
-  }) = _BookSource;
-
-  factory BookSource.fromJson(Map<String, dynamic> json) =>
-      _$BookSourceFromJson(json);
-}
-```
+> 书源模型的**字段映射与分期**归 `docs/dev/book-source.md` §2，类型命名归 `docs/dev/naming.md` §3，
+> 本组不复述；`freezed` + `json_serializable` 的写法示例见 `docs/dev/architecture.md` §3 的例外一。
 
 ---
 
@@ -163,30 +149,8 @@ class BookSource with _$BookSource {
 | C-UI-8 | 禁止在 `build` 中构造可常量化对象（`TextStyle`、`BoxDecoration`、`EdgeInsets`）；主题相关对象必须来自令牌。 |
 | C-UI-9 | 必须提供「关于 → 法律声明」页面，显示版权、无担保声明、**禁止侵权用途声明（见 ADR-0023）**、GPL-3.0 全文查看入口与源代码获取入口（GPL-3.0 §0/§5d/§6）。文案键：`legalNoticesTitle`、`legalNoticesCopyright`、`legalNoticesNoWarranty`、`legalNoticesViewLicense`、`legalNoticesCorrespondingSource`、`legalNoticesProhibitedUse`。 |
 
-```dart
-// ✅ 正确（已核实 m3e_design 0.2.1 API）
-final tokens = Theme.of(context).m3e;
-Container(
-  color: tokens.colors.surface,
-  padding: EdgeInsets.all(tokens.spacing.md),
-  child: Text(
-    AppLocalizations.of(context).bookSourceListTitle,
-    style: tokens.typography.base.titleLarge,
-  ),
-);
-
-// ❌ 禁止
-Container(
-  color: const Color(0xFF6750A4),
-  padding: const EdgeInsets.all(16),
-  child: const Text('书源列表'),
-);
-```
-
-> `M3ESpacing` 成员已核实：`xs=4`、`sm=8`、`md=12`、`lg=16`、`xl=24`、`xxl=32`。
-> `M3ETypography` 是 `{TextTheme base, M3EEmphasized emphasized}`，取文本样式**必须经 `base`**
-> （`typography.base.titleLarge`，不存在 `typography.titleLarge`）。完整 API 清单见
-> `docs/dev/tech-stack.md` §3.1。
+> `M3ETheme` 的完整 API 清单（含 `M3ESpacing` 六阶数值与 `typography.base` 要求）与
+> 正确 / 禁止写法示例见 `docs/dev/tech-stack.md` §3.1，本组不复述。
 
 ---
 
@@ -213,7 +177,7 @@ Container(
 | C-TEST-1 | 覆盖率门禁（各层阈值唯一定义在 `docs/dev/testing.md` §2，由 `tool/check_coverage.dart` 强制执行）。 |
 | C-TEST-2 | 所有页面级 Widget 至少一个 smoke test。 |
 | C-TEST-3 | 测试命名格式：`方法名_场景_预期结果`，例如 `searchBooks_whenNetworkFails_returnsParseFailure`。 |
-| C-TEST-4 | 单元 / Widget / 回放测试文件放在 `test/` 下并**镜像被测文件的 `lib/` 相对路径**（ADR-0017）；**设备级集成测试**（必须依赖真实引擎、平台通道或原生库的用例）放 `integration_test/`，不镜像 `lib/`、不参与覆盖率统计、不进 CI（ADR-0017 §决策 5，运行方式见 `docs/dev/test-environment.md`）。`lib/**` 下禁止出现 `*_test.dart`。文件名固定 `*_test.dart`。 |
+| C-TEST-4 | 测试文件的位置（镜像 `lib/` 相对路径、`integration_test/` 例外）与命名见 `docs/dev/testing.md` §3（ADR-0017）；`lib/**` 下禁止出现 `*_test.dart`，文件名固定 `*_test.dart`。 |
 | C-TEST-5 | 禁止 `skip: true` 合入 `main`，除非关联 issue 且在 PR 描述中说明。 |
 | C-TEST-6 | Golden 测试使用 Flutter 内置 `matchesGoldenFile`；**禁止使用已停止维护的 `golden_toolkit`**（见 ADR-0009）。 |
 | C-TEST-7 | CI 必须依次通过 `AGENTS.md` §4 的全部命令；缺任一命令视为未通过。 |
@@ -352,12 +316,8 @@ docs/dev/testing.md、docs/dev/platform.md、docs/dev/tech-stack.md。
 - 安全：禁止硬编码密钥；强制 HTTPS；JS 沙箱。
 - 性能：重计算放入 Isolate；列表懒加载。
 
-禁止：未使用代码、TODO 占位、dynamic、! 强制解包、硬编码字符串/颜色、
+**禁止：** 未使用代码、TODO 占位、dynamic、! 强制解包、硬编码字符串/颜色、
 未声明的依赖。
 
 必须通过：AGENTS.md §4 声明的全部门禁命令（清单唯一出处；本文档不复述）。
 ```
-
----
-
-**文档版本：** v2.0 · **最后更新：** 2026-10-11

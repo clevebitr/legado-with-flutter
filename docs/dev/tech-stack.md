@@ -19,7 +19,6 @@
 | 锁文件 | 提交 `pubspec.lock`；升级依赖必须单独 PR |
 | 许可证 | 必须 GPL-3.0 兼容（C-DEP-7）；清单见 `NOTICE.md` §5 |
 | lint 规则名基准 | Dart **3.13.x** 官方清单（`https://dart.dev/tools/linter-rules/all`）。`analysis_options.yaml` 的 47 条规则已逐名机器比对通过 |
-| 分析器插件安装位置 | **顶层 `plugins:`**，不是 `analyzer: plugins:`（后者已弃用，见 §12） |
 
 **版本号必须同步的四处**（改任一处必须同时改其余三处）：
 
@@ -66,8 +65,7 @@
 | `m3e_design` | `^0.2.1` | MD3E 设计令牌（`M3ETheme` ThemeExtension） | MIT | C-UI-1、C-UI-2 |
 | `dynamic_color` | `^1.9.0` | Android 壁纸种子色取色（`DynamicColorBuilder`） | Apache-2.0 | C-UI-3、C-PLT-2 |
 
-> **`dynamic_color` 只能是 1.x：** `m3e_design 0.2.1` 声明 `dynamic_color: ^1.8.1`，
-> 升到 2.x 会导致版本求解失败。要升级 `dynamic_color` 必须先升级 `m3e_design`。
+> **`dynamic_color` 只能停在 1.x**（版本耦合原因见 §1.1）。
 > `DynamicColorBuilder` 内部使用 `OptionalMethodChannel` + try/catch，因此在单元测试
 > 环境下不会抛异常（已验证）。
 
@@ -258,8 +256,8 @@ dart run drift_dev schema generate drift_schemas/ test/core/storage/generated_mi
 > `intl` 由 `flutter_localizations` 传递提供。仅当 ARB 使用 `type: date` / `type: number`
 > 占位符时才需要显式声明 `intl`，此时必须与 `flutter_localizations` 的约束保持一致。
 >
-> 失败文案键与 `ParseFailureKind` 一一对应（`failure<PascalCaseKind>`），
-> 见 `docs/dev/architecture.md` §5 与 `docs/dev/book-source.md` §7。
+> 失败文案键的**键名规则**见 `docs/dev/naming.md` §8，`ParseFailureKind` 与键值的对照
+> 表见 `docs/dev/book-source.md` §7（本文档不复述）。
 
 ---
 
@@ -331,7 +329,3 @@ dart run drift_dev schema generate drift_schemas/ test/core/storage/generated_mi
 7. 核对 `analysis_options.yaml` 中的规则名：逐个对照
    `https://dart.dev/tools/linter-rules/all`（版本基线见 §1，此处不复述）。
    未使用代码类的 `unused_*` 属于 analyzer 诊断，必须放在 `analyzer.errors`。
-
----
-
-**文档版本：** v2.1 · **最后更新：** 2026-10-11

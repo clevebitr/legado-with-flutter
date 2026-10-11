@@ -37,10 +37,8 @@ flutter gen-l10n
 > 平台工程（`android/`、`ios/`、`windows/`）、`lib/main.dart` 与 `test/` 已生成并纳入
 > 版本控制，**不需要**再执行 `flutter create`。
 >
-> **Windows 桌面开发必须先开启「开发者模式」**（需要管理员）：
-> `设置 → 系统 → 开发者选项 → 开发人员模式`，或执行 `start ms-settings:developers`。
-> 否则 `flutter run -d windows` 会因插件符号链接失败而直接退出，
-> 详见 [`docs/dev/platform.md`](docs/dev/platform.md) §1.2。
+> **Windows 桌面开发需先开启「开发者模式」**（管理员），否则 `flutter run -d windows` 会因
+> 插件符号链接失败而直接退出；原因与开启方式见 [`docs/dev/platform.md`](docs/dev/platform.md) §1.2。
 
 ### 运行
 
@@ -51,26 +49,22 @@ flutter run -d windows     # 或 -d android / -d ios
 ### 门禁命令
 
 完整且唯一的门禁命令清单见 [`AGENTS.md`](AGENTS.md) §4（本文档不复述，见 ADR-0013 §5）；
-执行顺序与 CI 特有步骤见 [`docs/dev/testing.md`](docs/dev/testing.md) §7。`riverpod_lint` 插件规则由
-`flutter analyze` 执行（`analysis_options.yaml` 顶层 `plugins:`）。
+执行顺序与 CI 特有步骤见 [`docs/dev/testing.md`](docs/dev/testing.md) §7。
 
 ---
 
-## 文档地图
+## 文档入口
 
-| 文档 | 内容 |
+**全部文档路径与职责的唯一权威索引是 [`docs/README.md`](docs/README.md)**（从这里开始）。
+常用入口：
+
+| 我想… | 读 |
 |---|---|
-| [`docs/README.md`](docs/README.md) | **全部文档路径的唯一权威索引**（从这里开始） |
-| [`AGENTS.md`](AGENTS.md) | AI 代理入口：工作流、门禁、文档地图 |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 贡献流程：分支、Commit、PR、Review |
-| [`docs/dev/naming.md`](docs/dev/naming.md) | 命名规范 |
-| [`docs/dev/constraints.md`](docs/dev/constraints.md) | 约束条目（带稳定 ID `C-*`） |
-| [`docs/dev/architecture.md`](docs/dev/architecture.md) | 目录结构、分层、DI、路由、错误契约 |
-| [`docs/dev/book-source.md`](docs/dev/book-source.md) | Legado 书源规格与支持矩阵 |
-| [`docs/dev/testing.md`](docs/dev/testing.md) | 测试分层、覆盖率门禁、CI |
-| [`docs/dev/platform.md`](docs/dev/platform.md) | 平台基线与降级策略 |
-| [`docs/dev/tech-stack.md`](docs/dev/tech-stack.md) | 依赖清单与版本基线 |
-| [`docs/dev/adr/`](docs/dev/adr/README.md) | 决策记录（含未决事项） |
+| 开始开发 / 看进度与验收 | [`PLAN.md`](PLAN.md) |
+| 提 PR / 分支 / Commit | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| 查约束与命名 | [`docs/dev/constraints.md`](docs/dev/constraints.md)、[`docs/dev/naming.md`](docs/dev/naming.md) |
+| 查依赖、许可证、免责声明 | [`docs/dev/tech-stack.md`](docs/dev/tech-stack.md)、[`NOTICE.md`](NOTICE.md) |
+| 看决策理由 | [`docs/dev/adr/`](docs/dev/adr/README.md) |
 
 ---
 
@@ -78,30 +72,17 @@ flutter run -d windows     # 或 -d android / -d ios
 
 | 项 | 状态 |
 |---|---|
-| 文档规范体系 | v2.0，已按单一来源（SSOT）重构 |
-| 实现进度 | 唯一出处：[`PLAN.md`](PLAN.md) §3（阶段状态不在本文档复述，见 `docs/README.md` §6） |
-| 书源规格 | v1.0，对标原版阅读（Legado）；语法行状态待真实书源回归逐行确认 |
+| 文档规范体系 | v2.0+，已按单一来源（SSOT）与事实级归属（`docs/README.md` §2.1）重构 |
+| 实现进度 | 唯一出处：[`PLAN.md`](PLAN.md) §3.1 阶段状态表 |
+| 书源规格 | 对标原版阅读（Legado）；语法行状态以 [`docs/dev/book-source.md`](docs/dev/book-source.md) §3 矩阵为准 |
 | 覆盖率门禁 | 已可执行（`tool/check_coverage.dart`）；阈值与判定规则见 [`docs/dev/testing.md`](docs/dev/testing.md) §2 |
 | 许可证 | **GNU GPL-3.0**（version 3 only），见 [`LICENSE`](LICENSE) 与 [`NOTICE.md`](NOTICE.md) |
-| 依赖许可核实 | ✅ 已完成：`pubspec.lock` 全部包已扫描，零风险项；包数与分类基线见 [`NOTICE.md`](NOTICE.md) §5（本文档不复述计数） |
+| 依赖许可核实 | 已完成；包数与分类基线见 [`NOTICE.md`](NOTICE.md) §5 |
 
 ---
 
-## 许可证
+## 许可证与免责声明
 
-本项目采用 **GNU GPL-3.0**（version 3 only）。完整文本见 [`LICENSE`](LICENSE)。
-
-分发本程序的任何形式（包括二进制与应用商店包）都必须同时提供对应源代码，
-并保留版权与许可证声明；应用内「关于 → 法律声明」提供许可证全文入口。
-详见 [`NOTICE.md`](NOTICE.md) §4 的合规义务清单。
-
----
-
-## 免责声明
-
-本项目是独立的阅读客户端实现，**不提供、不托管、不传播、不索引任何书源或阅读内容**。
-用户自行导入的第三方书源及其内容由用户自行承担合规责任。
-本项目不绕过任何付费、登录或版权保护机制。
-本项目与 Legado 项目及其作者**无隶属关系**，也未经其背书。
-
-软件按“现状”提供，**不提供任何担保**（GPL-3.0 §15、§16）。
+本项目采用 **GNU GPL-3.0**（version 3 only）。分发本程序的任何形式（包括二进制与应用商店包）
+都必须同时提供对应源代码，并保留版权与许可证声明。**版权、与上游 Legado 的关系、免责声明、
+GPL 合规义务清单与第三方依赖许可清单的唯一正文在 [`NOTICE.md`](NOTICE.md)**（本文档不复述）。

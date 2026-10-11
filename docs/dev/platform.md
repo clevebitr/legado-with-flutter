@@ -178,7 +178,3 @@ pageTransitionsTheme: const PageTransitionsTheme(
 | `applicationId` | 当前为 Flutter 默认的 `com.example.flutter_reader`；`com.example.*` 无法上架。改动点：`android/app/build.gradle.kts` 的 `namespace` 与 `applicationId`、`ios/Runner.xcodeproj` 中的 `PRODUCT_BUNDLE_IDENTIFIER`（共 3 处配置） |
 | 发布签名 | `android/app/build.gradle.kts` 的 release 构建当前复用 debug 签名 |
 | Windows 开发者模式 | 见 §1.2，需在每台开发机开启（管理员） |
-
----
-
-**文档版本：** v2.0 · **最后更新：** 2026-10-11
