@@ -141,6 +141,7 @@ m3e.spacing.md;
 | `json_path` | `^0.9.0` | JSONPath（唯一） | 全平台 | MIT | C-SRC-6 |
 | `flutter_qjs_next` | `^1.5.2` | JS 引擎（QuickJS，构建时从 `cxx/` 源码编译） | Android/iOS/Windows/Linux/macOS | MIT | C-SRC-2、C-SRC-3 |
 | `betto_charset_detector` | `^0.1.0` | 字符编码检测（唯一，纯 Dart） | 全平台 | Apache-2.0 | C-NET-3 |
+| `charset` | `^2.0.1` | 字符编码解码（把检测出的标签变成 `Encoding`；支持标签集见 `book-source.md` §5.1） | 全平台 | Apache-2.0 | C-NET-3 |
 
 > **JS 引擎已实测选定（2026-10-10，ADR-0015）**：9 项探针全通过，无预编译库、无需打补丁；
 > 引擎级 `timeout` 与 `memoryLimit` **真实生效**。配额数值与实测证据分别归

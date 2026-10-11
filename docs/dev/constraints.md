@@ -100,7 +100,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 |---|---|
 | C-NET-1 | 所有网络请求必须经 `core/network/HttpClient`；feature 中禁止直接 import `dio` 或 `http`。 |
 | C-NET-2 | 默认超时 15 秒且可配置；重试策略必须显式声明次数上限，禁止无限重试。 |
-| C-NET-3 | 编码必须经 `betto_charset_detector` 检测；禁止假设 UTF-8。 |
+| C-NET-3 | 编码必须经 `betto_charset_detector` 检测；禁止假设 UTF-8。可解码的标签集与已知缺口见 `docs/dev/book-source.md` §5.1。 |
 | C-NET-4 | User-Agent 必须可配置，默认使用项目标识。 |
 | C-NET-5 | Cookie 由统一 `CookieManager` 管理；禁止业务层手动拼接 Cookie 头。 |
 | C-NET-6 | 缓存必须设置 TTL；缓存键必须为「书源 ID + 参数摘要」的稳定哈希；禁止无限缓存。 |

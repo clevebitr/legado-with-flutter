@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Network layer (2026-10-11)
+
+- Added the Phase 1.4 network layer: `HttpClient` (interface) with `DioHttpClient`,
+  `CookieManager` with `InMemoryCookieManager`, `HttpPolicy` (timeout, retry bound,
+  `User-Agent`, plaintext-HTTP switch), `HttpResponse` and `charset_decoder.dart`, plus the
+  injectable wiring in `lib/core/di/http_client_provider.dart`.
+- Failures never throw: timeouts, connection errors, 403/404/5xx and undecodable bodies are
+  mapped onto `ParseFailureKind` and returned as `ParseResult` (C-ERR-1). Retries reuse
+  `ParseFailureKind.isRetryable`, so only the two transient kinds are retried, and the bound
+  is explicit (`maxRetries`, C-NET-2).
+- Plaintext `http://` is rejected unless `HttpPolicy.allowPlainHttp` is set (C-SEC-2),
+  `Cookie` headers are produced only by the interceptor that asks the `CookieManager`
+  (C-NET-5), and every failure log goes through `redactUrl` + `describeError`, with the
+  search keyword kept out of the log entirely (C-SEC-4, ADR-0006 §5).
+- Encoding follows `book-source.md` §5: the `Content-Type` and `<meta>` declarations win,
+  byte sniffing through `betto_charset_detector` is the fallback, and an invalid body raises
+  `FormatException`, which becomes `encodingFailed` instead of being swallowed
+  (`allowMalformed` is never used, C-NET-3). `charset` was promoted from a transitive to a
+  direct dependency (no new package in the lock) to turn the detected label into a decoder;
+  `NOTICE.md` §5 and `docs/dev/tech-stack.md` §5 were updated, and
+  `book-source.md` §5.1 now records the labels that can and cannot be decoded.
+- `dio` is imported by `lib/core/network/http_client.dart` only (C-NET-1); tests attach a
+  hand-written `HttpClientAdapter` double in `test/support/` instead of mocking dio
+  internals or touching the network (`docs/dev/testing.md` §4).
+
 ### Licence scan (2026-10-11)
 
 - Corrected the classification rule in `NOTICE.md` §6 and the inventory in §5: the BSD

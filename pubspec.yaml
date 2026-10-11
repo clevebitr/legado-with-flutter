@@ -32,6 +32,9 @@ dependencies:
   dio: ^5.7.0
   cached_network_image: ^3.4.1
 
+  # 编码：betto 只检测标签，解码需要 charset 把标签变成 Encoding（C-NET-3）
+  charset: ^2.0.1
+
   # 持久化：Drift 为主库，drift_flutter 提供各平台原生 SQLite（ADR-0003）
   # 禁止使用 sqlite3_flutter_libs：上游已 EOL（0.6.0+eol），在新版 Android 工具链上
   # 不再正确打包原生库，会在启动时抛 DriftRemoteException。

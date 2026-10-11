@@ -168,9 +168,31 @@
 
 - 必须使用 `betto_charset_detector` 检测（C-NET-3），检测顺序：
   HTTP `Content-Type` → HTML `<meta charset>` → 字节嗅探 → 回退 UTF-8。
+  前两步是**权威声明**：只要有声明就必须用它，嗅探仅用于两者都缺失的页面。
 - 检测结果必须缓存到「书源 ID + URL」维度，避免重复嗅探。
 - 解码失败返回 `ParseFailure(encodingFailed)`，
   禁止用 `utf8.decode(allowMalformed: true)` 静默吞掉。
+
+### 5.1 可解码的编码集（实测 2026-10-11）
+
+检测得到的是 IANA 标签，解码由 `charset` 把标签变成 `Encoding`（`tech-stack.md` §5）。
+标签空间比解码器空间大，**未支持的标签会回落到 UTF-8**，通常接着以
+`encodingFailed` 失败（安全，但功能缺失）：
+
+| 标签 | 结果 |
+|---|---|
+| `utf-8`、`utf-16le/be`、`utf-32le/be` | ✅ |
+| `gbk`、`gb2312`、`gb18030`、`cp936` | ✅（四者共用 GBK 解码器） |
+| `windows-1252`、`iso-8859-1/2/15`、`latin1` | ✅ |
+| `shift-jis`、`euc-jp`、`euc-kr`、`us-ascii` | ✅ |
+| `big5`、`big5-hkscs`、`euc-cn`、`sjis`、`windows-31j`、`iso-2022-jp`、`koi8-r` | ❌ 回落 UTF-8 → 通常 `encodingFailed` |
+
+**已知缺口：** 繁体中文书源（`big5` / `big5-hkscs`）当前不可解码；补齐需要引入
+Big5 解码器（新依赖，受 C-DEP-1 / C-DEP-7 约束，必须先开 ADR）。
+`gb18030` 按 GBK 解码，四字节扩展区字符会失败，属 M0 已知限制。
+
+**嗅探的样本下限：** 字节嗅探只看前 8 KB；样本极短时（几个字节）可能误判为
+`shift-jis` 等其他 CJK 编码，因此**不得**跳过前两步去信任嗅探结果。
 
 ---
 

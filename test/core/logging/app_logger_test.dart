@@ -3,21 +3,12 @@ import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 
-/// 内存收集器：截获 `LogEvent` 本身，因此能断言级别与内容（testing.md §4）。
-final class _CapturingPrinter extends LogPrinter {
-  final List<LogEvent> events = <LogEvent>[];
-
-  @override
-  List<String> log(LogEvent event) {
-    events.add(event);
-    return const <String>[];
-  }
-}
+import '../../support/capturing_log_printer.dart';
 
 void main() {
   group('AppLogger', () {
     test('debug_whenLevelIsDebug_recordsADebugEvent', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.debug,
         printer: printer,
@@ -31,7 +22,7 @@ void main() {
     });
 
     test('info_whenLevelIsInfo_recordsAnInfoEvent', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.info,
         printer: printer,
@@ -43,7 +34,7 @@ void main() {
     });
 
     test('warning_whenLevelIsWarning_recordsAWarningEvent', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.warning,
         printer: printer,
@@ -55,7 +46,7 @@ void main() {
     });
 
     test('error_whenLevelIsError_recordsAnErrorEvent', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.error,
         printer: printer,
@@ -67,7 +58,7 @@ void main() {
     });
 
     test('debug_whenLevelIsInfo_dropsTheRecord', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.info,
         printer: printer,
@@ -82,7 +73,7 @@ void main() {
     });
 
     test('error_whenLevelIsOff_dropsTheRecord', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(level: LogLevel.off, printer: printer);
 
       logger.error('never recorded');
@@ -91,7 +82,7 @@ void main() {
     });
 
     test('warning_whenStackTraceIsGiven_forwardsIt', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.info,
         printer: printer,
@@ -104,7 +95,7 @@ void main() {
     });
 
     test('error_whenRawExceptionIsPassed_recordsADigestInsteadOfItsText', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.info,
         printer: printer,
@@ -123,7 +114,7 @@ void main() {
     });
 
     test('warning_whenStringErrorCarriesAToken_recordsItScrubbed', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.info,
         printer: printer,
@@ -141,7 +132,7 @@ void main() {
     });
 
     test('error_whenMessageCarriesAToken_recordsItMasked', () {
-      final _CapturingPrinter printer = _CapturingPrinter();
+      final CapturingLogPrinter printer = CapturingLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.info,
         printer: printer,

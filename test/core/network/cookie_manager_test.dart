@@ -1,0 +1,231 @@
+import 'package:flutter_reader/core/network/cookie_manager.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('InMemoryCookieManager', () {
+    test('cookieHeaderFor_whenNothingIsStored_returnsNull', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/a')),
+        isNull,
+      );
+    });
+
+    test('storeFromResponse_whenCookieIsSet_returnsItForTheSameHost', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      cookies.storeFromResponse(Uri.parse('https://example.com/a'), <String>[
+        'session=abc; Path=/',
+      ]);
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/b')),
+        'session=abc',
+      );
+      expect(cookies.cookieHeaderFor(Uri.parse('https://other.com/b')), isNull);
+    });
+
+    test(
+      'storeFromResponse_whenSeveralCookiesMatch_joinsThemWithSemicolons',
+      () {
+        final CookieManager cookies = InMemoryCookieManager();
+
+        cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+          'a=1; Path=/',
+          'b=2; Path=/',
+        ]);
+
+        expect(
+          cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+          'a=1; b=2',
+        );
+      },
+    );
+
+    test('storeFromResponse_whenValueContainsEquals_keepsTheWholeValue', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'session=YWJj==; Path=/',
+      ]);
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'session=YWJj==',
+      );
+    });
+
+    test(
+      'storeFromResponse_whenDomainAttributeMatches_appliesToSubdomains',
+      () {
+        final CookieManager cookies = InMemoryCookieManager();
+
+        cookies.storeFromResponse(
+          Uri.parse('https://www.example.com/'),
+          <String>['session=abc; Domain=example.com; Path=/'],
+        );
+
+        expect(
+          cookies.cookieHeaderFor(Uri.parse('https://api.example.com/')),
+          'session=abc',
+        );
+      },
+    );
+
+    test('storeFromResponse_whenDomainAttributeIsForeign_isIgnored', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'session=abc; Domain=other.com; Path=/',
+      ]);
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'session=abc',
+        reason: 'A foreign domain attribute falls back to the request host.',
+      );
+      expect(cookies.cookieHeaderFor(Uri.parse('https://other.com/')), isNull);
+    });
+
+    test('storeFromResponse_whenDomainAttributeIsASingleLabel_isIgnored', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'session=abc; Domain=com; Path=/',
+      ]);
+
+      expect(cookies.cookieHeaderFor(Uri.parse('https://other.com/')), isNull);
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'session=abc',
+      );
+    });
+
+    test('storeFromResponse_whenPathAttributeIsSet_scopesTheCookie', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'session=abc; Path=/search',
+      ]);
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/search/x')),
+        'session=abc',
+      );
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/searchx')),
+        isNull,
+        reason: 'A path prefix must end on a segment boundary.',
+      );
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/other')),
+        isNull,
+      );
+    });
+
+    test(
+      'storeFromResponse_whenPathAttributeEndsWithSlash_scopesTheCookie',
+      () {
+        final CookieManager cookies = InMemoryCookieManager();
+
+        cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+          'session=abc; Path=/search/',
+        ]);
+
+        expect(
+          cookies.cookieHeaderFor(Uri.parse('https://example.com/search/x')),
+          'session=abc',
+        );
+      },
+    );
+
+    test('storeFromResponse_whenPathAttributeIsEmpty_keepsTheDefaultPath', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      cookies.storeFromResponse(
+        Uri.parse('https://example.com/deep/page'),
+        <String>['session=abc; Path='],
+      );
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/anything')),
+        'session=abc',
+      );
+    });
+
+    test('cookieHeaderFor_whenCookieIsSecure_isNotSentOverPlainHttp', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'session=abc; Secure; Path=/',
+      ]);
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'session=abc',
+      );
+      expect(cookies.cookieHeaderFor(Uri.parse('http://example.com/')), isNull);
+    });
+
+    test('storeFromResponse_whenMaxAgeIsZero_removesTheCookie', () {
+      final CookieManager cookies = InMemoryCookieManager();
+      final Uri url = Uri.parse('https://example.com/');
+
+      cookies.storeFromResponse(url, <String>['session=abc; Path=/']);
+      cookies.storeFromResponse(url, <String>[
+        'session=abc; Max-Age=0; Path=/',
+      ]);
+
+      expect(cookies.cookieHeaderFor(url), isNull);
+    });
+
+    test('storeFromResponse_whenMaxAgeIsPositive_keepsTheCookie', () {
+      final CookieManager cookies = InMemoryCookieManager();
+      final Uri url = Uri.parse('https://example.com/');
+
+      cookies.storeFromResponse(url, <String>[
+        'session=abc; Max-Age=3600; Path=/',
+      ]);
+
+      expect(cookies.cookieHeaderFor(url), 'session=abc');
+    });
+
+    test('storeFromResponse_whenValueIsEmpty_removesTheCookie', () {
+      final CookieManager cookies = InMemoryCookieManager();
+      final Uri url = Uri.parse('https://example.com/');
+
+      cookies.storeFromResponse(url, <String>['session=abc; Path=/']);
+      cookies.storeFromResponse(url, <String>['session=; Path=/']);
+
+      expect(cookies.cookieHeaderFor(url), isNull);
+    });
+
+    test('storeFromResponse_whenHeaderHasNoPair_isIgnored', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'session',
+        '=abc; Path=/',
+      ]);
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        isNull,
+      );
+    });
+
+    test('storeFromResponse_whenUnknownAttributeIsPresent_keepsTheCookie', () {
+      final CookieManager cookies = InMemoryCookieManager();
+
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'session=abc; HttpOnly; SameSite=Lax; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Path=/',
+      ]);
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'session=abc',
+      );
+    });
+  });
+}
