@@ -15,6 +15,10 @@
 | Widget 测试 | `presentation/` | 页面 smoke、交互、Semantics | 否 |
 | Golden 测试 | 关键 UI 组件 | MD3E 令牌一致性 | 否 |
 | 集成回放测试 | 书源全链路 | 搜索→详情→目录→正文（离线语料） | 否 |
+| 设备级集成测试 | 真实引擎 / 平台通道 / 原生 SQLite | `integration_test/`（Windows 桌面、Android 模拟器） | 否 |
+
+设备级集成测试**不进 CI**（§7 的命令清单与 `AGENTS.md` §4 不变）；要把它接入 CI 需另开 PR/ADR
+（ADR-0017 §决策 5：需要 Android SDK/模拟器，iOS 还需 macOS）。
 
 **所有测试禁止真实联网**；`HttpClient` 与时间源必须可注入替身（C-NET-8、C-DEP-3）。
 
@@ -63,9 +67,11 @@ dart run tool/check_coverage.dart --allowlist=    # 不使用 allowlist（排查
 
 ## 3. 测试命名
 
-- 文件名：`*_test.dart`，放在 `test/` 下并**镜像被测文件的 `lib/` 相对路径**
-  （C-TEST-4、ADR-0017）：`lib/core/error/parse_result.dart` →
-  `test/core/error/parse_result_test.dart`。`lib/**` 下禁止出现 `*_test.dart`。
+- 文件名：`*_test.dart`。单元 / Widget / 回放测试放在 `test/` 下并**镜像被测文件的 `lib/`
+  相对路径**（C-TEST-4、ADR-0017）：`lib/core/error/parse_result.dart` →
+  `test/core/error/parse_result_test.dart`；**设备级集成测试**放在 `integration_test/` 下平铺，
+  不镜像 `lib/`（ADR-0017 §决策 5、`docs/dev/test-environment.md`）。
+  `lib/**` 下禁止出现 `*_test.dart`。
 - 测试名：`方法名_场景_预期结果`（C-TEST-3）。
 
 ```dart

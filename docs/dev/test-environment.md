@@ -84,6 +84,9 @@ flutter test integration_test/on_disk_database_test.dart -d emulator-5554
 豁免覆盖率。`integration_test/on_disk_database_test.dart` 是它唯一的自动化验证入口，
 Windows 与 Android 两侧都已实测通过。
 
+**规范依据：** 设备级集成测试是独立的一层，由 ADR-0017 §决策 5（2026-10-11 修订）授权，
+C-TEST-4 的例外句、`testing.md` §1 的第五行与 `naming.md` §2 同步；不进 CI，接入需另开 PR/ADR。
+
 设备级用例**不参与**覆盖率统计：`integration_test/` 不在 `lib/**` 下，`flutter test --coverage`
 也不会加载它，所以覆盖率门禁的输入与结论都不受影响。
 

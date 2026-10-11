@@ -38,7 +38,7 @@
 | [0014](0014-book-source-minimal-scope.md) | 书源功能范围：对标原版阅读的最小实现分期 | Accepted | 本次新增 |
 | [0015](0015-adopt-flutter-qjs-next.md) | 采用 `flutter_qjs_next` 作为 JS 引擎 | Accepted | 取代 0008 |
 | [0016](0016-sealed-variant-form-vs-freezed.md) | 密封层级的子类形态以编译器产物为准（放弃 `final class` 字面要求） | Accepted | 本次新增 |
-| [0017](0017-test-file-location.md) | 测试文件位置：在 `test/` 下镜像 `lib/` 路径 | Accepted | 本次新增 |
+| [0017](0017-test-file-location.md) | 测试文件位置：在 `test/` 下镜像 `lib/` 路径 | Accepted（2026-10-11 修订） | 本次新增 |
 | [0018](0018-android-min-sdk-baseline.md) | Android 平台基线：保留 `minSdk 26`，并重建其依据 | Accepted | 本次新增 |
 | [0019](0019-coverage-gate-must-detect-unmeasured-files.md) | 覆盖率门禁必须检测「未出现在报告中的源文件」 | Accepted | 本次新增 |
 | [0020](0020-dynamic-color-provider-builder-shape.md) | 动态取色接口以 builder 包装形态提供，并在根部注入 | Accepted | 本次新增 |
