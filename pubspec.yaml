@@ -42,6 +42,8 @@ dependencies:
 
   # 观测：业务侧只允许经 core/logging 使用（C-ERR-5、ADR-0006）
   logger: ^2.8.0
+  # 日志脱敏摘要（sha256），仅 core/logging/redaction.dart 使用（C-SEC-4）
+  crypto: ^3.0.7
 
   # 代码生成注解
   freezed_annotation: ^3.1.0

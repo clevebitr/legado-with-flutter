@@ -136,7 +136,7 @@ m3e.spacing.md;
 
 | 依赖 | 版本 | 用途 | 平台支持 | 许可证 | 关联约束 |
 |---|---|---|---|---|---|
-| `html` | `^0.15.6` | HTML DOM | 全平台 | BSD-3-Clause | C-SRC-1 |
+| `html` | `^0.15.6` | HTML DOM | 全平台 | MIT | C-SRC-1 |
 | `cascadia` | `^0.8.0` | CSS 选择器（唯一） | 全平台 | BSD-3-Clause | C-SRC-6 |
 | `json_path` | `^0.9.0` | JSONPath（唯一） | 全平台 | MIT | C-SRC-6 |
 | `flutter_qjs_next` | `^1.5.2` | JS 引擎（QuickJS，构建时从 `cxx/` 源码编译） | Android/iOS/Windows/Linux/macOS | MIT | C-SRC-2、C-SRC-3 |
@@ -179,6 +179,7 @@ m3e.spacing.md;
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |
 |---|---|---|---|---|
 | `logger` | `^2.8.0` | 日志实现；业务侧只允许通过 `core/logging` 使用 | MIT | C-ERR-5、C-SEC-4 |
+| `crypto` | `^3.0.7` | 日志脱敏摘要（SHA-256）；仅 `core/logging/redaction.dart` 使用 | BSD-3-Clause | C-SEC-4、ADR-0006 §5 |
 
 ## 8. 代码生成
 

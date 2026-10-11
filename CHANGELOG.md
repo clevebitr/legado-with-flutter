@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`ParseResult` / `ParseFailureKind` per ADR-0002) and `parse_failure_arb_key.dart`
   (`resolveFailureArbKey`, the single implementation of the `failure<PascalCaseKind>`
   ARB key rule from `docs/dev/naming.md` §8).
+- Added the Phase 1.2 logging layer under `lib/core/logging/` (`AppLogger` facade,
+  `LogLevel`, `redaction.dart`) with its provider in `lib/core/di/logger_provider.dart`.
+  Every message and every error is sanitised inside the facade: `Bearer` credentials,
+  `<name>=<value>` pairs, URL userinfo, sensitive path segments and all query values are
+  masked, and a non-string error is reduced to `describeError` so an exception whose
+  `toString()` embeds a URL cannot leak it (C-SEC-4). The facade uses
+  `ProductionFilter`, because `package:logger`'s default `DevelopmentFilter` is wrapped in
+  `assert(() { ... }())` and would drop every record in release builds.
+  `crypto` (already present transitively) was promoted to a direct dependency for the
+  SHA-256 digests used by `describeKeyword` / `describePayload` / `describeError`; its
+  licence was verified and `NOTICE.md` §5 and `docs/dev/tech-stack.md` §7 updated.
 - The coverage gate now reports exit code `3` when a `lib/` source file never appears in the
   lcov report, with `tool/coverage_allowlist.txt` for platform-only or integration-only
   entries. Previously an untested new `lib/core/**` file silently produced `100% 4/4 OK`.

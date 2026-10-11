@@ -108,6 +108,7 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 | `shared_preferences` | 2.5.6 | BSD-2-Clause |
 | `path_provider` | 2.1.6 | BSD-2-Clause |
 | `logger` | 2.8.0 | MIT |
+| `crypto` | 3.0.7 | BSD-3-Clause |
 | `freezed_annotation` | 3.1.0 | MIT |
 | `json_annotation` | 4.12.0 | BSD-2-Clause |
 | `flutter_lints`（dev） | 6.0.0 | BSD-2-Clause |

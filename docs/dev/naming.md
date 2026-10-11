@@ -21,6 +21,7 @@
 |---|---|---|
 | 目录 | `snake_case`，全小写 | `book_source/`、`core/theme/` |
 | Dart 文件 | `snake_case` | `rule_engine.dart`、`book_source_parser.dart` |
+| 基础设施 Provider 文件（仅 `core/di/`） | `<subject>_provider.dart` | `logger_provider.dart`、`http_client_provider.dart` |
 | 测试文件 | `*_test.dart`，放在 `test/` 下并镜像被测文件的 `lib/` 相对路径（ADR-0017） | `test/core/error/parse_result_test.dart` |
 | 生成文件 | 由工具决定，禁止改名、禁止手改 | `book_source.freezed.dart` |
 | ADR | `docs/dev/adr/NNNN-kebab-title.md` | `0001-riverpod-codegen-only.md` |
@@ -141,6 +142,7 @@ const DEFAULT_TIMEOUT = 15;  // 常量必须 lowerCamelCase
 | 仓储实现 | `XxxRepositoryImpl`（放在 `data/`） | `BookSourceRepositoryImpl` |
 | 数据源 | `XxxDataSource` | `BookSourceLocalDataSource` |
 | 状态 | `XxxNotifier`（Riverpod 代码生成） | `BookSourceListNotifier` |
+| 基础设施 Provider | 被注入对象的名词，lowerCamelCase，**不加** `Provider` 后缀；文件见 §2 | `@riverpod AppLogger appLogger(Ref ref)` → `appLoggerProvider` |
 | Widget | `XxxPage` / `XxxView` | `BookSourceListPage`、`ReaderView` |
 | 扩展 | `XxxExtension` | `StringExtension` |
 

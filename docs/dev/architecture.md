@@ -80,6 +80,9 @@ DTO ↔ Entity 转换必须放在 `data/` 的 Mapper 中，禁止在 `presentati
 | `core/di/` | 基础设施：数据库、`HttpClient`、`Logger`、时钟 | `@riverpod HttpClient httpClient(Ref ref)` |
 | `features/<f>/di.dart` | 该 feature 的 DataSource / Repository / UseCase | `@riverpod BookSourceRepository bookSourceRepository(Ref ref)` |
 
+**文件粒度：** `core/di/` 下每个主题一个文件，命名见 `docs/dev/naming.md` §2/§6（本文档不复述）；
+`features/<f>/` 下继续沿用单文件 `di.dart`。两者不得混用。
+
 ```dart
 // features/book_source/di.dart
 @riverpod

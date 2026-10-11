@@ -1,7 +1,7 @@
 # ADR-0006 日志统一 `logger` + `core/logging` 门面
 
 - **状态：** Accepted
-- **日期：** 2026-10-10
+- **日期：** 2026-10-10（2026-10-11 修订：§4 补充 `LOG_LEVEL` 的取值集与非法值回落行为）
 - **关联：** C-ERR-5、C-ERR-8、C-SEC-4、`docs/dev/tech-stack.md` §7
 
 ## 背景
@@ -16,6 +16,8 @@
 2. 业务代码**只允许**通过 `lib/core/logging/` 暴露的门面使用日志；禁止直接 import `package:logger`。
 3. 门面方法：`debug` / `info` / `warning` / `error`，均接受 `(String message, [Object? error, StackTrace? stackTrace])`。
 4. 日志级别：debug 与 release 构建下默认 `info`；通过 `--dart-define=LOG_LEVEL=` 覆盖。
+   取值集：`debug` / `info` / `warning` / `error` / **`off`**（关闭全部日志，供诊断或未来用户设置使用）；
+   匹配忽略大小写与首尾空白；**非法值回落 `info`**，不得因构建参数拼错而崩溃。
 5. 强制脱敏：`Cookie`、`Authorization`、`Token`、页面正文、搜索关键词原文不得进入日志
    （C-ERR-8、C-SEC-4）。搜索关键词以长度与哈希代替。
 
