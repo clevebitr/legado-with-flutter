@@ -83,7 +83,7 @@ flutter run -d windows     # 或 -d android / -d ios
 | 书源规格 | v1.0，对标原版阅读（Legado）；语法行状态待真实书源回归逐行确认 |
 | 覆盖率门禁 | 已可执行（`tool/check_coverage.dart`）；阈值与判定规则见 [`docs/dev/testing.md`](docs/dev/testing.md) §2 |
 | 许可证 | **GNU GPL-3.0**（version 3 only），见 [`LICENSE`](LICENSE) 与 [`NOTICE.md`](NOTICE.md) |
-| 依赖许可核实 | ✅ 已完成：`pubspec.lock` 中 150 个包全部扫描，零风险项，见 [`NOTICE.md`](NOTICE.md) §5 |
+| 依赖许可核实 | ✅ 已完成：`pubspec.lock` 全部包已扫描，零风险项；包数与分类基线见 [`NOTICE.md`](NOTICE.md) §5（本文档不复述计数） |
 
 ---
 

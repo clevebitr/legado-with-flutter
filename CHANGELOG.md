@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Default rule syntaxes for the 3.1 slice (2026-10-11)
+
+- The rule engine (`lib/features/book_source/domain/rule_engine/rule_engine.dart`) now implements
+  the rest of the default-rule matrix this slice owns — #3, #4, #6, #7, #26 and #28 — so those
+  syntaxes have left the rejection surface:
+  - **#3 `text`** matches an element's *own* text, case-insensitively, so a node whose text lives in
+    a child is not a hit (upstream's `getElementsContainingOwnText`, `AnalyzeByJSoup.kt:319`); it
+    shares one normalisation with the #8 `ownText` extraction.
+  - **#4 `children`** takes the direct children, ignores the second and third segment, and chains
+    into the next selector like any other segment.
+  - **#6 `!`** drops `:`-separated indices, negatives included.
+  - **#7** a leading `-` reverses the result list; it is stripped before the flag head is
+    recognised, so `-@css:.a` still reports `unsupported:@css:` instead of a malformed rule.
+  - **#26 `[]`** index lists: a single index, several indices in authored order, ranges, ranges with
+    a step, descending ranges, exclusions, and out-of-range / over-the-end clamping.
+  - **#28** — an index as the first rule of a segment (`.1` / `[1]` / `children[1]`) — is a **new
+    matrix row**: it existed only upstream (`AnalyzeByJSoup.kt:311` and `:460`) and this engine had
+    been rejecting it, which review judged an M0 gap. ADR-0014 carries the second-round note and
+    the ruling, `book-source.md` §3 the row itself, and a test asserts the three spellings agree.
+- Validation and evaluation are now **one parse**: a rule string goes through a single pass that
+  yields either the selector steps or the rejection, so the two can no longer disagree about the
+  same rule. Structurally broken rules (an empty name, an unclosed or non-numeric index, a zero
+  step, `!` in the position segment, two position spellings at once, `-` with no selector) stay
+  `parseFailed` with the field path, and everything outside the slice still returns
+  `unsupportedRule` with `rulePath` naming the syntax (C-SRC-4, C-SRC-8). The phase 2.2 entry below
+  keeps the rejection surface *as it was then* and is now scoped that way.
+- One deliberate difference from upstream is **registered rather than fixed**: `tag.div[-1].0` (an
+  index list and the position segment at once) is a `parseFailed` here, while upstream folds
+  `[-1]` into the name and silently matches nothing; C-SRC-4 forbids the silent form.
+  `book-source.md` §3 records it as a registered difference so it is not mistaken for a defect.
+- 30 new unit tests (that file 42 → 72). The host-side suite is now **310** tests and the gate is
+  green end to end: `dart format` unchanged, `flutter analyze` no issues, `flutter test --coverage`
+  310 passed, `dart run tool/check_coverage.dart` exit 0 with `core` 342/342 and `domain` 643/643
+  (both files measured, as ADR-0019 requires). `docs/dev/test-environment.md` §1 carries the same
+  count so the doc does not drift behind the slice. No new dependency: `cascadia` and `html` were
+  already declared, and every CSS match still goes through cascadia (C-SRC-6). The matrix status
+  column stays 待验证 — only a real book source regression may change it (`book-source.md` §10),
+  which is 3.7's job.
+
+### Catch-clause boundary recorded for C-ERR-2 (2026-10-11)
+
+- ADR-0002 gained a sixth decision as a dated revision: a `presentation/` Notifier may catch
+  `on Exception` without naming a narrower type, provided it immediately turns the failure into
+  state and logs it; the `domain/` engine and use cases stay on specific types, and `Error` is never
+  caught anywhere (ADR-0022). The ADR also states the extension rule — a `data/` fallback would need
+  its own ADR rather than a local loosening.
+- The loosening describes behaviour phase 2.5 already shipped instead of changing it:
+  `search_results_notifier.dart:66` degrades a collaborator's `Exception` to
+  `ParseFailureKind.parseFailed` and logs the book source, so the page no longer stays on
+  `Searching`. Until now that code sat against the literal wording of C-ERR-2 with no recorded
+  ruling; `constraints.md` C-ERR-2 now back-links ADR-0002, `adr/README.md` marks ADR-0002 as
+  revised, and `tech-stack.md` §12 maps the boundary to its review check
+  (`grep -rn 'on Exception' lib/` may only hit a `presentation/` notifier).
+
+### Phase 3 registrations and baseline consistency (2026-10-11)
+
+- `PLAN.md` §3 now owns the phase 3 **execution order** the architect fixed — 3.2 and 3.6 in one
+  pass, a live-site spot-check after 3.2 and before the JS bridge, 3.5 after 3.6, 3.8 after 3.5,
+  and the `JsBridge` / `@js:` work last — plus the 3.1 closure row and a phase 3 handover register,
+  so the two items that had dropped out of the phase 1 register (the charset cache and the
+  per-source cache purge) are visible again instead of silently lost.
+- The charset detection cache is registered as **3.9**. This is a registration, not a scope change:
+  the M0 enumeration of `book-source.md` §3.1 never included it, and §5 now says so too, which is
+  what stopped §5 and §3.1 from disagreeing. `PLAN.md` Phase 5 gains a 5.5 row for the cache purge
+  with both cost tiers spelled out — a full `DELETE` needs no schema change, while a per-source
+  purge needs a `sourceId` column and therefore a schema dump plus a migration test. ADR-0011's
+  broken cross-reference (`§决策 4` → `§后果`) was corrected, and `tool/coverage_allowlist.txt`'s
+  header no longer claims the project has no exemptions.
+- The locked-package count is no longer restated: `docs/dev/tech-stack.md` §1 and the `README.md`
+  status table both still wrote `150`, while `NOTICE.md` §5 had been rebaselined to `156` when
+  `integration_test` landed. The count now has one home — `NOTICE.md` §5, produced by
+  `tool/scan_licenses.dart` — and the other two sites point at it, because restating a number is
+  how this drifted (ADR-0013 §3). The dated `150` in ADR-0007 and ADR-0010 stays: those record
+  what was scanned on 2026-10-10, not today's baseline, and ADR-0007's closure row now says so in
+  place.
+
 ### Local test environment for Windows and Android (2026-10-11)
 
 - Added `integration_test/` (a device-level smoke test plus a real on-disk Drift
@@ -119,7 +195,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cache cannot compile the pattern.
 - Everything outside this phase's matrix is **rejected** as `ParseFailureKind.unsupportedRule`
   instead of being silently mis-parsed (C-SRC-4), with `rulePath` naming the syntax
-  (`unsupported:<syntax>`). The full set, so the rejection surface stays auditable:
+  (`unsupported:<syntax>`). The full set **as of this phase**, so the rejection surface stays
+  auditable — phase 3.1 later moved #3, #4, #6, #7, #26 and #28 out of it and raised this file's
+  test count to 72 (see the phase 3.1 entry above), so the table below records what 2.2 shipped
+  rather than today's surface:
 
   | Syntax | `rulePath` | Owner |
   |---|---|---|

@@ -28,11 +28,15 @@ const List<String> _deferredFlags = <String>[
 /// Operators that join several rules; matrix #10 / #11 own them.
 const List<String> _deferredOperators = <String>['||', '&&', '%%'];
 
-/// Selector types this phase implements (matrix #2).
-const Set<String> _implementedTypes = <String>{'class', 'id', 'tag'};
-
-/// Selector types the matrix knows but a later phase owns (matrix #3 / #4).
-const Set<String> _deferredTypes = <String>{'text', 'children'};
+/// Selector types this phase implements: matrix #2 (`class` / `id` / `tag`),
+/// #3 (`text`) and #4 (`children`).
+const Set<String> _implementedTypes = <String>{
+  'class',
+  'id',
+  'tag',
+  'text',
+  'children',
+};
 
 /// Matches a segment that carries a rule flag, e.g. the `css:` of `class.a@css:.b`.
 ///
@@ -49,14 +53,19 @@ final RegExp _whitespace = RegExp(r'\s+');
 /// Evaluates Legado's **default** rule syntax against an HTML scope
 /// (`docs/dev/book-source.md` §3.3; C-SRC-1, C-SRC-6, C-SRC-9).
 ///
-/// Implemented so far — the five syntaxes the Phase 2 vertical slice needs:
+/// Implemented so far:
 ///
 /// | Matrix | Syntax |
 /// |---|---|
 /// | #1 / #2 | selector segments `类型.名称.位置` with the types `class`, `id`, `tag` |
-/// | #5 | the position segment, positive and negative (`-1` is the last match) |
+/// | #3 | the type `text`, matching an element by its own text |
+/// | #4 | the type `children`, taking every direct child element |
+/// | #5 / #6 | the position, including negative positions and the `!` exclusion list |
+/// | #7 | a leading `-`, reversing the result list |
 /// | #8 | extraction `text`, `textNodes`, `ownText`, `html`, `all`, or an attribute name |
 /// | #9 | `##regex##replacement`, with `$1` / `${name}` group references |
+/// | #26 | the `[...]` index list, with ranges, steps and `[!...]` exclusion |
+/// | #28 | an index as the first rule of a segment (`.1` / `[1]` / `children[1]`) |
 ///
 /// Everything else in the matrix is reported as
 /// [ParseFailureKind.unsupportedRule] — never silently mis-parsed (C-SRC-4) — with
@@ -94,16 +103,20 @@ final class RuleEngine {
     }
 
     final _ParsedRule parsed = _parse(rule);
-    final _RuleRejection? rejection = _validate(
+    final _Parsed<List<_SelectorStep>> check = _check(
       parsed,
       field: rulePath,
       hasExtraction: false,
     );
-    if (rejection != null) {
-      return _fail<List<Element>>(rejection, field: rulePath);
-    }
 
-    return ParseSuccess<List<Element>>(_selectAll(parsed.segments, scope));
+    return switch (check) {
+      _ParsedFailure<List<_SelectorStep>>(:final _RuleRejection rejection) =>
+        _fail<List<Element>>(rejection, field: rulePath),
+      _ParsedValue<List<_SelectorStep>>(:final List<_SelectorStep> value) =>
+        ParseSuccess<List<Element>>(
+          _run(value, scope, reverse: parsed.reverse),
+        ),
+    };
   }
 
   /// Returns every value extracted by the **value** rule [rule] from [scope].
@@ -122,16 +135,18 @@ final class RuleEngine {
     }
 
     final _ParsedRule parsed = _parse(rule);
-    final _RuleRejection? rejection = _validate(
+    final _Parsed<List<_SelectorStep>> check = _check(
       parsed,
       field: rulePath,
       hasExtraction: true,
     );
-    if (rejection != null) {
-      return _fail<List<String>>(rejection, field: rulePath);
-    }
 
-    return ParseSuccess<List<String>>(_extractAll(parsed, scope));
+    return switch (check) {
+      _ParsedFailure<List<_SelectorStep>>(:final _RuleRejection rejection) =>
+        _fail<List<String>>(rejection, field: rulePath),
+      _ParsedValue<List<_SelectorStep>>(:final List<_SelectorStep> value) =>
+        ParseSuccess<List<String>>(_extractAll(value, parsed, scope)),
+    };
   }
 
   /// Returns the first value of [rule], or `null` when nothing matched.
@@ -161,30 +176,38 @@ final class RuleEngine {
     };
   }
 
-  /// Extracts every value of a rule that passed validation.
-  List<String> _extractAll(_ParsedRule parsed, Node scope) {
-    final List<String> segments = parsed.segments;
-    final List<Element> elements = _selectAll(
-      segments.sublist(0, segments.length - 1),
-      scope,
-    );
-
+  /// Extracts every value of a rule whose selectors already parsed into [steps].
+  List<String> _extractAll(
+    List<_SelectorStep> steps,
+    _ParsedRule parsed,
+    Node scope,
+  ) {
     return _applyReplacement(
-      _extract(segments.last, elements),
+      _extract(
+        parsed.segments.last,
+        _run(steps, scope, reverse: parsed.reverse),
+      ),
       parsed.replacementParts,
     );
   }
 
-  /// Applies [segments] as selector steps, starting from [scope].
+  /// Runs [steps] from [scope] and returns the elements they matched.
   ///
-  /// With no segment the scope itself is the single match, which is what makes an
+  /// With no step the scope itself is the single match, which is what makes an
   /// extraction-only rule such as `href` work (upstream applies the extraction to
   /// the current element).
-  List<Element> _selectAll(List<String> segments, Node scope) {
+  ///
+  /// A rule that starts with `-` reverses the whole result list (matrix #7) rather
+  /// than each step's own matches — that is what “列表倒置” means upstream, and a
+  /// reversed chapter list is the case it exists for.
+  List<Element> _run(
+    List<_SelectorStep> steps,
+    Node scope, {
+    required bool reverse,
+  }) {
     List<Node> current = <Node>[scope];
 
-    for (final String segment in segments) {
-      final _SelectorStep step = _step(segment);
+    for (final _SelectorStep step in steps) {
       final List<Element> next = <Element>[];
       for (final Node node in current) {
         next.addAll(_match(step, node));
@@ -192,39 +215,144 @@ final class RuleEngine {
       current = next;
     }
 
-    return current.whereType<Element>().toList();
+    final List<Element> matched = current.whereType<Element>().toList();
+
+    return reverse ? matched.reversed.toList(growable: false) : matched;
   }
 
-  /// Returns the elements matched by [step] inside [scope].
+  /// Returns the elements [step] matches inside [scope], with its positions
+  /// applied.
+  List<Element> _match(_SelectorStep step, Node scope) {
+    final List<Element> matched = switch (step.type) {
+      // 矩阵 #4：`children` 取直接子标签（原版 html.children()），第二、三段忽略。
+      'children' => List<Element>.of(scope.children),
+      // 矩阵 #3：`text` 按元素自身的文本匹配，见 [_elementsContainingOwnText]。
+      'text' => _elementsContainingOwnText(scope, step.name),
+      _ => _matchByCss(step, scope),
+    };
+
+    return _applySelection(matched, step.selection);
+  }
+
+  /// Returns the elements matched by [step]'s CSS selector inside [scope].
   ///
   /// Upstream (jsoup) matches the scope element itself as well as its
   /// descendants, while `cascadia.queryAll` deliberately excludes the root, so the
   /// scope is tested separately.
-  List<Element> _match(_SelectorStep step, Node scope) {
+  List<Element> _matchByCss(_SelectorStep step, Node scope) {
     final String selector = _selectorFor(step);
-    final List<Element> matched = <Element>[
+
+    return <Element>[
       if (scope is Element && cascadia.matches(scope, selector)) scope,
       ...cascadia.queryAll(scope, selector),
     ];
-
-    return _applyIndex(matched, step.index);
   }
 
-  /// Keeps only [index] of [matched], counting from the end when it is negative.
+  /// Returns the elements whose **own** text contains [text] (matrix #3).
   ///
-  /// Out-of-range positions yield no match instead of an error, which is upstream
-  /// behaviour and lets a rule degrade to "nothing found".
-  List<Element> _applyIndex(List<Element> matched, int? index) {
-    if (index == null) {
+  /// Upstream calls jsoup's `getElementsContainingOwnText`: the comparison is
+  /// case-insensitive, it covers the scope element itself plus its descendants, and
+  /// it only looks at an element's direct text. A wrapper is therefore not a match
+  /// for text that lives in its child, which is the same `text` / `ownText`
+  /// distinction matrix #8 extracts.
+  List<Element> _elementsContainingOwnText(Node scope, String text) {
+    final String needle = text.toLowerCase();
+
+    return <Element>[
+      for (final Element element in <Element>[
+        if (scope is Element) scope,
+        ...cascadia.queryAll(scope, '*'),
+      ])
+        if (_ownTextOf(element).toLowerCase().contains(needle)) element,
+    ];
+  }
+
+  /// Keeps the positions [selection] names, in the order the author wrote them.
+  ///
+  /// A `null` selection keeps every match (matrix #5's “不加位置表示取全部”). An
+  /// out-of-range position is dropped: upstream degrades a missing position to
+  /// “nothing matched” instead of failing the rule, so `tag.li.9` is an empty
+  /// result rather than a failure.
+  List<Element> _applySelection(
+    List<Element> matched,
+    _IndexSelection? selection,
+  ) {
+    if (selection == null) {
       return matched;
     }
 
-    final int resolved = index < 0 ? matched.length + index : index;
-    if (resolved < 0 || resolved >= matched.length) {
-      return const <Element>[];
+    final List<int> resolved = _resolveIndices(selection, matched.length);
+
+    if (!selection.isExclude) {
+      return <Element>[for (final int index in resolved) matched[index]];
     }
 
-    return <Element>[matched[resolved]];
+    final Set<int> excluded = resolved.toSet();
+
+    return <Element>[
+      for (int index = 0; index < matched.length; index++)
+        if (!excluded.contains(index)) matched[index],
+    ];
+  }
+
+  /// Resolves every part of [selection] against a list of [length] matches.
+  List<int> _resolveIndices(_IndexSelection selection, int length) {
+    final List<int> indices = <int>[];
+
+    for (final _IndexPart part in selection.parts) {
+      final int? end = part.end;
+      if (end == null) {
+        final int index = _resolveIndex(part.start, length);
+        if (index >= 0 && index < length) {
+          indices.add(index);
+        }
+        continue;
+      }
+      indices.addAll(_resolveRange(part.start, end, part.step, length));
+    }
+
+    return indices;
+  }
+
+  /// Expands the `start:end[:step]` range `start`..`end` into concrete indices.
+  ///
+  /// Both endpoints are clamped to at most one step outside the list so a rule such
+  /// as `[0:1000000000]` cannot spin: out-of-range indices are dropped anyway, and a
+  /// book source is untrusted input that must not be able to hang the parse
+  /// (C-SRC-9).
+  List<int> _resolveRange(int start, int end, int? step, int length) {
+    final int resolvedStart = _resolveIndex(start, length);
+    final int resolvedEnd = _resolveIndex(end, length);
+    // 未写 step 时方向由两端决定，矩阵 #26 的 `[-1:0]` 因此天然成为倒序。
+    final int resolvedStep = step ?? (resolvedStart <= resolvedEnd ? 1 : -1);
+    final int from = _clampIndex(resolvedStart, length);
+    final int to = _clampIndex(resolvedEnd, length);
+    final List<int> indices = <int>[];
+
+    for (
+      int index = from;
+      resolvedStep > 0 ? index <= to : index >= to;
+      index += resolvedStep
+    ) {
+      if (index >= 0 && index < length) {
+        indices.add(index);
+      }
+    }
+
+    return indices;
+  }
+
+  /// Maps a negative [index] onto the list by counting from its end.
+  int _resolveIndex(int index, int length) =>
+      index < 0 ? length + index : index;
+
+  /// Clamps [index] to at most one step outside `[0, length)`.
+  int _clampIndex(int index, int length) {
+    if (index < 0) {
+      return -1;
+    }
+
+    return index > length ? length : index;
   }
 
   /// Extracts one value per element, following upstream `getResultLast` (#8).
@@ -244,7 +372,7 @@ final class RuleEngine {
                 .join('\n'),
           );
         case 'ownText':
-          _addValue(values, _collapseWhitespace(_ownTextNodes(element).join()));
+          _addValue(values, _ownTextOf(element));
         case 'html':
           _addValue(values, _withoutScripts(element).outerHtml);
         case 'all':
@@ -266,39 +394,36 @@ final class RuleEngine {
     _ => cascadia.escapeCssIdent(step.name),
   };
 
-  /// Splits [rule] into its `##` parts and its `@`-separated segments.
+  /// Splits [rule] into its `##` parts, its leading `-` and its `@`-separated
+  /// segments.
   ///
   /// Total on purpose: a rejected rule still needs its segments to name the
   /// offending syntax.
   _ParsedRule _parse(String rule) {
     final List<String> replacementParts = rule.split('##');
+    final String rawBody = replacementParts.first.trim();
+    // 矩阵 #7：`-` 是整条规则的前缀（`-class.odd@tag.a@href`）。必须在按 `@`
+    // 切段之前摘掉，否则它会变成一个空段，后面的标志头也会被切错。
+    final bool reverse = rawBody.startsWith('-');
+    final String body = (reverse ? rawBody.substring(1) : rawBody).trim();
 
     return _ParsedRule(
+      body: body,
       replacementParts: replacementParts,
-      segments: replacementParts.first
+      reverse: reverse,
+      segments: body
           .split('@')
           .map((String segment) => segment.trim())
           .toList(),
     );
   }
 
-  /// Reads an already-validated selector segment into its parts.
-  _SelectorStep _step(String segment) {
-    final List<String> parts = segment.split('.');
-
-    return _SelectorStep(
-      type: parts[0],
-      name: parts.length > 1 ? parts[1] : '',
-      // 校验阶段已确认第三段是整数，这里让它直接抛出，避免再写一条不可达分支。
-      index: parts.length > 2 ? int.parse(parts[2]) : null,
-    );
-  }
-
-  /// Returns why [parsed] cannot be evaluated yet, or `null` when it can.
+  /// Reads [parsed] into the selector steps it runs, or reports the rejection.
   ///
-  /// [hasExtraction] says whether the last segment is the extraction (value rules)
-  /// or one more selector (list rules).
-  _RuleRejection? _validate(
+  /// Validation and evaluation share this one parse, so the two can never disagree
+  /// about what a rule means. [hasExtraction] says whether the last segment is the
+  /// extraction (value rules) or one more selector (list rules).
+  _Parsed<List<_SelectorStep>> _check(
     _ParsedRule parsed, {
     required String field,
     required bool hasExtraction,
@@ -308,51 +433,372 @@ final class RuleEngine {
     for (final String flag in _deferredFlags) {
       if (body.toLowerCase().startsWith(flag)) {
         // 用原文截取，保留作者写的 `@webJs` 这类大小写（book-source.md §3 前缀大小写不敏感）。
-        return _unsupported(body.substring(0, flag.length));
+        return _ParsedFailure<List<_SelectorStep>>(
+          _unsupported(body.substring(0, flag.length)),
+        );
       }
     }
     if (body.contains('@@')) {
       // 矩阵 #15：`@@` 默认规则标志。`@` 切分后中段的 `@@` 会留下一个空段，
       // 因此必须在切段之前判掉，否则会被误报成畸形规则。
-      return _unsupported('@@');
+      return _ParsedFailure<List<_SelectorStep>>(_unsupported('@@'));
     }
     for (final String operator in _deferredOperators) {
       if (body.contains(operator)) {
-        return _unsupported(operator);
+        return _ParsedFailure<List<_SelectorStep>>(_unsupported(operator));
       }
-    }
-    if (body.startsWith('-')) {
-      // 矩阵 #7：首字符 `-` 使结果倒置，Phase 3.1 实现。
-      return _unsupported('-');
     }
 
     final List<String> segments = parsed.segments;
-    final List<String> selectors = hasExtraction
+    final List<String> selectorTexts = hasExtraction
         ? segments.sublist(0, segments.length - 1)
         : segments;
-    for (final String segment in selectors) {
-      final _RuleRejection? rejection = _validateSelector(
-        segment,
-        field: field,
-      );
-      if (rejection != null) {
-        return rejection;
+    final List<_SelectorStep> steps = <_SelectorStep>[];
+    for (final String segment in selectorTexts) {
+      final _Parsed<_SelectorStep> read = _readSelector(segment, field: field);
+      switch (read) {
+        case _ParsedFailure<_SelectorStep>(:final _RuleRejection rejection):
+          return _ParsedFailure<List<_SelectorStep>>(rejection);
+        case _ParsedValue<_SelectorStep>(:final _SelectorStep value):
+          steps.add(value);
       }
     }
 
     if (hasExtraction) {
       final String extraction = segments.last;
       if (extraction.isEmpty) {
-        return _malformed(field);
+        return _ParsedFailure<List<_SelectorStep>>(_malformed(field));
       }
       final String? flag = _flagOf(extraction);
       if (flag != null) {
         // `class.a@css:.b`：原版把末段当作嵌套规则，Phase 3.2 实现。
-        return _unsupported(flag);
+        return _ParsedFailure<List<_SelectorStep>>(_unsupported(flag));
       }
     }
 
+    return _ParsedValue<List<_SelectorStep>>(steps);
+  }
+
+  /// Reads one selector [segment] into the step it stands for (matrix #1..#7,
+  /// #26, #28), or reports why it cannot be evaluated.
+  _Parsed<_SelectorStep> _readSelector(
+    String segment, {
+    required String field,
+  }) {
+    if (segment.isEmpty) {
+      return _ParsedFailure<_SelectorStep>(_malformed(field));
+    }
+    final String? flag = _flagOf(segment);
+    if (flag != null) {
+      // 例如 `class.a@css:.b`：原版把这种段当作嵌套规则，Phase 3.2 实现。
+      return _ParsedFailure<_SelectorStep>(_unsupported(flag));
+    }
+
+    final List<String> parts = segment.split('.');
+    final String type = parts[0];
+    final String? indexExpression = _childrenIndexExpression(segment, parts);
+    if (indexExpression != null) {
+      // 矩阵 #28：索引作为该段首规则，等价于 `children` + 该索引。
+      return _readChildren(indexExpression, field: field);
+    }
+    if (type.isEmpty) {
+      // 类型段为空又不是索引写法（如 `.li`）：结构性错误，不猜。
+      return _ParsedFailure<_SelectorStep>(_malformed(field));
+    }
+    if (!_implementedTypes.contains(type)) {
+      // 未知类型在原版里会退化成原始 CSS 选择器，即矩阵 #12 的能力（Phase 3.2）。
+      return _ParsedFailure<_SelectorStep>(_unsupported(type));
+    }
+    if (type == 'children') {
+      // 矩阵 #4：`children` 取全部子标签，忽略第二、三段。
+      return const _ParsedValue<_SelectorStep>(
+        _SelectorStep(type: 'children', name: ''),
+      );
+    }
+    if (parts.length < 2 || parts.length > 3) {
+      return _ParsedFailure<_SelectorStep>(_malformed(field));
+    }
+
+    final _Parsed<_NamedSelector> named = _readName(parts[1], field: field);
+    switch (named) {
+      case _ParsedFailure<_NamedSelector>(:final _RuleRejection rejection):
+        return _ParsedFailure<_SelectorStep>(rejection);
+      case _ParsedValue<_NamedSelector>(:final _NamedSelector value):
+        return _withPosition(
+          type: type,
+          named: value,
+          position: parts.length == 3 ? parts[2] : null,
+          field: field,
+        );
+    }
+  }
+
+  /// Adds the position segment of matrix #1 to an already read name.
+  ///
+  /// The two position forms — `tag.li.0` and `tag.li[0]` — are alternatives:
+  /// upstream would read `[-1]` of `tag.div[-1].0` as part of the name and match
+  /// nothing, so writing both is rejected instead of silently returning empty.
+  _Parsed<_SelectorStep> _withPosition({
+    required String type,
+    required _NamedSelector named,
+    required String? position,
+    required String field,
+  }) {
+    if (position == null) {
+      return _ParsedValue<_SelectorStep>(
+        _SelectorStep(type: type, name: named.name, selection: named.selection),
+      );
+    }
+
+    final _Parsed<List<_IndexPart>> positions = _readIndices(
+      position,
+      field: field,
+    );
+    switch (positions) {
+      case _ParsedFailure<List<_IndexPart>>(:final _RuleRejection rejection):
+        return _ParsedFailure<_SelectorStep>(rejection);
+      case _ParsedValue<List<_IndexPart>>(:final List<_IndexPart> value):
+        if (named.selection != null) {
+          return _ParsedFailure<_SelectorStep>(_malformed(field));
+        }
+
+        return _ParsedValue<_SelectorStep>(
+          _SelectorStep(
+            type: type,
+            name: named.name,
+            selection: _IndexSelection(parts: value, isExclude: false),
+          ),
+        );
+    }
+  }
+
+  /// Splits the name part of a selector into the name itself and the positions
+  /// attached to it (matrix #6's `!` list and #26's `[...]` list).
+  _Parsed<_NamedSelector> _readName(String text, {required String field}) {
+    final int bracket = text.indexOf('[');
+    if (bracket >= 0) {
+      return _withIndexSelection(
+        name: text.substring(0, bracket),
+        indexExpression: text.substring(bracket),
+        field: field,
+      );
+    }
+
+    final int excluded = text.indexOf('!');
+    if (excluded < 0) {
+      // `div]`：括起来却没有 `[`，不是任何已实现的写法。
+      return text.contains(']')
+          ? _ParsedFailure<_NamedSelector>(_malformed(field))
+          : _namedWith(text, null, field: field);
+    }
+
+    return _withIndexSelection(
+      name: text.substring(0, excluded),
+      indexExpression: text.substring(excluded),
+      field: field,
+    );
+  }
+
+  /// Pairs [name] with the positions named by [indexExpression].
+  _Parsed<_NamedSelector> _withIndexSelection({
+    required String name,
+    required String indexExpression,
+    required String field,
+  }) {
+    return switch (_readIndexOnly(indexExpression, field: field)) {
+      _ParsedFailure<_IndexSelection>(:final _RuleRejection rejection) =>
+        _ParsedFailure<_NamedSelector>(rejection),
+      _ParsedValue<_IndexSelection>(:final _IndexSelection value) => _namedWith(
+        name,
+        value,
+        field: field,
+      ),
+    };
+  }
+
+  /// Checks the name itself and pairs it with its positions.
+  ///
+  /// A `:` inside the name is not part of any implemented syntax (matrix #6 uses
+  /// `:` only inside the `!` list and inside the position segment), so it is
+  /// reported as unsupported instead of being matched as a class or tag name.
+  _Parsed<_NamedSelector> _namedWith(
+    String name,
+    _IndexSelection? selection, {
+    required String field,
+  }) {
+    if (name.isEmpty) {
+      return _ParsedFailure<_NamedSelector>(_malformed(field));
+    }
+    if (name.contains(':')) {
+      return _ParsedFailure<_NamedSelector>(_unsupported(':'));
+    }
+
+    return _ParsedValue<_NamedSelector>((name: name, selection: selection));
+  }
+
+  /// Reads the `:`-separated index list of matrix #6 (`!0:1`, and the position
+  /// segment's `-1:2`).
+  ///
+  /// Upstream parses this list with `findIndexSet`, which throws on an empty or
+  /// non-numeric entry (upstream issue #1796); here it is a `parseFailed` rejection
+  /// so the book source field stays locatable (C-SRC-8).
+  _Parsed<List<_IndexPart>> _readIndices(String text, {required String field}) {
+    final List<_IndexPart> parts = <_IndexPart>[];
+
+    for (final String token in text.split(':')) {
+      final int? index = int.tryParse(token.trim());
+      if (index == null) {
+        return _ParsedFailure<List<_IndexPart>>(_malformed(field));
+      }
+      parts.add(_IndexPart(start: index));
+    }
+
+    return _ParsedValue<List<_IndexPart>>(parts);
+  }
+
+  /// Reads the comma-separated list inside `[...]` (matrix #26).
+  ///
+  /// Each entry is an index (`-1`) or a range (`start:end[:step]`). The upstream
+  /// rule documentation allows an omitted `start` (meaning 0) and an omitted `end`
+  /// (meaning -1); negatives count from the end in every position.
+  _Parsed<List<_IndexPart>> _readRanges(String text, {required String field}) {
+    if (text.trim().isEmpty) {
+      return _ParsedFailure<List<_IndexPart>>(_malformed(field));
+    }
+    final List<_IndexPart> parts = <_IndexPart>[];
+
+    for (final String token in text.split(',')) {
+      final List<String> pieces = token.trim().split(':');
+      if (pieces.length > 3) {
+        return _ParsedFailure<List<_IndexPart>>(_malformed(field));
+      }
+
+      final String startText = pieces[0].trim();
+      final int? start = startText.isEmpty ? 0 : int.tryParse(startText);
+      final bool hasEnd = pieces.length > 1;
+      final String endText = hasEnd ? pieces[1].trim() : '';
+      final int? end = hasEnd
+          ? (endText.isEmpty ? -1 : int.tryParse(endText))
+          : null;
+      final bool hasStep = pieces.length > 2;
+      final String stepText = hasStep ? pieces[2].trim() : '';
+      final int? step = hasStep && stepText.isNotEmpty
+          ? int.tryParse(stepText)
+          : null;
+
+      if (start == null ||
+          (hasEnd && end == null) ||
+          (hasStep && stepText.isNotEmpty && step == null) ||
+          step == 0) {
+        return _ParsedFailure<List<_IndexPart>>(_malformed(field));
+      }
+      parts.add(_IndexPart(start: start, end: end, step: step));
+    }
+
+    return _ParsedValue<List<_IndexPart>>(parts);
+  }
+
+  /// Returns the index expression of a segment that stands for `children` plus a
+  /// position, or `null` when the segment is a normal selector (matrix #28).
+  ///
+  /// Upstream allows an index as the **first rule** of a segment, and three
+  /// spellings mean the same thing: `.1`, `[1]` and `children[1]`. A letter after
+  /// the dot is *not* one of them — `children.li.0` stays matrix #4's “ignore the
+  /// second and third segment” behaviour.
+  String? _childrenIndexExpression(String segment, List<String> parts) {
+    final String type = parts[0];
+
+    if (type.isEmpty) {
+      final String rest = parts.sublist(1).join('.');
+
+      return _looksLikeIndexExpression(rest) ? rest : null;
+    }
+    if (segment.startsWith('children')) {
+      final String rest = segment.substring('children'.length);
+      final String expression = rest.startsWith('.') ? rest.substring(1) : rest;
+
+      // 裸 `children`（矩阵 #4）与 `children.li.0`（忽略第二、三段）都不是索引写法。
+      return _looksLikeIndexExpression(expression) ? expression : null;
+    }
+    if (type.startsWith('[') || type.startsWith('!')) {
+      return segment;
+    }
+
     return null;
+  }
+
+  /// Whether [text] starts like an index expression (an index, a range or a list).
+  bool _looksLikeIndexExpression(String text) {
+    if (text.isEmpty) {
+      return false;
+    }
+    if (text.startsWith('[') || text.startsWith('!')) {
+      return true;
+    }
+
+    final int first = text.codeUnitAt(0);
+
+    // `-1`（负索引）与 `0` / `0:2` 这类序号列表。
+    return first == 0x2D || _isDigit(first);
+  }
+
+  /// Reads an index-only segment into a `children` step (matrix #28).
+  _Parsed<_SelectorStep> _readChildren(
+    String indexExpression, {
+    required String field,
+  }) {
+    return switch (_readIndexOnly(indexExpression, field: field)) {
+      _ParsedFailure<_IndexSelection>(:final _RuleRejection rejection) =>
+        _ParsedFailure<_SelectorStep>(rejection),
+      _ParsedValue<_IndexSelection>(:final _IndexSelection value) =>
+        _ParsedValue<_SelectorStep>(
+          _SelectorStep(type: 'children', name: '', selection: value),
+        ),
+    };
+  }
+
+  /// Reads an index expression on its own: `[1]`, `[!0]`, `[0:2]`, `!0`, `-1`.
+  ///
+  /// Matrix #26 owns the bracketed form, matrix #6 the `!` list, and the bare list
+  /// is what an index-only segment carries (`children.1`, matrix #28). All three go
+  /// through one parser, so `[1]` and `children.1` cannot drift apart.
+  _Parsed<_IndexSelection> _readIndexOnly(
+    String text, {
+    required String field,
+  }) {
+    if (text.startsWith('[')) {
+      if (!text.endsWith(']')) {
+        return _ParsedFailure<_IndexSelection>(_malformed(field));
+      }
+      final String listed = text.substring(1, text.length - 1);
+      final bool isExclude = listed.startsWith('!');
+
+      return switch (_readRanges(
+        isExclude ? listed.substring(1) : listed,
+        field: field,
+      )) {
+        _ParsedFailure<List<_IndexPart>>(:final _RuleRejection rejection) =>
+          _ParsedFailure<_IndexSelection>(rejection),
+        _ParsedValue<List<_IndexPart>>(:final List<_IndexPart> value) =>
+          _ParsedValue<_IndexSelection>(
+            _IndexSelection(parts: value, isExclude: isExclude),
+          ),
+      };
+    }
+
+    final bool isExclude = text.startsWith('!');
+
+    return switch (_readIndices(
+      isExclude ? text.substring(1) : text,
+      field: field,
+    )) {
+      _ParsedFailure<List<_IndexPart>>(:final _RuleRejection rejection) =>
+        _ParsedFailure<_IndexSelection>(rejection),
+      _ParsedValue<List<_IndexPart>>(:final List<_IndexPart> value) =>
+        _ParsedValue<_IndexSelection>(
+          _IndexSelection(parts: value, isExclude: isExclude),
+        ),
+    };
   }
 
   /// Returns the rule flag [segment] starts with, or `null` when it starts with
@@ -365,49 +811,6 @@ final class RuleEngine {
     final String? token = _flagSegment.firstMatch(segment)?.group(0);
 
     return token == null ? null : '@$token';
-  }
-
-  /// Returns why one selector segment cannot be evaluated, or `null` when it can.
-  _RuleRejection? _validateSelector(String segment, {required String field}) {
-    if (segment.isEmpty) {
-      return _malformed(field);
-    }
-    final String? flag = _flagOf(segment);
-    if (flag != null) {
-      // 例如 `class.a@css:.b`：原版把这种段当作嵌套规则，Phase 3.2 实现。
-      return _unsupported(flag);
-    }
-    if (segment.contains('!')) {
-      // 矩阵 #6：`!` 位置排除，Phase 3.1 实现。
-      return _unsupported('!');
-    }
-    if (segment.contains(':')) {
-      // 矩阵 #6 的「序号用 `:` 分隔」形式（如 `tag.li.-1:2`），Phase 3.1 实现。
-      // 与 `!` 分开报，否则会把两种语法混成一个 token。
-      return _unsupported(':');
-    }
-    if (segment.contains('[') || segment.contains(']')) {
-      // 原版的 `[]` 索引列表写法不在本仓矩阵内，显式拒绝而不是当作选择器。
-      return _unsupported('[]');
-    }
-
-    final List<String> parts = segment.split('.');
-    final String type = parts[0];
-    if (_deferredTypes.contains(type)) {
-      return _unsupported(type);
-    }
-    if (!_implementedTypes.contains(type)) {
-      // 未知类型在原版里会退化成原始 CSS 选择器，即矩阵 #12 的能力。
-      return _unsupported(type);
-    }
-    if (parts.length > 3 || parts.length < 2 || parts[1].isEmpty) {
-      return _malformed(field);
-    }
-    if (parts.length == 3 && int.tryParse(parts[2]) == null) {
-      return _malformed(field);
-    }
-
-    return null;
   }
 
   /// Builds the failure for a syntax a later phase owns.
@@ -452,36 +855,93 @@ final class RuleEngine {
   }
 }
 
-/// One parsed rule: its `##` parts and the `@`-separated segments of the body.
+/// One parsed rule: its body, its leading `-` and its `@`-separated segments.
 final class _ParsedRule {
-  const _ParsedRule({required this.replacementParts, required this.segments});
+  const _ParsedRule({
+    required this.body,
+    required this.replacementParts,
+    required this.reverse,
+    required this.segments,
+  });
+
+  /// The rule itself: everything before the first `##`, without the leading `-`.
+  final String body;
 
   /// The `##`-separated parts: `[rule]`, `[regex]`, `[replacement]`.
   final List<String> replacementParts;
 
+  /// Whether the rule starts with `-`, i.e. its result list is reversed (matrix #7).
+  final bool reverse;
+
   /// The trimmed segments of the rule body.
   final List<String> segments;
-
-  /// The rule itself, i.e. the part before the first `##`.
-  String get body => replacementParts.first.trim();
 }
+
+/// A selector name together with the positions written on it (matrix #6 / #26).
+typedef _NamedSelector = ({String name, _IndexSelection? selection});
 
 /// One selector segment: `类型.名称.位置` (matrix #1).
 final class _SelectorStep {
-  const _SelectorStep({
-    required this.type,
-    required this.name,
-    required this.index,
-  });
+  const _SelectorStep({required this.type, required this.name, this.selection});
 
-  /// `class`, `id` or `tag` — validated before this step is built.
+  /// `class`, `id`, `tag`, `text` or `children` — validated before this step is built.
   final String type;
 
-  /// The class name, id or tag name.
+  /// The class name, id, tag name, or the text `text` looks for (empty for `children`).
   final String name;
 
-  /// The position within the matches, or `null` for "all of them".
-  final int? index;
+  /// The positions this step keeps, or `null` for every match (`类型.名称`).
+  final _IndexSelection? selection;
+}
+
+/// One entry of a position selection: a single index or a `start:end[:step]` range
+/// (matrix #6 / #26).
+final class _IndexPart {
+  const _IndexPart({required this.start, this.end, this.step});
+
+  /// The start index; a negative value counts from the end of the matches.
+  final int start;
+
+  /// The end index of a range, or `null` for a single index.
+  final int? end;
+
+  /// The range step, or `null` to take the direction from the two endpoints.
+  final int? step;
+}
+
+/// The positions a selector keeps, in the order the author wrote them.
+final class _IndexSelection {
+  const _IndexSelection({required this.parts, required this.isExclude});
+
+  /// The indices and ranges of the selection.
+  final List<_IndexPart> parts;
+
+  /// Whether the listed positions are removed instead of kept (`!`).
+  final bool isExclude;
+}
+
+/// A parse outcome: the value the parser produced, or why it was rejected.
+sealed class _Parsed<T> {
+  const _Parsed();
+}
+
+/// The parser accepted its input.
+final class _ParsedValue<T> extends _Parsed<T> {
+  const _ParsedValue(this.value);
+
+  /// The parsed value.
+  final T value;
+}
+
+/// The parser rejected its input.
+///
+/// A malformed rule is an expected outcome of untrusted book source input, so the
+/// rejection is a value instead of a thrown error (C-ERR-1 / C-ERR-2).
+final class _ParsedFailure<T> extends _Parsed<T> {
+  const _ParsedFailure(this.rejection);
+
+  /// Why the input cannot be evaluated.
+  final _RuleRejection rejection;
 }
 
 /// Why a rule cannot be evaluated, in the shape [ParseFailure] needs.
@@ -500,6 +960,14 @@ List<String> _ownTextNodes(Element element) => element.nodes
     .whereType<Text>()
     .map((Text node) => node.data)
     .toList(growable: false);
+
+/// The direct text of [element], whitespace-collapsed the way upstream (jsoup)
+/// normalises `ownText()`.
+///
+/// Matrix #3 compares against this form and matrix #8's `ownText` extracts it, so
+/// both go through one definition instead of two that could drift apart.
+String _ownTextOf(Element element) =>
+    _collapseWhitespace(_ownTextNodes(element).join());
 
 /// Collapses whitespace runs the way upstream (jsoup) normalises text.
 ///

@@ -11,7 +11,7 @@
 
 | 目标 | 状态 | 说明 |
 |---|---|---|
-| 主机侧单元 / Widget 测试 | ✅ 已跑通 | `flutter test --coverage` 280 个用例全通过，`tool/check_coverage.dart` 退出码 0（2026-10-11 实测） |
+| 主机侧单元 / Widget 测试 | ✅ 已跑通 | `flutter test --coverage` 全部用例通过，`tool/check_coverage.dart` 退出码 0（2026-10-11 实测：**310** 个用例，`core` 342/342、`domain` 643/643）。该计数随每个切片增长，以**最近一次运行**为准，不另设副本 |
 | Windows 桌面设备级用例 | ✅ 已跑通 | `integration_test/` 两个用例文件在 `-d windows` 全部通过 |
 | Android 模拟器设备级用例 | ✅ 已跑通 | AVD `Medium_Phone`（API 37）上两个用例文件全部通过，含文件型 Drift 数据库 |
 | iOS | ❌ **未覆盖** | 本机无 macOS / Xcode，条件不具备；iOS 行为仍按 `docs/dev/platform.md` §6 人工确认 |
