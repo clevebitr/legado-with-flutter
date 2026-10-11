@@ -76,7 +76,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|---|
 | 1.1 | `lib/core/error/`：`parse_result.dart`（契约）+ `parse_failure_arb_key.dart`（ARB 键名规则）+ 单测 | ADR-0002 | `ParseFailureKind` 9 个值均有 ARB 文案键；`switch` 穷尽；core 覆盖率 100% |
 | 1.2 | `lib/core/logging/`（Logger 门面，不依赖 Riverpod）+ `lib/core/di/logger_provider.dart`（Provider） | ADR-0006、C-ERR-5、`architecture.md` §1/§4 | 测试断言级别与脱敏（Cookie/Token/正文不入日志，C-SEC-4） |
-| 1.3 | `lib/core/platform/`：`PlatformInfo` / `DynamicColorProvider` 抽象 + 各平台 fallback | C-PLT-1..4 | 把 `lib/app.dart` 里直接用 `DynamicColorBuilder` 的接线收敛到这里 |
+| 1.3 | `lib/core/platform/`：`PlatformInfo` / `DynamicColorProvider` 抽象 + 各平台 fallback + `lib/core/di/platform_provider.dart`（Provider） | C-PLT-1..4、ADR-0020 | 把 `lib/app.dart` 里直接用 `DynamicColorBuilder` 的接线收敛到这里 |
 | 1.4 | `lib/core/network/`：`HttpClient`、`CookieManager` | C-NET-1..5 | 替身可注入；超时/重试上限可配；编码走 `betto_charset_detector`（C-NET-3）；失败日志经 `describeError` 脱敏（C-SEC-4） |
 | 1.5 | `lib/core/storage/`：Drift 库、TTL 表、DAO | ADR-0003、C-NET-6/9 | `build_runner` 真跑一次；迁移有测试 |
 
@@ -136,7 +136,16 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 ### Phase 5 — 阅读体验
 
 阅读器（翻页、字号、进度）、书架、正文缓存、设置页、**「关于 → 法律声明」页（C-UI-9，GPL 要求）**。
-完成判定：`C-UI-9` 页面存在且可达（widget 测试断言）。
+
+平台体验：`platform.md` §2 中其余三个接口在本阶段落地（不另设阶段）。
+
+| 步骤 | 内容 | 验收 |
+|---|---|---|
+| 5.1 | 预测性返回接线：`PredictiveBackSupport` → `PageTransitionsTheme` + `AndroidManifest.xml` 的 `enableOnBackInvokedCallback`（C-UI-4、C-PLT-2） | Android 13+ 侧滑返回出现预览动画 |
+| 5.2 | `SystemUiController`：状态栏透明与 edge-to-edge 适配 | edge-to-edge 下内容不被遮挡 |
+| 5.3 | `HapticsController`：触感反馈能力探测与降级 | 不支持的平台 no-op 且不抛异常 |
+
+完成判定：`C-UI-9` 页面存在且可达（widget 测试断言）；三端平台验收清单（`platform.md` §6）逐项通过。
 
 ---
 

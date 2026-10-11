@@ -55,8 +55,8 @@ Please enable Developer Mode in your system settings.
 
 | 接口 | 职责 | UI 侧用法 |
 |---|---|---|
-| `PlatformInfo` | 暴露 `isMobile` / `isDesktop` / `isAndroid` | 只允许在 `core/platform/` 内使用 |
-| `DynamicColorProvider` | 返回系统动态取色 `ColorScheme?`，不支持时返回 `null` | 注入 `core/theme/`，UI 不判断平台 |
+| `PlatformInfo` | 暴露 `isMobile` / `isDesktop` / `isAndroid` | 经 `core/di/platform_provider.dart` 注入，但**只允许 `core/platform/` 内的 resolver 与测试消费**；业务层不得用它分支平台（ADR-0020 §4） |
+| `DynamicColorProvider` | **包装 `DynamicColorBuilder`**：`Widget resolve(Widget Function(ColorScheme? light, ColorScheme? dark) builder)`；无能力时由调用方以 `null` scheme 走种子色 fallback（ADR-0020） | 在 `lib/app.dart` 根部注入，UI 不判断平台 |
 | `PredictiveBackSupport` | 提供 `PageTransitionsTheme`（支持时用预测性返回，否则回退） | 注入 `app.dart` 的 `theme` |
 | `SystemUiController` | 状态栏透明、edge-to-edge 适配 | 在 `core/theme/` 统一调用 |
 | `HapticsController` | 触感反馈能力探测与降级 | 组件内调用，不判断平台 |
@@ -75,8 +75,10 @@ Please enable Developer Mode in your system settings.
 | iOS | 不支持 | 使用默认种子色（C-PLT-4） |
 | Windows | 不支持 | 使用应用内种子色（C-PLT-3） |
 
-链路：`DynamicColorProvider` → `ColorScheme` → `ColorScheme.toM3EThemeData()`
-→ `M3ETheme`（C-UI-3、ADR-0004）。**取色真源只能是 `dynamic_color`。**
+链路：`core/platform/` 的 `DynamicColorProvider`（内部包装 `DynamicColorBuilder`）
+→ `ColorScheme?` → `lib/app.dart` 交给 `core/theme/` 的 `buildReaderTheme`
+→ `ColorScheme.toM3EThemeData()` → `M3ETheme`（C-UI-3、ADR-0004、ADR-0020）。
+**取色真源只能是 `dynamic_color`。**
 
 ---
 

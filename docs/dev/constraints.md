@@ -197,7 +197,7 @@ Container(
 | ID | 约束 |
 |---|---|
 | C-PLT-1 | 平台差异代码只能放在 `core/platform/`，并通过抽象接口注入；禁止在业务层散落 `Platform.isXxx`。 |
-| C-PLT-2 | Android 动态取色与预测性返回必须经抽象接口调用；UI 不直接判断平台。 |
+| C-PLT-2 | Android 动态取色与预测性返回必须经抽象接口调用；UI 不直接判断平台（`DynamicColorProvider` 的接口形态与注入点见 ADR-0020）。 |
 | C-PLT-3 | Windows 必须提供无动态取色的 fallback 主题；路径统一使用 `path_provider`，禁止硬编码 `C:\`。 |
 | C-PLT-4 | iOS 遵循 Human Interface Guidelines；返回手势使用原生导航；动态取色不可用时使用默认种子色。 |
 | C-PLT-5 | `minSdk` / `targetSdk` / 最低 Windows 版本等基线以 `docs/dev/platform.md` 为准，不得在文档其他位置另立数值。 |

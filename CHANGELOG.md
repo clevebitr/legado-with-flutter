@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Platform abstraction (2026-10-11)
+
+- Added the Phase 1.3 platform layer: `lib/core/platform/platform_info.dart`
+  (`PlatformInfo` / `SystemPlatformInfo`), `dynamic_color_provider.dart`
+  (`DynamicColorProvider`, `SystemDynamicColorProvider`,
+  `resolveDynamicColorProvider`) and the injectable wiring in
+  `lib/core/di/platform_provider.dart`, plus the shared fake
+  `test/support/fake_platform_info.dart`.
+- `lib/app.dart` is now a `ConsumerWidget` and no longer imports `dynamic_color`, so the
+  UI never asks which platform it runs on (C-PLT-1, C-PLT-2). `Platform.is*` and
+  `package:dynamic_color` appear only inside `lib/core/platform/`.
+- ADR-0020 records that the dynamic color interface wraps `DynamicColorBuilder`
+  instead of returning a `ColorScheme?` (which would need a `FutureBuilder` and make the
+  first frame fall back to the seed color), that it is injected at the root, and that
+  `PlatformInfo` is injectable but consumed only by `core/platform/` resolvers and tests.
+  `docs/dev/platform.md` §2/§3 and `docs/dev/constraints.md` C-PLT-2 were updated to match.
+- `docs/dev/testing.md` §4 now documents `test/support/` as the home of shared fakes.
+
 ### Spec, gates & consistency audit (2026-10-11)
 
 - Added ADR-0016 (sealed variant form: the compiler/generator shape wins over the literal
