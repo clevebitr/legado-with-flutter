@@ -16,7 +16,7 @@
 # 因此它会被当成「未测量源文件」而失败；确需 ignore 时必须在本表登记并说明原因。
 # 生成物（*.g.dart / *.freezed.dart / *.gr.dart / **/generated/**）无需登记，已自动排除。
 #
-# 示例（当前无豁免项）：
+# 示例（当前 3 条已登记豁免见文末「已登记的豁免项」）：
 # lib/core/platform/system_ui_controller_android.dart  # 仅 Android 可达，由平台验收清单覆盖
 
 # --- 已登记的豁免项（见 docs/dev/adr/0019）---
