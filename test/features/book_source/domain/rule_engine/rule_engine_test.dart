@@ -58,7 +58,8 @@ const Map<String, String> _unsupportedRules = <String, String>{
   'class.a||class.b': 'unsupported:||',
   'class.a&&class.b': 'unsupported:&&',
   'class.a%%class.b': 'unsupported:%%',
-  '-class.a@text': 'unsupported:-',
+  // 矩阵 #7 的 `-` 先摘掉再识别标志头，所以标志头的报错保持原样（不能被 `-` 顶掉）。
+  '-@css:.a': 'unsupported:@css:',
   // 矩阵 #15：中段 `@@`（`@` 切分后留空段，必须在切段前判掉，否则误报畸形）。
   'class.a@@class.b@text': 'unsupported:@@',
 };
@@ -69,12 +70,10 @@ const Map<String, String> _unsupportedRules = <String, String>{
 /// segment of a value rule is the extraction and is therefore never a selector.
 const Map<String, String> _unsupportedSelectors = <String, String>{
   'css:.b': 'unsupported:@css:',
-  'tag.li!0': 'unsupported:!',
-  // 矩阵 #6 的「序号用 `:` 分隔」形式，与 `!` 分开报（不得合并成一个 token）。
-  'tag.li.-1:2': 'unsupported::',
-  'tag.li[-1]': 'unsupported:[]',
-  'children': 'unsupported:children',
-  'text.x': 'unsupported:text',
+  // 字母段里的 `!` 不是索引写法（矩阵 #6 的 `!` 只跟在名称后）：整段退化成未知类型。
+  'li!0': 'unsupported:li!0',
+  // 名称里的 `:` 不属于任何已实现写法（矩阵 #6 的 `:` 只在 `!` 列表与位置段内）。
+  'tag.a:b': 'unsupported::',
   'div.item': 'unsupported:div',
 };
 
@@ -88,6 +87,31 @@ const List<String> _malformedSelectors = <String>[
   'tag',
   'class.a.b',
   'class.a.0.1',
+  // 矩阵 #3：`text` 必须带名称（第二段是文本内容的一部分）。
+  'text.',
+  // 矩阵 #6 / #26 的结构性畸形：空列表、未闭合、非整数、步长为 0、
+  // `!` 写在位置段（上游在那里抛 NumberFormatException，issue #432）、
+  // 两种位置写法同时出现、只有 `-` 而没有选择器。
+  'tag.li!',
+  'tag.li!x',
+  'tag.dl.!0',
+  'tag.li[]',
+  'tag.li[x]',
+  'tag.li[0',
+  'tag.li[0:1:2:3]',
+  'tag.li[0:1:x]',
+  'tag.li[0:2:0]',
+  'tag.div[-1].0',
+  // 矩阵 #28 的结构性畸形：空类型但不是索引、索引里混进字符、未闭合、多段索引。
+  '.',
+  '.li',
+  '.1.2',
+  '[1',
+  '[x]',
+  '!x',
+  // `]` 而没有 `[`（`div]` 会被当作挂在类型上的索引写法，另归 unsupported）。
+  'tag.div]',
+  '-',
 ];
 
 /// An engine with a capturing logger, so a test can assert the C-SRC-4 record.
@@ -133,6 +157,21 @@ ParseFailure<Never> _failure<T>(ParseResult<T> result) => switch (result) {
     ParseFailure<Never>(kind: kind, rulePath: rulePath),
   ParseSuccess<T>() => fail('Expected a failure.'),
 };
+
+/// The `href` of every match of `class.result-list@<segment>@tag.a`.
+///
+/// The list page has three items, so a position test can tell an index list's
+/// authored order (matrix #26) from an ascending sort.
+List<String?> _hrefsFor(String segment) => _elements(
+  _engine().selectAll(
+    'class.result-list@$segment@tag.a',
+    _document(_listHtml),
+    rulePath: 'searchRule.bookUrl',
+  ),
+).map((Element element) => element.attributes['href']).toList();
+
+/// The `href` of every match of `class.result-list@tag.li<position>@tag.a`.
+List<String?> _hrefsForList(String position) => _hrefsFor('tag.li$position');
 
 void main() {
   group('RuleEngine selectAll', () {
@@ -789,5 +828,308 @@ void main() {
       expect(failure.kind, ParseFailureKind.unsupportedRule);
       expect(failure.rulePath, 'unsupported:@css:');
     });
+  });
+
+  group('RuleEngine matrix #3 (text)', () {
+    test('selectAll_givenTextRule_matchesTheElementHoldingThatText', () {
+      final List<Element> elements = _elements(
+        _engine().selectAll(
+          'text.Second',
+          _document(_chapterHtml),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(elements, hasLength(1));
+      expect(elements.single.localName, 'p');
+    });
+
+    test('selectAll_givenTextRule_matchesOwnTextNotTheParentsText', () {
+      // `b` 的自身文本是 `bold`，它的祖先（`p` / `#content`）自身文本里没有它，
+      // 所以只命中 `b` 本身——上游用的是 getElementsContainingOwnText，
+      // getElementsContainingText 会额外命中祖先。
+      final List<Element> elements = _elements(
+        _engine().selectAll(
+          'text.bold',
+          _document(_chapterHtml),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(elements, hasLength(1));
+      expect(elements.single.localName, 'b');
+    });
+
+    test('selectAll_givenTextRuleAndAnElementScope_includesTheScopeItself', () {
+      final Element scope = _document(_chapterHtml).querySelectorAll('p').first;
+
+      final List<Element> elements = _elements(
+        _engine().selectAll(
+          'text.First',
+          scope,
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(elements, hasLength(1));
+      expect(elements.single, same(scope));
+    });
+
+    test('selectAll_givenTextRule_isCaseInsensitive', () {
+      expect(
+        _elements(
+          _engine().selectAll(
+            'text.SECOND',
+            _document(_chapterHtml),
+            rulePath: 'tocRule.chapterList',
+          ),
+        ),
+        hasLength(1),
+      );
+    });
+
+    test('selectAll_givenTextRuleWithAPosition_takesThatMatch', () {
+      final List<Element> elements = _elements(
+        _engine().selectAll(
+          'text.Author.-1',
+          _document(_listHtml),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(elements, hasLength(1));
+      expect(elements.single.text, 'Author C');
+    });
+
+    test('selectAll_givenTextRuleWithoutItsName_returnsParseFailed', () {
+      // 矩阵 #3 的第二段是文本内容的一部分；只写 `text` 没有任何内容可匹配。
+      final ParseFailure<Never> failure = _failure(
+        _engine().selectAll(
+          'text',
+          _document(_chapterHtml),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'tocRule.chapterList');
+    });
+  });
+
+  group('RuleEngine matrix #4 (children)', () {
+    test('selectAll_givenChildrenRule_returnsTheDirectChildrenOnly', () {
+      final Element scope = _document(_listHtml).querySelectorAll('ul').single;
+
+      final List<Element> elements = _elements(
+        _engine().selectAll('children', scope, rulePath: 'tocRule.chapterList'),
+      );
+
+      expect(elements, hasLength(3));
+      expect(
+        elements.map((Element element) => element.localName),
+        everyElement('li'),
+      );
+      // 孙元素（`a` / `span`）不在结果里，范围元素自身也不在。
+      expect(elements, isNot(contains(scope)));
+    });
+
+    test('selectAll_givenChildrenRuleWithExtraSegments_ignoresThem', () {
+      final Element scope = _document(_listHtml).querySelectorAll('ul').single;
+
+      // 矩阵 #4：`children` 取全部子标签，忽略第二、三段。
+      expect(
+        _elements(
+          _engine().selectAll(
+            'children.li.0',
+            scope,
+            rulePath: 'tocRule.chapterList',
+          ),
+        ),
+        hasLength(3),
+      );
+    });
+
+    test('extractAll_givenChildrenRule_chainsIntoTheNextSelector', () {
+      final Element scope = _document(_listHtml).querySelectorAll('ul').single;
+
+      expect(
+        _values(
+          _engine().extractAll(
+            'children@tag.a@href',
+            scope,
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        <String>['/book/1', '/book/2', '/book/3'],
+      );
+    });
+  });
+
+  group('RuleEngine matrix #6 (! exclusion)', () {
+    test('selectAll_givenExcludedIndex_dropsThatMatch', () {
+      expect(_hrefsForList('!0'), <String?>['/book/2', '/book/3']);
+    });
+
+    test('selectAll_givenSeveralExcludedIndices_dropsThemAll', () {
+      // 矩阵 #6：`!` 后面的序号用 `:` 隔开，负数为倒数序号。
+      expect(_hrefsForList('!0:2'), <String?>['/book/2']);
+      expect(_hrefsForList('!-1'), <String?>['/book/1', '/book/2']);
+    });
+
+    test('selectAll_givenExcludedIndexBeyondTheMatches_keepsEveryMatch', () {
+      expect(_hrefsForList('!9'), <String?>['/book/1', '/book/2', '/book/3']);
+    });
+
+    test('extractAll_givenExclusionAndAnExtraction_returnsTheRest', () {
+      expect(
+        _values(
+          _engine().extractAll(
+            'class.result-list@tag.li!1@tag.a@href',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        <String>['/book/1', '/book/3'],
+      );
+    });
+  });
+
+  group('RuleEngine matrix #7 (leading dash)', () {
+    test('selectAll_givenLeadingDash_reversesTheResultList', () {
+      final List<Element> elements = _elements(
+        _engine().selectAll(
+          '-class.result-list@tag.li',
+          _document(_listHtml),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(
+        elements.map(
+          (Element element) => element.querySelector('a')?.attributes['href'],
+        ),
+        <String?>['/book/3', '/book/2', '/book/1'],
+      );
+    });
+
+    test('extractAll_givenLeadingDash_reversesTheValues', () {
+      expect(
+        _values(
+          _engine().extractAll(
+            '-class.result-list@tag.a@href',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        <String>['/book/3', '/book/2', '/book/1'],
+      );
+    });
+
+    test('extractFirst_givenLeadingDash_returnsTheLastMatch', () {
+      expect(
+        _first(
+          _engine().extractFirst(
+            '-class.result-list@tag.a@href',
+            _document(_listHtml),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        '/book/3',
+      );
+    });
+  });
+
+  group('RuleEngine matrix #26 (index list)', () {
+    test('selectAll_givenABracketIndex_returnsThatMatch', () {
+      expect(_hrefsForList('[-1]'), <String?>['/book/3']);
+    });
+
+    test('selectAll_givenSeveralBracketIndices_keepsTheAuthoredOrder', () {
+      // 矩阵 #26：`[index,index,...]`，顺序按写法，不是升序。
+      expect(_hrefsForList('[2,0]'), <String?>['/book/3', '/book/1']);
+    });
+
+    test('selectAll_givenABracketRange_returnsEveryIndexInsideIt', () {
+      expect(_hrefsForList('[0:1]'), <String?>['/book/1', '/book/2']);
+      // 上游规则文档：start 为 0 时可省略，end 为 -1 时可省略。
+      expect(_hrefsForList('[:1]'), <String?>['/book/1', '/book/2']);
+      expect(_hrefsForList('[1:]'), <String?>['/book/2', '/book/3']);
+    });
+
+    test('selectAll_givenABracketRangeWithStep_returnsEveryStep', () {
+      expect(_hrefsForList('[0:2:2]'), <String?>['/book/1', '/book/3']);
+      expect(_hrefsForList('[2:0:-1]'), <String?>[
+        '/book/3',
+        '/book/2',
+        '/book/1',
+      ]);
+    });
+
+    test('selectAll_givenADescendingRange_reversesTheMatches', () {
+      // 上游规则文档的 `tag.div[-1:0]`：不写 step 时方向由两端决定。
+      expect(_hrefsForList('[-1:0]'), <String?>[
+        '/book/3',
+        '/book/2',
+        '/book/1',
+      ]);
+    });
+
+    test('selectAll_givenExcludedBracketIndices_dropsThem', () {
+      expect(_hrefsForList('[!0]'), <String?>['/book/2', '/book/3']);
+      expect(_hrefsForList('[!1:2]'), <String?>['/book/1']);
+    });
+
+    test('selectAll_givenABracketIndexBeyondTheMatches_returnsNothing', () {
+      expect(_hrefsForList('[9]'), isEmpty);
+      expect(_hrefsForList('[-9]'), isEmpty);
+    });
+
+    test('selectAll_givenARangeStartingBeforeTheList_keepsTheRangeInside', () {
+      // 负索引落到列表之前：端点会被夹到列表外一格，越界的部分直接丢掉。
+      expect(_hrefsForList('[-9:0]'), <String?>['/book/1']);
+    });
+
+    test('selectAll_givenABracketRangeBeyondTheMatches_stopsAtTheListEnd', () {
+      // 区间端点被夹到列表之外一格，书源写超大区间也不能把解析卡住（C-SRC-9）。
+      expect(_hrefsForList('[0:999999]'), <String?>[
+        '/book/1',
+        '/book/2',
+        '/book/3',
+      ]);
+    });
+  });
+
+  group('RuleEngine matrix #28 (index as the first rule of a segment)', () {
+    test('selectAll_givenABareIndexSegment_usesTheDirectChildren', () {
+      // 上游 doc：索引作为分段首规则时，相当于前面是 `children`。
+      expect(_hrefsFor('[1]'), <String?>['/book/2']);
+      expect(_hrefsFor('.1'), <String?>['/book/2']);
+      expect(_hrefsFor('children[1]'), <String?>['/book/2']);
+    });
+
+    test('selectAll_givenTheThreeSpellings_agreeWithEachOther', () {
+      // `.1` ≡ `[1]` ≡ `children[1]`（上游 doc 的等价式），也与 `children.1` 一致。
+      expect(_hrefsFor('.1'), _hrefsFor('[1]'));
+      expect(_hrefsFor('children[1]'), _hrefsFor('[1]'));
+      expect(_hrefsFor('children.1'), _hrefsFor('[1]'));
+    });
+
+    test('selectAll_givenAnExcludedIndexSegment_dropsThatChild', () {
+      expect(_hrefsFor('!0'), <String?>['/book/2', '/book/3']);
+      expect(_hrefsFor('[!0]'), <String?>['/book/2', '/book/3']);
+    });
+
+    test('selectAll_givenAnIndexListSegment_keepsTheAuthoredOrder', () {
+      expect(_hrefsFor('.0:2'), <String?>['/book/1', '/book/3']);
+      expect(_hrefsFor('[0:1]'), <String?>['/book/1', '/book/2']);
+    });
+
+    test(
+      'selectAll_givenChildrenWithASegmentName_keepsMatrixFourBehaviour',
+      () {
+        // `children.li.0` 不是索引写法：矩阵 #4 规定第二、三段被忽略。
+        expect(_hrefsFor('children.li.0'), _hrefsFor('children'));
+      },
+    );
   });
 }
