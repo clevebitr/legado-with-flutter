@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Licence scan (2026-10-11)
+
+- Corrected the classification rule in `NOTICE.md` §6 and the inventory in §5: the BSD
+  third clause must be matched as `Neither the name`, **not** `3. Neither the name`. Dart's
+  own packages write it as a bullet (`* Neither the name`), so the numbered pattern matched
+  only `cascadia` and the other 93 BSD-3-Clause packages were reported as BSD-2-Clause.
+  The corrected counts are BSD-3-Clause 93, MIT 37, Apache-2.0 9, BSD-2-Clause 6
+  (+ 5 Flutter SDK packages = 150), still with zero GPL / MPL / unknown entries, so
+  C-DEP-7's conclusion is unchanged; only the inventory was wrong. Six rows of the direct
+  dependency table moved from BSD-2-Clause to BSD-3-Clause (`shared_preferences`,
+  `path_provider`, `json_annotation`, `flutter_lints`, `build_runner`,
+  `json_serializable`) — `docs/dev/tech-stack.md` already had them right.
+- Added `tool/scan_licenses.dart`, so §6 is executable instead of manual. It reads only the
+  local pub cache (path discovered from `PUB_CACHE` / `%LOCALAPPDATA%` / `~/.pub-cache`),
+  classifies a multi-licence file by its **first** section (e.g. `sqlcipher_flutter_libs`
+  is MIT, not the OpenSSL Apache-2.0 text that follows it) and exits non-zero when a
+  package has no licence file or lands in a forbidden family.
+
 ### Platform abstraction (2026-10-11)
 
 - Added the Phase 1.3 platform layer: `lib/core/platform/platform_info.dart`

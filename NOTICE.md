@@ -76,17 +76,23 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；
 **GPL-2.0-only、无许可证、专有许可一律禁止引入**（GPL-2.0-only 与 GPL-3.0 不兼容）。
 
-**核实结果（2026-10-10，引擎切换后重扫）：** 对 `pubspec.lock` 中全部 **150 个包**逐个读取其
+**核实结果（2026-10-11，修正分类规则后重扫）：** 对 `pubspec.lock` 中全部 **150 个包**逐个读取其
 `LICENSE` / `COPYING` 文件并分类，结果：
 
 | 许可证 | 数量 |
 |---|---|
-| BSD-2-Clause | 98 |
-| MIT | 36 |
-| Apache-2.0 | 10 |
-| BSD-3-Clause | 1 |
+| BSD-3-Clause | 93 |
+| MIT | 37 |
+| Apache-2.0 | 9 |
+| BSD-2-Clause | 6 |
 | Flutter SDK 自带（未在 pub cache 中） | 5 |
 | **GPL / LGPL / AGPL / MPL / 无许可证 / 未识别** | **0** |
+
+> **本次修正了什么：** 旧结果（BSD-2 = 98 / BSD-3 = 1）是因为 §6 的分类特征串写成了
+> `3. Neither the name`。Dart 官方包把 BSD 第三条写成**项目符号** `* Neither the name`，
+> 带序号的形式只能匹配到 `cascadia` 一个包，其余 93 个 BSD-3 全被误归为 BSD-2。
+> 分类本身不影响 C-DEP-7 的结论（两者都是宽松许可），但清单必须准确。
+> 现由 `tool/scan_licenses.dart` 可重复执行，不再依赖肉眼判断。
 
 **直接依赖明细：**
 
@@ -105,17 +111,17 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 | `cached_network_image` | 3.4.1 | MIT |
 | `drift` | 2.35.2 | MIT |
 | `drift_flutter` | 0.3.1 | MIT |
-| `shared_preferences` | 2.5.6 | BSD-2-Clause |
-| `path_provider` | 2.1.6 | BSD-2-Clause |
+| `shared_preferences` | 2.5.6 | BSD-3-Clause |
+| `path_provider` | 2.1.6 | BSD-3-Clause |
 | `logger` | 2.8.0 | MIT |
 | `crypto` | 3.0.7 | BSD-3-Clause |
 | `freezed_annotation` | 3.1.0 | MIT |
-| `json_annotation` | 4.12.0 | BSD-2-Clause |
-| `flutter_lints`（dev） | 6.0.0 | BSD-2-Clause |
+| `json_annotation` | 4.12.0 | BSD-3-Clause |
+| `flutter_lints`（dev） | 6.0.0 | BSD-3-Clause |
 | `riverpod_lint`（dev） | 3.1.9 | MIT |
-| `build_runner`（dev） | 2.16.2 | BSD-2-Clause |
+| `build_runner`（dev） | 2.16.2 | BSD-3-Clause |
 | `freezed`（dev） | 4.0.2 | MIT |
-| `json_serializable`（dev） | 6.14.1 | BSD-2-Clause |
+| `json_serializable`（dev） | 6.14.1 | BSD-3-Clause |
 | `riverpod_generator`（dev） | 4.0.9 | MIT |
 | `drift_dev`（dev） | 2.35.1 | MIT |
 | `mocktail`（dev） | 1.0.5 | MIT |
@@ -125,18 +131,38 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 
 ## 6. 如何重新执行许可证扫描
 
-扫描只依赖本地 pub cache，不需要联网：
+扫描只依赖本地 pub cache，不需要联网。**必须跑脚本，不要凭肉眼判断**：
+2026-10-11 的复扫证明，一个写错的特征串就能把 93 个包归错类（见第 3 步）。
+
+```bash
+dart run tool/scan_licenses.dart            # 打印各许可证计数与风险项
+dart run tool/scan_licenses.dart --list     # 额外逐包打印分类，便于与 §5 基线逐行核对
+```
+
+该脚本等价于以下步骤，人工复核时按此执行：
 
 1. 从 `pubspec.lock` 取出全部包名与版本；
-2. 逐个读取 `%LOCALAPPDATA%\Pub\Cache\hosted\pub.dev\<name>-<version>\` 下的
-   `LICENSE*` / `COPYING*`；
-3. 按特征串分类（`Permission is hereby granted` → MIT；`Apache License` + `Version 2.0`
-   → Apache-2.0；`Redistribution and use in source and binary forms` + `3. Neither the name`
-   → BSD-3-Clause；`GNU ...` → GPL 系）；
-4. 出现 GPL 系 / MPL / 无许可证文件 / 无法识别任一情况时，**先开 ADR 再决定**是否引入。
+2. 逐个读取包目录下的 `LICENSE*` / `COPYING*`（pub cache 路径依次探测 `PUB_CACHE`、
+   `%LOCALAPPDATA%\Pub\Cache`、`~/.pub-cache`）；**同一文件内的多段许可证以第一段为准**
+   ——包自身的许可证在前，随后才是随包分发的第三方声明
+   （例：`sqlcipher_flutter_libs` 第一段是 MIT，其后才是 OpenSSL 的 Apache-2.0）；
+3. 按特征串分类：
+   - MIT：`Permission is hereby granted`
+   - Apache-2.0：`Apache License` + `Version 2.0`
+   - BSD-3-Clause：`Redistribution and use in source and binary forms` + **`Neither the name`**
+   - BSD-2-Clause：含 BSD 特征串但**不含** `Neither the name`
+   - GPL 系：`GNU ...`；MPL 系：`Mozilla Public License`
+
+   > **禁止把 `3. Neither the name` 当作特征串。** Dart 官方包把 BSD 第三条写成项目符号
+   > `* Neither the name`；用带序号的形式只能匹配到极少数包。2026-10-11 实测：99 个包含
+   > BSD 特征串，其中 93 个含第三条（仅 `cascadia` 用带序号写法），6 个不含（`sqflite*` 系列）。
+4. **计数校验：** 各许可证数量之和必须等于 `pubspec.lock` 的包数（当前 93 + 37 + 9 + 6 = 145，
+   加 5 个 Flutter SDK 自带包 = 150）。重扫后与 §5 的基线**逐项 diff**：有差异时先判断是
+   “新增/升级依赖”还是“分类规则变了”，后者必须先修规则再回写基线。
+5. 出现 GPL 系 / MPL / 无许可证文件 / 无法识别任一情况时，**先开 ADR 再决定**是否引入。
 
 **触发时机：** 新增依赖、升级依赖、以及**每次发布前**（发布时还需覆盖二进制产物）。
 
 ---
 
-**最后更新：** 2026-10-10
+**最后更新：** 2026-10-11
