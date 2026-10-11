@@ -130,8 +130,9 @@
 >   `div p:eq(0)` 每个 `div` 各取一个 `p`）。实现方式是把它们**改写成 cascadia 已有的
 >   `:nth-child`**（匹配仍全在 cascadia 内，C-SRC-6）：`:eq(1)` → `:nth-child(2)`（**纯整数才是
 >   「相等」**，写成 `:nth-child(n+2)` 会匹配该位置之后的全部兄弟）、`:gt(1)` →
->   `:nth-child(n+3)`、`:lt(3)` → `:nth-child(-n+3)`。**负索引：** jsoup 文档把索引伪类定义为
->   0-based、未定义负索引，故本仓同样不支持，报可定位的 `unsupported::eq(-1)`。
+>   `:nth-child(n+3)`、`:lt(3)` → `:nth-child(-n+3)`。**负索引：** jsoup 公开文档把索引伪类
+>   定义为 0-based，**没有定义负索引**（本仓未核实 jsoup 对负数的实际行为，故不猜），一律报
+>   可定位的 `unsupported::eq(-1)`，不静默当空结果（C-SRC-4）。
 > - **#30（提取段嵌套规则）暂不实现：** 它要把提取契约从封闭集合（text / textNodes / ownText /
 >   html / all / 属性）扩成「提取值可以是子规则」，与 `##` 替换、以及 JSON / JS 的 scope 改造
 >   三者叠加，属「接口形状未定型就横向铺开」；且当前无使用率证据。`rulePath` 用
@@ -164,9 +165,9 @@
 
 | 阶段 | 范围 | 完成判定 |
 |---|---|---|
-| **M0** | 矩阵 #1–#14、#25、#26、#27；搜索 / 详情 / 目录 / 正文四段完整字段；`nextTocUrl`；`nextContentUrl`；`{{key}}`、`{{page}}`、`{{baseUrl}}` | 至少 2 个真实书源完成「搜索 → 详情 → 目录 → 正文」离线回放 |
+| **M0** | 矩阵 #1–#14、#25、#26、#27、#28、#29；搜索 / 详情 / 目录 / 正文四段完整字段；`nextTocUrl`；`nextContentUrl`；`{{key}}`、`{{page}}`、`{{baseUrl}}` | 至少 2 个真实书源完成「搜索 → 详情 → 目录 → 正文」离线回放 |
 | **M1** | 矩阵 #15–#19；`exploreUrl` 发现页；`canReName`；`updateTime`；`java.timeFormat`；`concurrentRate` | 每条语法至少 1 条真实书源验证记录 |
-| **M2 / 暂不实现** | 矩阵 #20–#24；登录脚本与登录 UI；RSS / 订阅源；朗读规则 | 命中时返回 `ParseFailure(unsupportedRule)` |
+| **M2 / 暂不实现** | 矩阵 #20–#24、#30；登录脚本与登录 UI；RSS / 订阅源；朗读规则 | 命中时返回 `ParseFailure(unsupportedRule)` |
 
 **M0 未全部通过前，不得发布「支持导入书源」的版本。**
 命中 M2 或任何未实现语法时，禁止静默返回空结果（C-SRC-4）。
@@ -406,6 +407,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 - 原版的登录脚本、登录 UI、登录检查 JS
 - RSS / 订阅源、朗读规则
 - 需要浏览器 DOM/BOM 的网页 JS、依赖 Android WebView 行为的规则
+- 提取段里的嵌套规则（矩阵 #30：末段本身是一条规则，如 `class.a@css:.b`；命中报 `unsupported:nested-rule`）
 
 ---
 
