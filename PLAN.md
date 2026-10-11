@@ -154,8 +154,14 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 （对齐上游 `getElements` / `getStringList` / `getString`），共 39 条单测。本阶段未实现的
 语法一律**显式拒绝**为 `unsupportedRule`（C-SRC-4），`rulePath` 写 `unsupported:<语法名>`。
 
+**2.6 状态（部分完成）：** 离线语料已建立——`test/fixtures/book_sources/` 两份真实书源
+（脱敏）+ `test/fixtures/html/` 三页，并有 `test/features/book_source/offline_replay_test.dart`
+用真实书源的规则跑通搜索 → 详情 → 目录 → 正文四段（每条规则均未被拒绝）。页面是**按真实
+选择器构造**的，原因与实测证据见 `test/fixtures/html/README.md`。
+
 **本步产出 / 修订的 ADR：** 0021（书源模型位于 domain 实体并携带 JSON 注解；架构师复审追认）、
-0022（`json_serializable` 开 `checked: true`；架构师复审裁决）。
+0022（`json_serializable` 开 `checked: true`；架构师复审裁决）、0023（上游停运后的法律立场；
+架构师裁决三件事）。
 
 **交接给后续步骤（不得静默丢弃）：**
 
@@ -166,7 +172,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `lastUpdateTime` / `respondTime` / `weight` / `customOrder`（M0，仅展示与排序） | 并入 **Phase 5.4** |
 | `extra` 的导出合并（`toLegadoJson`） | 随导入 / 导出功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出 |
 | Big5 / Big5-HKSCS 解码缺口 | 承 Phase 1，仍待排期（`book-source.md` §5.1） |
-| 上游 `gedoor/legado` 已清空（无源码） | 已记入 `book-source.md` 顶部与 ADR-0014 事实附注；语义参照改为本仓 §3 + 仍在维护的 fork |
+| 上游 `gedoor/legado` 已清空（无源码） | 已记入 `book-source.md` 顶部与 ADR-0014 事实附注；法律立场见 **ADR-0023**；语义参照改为本仓 §3 + 仍在维护的 fork |
+| B4 语料形态偏差：页面是**按真实选择器构造**而非抓取 | 实测：242 份抽样仅 20 份（8%）全用默认规则，其中 4 份站点存活、**0 份搜索路径仍有效**（2021 规则已失效）。证据与口径见 `test/fixtures/html/README.md`；**待架构师追认**（若要求抓取页面，找到存活默认规则书源后直接替换 `*.html` 即可，测试无需改动） |
+| G2 的「手动真实链路跑通一次」在 Phase 2 不可达成 | 存活书源的规则都需 `@css:`（Phase 3.2）。需裁决：把 G2 拆成 G2a（离线回放，**已可达**）/ G2b（真实链路，移至 3.2 之后），或按 ADR 流程修正验收措辞 |
 
 ---
 

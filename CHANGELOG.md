@@ -84,6 +84,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `#1–#14` / `#15–#19` / `#20–#24` and inserting would renumber them. ADR-0014 carries the
   matching factual addendum.
 
+### Offline corpus for the default-rule slice (2026-10-11)
+
+- Added the corpus pair the vertical slice needs: `test/fixtures/book_sources/legado_default_rules_source.json`
+  (a real export whose four rule objects use **only** the default syntax, trimmed to one entry and
+  sanitised per ADR-0023) plus `test/fixtures/html/{search_result,book_page,chapter_page}.html`, and
+  `test/features/book_source/offline_replay_test.dart`, which replays search → book info → table of
+  contents → chapter body through the engine and asserts that **every** rule of that source is
+  accepted (C-SRC-4's rejection surface does not touch it). The first half of `PLAN.md` G2 is
+  therefore reachable now.
+- **The pages are constructed to satisfy the real source's selectors, not captured** — a documented
+  deviation from the ruling, which asked for captured HTML. Measured evidence: of 242 sampled
+  sources only 20 (8%) use the default syntax throughout; only 4 of those sites are still up; and
+  **none** of the four still resolves its search path (404, redirect to the home page, or zero
+  selector matches — the 2021 rules no longer fit today's sites); the 12k-entry collection's release
+  asset is gone. `test/fixtures/html/README.md` records the measurements and states that no real
+  work's text is included, which also keeps ADR-0023's stance. Swapping in captured pages later needs
+  no test change.
+- The other half of G2 — "run the real link manually once" — cannot be satisfied in Phase 2 either:
+  every live source needs `@css:`, which is Phase 3.2. It is registered in `PLAN.md` for a ruling
+  instead of being dropped silently.
+
 ### Book source models (2026-10-11)
 
 - Added the Phase 2.1 book source models: `lib/features/book_source/domain/entities/book_source.dart`
