@@ -45,7 +45,7 @@ final class SearchResultsNotifierProvider
 }
 
 String _$searchResultsNotifierHash() =>
-    r'35fd7a935910ff29204c4484f648c7ba5e5df8a9';
+    r'1dc569802730a7a3d245fef4f2efad93941ccb0c';
 
 /// Runs one search of the selected book source.
 
