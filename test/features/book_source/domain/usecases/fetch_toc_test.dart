@@ -11,8 +11,8 @@ import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engi
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../../support/capturing_log_printer.dart';
 import '../../../../support/fake_http_client.dart';
+import '../../../../support/fake_log_printer.dart';
 
 /// The real default-rule source of the offline corpus.
 const String _sourceFixture =
@@ -31,10 +31,10 @@ String _page(String name) =>
     File('test/fixtures/html/$name').readAsStringSync();
 
 /// Builds the page service under test around [http].
-({PageFetchService pages, CapturingLogPrinter printer}) _service(
+({PageFetchService pages, FakeLogPrinter printer}) _service(
   FakeHttpClient http,
 ) {
-  final CapturingLogPrinter printer = CapturingLogPrinter();
+  final FakeLogPrinter printer = FakeLogPrinter();
   final AppLogger logger = AppLogger(level: LogLevel.debug, printer: printer);
 
   return (
@@ -113,7 +113,7 @@ void main() {
           '<dd><a>没有链接</a></dd>'
           '</dl></div>',
         );
-      final ({PageFetchService pages, CapturingLogPrinter printer}) service =
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
           _service(http);
 
       final List<Chapter> chapters = _data(

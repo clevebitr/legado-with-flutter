@@ -7,7 +7,7 @@ import 'package:html/dom.dart';
 import 'package:html/parser.dart' as parser;
 import 'package:logger/logger.dart';
 
-import '../../../../support/capturing_log_printer.dart';
+import '../../../../support/fake_log_printer.dart';
 
 /// A search result page shaped like the target of default-rule selectors
 /// (matrix #1 / #2): three list items with a title link and an author.
@@ -91,10 +91,10 @@ const List<String> _malformedSelectors = <String>[
 ];
 
 /// An engine with a capturing logger, so a test can assert the C-SRC-4 record.
-RuleEngine _engine([CapturingLogPrinter? printer]) => RuleEngine(
+RuleEngine _engine([FakeLogPrinter? printer]) => RuleEngine(
   logger: AppLogger(
     level: LogLevel.debug,
-    printer: printer ?? CapturingLogPrinter(),
+    printer: printer ?? FakeLogPrinter(),
   ),
 );
 
@@ -310,7 +310,7 @@ void main() {
     });
 
     test('selectAll_givenRejectedRule_logsTheFieldAndTheSyntax', () {
-      final CapturingLogPrinter printer = CapturingLogPrinter();
+      final FakeLogPrinter printer = FakeLogPrinter();
 
       _engine(printer).selectAll(
         '@css:.a@text',

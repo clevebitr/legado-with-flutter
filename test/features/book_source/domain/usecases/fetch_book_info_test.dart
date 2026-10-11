@@ -11,8 +11,8 @@ import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engi
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../../support/capturing_log_printer.dart';
 import '../../../../support/fake_http_client.dart';
+import '../../../../support/fake_log_printer.dart';
 
 /// The real default-rule source of the offline corpus.
 const String _sourceFixture =
@@ -34,7 +34,7 @@ String _page(String name) =>
 PageFetchService _service(FakeHttpClient http) {
   final AppLogger logger = AppLogger(
     level: LogLevel.debug,
-    printer: CapturingLogPrinter(),
+    printer: FakeLogPrinter(),
   );
 
   return PageFetchService(

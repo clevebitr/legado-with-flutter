@@ -14,8 +14,8 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.da
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../../support/capturing_log_printer.dart';
 import '../../../../support/fake_http_client.dart';
+import '../../../../support/fake_log_printer.dart';
 
 /// The real default-rule source of the offline corpus.
 const String _sourceFixture =
@@ -41,10 +41,10 @@ String _page(String name) =>
     File('test/fixtures/html/$name').readAsStringSync();
 
 /// Builds the page service under test around [http].
-({PageFetchService pages, CapturingLogPrinter printer}) _service(
+({PageFetchService pages, FakeLogPrinter printer}) _service(
   FakeHttpClient http,
 ) {
-  final CapturingLogPrinter printer = CapturingLogPrinter();
+  final FakeLogPrinter printer = FakeLogPrinter();
   final AppLogger logger = AppLogger(level: LogLevel.debug, printer: printer);
 
   return (
@@ -78,7 +78,7 @@ void main() {
       'execute_givenSourceWithoutSearchUrl_returnsInvalidBookSource',
       () async {
         final FakeHttpClient http = FakeHttpClient();
-        final ({PageFetchService pages, CapturingLogPrinter printer}) service =
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
             _service(http);
         final BookSource source = _source();
         // `copyWith` 造出「只有发现页、没有搜索」的书源形态。
@@ -98,7 +98,7 @@ void main() {
     test('execute_givenSearchPage_rendersTheUrlAndReturnsEveryBook', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_searchUrl, _page('search_result.html'));
-      final ({PageFetchService pages, CapturingLogPrinter printer}) service =
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
           _service(http);
 
       final List<Book> books = _data(
@@ -121,7 +121,7 @@ void main() {
     test('execute_givenHttpFailure_returnsTheSameFailure', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..failWith(_searchUrl, ParseFailureKind.networkTimeout);
-      final ({PageFetchService pages, CapturingLogPrinter printer}) service =
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
           _service(http);
 
       final ParseFailure<Never> failure = _failure(
@@ -135,7 +135,7 @@ void main() {
     test('execute_givenPageWithoutResultItems_returnsParseFailed', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_searchUrl, '<html><body><p>没有结果</p></body></html>');
-      final ({PageFetchService pages, CapturingLogPrinter printer}) service =
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
           _service(http);
 
       final ParseFailure<Never> failure = _failure(
@@ -157,7 +157,7 @@ void main() {
           '<div class="result-item-title"><a>没有链接</a></div>'
           '</div>',
         );
-      final ({PageFetchService pages, CapturingLogPrinter printer}) service =
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
           _service(http);
 
       final List<Book> books = _data(
@@ -182,7 +182,7 @@ void main() {
             '<div class="result-item-title"><a href="/book/1/">书名一</a></div>'
             '</div>',
           );
-        final ({PageFetchService pages, CapturingLogPrinter printer}) service =
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
             _service(http);
         final BookSource source = _source();
         // 真实书源 + 一条本阶段未实现的规则：整次搜索必须显式失败（C-SRC-4）。
@@ -204,7 +204,7 @@ void main() {
       () async {
         final FakeHttpClient http = FakeHttpClient()
           ..serve(_searchUrl, _page('search_result.html'));
-        final ({PageFetchService pages, CapturingLogPrinter printer}) service =
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
             _service(http);
         final BookSource source = _source();
         final BookSource withCss = source.copyWith(
@@ -227,7 +227,7 @@ void main() {
         ..serve(_searchUrl, _page('search_result.html'))
         ..serve(_bookUrl, _page('book_page.html'))
         ..serve(_chapterUrl, _page('chapter_page.html'));
-      final ({PageFetchService pages, CapturingLogPrinter printer}) service =
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
           _service(http);
       final BookSource source = _source();
 

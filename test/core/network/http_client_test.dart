@@ -11,20 +11,20 @@ import 'package:flutter_reader/core/network/http_response.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 
-import '../../support/capturing_log_printer.dart';
 import '../../support/fake_http_adapter.dart';
+import '../../support/fake_log_printer.dart';
 
 /// Client under test plus its doubles.
 typedef _Fixture = ({
   HttpClient client,
   FakeHttpAdapter adapter,
-  CapturingLogPrinter printer,
+  FakeLogPrinter printer,
 });
 
 /// Builds a client whose dio talks to [FakeHttpAdapter] instead of the network.
 _Fixture _buildClient({HttpPolicy policy = const HttpPolicy()}) {
   final FakeHttpAdapter adapter = FakeHttpAdapter();
-  final CapturingLogPrinter printer = CapturingLogPrinter();
+  final FakeLogPrinter printer = FakeLogPrinter();
   final Dio dio = Dio()..httpClientAdapter = adapter;
 
   return (

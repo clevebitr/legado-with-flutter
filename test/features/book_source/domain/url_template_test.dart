@@ -4,11 +4,11 @@ import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 
-import '../../../support/capturing_log_printer.dart';
+import '../../../support/fake_log_printer.dart';
 
 /// An engine-side logger that captures records, so a test can assert the warning.
-({AppLogger logger, CapturingLogPrinter printer}) _logger() {
-  final CapturingLogPrinter printer = CapturingLogPrinter();
+({AppLogger logger, FakeLogPrinter printer}) _logger() {
+  final FakeLogPrinter printer = FakeLogPrinter();
 
   return (
     logger: AppLogger(level: LogLevel.debug, printer: printer),
@@ -21,7 +21,7 @@ import '../../../support/capturing_log_printer.dart';
   String template,
   Map<String, String> params,
 ) {
-  final ({AppLogger logger, CapturingLogPrinter printer}) captured = _logger();
+  final ({AppLogger logger, FakeLogPrinter printer}) captured = _logger();
   final String url = renderUrlTemplate(
     template,
     params,
