@@ -173,17 +173,27 @@ final class FetchToc {
 
 /// Whether an `isVip` value marks its chapter as VIP (`book-source.md` §4.1).
 ///
-/// The rule's result is a string, and upstream marks the chapter VIP only when the
-/// string is **true-ish**: `null`, an empty string, `false` and `0` all stay non-VIP,
-/// while `true`, `1` and any other non-empty value (some sources write `是` or `VIP`)
-/// mark it. The compare is case-insensitive because the two spellings of `false` both
-/// occur in real exports, and §4.1 owns the list rather than this file.
+/// This is upstream's `String?.isTrue()` as the chapter list calls it
+/// (`BookChapterList.kt:261-264`, predicate at `StringExtensions.kt:75-80`, checked
+/// 2026-10-12): `null`, a blank string and the literal `null` are false, and every
+/// other value is true **unless** it matches upstream's negation pattern — so `true`,
+/// `1`, `是` and `yes` all mark the chapter VIP, while `false`, `no`, `not`, `0` and
+/// `0.0` do not.
+///
+/// Two details are copied from upstream on purpose, because “fixing” them would turn
+/// this into a difference that has to be registered first: the `'null'` compare happens
+/// **before** trimming (so `' null '` is VIP upstream), and the pattern's `.` is
+/// unescaped (so `0x0` matches too).
 bool _isVip(String? value) {
-  if (value == null) {
+  if (value == null || value.trim().isEmpty || value == 'null') {
     return false;
   }
 
-  final String normalized = value.trim().toLowerCase();
-
-  return normalized.isNotEmpty && normalized != 'false' && normalized != '0';
+  return !_falseVipValue.hasMatch(value.trim());
 }
+
+/// The spellings upstream's `isTrue()` treats as false (`StringExtensions.kt:80`).
+final RegExp _falseVipValue = RegExp(
+  r'^(?:false|no|not|0|0.0)$',
+  caseSensitive: false,
+);

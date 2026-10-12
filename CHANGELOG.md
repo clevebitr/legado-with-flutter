@@ -7,6 +7,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 3.3 review fixes: the sandbox closes its holes, `log.*` gets a ceiling, cancellation stops lying (2026-10-12)
+
+The architect independently re-ran the six host gates and the real-engine device probe (all green) and
+passed 3.3 **conditionally**, with one rule violation and two smaller items. All three are fixed:
+
+- **F1 (rule violation): the engine's own Web APIs were reachable from a rule.** §6 forbids timers,
+  `console` and native bindings, but `getJavascriptRuntime` installs a `JsWebApis.core` set by
+  default, so a probe on the Windows build found `setTimeout` / `setInterval` /
+  `clearTimeout` / `clearInterval` / `queueMicrotask` / `console` / `atob` / `btoa` /
+  `structuredClone` / `performance` all present — with three consequences: a timer left by one source
+  fires during another source's job (active cross-source interference, worse than ADR-0030 §决策 4's
+  registered passive `globalThis` sharing), a rule can rebind `globalThis.crypto` / `globalThis.log`
+  and the tampering reaches the next job (`Object.freeze` freezes the object, not the property name),
+  and `console.*` bypasses the `core/logging` facade (C-ERR-5, C-SEC-4).
+  **Two-part fix:** the worker builds the runtime with `JsWebApis.none()` — the library's "installs
+  nothing at all: no `console`, no timers, plain ECMAScript" — and every job now re-applies the
+  sandbox prelude before its script, which deletes the forbidden names (belt and braces, and it also
+  clears whatever a rule defined itself) and re-installs `log` / `crypto`. Re-parsing ~1.5 KB next to
+  a 5 s budget is noise. The integration probe gained three cases: every forbidden name must be
+  `undefined`, a job that does `delete globalThis.crypto; globalThis.log = null` must not affect the
+  next one, and the hardened sandbox must still let the engine drain its own promise job queue
+  (which 3.4's Promise bindings depend on).
+- **F2: `log.*` now has a host-side ceiling.** The facade redacts patterns, not size, so
+  `log.debug(result)` on a 200 KB page wrote 200 KB per chapter into the sink. §6 gained
+  "one `log.*` message: 2000 characters", the bridge truncates with a visible marker, and a unit test
+  pins the cut. Counting `log.*` calls towards the per-rule quota lands with the quota itself in 3.4
+  (§6 and `PLAN.md` §3.7 say so).
+- **F3: a cancellation no longer claims to be a script error.** Jobs dropped because the bridge was
+  disposed carried `rulePath: '<field>:js:error'`, which §6 defines as "the script threw". They now
+  carry the bare field path; §6's note spells it out, and §7's `cancelled` row (its owner is §7) gets
+  the "bridge or scope released" trigger from the review.
+- Gates after the fixes: `dart format` clean, `flutter analyze` clean, `flutter test --coverage` 424
+  passed, `check_coverage.dart` exit 0 with `core` 567/567 and `domain` 1048/1048; Windows device
+  suite 3/3 files green (now 9 JS cases, including a check that the hardened sandbox still drains
+the engine's promise job queue — which 3.4's Promise bindings depend on).
+
+### Phase 3.3: the `@js:` sandbox — bridge contract, resident worker, sync bindings (2026-10-12)
+
+The freeze preconditions are met (G2b, 3.5, 3.8), so the `JsBridge` contract is now in place: one
+asynchronous evaluation method with **no capacity parameters** (ADR-0030 §决策 2), a resident worker
+with one reused runtime, and the two sync bindings ADR-0029 §决策 3 assigns to this phase.
+
+- **New `core/js/`** (`architecture.md` §1): `JsBridge`, `JsJob` and `JsSourceInfo`. The job carries
+  exactly §6's variables (`baseUrl`, `result`, `page`, `source.name/url/group`) plus the field path
+  that failures and `log.*` need (C-SRC-8).
+- **`QuickJsWorkerBridge` owns the policy ADR-0030 §决策 1/3 fixes.** One worker, created lazily on
+  the first `@js:` rule and released with the provider scope; one reused runtime; **FIFO** queueing,
+  so a caller over capacity waits instead of failing (C-SRC-9 forbids “busy”); the budget is counted
+  from dispatch, not from queueing; and `Isolate.kill` is the fallback when the engine's own
+  interrupt did not fire — the next job then rebuilds the worker.
+- **`quickjs_worker.dart` is the native edge alone** (isolate, `getJavascriptRuntime(timeout:,
+  memoryLimit:)`, the JS prelude), which is why it is on the coverage allowlist under ADR-0019's
+  second category. The queue, the budgets and the rebuild policy live in
+  `quickjs_worker_bridge.dart` and are unit-tested against a fake worker transport, so the gate
+  keeps measuring them.
+- **The sync bindings are real:** `crypto.md5` / `sha1` / `base64Encode` / `base64Decode` (pure Dart
+  in `js_bindings.dart`, unit-tested with RFC vectors) and `log.debug/info/warn/error` (forwarded to
+  `core/logging` with the field attached, as §6 asks). Every `sendMessage` payload is a JSON object,
+  per `tool/spike/README.md` §4.
+- **JS failures mark the field**: `<field>:js:timeout` / `<field>:js:error`, now spelled out in §6.
+  A JS exception and an interrupted script both arrive as `isError` (probe 07), so the worker reports
+  its elapsed time and the bridge classifies: only a run that used up the budget is a timeout.
+- **The integration probe ADR-0029 §后果 requires exists**: `integration_test/js_bridge_test.dart`
+  covers 6 cases on a real engine and a real worker — sandbox variables, an array result (the
+  `nextTocUrl` shape), sync `crypto.*`, `log.*` forwarding, runaway → `js:timeout` **with the worker
+  still usable**, and a JS throw → `js:error`. Windows device run: all 3 device-level files pass,
+  exit 0.
+- 18 new cases (423 total). **Not in this phase, and registered instead of dropped:** the Promise
+  bindings `http.*` / `parse.*`, the `parse.*` page-scope boundary (`js:parse-scope`) and the ≤20
+  calls-per-rule quota — §6's note lists them and `PLAN.md` §3.7 carries the handoff to 3.4.
+- Docs: `architecture.md` §1, `book-source.md` §6 (what landed, the `rulePath` spelling, the `log.*`
+  C-SEC-4 note that a rule must not log page text), `tech-stack.md` §2 and `pubspec.yaml` (`crypto`
+  now also serves the sandbox), `test-environment.md` §4/§7, `PLAN.md` §3.1/§3.4/§3.7.
+- Gates: `dart format` clean, `flutter analyze` clean, `flutter test --coverage` 423 passed,
+  `check_coverage.dart` exit 0 with `core` 563/563 and `domain` 1048/1048; Windows device suite
+  3/3 files green.
+
+### R1 closed: `isVip` now matches upstream's `isTrue()` predicate, with the lines (2026-10-12)
+
+The review left one debt: the **positive** side of `isVip` (`true` / `1` / `是` → VIP) had no upstream
+`file:line` behind it, so it was either evidence or a registered difference. The fork's source settles
+it — upstream reads the rule result through `String?.isTrue()` (`BookChapterList.kt:261-264` calls
+`if (isVip.isTrue()) bookChapter.isVip = true`; the predicate is `StringExtensions.kt:75-80`):
+
+```kotlin
+fun String?.isTrue(nullIsTrue: Boolean = false): Boolean {
+    if (this.isNullOrBlank() || this == "null") return nullIsTrue
+    return !this.trim().matches("(?i)^(?:false|no|not|0|0.0)$".toRegex())
+}
+```
+
+- **The implementation was narrower than upstream, so it is now upstream's predicate.** The previous
+  compare only rejected `false` and `0`, which made `null`, `no`, `not` and `0.0` VIP — four wrong
+  answers against a real source. `fetch_toc.dart` now ports the predicate literally.
+- **Two upstream quirks are copied on purpose**, because "fixing" them would silently become a
+  difference: the `'null'` compare happens **before** trimming (`' null '` is VIP upstream), and the
+  pattern's `.` is unescaped (`0x0` matches too). Both are spelled out in `book-source.md` §4.1
+  (still the single owner of the semantics) and in the doc comment.
+- The `isVip` case table grew from 6 to 12 chapters so the negation list is pinned: `true` / `1` /
+  `是` / `yes` are VIP; `false` / `FALSE` / `no` / `not` / `0` / `0.0` / the literal `null` / an empty
+  value are not. `PLAN.md` §3.7's R1 row is closed.
+- Gates: `dart format` unchanged, `flutter analyze` clean, `flutter test --coverage` 405 passed,
+  `check_coverage.dart` exit 0 with `core` 385/385 and `domain` 1048/1048.
+
 ### Review of the 3.8 slice: three boundaries registered, no code findings (2026-10-12)
 
 Architect review of `15339cf`, gates re-run in a detached worktree: format clean, `flutter analyze`

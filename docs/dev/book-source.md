@@ -286,8 +286,14 @@
 >   对同一组页码链接，这只多读一些站点本来就要给的页，不会漏页。并发抓取归 3.8。
 > - **后续页失败在目录与正文上不同：** 目录缺页按 §9 降级（保留已读到的章节 + warning），
 >   正文缺页则**整章失败**——把截断的正文当成成功就是把失败伪装成成功。
-> - **`isVip` 的真值判定：** 规则结果为空 / `null` / `false` / `0`（后两者大小写不敏感）→
->   非 VIP；`true` / `1` / 其他非空值 → VIP。
+> - **`isVip` 的真值判定：** 按上游 `String?.isTrue()`（`BookChapterList.kt:261-264` 调用：
+>   `if (isVip.isTrue()) bookChapter.isVip = true`；谓词 `StringExtensions.kt:75-80`，2026-10-12
+>   核对）：`null` / 全空白 / 字面量 `"null"` → 非 VIP；其余值除非**逐字**匹配
+>   `(?i)^(?:false|no|not|0|0.0)$`（且用 **trim 后**的值匹配）否则算 VIP——所以
+>   `true` / `1` / `是` / `yes` 都是 VIP，`false` / `no` / `not` / `0` / `0.0` 不是。
+>   两处需要照抄的细节：`"null"` 的比较发生在 **trim 之前**（所以 `" null "` 反而是 VIP），
+>   模式里的 `.` **未转义**（`0x0` 也匹配）——改成更「正确」的写法就成为与上游的有意差异，
+>   必须先登记再改。
 > - **`replaceRegex` 是「独立替换段」规则**（上游「独立使用相当于 `all##正则##替换`」）：
 >   在**拼接后**的整章正文上应用一次（上游 `BookContent.kt:190-193`），支持矩阵 #9 的
 >   `##正则##替换` 与矩阵 #25 的 `##正则##替换###`。**有意不做的：** 上游在替换前后还会
@@ -415,8 +421,40 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | 单次 JS 墙钟超时 | 5 秒 |
 | 单次 JS 内存上限 | 32 MB |
 | 单条规则内 JS 调用次数 | ≤ 20 |
+| 单条 `log.*` 消息的字符上限 | 2 000（超出截断并附截断标记） |
 
 超时或异常 → `ParseFailure(parseFailed)`，`rulePath` 中标注 `js:timeout` 或 `js:error`。
+
+> **3.3 落地状态与两处边界（2026-10-12，随 `PLAN.md` 3.3 落地）：**
+>
+> - **本阶段落了什么：** 常驻 worker isolate + 单复用运行时的桥（`core/js/`）：引擎级 5 秒中断与
+>   32MB 堆上限由构造参数传入；同步绑定 `log.*`（转发到 `core/logging`，自动附字段路径）与
+>   `crypto.md5` / `sha1` / `base64Encode` / `base64Decode` 已可用。单 worker + FIFO 排队，
+>   超限**等待**而不报 busy（ADR-0030 §决策 1/3）；引擎中断失效时由硬预算 `Isolate.kill` 兜底，
+>   并在下一个 job 重建 worker。
+> - **`rulePath` 的标注形态：** 失败把标注**附在字段路径后**——`<字段路径>:js:timeout` /
+>   `:js:error`（例 `searchRule.name:js:timeout`），这样 C-SRC-8 的「可定位」与本表的「标注」
+>   两个要求同时成立。**例外：** 取消（桥 / 作用域已释放，或调用方主动取消）只带**裸字段路径**、
+>   不带标记——取消不是脚本错误，触发条件归 §7。
+> - **沙箱的禁令是按 §6 执行且可实测的（2026-10-12，3.3 复核 F1）：** 运行时以「什么都不装」
+>   构造（`JsWebApis.none()`：无 `console`、无定时器，plain ECMAScript），并且**每个 job 前
+>   重跑一次沙箱预备**——删掉 §6 禁止的名字（`setTimeout` / `setInterval` / `clearTimeout` /
+>   `clearInterval` / `queueMicrotask` / `console` / `atob` / `btoa` / `structuredClone` /
+>   `performance` / `require` / `process` / `XMLHttpRequest` / `fetch` 等）并重装白名单绑定。
+>   重跑是必要的：`Object.freeze(crypto)` 冻的是对象、不是 `globalThis` 上的属性名，规则写
+>   `globalThis.crypto = …` 会把篡改留给**下一个 job（可能是另一个书源）**。集成探针逐名断言
+>   这些名字是 `undefined`，验证重绑后下一个 job 仍能拿到真绑定，并确认硬化沙箱没有打掉引擎
+>   自己的 Promise 作业队列（3.4 的 Promise 绑定靠它）。
+> - **`log.*` 的宿主侧上界（3.3 复核 F2）：** 单条消息截断到上表的 2 000 字符并留可见标记，
+>   所以 `log.debug(result)` 不会把 200KB 正文写进日志；本条数**计入**「单条规则内 JS 调用次数」
+>   额度（随 3.4 的额度实现同批）。
+> - **未落的部分归 3.4：** Promise 形态的 `http.*` / `parse.*`（唯一实现分别是
+>   `core/network/HttpClient` 与规则引擎）、`parse.*` 的**页级 scope 边界**（命中报
+>   `js:parse-scope`，ADR-0029 §决策 5），以及「单条规则内 JS 调用次数 ≤ 20」（含 `log.*` 计数）
+>   ——它数的是 `parse.*` 的递推调用，因此与 `parse.*` 同批实现（ADR-0030 §决策 3 的「按 job 计数」）。
+> - **`log.*` 的 C-SEC-4 边界：** 转发的是**规则作者自己写的**文本，只经 `AppLogger` 的
+>   `redactMessage`（能掩 URL / 凭据，**认不出正文**）。上界挡住体量，但「不得把页面正文交给
+>   `log.*`」仍是书源作者的义务，宿主侧无法代为净化。
 
 ---
 
@@ -436,7 +474,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `parseFailed` | 规则无匹配、JS 异常或超时 | `failureParseFailed` | 否 |
 | `unsupportedRule` | 命中 M2 或未实现语法 | `failureUnsupportedRule` | 否 |
 | `invalidBookSource` | 导入 JSON 缺必填字段或结构非法 | `failureInvalidBookSource` | 否 |
-| `cancelled` | 用户主动取消 | 无（静默） | — |
+| `cancelled` | 用户主动取消，或**桥 / 作用域已释放**（job 被丢弃而未运行；`rulePath` 只带裸字段路径，§6） | 无（静默） | — |
 
 **关键判定：**
 

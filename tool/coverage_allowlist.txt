@@ -23,3 +23,4 @@
 lib/core/di/database_executor_provider.dart  # 依赖原生 sqlite3 与 drift_flutter 的后台 isolate；flutter test 里必然报 Channel was closed，只能由 flutter run / integration_test 验证
 lib/core/storage/cache_entries.dart  # drift 表定义是代码生成器的输入，运行时不可达（见 ADR-0019 第三类理由）
 lib/features/book_source/domain/entities/book.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形（2026-10-11 修订）：源文件只有重定向工厂声明、方法体由生成器内联，lcov 不收录该文件；行为由 test/features/book_source/domain/entities/book_test.dart 与四个 use case 测试构造并读取全部实体保证
+lib/core/js/quickjs_worker.dart  # 依赖 flutter_qjs_next 原生库，flutter test 的宿主 VM 加载不了（ADR-0019 第二类）；队列/预算/重建策略已放在 quickjs_worker_bridge.dart 由单测覆盖，本文件由 integration_test/js_bridge_test.dart 在 Windows / Android 上验证（见 docs/dev/test-environment.md §4）

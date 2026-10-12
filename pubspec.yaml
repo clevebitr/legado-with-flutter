@@ -45,7 +45,8 @@ dependencies:
 
   # 观测：业务侧只允许经 core/logging 使用（C-ERR-5、ADR-0006）
   logger: ^2.8.0
-  # 日志脱敏摘要（sha256），仅 core/logging/redaction.dart 使用（C-SEC-4）
+  # 日志脱敏摘要（sha256）与 `@js:` 沙箱的 crypto.* 绑定：仅 core/logging/redaction.dart
+  # 与 core/js/ 使用（C-SEC-4、book-source.md §6）
   crypto: ^3.0.7
 
   # 代码生成注解

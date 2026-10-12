@@ -72,7 +72,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
-| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**下一步顺序以 §3.4 为准**（当前 = 3.3 / 3.4）。细节见 `CHANGELOG.md` |
+| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**下一步顺序以 §3.4 为准**（当前 = 3.4）。细节见 `CHANGELOG.md` |
 | Phase 4 — M1 | ⏳ 未开始 | — |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
@@ -140,6 +140,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
    实现点与排队语义归 `book-source.md` §8，容量不进 `JsBridge` 契约（ADR-0030 §决策 2）。
 6. **3.3 与 3.4**：`JsBridge` 与 `@js:` 接入 —— 白名单里的 `parse.getString(rule, doc)` 委托给
    规则引擎，所以必须等 3.2 / 3.5 的求值路径定型再冻结桥接契约。
+   —— 3.3 ✅ **已完成（2026-10-12）**：`JsBridge` 契约（一个异步 `evaluate(JsJob)`，**无容量参数**）、
+   常驻 worker isolate + 单复用运行时、FIFO 排队与硬预算 `Isolate.kill` 兜底、同步绑定
+   `log.*` / `crypto.*`、真实引擎集成探针；已落的边界与 3.4 的清单归 `book-source.md` §6 的注记。
 7. **3.7**：真实书源回归记录，把矩阵 M0 行的状态列改为「已确认」。
 8. **3.9**：charset 检测结果缓存。
 
@@ -147,7 +150,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|
 | 3.1 | 补齐默认规则语法：#3 / #4 / #6 / #7 / #26 / #28 ✅ | 每条 1 条单测 |
 | 3.2 | `\|\|`（#10）、`&&`（#11）、`@css:`（#12）、`@json:`（#13）、`@css:` 内的 jsoup 索引伪类（#29）；并落地 **ADR-0026** 的非顶层字段降级语义（顶层不降级） ✅ | 连接符分组与跨类型合并拒绝各 ≥1 条单测；降级语义顶层 / 非顶层各 ≥1 条单测 |
-| 3.3 | `JsBridge`：专用 Isolate + 复用运行时 + 引擎级 `timeout` / `memoryLimit` + `Isolate.kill` 兜底 | 验收（依据：ADR-0015、**ADR-0029**（引擎 API 异步 + 逐绑定形态）、**ADR-0030**（单常驻 worker + FIFO，容量不进契约）、C-SRC-2）：`sendMessage` 载荷必须是合法 JSON；并发调用 FIFO 排队且**不得**报 busy（C-SRC-9）；一次超时/中断后同一运行时仍可继续求值（探针 07 口径）；单测走假 `JsBridge`（`testing.md` §4）；逐项绑定形态归 `book-source.md` §6。**冻结前置（架构师 2026-10-11 裁决）：必须在 G2b spot-check 与 3.5 / 3.8 之后**——3.5 的 `nextTocUrl` / `nextContentUrl` 允许 JS 返回 URL **数组**（`book-source.md` §4.1），先把「JS 返回单值 vs 列表」这一返回契约用真实字段行使定型再冻合同 |
+| 3.3 | `JsBridge`：专用 Isolate + 复用运行时 + 引擎级 `timeout` / `memoryLimit` + `Isolate.kill` 兜底 ✅ | 验收（依据：ADR-0015、**ADR-0029**（引擎 API 异步 + 逐绑定形态）、**ADR-0030**（单常驻 worker + FIFO，容量不进契约）、C-SRC-2）：`sendMessage` 载荷必须是合法 JSON；并发调用 FIFO 排队且**不得**报 busy（C-SRC-9）；一次超时/中断后同一运行时仍可继续求值（探针 07 口径）；单测走假 `JsBridge`（`testing.md` §4）；逐项绑定形态归 `book-source.md` §6。**冻结前置（架构师 2026-10-11 裁决）：必须在 G2b spot-check 与 3.5 / 3.8 之后**——3.5 的 `nextTocUrl` / `nextContentUrl` 允许 JS 返回 URL **数组**（`book-source.md` §4.1），先把「JS 返回单值 vs 列表」这一返回契约用真实字段行使定型再冻合同 |
 | 3.4 | `@js:` 规则接入（#14）+ JS 白名单绑定 | `book-source.md` §6 白名单逐项有测试；越权访问被拒绝；单测走假 `JsBridge`（`testing.md` §4），真实引擎只在集成探针里 |
 | 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定、`replaceRegex` 批量替换（含建模 `ContentRule.replaceRegex`） ✅ | 各 1 条单测 |
 | 3.6 | 失败语义全量：9 个 `ParseFailureKind` 各有触发路径 | 每个 kind ≥1 条单测 |
@@ -214,8 +217,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `shift-jis` / `euc-jp` 的字节不完整会让 `charset 2.0.1` 抛 `RangeError`（`Error`），越过 `ParseResult` 契约逃到调用方；同样地，`euc-kr` 的解码器静默丢弃非法字节（无宽容入口可走） | **待排期**：按 ADR-0022 不得捕获 `Error`，需换依赖或加隔离层；两族因此**不在** ADR-0031 的宽容映射里，仍按严格失败处理（`euc-kr` 则是依赖自身的丢弃行为）；证据与影响见 `tool/spot_check/README.md` §6 与 `book-source.md` §5.1 |
 | 矩阵 #14（`@js:`）无任何真实语料样本 | **3.7**：仓内 `test/fixtures/book_sources/*.json` 的 `@js:` 出现次数为 **0**，因此 #14 的状态列无法改「已确认」；补样前先补语料（ADR-0029 §后果） |
 | JS 绑定是否需要**同步**写法（3.3 只实现 Promise 形态的 `http.*` / `parse.*`） | **3.7** 真实语料回归出证据后，以**新 ADR** 裁决是否追加；不得就地放宽（ADR-0029 §决策 4） |
+| 3.3 未落的绑定与额度（`http.*` / `parse.*` 的 Promise 形态、`parse.*` 的页级 scope、≤20 调用额度**含 `log.*` 计数**） | **3.4**：清单归 `book-source.md` §6 的注记；元素级 scope 按 ADR-0029 §决策 5 报 `js:parse-scope` |
 | ~~3.8 并发策略与 JS worker 容量的耦合~~ | ✅ **已闭环（ADR-0030）**：裁决为单常驻 worker + 单复用运行时 + FIFO，**容量不进 `JsBridge` 契约**；重开触发条件见 ADR-0030 §决策 5 |
-| `isVip` 的**正侧**真值（`true` / `1` / `是` → VIP）缺上游 `file:line`：若上游只认 `"true"`，本仓判定就是**有意差异**，应按 `book-source.md` §4.1 的体例标注为差异 | **开发组**（不阻塞合并）：直抓 fork 源码补行号，或改写为差异登记；语义已由 `execute_givenIsVipRule_marksOnlyTheTrueishChapters` 钉住，唯一出处仍是 §4.1 |
+| ~~`isVip` 的**正侧**真值缺上游 `file:line`~~ | ✅ **已闭环（R1，2026-10-12）**：直抓 fork 源码 `HapeLee/legado-with-MD3@master`，判定就是上游 `String?.isTrue()`（调用 `BookChapterList.kt:261-264`，谓词 `StringExtensions.kt:75-80`）——`null` / 全空白 / 字面量 `"null"` → 非 VIP，其余值除非匹配 `(?i)^(?:false|no|not|0|0.0)$` 否则算 VIP（因此 `是` / `yes` 是 VIP，`no` / `not` / `0.0` 不是）；代码与测试已按此对齐，两处上游怪癖（`"null"` 在 trim 前比较、模式里 `.` 未转义）按原样照抄并登记在 `book-source.md` §4.1，唯一出处仍是 §4.1 |
 | 并发上限接入**用户设置**时（Phase 5）必须显式校验 `> 0`：`HttpPolicy` / `RequestLimiter` 目前只用 `assert`，release 下会被剥掉，`0` 会让该键的每个请求**永久排队** | **Phase 5（设置页）**：在设置边界校验或钳制；语义归 `book-source.md` §8 |
 | `httpClientProvider` 是 autoDispose，预算存在于 `DioHttpClient` 实例上，所以「同一书源并发上限」在**一次操作内**有效、跨操作会重建 | **Phase 5**：批量下载必须保证整批共用一份预算（该 provider 改 `keepAlive`，或把预算提到 app 级单例）；今天是串行翻页，无影响 |
 

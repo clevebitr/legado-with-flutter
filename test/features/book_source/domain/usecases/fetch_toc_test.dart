@@ -182,7 +182,9 @@ void main() {
     );
 
     test('execute_givenIsVipRule_marksOnlyTheTrueishChapters', () async {
-      // `book-source.md` §4.1：`null` / `false` / `0` / `""` 都是**非 VIP**，其余值算 VIP。
+      // 判定逐字对齐上游 `String?.isTrue()`（BookChapterList.kt:261-264 调用，
+      // StringExtensions.kt:75-80 谓词）：`null` / 全空白 / 字面量 `null` → 非 VIP；
+      // 其余值除非匹配 `(?i)^(?:false|no|not|0|0.0)$`，否则算 VIP。
       final FakeHttpClient http = FakeHttpClient()
         ..serve(
           _tocUrl,
@@ -190,9 +192,15 @@ void main() {
           '<dd><a href="1.html">第1章</a><em>true</em></dd>'
           '<dd><a href="2.html">第2章</a><em>1</em></dd>'
           '<dd><a href="3.html">第3章</a><em>是</em></dd>'
-          '<dd><a href="4.html">第4章</a><em>false</em></dd>'
-          '<dd><a href="5.html">第5章</a><em>0</em></dd>'
-          '<dd><a href="6.html">第6章</a><em></em></dd>'
+          '<dd><a href="4.html">第4章</a><em>yes</em></dd>'
+          '<dd><a href="5.html">第5章</a><em>false</em></dd>'
+          '<dd><a href="6.html">第6章</a><em>FALSE</em></dd>'
+          '<dd><a href="7.html">第7章</a><em>no</em></dd>'
+          '<dd><a href="8.html">第8章</a><em>not</em></dd>'
+          '<dd><a href="9.html">第9章</a><em>0</em></dd>'
+          '<dd><a href="10.html">第10章</a><em>0.0</em></dd>'
+          '<dd><a href="11.html">第11章</a><em>null</em></dd>'
+          '<dd><a href="12.html">第12章</a><em></em></dd>'
           '</dl></div>',
         );
       final BookSource source = _source();
@@ -204,11 +212,17 @@ void main() {
         await FetchToc(pages: _service(http).pages).execute(withVip, _tocUrl),
       );
 
-      expect(chapters, hasLength(6));
+      expect(chapters, hasLength(12));
       expect(chapters.map((Chapter chapter) => chapter.isVip), <bool>[
         true,
         true,
         true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
         false,
         false,
         false,
