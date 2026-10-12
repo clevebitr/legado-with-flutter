@@ -22,6 +22,8 @@ final class FetchContent {
     final ParseResult<RuleScope> page = await _pages.fetch(
       url,
       rulePath: 'ruleContent',
+      headers: source.headers,
+      sourceId: source.url,
     );
 
     return switch (page) {

@@ -1,0 +1,57 @@
+{
+  "bookSourceComment": "精准搜索",
+  "bookSourceGroup": "笔趣阁0905",
+  "bookSourceName": "示例书源（G2b 派生：默认规则改写为等价的 @css:，已脱敏）",
+  "bookSourceType": 0,
+  "bookSourceUrl": "https://example-novel.test",
+  "bookUrlPattern": "https://example-novel.test/book/\\d+/",
+  "customOrder": 383,
+  "enabled": true,
+  "enabledCookieJar": false,
+  "enabledExplore": true,
+  "exploreUrl": "[{\"title\":\"玄幻小说\",\"url\":\"/xuanhuan/\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"武侠小说\",\"url\":\"/wuxia/\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"都市小说\",\"url\":\"/dushi/\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"历史小说\",\"url\":\"/lishi/\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"网游小说\",\"url\":\"/wangyou/\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"科幻小说\",\"url\":\"/kehuan/\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"女生小说\",\"url\":\"/mm/\",\"style\":{\"layout_flexGrow\":0,\"layout_flexBasisPercent\":0.29}}]",
+  "header": "{\n  \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.73 Safari/537.36\"\n}",
+  "lastUpdateTime": 1688437153304,
+  "loginUrl": "",
+  "respondTime": 12203,
+  "ruleBookInfo": {
+    "author": "@css:.info .small span:eq(0)@text##作者：",
+    "coverUrl": "@css:.cover img@src",
+    "init": "",
+    "intro": "@css:.intro@text##简介：",
+    "kind": "@css:.info .small span:eq(4)@text&&@css:.info .small span:eq(2)@text&&@css:.info .small span:eq(1)@text##分类：|状态：|更新时间：",
+    "lastChapter": "@css:.info .small span:eq(5) a@text##免费章节 |正文卷 |正文 |VIP章节 |百度搜索.*",
+    "name": "@css:.info h1@text##\\（.*|\\(.*|免费阅读|全文.*阅读|最新章节|笔趣阁|小说"
+  },
+  "ruleContent": {
+    "content": "@css:#content@textNodes##请记住本书.*cc"
+  },
+  "ruleExplore": {
+    "author": "class.s4@text",
+    "bookList": "class.l@li",
+    "bookUrl": "class.s2@a@href",
+    "coverUrl": "class.s2@a@href<js>\nvar id = result.match(/(\\d+)\\/?$/)[1];\n'https://example-novel.test/bookimages/'+id+'.jpg';\n</js>",
+    "kind": "class.s5@text",
+    "lastChapter": "class.s3@a@text",
+    "name": "class.s2@a@text"
+  },
+  "ruleReview": {},
+  "ruleSearch": {
+    "author": "@css:.author@text##作者：|<",
+    "bookList": "@css:.bookbox",
+    "bookUrl": "@css:.bookname a@href",
+    "checkKeyWord": "万族之劫",
+    "coverUrl": "@css:.bookimg img:eq(0)@src",
+    "intro": "@css:.bookinfo p@text",
+    "kind": "@css:.cat@text##分类：",
+    "lastChapter": "@css:.update a@text##免费章节 |正文卷 |正文 |VIP章节 |百度搜索.*",
+    "name": "@css:.bookname a@text##\\（.*|\\(.*|免费阅读|全文.*阅读|最新章节|笔趣阁|小说"
+  },
+  "ruleToc": {
+    "chapterList": "@css:.listmain dd a",
+    "chapterName": "text",
+    "chapterUrl": "href"
+  },
+  "searchUrl": "https://example-novel.test/s.php?ie=gbk&q={{key}}",
+  "weight": 0
+}

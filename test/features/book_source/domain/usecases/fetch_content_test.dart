@@ -119,5 +119,23 @@ void main() {
         expect(failure.rulePath, 'unsupported:@js:');
       },
     );
+
+    test('execute_givenSourceWithHeaders_sendsThemToTheClient', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, _page('chapter_page.html'));
+      final BookSource source = _source().copyWith(
+        headers: <String, String>{'Referer': 'https://example-novel.test/'},
+      );
+
+      await FetchContent(pages: _service(http)).execute(source, _chapterUrl);
+
+      // `book-source.md` §2 的 `header` 字段是 M0：声明了浏览器 UA / Referer 的书源
+      // 必须真的把请求头带出去，否则站点会把它当成机器人（G2b spot-check 发现的缺陷）。
+      expect(http.requestedHeaders, <Map<String, String>>[
+        <String, String>{'Referer': 'https://example-novel.test/'},
+      ]);
+      // 书源 ID 同行：HTTP 层用它给 ADR-0031 §决策 2 的宽容解码 warning 定位书源（C-ERR-8）。
+      expect(http.requestedSourceIds, <String>[source.url]);
+    });
   });
 }

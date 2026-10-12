@@ -120,7 +120,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-SRC-1 | 解析引擎必须为纯 Dart，且无 Flutter / UI 依赖（受 C-ARCH-7 约束）。 |
 | C-SRC-2 | JS 规则必须在**独立 Isolate** 中执行，禁止阻塞 UI 线程（ADR-0015）。超时、内存上限与调用次数配额见 `docs/dev/book-source.md` §6（本文档不复述数值）；`Isolate.kill(priority: immediate)` 必须保留为硬预算兜底。 |
 | C-SRC-3 | JS 桥接只暴露 `book-source.md` 声明的白名单 API；禁止暴露文件系统、进程、网络与原生日志。 |
-| C-SRC-4 | 不支持的规则类型必须返回 `ParseFailure(unsupportedRule)` 并记录日志；**禁止静默忽略**。顶层规则（`bookList` / `chapterList` / `content`）被拒时必须整次失败；非顶层字段被拒时的降级语义（置空 + warning）见 **ADR-0026**。 |
+| C-SRC-4 | 不支持的规则类型必须返回 `ParseFailure(unsupportedRule)` 并记录日志；**禁止静默忽略**。顶层规则（`bookList` / `chapterList` / `content`）被拒时必须整次失败；非顶层字段被拒时的降级语义（置空 + warning）见 **ADR-0026**；**类型未知不等于不支持**（退化为原始 CSS，见 **ADR-0032**）。 |
 | C-SRC-5 | URL 模板必须统一经 `renderUrlTemplate` 渲染；禁止手写字符串拼接。 |
 | C-SRC-6 | CSS 选择器统一 `cascadia`；JSONPath 统一 `json_path`；禁止自研选择器或手写 JSON 遍历。 |
 | C-SRC-7 | `BookSource` 及全部子规则必须使用 `freezed` + `json_serializable`；禁止手写 `fromJson` / `toJson`。模型位于 `domain/entities/`，该层归属的例外见 ADR-0021。 |

@@ -12,6 +12,11 @@ import 'package:json_path/json_path.dart';
 /// `docs/dev/book-source.md` §3 declares the prefix casing insensitive
 /// (`@css:` and `@CSS:` are the same flag), so these are matched lower-cased.
 /// The order matters: `{{` has to be tested before `{`.
+///
+/// `<js>` is not a flag of the matrix at all: it is a newer upstream wrapper whose
+/// semantics (a whole rule body written as JavaScript) this repository does not
+/// implement, so it is rejected by name instead of being handed to cascadia as an
+/// unknown type (ADR-0032 §决策 3).
 const List<String> _deferredFlags = <String>[
   '{{',
   '//',
@@ -23,6 +28,7 @@ const List<String> _deferredFlags = <String>[
   '@put:',
   '@get:',
   '@webjs',
+  '<js>',
 ];
 
 /// The `@css:` flag of matrix #12, lower-cased for a case-insensitive compare.
@@ -112,6 +118,12 @@ final RegExp _whitespace = RegExp(r'\s+');
 /// Reporting those mismatches loudly is what keeps them from becoming a silent empty
 /// result (C-SRC-4): otherwise “the rule is wrong” and “the site changed” look the
 /// same in the UI.
+///
+/// A **selector segment whose type is none of the implemented ones** is not unsupported:
+/// upstream degrades it to a raw CSS selector, and real book sources depend on that
+/// (`li`, `dd`, `.searchresult`, `#txt`, `tr!0`), so the segment is handed to cascadia as
+/// it is (ADR-0032). Only a `//`-prefixed segment stays [ParseFailureKind.unsupportedRule]
+/// — that is matrix #21's XPath.
 ///
 /// Everything else in the matrix is reported as
 /// [ParseFailureKind.unsupportedRule] — never silently mis-parsed (C-SRC-4) — with
@@ -888,12 +900,15 @@ final class RuleEngine {
       return _readChildren(indexExpression, field: field);
     }
     if (type.isEmpty) {
-      // 类型段为空又不是索引写法（如 `.li`）：结构性错误，不猜。
-      return _ParsedFailure<_SelectorStep>(_malformed(field));
+      // ADR-0032：空类型不是结构性错误，而是一段原始 CSS（`.searchresult`）。
+      // 真正畸形的写法（`.`、`.1.2`）会在 cascadia 解析或索引解析处失败。
+      return _readDegraded(segment, field: field);
     }
     if (!_implementedTypes.contains(type)) {
-      // 未知类型在原版里会退化成原始 CSS 选择器，即矩阵 #12 的能力（Phase 3.2）。
-      return _ParsedFailure<_SelectorStep>(_unsupported(type));
+      // ADR-0032：类型未知时原版把**整段**当成原始 CSS 选择器（`li`、`dd`、`tr!0`、
+      // `#txt`、`div.item`）。语料中 58.1% 的 M0 源依赖这个退化，因此不能再按
+      // 「未知类型 = 不支持」拒绝。
+      return _readDegraded(segment, field: field);
     }
     if (type == 'children') {
       // 矩阵 #4：`children` 取全部子标签，忽略第二、三段。
@@ -1021,6 +1036,96 @@ final class RuleEngine {
 
     return _ParsedValue<_NamedSelector>((name: name, selection: selection));
   }
+
+  /// Reads a segment whose type is not one of the implemented ones as a **raw CSS
+  /// selector** (ADR-0032).
+  ///
+  /// Upstream hands such a segment to jsoup unchanged (`doc.select(rule)`), and real book
+  /// sources rely on it: `li` / `dd` / `p` (a bare tag name), `.searchresult`, `#txt`,
+  /// `div.item`. The position suffix is split off first, because `tr!0` is not valid CSS:
+  /// it means “every `tr`, minus index 0”, i.e. matrix #6's position applied to the CSS
+  /// matches.
+  ///
+  /// A `//`-prefixed segment stays [ParseFailureKind.unsupportedRule]: that is matrix
+  /// #21's XPath, and treating it as CSS would produce a syntactically fine selector that
+  /// never matches (C-SRC-4).
+  _Parsed<_SelectorStep> _readDegraded(
+    String segment, {
+    required String field,
+  }) {
+    if (segment.startsWith('//')) {
+      return _ParsedFailure<_SelectorStep>(_unsupported('//'));
+    }
+
+    final _Parsed<_NamedSelector> split = _splitDegradedSuffix(
+      segment,
+      field: field,
+    );
+    switch (split) {
+      case _ParsedFailure<_NamedSelector>(:final _RuleRejection rejection):
+        return _ParsedFailure<_SelectorStep>(rejection);
+      case _ParsedValue<_NamedSelector>(:final _NamedSelector value):
+        // 空选择器不需要在这里判：[_readCss] 对空串本就返回字段级 `parseFailed`，
+        // 重复判一次只会多出一行永不执行的代码（C-BAN-1）。
+        return switch (_readCss(value.name, field: field)) {
+          _ParsedFailure<_SelectorStep>(:final _RuleRejection rejection) =>
+            _ParsedFailure<_SelectorStep>(rejection),
+          _ParsedValue<_SelectorStep>(:final _SelectorStep value) =>
+            _ParsedValue<_SelectorStep>(
+              _SelectorStep(
+                type: value.type,
+                name: value.name,
+                selection: split.value.selection,
+              ),
+            ),
+        };
+    }
+  }
+
+  /// Splits the position suffix (`!0`, `[1]`, `[0:2]`) off a degraded segment.
+  ///
+  /// The same split as [_readName], minus its name validation: a raw CSS selector may
+  /// contain `:` (`.result-item:lt(3)`, `p:nth-of-type(3)`), which [_namedWith] rejects
+  /// because inside an **implemented** type a `:` is not part of any syntax.
+  _Parsed<_NamedSelector> _splitDegradedSuffix(
+    String segment, {
+    required String field,
+  }) {
+    final int bracket = segment.indexOf('[');
+    if (bracket >= 0) {
+      return _indexSuffix(
+        segment.substring(0, bracket),
+        segment.substring(bracket),
+        field: field,
+      );
+    }
+
+    final int excluded = segment.indexOf('!');
+    if (excluded < 0) {
+      // `div]`：括起来却没有 `[`，不是任何已实现的写法（与 [_readName] 同口径）。
+      return segment.contains(']')
+          ? _ParsedFailure<_NamedSelector>(_malformed(field))
+          : _ParsedValue<_NamedSelector>((name: segment, selection: null));
+    }
+
+    return _indexSuffix(
+      segment.substring(0, excluded),
+      segment.substring(excluded),
+      field: field,
+    );
+  }
+
+  /// Pairs a degraded segment's head with the positions named by [indexExpression].
+  _Parsed<_NamedSelector> _indexSuffix(
+    String head,
+    String indexExpression, {
+    required String field,
+  }) => switch (_readIndexOnly(indexExpression, field: field)) {
+    _ParsedFailure<_IndexSelection>(:final _RuleRejection rejection) =>
+      _ParsedFailure<_NamedSelector>(rejection),
+    _ParsedValue<_IndexSelection>(:final _IndexSelection value) =>
+      _ParsedValue<_NamedSelector>((name: head, selection: value)),
+  };
 
   /// Reads the `:`-separated index list of matrix #6 (`!0:1`, and the position
   /// segment's `-1:2`).

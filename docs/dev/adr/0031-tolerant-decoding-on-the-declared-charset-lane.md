@@ -25,16 +25,27 @@ G2b 真实站点 spot-check 撞上一个在野外很常见的情形：**页面�
 | **嗅探**（`betto_charset_detector`） | 编码是**猜测** | 宽容会把猜错变成乱码成功，把问题藏起来 |
 | **未知标签回退 UTF-8** | 也是猜测（声明了但我们不认识） | 同上 |
 
-实现层面已核实可行（2026-10-11，`charset 2.0.1` 本地 pub cache）：本仓可解码的每个编码族**都有
-宽容入口**——`GbkCodec(allowMalformed: true)`、`EucJPCodec(allowMalformed: true)`、
+实现层面已核实可行（2026-10-11，`charset 2.0.1` 本地 pub cache）：本仓可解码的每个编码族**都有宽容入口**——`GbkCodec(allowMalformed: true)`、`EucJPCodec(allowMalformed: true)`、
 `EucKRCodec(allowInvalid: true)`、`ShiftJISCodec(allowMalformed: true)`、
 `CodePage.decode(..., allowInvalid: true)`、`utf8.decode(..., allowMalformed: true)`。
 因此宽容解码**不必**退化成「一律按 UTF-8 宽容」。
+
+> **复审更正（2026-10-12，架构师审核 R3；G2b spot-check 实测推翻本段初稿的表述）：**
+> 上面「每个族都有宽容入口」只说对了 **codec 层**，**不等于本仓可达**——初稿把两件事当成一件，
+> 这是**本文档的错误**。实测：`shift-jis` / `euc-jp` 的**严格**解码在字节不完整时抛 `RangeError`
+> （`Error`，ADR-0022 禁捕获），而本文档的宽容路径只从 `FormatException` 进入，因此**永远到不了**；
+> `euc-kr` 的解码器静默丢弃非法字节，**没有可宽容的失败点**；`us-ascii` / `utf-16` / `utf-32`
+> 虽有入口但本仓**刻意不用**（声明它们却解不开，说明声明本身错了）。
+> **实际可宽容的只有 `utf-8` 与 `gbk`**；哪个族属于哪一类（不可达 / 刻意排除）的**唯一出处是
+> `docs/dev/book-source.md` §5.1**，本文档不复述那张表。§决策 1 的「按声明出的编码族宽容解码」
+> 因此应读作「按 §5.1 判定为可宽容的族」。
 
 ## 决策
 
 1. **宽容解码只对「已声明」车道开放**：`Content-Type` 的 `charset` 参数与 HTML `<meta charset>`
    两条车道，解码时按**声明出的编码族**宽容解码（非法字节 → U+FFFD），成功返回**并记一条 warning**。
+   哪些族实际可宽容（以及哪些属于不可达、哪些属于刻意排除）**以 `docs/dev/book-source.md` §5.1 为准**，
+   本文档不另立清单。
 2. **warning 必须可定位、可解释，且不得泄露内容**：携带书源 ID、目标 URL 摘要、字段路径
    （C-ERR-8、C-SRC-8），**禁止**包含页面正文、Cookie、Token（C-SEC-4）。措辞必须说明
    「声明编码 N，其中 M 字节非法，已按宽容模式解码」，不得写成无信息的「decode warning」。

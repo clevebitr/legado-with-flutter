@@ -67,6 +67,9 @@ const Map<String, String> _unsupportedRules = <String, String>{
   '-@js:result': 'unsupported:@js:',
   // 矩阵 #15：中段 `@@`（`@` 切分后留空段，必须在切段前判掉，否则误报畸形）。
   'class.a@@class.b@text': 'unsupported:@@',
+  // `<js>` 包装不是矩阵里的标志：语义（整条规则写成 JS）本仓未实现，按名字拒绝，
+  // 不得当成未知类型交给 cascadia（ADR-0032 §决策 3）。
+  '<js>result</js>': 'unsupported:<js>',
 };
 
 /// Selector segments that carry syntax a later phase of the matrix owns.
@@ -76,11 +79,10 @@ const Map<String, String> _unsupportedRules = <String, String>{
 const Map<String, String> _unsupportedSelectors = <String, String>{
   // 段内（非规则开头）的标志头：body 级检查只覆盖规则开头，中间段由选择器层拒绝。
   'json:\$.data': 'unsupported:@json:',
-  // 字母段里的 `!` 不是索引写法（矩阵 #6 的 `!` 只跟在名称后）：整段退化成未知类型。
-  'li!0': 'unsupported:li!0',
   // 名称里的 `:` 不属于任何已实现写法（矩阵 #6 的 `:` 只在 `!` 列表与位置段内）。
   'tag.a:b': 'unsupported::',
-  'div.item': 'unsupported:div',
+  // 裸 `//` 是矩阵 #21 的 XPath（M2）：即使写在选择器位置也不能当 CSS 退（ADR-0032 §决策 3）。
+  '//div': 'unsupported://',
 };
 
 /// Selector segments that are structurally broken, so `rulePath` stays the field
@@ -110,13 +112,16 @@ const List<String> _malformedSelectors = <String>[
   'tag.div[-1].0',
   // 矩阵 #28 的结构性畸形：空类型但不是索引、索引里混进字符、未闭合、多段索引。
   '.',
-  '.li',
   '.1.2',
   '[1',
   '[x]',
   '!x',
   // `]` 而没有 `[`（`div]` 会被当作挂在类型上的索引写法，另归 unsupported）。
   'tag.div]',
+  // 退化段（ADR-0032）的同类畸形：`]` 没有 `[`、未闭合、排除列表里混进字符。
+  'li]',
+  'li[0',
+  'li!x',
   '-',
 ];
 
@@ -1329,25 +1334,21 @@ void main() {
       expect(failure.rulePath, 'searchRule.bookList');
     });
 
-    test(
-      'selectAll_givenAValueExtractionInAListRule_returnsUnsupportedRule',
-      () {
-        // 与上一条合起来看：把取值段写进列表规则一律**响亮失败**，但落在哪个 kind 取决于
-        // 那一段是不是已实现的类型名——`text` 是（因此借道「段结构畸形」报 parseFailed），
-        // `href` 不是（因此报 unsupported:href）。两条都不是跨类型的**专门检测**，
-        // JSON 与默认规则混用时的专门检测见 `@json:` 组的合并用例。
-        final ParseFailure<Never> failure = _failure(
+    test('selectAll_givenAnUnknownTypeInAListRule_matchesItAsCss', () {
+      // ADR-0032 改变了这里的语义：`href` 不再是「不支持的类型」，而是原始 CSS 选择器
+      //（`doc.select("href")`，匹配不到任何元素）。列表规则里写取值段仍然不是
+      // 跨类型检测——上一条 `text` 借道「段结构畸形」报 parseFailed，这里则是空匹配。
+      expect(
+        _elements(
           _engine().selectAll(
             'class.result-list&&class.result-list@href',
             _scope(_document(_listHtml)),
             rulePath: 'searchRule.bookList',
           ),
-        );
-
-        expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:href');
-      },
-    );
+        ),
+        hasLength(1),
+      );
+    });
 
     test('extractAll_givenAnEmptyBranch_returnsParseFailed', () {
       final ParseFailure<Never> failure = _failure(
@@ -1939,5 +1940,119 @@ void main() {
       expect(failure.kind, ParseFailureKind.parseFailed);
       expect(failure.rulePath, 'searchRule.bookList');
     });
+  });
+
+  group('RuleEngine ADR-0032 (unknown type degrades to CSS)', () {
+    test('selectAll_givenABareTagType_matchesEveryElementOfThatTag', () {
+      // 真实语料里最高频的形态：`li` / `dd` / `p` 直接当类型写。
+      expect(
+        _elements(
+          _engine().selectAll(
+            'li',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.bookList',
+          ),
+        ),
+        hasLength(3),
+      );
+    });
+
+    test('selectAll_givenALeadingDotType_matchesThatClass', () {
+      // `.searchresult`：空类型不是畸形，而是一段原始 CSS。
+      expect(
+        _elements(
+          _engine().selectAll(
+            '.result-list',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.bookList',
+          ),
+        ),
+        hasLength(1),
+      );
+    });
+
+    test('selectAll_givenAHashType_matchesThatId', () {
+      expect(
+        _elements(
+          _engine().selectAll(
+            '#content',
+            _scope(_document(_chapterHtml)),
+            rulePath: 'bookInfoRule.init',
+          ),
+        ),
+        hasLength(1),
+      );
+    });
+
+    test('selectAll_givenAnUnknownTypeWithExclusion_dropsThatIndex', () {
+      // `li!0`：`!` 后缀仍按位置解析（`tr!0` 不是合法 CSS，不能整段丢给 cascadia）。
+      expect(
+        _elements(
+          _engine().selectAll(
+            'li!0',
+            _scope(_document(_listHtml)),
+            rulePath: 'tocRule.chapterList',
+          ),
+        ),
+        hasLength(2),
+      );
+    });
+
+    test('extractAll_givenADegradedSelectorWithAClassQualifier_extractsIt', () {
+      expect(
+        _values(
+          _engine().extractAll(
+            'span.dupe@data-x',
+            _scope(_document(_chapterHtml)),
+            rulePath: 'bookInfoRule.kind',
+          ),
+        ),
+        <String>['same'],
+      );
+    });
+
+    test('selectAll_givenAJsonPseudoInADegradedSelector_rewritesIt', () {
+      // 矩阵 #29 的改写对退化段同样生效：`:eq` 是兄弟索引，不是结果集索引。
+      expect(
+        _elements(
+          _engine().selectAll(
+            'p.line:eq(1)',
+            _scope(_document(_chapterHtml)),
+            rulePath: 'contentRule.content',
+          ),
+        ),
+        hasLength(1),
+      );
+    });
+
+    test('selectAll_givenAnUnknownTypeWithABracketPosition_takesThatMatch', () {
+      // 退化段的位置后缀走同一套解析：`li[0]` = 原始 CSS `li` + 位置 0。
+      expect(
+        _elements(
+          _engine().selectAll(
+            'li[0]',
+            _scope(_document(_listHtml)),
+            rulePath: 'tocRule.chapterList',
+          ),
+        ),
+        hasLength(1),
+      );
+    });
+
+    test(
+      'extractAll_givenADegradedSelectorThatIsNotCss_returnsParseFailed',
+      () {
+        final ParseFailure<Never> failure = _failure(
+          _engine().extractAll(
+            'li..b@text',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        expect(failure.kind, ParseFailureKind.parseFailed);
+        expect(failure.rulePath, 'searchRule.name');
+      },
+    );
   });
 }
