@@ -59,10 +59,19 @@ ParseResult<List<Element>> selectAll(String rule, Node scope, ...);
 4. **跨 scope 的合并显式失败。** `$.a&&class.b` 报 `parseFailed`：`book-source.md` §3 的 `&&`
    注记已经写明连接符只合并**同种**规则，异构结果是未定义的，不猜一种语义。
 5. **JSON 值 → 值规则的结果**：字符串原样；数字与布尔按 JSON 的写法；`null` 与空字符串**不产生
-   值**（与矩阵 #8 的空提取同口径）；对象与数组按 **JSON 文本**返回。上游用 Java 的 `toString`
+   值**（与矩阵 #8 的空提取同口径）；对象按 **JSON 文本**返回。上游用 Java 的 `toString`
    （`{a=1}`）不可复现、也不是任何规则能依赖的形式，故取无损形式。真实 JSON 语料
-   （`test/fixtures/json/`）中的取值目前均为标量，故**对象 / 数组形态仍只有单测覆盖，待后续
+   （`test/fixtures/json/`）中的取值目前均为标量，故**对象形态仍只有单测覆盖，待后续
    真实源确认**（`book-source.md` §10）。
+
+   > **复审更正（2026-10-12，随 `PLAN.md` 3.7 的真实源回归）：** 本条初稿把**数组**与对象并列，
+   > 都写成「按 JSON 文本返回」，**已不成立**。实测（猫耳FM JSON 接口源）与上游源码都表明
+   > **列表要逐元素展开**：取值规则按 `AnalyzeByJSonPath.kt:83-87`（`for (o in obj)
+   > result.add(o.toString())`）展开，列表规则按 `:137`（`read<ArrayList<Any>>`）把命中的列表
+   > 当成**条目列表**；否则 `bookList: $.info.Datas` 只会得到一个「数组」，真实源的搜索段直接
+   > 空掉（回归修前 1 条且书名为空，修后 30 条）。**对象仍保持 JSON 文本**并保留差异登记（上游
+   > `Map.toString` 不可复现）。行为规格的唯一出处是 `docs/dev/book-source.md` §3 的 #13 注记，
+   > 本节只负责决策与更正记录。
 6. **`@json:` 必须在按 `@` 切段之前识别**：JSONPath 的过滤器里既有 `@`（`$[?(@.a)]`）也有 `&&`
    （`$[?(@.a==1 && @.b==2)]`），先切段就会把一条路径切碎。
 

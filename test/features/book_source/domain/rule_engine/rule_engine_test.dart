@@ -1926,7 +1926,9 @@ void main() {
       );
     });
 
-    test('extractAll_givenAJsonListValue_returnsItAsJsonText', () async {
+    test('extractAll_givenAJsonListValue_expandsItIntoValues', () async {
+      // 上游把「path 命中一个列表」展开成逐元素的值（`AnalyzeByJSonPath.kt:83-87`），
+      // 所以 `$.data.tags` 给 `a` / `b` 两个值，而不是一段 JSON 文本。
       expect(
         await _values(
           _engine().extractAll(
@@ -1935,7 +1937,7 @@ void main() {
             rulePath: 'searchRule.kind',
           ),
         ),
-        <String>['["a","b"]'],
+        <String>['a', 'b'],
       );
     });
 
@@ -2109,6 +2111,64 @@ void main() {
         <String>['/book/2'],
       );
     });
+
+    test(
+      'selectAll_givenAJsonRuleMatchingAnArray_returnsOneScopePerElement',
+      () async {
+        // 上游把命中的列表本身当作元素列表（`AnalyzeByJSonPath.kt:137` 的
+        // `read<ArrayList<Any>>`），所以 `$.data.list`（无 `[*]`）也必须给两个条目——
+        // 真实 JSON API 源就是这么写的（PLAN.md 3.7 在 猫耳FM 的 `searchRule.bookList` 上核对）。
+        final List<RuleScope> items = await _matches(
+          _engine().selectAll(
+            r'$.data.list',
+            _page(_jsonBody),
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+
+        expect(items, hasLength(2));
+        expect(
+          await _values(
+            _engine().extractAll(
+              r'$.name',
+              items.first,
+              rulePath: 'searchRule.name',
+            ),
+          ),
+          <String>['One'],
+        );
+        expect(
+          await _values(
+            _engine().extractAll(
+              r'$.url',
+              items.last,
+              rulePath: 'searchRule.bookUrl',
+            ),
+          ),
+          <String>['/book/2'],
+        );
+      },
+    );
+
+    test(
+      'selectAll_givenAJsonRuleMatchingAScalar_returnsThatOneScope',
+      () async {
+        // 非列表的命中仍然是「一个 scope」，展开只针对列表。
+        final List<RuleScope> items = await _matches(
+          _engine().selectAll(
+            r'$.data.name',
+            _page(_jsonBody),
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+
+        expect(items, hasLength(1));
+        expect(switch (items.single) {
+          JsonScope(:final Object? value) => value,
+          DomScope() => fail('Expected a JSON scope.'),
+        }, 'One');
+      },
+    );
 
     test('selectAll_givenAReversedJsonListRule_reversesTheMatches', () async {
       final List<RuleScope> items = await _matches(

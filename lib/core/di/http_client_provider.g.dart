@@ -122,16 +122,28 @@ final class HttpPolicyProvider
 String _$httpPolicyHash() => r'c938007d4eea9c35bf25dfc7a041b989882e7d35';
 
 /// Provides the app-wide HTTP client (C-NET-1).
+///
+/// The charset cache is wired here because the app is the only place that has both halves:
+/// the request layer that decodes a body and the TTL cache that can remember the result
+/// (`book-source.md` §5). It is the first production consumer of `CacheDao` (C-NET-6).
 
 @ProviderFor(httpClient)
 final httpClientProvider = HttpClientProvider._();
 
 /// Provides the app-wide HTTP client (C-NET-1).
+///
+/// The charset cache is wired here because the app is the only place that has both halves:
+/// the request layer that decodes a body and the TTL cache that can remember the result
+/// (`book-source.md` §5). It is the first production consumer of `CacheDao` (C-NET-6).
 
 final class HttpClientProvider
     extends $FunctionalProvider<HttpClient, HttpClient, HttpClient>
     with $Provider<HttpClient> {
   /// Provides the app-wide HTTP client (C-NET-1).
+  ///
+  /// The charset cache is wired here because the app is the only place that has both halves:
+  /// the request layer that decodes a body and the TTL cache that can remember the result
+  /// (`book-source.md` §5). It is the first production consumer of `CacheDao` (C-NET-6).
   HttpClientProvider._()
     : super(
         from: null,
@@ -165,4 +177,4 @@ final class HttpClientProvider
   }
 }
 
-String _$httpClientHash() => r'0d1f9ba67d9d37bb703443c9faa797a384369ec8';
+String _$httpClientHash() => r'71af85b34cc9d0db1354757b4190e71a2b7ce3d0';

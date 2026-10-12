@@ -5,6 +5,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/network/charset_cache.dart';
+import 'package:flutter_reader/core/network/charset_decoder.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
@@ -20,13 +22,67 @@ typedef _Fixture = ({
   HttpClient client,
   FakeHttpAdapter adapter,
   FakeLogPrinter printer,
+  _FakeCharsetCache cache,
 });
 
+/// In-memory [CharsetCache] double: records what the client asked and answers from a map
+/// (`docs/dev/testing.md` §4).
+final class _FakeCharsetCache implements CharsetCache {
+  /// Labels the client is told about, keyed by `sourceId|url`.
+  final Map<String, String> entries = <String, String>{};
+
+  /// URLs the client read.
+  final List<String> reads = <String>[];
+
+  /// `url=charset` pairs the client wrote.
+  final List<String> writes = <String>[];
+
+  /// When true, [read] throws so a test can pin the “cache failure is a miss” path.
+  bool failReads = false;
+
+  /// When true, [write] throws so a test can pin “a failed write is not the page's”.
+  bool failWrites = false;
+
+  @override
+  Future<String?> read({
+    required String sourceId,
+    required String ruleField,
+    required String url,
+    required int page,
+  }) async {
+    if (failReads) {
+      throw Exception('cache read failed');
+    }
+    reads.add(url);
+
+    return entries['$sourceId|$url'];
+  }
+
+  @override
+  Future<void> write({
+    required String sourceId,
+    required String ruleField,
+    required String url,
+    required int page,
+    required String charset,
+  }) async {
+    if (failWrites) {
+      throw Exception('cache write failed');
+    }
+    writes.add('$url=$charset');
+    entries['$sourceId|$url'] = charset;
+  }
+}
+
 /// Builds a client whose dio talks to [FakeHttpAdapter] instead of the network.
-_Fixture _buildClient({HttpPolicy policy = const HttpPolicy()}) {
+_Fixture _buildClient({
+  HttpPolicy policy = const HttpPolicy(),
+  bool withCharsetCache = false,
+}) {
   final FakeHttpAdapter adapter = FakeHttpAdapter();
   final FakeLogPrinter printer = FakeLogPrinter();
   final Dio dio = Dio()..httpClientAdapter = adapter;
+  final _FakeCharsetCache cache = _FakeCharsetCache();
 
   return (
     client: DioHttpClient(
@@ -34,9 +90,11 @@ _Fixture _buildClient({HttpPolicy policy = const HttpPolicy()}) {
       logger: AppLogger(level: LogLevel.debug, printer: printer),
       policy: policy,
       dio: dio,
+      charsetCache: withCharsetCache ? cache : null,
     ),
     adapter: adapter,
     printer: printer,
+    cache: cache,
   );
 }
 
@@ -584,6 +642,107 @@ void main() {
         ParseFailureKind.networkFailed,
       );
       expect(plain.adapter.requests, isEmpty);
+    });
+
+    test('get_givenNoDeclaration_writesTheDetectedCharsetToTheCache', () async {
+      final _Fixture fixture = _buildClient(withCharsetCache: true);
+      // 无声明的 GBK 页：嗅探车道，结果应记入缓存（book-source.md §5）。
+      // 期望值取自解码器自己：断言的是「嗅探出什么就缓存什么」，
+      // 而不是钉某个检测器版本对这两个字节的选择。
+      const List<int> bytes = <int>[0xCC, 0xEC];
+      final DecodedBody sniffed = decodeBody(bytes);
+      fixture.adapter.enqueueResponse(bytes: bytes);
+
+      final HttpResponse response = _expectSuccess(
+        await fixture.client.get(
+          'https://example.com/a',
+          rulePath: 'ruleBookInfo',
+          sourceId: 'https://example.com',
+        ),
+      );
+
+      expect(response.body, sniffed.text);
+      expect(fixture.cache.writes, <String>[
+        'https://example.com/a=${sniffed.charset}',
+      ]);
+    });
+
+    test('get_givenACachedLabel_sniffsNoMore', () async {
+      final _Fixture fixture = _buildClient(withCharsetCache: true);
+      fixture.cache.entries['https://example.com|https://example.com/a'] =
+          'gbk';
+      // UTF-8 字节 + 缓存标签 gbk：解出来是 GBK 读法（不是嗅探会选的 utf-8），
+      // 即第二次请求确实没有再嗅探（PLAN 3.9 的验收口径）。
+      fixture.adapter.enqueueResponse(bytes: utf8.encode('剑来'));
+
+      final HttpResponse response = _expectSuccess(
+        await fixture.client.get(
+          'https://example.com/a',
+          rulePath: 'ruleBookInfo',
+          sourceId: 'https://example.com',
+        ),
+      );
+
+      expect(fixture.cache.reads, <String>['https://example.com/a']);
+      expect(response.body, isNot('剑来'));
+      expect(fixture.cache.writes, isEmpty, reason: '命中的标签不需要重写');
+    });
+
+    test('get_givenADeclaredCharset_doesNotWriteToTheCache', () async {
+      final _Fixture fixture = _buildClient(withCharsetCache: true);
+      fixture.adapter.enqueueResponse(
+        bytes: <int>[0xCC, 0xEC],
+        headers: <String, List<String>>{
+          'content-type': <String>['text/html; charset=gbk'],
+        },
+      );
+
+      final HttpResponse response = _expectSuccess(
+        await fixture.client.get(
+          'https://example.com/a',
+          rulePath: 'ruleBookInfo',
+          sourceId: 'https://example.com',
+        ),
+      );
+
+      // 声明车道每次都能自己读出标签，不值得缓存；而且声明优先于缓存标签（ADR-0031）。
+      expect(response.body, '天');
+      expect(fixture.cache.writes, isEmpty);
+    });
+
+    test('get_givenACacheThatBreaksItsContract_theFailurePropagates', () async {
+      // `CharsetCache` 的契约是 total（读返回 null / 写 no-op / 绝不抛），失败面在适配器里
+      // 被吸收，所以客户端**故意**没有异常边界：C-ERR-2 的 `on Exception` 只允许出现在
+      // presentation 的 Notifier 里（ADR-0002 的修订注记）。这条用例把边界的位置钉住——
+      // 契约被违反时异常不会被就地吞掉。
+      final _Fixture fixture = _buildClient(withCharsetCache: true);
+      fixture.cache.failReads = true;
+      fixture.adapter.enqueueResponse(bytes: <int>[0xCC, 0xEC]);
+
+      await expectLater(
+        fixture.client.get(
+          'https://example.com/a',
+          rulePath: 'ruleBookInfo',
+          sourceId: 'https://example.com',
+        ),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('get_givenNoSourceId_doesNotTouchTheCache', () async {
+      final _Fixture fixture = _buildClient(withCharsetCache: true);
+      fixture.adapter.enqueueResponse(bytes: <int>[0xCC, 0xEC]);
+
+      _expectSuccess(
+        await fixture.client.get(
+          'https://example.com/a',
+          rulePath: 'searchUrl',
+        ),
+      );
+
+      // C-NET-6 的键以书源 ID 开头：没有书源上下文的页没有可缓存的身份。
+      expect(fixture.cache.reads, isEmpty);
+      expect(fixture.cache.writes, isEmpty);
     });
   });
 }

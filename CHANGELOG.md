@@ -7,6 +7,133 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 3 closure review: ADR corrections and one narrow ADR added (2026-10-12)
+
+Architect review of 3.7 (`844944b`) and 3.9 (`c64f827` + the F1 fix `27d33ab`), gates re-run in a
+detached worktree (503 tests, `core` 777/777, `domain` 1163/1163) with the device probes re-run
+(`js_bridge` 16/16, `app_boot`). The matrix was checked row by row: all **19 M0 rows** are now
+已确认, and G3's three conditions hold.
+
+- **ADR-0033 (new, Accepted): the cache's failure absorption gets exactly one exemption.** 3.9's F1
+  fix moved the catch into `CacheDaoCharsetCache` with four named types, but drift 2.35.2 does not
+  export `ConnectionClosedException` (`communication.dart:47` completes in-flight requests with it
+  when the isolate connection is cancelled — reachable here, and the symptom is already documented
+  in `test-environment.md` §5), so it cannot be named in a `catch`. The ruling: that one method may
+  add `on Exception` after the named catches, the port stays total, `Error` stays uncatchable, every
+  absorbed failure is logged at debug, and the exemption carries a sunset clause (drop it once drift
+  exports the type). C-ERR-2 links the ADR; `docs/README.md` §2.1 owns the row.
+- **ADR-0028 §决策 5 corrected:** it still said arrays are returned as JSON text. The 3.7 regression
+  and upstream (`AnalyzeByJSonPath.kt:83-87`, `:137`) show lists expand element-wise for value rules
+  and become the item list for list rules, while maps keep the JSON-text form as a registered
+  difference. The behaviour spec stays in `book-source.md` §3's #13 note.
+- **ADR-0032's snapshot numbers qualified:** 197 / 137 came from the `--list` filter that still
+  excluded `@js:`; the current snapshot is 266 M0-compatible / 192 degrading / 69 using value-rule
+  `@js:`, whose single source is `tool/spot_check/README.md` §3.
+- **The `@js:` fixture's restore command was wrong:**
+  `sed 's/example-novel\.test/www.missevan.com/g'` turns `static.example-novel.test` into
+  `static.www.missevan.com`; it now replaces the longer host first, so a re-run reaches the static
+  host the `content` script names.
+
+### 3.9 review fix: the charset cache absorbs its own failures (2026-10-12)
+
+The review found one rule violation: `core/network/http_client.dart` used `on Exception` for the
+charset cache's read and write, and C-ERR-2 (with ADR-0002's revision note) allows that clause in the
+`presentation/` Notifiers alone — a boundary that must not be widened in place.
+
+- **The catch moved down to `CacheDaoCharsetCache`**, the only class that knows the cache's failure
+  surface, and names the exceptions: sqlite's `SqliteException` plus drift's `DriftRemoteException`,
+  `DriftWrappedException` and `InvalidDataException`. `Error` stays uncaught (ADR-0022), and each
+  absorbed failure is recorded at `debug` level with the URL digest and the error digest (C-ERR-3,
+  C-SEC-4). `CharsetCache`'s contract is now documented as **total** — `read` answers `null`, `write`
+  does nothing, neither throws — so the request path carries no exception boundary and never has to
+  hear about drift. The adapter therefore takes the `AppLogger` the client used to log with.
+- **The one exception that cannot be named is covered by a ruling, not by a workaround.** drift
+  2.35.2 does not export `ConnectionClosedException` (`remote.dart` / `isolate.dart` export only
+  `DriftRemoteException`), and letting it escape the adapter would turn a lost cache entry into a
+  throwing page request (C-ERR-1). Under **ADR-0033** `_absorb` therefore carries a fifth clause,
+  `on Exception`, pinned to that one method: `Error` stays uncaught, the failure is still logged, the
+  port stays total — and the clause must be deleted as soon as drift exports the type. The test that
+  exercises it uses a plain `Exception`, for the same reason the type cannot be named there.
+- Tests: the adapter now has four cases (one per absorbed type) proving a failed read is a miss, a
+  failed write completes, and both leave a `debug` line; the client keeps hit/miss and
+  “no source id” cases, and one new case pins **where** the boundary is — a cache that breaks the
+  total contract propagates instead of being swallowed by the client. 504 host cases, coverage exit 0
+  (`core` 779/779, `domain` 1163/1163).
+- Docs: `book-source.md` §5 (what the adapter absorbs and why the port is total), `PLAN.md` §3.7.
+
+
+### Phase 3.9: the charset detection result is cached per source and URL (2026-10-12)
+
+Phase 3 is closed: the sniffing step now runs once per `(书源, URL)` instead of once per response,
+which is also `CacheDao`'s first production consumer.
+
+- **`CharsetCache` is a port in `core/network/`** (`charset_cache.dart`) with a `CacheDao`-backed
+  adapter: the key reuses the DAO's stable key (`cacheKeyFor`, `ruleField` fixed to `charset` and
+  a fixed `page`, so the two stages that read one book page share an entry) and its expiry column —
+  **no new column, no new table**. The TTL lives once, as `defaultCharsetCacheTtl` (a week: the label
+  for a URL almost never changes, and the expiry exists so a site that fixes a wrong declaration can
+  take effect).
+- **Only the sniffed lane is cached, and a declaration always wins.** `decodeBody` gained
+  `sniffedCharset` and `DecodedBody.isDetected`: a declared label is re-read from the response every
+  time (a header plus a 2 KB meta scan cost nothing next to the detector), so a cached label can never
+  move a page from one ADR-0031 lane to the other. The client *reads* the cache on every response and
+  *writes* only when the label came from detection.
+- **The cache is a bypass.** A read failure, a write failure or a page without a book source (the key
+  starts with the source id) all mean "sniff again": the page still decodes, and the failure is a
+  `debug` line, because C-ERR-1 does not allow a cache to fail a request.
+- Tests: the decoder's `sniffedCharset` / `isDetected` contract (including "the cached label is used
+  instead of sniffing" and "a declaration beats it"), the DAO-backed adapter (hit, miss, per-source
+  and per-URL separation, expiry, overwrite), and the client's five cache paths. `httpClient` now
+  needs a database, so the two provider tests that read that graph override the device-only executor
+  with `NativeDatabase.memory()`. 499 host cases, coverage exit 0 (`core` 763/763, `domain` 1163/1163).
+- Docs: `book-source.md` §5 (what is cached, where the key and the TTL live), `PLAN.md` §3.1/§3.4/§3.7,
+  `architecture.md` §1.
+
+### Phase 3.7: the real-source regression, the matrix M0 rows confirmed, and the two JSON gaps it found (2026-10-12)
+
+G3 is met: the matrix's 19 M0 rows all read **已确认**, two sources replay offline end to end, and the
+nine `ParseFailureKind`s all have trigger tests. The evidence is four live runs, recorded row by row in
+`tool/spot_check/README.md` §4b.
+
+- **A real `@js:` source is in the corpus at last.** `test/fixtures/book_sources/legado_js_rules_source.json`
+  (猫耳FM, sanitized) plus two derived response pages (`test/fixtures/json/maoer_search.json` /
+  `maoer_toc.json`, real captures with every readable string and host replaced, array lengths kept).
+  On the live site the chain gives search 30 / bookInfo 1 / toc 34, and both per-item scripts
+  (`$.id@js:'…'+result`, `$.sound_id@js:'…'+result`) produce the URLs — so matrix #14 has a real
+  source behind it now, not just unit tests. The content stage fails there for a site-side reason:
+  the sound endpoint answers an Aliyun WAF challenge page instead of JSON.
+- **The regression found two matrix #13 fidelity gaps, both fixed against upstream.** A JSONPath that
+  matches a **list** was treated as one item: upstream reads such a path as the element list in a list
+  rule (`AnalyzeByJSonPath.kt:137`, `read<ArrayList<Any>>`) and expands it element by element in a value
+  rule (`:83-87`, `for (o in obj) result.add(o.toString())`). Before the fix the live run returned one
+  result with a null name; after it, 30. Maps still travel as JSON text — upstream's Java `toString`
+  (`{a=1}`) is not reproducible, and the difference stays registered.
+- **A second derived source covers the syntaxes the baseline never used.**
+  `legado_g2b_syntax_rules_source.json` rewrites nine rules of the G2b source into equivalent spellings
+  that exercise #3, #4, #6, #7, #10, #25, #26, #27 and #28, and reproduces the baseline's counts **and**
+  content hash `6578ef3efc456856` on the same pages — the same technique the `@css:` derivation used
+  for #12/#29. The per-row mapping is tabulated in `test/fixtures/book_sources/README.md`.
+- **The spot-check harness runs again.** Since 3.4 wired the real `@js:` engine into the chain the tool
+  had been uncompilable under `dart run` (it needs Flutter's `dart:ui`); it now documents and uses a
+  device host (`SPOT_CHECK_ARGS=… flutter run -d windows -t tool/spot_check/spot_check.dart`, because
+  `flutter run` does not forward argv). Its `--list` filter no longer treats `@js:` as a deferred flag:
+  only **list rules** and **URL templates** exclude it. The recomputed snapshot is 266/3907
+  M0-compatible, 192 of them relying on the unknown-type degradation, 69 using a value-rule `@js:` —
+  the ADR-0032 figure (137/197) was that older snapshot, and the README says why it moved.
+- **One evidence debt closed, three registered.** The element-scope `@js:` `result` shape was checked
+  against the fork: upstream hands the script the jsoup `Node` (so `outerHtml()` / `text()` work),
+  while this repository can only offer an HTML string — a rule that needs DOM methods now fails
+  loudly with `js:error` instead of quietly getting something else, and no real source in 1096 with
+  `@js:` writes that form. Registered instead: the multi-element form of `-` has no corpus sample
+  (direction is pinned by unit tests), the list-rule `@js:` contract still has no sample to freeze it,
+  and `--list` does not yet scan `{…}` inside non-search URL fields.
+- Tests: 3 new engine cases for the JSON list/scalar shapes and one chain replay of the `@js:` corpus
+  source (search 30 / toc 34, plus the per-item script arguments). 486 host cases, coverage exit 0
+  (`core` 744/744, `domain` 1163/1163).
+- Docs: `book-source.md` §3 (status column + the 3.7 evidence note, #13 and #14 notes), §3.7 of
+  `PLAN.md`, the gate table (G3), `tool/spot_check/README.md` §2/§3/§4b/§5/§6,
+  `test/fixtures/book_sources/README.md` and `test/fixtures/json/README.md`.
+
 ### Phase 3.4 part 3: the `http.*` / `parse.*` Promise bindings, the call quota and the scope boundaries (2026-10-12)
 
 3.4 is complete: every binding of `book-source.md` §6 exists now, including the two a rule has to

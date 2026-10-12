@@ -201,5 +201,46 @@ void main() {
         );
       },
     );
+
+    test('decodeBody_givenASniffedCharset_usesItInsteadOfDetecting', () {
+      // 缓存命中（book-source.md §5）：同一 (书源, URL) 的第二次请求把上次的检测结果带进来。
+      // 这里把 **UTF-8** 字节配上缓存标签 `gbk`：解出来是 GBK 读法而不是 `剑来`，
+      // 证明嗅探确实没有跑（嗅探会选 utf-8）——这正是「第二次不再嗅探」的可观测形式，
+      // 也说明缓存的前提是「同一 URL 的编码不变」（§5 的固有假设）。
+      final DecodedBody decoded = decodeBody(
+        utf8.encode('剑来'),
+        sniffedCharset: 'gbk',
+      );
+
+      expect(decoded.charset, 'gbk');
+      expect(decoded.isDetected, isTrue);
+      expect(decoded.text, isNot('剑来'));
+      expect(decoded.text, isNotEmpty);
+    });
+
+    test(
+      'decodeBody_givenBothADeclarationAndASniffedCharset_theDeclarationWins',
+      () {
+        // 声明永远优先于缓存：ADR-0031 的两条车道不得因为缓存而改变。
+        final DecodedBody decoded = decodeBody(
+          _gbkTian,
+          contentType: 'text/html; charset=gbk',
+          sniffedCharset: 'utf-8',
+        );
+
+        expect(decoded.charset, 'gbk');
+        expect(decoded.isDetected, isFalse);
+        expect(decoded.text, '天');
+      },
+    );
+
+    test('decodeBody_givenNoDeclaration_reportsThatItDetected', () {
+      // `isDetected` 是「这个标签值不值得缓存」的判据：只有嗅探出来的才写缓存。
+      expect(decodeBody(utf8.encode('天')).isDetected, isTrue);
+      expect(
+        decodeBody(_gbkTian, contentType: 'text/html; charset=gbk').isDetected,
+        isFalse,
+      );
+    });
   });
 }

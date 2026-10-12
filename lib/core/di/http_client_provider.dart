@@ -1,4 +1,6 @@
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/di/storage_provider.dart';
+import 'package:flutter_reader/core/network/charset_cache.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
@@ -22,9 +24,17 @@ CookieManager cookieManager(Ref ref) => InMemoryCookieManager();
 HttpPolicy httpPolicy(Ref ref) => const HttpPolicy();
 
 /// Provides the app-wide HTTP client (C-NET-1).
+///
+/// The charset cache is wired here because the app is the only place that has both halves:
+/// the request layer that decodes a body and the TTL cache that can remember the result
+/// (`book-source.md` §5). It is the first production consumer of `CacheDao` (C-NET-6).
 @riverpod
 HttpClient httpClient(Ref ref) => DioHttpClient(
   cookies: ref.watch(cookieManagerProvider),
   logger: ref.watch(appLoggerProvider),
   policy: ref.watch(httpPolicyProvider),
+  charsetCache: CacheDaoCharsetCache(
+    ref.watch(cacheDaoProvider),
+    logger: ref.watch(appLoggerProvider),
+  ),
 );

@@ -30,6 +30,7 @@ final class DecodedBody {
     required this.text,
     required this.charset,
     required this.malformedByteCount,
+    this.isDetected = false,
   });
 
   /// The decoded text.
@@ -38,6 +39,15 @@ final class DecodedBody {
   /// The charset the body was decoded with: the **declared** label when the page
   /// declared one (ADR-0031), otherwise the label byte detection chose.
   final String charset;
+
+  /// Whether [charset] came from **byte detection** rather than from a declaration.
+  ///
+  /// It is what tells a caller whether [charset] is worth caching (`book-source.md` §5
+  /// caches the detection result per book source and URL, so the second request for the
+  /// same page does not sniff again). A declared label is free to read on every response
+  /// — the header and the 2 KB meta scan cost nothing next to the detector — so it is
+  /// never cached and always wins.
+  final bool isDetected;
 
   /// How many U+FFFD replacements the decode inserted, i.e. how much of the byte stream
   /// was illegal for [charset]. `0` means the strict decode succeeded.
@@ -73,18 +83,29 @@ final class DecodedBody {
 /// Big5 pages cannot be decoded at all: neither the detector nor the decoder
 /// knows that family, which is recorded as a known gap in
 /// `docs/dev/book-source.md` §5.1.
-DecodedBody decodeBody(List<int> bytes, {String? contentType}) {
+///
+/// [sniffedCharset] is the label a **previous** request for the same book source and URL
+/// detected (`book-source.md` §5). When the page declares nothing it replaces the sniff,
+/// which is the expensive step; a declaration still wins over it, exactly as it does over
+/// a fresh sniff, so the two decoding lanes of ADR-0031 cannot change because of a cache.
+DecodedBody decodeBody(
+  List<int> bytes, {
+  String? contentType,
+  String? sniffedCharset,
+}) {
   final String? declared =
       _charsetFromContentType(contentType) ?? _charsetFromMeta(bytes);
 
   // 声明优先：服务端显式说了编码就用它，没说才去嗅探（book-source.md §5 的顺序）。
   if (declared == null) {
-    final String detected = detectCharset(Uint8List.fromList(bytes));
+    final String detected =
+        sniffedCharset ?? detectCharset(Uint8List.fromList(bytes));
 
     return DecodedBody(
       text: _decodeWith(detected, bytes),
       charset: detected,
       malformedByteCount: 0,
+      isDetected: true,
     );
   }
 
