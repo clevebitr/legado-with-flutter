@@ -1,4 +1,30 @@
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:html/dom.dart';
+
+/// The page a JS rule is evaluated on: the `baseUrl` / `page` / `source` bindings of
+/// `docs/dev/book-source.md` §6.
+///
+/// The scope carries it because only the caller that fetched the page knows these values,
+/// and every `@js:` rule — including one on a per-item field, which runs against an element
+/// scope — has to fill [JsJob] from them. Element scopes inherit it from the page scope
+/// they were matched in (see `RuleEngine`), so the values survive the descent.
+final class JsPageContext {
+  /// Creates the context of one fetched page.
+  const JsPageContext({
+    required this.baseUrl,
+    this.page = 1,
+    JsSourceInfo? source,
+  }) : source = source ?? const JsSourceInfo(name: '', url: '');
+
+  /// The URL the page was fetched from (the `baseUrl` binding).
+  final String baseUrl;
+
+  /// The 1-based page number (the `page` binding).
+  final int page;
+
+  /// The sandbox view of the book source (the `source` binding).
+  final JsSourceInfo source;
+}
 
 /// The value a rule is evaluated against (`docs/dev/book-source.md` §3.2).
 ///
@@ -24,30 +50,40 @@ sealed class RuleScope {
   /// `null` for a scope that is only an element — reaching JSON *inside* an element
   /// would need a rule in the extraction segment, which is matrix #30 and
   /// deliberately not implemented.
-  factory RuleScope.dom(Node node, {String? body}) = DomScope;
+  factory RuleScope.dom(Node node, {String? body, JsPageContext? jsContext}) =
+      DomScope;
 
   /// The JSON variant, wrapping a decoded JSON [value] (matrix #13).
-  factory RuleScope.json(Object? value) = JsonScope;
+  factory RuleScope.json(Object? value, {JsPageContext? jsContext}) = JsonScope;
 }
 
 /// The DOM variant of [RuleScope].
 final class DomScope extends RuleScope {
   /// Creates a DOM scope; see [RuleScope.dom] for [node] and [body].
-  const DomScope(this.node, {this.body});
+  const DomScope(this.node, {this.body, this.jsContext});
 
   /// The node the default rules and `@css:` read.
   final Node node;
 
   /// The raw body of the page [node] was parsed from, or `null` for an element.
   final String? body;
+
+  /// The page a `@js:` rule on this scope runs against (`book-source.md` §6).
+  ///
+  /// Set by the fetch that built the page scope and copied onto every element scope the
+  /// engine derives from it; `null` only for a scope assembled by hand (a unit test).
+  final JsPageContext? jsContext;
 }
 
 /// The JSON variant of [RuleScope].
 final class JsonScope extends RuleScope {
   /// Creates a JSON scope around a decoded [value]: a map, a list, a scalar or
   /// `null`.
-  const JsonScope(this.value);
+  const JsonScope(this.value, {this.jsContext});
 
   /// The value `@json:` and the bare `$.` / `$[` rules read.
   final Object? value;
+
+  /// The page a `@js:` rule on this scope runs against; see [DomScope.jsContext].
+  final JsPageContext? jsContext;
 }

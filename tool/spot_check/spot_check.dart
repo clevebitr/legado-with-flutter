@@ -32,6 +32,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/quickjs_worker.dart';
+import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
@@ -121,7 +123,13 @@ BookSource _loadSource(File file, {String? name}) {
 Future<_Report> _runChain(BookSource source, String keyword) async {
   final AppLogger logger = AppLogger(level: LogLevel.warning);
   final PageFetchService pages = PageFetchService(
-    engine: RuleEngine(logger: logger),
+    engine: RuleEngine(
+      logger: logger,
+      jsBridge: QuickJsWorkerBridge(
+        logger: logger,
+        launch: launchQuickJsWorker,
+      ),
+    ),
     http: DioHttpClient(
       cookies: InMemoryCookieManager(),
       logger: logger,

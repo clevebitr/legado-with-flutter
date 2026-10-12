@@ -6,7 +6,10 @@ import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:html/parser.dart' as parser;
 import 'package:integration_test/integration_test.dart';
 import 'package:logger/logger.dart';
 
@@ -184,6 +187,37 @@ void main() {
       );
 
       expect(_value(after), 'ran');
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets(
+    'jsBridge_whenTheEngineRunsAJsRule_bindsResultAndThePageContext',
+    (WidgetTester tester) async {
+      // 3.4 的接入点：引擎把选择器算出的值当 `result` 交给沙箱，并把页面的
+      // baseUrl / page / source 一起带上（book-source.md §6）。
+      final RuleEngine engine = RuleEngine(
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+        jsBridge: bridge,
+      );
+      const String pageHtml = '<div id="c">正文</div>';
+      final RuleScope scope = RuleScope.dom(
+        parser.parse(pageHtml),
+        body: pageHtml,
+        jsContext: const JsPageContext(
+          baseUrl: 'https://example-novel.test/book/1/',
+          page: 3,
+          source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+        ),
+      );
+
+      final ParseResult<String?> result = await engine.extractFirst(
+        "id.c@text@js:result + '|' + baseUrl + '|' + page + '|' + source.name",
+        scope,
+        rulePath: 'contentRule.content',
+      );
+
+      expect(_value(result), '正文|https://example-novel.test/book/1/|3|示例书源');
     },
     timeout: const Timeout(Duration(minutes: 2)),
   );

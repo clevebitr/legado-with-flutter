@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
@@ -130,12 +131,18 @@ final class PageFetchService {
   /// [sourceId] is the book source URL. It travels only for the logs the HTTP layer
   /// owns — the tolerant-decode warning of ADR-0031 §决策 2 names the source, which is
   /// what C-ERR-8 asks for (C-SEC-4 still forbids the body).
+  ///
+  /// [page] and [source] fill the `page` / `source` bindings a `@js:` rule sees
+  /// (`book-source.md` §6); they default to the first page and an empty source so a caller
+  /// that has no book source context still gets a valid context.
   Future<ParseResult<RuleScope>> fetch(
     String url, {
     required String rulePath,
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    int page = 1,
+    JsSourceInfo? source,
   }) async {
     final ParseResult<HttpResponse> response = await _http.get(
       url,
@@ -152,7 +159,12 @@ final class PageFetchService {
       ) =>
         failureAt<RuleScope>(kind: kind, rulePath: failedAt),
       ParseSuccess<HttpResponse>(:final HttpResponse data) => ParseSuccess(
-        RuleScope.dom(parser.parse(data.body), body: data.body),
+        RuleScope.dom(
+          parser.parse(data.body),
+          body: data.body,
+          // §6 的 baseUrl / page / source 绑定就来自这里；逐项字段的 `@js:` 靠它继承。
+          jsContext: JsPageContext(baseUrl: url, page: page, source: source),
+        ),
       ),
     };
   }
@@ -294,9 +306,9 @@ final class PageFetchService {
   ///
   /// [rulePath] is the stage's field (`ruleToc`, `ruleContent`) and travels into every
   /// request, so a failure stays locatable (C-SRC-8); [nextRulePath] is the paging
-  /// field (`tocRule.nextTocUrl`, `contentRule.nextContentUrl`). [headers] and
-  /// [sourceId] are the book source's own request overrides and id (C-NET-4, C-ERR-8),
-  /// passed the same way [fetch] takes them.
+  /// field (`tocRule.nextTocUrl`, `contentRule.nextContentUrl`). [headers], [sourceId] and
+  /// [source] are the book source's own request overrides, id and sandbox view
+  /// (C-NET-4, C-ERR-8, §6), passed the same way [fetch] takes them.
   Future<ParseResult<PageWalk>> walk({
     required String url,
     required String rulePath,
@@ -304,6 +316,7 @@ final class PageFetchService {
     required String nextRulePath,
     Map<String, String>? headers,
     required String sourceId,
+    JsSourceInfo? source,
   }) async {
     final List<FetchedPage> pages = <FetchedPage>[];
     final Set<String> visited = <String>{};
@@ -329,6 +342,9 @@ final class PageFetchService {
         rulePath: rulePath,
         headers: headers,
         sourceId: sourceId,
+        // 正在取的这一页就是 `pages.length + 1`（1-based），与翻页规则里的 `{{page}}` 同口径。
+        page: pages.length + 1,
+        source: source,
       );
 
       switch (page) {

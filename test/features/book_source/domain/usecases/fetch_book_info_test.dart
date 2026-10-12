@@ -12,6 +12,7 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_i
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_http_client.dart';
+import '../../../../support/fake_js_bridge.dart';
 import '../../../../support/fake_log_printer.dart';
 
 /// The real default-rule source of the offline corpus.
@@ -38,7 +39,7 @@ PageFetchService _service(FakeHttpClient http) {
   );
 
   return PageFetchService(
-    engine: RuleEngine(logger: logger),
+    engine: RuleEngine(logger: logger, jsBridge: FakeJsBridge()),
     http: http,
     logger: logger,
   );
@@ -115,7 +116,7 @@ void main() {
           ..serve(_bookUrl, _page('book_page.html'));
         final BookSource source = _source();
         final BookSource withJs = source.copyWith(
-          bookInfoRule: source.bookInfoRule?.copyWith(intro: '@js:result'),
+          bookInfoRule: source.bookInfoRule?.copyWith(intro: '@xpath://div'),
         );
         final FakeLogPrinter printer = FakeLogPrinter();
         final AppLogger logger = AppLogger(
@@ -125,7 +126,7 @@ void main() {
 
         final ParseResult<BookInfo> result = await FetchBookInfo(
           pages: PageFetchService(
-            engine: RuleEngine(logger: logger),
+            engine: RuleEngine(logger: logger, jsBridge: FakeJsBridge()),
             http: http,
             logger: logger,
           ),
@@ -161,7 +162,7 @@ void main() {
 
         final ParseResult<BookInfo> result = await FetchBookInfo(
           pages: PageFetchService(
-            engine: RuleEngine(logger: logger),
+            engine: RuleEngine(logger: logger, jsBridge: FakeJsBridge()),
             http: http,
             logger: logger,
           ),

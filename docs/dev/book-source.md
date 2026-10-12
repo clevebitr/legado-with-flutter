@@ -299,8 +299,10 @@
 >   `##正则##替换` 与矩阵 #25 的 `##正则##替换###`。**有意不做的：** 上游在替换前后还会
 >   按行 trim 并加全角缩进（`BookContent.kt:191-194`），那是阅读端排版，不属于解析阶段，
 >   本仓的正文保持解析出来的原样（否则语料回归里已有的正文会被改形）。
->   规则体带选择器时报 `parseFailed`（规则里没有可选的 DOM），带 `@js:` 等未实现标志时报
->   `unsupportedRule`（标志属于后续阶段）；两者都降级为「不替换」+ warning（ADR-0026 §决策 2）。
+>   规则体带选择器时报 `parseFailed`（规则里没有可选的 DOM）；`@js:` 净化规则在沙箱里跑
+>   （`result` = 拼接后的整章正文，与上游 `analyzeRule.getString(replaceRegex, contentStr)` 同形），
+>   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
+>   （ADR-0026 §决策 2）。
 
 ---
 
@@ -425,6 +427,17 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 
 超时或异常 → `ParseFailure(parseFailed)`，`rulePath` 中标注 `js:timeout` 或 `js:error`。
 
+> - **值规则上的终段 `@js:` 已可用（2026-10-12，3.4 part 2）。** `@js:` 贪婪吞掉本条规则剩余
+>   部分（上游 `AppPattern.JS_PATTERN` 的 `@js:([\w\W]*)`），所以 JS 里的 `&&` / `||` 不会被读成
+>   连接符；`result` 的形态按上游：`getString` 语义（单值字段）给**字符串**，`getStringList`
+>   语义（多值字段，如 `nextTocUrl`）给**列表**，列表返回值也保持列表（§4.1 的 URL 数组靠它）；
+>   `##` 替换在脚本**之后**应用（上游同一 `SourceRule` 的 `replaceRegex` 也是最后跑）。
+> - **未落的边界（显式报错，不静默）：** 列表规则（`bookList` / `chapterList`）上的 `@js:` 报
+>   `unsupported:@js:list`（它要的是「JS 返回一列元素」的契约——上游 `getElements` 的
+>   `Mode.Js` 分支，`AnalyzeRule.kt:439`——尚未成型）；`<js>…</js>` 仍按矩阵 #31 拒（M2）。
+> - **仍属本阶段剩余部分：** Promise 形态的 `http.*` / `parse.*`（含 `parse.*` 的**页级 scope**
+>   边界 `js:parse-scope`）与「单条规则内 JS 调用次数 ≤ 20」（含 `log.*` 计数）。
+>
 > **3.3 落地状态与两处边界（2026-10-12，随 `PLAN.md` 3.3 落地）：**
 >
 > - **本阶段落了什么：** 常驻 worker isolate + 单复用运行时的桥（`core/js/`）：引擎级 5 秒中断与

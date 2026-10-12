@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
@@ -8,6 +9,7 @@ import 'package:html/dom.dart';
 import 'package:html/parser.dart' as parser;
 import 'package:logger/logger.dart';
 
+import '../../../../support/fake_js_bridge.dart';
 import '../../../../support/fake_log_printer.dart';
 
 /// A search result page shaped like the target of default-rule selectors
@@ -53,7 +55,6 @@ const String _jsonBody =
 /// them, with the syntax name `rulePath` has to carry
 /// (`docs/dev/book-source.md` §7).
 const Map<String, String> _unsupportedRules = <String, String>{
-  '@js:result': 'unsupported:@js:',
   '@xpath://div': 'unsupported:@xpath:',
   '@put:{a:1}': 'unsupported:@put:',
   '@get:{a}': 'unsupported:@get:',
@@ -64,7 +65,6 @@ const Map<String, String> _unsupportedRules = <String, String>{
   r'{$.data}': 'unsupported:{',
   ':regex': 'unsupported::',
   // 矩阵 #7 的 `-` 先摘掉再识别标志头，所以标志头的报错保持原样（不能被 `-` 顶掉）。
-  '-@js:result': 'unsupported:@js:',
   // 矩阵 #15：中段 `@@`（`@` 切分后留空段，必须在切段前判掉，否则误报畸形）。
   'class.a@@class.b@text': 'unsupported:@@',
   // `<js>` 包装不是矩阵里的标志：语义（整条规则写成 JS）本仓未实现，按名字拒绝，
@@ -126,15 +126,32 @@ const List<String> _malformedSelectors = <String>[
 ];
 
 /// An engine with a capturing logger, so a test can assert the C-SRC-4 record.
-RuleEngine _engine([FakeLogPrinter? printer]) => RuleEngine(
+RuleEngine _engine([FakeLogPrinter? printer, JsBridge? jsBridge]) => RuleEngine(
   logger: AppLogger(
     level: LogLevel.debug,
     printer: printer ?? FakeLogPrinter(),
   ),
+  jsBridge: jsBridge ?? FakeJsBridge(),
 );
 
 /// Parses [html]; every rule below is evaluated against the result.
 Document _document(String html) => parser.parse(html);
+
+/// Parses [html] into a page scope that carries a JS context (`book-source.md` §6), so a
+/// `@js:` rule has a `baseUrl` / `page` / `source` to bind.
+RuleScope _pageWithContext(String html) => RuleScope.dom(
+  parser.parse(html),
+  body: html,
+  jsContext: const JsPageContext(
+    baseUrl: 'https://example-novel.test/book/1/',
+    page: 2,
+    source: JsSourceInfo(
+      name: '示例书源',
+      url: 'https://example-novel.test',
+      group: '分组',
+    ),
+  ),
+);
 
 /// Wraps [node] as the DOM scope the default rules and `@css:` read
 /// (matrix #1..#12).
@@ -442,7 +459,7 @@ void main() {
       );
       expect(
         printer.events.single.message.toString(),
-        contains('unsupported:@js:'),
+        contains('unsupported:@js:list'),
       );
     });
   });
@@ -970,12 +987,12 @@ void main() {
       expect(
         (await _failure(
           _engine().applyReplaceRule(
-            '@JS:result',
+            '@XPath://div',
             '正文。',
             rulePath: 'contentRule.replaceRegex',
           ),
         )).rulePath,
-        'unsupported:@JS:',
+        'unsupported:@XPath:',
       );
       expect(
         (await _failure(
@@ -1037,14 +1054,14 @@ void main() {
     test('extractFirst_givenRejectedRule_returnsTheSameFailure', () async {
       final ParseFailure<Never> failure = await _failure(
         _engine().extractFirst(
-          '@js:result',
+          '@xpath://div',
           _scope(_document(_listHtml)),
           rulePath: 'searchRule.intro',
         ),
       );
 
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@js:');
+      expect(failure.rulePath, 'unsupported:@xpath:');
     });
   });
 
@@ -1571,14 +1588,14 @@ void main() {
       // body 级标志检查只覆盖规则开头；后续候选的标志头由选择器层拒绝。
       final ParseFailure<Never> failure = await _failure(
         _engine().selectAll(
-          'class.result-list||@js:result',
+          'class.result-list||@xpath://div',
           _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
 
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@js:');
+      expect(failure.rulePath, 'unsupported:@xpath:');
     });
   });
 
@@ -2274,6 +2291,261 @@ void main() {
 
         expect(failure.kind, ParseFailureKind.parseFailed);
         expect(failure.rulePath, 'searchRule.name');
+      },
+    );
+  });
+
+  group('RuleEngine matrix #14 (@js:)', () {
+    test('extractFirst_givenABareJsRule_runsItOnThePageBody', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = '正文尾';
+
+      final String? value = await _first(
+        _engine(null, bridge).extractFirst(
+          "@js:result + '尾'",
+          _pageWithContext(_countHtml),
+          rulePath: 'contentRule.content',
+        ),
+      );
+
+      expect(value, '正文尾');
+      expect(bridge.jobs.single.script, "result + '尾'");
+      // 独立 `@js:` 的 `result` 是整页 responseBody（§6 的 result 绑定）。
+      expect(bridge.jobs.single.result, _countHtml);
+      expect(bridge.jobs.single.rulePath, 'contentRule.content');
+    });
+
+    test(
+      'extractFirst_givenJsAfterSelectors_passesTheExtractedValue',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = '共 123 字';
+
+        final String? value = await _first(
+          _engine(null, bridge).extractFirst(
+            'class.count@text@js:result.trim()',
+            _pageWithContext(_countHtml),
+            rulePath: 'searchRule.wordCount',
+          ),
+        );
+
+        expect(value, '共 123 字');
+        // 上游 `getString` 读单值时 result 是**字符串**：`result.replace(...)` 才能成立。
+        expect(bridge.jobs.single.result, '共 123 字');
+      },
+    );
+
+    test('extractAll_givenJsAfterSelectors_passesTheWholeList', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = <Object?>['One Author A', 'Two Author B', 'Three Author C'];
+
+      final List<String> values = await _values(
+        _engine(null, bridge).extractAll(
+          'class.result-list@tag.li@text@js:result',
+          _pageWithContext(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // 上游 `getStringList` 读多值时 result 是**列表**，返回列表也保持列表。
+      // `tag.li` 的 text 含作者 span，所以列表就是这三个串——重点在 result 是**列表**。
+      expect(values, <String>[
+        'One Author A',
+        'Two Author B',
+        'Three Author C',
+      ]);
+      expect(bridge.jobs.single.result, <String>[
+        'One Author A',
+        'Two Author B',
+        'Three Author C',
+      ]);
+    });
+
+    test('extractFirst_givenJsReturnsAList_takesTheFirstValue', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = <Object?>['toc_2.html', 'toc_3.html'];
+
+      expect(
+        await _first(
+          _engine(null, bridge).extractFirst(
+            "@css:a.next @href@js:['toc_2.html', 'toc_3.html']",
+            _pageWithContext(_listHtml),
+            rulePath: 'tocRule.nextTocUrl',
+          ),
+        ),
+        'toc_2.html',
+      );
+    });
+
+    test('extractFirst_givenTheScriptReturnsNothing_returnsNull', () async {
+      // 默认 result 为 null：`@js:` 什么都没返回就是「没有值」，与矩阵 #8 的空提取同口径。
+      expect(
+        await _first(
+          _engine(null, FakeJsBridge()).extractFirst(
+            '@js:undefined',
+            _pageWithContext(_countHtml),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        isNull,
+      );
+    });
+
+    test(
+      'extractFirst_givenTheScriptTimesOut_propagatesTheMarkedFailure',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..failure = const ParseFailure<Never>(
+            kind: ParseFailureKind.parseFailed,
+            rulePath: 'searchRule.name:js:timeout',
+          );
+
+        final ParseFailure<Never> failure = await _failure(
+          _engine(null, bridge).extractFirst(
+            '@js:while (true) {}',
+            _pageWithContext(_countHtml),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        // §6：超时/异常由桥报 parseFailed，rulePath 带 js:timeout 标记（可定位到字段）。
+        expect(failure.kind, ParseFailureKind.parseFailed);
+        expect(failure.rulePath, 'searchRule.name:js:timeout');
+      },
+    );
+
+    test('extractAll_givenJsWithAmpersand_keepsItInsideTheScript', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'yes';
+
+      await _values(
+        _engine(null, bridge).extractAll(
+          "@js:result && 'yes'",
+          _pageWithContext(_countHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // `@js:` 贪婪吞掉剩余部分（上游 JS_PATTERN），所以 `&&` 属于脚本而不是 `#11` 连接符。
+      expect(bridge.jobs.single.script, "result && 'yes'");
+    });
+
+    test(
+      'extractFirst_givenJsAndReplacement_appliesTheReplacementAfter',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'aXa';
+
+        expect(
+          await _first(
+            _engine(null, bridge).extractFirst(
+              '@js:result##a##b',
+              _pageWithContext(_countHtml),
+              rulePath: 'searchRule.name',
+            ),
+          ),
+          'bXb',
+        );
+      },
+    );
+
+    test('extractFirst_givenAContextScope_fillsTheSandboxBindings', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'x';
+
+      await _first(
+        _engine(null, bridge).extractFirst(
+          '@js:baseUrl',
+          RuleScope.dom(
+            _document(_countHtml),
+            body: _countHtml,
+            jsContext: const JsPageContext(
+              baseUrl: 'https://example-novel.test/book/1/',
+              page: 3,
+              source: JsSourceInfo(
+                name: '示例书源',
+                url: 'https://example-novel.test',
+                group: '分组',
+              ),
+            ),
+          ),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(bridge.jobs.single.baseUrl, 'https://example-novel.test/book/1/');
+      expect(bridge.jobs.single.page, 3);
+      expect(bridge.jobs.single.source.name, '示例书源');
+      expect(bridge.jobs.single.source.url, 'https://example-novel.test');
+      expect(bridge.jobs.single.source.group, '分组');
+    });
+
+    test('selectAll_givenJsOnAListRule_reportsTheListBoundary', () async {
+      final FakeJsBridge bridge = FakeJsBridge();
+
+      final ParseFailure<Never> failure = await _failure(
+        _engine(null, bridge).selectAll(
+          'class.result-list@js:result',
+          _pageWithContext(_listHtml),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      // 3.4 只实现值规则上的 `@js:`；列表规则需要「JS 返回一列元素」的契约，显式拒绝。
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@js:list');
+      expect(bridge.jobs, isEmpty);
+    });
+
+    test('applyReplaceRule_givenAJsRule_runsItOnTheText', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = '正文（净化）';
+
+      expect(
+        await _text(
+          _engine(null, bridge).applyReplaceRule(
+            '@js:result.replace("（", "（净化")',
+            '正文（',
+            rulePath: 'contentRule.replaceRegex',
+          ),
+        ),
+        '正文（净化）',
+      );
+      expect(bridge.jobs.single.result, '正文（');
+    });
+    test(
+      'extractFirst_givenABareJsRuleOnAJsonScope_passesTheJsonText',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+
+        await _first(
+          _engine(null, bridge).extractFirst(
+            '@js:result',
+            RuleScope.json(<String, Object?>{'a': 1}),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        // JSON 条目上的 `@js:` 拿不到页面上下文（它不由 fetch 建），`result` 是该条目的 JSON 文本。
+        expect(bridge.jobs.single.result, '{"a":1}');
+        expect(bridge.jobs.single.baseUrl, isEmpty);
+        expect(bridge.jobs.single.page, 1);
+      },
+    );
+
+    test(
+      'applyReplaceRule_givenTheScriptTimesOut_propagatesTheMarkedFailure',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..failure = const ParseFailure<Never>(
+            kind: ParseFailureKind.parseFailed,
+            rulePath: 'contentRule.replaceRegex:js:timeout',
+          );
+
+        final ParseFailure<Never> failure = await _failure(
+          _engine(null, bridge).applyReplaceRule(
+            '@js:while (true) {}',
+            '正文',
+            rulePath: 'contentRule.replaceRegex',
+          ),
+        );
+
+        expect(failure.kind, ParseFailureKind.parseFailed);
+        expect(failure.rulePath, 'contentRule.replaceRegex:js:timeout');
       },
     );
   });

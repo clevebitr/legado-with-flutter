@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cascadia/cascadia.dart' as cascadia;
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:html/dom.dart';
@@ -23,13 +24,19 @@ const List<String> _deferredFlags = <String>[
   '{',
   ':',
   '@@',
-  '@js:',
   '@xpath:',
   '@put:',
   '@get:',
   '@webjs',
   '<js>',
 ];
+
+/// The `@js:` flag of matrix #14, lower-cased for a case-insensitive compare.
+///
+/// It is **terminal**: upstream's `AppPattern.JS_PATTERN` is `@js:([\w\W]*)`, i.e. greedy
+/// to the end of the rule, so everything after the flag is the script and a `&&` or `||`
+/// inside the script stays part of it instead of being read as a connector.
+const String _jsFlag = '@js:';
 
 /// The `@css:` flag of matrix #12, lower-cased for a case-insensitive compare.
 const String _cssFlag = '@css:';
@@ -95,6 +102,7 @@ final RegExp _whitespace = RegExp(r'\s+');
 /// | #27 | `%%`, interleaving the branches of one candidate |
 /// | #12 | the `@css:` flag, handing the rest of the segment to cascadia |
 /// | #13 | the `@json:` flag and the bare `$.` / `$[` form, read as JSONPath |
+/// | #14 | the terminal `@js:` flag, evaluated by the sandbox ([JsBridge]) |
 /// | #26 | the `[...]` index list, with ranges, steps and `[!...]` exclusion |
 /// | #28 | an index as the first rule of a segment (`.1` / `[1]` / `children[1]`) |
 /// | #29 | the jsoup index pseudo-classes `:eq` / `:gt` / `:lt`, rewritten onto `:nth-child` |
@@ -134,10 +142,16 @@ final RegExp _whitespace = RegExp(r'\s+');
 /// The engine is stateless, so one instance can evaluate rules concurrently
 /// (C-SRC-9), and it never mutates the scope it is given or its elements.
 final class RuleEngine {
-  /// Creates an engine that reports rejected rules through `logger`.
-  RuleEngine({required this._logger});
+  /// Creates an engine that reports rejected rules through `logger` and runs `@js:` rules
+  /// on `jsBridge`.
+  ///
+  /// The bridge is the only door to JavaScript (C-SRC-2), which is why the engine takes it
+  /// as a collaborator instead of the engine library: a unit test passes a fake
+  /// (`docs/dev/testing.md` §4) and `domain/` never imports `flutter_qjs_next`.
+  RuleEngine({required this._logger, required this._jsBridge});
 
   final AppLogger _logger;
+  final JsBridge _jsBridge;
 
   /// Returns every element matched by the **list** rule [rule] inside [scope].
   ///
@@ -264,7 +278,10 @@ final class RuleEngine {
         _ParsedFailure<List<RuleScope>>(rejection),
       _ParsedValue<List<Element>>(:final List<Element> value) =>
         _ParsedValue<List<RuleScope>>(<RuleScope>[
-          for (final Element element in value) RuleScope.dom(element),
+          // 逐条结果继承页面的 JS 上下文，否则 `searchRule.name` 这种逐项字段上的
+          // `@js:` 拿不到 baseUrl / page / source（book-source.md §6）。
+          for (final Element element in value)
+            RuleScope.dom(element, jsContext: _jsContextOf(scope)),
         ]),
     },
     final _JsonBranch json => switch (_jsonScopeOf(scope, field: field)) {
@@ -273,7 +290,7 @@ final class RuleEngine {
       _ParsedValue<Object?>(:final Object? value) =>
         _ParsedValue<List<RuleScope>>(<RuleScope>[
           for (final JsonPathMatch match in json.path.read(value))
-            RuleScope.json(match.value),
+            RuleScope.json(match.value, jsContext: _jsContextOf(scope)),
         ]),
     },
   };
@@ -366,34 +383,7 @@ final class RuleEngine {
     String rule,
     RuleScope scope, {
     required String rulePath,
-  }) async {
-    if (rule.trim().isEmpty) {
-      return const ParseSuccess<List<String>>(<String>[]);
-    }
-
-    final _ParsedRule parsed = _parse(rule);
-    final _Parsed<List<_CheckedCandidate>> check = _check(
-      parsed,
-      field: rulePath,
-      hasExtraction: true,
-    );
-
-    return switch (check) {
-      _ParsedFailure<List<_CheckedCandidate>>(
-        :final _RuleRejection rejection,
-      ) =>
-        _fail<List<String>>(rejection, field: rulePath),
-      _ParsedValue<List<_CheckedCandidate>>(
-        :final List<_CheckedCandidate> value,
-      ) =>
-        switch (_extractAll(value, parsed, scope, field: rulePath)) {
-          _ParsedFailure<List<String>>(:final _RuleRejection rejection) =>
-            _fail<List<String>>(rejection, field: rulePath),
-          _ParsedValue<List<String>>(:final List<String> value) =>
-            ParseSuccess<List<String>>(value),
-        },
-    };
-  }
+  }) => _evaluate(rule, scope, rulePath: rulePath, single: false);
 
   /// Returns the first value of [rule], or `null` when nothing matched.
   ///
@@ -407,10 +397,11 @@ final class RuleEngine {
     RuleScope scope, {
     required String rulePath,
   }) async {
-    final ParseResult<List<String>> values = await extractAll(
+    final ParseResult<List<String>> values = await _evaluate(
       rule,
       scope,
       rulePath: rulePath,
+      single: true,
     );
 
     return switch (values) {
@@ -423,6 +414,148 @@ final class RuleEngine {
         ParseSuccess<String?>(data.isEmpty ? null : data.first),
     };
   }
+
+  /// Runs the shared pipeline of a **value** rule: candidates, branches, the optional
+  /// terminal `@js:`, then the `-` reverse and the `##` replacements.
+  ///
+  /// [single] says which shape the sandbox receives as `result`: upstream reads a single
+  /// value for `getString` and the whole list for `getStringList`, and real rules depend on
+  /// the difference — `result.replace(...)` needs a String, while `nextTocUrl`'s array needs
+  /// a List (`book-source.md` §4.1).
+  Future<ParseResult<List<String>>> _evaluate(
+    String rule,
+    RuleScope scope, {
+    required String rulePath,
+    required bool single,
+  }) async {
+    if (rule.trim().isEmpty) {
+      return const ParseSuccess<List<String>>(<String>[]);
+    }
+
+    final _ParsedRule parsed = _parse(rule);
+    final List<String> merged;
+    if (parsed.isBareJs) {
+      // `@js:` 独立成规则：没有选择器要跑，`result` 就是整页内容（§6 的 result 绑定）。
+      merged = <String>[_contentOf(scope)];
+    } else {
+      final _Parsed<List<_CheckedCandidate>> check = _check(
+        parsed,
+        field: rulePath,
+        hasExtraction: true,
+      );
+      final List<_CheckedCandidate> candidates;
+      switch (check) {
+        case _ParsedFailure<List<_CheckedCandidate>>(
+          :final _RuleRejection rejection,
+        ):
+          return _fail<List<String>>(rejection, field: rulePath);
+        case _ParsedValue<List<_CheckedCandidate>>(
+          :final List<_CheckedCandidate> value,
+        ):
+          candidates = value;
+      }
+
+      switch (_extractAll(candidates, scope, field: rulePath)) {
+        case _ParsedFailure<List<String>>(:final _RuleRejection rejection):
+          return _fail<List<String>>(rejection, field: rulePath);
+        case _ParsedValue<List<String>>(:final List<String> value):
+          merged = value;
+      }
+    }
+
+    final String? script = parsed.jsScript;
+    if (script == null) {
+      return ParseSuccess<List<String>>(_finish(merged, parsed));
+    }
+
+    final ParseResult<List<String>> evaluated = await _runJs(
+      script,
+      merged,
+      scope,
+      field: rulePath,
+      single: single,
+    );
+
+    return switch (evaluated) {
+      ParseFailure<List<String>>() => evaluated,
+      ParseSuccess<List<String>>(:final List<String> data) =>
+        ParseSuccess<List<String>>(_finish(data, parsed)),
+    };
+  }
+
+  /// Runs one terminal `@js:` script on the values the selectors produced (matrix #14).
+  ///
+  /// The sandbox receives them as `result`, plus the page context the scope carries
+  /// ([JsPageContext]). What it returns becomes the rule's value: a String is one value, a
+  /// List is many — which is how `nextTocUrl` gets an array, and `null` yields no value
+  /// (matrix #8's “no value” for an empty extract).
+  ///
+  /// A timeout or a JS exception comes back as [ParseFailureKind.parseFailed] with the
+  /// bridge's `rulePath` marker (§6); nothing is swallowed (C-SRC-4).
+  Future<ParseResult<List<String>>> _runJs(
+    String script,
+    List<String> values,
+    RuleScope scope, {
+    required String field,
+    required bool single,
+  }) async {
+    final JsPageContext context = _jsContextOf(scope);
+    final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
+      JsJob(
+        script: script,
+        rulePath: field,
+        baseUrl: context.baseUrl,
+        page: context.page,
+        source: context.source,
+        result: single ? (values.isEmpty ? null : values.first) : values,
+      ),
+    );
+
+    return switch (evaluated) {
+      ParseFailure<Object?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        failureAt<List<String>>(kind: kind, rulePath: rulePath),
+      ParseSuccess<Object?>(:final Object? data) => ParseSuccess<List<String>>(
+        _jsValues(data),
+      ),
+    };
+  }
+
+  /// The values one `@js:` result contributes: a List is kept element by element, anything
+  /// else is one value, and `null` (or a null element) contributes nothing.
+  List<String> _jsValues(Object? value) => switch (value) {
+    null => const <String>[],
+    final List<Object?> list => <String>[
+      for (final Object? item in list)
+        if (item != null) item.toString(),
+    ],
+    _ => <String>[value.toString()],
+  };
+
+  /// Applies the `-` reverse and every `##` replacement of [parsed] to [values].
+  ///
+  /// Upstream applies a `SourceRule`'s `replaceRegex` **after** its JS evaluation
+  /// (`AnalyzeRule.kt:250-258`), so the replacement runs on the sandbox's output here too.
+  List<String> _finish(List<String> values, _ParsedRule parsed) =>
+      _applyReplacement(
+        parsed.reverse ? values.reversed.toList(growable: false) : values,
+        parsed.replacementParts,
+      );
+
+  /// The page context of [scope], or an empty one for a scope built without a fetch.
+  JsPageContext _jsContextOf(RuleScope scope) => switch (scope) {
+    DomScope(:final JsPageContext? jsContext) =>
+      jsContext ?? const JsPageContext(baseUrl: ''),
+    JsonScope() => const JsPageContext(baseUrl: ''),
+  };
+
+  /// The page content a bare `@js:` rule receives as `result` (`book-source.md` §6).
+  String _contentOf(RuleScope scope) => switch (scope) {
+    DomScope(:final String? body) => body ?? '',
+    JsonScope(:final Object? value) => value == null ? '' : jsonEncode(value),
+  };
 
   /// Applies a **standalone** `##regex##replacement` rule to [text] (matrix #9).
   ///
@@ -452,6 +585,33 @@ final class RuleEngine {
   }) async {
     final List<String> parts = rule.split('##');
     final String body = parts.first.trim();
+    if (body.toLowerCase().startsWith(_jsFlag)) {
+      // 上游把 `replaceRegex` 交给同一套规则求值（`analyzeRule.getString(replaceRegex,
+      // contentStr)`），所以 `@js:` 净化规则在沙箱里跑，`result` 是拼接后的整章正文。
+      const JsPageContext context = JsPageContext(baseUrl: '');
+      final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
+        JsJob(
+          script: body.substring(_jsFlag.length),
+          rulePath: rulePath,
+          baseUrl: context.baseUrl,
+          page: context.page,
+          source: context.source,
+          result: text,
+        ),
+      );
+
+      return switch (evaluated) {
+        ParseFailure<Object?>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ) =>
+          failureAt<String>(kind: kind, rulePath: rulePath),
+        ParseSuccess<Object?>(:final Object? data) => ParseSuccess<String>(
+          data?.toString() ?? '',
+        ),
+      };
+    }
+
     if (body.isNotEmpty && body.toLowerCase() != 'all') {
       for (final String flag in _deferredFlags) {
         if (body.toLowerCase().startsWith(flag)) {
@@ -477,7 +637,6 @@ final class RuleEngine {
   /// fallback rather than an error recovery.
   _Parsed<List<String>> _extractAll(
     List<_CheckedCandidate> candidates,
-    _ParsedRule parsed,
     RuleScope scope, {
     required String field,
   }) {
@@ -498,12 +657,8 @@ final class RuleEngine {
       }
       final List<String> values = _merge<String>(results, candidate.connector);
       if (values.isNotEmpty) {
-        return _ParsedValue<List<String>>(
-          _applyReplacement(
-            parsed.reverse ? values.reversed.toList(growable: false) : values,
-            parsed.replacementParts,
-          ),
-        );
+        // 倒置与 `##` 替换不在这里做：`@js:` 之后才轮到它们（[_finish]）。
+        return _ParsedValue<List<String>>(values);
       }
     }
 
@@ -757,12 +912,23 @@ final class RuleEngine {
     // 切段之前摘掉，否则它会变成一个空段，后面的标志头也会被切错。
     final bool reverse = rawBody.startsWith('-');
     final String body = (reverse ? rawBody.substring(1) : rawBody).trim();
+    // 矩阵 #14：`@js:` 贪婪吞掉本条规则剩余部分（上游 `AppPattern.JS_PATTERN` 的
+    // `@js:([\w\W]*)`），所以必须在切候选 / 分支 / 段之前先切它——否则 JS 里的
+    // `&&` / `||` 会被当成连接符，而那正是真实规则大量使用的写法。
+    final int jsAt = body.toLowerCase().indexOf(_jsFlag);
+    final String selectorBody = jsAt < 0
+        ? body
+        : body.substring(0, jsAt).trim();
+    final String? jsScript = jsAt < 0
+        ? null
+        : body.substring(jsAt + _jsFlag.length).trim();
 
     return _ParsedRule(
-      body: body,
+      body: selectorBody,
+      jsScript: jsScript,
       replacementParts: replacementParts,
       reverse: reverse,
-      candidates: _candidatesOf(body),
+      candidates: _candidatesOf(selectorBody),
     );
   }
 
@@ -828,6 +994,13 @@ final class RuleEngine {
     required bool hasExtraction,
   }) {
     final String body = parsed.body;
+
+    if (!hasExtraction && parsed.jsScript != null) {
+      // 矩阵 #14 目前只实现**值规则**上的 `@js:`（终段）。列表规则上的 JS 要的是「JS
+      // 返回一列元素」的契约（上游 `getElements` 的 `Mode.Js` 分支，AnalyzeRule.kt:439），
+      // 该契约尚未成型，所以显式拒绝——顶层列表规则被拒仍整次失败（C-SRC-4）。
+      return _ParsedFailure<List<_CheckedCandidate>>(_unsupported('@js:list'));
+    }
 
     for (final String flag in _deferredFlags) {
       if (body.toLowerCase().startsWith(flag)) {
@@ -1547,17 +1720,25 @@ final class RuleEngine {
   }
 }
 
-/// One parsed rule: its body, its leading `-` and its `@`-separated segments.
+/// One parsed rule: its body, its script, its leading `-` and its `@`-separated segments.
 final class _ParsedRule {
   const _ParsedRule({
     required this.body,
+    required this.jsScript,
     required this.replacementParts,
     required this.reverse,
     required this.candidates,
   });
 
-  /// The rule itself: everything before the first `##`, without the leading `-`.
+  /// The rule itself: everything before the first `##` and before an `@js:` flag, without
+  /// the leading `-`. Empty when the rule is nothing but `@js:`.
   final String body;
+
+  /// The script of a terminal `@js:` flag (matrix #14), or `null` when the rule has none.
+  final String? jsScript;
+
+  /// Whether the rule is a bare `@js:`: no selector to run, so `result` is the page itself.
+  bool get isBareJs => jsScript != null && body.isEmpty;
 
   /// The `##`-separated parts: `[rule]`, `[regex]`, `[replacement]`.
   final List<String> replacementParts;

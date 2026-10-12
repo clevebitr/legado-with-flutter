@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 3.4 part 2: `@js:` runs in the engine, with the sandbox bound to the page (2026-10-12)
+
+The sandbox is now reachable from a rule. `RuleEngine` takes a `JsBridge` (the only door to
+JavaScript, so `domain/` never imports the engine library), and a **terminal `@js:`** is evaluated
+with upstream's semantics:
+
+- **`@js:` swallows the rest of its rule**, like upstream's greedy `AppPattern.JS_PATTERN`
+  (`@js:([\w\W]*)`), so a `&&` or `||` inside the script stays part of the script instead of being
+  read as a connector — which is what real rule text needs.
+- **`result` has the shape upstream gives it:** a String when the field is single-valued
+  (`getString`) and the whole List when it is multi-valued (`getStringList`, e.g. `nextTocUrl`); a
+  List returned by the script also stays a List, which is what §4.1's URL array needs. `##`
+  replacements run **after** the script, matching upstream's per-`SourceRule` order.
+- **The sandbox gets the page**: `RuleScope` now carries a `JsPageContext` (`baseUrl`, `page`,
+  `source`), built by `PageFetchService.fetch` and inherited by every element scope the engine
+  derives, so a `@js:` on a per-item field (`searchRule.name`) still sees the page it came from.
+- **`replaceRegex` follows the same path**: a `@js:` purification rule runs on the joined chapter
+  text, exactly as upstream's `analyzeString(replaceRegex, contentStr)` does.
+- **Boundaries are explicit, not silent** (C-SRC-4): `@js:` on a **list** rule is
+  `unsupportedRule` with `rulePath: unsupported:@js:list` — upstream's list path would need the
+  "JS returns a list of elements" contract (`AnalyzeRule.kt:439`), which is not modelled yet — and
+  `<js>…</js>` stays matrix #31's M2 rejection. Both are registered in `book-source.md` §6.
+- Tests: 13 new cases (437 total) driven through `test/support/fake_js_bridge.dart`
+  (`testing.md` §4 — no native engine in unit tests), plus a real-engine case in
+  `integration_test/js_bridge_test.dart` that runs a `@js:` rule through `RuleEngine` and asserts
+  the `result` / `baseUrl` / `page` / `source` bindings (10 device cases green on Windows).
+- Docs: `book-source.md` §6 (what landed, what is still open) and §4.1 (`@js:` purification),
+  `test-environment.md` §7.
+- Gates: format clean, analyze clean, 437 tests, coverage exit 0 (core 567/567, domain 1111/1111).
+
 ### 3.4 part 1: the rule evaluation API is asynchronous (ADR-0029 §决策 1) (2026-10-12)
 
 The first half of 3.4, kept as its own step so the mechanical change is reviewable without the JS
