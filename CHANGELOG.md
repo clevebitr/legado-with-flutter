@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ADR-0031: tolerant decoding only on the declared-charset lane (2026-10-11)
+
+- **A real site in the G2b spot-check declares UTF-8 but carries a few illegal bytes, and the old
+  rule let one byte kill a whole detail page** (`book-source.md` §5: "decoding failure is
+  `encodingFailed`"; C-NET-3's ban on `allowMalformed`). ADR-0031 splits the two situations that
+  rule had merged: on the **declared** lane (HTTP `Content-Type` / `<meta charset>`) the encoding is
+  authoritative, so decoding is now tolerant per the declared family (illegal bytes → U+FFFD) and
+  succeeds **with one warning** carrying the source id, URL summary and field path (never the body,
+  C-ERR-8 / C-SEC-4). On the **sniffed** lane and the unknown-label UTF-8 fallback the encoding is a
+  guess, so a decoding failure stays `encodingFailed` — guessing plus tolerance would turn a wrong
+  guess into mojibake reported as success (C-SRC-4).
+- **Tolerant decoding must not degenerate into "UTF-8 with `allowMalformed`"**: it stays on the
+  declared family, and the per-family entry points were verified to exist (`GbkCodec`,
+  `EucJPCodec`, `EucKRCodec`, `ShiftJISCodec`, `CodePage.decode(..., allowInvalid: true)`,
+  `utf8.decode(..., allowMalformed: true)`). A family without one keeps failing loudly and must be
+  registered in §5.1 rather than pretended away. `book-source.md` §5.1's gaps (Big5) are unchanged,
+  no `ParseFailureKind` is added (§7 still owns the nine), and the detection order is untouched.
+- Written back to the single owners: `book-source.md` §5 (the lane rules, the U+FFFD/no-byte-loss
+  requirement, one warning per page), `constraints.md` C-NET-3 (now links §5 instead of restating
+  it), `docs/README.md` §2.1 (ownership row), `PLAN.md` §3.4 (the spot-check records the fact that a
+  page carried illegal bytes). The ADR also hands over the C-DOC-1 item: `charset_decoder.dart`'s
+  `///` says "must not hide it behind `allowMalformed`" and must be rewritten when the tolerant path
+  lands.
+
+### 3.3's freeze precondition is pinned, and PLAN.md no longer contradicts itself (2026-10-11)
+
+- **A real contradiction inside `PLAN.md` is fixed.** Its §3.1 status row said the next step was
+  "spot-check → 3.3", while §3.4 — the single owner of the Phase 3 execution order — puts 3.5 and
+  3.8 before 3.3/3.4. §3.1 now points at §3.4 instead of restating an order (ADR-0013 §3).
+- **The reason is recorded where the gate lives:** `PLAN.md` §3.3 now states its freeze
+  precondition explicitly — G2b spot-check and 3.5 / 3.8 come first, because 3.5's `nextTocUrl` /
+  `nextContentUrl` may have JS return a **URL array** (`book-source.md` §4.1), so the "single value
+  vs list" dimension of the bridge's return contract has to be exercised by a real field before the
+  contract is frozen (user ruling, 2026-10-11).
+- **ADR-0030 carries the matching note:** closing the *capacity* precondition does not mean the
+  contract may be frozen now, and it does not change `PLAN.md` §3.4's order.
+
 ### ADR-0029 accepted, and ADR-0030 rules the JS engine capacity (2026-10-11)
 
 - **ADR-0029 is accepted** (user-confirmed). Its consequences are written back where they belong:

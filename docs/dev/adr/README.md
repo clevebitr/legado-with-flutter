@@ -52,3 +52,4 @@
 | [0028](0028-rule-scope-and-json-rules.md) | 规则 scope 显式化为 `RuleScope`，`@json:` 与默认 / `@css:` 规则共用一条读取路径 | Accepted（架构师裁决「RuleScope」；细节由本 PR 登记） | 本次新增 |
 | [0029](0029-js-bridge-shape-and-async-engine-api.md) | `@js:` 接入：引擎 API 转异步，JS 绑定形态逐项定义 | Accepted（2026-10-11 架构师裁决，用户确认生效） | 本次新增 |
 | [0030](0030-js-engine-capacity-and-queueing.md) | JS 引擎容量与排队：单常驻 worker + 单复用运行时 + FIFO，容量不进 `JsBridge` 契约 | Accepted（2026-10-11 架构师裁决） | 本次新增 |
+| [0031](0031-tolerant-decoding-on-the-declared-charset-lane.md) | 编码宽容只对「已声明」车道开放（声明权威 + warning，嗅探/回退保持严格） | Accepted（2026-10-11 架构师裁决，用户指令） | 本次新增 |
