@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review follow-up: the spot-check evidence is committed and the statistic re-derived (2026-10-12)
+
+- **R4 closed: the two G2b sources are in the repository.** `test/fixtures/book_sources/` gained
+  `legado_g2b_default_rules_source.json` (the baseline source, real rules verbatim) and
+  `legado_g2b_css_rules_source.json` (the same source with 16 rules re-spelled as `@css:`), both
+  sanitized per ADR-0023 §决策 2 — neutral name, hosts → `example-novel.test` — with the original
+  host, the full derivation table and a two-command re-run recipe recorded in that directory's
+  README. With the host restored, the committed fixtures reproduced the recorded evidence
+  verbatim: identical stage counts and `sha256=6578ef3efc456856` for both spellings.
+- **The corpus statistic behind ADR-0032 was re-derived, and the numbers recorded there were
+  wrong.** The harness's own `--list` — the auditable implementation, which also rejects
+  `sourceRegex` and inspects every `@`-segment — reports **197 of 3907** sources as M0-compatible,
+  of which **137 (69.5%)** need the unknown-type degradation. The earlier 157/270 (58.1%) came from
+  a throwaway script with a looser filter, and “9 of the 13 live candidates failed in the search
+  stage” is in fact 10. ADR-0032 §背景/§后果/§备选方案, `book-source.md` §3 and
+  `tool/spot_check/README.md` are corrected, and `--list` now marks each source `degraded` so the
+  figure is one command plus the public collection instead of a number to trust.
+- **O3**: the sniffed-lane case became a table of four malformed inputs asserting the **exact**
+  detected label and zero replacements, replacing the `isNotEmpty` assertion. A
+  `throwsFormatException` case for that lane is not constructible, and the measurement is recorded
+  in the test: the detector's candidate table has no `utf-8`, its CJK labels are lenient codecs,
+  and `shift-jis` / `euc-jp` raise a `RangeError` (an `Error`, registered in `PLAN.md` §3.7)
+  rather than a `FormatException`.
+- **O4**: `search_books_test.dart` now asserts that a search request carries the source's `header`
+  map and the source id while still carrying the keyword.
+- The `us-ascii` exclusion comment now points at `book-source.md` §5.1, which owns that policy,
+  instead of at a decision item of ADR-0031.
+- Gates after the follow-up: `dart format` unchanged, `flutter analyze` clean, `flutter test
+  --coverage` 370 passed, `check_coverage.dart` exit 0 with `core` 357/357 and `domain` 925/925.
+
 ### Review of the G2b/ADR-0031/ADR-0032 commit: docs fixed, code items handed over (2026-10-12)
 
 Architect review of the dev team's `4304a19`, run in a detached worktree with the gates re-run
@@ -45,7 +75,7 @@ or handed back to the dev team (code and evidence).
   carries a correction note and points at `book-source.md` §5.1, which owns the split between
   "unreachable" and "deliberately excluded".
 - **Handed to the dev team:** (1) commit the two spot-check sources (baseline and the derived
-  `@css:` equivalent) so README §4's equal counts / equal `sha256` and the 58.1% figure become
+  `@css:` equivalent) so README §4's equal counts / equal `sha256` and the corpus statistic become
   reproducible — registered in `PLAN.md` §3.7; (2) add a direct test for the **sniffing lane failing
   strictly** (the current case only proves the tolerant path was not taken, and asserts with
   `isNotEmpty`); (3) assert `headers` / `sourceId` arrival for a second use case (search, which also
@@ -101,8 +131,8 @@ or handed back to the dev team (code and evidence).
 - **ADR-0032 (architect ruling on the spot-check evidence): an unknown default-rule type degrades
   to a raw CSS selector.** `.searchresult`, `li`, `dd`, `tr!0`, `#txt`, `div.item` were rejected
   before (as `parseFailed` / `unsupportedRule`), while upstream hands the segment to jsoup's
-  `doc.select`. The measurement that decided it: **157 of the 270** M0-compatible sources in the
-  collection (58.1%) use at least one such rule, and 9 of the 13 live candidates with real result
+  `doc.select`. The measurement that decided it: **137 of the 197** M0-compatible sources in the
+  collection (69.5%) use at least one such rule, and 10 of the 13 live candidates with real result
   links died in the search stage. `RuleEngine` now hands such a segment to cascadia, keeping the
   `!` / `[...]` position suffix out of the CSS (`tr!0` is not valid CSS), and `unsupportedRule` is
   reserved for the flags that really are unimplemented (`@xpath:` / bare `//` / `<js>` / `:regex`).

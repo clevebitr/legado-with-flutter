@@ -202,7 +202,10 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `extra` 的导出合并（`toLegadoJson`） | 随**导入 / 导出**功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出 |
 | Big5 / Big5-HKSCS 解码缺口 | 仍待排期（`book-source.md` §5.1） |
 | 文件型数据库（后台 isolate + 原生库）无自动化覆盖 | 由 `integration_test/` 覆盖（`test-environment.md` §4） |
-| G2b 的**证据语料未入库**：`tool/spot_check/` 只有 harness 与 README，基线书源与派生 `@css:` 等价源两个 JSON 都不在仓内，因此 README §4 的「同计数 + 同 `sha256`」与 58.1% 统计**不可复核**（合集 URL 内容会变）；而 `docs/README.md` §4 已宣称它「可复现」 | **开发组**：按 `test/fixtures/book_sources/README.md` 的来源/脱敏格式入库两条源（ADR-0023 口径），或在 README 里给出完整规则映射表；入库前本行的 G2b 记录视为「已跑通、证据待入库」 |
+| ~~G2b 的**证据语料未入库**~~ | ✅ **已闭环（2026-10-12）**：`legado_g2b_default_rules_source.json` 与
+`legado_g2b_css_rules_source.json` 按 `test/fixtures/book_sources/README.md` 的来源/脱敏格式入库（含 16 处派生映射表），
+入库后在活站点上逐字复现「同计数 + `sha256=6578ef3efc456856`」；同时发现并改正了统计口径：`--list` 复算为 **137/197（69.5%）**，
+搜索段失败 **10/13**（原 157/270、58.1%、9/13 出自未入库的临时脚本，已作废，见 ADR-0032 §背景） |
 | `shift-jis` / `euc-jp` 的字节不完整会让 `charset 2.0.1` 抛 `RangeError`（`Error`），越过 `ParseResult` 契约逃到调用方；同样地，`euc-kr` 的解码器静默丢弃非法字节（无宽容入口可走） | **待排期**：按 ADR-0022 不得捕获 `Error`，需换依赖或加隔离层；两族因此**不在** ADR-0031 的宽容映射里，仍按严格失败处理（`euc-kr` 则是依赖自身的丢弃行为）；证据与影响见 `tool/spot_check/README.md` §6 与 `book-source.md` §5.1 |
 | 矩阵 #14（`@js:`）无任何真实语料样本 | **3.7**：仓内 `test/fixtures/book_sources/*.json` 的 `@js:` 出现次数为 **0**，因此 #14 的状态列无法改「已确认」；补样前先补语料（ADR-0029 §后果） |
 | JS 绑定是否需要**同步**写法（3.3 只实现 Promise 形态的 `http.*` / `parse.*`） | **3.7** 真实语料回归出证据后，以**新 ADR** 裁决是否追加；不得就地放宽（ADR-0029 §决策 4） |

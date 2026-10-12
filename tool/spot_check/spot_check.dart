@@ -223,6 +223,7 @@ void _listCandidates(File file) {
   final Object? decoded = jsonDecode(file.readAsStringSync());
   final List<Object?> entries = decoded is List ? decoded : <Object?>[decoded];
   var compatible = 0;
+  var degraded = 0;
   for (final Object? item in entries) {
     if (item is! Map<String, Object?>) {
       continue;
@@ -232,14 +233,91 @@ void _listCandidates(File file) {
     }
     compatible++;
     final String rules = jsonEncode(item);
+    final bool needsDegradation = _needsUnknownTypeDegradation(item);
+    if (needsDegradation) {
+      degraded++;
+    }
     stdout.writeln(
-      '${rules.contains('@css:') ? 'css' : '   '}\t'
+      '${rules.contains('@css:') ? 'css ' : '    '}'
+      '${needsDegradation ? 'degraded' : '        '}\t'
       '${item['bookSourceName']}\t${item['bookSourceUrl']}',
     );
   }
   stdout.writeln(
     '-- $compatible of ${entries.length} sources are M0-compatible.',
   );
+  stdout.writeln(
+    '-- $degraded of $compatible M0-compatible sources rely on the unknown-type '
+    'degradation (ADR-0032).',
+  );
+}
+
+/// The selector types this repository implements (`book-source.md` §3, matrix #2..#4).
+const List<String> _implementedTypes = <String>[
+  'class',
+  'id',
+  'tag',
+  'text',
+  'children',
+];
+
+/// Whether [item] needs ADR-0032's unknown-type degradation for its chain rules.
+///
+/// List rules (`bookList` / `chapterList`) treat every `@`-segment as a selector, value
+/// rules treat all but the last one that way (the last is the extraction), and `||`
+/// branches are inspected separately — the same check the engine performs. This is what
+/// makes the “157 of 270” figure behind the ruling reproducible rather than trusted.
+bool _needsUnknownTypeDegradation(Map<String, Object?> item) {
+  final List<({String rule, bool isList})> rules =
+      <({String rule, bool isList})>[
+        (rule: _ruleText(item, 'ruleSearch', 'bookList'), isList: true),
+        (rule: _ruleText(item, 'ruleToc', 'chapterList'), isList: true),
+        (rule: _ruleText(item, 'ruleSearch', 'bookUrl'), isList: false),
+        (rule: _ruleText(item, 'ruleToc', 'chapterUrl'), isList: false),
+        (rule: _ruleText(item, 'ruleContent', 'content'), isList: false),
+      ];
+
+  for (final ({String rule, bool isList}) entry in rules) {
+    for (final String branch in entry.rule.split('||')) {
+      final List<String> segments = branch
+          .split('@')
+          .map((String segment) => segment.trim())
+          .toList();
+      final List<String> selectors = entry.isList
+          ? segments
+          : segments.sublist(0, segments.length - 1);
+      for (final String selector in selectors) {
+        if (selector.isEmpty || _isKnownSelector(selector)) {
+          continue;
+        }
+
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/// Reads one rule string out of a nested section of a book source JSON.
+String _ruleText(Map<String, Object?> item, String section, String key) {
+  final Map<String, Object?> rules =
+      item[section] as Map<String, Object?>? ?? const <String, Object?>{};
+
+  return '${rules[key] ?? ''}';
+}
+
+/// Whether [selector] is one the engine handles without ADR-0032's degradation.
+bool _isKnownSelector(String selector) {
+  final String lower = selector.toLowerCase();
+  if (lower.startsWith('@css:') ||
+      lower.startsWith('@json:') ||
+      selector.startsWith(r'$.') ||
+      selector.startsWith(r'$[')) {
+    return true;
+  }
+
+  return _implementedTypes.contains(selector.split('.').first);
 }
 
 /// Whether [item] uses only what this repository implements today.

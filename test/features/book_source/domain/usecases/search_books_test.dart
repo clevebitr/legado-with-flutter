@@ -376,5 +376,33 @@ void main() {
         'ruleContent',
       ]);
     });
+
+    test(
+      'execute_givenSourceWithHeaders_sendsThemAndTheSourceIdWithTheKeyword',
+      () async {
+        // 搜索请求同时携带 keyword（ADR-0006 §5 的日志口径），所以它必须单独钉一次：
+        // `header`（`book-source.md` §2 的 M0 字段）与书源 ID（ADR-0031 §决策 2 的
+        // warning 需要它，C-ERR-8）都要到位。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_searchUrl, _page('search_result.html'));
+        final BookSource source = _source().copyWith(
+          headers: <String, String>{
+            'User-Agent': 'Mozilla/5.0 (browser-like)',
+            'Referer': 'https://example-novel.test/',
+          },
+        );
+
+        _data(
+          await SearchBooks(pages: _service(http).pages).execute(source, '剑来'),
+        );
+
+        expect(http.requestedUrls, <String>[_searchUrl]);
+        expect(http.requestedHeaders.single, <String, String>{
+          'User-Agent': 'Mozilla/5.0 (browser-like)',
+          'Referer': 'https://example-novel.test/',
+        });
+        expect(http.requestedSourceIds, <String>[source.url]);
+      },
+    );
   });
 }

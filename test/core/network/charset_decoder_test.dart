@@ -138,17 +138,40 @@ void main() {
       expect(decoded.malformedByteCount, 0);
     });
 
-    test('decodeBody_whenSniffedBodyHasAStrayByte_doesNotTolerateIt', () {
-      // 嗅探车道不做宽容解码：那里「编码猜错了」与「字节坏了」无法区分，静默替换
-      // 会得到乱码正文（ADR-0031 §决策 2）。这个输入恰好被侦测为 shift-jis 且能
-      // 解码，因此断言的是「没有走宽容通道」，而不是「抛异常」。
-      final DecodedBody decoded = decodeBody(_utf8WithStrayByte);
+    test(
+      'decodeBody_whenBytesLookMalformedWithoutADeclaration_neverTolerates',
+      () {
+        // 嗅探车道不做宽容解码（ADR-0031 §决策 3）：标签是猜的，静默替换会把「猜错编码」
+        // 变成乱码正文。
+        //
+        // 为什么这里断言的是「标签 + 零替换」而不是 `throwsFormatException`：实测
+        // （2026-10-12，`betto_charset_detector 0.1.0`）它的候选表里**没有 utf-8**，而会招
+        // `FormatException` 的 `gbk` 在嗅探下不可达——构造与真实样本一律被判成
+        // iso-8859-1 / windows-1252 / euc-kr（宽容解码器）或 shift-jis / euc-jp，
+        // 后者在字节不完整时抛的是 `RangeError`（`Error`，已登记在 `PLAN.md` §3.7）。
+        // 因此「不宽容」是这条车道唯一可观测且在仓内可钉的行为；依赖修好后，嗅探车道
+        // 会抛异常的直接用例可再补。
+        final List<({List<int> bytes, String label})> samples =
+            <({List<int> bytes, String label})>[
+              (bytes: _utf8WithStrayByte, label: 'shift-jis'),
+              (bytes: <int>[0xB0, 0xA1, 0x81, 0xB0, 0xA1], label: 'iso-8859-1'),
+              (bytes: <int>[0x82, 0xA0, 0x82], label: 'windows-1252'),
+              (bytes: <int>[0xCC, 0xEC, 0x81], label: 'euc-kr'),
+            ];
 
-      expect(decoded.toleratedMalformedBytes, isFalse);
-      // 嗅探车道记录的是「实际用了哪个标签」，而不是「声明了哪个」。
-      expect(decoded.charset, isNotEmpty);
-      expect(decoded.malformedByteCount, 0);
-    });
+        for (final ({List<int> bytes, String label}) sample in samples) {
+          final DecodedBody decoded = decodeBody(sample.bytes);
+
+          expect(decoded.charset, sample.label, reason: '${sample.bytes}');
+          expect(
+            decoded.toleratedMalformedBytes,
+            isFalse,
+            reason: '${sample.bytes}',
+          );
+          expect(decoded.malformedByteCount, 0, reason: '${sample.bytes}');
+        }
+      },
+    );
 
     test('decodeBody_whenDeclaredLabelIsUnknownAndBytesAreNotUtf8_throwsFormatException', () {
       // 未知标签会回退 UTF-8（§5 的最后一步），那是回退车道，仍严格失败。
@@ -165,8 +188,9 @@ void main() {
     test(
       'decodeBody_whenDeclaredLabelHasNoTolerantCodec_throwsFormatException',
       () {
-        // `us-ascii` 明确不在宽容映射里：声明成 ascii 却带高位字节，是声明本身错了，
-        // 宽容解码只会把整页变成垃圾（ADR-0031 §决策 4）。
+        // `us-ascii` / `utf-16` / `utf-32` 的**排除策略**归 `book-source.md` §5.1：声明了
+        // 它们却解不开，说明声明本身错了（不是「坏字节」），宽容只会把整页变成垃圾。
+        // 代码只回链该节，不在这里复述（ADR-0013 §3）。
         expect(
           () => decodeBody(<int>[
             0xFF,

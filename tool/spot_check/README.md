@@ -41,8 +41,21 @@ dart run tool/spot_check/spot_check.dart --list=<collection.json>
 | 合集 B | `https://raw.githubusercontent.com/safino9/SourceGo/master/book_source/all.json`（189 条） |
 | 合集 C | `https://legado.aoaostar.com/sources/b778fe6b.json`（3907 条，最近同步 2026-08-15） |
 | 筛选 | `--list` 的判据：`searchUrl` 是 HTTPS GET 且含 `{{key}}`、四段规则非空、不含任何后续阶段的标志（`@js:` / `@xpath:` / `@put:` / `@get:` / `@@` / `<js>` / `{{}}` 内嵌 / 裸 `{…}` / `:正则`） |
-| 结果 | 合集 C 中 **270/3907** 条属于 M0；取其中 `lastUpdateTime` 最新的 80 条做一次只读探测 |
+| 结果 | 合集 C 中 **197/3907** 条属于 M0；取其中 `lastUpdateTime` 最新的 80 条做一次只读探测 |
 | 探测 | 80 条各 1 次 GET（浏览器 UA，≤12 s）；**40 条返回 200**，其中 13 条搜索页含真实结果链接 |
+| 依赖 ADR-0032 的源 | 197 条 M0 源中 **137 条（69.5%）** 至少一处规则需要「未知类型 → 原始 CSS」 |
+
+**一行复算这两个数字（含 ADR-0032 的依据）：**
+
+```bash
+curl -sSL -o /tmp/ao.json https://legado.aoaostar.com/sources/b778fe6b.json
+dart run tool/spot_check/spot_check.dart --list=/tmp/ao.json | tail -2
+# -- 197 of 3907 sources are M0-compatible.
+# -- 137 of 197 M0-compatible sources rely on the unknown-type degradation (ADR-0032).
+```
+
+> 每行的第 2 列标 `degraded` 即该源依赖退化（判据与引擎一致：列表规则每个 `@` 段都是选择器，
+> 取值规则除末段外都是选择器）。合集内容会随上游同步变化，上面是 **2026-08-15 快照**下的数字。
 
 > 只读、低频：每个候选 1 次请求，链路本体每站 ≤4 次（搜索 / 详情 / 目录 / 正文各 1）。
 > 不登录、不批量爬取、不落盘页面。
@@ -54,6 +67,7 @@ dart run tool/spot_check/spot_check.dart --list=<collection.json>
 ```
 语法：全部默认规则（矩阵 #1 / #2 / #5 / #8 / #9）
 书源：笔趣阁③ (https://www.biquge99.cc)          # 合集 C 第 42 条
+语料：test/fixtures/book_sources/legado_g2b_default_rules_source.json（已脱敏，主机还原后复跑）
 链路：搜索 → 详情 → 目录 → 正文
 结果：
   search   ok  count=2     剑来 https://www.biquge99.cc/book/1869698028/
@@ -63,10 +77,23 @@ dart run tool/spot_check/spot_check.dart --list=<collection.json>
 结论：已确认（该站的规则串是真实导出的原文，未做任何改写）
 ```
 
+**复跑（入库后的 fixture 已逐字复现上表）：**
+
+```bash
+sed 's/example-novel\.test/www.biquge99.cc/g' \
+  test/fixtures/book_sources/legado_g2b_default_rules_source.json > /tmp/g2b.json
+dart run tool/spot_check/spot_check.dart --source=/tmp/g2b.json --keyword=剑来
+```
+
+> 哈希钉的是 **2026-10-12 当天**的站点内容（站点改版后哈希会变，那是事实而不是回归）；
+> fixture 自身不含真实主机，因此需显式还原主机（见 `test/fixtures/book_sources/README.md`）。
+
 **矩阵 #12（`@css:`）在真实 HTML 上的证据：** 同一站点、同一批页面，把上一条书源的默认规则**逐条改写为等价的 `@css:` 写法**（`class.bookbox` → `@css:.bookbox`、`id.content@textNodes` →
 `@css:#content@textNodes`、`class.bookimg@tag.img.0@src` → `@css:.bookimg img:eq(0)@src` 等，
-后者同时行使矩阵 #29），重跑得到**同样的四段计数**，且正文 **sha256 完全相同**
+后者同时行使矩阵 #29），得到**同样的四段计数**，且正文 **sha256 完全相同**
 （`6578ef3efc456856`）。⇒ cascadia 对本仓 `@css:` 求值路径在真实页面上与默认规则等价。
+派生源的**逐条映射表（16 处）与复跑命令**见 `test/fixtures/book_sources/README.md`；
+入库后的派生 fixture 已逐字复现上表（`legado_g2b_css_rules_source.json`）。
 
 > 为什么是派生源：合集里唯一两条用 `@css:` 的源，其站点一条已停放（`m.kayege.info` 返回
 > Coming Soon），另一条被 Cloudflare 拦截（`99csw.com`）；见 §5 的「源失效」发现。
@@ -87,7 +114,7 @@ Declared charset utf-8 carried illegal bytes; 1 malformed byte replacement(s) in
 | 现象 | 站点 | 归属 | 处理 |
 |---|---|---|---|
 | 书页声明 UTF-8 但含 1 个非法字节（131 368 B 中偏移 130 893 处 `0x8b`）→ 整段 `encodingFailed` | `biquge99.cc` 等 3 条同站源 | 本仓口径 | **ADR-0031**：声明车道宽容解码 + 一条带「声明的编码 + 替换数 + 书源 ID」的 warning（已实现，该站因此跑通）；记录里已按该 ADR 要求写明「该页含非法字节」 |
-| `.searchresult` / `li` / `dd` 等未知类型 → 搜索段即失败 | `ihuaben.com` / `zhulang.com` 等 9 条 | 本仓口径 | **ADR-0032**：未知类型退化为原始 CSS（已实现，`ihuaben.com` 随后搜索段拿到 30 条真实结果） |
+| `.searchresult` / `li` / `dd` 等未知类型 → 搜索段即失败 | `ihuaben.com` / `zhulang.com` 等 10 条 | 本仓口径 | **ADR-0032**：未知类型退化为原始 CSS（已实现，`ihuaben.com` 随后搜索段拿到 30 条真实结果） |
 | 声明 `shift-jis` / `euc-jp` 且字节不完整 → 依赖抛 `RangeError`（`Error`）逃出 `ParseResult` 契约；`euc-kr` 则静默丢弃非法字节 | — | 依赖缺陷 + `Error` 不得捕获（ADR-0022） | 登记为已知缺口，见 §6（宽容映射因此只含 `utf-8` / `gbk`，见 `book-source.md` §5.1） |
 | 搜索参数改版（源写 `wd=`，站点现在用 `qd=`）、目录结构改版 | `dushu.com` / `linovel.net` | **源失效**，非本仓缺陷 | 记录即可；矩阵状态列仍由 3.7 的真实回归决定 |
 
