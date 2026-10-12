@@ -118,9 +118,12 @@ Future<void> _quickJsWorkerMain(List<Object?> bootstrap) async {
   final JavascriptRuntime runtime = getJavascriptRuntime(
     timeout: timeoutMs,
     memoryLimit: memoryLimit,
+    // §6 禁止定时器、`console` 与原生态；`JsWebApis.none()` 就是「什么都不装」
+    // （库自己的描述：no console, no timers, plain ECMAScript），比装完再 delete 干净。
+    // 剩下的重绑防护由 `_evaluationSource` 在每个 job 前重跑沙箱完成。
+    webApis: const JsWebApis.none(),
   );
   _installHostBindings(runtime, port);
-  runtime.evaluate(_prelude);
 
   await for (final Object? raw in fromBridge) {
     if (raw is! Map) {
@@ -191,7 +194,16 @@ void _evaluate(JavascriptRuntime runtime, Object? job, SendPort toBridge) {
   });
 }
 
-/// Builds the script one job runs: the §6 variables, then the rule through the helper.
+/// Builds the script one job runs: the sandbox (re-applied every job), the §6
+/// variables, then the rule through the helper.
+///
+/// **The whole sandbox is re-applied per job on purpose.** The runtime is reused and
+/// `globalThis` is shared, so a rule could otherwise leave `globalThis.crypto` or
+/// `globalThis.log` pointing somewhere else (freezing the object does not protect the
+/// property name) and the *next* job — possibly another book source — would inherit it.
+/// Re-running the prelude costs a re-parse of about 1.5 KB next to a 5 s budget and
+/// repairs every whitelisted name; the belt-and-braces `delete` list inside it also
+/// clears the names §6 forbids, in case a rule defined them again.
 ///
 /// `eval` inside the helper is what gives the rule its **completion value** semantics:
 /// `result.replace(...)` and `var x = 1; x + 1` both produce a value, so a source can
@@ -199,6 +211,7 @@ void _evaluate(JavascriptRuntime runtime, Object? job, SendPort toBridge) {
 /// nothing in the rule can break out of it.
 String _evaluationSource(Map<String, Object?> fields) {
   final StringBuffer buffer = StringBuffer()
+    ..writeln(_prelude)
     ..writeln('var baseUrl = ${jsonEncode(fields['baseUrl'])};')
     ..writeln('var result = ${jsonEncode(fields['result'])};')
     ..writeln('var page = ${jsonEncode(fields['page'])};')
@@ -264,7 +277,26 @@ void _installHostBindings(JavascriptRuntime runtime, SendPort toBridge) {
 /// Every `sendMessage` payload is a `JSON.stringify` object: the bridge decodes it with
 /// `jsonDecode` before the handler sees it (`tool/spike/README.md` §4), so a bare
 /// string would not survive.
+///
+/// It is re-evaluated before every job (see `_evaluationSource`), so every statement
+/// here must be idempotent. The first block closes the holes F1 of the 3.3 review
+/// found: the names §6 forbids are deleted even though `JsWebApis.none()` should never
+/// have installed them, because a rule can define them itself and the next job must not
+/// inherit that.
 const String _prelude = r'''
+(function () {
+  var forbidden = [
+    'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
+    'queueMicrotask', 'setImmediate', 'console',
+    'atob', 'btoa', 'structuredClone', 'performance',
+    'require', 'process', 'XMLHttpRequest', 'fetch',
+    'navigator', 'location', 'window', 'global', 'self'
+  ];
+  for (var index = 0; index < forbidden.length; index++) {
+    delete globalThis[forbidden[index]];
+  }
+})();
+
 globalThis.__runRule = function (scriptText) {
   var value;
   try {

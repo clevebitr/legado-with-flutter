@@ -27,6 +27,13 @@ const String _jsTimeoutMarker = 'js:timeout';
 /// Marks the `rulePath` of a JS failure that came from the script itself (§6).
 const String _jsErrorMarker = 'js:error';
 
+/// Longest `log.*` message the bridge forwards (`docs/dev/book-source.md` §6).
+///
+/// A rule's diagnostic line is not a data channel: without a bound, `log.debug(result)`
+/// on a 200 KB page would write 200 KB per chapter straight into the log sink, which
+/// grows the privacy surface and the disk footprint together (C-SEC-4).
+const int maxJsLogMessageLength = 2000;
+
 /// [JsBridge] backed by **one resident worker isolate with one reused runtime**.
 ///
 /// ADR-0030 §决策 1 fixes the shape: a single worker (created lazily on the first
@@ -71,7 +78,9 @@ final class QuickJsWorkerBridge implements JsBridge {
   @override
   Future<ParseResult<Object?>> evaluate(JsJob job) {
     if (_disposed) {
-      return Future<ParseResult<Object?>>.value(_cancelled(job.rulePath));
+      return Future<ParseResult<Object?>>.value(
+        _cancelledFailure(job.rulePath),
+      );
     }
 
     final _PendingJob pending = _PendingJob(job);
@@ -110,7 +119,7 @@ final class QuickJsWorkerBridge implements JsBridge {
         // dispose 之后不再拉起新 worker（ADR-0030 §决策 6 的作用域生命周期），
         // 否则一个已释放的桥会给排队中的 job 又开一个隔离体。
         if (_disposed) {
-          pending.completer.complete(_cancelled(pending.job.rulePath));
+          pending.completer.complete(_cancelledFailure(pending.job.rulePath));
           continue;
         }
         pending.completer.complete(await _run(pending.job));
@@ -166,13 +175,14 @@ final class QuickJsWorkerBridge implements JsBridge {
 
     return created;
   }
-
-  /// The failure a job gets when this bridge no longer runs jobs (C-ERR-1).
-  ParseFailure<Object?> _cancelled(String rulePath) => failureAt<Object?>(
-    kind: ParseFailureKind.cancelled,
-    rulePath: '$rulePath:$_jsErrorMarker',
-  );
 }
+
+/// The failure a job gets when it is dropped instead of run (C-ERR-1).
+///
+/// The path stays the bare field: a cancellation is not a script error, so it carries no
+/// `js:*` marker — §6 leaves the trigger itself to §7 (review F3).
+ParseFailure<Object?> _cancelledFailure(String rulePath) =>
+    failureAt<Object?>(kind: ParseFailureKind.cancelled, rulePath: rulePath);
 
 /// One queued evaluation and the caller waiting on it.
 final class _PendingJob {
@@ -247,12 +257,7 @@ final class _WorkerSession {
       final String rulePath = _inFlightRulePath ?? 'js';
       _inFlight = null;
       _inFlightRulePath = null;
-      inFlight.complete(
-        failureAt<Object?>(
-          kind: ParseFailureKind.cancelled,
-          rulePath: '$rulePath:$_jsErrorMarker',
-        ),
-      );
+      inFlight.complete(_cancelledFailure(rulePath));
     }
 
     if (!_closed.isCompleted) {
@@ -326,8 +331,13 @@ final class _WorkerSession {
   }
 
   /// Forwards one `log.*` record, tagged with the field it came from (§6).
+  ///
+  /// The text is capped at [maxJsLogMessageLength] and the cut is marked, so the bound
+  /// is visible instead of silently losing the tail.
   void _onLog(Map<String, Object?> message) {
-    final String text = _stringField(message, 'message') ?? '';
+    final String text = _limitLogMessage(
+      _stringField(message, 'message') ?? '',
+    );
     final String line = '[js:${_inFlightRulePath ?? 'js'}] $text';
 
     switch (_stringField(message, 'level')) {
@@ -406,6 +416,17 @@ String? _stringField(Map<String, Object?> message, String key) {
   final Object? value = message[key];
 
   return value is String ? value : null;
+}
+
+/// Caps one `log.*` message at [maxJsLogMessageLength], marking what was dropped.
+String _limitLogMessage(String text) {
+  if (text.length <= maxJsLogMessageLength) {
+    return text;
+  }
+  final int dropped = text.length - maxJsLogMessageLength;
+
+  return '${text.substring(0, maxJsLogMessageLength)}'
+      '…[truncated $dropped chars]';
 }
 
 /// Reads an `int` field of an envelope, ignoring a value of another type.

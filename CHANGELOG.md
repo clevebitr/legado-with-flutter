@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 3.3 review fixes: the sandbox closes its holes, `log.*` gets a ceiling, cancellation stops lying (2026-10-12)
+
+The architect independently re-ran the six host gates and the real-engine device probe (all green) and
+passed 3.3 **conditionally**, with one rule violation and two smaller items. All three are fixed:
+
+- **F1 (rule violation): the engine's own Web APIs were reachable from a rule.** §6 forbids timers,
+  `console` and native bindings, but `getJavascriptRuntime` installs a `JsWebApis.core` set by
+  default, so a probe on the Windows build found `setTimeout` / `setInterval` /
+  `clearTimeout` / `clearInterval` / `queueMicrotask` / `console` / `atob` / `btoa` /
+  `structuredClone` / `performance` all present — with three consequences: a timer left by one source
+  fires during another source's job (active cross-source interference, worse than ADR-0030 §决策 4's
+  registered passive `globalThis` sharing), a rule can rebind `globalThis.crypto` / `globalThis.log`
+  and the tampering reaches the next job (`Object.freeze` freezes the object, not the property name),
+  and `console.*` bypasses the `core/logging` facade (C-ERR-5, C-SEC-4).
+  **Two-part fix:** the worker builds the runtime with `JsWebApis.none()` — the library's "installs
+  nothing at all: no `console`, no timers, plain ECMAScript" — and every job now re-applies the
+  sandbox prelude before its script, which deletes the forbidden names (belt and braces, and it also
+  clears whatever a rule defined itself) and re-installs `log` / `crypto`. Re-parsing ~1.5 KB next to
+  a 5 s budget is noise. The integration probe gained three cases: every forbidden name must be
+  `undefined`, a job that does `delete globalThis.crypto; globalThis.log = null` must not affect the
+  next one, and the hardened sandbox must still let the engine drain its own promise job queue
+  (which 3.4's Promise bindings depend on).
+- **F2: `log.*` now has a host-side ceiling.** The facade redacts patterns, not size, so
+  `log.debug(result)` on a 200 KB page wrote 200 KB per chapter into the sink. §6 gained
+  "one `log.*` message: 2000 characters", the bridge truncates with a visible marker, and a unit test
+  pins the cut. Counting `log.*` calls towards the per-rule quota lands with the quota itself in 3.4
+  (§6 and `PLAN.md` §3.7 say so).
+- **F3: a cancellation no longer claims to be a script error.** Jobs dropped because the bridge was
+  disposed carried `rulePath: '<field>:js:error'`, which §6 defines as "the script threw". They now
+  carry the bare field path; §6's note spells it out, and §7's `cancelled` row (its owner is §7) gets
+  the "bridge or scope released" trigger from the review.
+- Gates after the fixes: `dart format` clean, `flutter analyze` clean, `flutter test --coverage` 424
+  passed, `check_coverage.dart` exit 0 with `core` 567/567 and `domain` 1048/1048; Windows device
+  suite 3/3 files green (now 9 JS cases, including a check that the hardened sandbox still drains
+the engine's promise job queue — which 3.4's Promise bindings depend on).
+
 ### Phase 3.3: the `@js:` sandbox — bridge contract, resident worker, sync bindings (2026-10-12)
 
 The freeze preconditions are met (G2b, 3.5, 3.8), so the `JsBridge` contract is now in place: one

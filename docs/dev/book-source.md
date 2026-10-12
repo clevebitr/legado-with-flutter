@@ -421,6 +421,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | 单次 JS 墙钟超时 | 5 秒 |
 | 单次 JS 内存上限 | 32 MB |
 | 单条规则内 JS 调用次数 | ≤ 20 |
+| 单条 `log.*` 消息的字符上限 | 2 000（超出截断并附截断标记） |
 
 超时或异常 → `ParseFailure(parseFailed)`，`rulePath` 中标注 `js:timeout` 或 `js:error`。
 
@@ -433,14 +434,27 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   并在下一个 job 重建 worker。
 > - **`rulePath` 的标注形态：** 失败把标注**附在字段路径后**——`<字段路径>:js:timeout` /
 >   `:js:error`（例 `searchRule.name:js:timeout`），这样 C-SRC-8 的「可定位」与本表的「标注」
->   两个要求同时成立。
+>   两个要求同时成立。**例外：** 取消（桥 / 作用域已释放，或调用方主动取消）只带**裸字段路径**、
+>   不带标记——取消不是脚本错误，触发条件归 §7。
+> - **沙箱的禁令是按 §6 执行且可实测的（2026-10-12，3.3 复核 F1）：** 运行时以「什么都不装」
+>   构造（`JsWebApis.none()`：无 `console`、无定时器，plain ECMAScript），并且**每个 job 前
+>   重跑一次沙箱预备**——删掉 §6 禁止的名字（`setTimeout` / `setInterval` / `clearTimeout` /
+>   `clearInterval` / `queueMicrotask` / `console` / `atob` / `btoa` / `structuredClone` /
+>   `performance` / `require` / `process` / `XMLHttpRequest` / `fetch` 等）并重装白名单绑定。
+>   重跑是必要的：`Object.freeze(crypto)` 冻的是对象、不是 `globalThis` 上的属性名，规则写
+>   `globalThis.crypto = …` 会把篡改留给**下一个 job（可能是另一个书源）**。集成探针逐名断言
+>   这些名字是 `undefined`，验证重绑后下一个 job 仍能拿到真绑定，并确认硬化沙箱没有打掉引擎
+>   自己的 Promise 作业队列（3.4 的 Promise 绑定靠它）。
+> - **`log.*` 的宿主侧上界（3.3 复核 F2）：** 单条消息截断到上表的 2 000 字符并留可见标记，
+>   所以 `log.debug(result)` 不会把 200KB 正文写进日志；本条数**计入**「单条规则内 JS 调用次数」
+>   额度（随 3.4 的额度实现同批）。
 > - **未落的部分归 3.4：** Promise 形态的 `http.*` / `parse.*`（唯一实现分别是
 >   `core/network/HttpClient` 与规则引擎）、`parse.*` 的**页级 scope 边界**（命中报
->   `js:parse-scope`，ADR-0029 §决策 5），以及「单条规则内 JS 调用次数 ≤ 20」——它数的是
->   `parse.*` 的递推调用，因此与 `parse.*` 同批实现（ADR-0030 §决策 3 的「按 job 计数」）。
+>   `js:parse-scope`，ADR-0029 §决策 5），以及「单条规则内 JS 调用次数 ≤ 20」（含 `log.*` 计数）
+>   ——它数的是 `parse.*` 的递推调用，因此与 `parse.*` 同批实现（ADR-0030 §决策 3 的「按 job 计数」）。
 > - **`log.*` 的 C-SEC-4 边界：** 转发的是**规则作者自己写的**文本，只经 `AppLogger` 的
->   `redactMessage`（能掩 URL / 凭据，**认不出正文**）。因此规则不得把页面正文交给 `log.*`——
->   这是书源作者的义务，宿主侧无法代为净化。
+>   `redactMessage`（能掩 URL / 凭据，**认不出正文**）。上界挡住体量，但「不得把页面正文交给
+>   `log.*`」仍是书源作者的义务，宿主侧无法代为净化。
 
 ---
 

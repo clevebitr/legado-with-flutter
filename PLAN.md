@@ -217,7 +217,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `shift-jis` / `euc-jp` 的字节不完整会让 `charset 2.0.1` 抛 `RangeError`（`Error`），越过 `ParseResult` 契约逃到调用方；同样地，`euc-kr` 的解码器静默丢弃非法字节（无宽容入口可走） | **待排期**：按 ADR-0022 不得捕获 `Error`，需换依赖或加隔离层；两族因此**不在** ADR-0031 的宽容映射里，仍按严格失败处理（`euc-kr` 则是依赖自身的丢弃行为）；证据与影响见 `tool/spot_check/README.md` §6 与 `book-source.md` §5.1 |
 | 矩阵 #14（`@js:`）无任何真实语料样本 | **3.7**：仓内 `test/fixtures/book_sources/*.json` 的 `@js:` 出现次数为 **0**，因此 #14 的状态列无法改「已确认」；补样前先补语料（ADR-0029 §后果） |
 | JS 绑定是否需要**同步**写法（3.3 只实现 Promise 形态的 `http.*` / `parse.*`） | **3.7** 真实语料回归出证据后，以**新 ADR** 裁决是否追加；不得就地放宽（ADR-0029 §决策 4） |
-| 3.3 未落的绑定与额度（`http.*` / `parse.*` 的 Promise 形态、`parse.*` 的页级 scope、≤20 调用额度） | **3.4**：清单归 `book-source.md` §6 的注记；元素级 scope 按 ADR-0029 §决策 5 报 `js:parse-scope` |
+| 3.3 未落的绑定与额度（`http.*` / `parse.*` 的 Promise 形态、`parse.*` 的页级 scope、≤20 调用额度**含 `log.*` 计数**） | **3.4**：清单归 `book-source.md` §6 的注记；元素级 scope 按 ADR-0029 §决策 5 报 `js:parse-scope` |
 | ~~3.8 并发策略与 JS worker 容量的耦合~~ | ✅ **已闭环（ADR-0030）**：裁决为单常驻 worker + 单复用运行时 + FIFO，**容量不进 `JsBridge` 契约**；重开触发条件见 ADR-0030 §决策 5 |
 | ~~`isVip` 的**正侧**真值缺上游 `file:line`~~ | ✅ **已闭环（R1，2026-10-12）**：直抓 fork 源码 `HapeLee/legado-with-MD3@master`，判定就是上游 `String?.isTrue()`（调用 `BookChapterList.kt:261-264`，谓词 `StringExtensions.kt:75-80`）——`null` / 全空白 / 字面量 `"null"` → 非 VIP，其余值除非匹配 `(?i)^(?:false|no|not|0|0.0)$` 否则算 VIP（因此 `是` / `yes` 是 VIP，`no` / `not` / `0.0` 不是）；代码与测试已按此对齐，两处上游怪癖（`"null"` 在 trim 前比较、模式里 `.` 未转义）按原样照抄并登记在 `book-source.md` §4.1，唯一出处仍是 §4.1 |
 | 并发上限接入**用户设置**时（Phase 5）必须显式校验 `> 0`：`HttpPolicy` / `RequestLimiter` 目前只用 `assert`，release 下会被剥掉，`0` 会让该键的每个请求**永久排队** | **Phase 5（设置页）**：在设置边界校验或钳制；语义归 `book-source.md` §8 |

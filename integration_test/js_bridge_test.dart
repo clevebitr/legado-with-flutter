@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
@@ -108,6 +110,83 @@ void main() {
 
     expect(_value(after), 'still alive');
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenRunningARule_hidesEverythingOutsideTheWhitelist', (
+    WidgetTester tester,
+  ) async {
+    // F1：§6 的禁令必须是可实测的——引擎自带的定时器 / console / 编码函数 / 模块
+    // 加载器全部不在沙箱里（`JsWebApis.none()`），白名单外的名字全部是 undefined。
+    const List<String> forbidden = <String>[
+      'setTimeout',
+      'setInterval',
+      'clearTimeout',
+      'clearInterval',
+      'queueMicrotask',
+      'console',
+      'atob',
+      'btoa',
+      'structuredClone',
+      'performance',
+      'require',
+      'process',
+      'XMLHttpRequest',
+      'fetch',
+    ];
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            '${jsonEncode(forbidden)}.map(function (name) {'
+            " return name + '=' + typeof globalThis[name]; }).join(',')",
+      ),
+    );
+
+    expect(
+      _value(result),
+      forbidden.map((String name) => '$name=undefined').join(','),
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleRebindsTheWhitelist_theNextJobIsRepaired', (
+    WidgetTester tester,
+  ) async {
+    // F1：Object.freeze 冻的是对象，不是 globalThis 上的属性名，所以每个 job 前重跑沙箱。
+    await bridge.evaluate(
+      _job(
+        script: "delete globalThis.crypto; globalThis.log = null; 'tampered'",
+      ),
+    );
+
+    final ParseResult<Object?> after = await bridge.evaluate(
+      _job(script: "crypto.md5('abc') + '|' + typeof log"),
+    );
+
+    expect(_value(after), '900150983cd24fb0d6963f7d28e17f72|object');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets(
+    'jsBridge_whenAScriptSchedulesAPromiseJob_theEngineStillDrainsIt',
+    (WidgetTester tester) async {
+      // F1 的收尾检查：硬化沙箱（`JsWebApis.none()` + 删掉定时器/microtask 名字）不能把引擎
+      // 自己的 Promise 作业队列一起打掉——3.4 的 `http.*` / `parse.*` 靠它才能返回 Promise。
+      // 观察方式是跨两个 job 的全局量：同一个运行时被复用，所以第一个 job 排下的作业在第二个
+      // job 读取时已经跑完（`enableHandlePromises` + `executePendingJobs`）。
+      await bridge.evaluate(
+        _job(
+          script:
+              "globalThis.__promiseJob = 'pending';"
+              'Promise.resolve(1).then(function () {'
+              " globalThis.__promiseJob = 'ran'; }); 'scheduled'",
+        ),
+      );
+
+      final ParseResult<Object?> after = await bridge.evaluate(
+        _job(script: 'globalThis.__promiseJob'),
+      );
+
+      expect(_value(after), 'ran');
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 
   testWidgets('jsBridge_whenTheScriptThrows_reportsJsError', (
     WidgetTester tester,

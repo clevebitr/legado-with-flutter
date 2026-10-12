@@ -333,6 +333,39 @@ void main() {
       );
     });
 
+    test('evaluate_givenALongLogMessage_truncatesItAndMarksTheCut', () async {
+      final _Fixture fixture = _buildBridge();
+
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'log',
+        'level': 'info',
+        'message': 'x' * 2500,
+      });
+      await pumpEventQueue();
+
+      // F2：宿主侧上界（§6），截断处必须有可见标记，不能静默丢尾巴。
+      const String prefix = '[js:searchRule.name] ';
+      const String marker = '…[truncated 500 chars]';
+      final String line = '${fixture.printer.events.last.message}';
+      expect(line, startsWith(prefix));
+      expect(line, endsWith(marker));
+      expect(
+        line.length,
+        prefix.length + maxJsLogMessageLength + marker.length,
+      );
+
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+      });
+      await call;
+    });
+
     test(
       'dispose_givenQueuedJobs_completesThemAsCancelledAndKillsTheWorker',
       () async {
@@ -350,7 +383,10 @@ void main() {
         await fixture.bridge.dispose();
 
         expect(_failure(await running).kind, ParseFailureKind.cancelled);
+        // F3：取消不是脚本错误，因此只带字段路径、不带 `js:*` 标记。
+        expect(_failure(await running).rulePath, 'searchRule.name');
         expect(_failure(await queued).kind, ParseFailureKind.cancelled);
+        expect(_failure(await queued).rulePath, 'searchRule.name');
         expect(worker.killCount, 1);
         // dispose 之后的调用不再拉起 worker（ADR-0030 §决策 6 的作用域生命周期）。
         expect(
