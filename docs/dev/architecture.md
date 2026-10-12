@@ -17,7 +17,7 @@ lib/
 │   ├── di/                       # 基础设施 Provider（数据库、HttpClient、Logger）
 │   ├── error/                    # ParseResult / ParseFailureKind / ARB 键名助手
 │   ├── logging/                  # Logger 门面（唯一日志入口）
-│   ├── network/                  # HttpClient、CookieManager、超时与重试策略
+│   ├── network/                  # HttpClient、CookieManager、超时/重试策略与同一书源的并发预算
 │   ├── platform/                 # 平台抽象接口 + 各平台实现 + fallback
 │   ├── router/                   # 路由机制（RouteSettings → 页面）与唯一 push 入口；页面表见 §6
 │   ├── storage/                  # Drift 数据库、DAO、键值存储封装

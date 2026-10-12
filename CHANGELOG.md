@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review of the 3.8 slice: three boundaries registered, no code findings (2026-10-12)
+
+Architect review of `15339cf`, gates re-run in a detached worktree: format clean, `flutter analyze`
+no issues, **405** tests, coverage exit 0 with `core` 385/385 and `domain` 1047/1047. The limiter
+and its wiring passed review (the slot hand-over leaves the count unchanged, so the gap between
+releasing and re-taking cannot admit an extra request; an action that throws still releases; the
+retry loop spends a second slot only after the first came back). Three boundaries are registered
+here instead of being rediscovered late:
+
+- **The JS bridge will share the per-source budget (3.4).** A JS `http.*` call spends the same
+  source budget as the page fetch, so the implementation must not start a same-source request from
+  inside a call that already holds a slot — with a budget of 3 that would exhaust itself and queue
+  forever. `book-source.md` §8 now states it.
+- **One host can carry two budgets**: calls with a source context bucket by `sourceId`, calls
+  without one bucket by URL host, and the two do not interact. §8 now says so.
+- **Two Phase 5 items landed in `PLAN.md` §3.7**: the budget must be validated `> 0` once it becomes
+  a user setting (the constructors only `assert`, which release builds strip, and a zero budget
+  queues every request forever), and the autoDispose `httpClientProvider` makes the budget effective
+  within one operation — the batch download must keep one budget for the whole batch.
+
+No code change was needed for 3.8 itself. The integration also brought the 3.5-era review fixes
+(B2/B3 and the R1 registry row) back on top of this branch, and refreshed
+`docs/dev/test-environment.md` §7 to the 405 / 385 / 1047 run.
+
+### Phase 3.8: one concurrency budget per book source, spent in the request layer (2026-10-12)
+
+`book-source.md` §8's per-source concurrency cap is now enforced instead of being a value
+nothing read. ADR-0030 §决策 2 puts the budget in the **request layer** and keeps it out of the
+`JsBridge` contract, so it is spent at the one place every request passes through.
+
+- **New `core/network/request_limiter.dart`**: a FIFO gate. `run(key, action)` takes one of the
+  key's slots or waits until the oldest caller hands one over. A caller over the budget **waits**
+  instead of failing — C-SRC-9 requires concurrent calls to be safe, so "busy" is not an
+  acceptable answer — and the slot is released even when the action throws, so one broken request
+  cannot shrink the budget for the rest of the session. The hand-over leaves the count unchanged,
+  so the gap between releasing and re-taking cannot let an extra request through.
+- **`DioHttpClient` spends it per wire attempt**, keyed by `sourceId` (the book source URL) and by
+  the URL host when a call has no source context. The future batch chapter download (Phase 5) is
+  therefore bounded as soon as it goes through `HttpClient` (C-NET-1), with no caller having to
+  know about the budget; `FetchContent`'s own paging was already serial. A retry spends a second
+  slot only after the first came back, which keeps the budget about requests on the wire.
+- **`HttpPolicy.maxConcurrentRequestsPerSource`** is the knob: it defaults to
+  `defaultMaxConcurrentRequestsPerSource` (3, owned by §8) and is overridable through the
+  `httpPolicyProvider` seam the settings phase already uses. `concurrentRate` (M1) will read a
+  source's own declaration into the same value.
+- 10 new cases (405 total): the limiter's concurrency, queueing, FIFO order, per-key independence
+  and release-on-throw; the client's per-source queueing plus the host fallback key, driven by a
+  new `FakeHttpAdapter.onFetch` hook that holds requests open without any wall-clock wait; and the
+  policy default, a custom value and the non-positive assert.
+- Gates: `dart format` unchanged, `flutter analyze` clean, `flutter test --coverage` 405 passed,
+  `check_coverage.dart` exit 0 with `core` 385/385 and `domain` 1047/1047.
+
 ### Review B1: the paging URL templates are rendered before they are requested (2026-10-12)
 
 Review found that `nextTocUrl` / `nextContentUrl` only went through `resolveAbsoluteUrl`, never

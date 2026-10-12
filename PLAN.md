@@ -72,7 +72,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
-| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**下一步顺序以 §3.4 为准**（当前 = 3.8）。细节见 `CHANGELOG.md` |
+| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**下一步顺序以 §3.4 为准**（当前 = 3.3 / 3.4）。细节见 `CHANGELOG.md` |
 | Phase 4 — M1 | ⏳ 未开始 | — |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
@@ -135,6 +135,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
    —— ✅ **已完成（2026-10-12）**：四个字段已建模（`extra` 的期望清单同步改）；目录 / 正文翻页、
    `isVip` 判定与 `replaceRegex` 净化按 `book-source.md` §4.1 落地，§9 补「正文分页失败整章失败」一行。
 5. **3.8** 在 3.5 之后：同书源并发上限 + 章节正文有限并发。
+   —— ✅ **已完成（2026-10-12）**：预算落在请求层（`DioHttpClient` + `RequestLimiter`），默认 3
+   且可配（`HttpPolicy.maxConcurrentRequestsPerSource`）、FIFO 排队不报 busy、异常也释放槽位；
+   实现点与排队语义归 `book-source.md` §8，容量不进 `JsBridge` 契约（ADR-0030 §决策 2）。
 6. **3.3 与 3.4**：`JsBridge` 与 `@js:` 接入 —— 白名单里的 `parse.getString(rule, doc)` 委托给
    规则引擎，所以必须等 3.2 / 3.5 的求值路径定型再冻结桥接契约。
 7. **3.7**：真实书源回归记录，把矩阵 M0 行的状态列改为「已确认」。
@@ -149,7 +152,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定、`replaceRegex` 批量替换（含建模 `ContentRule.replaceRegex`） ✅ | 各 1 条单测 |
 | 3.6 | 失败语义全量：9 个 `ParseFailureKind` 各有触发路径 | 每个 kind ≥1 条单测 |
 | 3.7 | **真实书源验证记录** | 按 `book-source.md` §10 格式写入 PR，并把矩阵状态列改为「已确认」 |
-| 3.8 | 同一书源并发上限（默认 3）+ 章节正文串行/有限并发 | 并发上限可配且有单测；超限请求排队而非并发发出；**并发预算只在此层实现，不改 `JsBridge` 契约**（ADR-0030 §决策 2） |
+| 3.8 | 同一书源并发上限（默认 3）+ 章节正文串行/有限并发 ✅ | 并发上限可配且有单测；超限请求排队而非并发发出；**并发预算只在此层实现，不改 `JsBridge` 契约**（ADR-0030 §决策 2） |
 | 3.9 | charset 检测结果缓存：按「书源 ID + URL」维度缓存；复用 `CacheDao` 的稳定键与 TTL，**不加列、不新建表**（架构师裁决 F1） | 同 `(书源, URL)` 第二次编码检测**不再嗅探**，有单测；本行同时让 `CacheDao` 拿到第一个生产消费方 |
 
 **完成判定：** 2 个真实书源完成全链路离线回放；矩阵 M0 行的状态列**全部为「已确认」**。
@@ -194,7 +197,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 | 事项 | 去向 |
 |---|---|
-| 同一书源并发上限 3 + 章节正文有限并发 | **3.8** |
+| 同一书源并发上限 3 + 章节正文有限并发 | ✅ **已闭环（3.8，2026-10-12）**：请求层唯一实现点 `DioHttpClient` + `RequestLimiter`（键 = 书源，无书源时按主机；默认 3 可配、FIFO 排队不报 busy、异常也释放槽位）；语义归 `book-source.md` §8 |
 | charset 检测结果缓存 | **3.9**（本阶段闭环） |
 | 按书源清理缓存（需加列 + 迁移） | **Phase 5.5** |
 | 非顶层字段被拒降级为 warning（ADR-0026） | ✅ **已闭环（3.2）**：唯一实现点为 `PageFetchService`，两类（`unsupportedRule` / `parseFailed`）均降级，顶层 / 非顶层各 ≥1 条测试 |
@@ -213,6 +216,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | JS 绑定是否需要**同步**写法（3.3 只实现 Promise 形态的 `http.*` / `parse.*`） | **3.7** 真实语料回归出证据后，以**新 ADR** 裁决是否追加；不得就地放宽（ADR-0029 §决策 4） |
 | ~~3.8 并发策略与 JS worker 容量的耦合~~ | ✅ **已闭环（ADR-0030）**：裁决为单常驻 worker + 单复用运行时 + FIFO，**容量不进 `JsBridge` 契约**；重开触发条件见 ADR-0030 §决策 5 |
 | `isVip` 的**正侧**真值（`true` / `1` / `是` → VIP）缺上游 `file:line`：若上游只认 `"true"`，本仓判定就是**有意差异**，应按 `book-source.md` §4.1 的体例标注为差异 | **开发组**（不阻塞合并）：直抓 fork 源码补行号，或改写为差异登记；语义已由 `execute_givenIsVipRule_marksOnlyTheTrueishChapters` 钉住，唯一出处仍是 §4.1 |
+| 并发上限接入**用户设置**时（Phase 5）必须显式校验 `> 0`：`HttpPolicy` / `RequestLimiter` 目前只用 `assert`，release 下会被剥掉，`0` 会让该键的每个请求**永久排队** | **Phase 5（设置页）**：在设置边界校验或钳制；语义归 `book-source.md` §8 |
+| `httpClientProvider` 是 autoDispose，预算存在于 `DioHttpClient` 实例上，所以「同一书源并发上限」在**一次操作内**有效、跨操作会重建 | **Phase 5**：批量下载必须保证整批共用一份预算（该 provider 改 `keepAlive`，或把预算提到 app 级单例）；今天是串行翻页，无影响 |
 
 ---
 

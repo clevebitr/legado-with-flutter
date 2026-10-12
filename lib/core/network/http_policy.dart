@@ -1,3 +1,5 @@
+import 'package:flutter_reader/core/network/request_limiter.dart';
+
 /// Request timeout applied to connect, send and receive (C-NET-2).
 const Duration defaultHttpTimeout = Duration(seconds: 15);
 
@@ -25,9 +27,14 @@ final class HttpPolicy {
   const HttpPolicy({
     this.timeout = defaultHttpTimeout,
     this.maxRetries = defaultMaxRetries,
+    this.maxConcurrentRequestsPerSource = defaultMaxConcurrentRequestsPerSource,
     this.userAgent = defaultUserAgent,
     this.allowPlainHttp = false,
-  }) : assert(maxRetries >= 0, 'Retries must be bounded and non-negative.');
+  }) : assert(maxRetries >= 0, 'Retries must be bounded and non-negative.'),
+       assert(
+         maxConcurrentRequestsPerSource > 0,
+         'A concurrency budget must be positive.',
+       );
 
   /// Time to wait for connect, send and receive, applied to every attempt.
   ///
@@ -39,6 +46,14 @@ final class HttpPolicy {
 
   /// Upper bound of additional attempts after the first one (C-NET-2).
   final int maxRetries;
+
+  /// Requests one book source may have in flight at once (`book-source.md` §8).
+  ///
+  /// Exceeding it queues the request instead of failing — the budget is spent inside
+  /// the HTTP client by [RequestLimiter]. The settings phase may raise or lower it,
+  /// and `concurrentRate` (M1) will read a source's own declaration into this same
+  /// budget.
+  final int maxConcurrentRequestsPerSource;
 
   /// `User-Agent` used unless a request overrides it (C-NET-4).
   final String userAgent;
