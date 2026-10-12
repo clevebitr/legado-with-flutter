@@ -212,6 +212,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 矩阵 #14（`@js:`）无任何真实语料样本 | **3.7**：仓内 `test/fixtures/book_sources/*.json` 的 `@js:` 出现次数为 **0**，因此 #14 的状态列无法改「已确认」；补样前先补语料（ADR-0029 §后果） |
 | JS 绑定是否需要**同步**写法（3.3 只实现 Promise 形态的 `http.*` / `parse.*`） | **3.7** 真实语料回归出证据后，以**新 ADR** 裁决是否追加；不得就地放宽（ADR-0029 §决策 4） |
 | ~~3.8 并发策略与 JS worker 容量的耦合~~ | ✅ **已闭环（ADR-0030）**：裁决为单常驻 worker + 单复用运行时 + FIFO，**容量不进 `JsBridge` 契约**；重开触发条件见 ADR-0030 §决策 5 |
+| `isVip` 的**正侧**真值（`true` / `1` / `是` → VIP）缺上游 `file:line`：若上游只认 `"true"`，本仓判定就是**有意差异**，应按 `book-source.md` §4.1 的体例标注为差异 | **开发组**（不阻塞合并）：直抓 fork 源码补行号，或改写为差异登记；语义已由 `execute_givenIsVipRule_marksOnlyTheTrueishChapters` 钉住，唯一出处仍是 §4.1 |
 
 ---
 
