@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
@@ -130,12 +131,18 @@ final class PageFetchService {
   /// [sourceId] is the book source URL. It travels only for the logs the HTTP layer
   /// owns — the tolerant-decode warning of ADR-0031 §决策 2 names the source, which is
   /// what C-ERR-8 asks for (C-SEC-4 still forbids the body).
+  ///
+  /// [page] and [source] fill the `page` / `source` bindings a `@js:` rule sees
+  /// (`book-source.md` §6); they default to the first page and an empty source so a caller
+  /// that has no book source context still gets a valid context.
   Future<ParseResult<RuleScope>> fetch(
     String url, {
     required String rulePath,
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    int page = 1,
+    JsSourceInfo? source,
   }) async {
     final ParseResult<HttpResponse> response = await _http.get(
       url,
@@ -152,7 +159,18 @@ final class PageFetchService {
       ) =>
         failureAt<RuleScope>(kind: kind, rulePath: failedAt),
       ParseSuccess<HttpResponse>(:final HttpResponse data) => ParseSuccess(
-        RuleScope.dom(parser.parse(data.body), body: data.body),
+        RuleScope.dom(
+          parser.parse(data.body),
+          body: data.body,
+          // §6 的 baseUrl / page / source 绑定就来自这里；逐项字段的 `@js:` 靠它继承。
+          // 书源自带的 `header` 同时带上：规则里的 `http.*` 也要用它（C-NET-4）。
+          jsContext: JsPageContext(
+            baseUrl: url,
+            page: page,
+            source: source,
+            headers: headers,
+          ),
+        ),
       ),
     };
   }
@@ -170,13 +188,17 @@ final class PageFetchService {
   /// that one field. Escalating a malformed rule instead would be worse than useless:
   /// the callers read `dataOrNull`, so it would turn into a silent `null` with no
   /// record at all. C-SRC-4 is satisfied by the explicit degradation plus its warning.
-  ParseResult<String?> field(
+  ///
+  /// Asynchronous because the engine is: the rule may hold a `@js:` segment
+  /// (ADR-0029 §决策 1). Every caller awaits it in turn, so the use cases stay
+  /// `Future`-returning without a second evaluation path.
+  Future<ParseResult<String?>> field(
     String? rule,
     RuleScope scope,
     String rulePath, {
     required String sourceId,
-  }) {
-    final ParseResult<String?> parsed = _engine.extractFirst(
+  }) async {
+    final ParseResult<String?> parsed = await _engine.extractFirst(
       rule ?? '',
       scope,
       rulePath: rulePath,
@@ -226,12 +248,12 @@ final class PageFetchService {
   /// Returns every match of a **top-level list** rule.
   ///
   /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7).
-  ParseResult<List<RuleScope>> list(
+  Future<ParseResult<List<RuleScope>>> list(
     String? rule,
     RuleScope scope,
     String rulePath,
-  ) {
-    final ParseResult<List<RuleScope>> result = _engine.selectAll(
+  ) async {
+    final ParseResult<List<RuleScope>> result = await _engine.selectAll(
       rule ?? '',
       scope,
       rulePath: rulePath,
@@ -251,8 +273,14 @@ final class PageFetchService {
   /// A rejected `content` rule stays a failure: it is top-level, so ADR-0026 §决策 1
   /// applies and the degradation of [field] deliberately does not. The engine is
   /// therefore called directly here.
-  ParseResult<String> content(String? rule, RuleScope scope, String rulePath) {
-    final ParseResult<String?> parsed = _engine.extractFirst(
+  ///
+  /// Asynchronous for the same reason as [field]: the engine's value API is.
+  Future<ParseResult<String>> content(
+    String? rule,
+    RuleScope scope,
+    String rulePath,
+  ) async {
+    final ParseResult<String?> parsed = await _engine.extractFirst(
       rule ?? '',
       scope,
       rulePath: rulePath,
@@ -284,9 +312,9 @@ final class PageFetchService {
   ///
   /// [rulePath] is the stage's field (`ruleToc`, `ruleContent`) and travels into every
   /// request, so a failure stays locatable (C-SRC-8); [nextRulePath] is the paging
-  /// field (`tocRule.nextTocUrl`, `contentRule.nextContentUrl`). [headers] and
-  /// [sourceId] are the book source's own request overrides and id (C-NET-4, C-ERR-8),
-  /// passed the same way [fetch] takes them.
+  /// field (`tocRule.nextTocUrl`, `contentRule.nextContentUrl`). [headers], [sourceId] and
+  /// [source] are the book source's own request overrides, id and sandbox view
+  /// (C-NET-4, C-ERR-8, §6), passed the same way [fetch] takes them.
   Future<ParseResult<PageWalk>> walk({
     required String url,
     required String rulePath,
@@ -294,6 +322,7 @@ final class PageFetchService {
     required String nextRulePath,
     Map<String, String>? headers,
     required String sourceId,
+    JsSourceInfo? source,
   }) async {
     final List<FetchedPage> pages = <FetchedPage>[];
     final Set<String> visited = <String>{};
@@ -319,6 +348,9 @@ final class PageFetchService {
         rulePath: rulePath,
         headers: headers,
         sourceId: sourceId,
+        // 正在取的这一页就是 `pages.length + 1`（1-based），与翻页规则里的 `{{page}}` 同口径。
+        page: pages.length + 1,
+        source: source,
       );
 
       switch (page) {
@@ -339,7 +371,7 @@ final class PageFetchService {
         case ParseSuccess<RuleScope>(:final RuleScope data):
           pages.add(FetchedPage(url: pageUrl, scope: data));
           pending.addAll(
-            nextPageUrls(
+            await nextPageUrls(
               nextRule,
               data,
               nextRulePath,
@@ -373,15 +405,16 @@ final class PageFetchService {
   ///
   /// A rejected or malformed rule degrades to **no next page** plus a warning
   /// (ADR-0026 §决策 2): the field is not top-level, so it must not cost the stage —
-  /// paging simply stops where it is.
-  List<String> nextPageUrls(
+  /// paging simply stops where it is. Asynchronous because the rule may hold a `@js:`
+  /// segment (ADR-0029 §决策 1).
+  Future<List<String>> nextPageUrls(
     String? rule,
     RuleScope scope,
     String rulePath, {
     required String currentUrl,
     required int page,
     required String sourceId,
-  }) {
+  }) async {
     if (rule == null || rule.trim().isEmpty) {
       return const <String>[];
     }
@@ -391,7 +424,7 @@ final class PageFetchService {
       return _pagingUrls(<String>[text], currentUrl, page);
     }
 
-    final ParseResult<List<String>> parsed = _engine.extractAll(
+    final ParseResult<List<String>> parsed = await _engine.extractAll(
       text,
       scope,
       rulePath: rulePath,
@@ -465,21 +498,28 @@ final class PageFetchService {
   ///
   /// A rejected or malformed rule degrades to **no replacement** plus a warning
   /// (ADR-0026 §决策 2), which for a transform means “keep the text as it was
-  /// extracted” instead of losing the whole chapter.
-  String replaceContent(
+  /// extracted” instead of losing the whole chapter. Asynchronous because the engine's
+  /// evaluation API is (ADR-0029 §决策 1).
+  ///
+  /// [jsContext] is the page a `@js:` purification rule runs against — the caller has it (it
+  /// fetched the chapter), and without it a rule reading `baseUrl` would silently get an
+  /// empty string.
+  Future<String> replaceContent(
     String? rule,
     String content,
     String rulePath, {
     required String sourceId,
-  }) {
+    required JsPageContext jsContext,
+  }) async {
     if (rule == null || rule.trim().isEmpty) {
       return content;
     }
 
-    final ParseResult<String> replaced = _engine.applyReplaceRule(
+    final ParseResult<String> replaced = await _engine.applyReplaceRule(
       rule,
       content,
       rulePath: rulePath,
+      jsContext: jsContext,
     );
 
     return switch (replaced) {

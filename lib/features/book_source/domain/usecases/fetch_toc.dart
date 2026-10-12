@@ -31,6 +31,7 @@ final class FetchToc {
       nextRulePath: 'tocRule.nextTocUrl',
       headers: source.headers,
       sourceId: source.url,
+      source: source.jsSourceInfo,
     );
 
     return switch (walk) {
@@ -39,7 +40,7 @@ final class FetchToc {
         rulePath: final String failedAt,
       ) =>
         failureAt<List<Chapter>>(kind: kind, rulePath: failedAt),
-      ParseSuccess<PageWalk>(:final PageWalk data) => _read(source, data),
+      ParseSuccess<PageWalk>(:final PageWalk data) => await _read(source, data),
     };
   }
 
@@ -49,7 +50,10 @@ final class FetchToc {
   /// tolerates a missing table-of-contents page, so the chapters read so far come back
   /// with a warning. The first page keeps the strict rule of §7 — a source whose
   /// `chapterList` does not fit its own entry page has nothing to show.
-  ParseResult<List<Chapter>> _read(BookSource source, PageWalk walk) {
+  Future<ParseResult<List<Chapter>>> _read(
+    BookSource source,
+    PageWalk walk,
+  ) async {
     final ParseFailure<Never>? stopped = walk.stoppedBy;
     if (stopped != null) {
       // §9 目录缺页：翻页取不到时保留已读到的章节，只记录 warning。
@@ -64,7 +68,11 @@ final class FetchToc {
 
     for (var index = 0; index < walk.pages.length; index++) {
       final FetchedPage page = walk.pages[index];
-      final ParseResult<List<Chapter>> read = _chapters(source, rules, page);
+      final ParseResult<List<Chapter>> read = await _chapters(
+        source,
+        rules,
+        page,
+      );
 
       switch (read) {
         case ParseFailure<List<Chapter>>(
@@ -90,12 +98,12 @@ final class FetchToc {
   }
 
   /// Reads the chapter list of one walked [page].
-  ParseResult<List<Chapter>> _chapters(
+  Future<ParseResult<List<Chapter>>> _chapters(
     BookSource source,
     TocRule rules,
     FetchedPage page,
-  ) {
-    final ParseResult<List<RuleScope>> items = _pages.list(
+  ) async {
+    final ParseResult<List<RuleScope>> items = await _pages.list(
       rules.chapterList,
       page.scope,
       'tocRule.chapterList',
@@ -107,12 +115,8 @@ final class FetchToc {
         rulePath: final String failedAt,
       ) =>
         failureAt<List<Chapter>>(kind: kind, rulePath: failedAt),
-      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) => _entries(
-        source,
-        rules,
-        page.url,
-        data,
-      ),
+      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) =>
+        await _entries(source, rules, page.url, data),
     };
   }
 
@@ -122,28 +126,28 @@ final class FetchToc {
   /// falls back to empty / non-VIP with a warning (ADR-0026 §决策 2); a rejected
   /// `chapterList` is top-level and still fails the stage, which happens in
   /// [PageFetchService.list].
-  ParseResult<List<Chapter>> _entries(
+  Future<ParseResult<List<Chapter>>> _entries(
     BookSource source,
     TocRule rules,
     String baseUrl,
     List<RuleScope> items,
-  ) {
+  ) async {
     final List<Chapter> chapters = <Chapter>[];
 
     for (final RuleScope item in items) {
-      final ParseResult<String?> name = _pages.field(
+      final ParseResult<String?> name = await _pages.field(
         rules.chapterName,
         item,
         'tocRule.chapterName',
         sourceId: source.url,
       );
-      final ParseResult<String?> url = _pages.field(
+      final ParseResult<String?> url = await _pages.field(
         rules.chapterUrl,
         item,
         'tocRule.chapterUrl',
         sourceId: source.url,
       );
-      final ParseResult<String?> vip = _pages.field(
+      final ParseResult<String?> vip = await _pages.field(
         rules.isVip,
         item,
         'tocRule.isVip',

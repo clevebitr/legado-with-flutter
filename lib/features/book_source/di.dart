@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/di/http_client_provider.dart';
+import 'package:flutter_reader/core/di/js_bridge_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
@@ -25,8 +26,10 @@ BookSource? currentBookSource(Ref ref) => null;
 
 /// Provides the rule engine every book source use case shares.
 @riverpod
-RuleEngine ruleEngine(Ref ref) =>
-    RuleEngine(logger: ref.watch(appLoggerProvider));
+RuleEngine ruleEngine(Ref ref) => RuleEngine(
+  logger: ref.watch(appLoggerProvider),
+  jsBridge: ref.watch(jsBridgeProvider),
+);
 
 /// Provides the page fetch + rule reading service the use cases are built on.
 @riverpod

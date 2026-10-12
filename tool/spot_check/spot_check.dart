@@ -32,6 +32,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/quickjs_worker.dart';
+import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
@@ -120,13 +122,23 @@ BookSource _loadSource(File file, {String? name}) {
 /// Runs the four stages of `PLAN.md` §4 against the live site of [source].
 Future<_Report> _runChain(BookSource source, String keyword) async {
   final AppLogger logger = AppLogger(level: LogLevel.warning);
+  // 请求层是唯一的上网入口（C-NET-1）：页面抓取与规则里的 `http.*` 共用同一个客户端，
+  // 因此也共用 cookie 与同一份书源并发预算（book-source.md §8）。
+  final DioHttpClient http = DioHttpClient(
+    cookies: InMemoryCookieManager(),
+    logger: logger,
+    policy: const HttpPolicy(),
+  );
   final PageFetchService pages = PageFetchService(
-    engine: RuleEngine(logger: logger),
-    http: DioHttpClient(
-      cookies: InMemoryCookieManager(),
+    engine: RuleEngine(
       logger: logger,
-      policy: const HttpPolicy(),
+      jsBridge: QuickJsWorkerBridge(
+        logger: logger,
+        launch: launchQuickJsWorker,
+        http: http,
+      ),
     ),
+    http: http,
     logger: logger,
   );
   final _Report report = _Report(source: source, keyword: keyword);

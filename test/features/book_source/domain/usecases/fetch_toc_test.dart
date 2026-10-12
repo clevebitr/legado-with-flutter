@@ -12,6 +12,7 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.da
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_http_client.dart';
+import '../../../../support/fake_js_bridge.dart';
 import '../../../../support/fake_log_printer.dart';
 
 /// The real default-rule source of the offline corpus.
@@ -69,7 +70,7 @@ String _tocHtml(List<String> names, {String? nextHref, String prefix = 'c'}) {
 
   return (
     pages: PageFetchService(
-      engine: RuleEngine(logger: logger),
+      engine: RuleEngine(logger: logger, jsBridge: FakeJsBridge()),
       http: http,
       logger: logger,
     ),
@@ -162,7 +163,7 @@ void main() {
           ..serve(_tocUrl, _page('book_page.html'));
         final BookSource source = _source();
         final BookSource withJs = source.copyWith(
-          tocRule: source.tocRule.copyWith(chapterName: '@js:result'),
+          tocRule: source.tocRule.copyWith(chapterName: '@xpath://div'),
         );
         final ({PageFetchService pages, FakeLogPrinter printer}) service =
             _service(http);
@@ -389,7 +390,7 @@ void main() {
 
         final List<Chapter> chapters = _data(
           await FetchToc(pages: service.pages)
-              .execute(_pagingSource('@js:result'), _tocUrl),
+              .execute(_pagingSource('@xpath://div'), _tocUrl),
         );
 
         // ADR-0026 §决策 2：非顶层字段被拒 → 降级为「没有下一页」+ warning。

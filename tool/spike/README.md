@@ -73,6 +73,11 @@ FLUTTER_QJS_NEXT_LIBRARY="<repo>/build/windows/x64/runner/Debug/flutter_qjs_next
 3. **内存上限用 `memoryLimit: 32 * 1024 * 1024`**（该引擎默认 64MB）。
 4. 引擎实例创建成本并不低（探针 02 的整轮耗时含创建），**必须复用**：
    按 `JsEnginePool` 或每书源一个长驻 Isolate + 复用运行时。
+5. **脚本执行中 `Isolate.kill` 在本机会 hang（2026-10-12 实测，3.4 part 3）**：第一次在
+   Windows 设备探针里跑「额度超限」用例时，判决后立刻杀隔离体直接把探针卡死（`Isolate.kill`
+   只能在该 isolate 回到 Dart 事件循环时生效，而它正卡在原生 `evaluate` 里）。因此**致命边界
+   （额度 / `parse.*` 边界）不杀 worker**：判决先记录、拒绝后续绑定调用，等脚本自己的结果回来
+   （或引擎中断 / 硬预算兜底）再交付。语义归 `book-source.md` §6；这条坑登记在此以免重踩。
 
 ## 5. 复现清单
 

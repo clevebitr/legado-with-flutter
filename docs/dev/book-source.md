@@ -173,6 +173,13 @@
 > 返回 `parseFailed`；上游会把 `[-1]` 当成名称的一部分而**静默返回空结果**。按 C-SRC-4
 > 「禁止静默忽略」的口径取显式失败，此处登记以免日后被当成实现缺陷。
 
+> **#14 注记（2026-10-12，随 3.4 落地）：** 值规则上的**终段** `@js:` 已实现（`@js:` 贪婪吞掉
+> 本条规则剩余部分，与上游 `AppPattern.JS_PATTERN` 同形）；**列表规则**上的 `@js:` 报
+> `unsupported:@js:list`（尚无「JS 返回一列元素」的契约）。白名单绑定、配额与四条边界
+> （`js:timeout` / `js:error` / `js:parse-scope` / `js:parse-recursion` / `js:quota`）的唯一出处是
+> §6。**状态列仍为「待验证」：** 仓内 `@js:` 语料为 0，按 ADR-0024 §决策 2 与 ADR-0029 §后果，
+> 只有真实书源回归（`PLAN.md` 3.7）能把状态改为「已确认」。
+
 **大小写处理：** 原版文档同时出现 `@css:` / `@CSS:`、`@json:` / `@Json:` 等写法。
 本项目按**前缀大小写不敏感**实现，并为每种前缀补一条测试（状态：待验证）。
 
@@ -299,8 +306,10 @@
 >   `##正则##替换` 与矩阵 #25 的 `##正则##替换###`。**有意不做的：** 上游在替换前后还会
 >   按行 trim 并加全角缩进（`BookContent.kt:191-194`），那是阅读端排版，不属于解析阶段，
 >   本仓的正文保持解析出来的原样（否则语料回归里已有的正文会被改形）。
->   规则体带选择器时报 `parseFailed`（规则里没有可选的 DOM），带 `@js:` 等未实现标志时报
->   `unsupportedRule`（标志属于后续阶段）；两者都降级为「不替换」+ warning（ADR-0026 §决策 2）。
+>   规则体带选择器时报 `parseFailed`（规则里没有可选的 DOM）；`@js:` 净化规则在沙箱里跑
+>   （`result` = 拼接后的整章正文，与上游 `analyzeRule.getString(replaceRegex, contentStr)` 同形），
+>   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
+>   （ADR-0026 §决策 2）。
 
 ---
 
@@ -425,6 +434,49 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 
 超时或异常 → `ParseFailure(parseFailed)`，`rulePath` 中标注 `js:timeout` 或 `js:error`。
 
+> - **值规则上的终段 `@js:` 已可用（2026-10-12，3.4 part 2）。** `@js:` 贪婪吞掉本条规则剩余
+>   部分（上游 `AppPattern.JS_PATTERN` 的 `@js:([\w\W]*)`），所以 JS 里的 `&&` / `||` 不会被读成
+>   连接符；`result` 的形态按上游：`getString` 语义（单值字段）给**字符串**，`getStringList`
+>   语义（多值字段，如 `nextTocUrl`）给**列表**，列表返回值也保持列表（§4.1 的 URL 数组靠它）；
+>   `##` 替换在脚本**之后**应用（上游同一 `SourceRule` 的 `replaceRegex` 也是最后跑）。
+> - **未落的边界（显式报错，不静默）：** 列表规则（`bookList` / `chapterList`）上的 `@js:` 报
+>   `unsupported:@js:list`（它要的是「JS 返回一列元素」的契约——上游 `getElements` 的
+>   `Mode.Js` 分支，`AnalyzeRule.kt:439`——尚未成型）；`<js>…</js>` 仍按矩阵 #31 拒（M2）。
+> - **独立 `@js:` 的 `result`：** 整页 scope 给 responseBody；**元素 scope**（逐项字段，如
+>   `searchRule.name`）给它自己的 `outerHtml`——沙箱里没有 DOM 句柄可交（ADR-0029 §决策 5），
+>   但规则总得看见它所属的那一项；JSON 条目 scope 给该条目的 JSON 文本。
+>
+> **JS 绑定的操作面（2026-10-12，3.4 落地；上表是白名单，本段是每一项的行为）：**
+>
+> - **`http.get(url, options)` / `http.post(url, options)` 是 Promise**（ADR-0029 §决策 3），
+>   唯一实现是 `core/network/HttpClient`（C-NET-1），因此超时 / 重试 / 编码 / 明文策略与页面
+>   抓取完全同一套。请求带上书源自带的 `header`（C-NET-4，规则自己的同名键优先），并以**书源
+>   URL** 作为并发预算键，所以它花的仍是 §8 那份预算。
+> - **`options` 只认 `headers` 与（POST 的）`body`**，其余键（如 `charset` / `timeout` / `retry` /
+>   `webView`）让**该次调用抛错**：策略由 `HttpPolicy` 拥有，而 `webView` 本仓没有，悄悄忽略
+>   它会把「未渲染的页面」当成答案（§1 的不兼容清单）。
+> - **传输失败只拒绝这次的 Promise**（message 是 `ParseFailureKind` 名，如 `networkTimeout`）：
+>   规则可以自己 `catch` 后改走镜像；规则没 catch 时该 job 按 §7 报 `js:error`。
+>   **已登记的取舍：** 可重试性（`isRetryable`）不随它上抛——脚本可能吞掉它，把「传输失败」
+>   归给字段就是猜，唯一出处仍是 §7。
+> - **`parse.getString(rule, doc)` / `parse.getElements(rule, doc)` 是 Promise**，由**规则引擎**
+>   求值（ADR-0029 §决策 5 的页级 scope）：嵌套规则在宿主 isolate 上跑，worker 不需要重建 scope。
+>   `getString` = 首个值（无匹配时 `''`，与上游 `getString` 同形）；`getElements` = 每个匹配
+>   ——DOM 匹配给 `outerHtml`、JSON 匹配给值本身（**无 DOM 句柄**，所以上游「`getElements` 再
+>   `parse.getString(rule, element)`」的写法会在 `doc` 这一步被拒，见下）。
+> - **`parse.*` 的边界都报 `unsupportedRule` 且带字段路径：** `js:parse-scope` = `doc` 不是本 job
+>   的页 body（元素 scope / JSON 条目 / 脚本自己拼的片段，只有页级 scope 被承诺）；
+>   `js:parse-recursion` = 嵌套规则自己又要 `@js:`（单 worker 正在跑发起它的那个 job，
+>   ADR-0030 §决策 1/3，嵌套 evaluate 只会排在自己的队后面）；而 `parse.getElements` 的嵌套
+>   `@js:` 落在列表规则的柜口上，报 `unsupported:@js:list`（与顶层列表规则同口径）。三者都是
+>   **整个 job 的失败**，不被脚本吞成空值。
+> - **额度**（上表 20 次/规则）由**桥**按 job 计数，已含 `log.*`：数的是**跨出 worker 的调用**
+>   （`log.*` / `http.*` / `parse.*`）；`crypto.*` 在 worker 内完成，不进这个计数。超限使该 job
+>   失败，`rulePath` 标 `js:quota`，并且之后的调用只被拒绝（不再花钱）。
+> - **致命与可吞的区别：** `http.*` 的传输失败只拒绝那次调用；`parse.*` 的边界与额度是**判决**
+>   ——判决先记下、等脚本停下来的那条结果回来时才交给调用方（脚本还在跑时不能把 worker 交给下一个
+>   job：同一运行时上跑两份求值会共享 `globalThis` 与作业队列），硬预算仍是「脚本永远不停」的兜底。
+>
 > **3.3 落地状态与两处边界（2026-10-12，随 `PLAN.md` 3.3 落地）：**
 >
 > - **本阶段落了什么：** 常驻 worker isolate + 单复用运行时的桥（`core/js/`）：引擎级 5 秒中断与
@@ -447,11 +499,10 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   自己的 Promise 作业队列（3.4 的 Promise 绑定靠它）。
 > - **`log.*` 的宿主侧上界（3.3 复核 F2）：** 单条消息截断到上表的 2 000 字符并留可见标记，
 >   所以 `log.debug(result)` 不会把 200KB 正文写进日志；本条数**计入**「单条规则内 JS 调用次数」
->   额度（随 3.4 的额度实现同批）。
-> - **未落的部分归 3.4：** Promise 形态的 `http.*` / `parse.*`（唯一实现分别是
->   `core/network/HttpClient` 与规则引擎）、`parse.*` 的**页级 scope 边界**（命中报
->   `js:parse-scope`，ADR-0029 §决策 5），以及「单条规则内 JS 调用次数 ≤ 20」（含 `log.*` 计数）
->   ——它数的是 `parse.*` 的递推调用，因此与 `parse.*` 同批实现（ADR-0030 §决策 3 的「按 job 计数」）。
+>   额度（已随 3.4 的额度实现落地，见上）。
+> - ~~**未落的部分归 3.4：** Promise 形态的 `http.*` / `parse.*`、`parse.*` 的页级 scope 边界
+>   （`js:parse-scope`）与「单条规则内 JS 调用次数 ≤ 20」（含 `log.*` 计数）~~ → ✅ **均已落地
+>   （3.4，见上）**。
 > - **`log.*` 的 C-SEC-4 边界：** 转发的是**规则作者自己写的**文本，只经 `AppLogger` 的
 >   `redactMessage`（能掩 URL / 凭据，**认不出正文**）。上界挡住体量，但「不得把页面正文交给
 >   `log.*`」仍是书源作者的义务，宿主侧无法代为净化。
@@ -520,6 +571,9 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   主机分桶，两者互不影响（今天所有页面抓取都带 `sourceId`，主机桶只服务将来的无上下文调用）。
 > - **JS 桥的 `http.*`（3.4）与页面抓取共用同一书源预算。** 实现时**不得**在已经持有该预算
 >   槽位的调用内部再发起同一书源的请求，否则预算会被自身耗尽而永久排队（预算只有 3 个）。
+>   —— **已落地（3.4）：** 规则里的 `http.*` 由桥转发到同一个 `HttpClient` 实例，预算键就是
+>   规则 job 的 `source.url`（同 §6）；上面的禁忌针对的是「持有槽位时再嵌套发起」，与桥无关
+>   （页面抓取的槽位在规则求值之前已释放）。
 
 ---
 

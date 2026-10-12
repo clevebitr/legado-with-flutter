@@ -7,6 +7,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 3.4 part 3: the `http.*` / `parse.*` Promise bindings, the call quota and the scope boundaries (2026-10-12)
+
+3.4 is complete: every binding of `book-source.md` §6 exists now, including the two a rule has to
+`await`, and the per-rule quota ADR-0030 §决策 3 fixes.
+
+- **`http.get(url, options)` / `http.post(url, options)` are Promises** (ADR-0029 §决策 3). Both go
+  through `core/network/HttpClient` — C-NET-1 keeps one door to the network — so timeouts, retries,
+  decoding and the plaintext policy are the page layer's; `HttpClient` therefore gained `post`, and
+  `DioHttpClient` answers both verbs from one shared `_request` (policy, per-source budget, retry
+  loop) so a later change cannot land on one verb only. The source's own `header` field is applied
+  under the rule's own headers (C-NET-4), and the source URL keys the same §8 budget the page fetch
+  spends. `options` only honours `headers` and (POST) `body`; anything else — `charset`, `timeout`,
+  `retry`, `webView` — makes that call fail loudly instead of answering a different question.
+- **`parse.getString(rule, doc)` / `parse.getElements(rule, doc)` are Promises**, and the engine
+  evaluates them **on the host** (ADR-0029 §决策 5's page-level scope): the nested rule runs where the
+  engine already is, so the worker never rebuilds a scope. `getString` answers the first value or
+  `''`; `getElements` answers each DOM match as its `outerHtml` and each JSON match as its value
+  (a sandbox without DOM handles cannot do better — registered, with the upstream idiom it closes).
+  The two boundaries §6 registers are explicit and locatable: `js:parse-scope` (a `doc` that is not
+  this job's page body, or a scope that is not a page) and `js:parse-recursion` (a value-shaped
+  nested rule that needs `@js:` itself — the one worker is running the job that asked, so a nested
+  evaluation could only wait on its own queue). An element-shaped nested `@js:` lands on the list
+  rule's own boundary, `unsupported:@js:list`, exactly as a top-level `bookList` would.
+- **The quota is real, and it counts `log.*`.** `QuickJsWorkerBridge` counts every binding call that
+  crosses out of the worker (`log.*`, `http.*`, `parse.*`; `crypto.*` is answered inside it) against
+  §6's 20-per-rule bound and fails the job with `js:quota`; later calls of that script are refused
+  without spending anything.
+- **Fatal versus catchable is a decision, not an accident.** An `http.*` transport failure only
+  rejects that Promise (a rule may `catch` it and try a mirror; uncaught it still fails the job as
+  `js:error`, which is `book-source.md` §7's own classification). The `parse.*` boundaries and the
+  quota decide the whole job, and the decision is **recorded and delivered when the script stops**,
+  not mid-script: the worker must not be handed to the next job while a script is still running (two
+  evaluations on one runtime would share `globalThis` and the engine's job queue), and killing a
+  worker that is actively executing native JS is what turned the first device run of the quota probe
+  into a hang. The hard budget still kills a script that never stops.
+- **The worker's message loop no longer awaits an evaluation.** A script parked on `await
+  http.get(...)` has to let `hostResult` envelopes through, so `evaluate` runs unawaited and the two
+  host bindings travel as a `JsHostCall` / `JsHostReply` round trip (both decoded by the same tested
+  type in `core/js`); `__runRule` returns a **Promise** for an `await`-ing rule and settles it inside
+  JavaScript, so a rejected promise can never escape as an unhandled rejection.
+- **A bare `@js:` now sees the item it belongs to.** On an element scope (a per-item field such as
+  `searchRule.name`) `result` is the element's `outerHtml` instead of an empty string, and a bare
+  `@js:` in a multi-valued field gets the page body (a String) rather than a one-element list — both
+  are what upstream's `getString` / `getStringList` hand over.
+- Tests: 16 new host cases at the bridge (routing, header merge, budget key, malformed calls, the
+  quota, the fatal/rejected split, stale replies), 13 in `js_bindings_test.dart` for the envelope and
+  argument decoding, 13 engine cases for the `parse.*` evaluator and the `result` shapes, and 6 new
+  device cases. 483 host cases, coverage exit 0 (`core` 744/744, `domain` 1157/1157); the Windows
+  device suite is 16/16 for `js_bridge_test.dart` (plus the other two files, all green).
+- Docs: `book-source.md` §6 (binding behaviour, quota counting point, every marker and boundary),
+  §3's #14 note, §8 (what landed, and what the nesting taboo was about), `PLAN.md` §3.1/§3.4/§3.7,
+  `architecture.md` §1, `test-environment.md` §7.
+
+### Review follow-up: a `@js:` purification rule now sees the page it ran on (2026-10-12)
+
+The 3.4 part 1–2 review found one silent wrong value, not a code defect in the API: `replaceRegex`'s
+`@js:` path built its sandbox context as `JsPageContext(baseUrl: '')`, so a purification rule reading
+`baseUrl` got an empty string — upstream evaluates it through `analyzeString(replaceRegex,
+contentStr)`, which has a base URL.
+
+- `applyReplaceRule` takes an optional `JsPageContext`, and `PageFetchService.replaceContent` now
+  requires one; `FetchContent` builds it from the first fetched page and the source view, so the
+  chapter URL and `source.name/url/group` reach the sandbox.
+- The source view became one mapping instead of four hand-rolled ones: `BookSourceJsView.jsSourceInfo`
+  (`name` / `url` / `group` only, `book-source.md` §6), used by all four use cases to fill the page
+  context of the pages they fetch.
+- A unit test pins the context that reaches the sandbox, so the silent empty-string case cannot come
+  back.
+- Gates: format clean, analyze clean, 438 tests, coverage exit 0 (core 567/567, domain 1120/1120).
+
+### 3.4 part 2: `@js:` runs in the engine, with the sandbox bound to the page (2026-10-12)
+
+The sandbox is now reachable from a rule. `RuleEngine` takes a `JsBridge` (the only door to
+JavaScript, so `domain/` never imports the engine library), and a **terminal `@js:`** is evaluated
+with upstream's semantics:
+
+- **`@js:` swallows the rest of its rule**, like upstream's greedy `AppPattern.JS_PATTERN`
+  (`@js:([\w\W]*)`), so a `&&` or `||` inside the script stays part of the script instead of being
+  read as a connector — which is what real rule text needs.
+- **`result` has the shape upstream gives it:** a String when the field is single-valued
+  (`getString`) and the whole List when it is multi-valued (`getStringList`, e.g. `nextTocUrl`); a
+  List returned by the script also stays a List, which is what §4.1's URL array needs. `##`
+  replacements run **after** the script, matching upstream's per-`SourceRule` order.
+- **The sandbox gets the page**: `RuleScope` now carries a `JsPageContext` (`baseUrl`, `page`,
+  `source`), built by `PageFetchService.fetch` and inherited by every element scope the engine
+  derives, so a `@js:` on a per-item field (`searchRule.name`) still sees the page it came from.
+- **`replaceRegex` follows the same path**: a `@js:` purification rule runs on the joined chapter
+  text, exactly as upstream's `analyzeString(replaceRegex, contentStr)` does.
+- **Boundaries are explicit, not silent** (C-SRC-4): `@js:` on a **list** rule is
+  `unsupportedRule` with `rulePath: unsupported:@js:list` — upstream's list path would need the
+  "JS returns a list of elements" contract (`AnalyzeRule.kt:439`), which is not modelled yet — and
+  `<js>…</js>` stays matrix #31's M2 rejection. Both are registered in `book-source.md` §6.
+- Tests: 13 new cases (437 total) driven through `test/support/fake_js_bridge.dart`
+  (`testing.md` §4 — no native engine in unit tests), plus a real-engine case in
+  `integration_test/js_bridge_test.dart` that runs a `@js:` rule through `RuleEngine` and asserts
+  the `result` / `baseUrl` / `page` / `source` bindings (10 device cases green on Windows).
+- Docs: `book-source.md` §6 (what landed, what is still open) and §4.1 (`@js:` purification),
+  `test-environment.md` §7.
+- Gates: format clean, analyze clean, 437 tests, coverage exit 0 (core 567/567, domain 1111/1111).
+
+### 3.4 part 1: the rule evaluation API is asynchronous (ADR-0029 §决策 1) (2026-10-12)
+
+The first half of 3.4, kept as its own step so the mechanical change is reviewable without the JS
+plumbing mixed in: `@js:` can appear on **any** field, and a JS rule has to cross into the worker
+isolate, so the engine cannot stay synchronous.
+
+- `RuleEngine.selectAll` / `extractAll` / `extractFirst` / `applyReplaceRule` now return
+  `Future<ParseResult<…>>`; `PageFetchService.field` / `list` / `content` / `nextPageUrls` /
+  `replaceContent` and the four use cases await them. **One evaluation path only** — the alternative
+  (a second, async entry point for `@js:`) would duplicate §7's failure semantics, the connector
+  handling, the scope rules and the ADR-0026 degradation (`PLAN.md` §6 trap #5).
+- `applyReplaceRule` is included because upstream evaluates `replaceRegex` through the same rule
+  call (`BookContent.kt:190-193`), so a `@js:` replacement belongs on one path too; part 2 wires it.
+- **Breaking change for callers**, recorded here as ADR-0029 §后果 requires. No behaviour change:
+  same values, same failures, same `rulePath`s. What lands in part 2 is the sandbox call itself.
+- `rule_engine_test.dart` absorbed it in the helpers: the six unwrapping helpers take the
+  **unawaited** engine call and await it themselves, so ~200 call sites only gained `await` and
+  `async` rather than being restructured.
+- Gates: format clean, analyze clean, 424 tests, coverage exit 0 (core 567/567, domain 1049/1049).
+
 ### 3.3 review fixes: the sandbox closes its holes, `log.*` gets a ceiling, cancellation stops lying (2026-10-12)
 
 The architect independently re-ran the six host gates and the real-engine device probe (all green) and

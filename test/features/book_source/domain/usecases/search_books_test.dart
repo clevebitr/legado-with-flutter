@@ -15,6 +15,7 @@ import 'package:flutter_reader/features/book_source/domain/usecases/search_books
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_http_client.dart';
+import '../../../../support/fake_js_bridge.dart';
 import '../../../../support/fake_log_printer.dart';
 
 /// The real default-rule source of the offline corpus.
@@ -83,7 +84,7 @@ String _jsonPage(String name) =>
 
   return (
     pages: PageFetchService(
-      engine: RuleEngine(logger: logger),
+      engine: RuleEngine(logger: logger, jsBridge: FakeJsBridge()),
       http: http,
       logger: logger,
     ),
@@ -221,7 +222,7 @@ void main() {
         final BookSource source = _source();
         // ADR-0026 §决策 2：非顶层字段被拒 → 置空 + warning，搜索结果照常返回。
         final BookSource withJs = source.copyWith(
-          searchRule: source.searchRule.copyWith(name: '@js:result'),
+          searchRule: source.searchRule.copyWith(name: '@xpath://div'),
         );
 
         final ParseResult<List<Book>> result = await SearchBooks(
@@ -254,7 +255,9 @@ void main() {
         );
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@js:');
+        // `bookList` 是列表规则，而 `@js:` 目前只在值规则上实现（3.4 登记边界）：
+        // 列表规则上的 JS 仍报 unsupported，且顶层规则被拒必须整次失败（C-SRC-4）。
+        expect(failure.rulePath, 'unsupported:@js:list');
       },
     );
 

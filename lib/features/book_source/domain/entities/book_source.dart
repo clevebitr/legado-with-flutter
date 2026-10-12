@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'book_source.freezed.dart';
@@ -290,6 +291,16 @@ Map<String, String> _toStringMap(Map<Object?, Object?> raw) {
   }
 
   return headers;
+}
+
+/// The sandbox view of a book source (`docs/dev/book-source.md` §6).
+///
+/// The whitelist exposes `name` / `url` / `group` only, so the mapping lives next to the model
+/// instead of being rebuilt by every use case that has to fill a [JsJob].
+extension BookSourceJsView on BookSource {
+  /// The read-only object the sandbox receives as `source`.
+  JsSourceInfo get jsSourceInfo =>
+      JsSourceInfo(name: name, url: url, group: group);
 }
 
 /// Returns the entries of [json] that [known] does not describe.

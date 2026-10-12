@@ -1,6 +1,7 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 
 /// Reads the body of one chapter (`PLAN.md` 2.4, `ruleContent`).
 ///
@@ -25,6 +26,7 @@ final class FetchContent {
       nextRulePath: 'contentRule.nextContentUrl',
       headers: source.headers,
       sourceId: source.url,
+      source: source.jsSourceInfo,
     );
 
     return switch (walk) {
@@ -33,7 +35,7 @@ final class FetchContent {
         rulePath: final String failedAt,
       ) =>
         failureAt<String>(kind: kind, rulePath: failedAt),
-      ParseSuccess<PageWalk>(:final PageWalk data) => _read(source, data),
+      ParseSuccess<PageWalk>(:final PageWalk data) => await _read(source, data),
     };
   }
 
@@ -47,7 +49,7 @@ final class FetchContent {
   /// (`BookContent.kt:70-76`), and the joined text is then purified once by the
   /// source's `replaceRegex` — upstream applies that rule to the assembled text, not
   /// to each page (`BookContent.kt:190-193`).
-  ParseResult<String> _read(BookSource source, PageWalk walk) {
+  Future<ParseResult<String>> _read(BookSource source, PageWalk walk) async {
     final ParseFailure<Never>? stopped = walk.stoppedBy;
     if (stopped != null) {
       return failureAt<String>(kind: stopped.kind, rulePath: stopped.rulePath);
@@ -56,7 +58,7 @@ final class FetchContent {
     final List<String> bodies = <String>[];
 
     for (final FetchedPage page in walk.pages) {
-      final ParseResult<String> body = _pages.content(
+      final ParseResult<String> body = await _pages.content(
         source.contentRule.content,
         page.scope,
         'contentRule.content',
@@ -74,11 +76,16 @@ final class FetchContent {
     }
 
     return ParseSuccess<String>(
-      _pages.replaceContent(
+      await _pages.replaceContent(
         source.contentRule.replaceRegex,
         bodies.join('\n'),
         'contentRule.replaceRegex',
         sourceId: source.url,
+        // 净化规则拿得到它读的那一页：上游 `getString(replaceRegex, contentStr)` 同样有上下文。
+        jsContext: JsPageContext(
+          baseUrl: walk.pages.first.url,
+          source: source.jsSourceInfo,
+        ),
       ),
     );
   }

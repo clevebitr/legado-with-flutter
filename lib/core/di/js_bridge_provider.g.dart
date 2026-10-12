@@ -16,6 +16,11 @@ part of 'js_bridge_provider.dart';
 /// the engine and the JS prelude — stays behind the launcher, which is why `domain/`
 /// only ever sees [JsBridge] (ADR-0029 §决策 2).
 ///
+/// The bridge also gets the app-wide HTTP client, because §6 binds `http.*` to the rule
+/// sandbox and C-NET-1 makes that client the only door to the network: a rule's request
+/// shares the same cookies and the same per-source concurrency budget (`book-source.md`
+/// §8) as the page that carried the rule.
+///
 /// The provider is autoDispose: the budget dies with the scope, so one operation's
 /// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
 
@@ -30,6 +35,11 @@ final jsBridgeProvider = JsBridgeProvider._();
 /// the engine and the JS prelude — stays behind the launcher, which is why `domain/`
 /// only ever sees [JsBridge] (ADR-0029 §决策 2).
 ///
+/// The bridge also gets the app-wide HTTP client, because §6 binds `http.*` to the rule
+/// sandbox and C-NET-1 makes that client the only door to the network: a rule's request
+/// shares the same cookies and the same per-source concurrency budget (`book-source.md`
+/// §8) as the page that carried the rule.
+///
 /// The provider is autoDispose: the budget dies with the scope, so one operation's
 /// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
 
@@ -43,6 +53,11 @@ final class JsBridgeProvider
   /// pays for an isolate or a QuickJS runtime. Everything the bridge needs — the isolate,
   /// the engine and the JS prelude — stays behind the launcher, which is why `domain/`
   /// only ever sees [JsBridge] (ADR-0029 §决策 2).
+  ///
+  /// The bridge also gets the app-wide HTTP client, because §6 binds `http.*` to the rule
+  /// sandbox and C-NET-1 makes that client the only door to the network: a rule's request
+  /// shares the same cookies and the same per-source concurrency budget (`book-source.md`
+  /// §8) as the page that carried the rule.
   ///
   /// The provider is autoDispose: the budget dies with the scope, so one operation's
   /// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
@@ -79,4 +94,4 @@ final class JsBridgeProvider
   }
 }
 
-String _$jsBridgeHash() => r'3b28d6db16655340e9c32ff97e0eac0adba75f24';
+String _$jsBridgeHash() => r'e932d992d458fc1cd9fadfcefc571f324d06af86';

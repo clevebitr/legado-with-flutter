@@ -6,7 +6,12 @@ import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/network/http_client.dart';
+import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:html/parser.dart' as parser;
 import 'package:integration_test/integration_test.dart';
 import 'package:logger/logger.dart';
 
@@ -25,12 +30,15 @@ void main() {
 
   late _CollectingPrinter printer;
   late QuickJsWorkerBridge bridge;
+  late _ProbeHttpClient http;
 
   setUp(() {
     printer = _CollectingPrinter();
+    http = _ProbeHttpClient();
     bridge = QuickJsWorkerBridge(
       logger: AppLogger(level: LogLevel.debug, printer: printer),
       launch: launchQuickJsWorker,
+      http: http,
     );
   });
 
@@ -188,6 +196,37 @@ void main() {
     timeout: const Timeout(Duration(minutes: 2)),
   );
 
+  testWidgets(
+    'jsBridge_whenTheEngineRunsAJsRule_bindsResultAndThePageContext',
+    (WidgetTester tester) async {
+      // 3.4 的接入点：引擎把选择器算出的值当 `result` 交给沙箱，并把页面的
+      // baseUrl / page / source 一起带上（book-source.md §6）。
+      final RuleEngine engine = RuleEngine(
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+        jsBridge: bridge,
+      );
+      const String pageHtml = '<div id="c">正文</div>';
+      final RuleScope scope = RuleScope.dom(
+        parser.parse(pageHtml),
+        body: pageHtml,
+        jsContext: const JsPageContext(
+          baseUrl: 'https://example-novel.test/book/1/',
+          page: 3,
+          source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+        ),
+      );
+
+      final ParseResult<String?> result = await engine.extractFirst(
+        "id.c@text@js:result + '|' + baseUrl + '|' + page + '|' + source.name",
+        scope,
+        rulePath: 'contentRule.content',
+      );
+
+      expect(_value(result), '正文|https://example-novel.test/book/1/|3|示例书源');
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
   testWidgets('jsBridge_whenTheScriptThrows_reportsJsError', (
     WidgetTester tester,
   ) async {
@@ -200,17 +239,166 @@ void main() {
       ParseSuccess<Object?>() => 'unexpected success',
     }, 'searchRule.name:js:error');
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleAwaitsAnHttpGet_resolvesThePromise', (
+    WidgetTester tester,
+  ) async {
+    // §6 的 `http.*` 是 Promise（ADR-0029 §决策 3）：脚本必须 await，而这次等待要真的跨过
+    // worker → 桥 → 请求层再回来。这也是 3.4 里唯一无法用假 worker 证明的一段。
+    http.body = '{"name":"One"}';
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            '(async function () {'
+            " var body = await http.get('https://mirror.test/api');"
+            " return body + '|' + source.name; })()",
+        sourceHeaders: const <String, String>{'Referer': 'https://book.test/'},
+      ),
+    );
+
+    expect(_value(result), '{"name":"One"}|示例书源');
+    expect(http.requestedUrls, <String>['https://mirror.test/api']);
+    // 书源自带的 header 在下面（C-NET-4），书源 URL 作为并发预算键（§8）。
+    expect(http.lastHeaders?['Referer'], 'https://book.test/');
+    expect(http.lastSourceId, 'https://example-novel.test');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleAwaitsAnHttpPost_sendsTheBody', (
+    WidgetTester tester,
+  ) async {
+    http.body = 'posted';
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            '(async function () {'
+            " return await http.post('https://mirror.test/api', {body: 'q=1'}); })()",
+      ),
+    );
+
+    expect(_value(result), 'posted');
+    expect(http.requestedMethods, <String>['POST']);
+    expect(http.lastBody, 'q=1');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleAwaitsAParseCall_evaluatesTheNestedRule', (
+    WidgetTester tester,
+  ) async {
+    // `parse.*` 也是 Promise，且它的实现落在**引擎**那边：嵌套规则在宿主 isolate 上求值，
+    // 所以这里要的是「真引擎 + 真 worker」两段同时成立。
+    const String pageHtml =
+        '<ul class="list"><li class="odd"><a href="/book/1">One</a></li></ul>';
+    final RuleEngine engine = RuleEngine(
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      jsBridge: bridge,
+    );
+    final RuleScope scope = RuleScope.dom(
+      parser.parse(pageHtml),
+      body: pageHtml,
+      jsContext: const JsPageContext(
+        baseUrl: 'https://example-novel.test/search',
+      ),
+    );
+
+    final ParseResult<String?> result = await engine.extractFirst(
+      '@js:(async function () {'
+      " return await parse.getString('class.odd.0@tag.a.0@text', result); })()",
+      scope,
+      rulePath: 'searchRule.name',
+    );
+
+    expect(_value(result), 'One');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenAParseCallHasNoPageScope_failsWithTheMarker', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0029 §决策 5：元素级 scope 必须显式失败（`js:parse-scope`），不得静默给空值。
+    const String pageHtml = '<li class="odd"><a href="/book/1">One</a></li>';
+    final RuleEngine engine = RuleEngine(
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      jsBridge: bridge,
+    );
+    final RuleScope element = RuleScope.dom(parser.parse(pageHtml));
+
+    final ParseResult<String?> result = await engine.extractFirst(
+      '@js:(async function () {'
+      " return await parse.getString('tag.a@href', result); })()",
+      element,
+      rulePath: 'tocRule.chapterUrl',
+    );
+
+    expect(switch (result) {
+      ParseFailure<String?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        '$kind $rulePath',
+      ParseSuccess<String?>() => 'unexpected success',
+    }, 'ParseFailureKind.unsupportedRule tocRule.chapterUrl:js:parse-scope');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleExceedsTheCallQuota_failsTheJob', (
+    WidgetTester tester,
+  ) async {
+    // §6 的额度含 log.*：超限不是拒绝一次调用，而是这个 job 已经不可信；worker 随之重建。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            'for (var index = 0; index < 25; index++) { log.info(index); }'
+            " 'done'",
+      ),
+    );
+
+    expect(switch (result) {
+      ParseFailure<Object?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        '$kind $rulePath',
+      ParseSuccess<Object?>() => 'unexpected success',
+    }, 'ParseFailureKind.parseFailed searchRule.name:js:quota');
+
+    // 重建后的 worker 必须照常可用。
+    expect(
+      _value(await bridge.evaluate(_job(script: "'still alive'"))),
+      'still alive',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleLooksAtTheWhitelist_findsOnlyIt', (
+    WidgetTester tester,
+  ) async {
+    // C-SRC-3：白名单外的能力不存在（`java` 仍属 M1，未实现），而本阶段的两个宿主绑定存在。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            '[typeof http, typeof http.get, typeof http.post, '
+            'typeof parse, typeof parse.getString, typeof parse.getElements, '
+            "typeof java].join(',')",
+      ),
+    );
+
+    expect(
+      _value(result),
+      'object,function,function,object,function,function,undefined',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }
 
 /// A job whose script decides the behaviour; the variables are the §6 bindings.
-JsJob _job({required String script}) => JsJob(
-  script: script,
-  rulePath: 'searchRule.name',
-  baseUrl: 'https://example-novel.test/search',
-  page: 2,
-  source: const JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
-  result: 'raw',
-);
+JsJob _job({required String script, Map<String, String>? sourceHeaders}) =>
+    JsJob(
+      script: script,
+      rulePath: 'searchRule.name',
+      baseUrl: 'https://example-novel.test/search',
+      page: 2,
+      source: const JsSourceInfo(
+        name: '示例书源',
+        url: 'https://example-novel.test',
+      ),
+      result: 'raw',
+      sourceHeaders: sourceHeaders,
+    );
 
 /// The value of a successful evaluation, failing the test otherwise.
 Object? _value(ParseResult<Object?> result) => switch (result) {
@@ -233,4 +421,74 @@ final class _CollectingPrinter extends LogPrinter {
 
     return const <String>[];
   }
+}
+
+/// Serves canned bodies for the probe's `http.*` calls, so the device run never touches
+/// the network (`docs/dev/testing.md` §1).
+///
+/// It is local on purpose, for the same reason [_CollectingPrinter] is: the probe has no
+/// dependency on `test/support/`. The request layer's own behaviour (timeouts, retries,
+/// decoding, the per-source budget) belongs to its unit tests; what this double has to make
+/// observable is what the **worker** sent and what it got back.
+final class _ProbeHttpClient implements HttpClient {
+  /// URLs requested, in order.
+  final List<String> requestedUrls = <String>[];
+
+  /// HTTP methods requested, in order.
+  final List<String> requestedMethods = <String>[];
+
+  /// The body served for every request.
+  String body = '';
+
+  /// The headers of the last request.
+  Map<String, String>? lastHeaders;
+
+  /// The `sourceId` of the last request.
+  String? lastSourceId;
+
+  /// The request body of the last request.
+  String? lastBody;
+
+  @override
+  Future<ParseResult<HttpResponse>> get(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+  }) async {
+    requestedUrls.add(url);
+    requestedMethods.add('GET');
+    lastHeaders = headers;
+    lastSourceId = sourceId;
+
+    return _answer();
+  }
+
+  @override
+  Future<ParseResult<HttpResponse>> post(
+    String url, {
+    required String rulePath,
+    String? body,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+  }) async {
+    requestedUrls.add(url);
+    requestedMethods.add('POST');
+    lastHeaders = headers;
+    lastSourceId = sourceId;
+    lastBody = body;
+
+    return _answer();
+  }
+
+  /// The canned 200 with [body].
+  ParseResult<HttpResponse> _answer() => ParseSuccess<HttpResponse>(
+    HttpResponse(
+      statusCode: 200,
+      headers: const <String, List<String>>{},
+      body: body,
+    ),
+  );
 }

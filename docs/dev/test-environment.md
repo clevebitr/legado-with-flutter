@@ -71,7 +71,7 @@ flutter test integration_test/on_disk_database_test.dart -d emulator-5554
 |---|---|
 | `integration_test/app_boot_test.dart` | 设备级 smoke：真实引擎 + 真实平台通道下应用能启动并渲染落地页 |
 | `integration_test/on_disk_database_test.dart` | 设备级验证：文件型 Drift 数据库（原生 SQLite + 后台 isolate）建库、落盘、跨连接读回 |
-| `integration_test/js_bridge_test.dart` | 设备级验证：真实 QuickJS 引擎 + 真实 worker isolate 上的 `JsBridge`（标量 / 数组结果、同步 `crypto.*`、`log.*` 转发、runaway → `js:timeout` 后 worker 仍可用、JS 异常 → `js:error`） |
+| `integration_test/js_bridge_test.dart` | 设备级验证：真实 QuickJS 引擎 + 真实 worker isolate 上的 `JsBridge`（标量 / 数组结果、同步 `crypto.*`、`log.*` 转发、runaway → `js:timeout` 后 worker 仍可用、JS 异常 → `js:error`、`await http.get` / `http.post`、`await parse.getString`、元素级 scope → `js:parse-scope`、额度 → `js:quota`、白名单内外） |
 | `tool/test/common.ps1` | 共享工具：路径解析、命令执行与失败传播、Android 设备/模拟器辅助（**不单独执行**） |
 | `tool/test/run_unit.ps1` | 主机侧测试 + 覆盖率门禁 |
 | `tool/test/run_windows.ps1` | Windows 设备级用例 |
@@ -148,9 +148,9 @@ Windows 与 Android 两侧都已实测通过。
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**424** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 567/567、`domain` 1048/1048，均 100%；阈值见 `docs/dev/testing.md` §2） |
+| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**483** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 744/744、`domain` 1157/1157，均 100%；阈值见 `docs/dev/testing.md` §2） |
 | Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`），含 `flutter_qjs_next` 从 `cxx/` 源码编译的 QuickJS |
-| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` 9 项（含 runaway → `js:timeout` 后 worker 仍可用）、`on_disk_database` 1 项）；退出码 0 |
+| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` 16 项（含 `await http.*` / `await parse.*` / `js:parse-scope` / `js:quota`），`on_disk_database` 1 项）；退出码 0 |
 | Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器自动启动 → 2 个用例文件全部通过 → 自动关闭；退出码 0（当时 `integration_test/` 只有 2 个文件；`js_bridge_test.dart` 的 Android 侧尚未复跑） |
 | 许可证扫描 | `dart run tool/scan_licenses.dart` | 156 个包全部为宽松许可，无风险项；退出码 0（`NOTICE.md` §5） |
 

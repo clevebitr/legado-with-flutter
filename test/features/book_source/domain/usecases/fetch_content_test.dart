@@ -11,6 +11,7 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_conten
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_http_client.dart';
+import '../../../../support/fake_js_bridge.dart';
 import '../../../../support/fake_log_printer.dart';
 
 /// The real default-rule source of the offline corpus.
@@ -60,7 +61,7 @@ PageFetchService _service(FakeHttpClient http) =>
 
   return (
     pages: PageFetchService(
-      engine: RuleEngine(logger: logger),
+      engine: RuleEngine(logger: logger, jsBridge: FakeJsBridge()),
       http: http,
       logger: logger,
     ),
@@ -132,7 +133,7 @@ void main() {
           ..serve(_chapterUrl, _page('chapter_page.html'));
         final BookSource source = _source();
         final BookSource withJs = source.copyWith(
-          contentRule: source.contentRule.copyWith(content: '@js:result'),
+          contentRule: source.contentRule.copyWith(content: '@xpath://div'),
         );
 
         final ParseFailure<Never> failure = _failure(
@@ -141,7 +142,7 @@ void main() {
         );
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@js:');
+        expect(failure.rulePath, 'unsupported:@xpath:');
       },
     );
 
@@ -221,7 +222,7 @@ void main() {
 
       final String content = _data(
         await FetchContent(pages: service.pages)
-            .execute(_purifyingSource('@js:result'), _chapterUrl),
+            .execute(_purifyingSource('@xpath://div'), _chapterUrl),
       );
 
       // ADR-0026 §决策 2：非顶层字段被拒 → 降级为「不替换」，正文照常返回。
