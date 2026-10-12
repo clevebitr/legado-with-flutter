@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation single-source fixes: coverage counts, gate thresholds, G2a wording (2026-10-11)
+
+- **The run counts and per-layer coverage live in one place again.** The latest-run evidence
+  (`353` cases, `core` 336/336, `domain` 881/881) is stated once in `docs/dev/test-environment.md` §7;
+  its §1 row and `PLAN.md` §3.4 no longer restate a second, stale copy of the same count
+  (ADR-0013 §3: restating one fact in two places is how the two copies drift apart).
+- **`PLAN.md` stops restating the coverage thresholds.** The three places that spelled out
+  `100%` (§3.1, §3.2 step 1.1, gate G1) now link to the single owner of the thresholds and of
+  the "unmeasured source file" rule, `docs/dev/testing.md` §2 (C-TEST-1).
+- **The two-source replay row is labelled with its actual gate.** `docs/dev/book-source.md` §10
+  "链路测试" now says **G2a offline replay**, and records that the JSON source has 2 rewritten URL
+  rules, so it cannot be mistaken for the real-site regression that owns the matrix "已确认"
+  status column (ADR-0024, `PLAN.md` §3.4 step 3.7).
+
 ### Rule connectors, field degradation and JSON rules for the 3.2 slice (2026-10-11)
 
 - **The three rule connectors are implemented** (matrix #10 `||`, #11 `&&`, #27 `%%`). `||`

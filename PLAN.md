@@ -70,7 +70,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 | 阶段 | 状态 | 证据 / 说明 |
 |---|---|---|
-| Phase 1 — core 基础设施 | ✅ 完成 | `lib/core/**` 行覆盖率 100%；门禁六条全绿。交付物见 3.2；过程记录见 `CHANGELOG.md` |
+| Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
 | Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）已完成；下一步 = 真实站点 spot-check → 3.3。细节见 `CHANGELOG.md` |
 | Phase 4 — M1 | ⏳ 未开始 | — |
@@ -84,7 +84,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 | 步骤 | 交付物 | 依据 | 验收 |
 |---|---|---|---|
-| 1.1 | `lib/core/error/`：`parse_result.dart`（契约）+ `parse_failure_arb_key.dart`（ARB 键名规则）+ 单测 | ADR-0002 | `ParseFailureKind` 9 个值均有 ARB 文案键；`switch` 穷尽；core 覆盖率 100% |
+| 1.1 | `lib/core/error/`：`parse_result.dart`（契约）+ `parse_failure_arb_key.dart`（ARB 键名规则）+ 单测 | ADR-0002 | `ParseFailureKind` 9 个值均有 ARB 文案键；`switch` 穷尽；core 层通过覆盖率门禁（`docs/dev/testing.md` §2） |
 | 1.2 | `lib/core/logging/`（Logger 门面，不依赖 Riverpod）+ `lib/core/di/logger_provider.dart`（Provider） | ADR-0006、C-ERR-5、`architecture.md` §1/§4 | 测试断言级别与脱敏（Cookie/Token/正文不入日志，C-SEC-4） |
 | 1.3 | `lib/core/platform/`：`PlatformInfo` / `DynamicColorProvider` 抽象 + 各平台 fallback + `lib/core/di/platform_provider.dart`（Provider） | C-PLT-1..4、ADR-0020 | 动态取色接线收敛到 `core/platform/` |
 | 1.4 | `lib/core/network/`：`HttpClient`、`CookieManager` | C-NET-1..5 | 替身可注入；超时/重试上限可配；编码走 `betto_charset_detector`（C-NET-3）；失败日志经 `describeError` 脱敏（C-SEC-4） |
@@ -150,7 +150,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 > **3.2 状态：✅ 功能面已完成（2026-10-11）。** 交付：连接符 `\|\|` / `&&` / `%%`（含分组与
 > 跨类型拒绝）、`@css:` 与 jsoup 索引伪类 #29、`@json:`（含裸 `$.` / `$[`）与 `RuleScope`
 > （ADR-0028）、ADR-0026 非顶层字段降级（置空 + warning）、3.6 九个 `ParseFailureKind` 触发路径。
-> `firstFailure` 因降级改动被删除，`core` 336/336 行全测。验收清单逐项对照见 `CHANGELOG.md`。
+> `firstFailure` 因降级改动被删除；覆盖率门禁保持全绿（阈值与判定见 `docs/dev/testing.md` §2）。
+> 验收清单逐项对照见 `CHANGELOG.md`。
 > **未完成的收口：** 矩阵状态列未改（需 3.7 的真实回归）；G2b 真实站点 spot-check 待执行；
 > JSON 语料的 URL 规则依赖 M1 的 #16–#19（见 §3.7 登记表）。
 
@@ -203,7 +204,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 | Gate | 条件 |
 |---|---|
-| **G1** | `lib/core/**` 覆盖率 100%；`AGENTS.md` §4 的全部命令退出码均为 0 |
+| **G1** | 覆盖率门禁全绿（阈值与「未测量源文件」判定见 `docs/dev/testing.md` §2）；`AGENTS.md` §4 的全部命令退出码均为 0 |
 | **G2a** | 1 个**真实书源**的「搜索 → 详情 → 目录 → 正文」**离线回放**通过，且回放必须驱动**生产链路**（UseCase → `renderUrlTemplate` → `HttpClient` → `RuleEngine`）；**已达成**（ADR-0024） |
 | **G2b** | 手动跑通一次**真实站点**链路；依赖矩阵 #12（`@css:`，3.2）。**3.2 功能面已完成（2026-10-11）**，此检查点排队在 spot-check 步骤（3.2 之后、3.3 之前） |
 | **G3** | 2 个书源全链路离线回放；矩阵 M0 状态列全部「已确认」；9 个失败 kind 均有测试 |

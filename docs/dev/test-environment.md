@@ -11,7 +11,7 @@
 
 | 目标 | 状态 | 说明 |
 |---|---|---|
-| 主机侧单元 / Widget 测试 | ✅ 已跑通 | `flutter test --coverage` 全部用例通过，`tool/check_coverage.dart` 退出码 0（2026-10-11 最近一次：**324** 个用例，`core` 342/342、`domain` 683/683）。该计数随每个切片增长，以**最近一次运行**为准；本文档其它位置不复述计数 |
+| 主机侧单元 / Widget 测试 | ✅ 已跑通 | `flutter test --coverage` 全部用例通过，`tool/check_coverage.dart` 退出码 0。用例计数与分层覆盖率只在 §7 的实测证据表里出现一次（该计数随每个切片增长，以**最近一次运行**为准；阈值与判定归 `docs/dev/testing.md` §2） |
 | Windows 桌面设备级用例 | ✅ 已跑通 | `integration_test/` 两个用例文件在 `-d windows` 全部通过 |
 | Android 模拟器设备级用例 | ✅ 已跑通 | AVD `Medium_Phone`（API 37）上两个用例文件全部通过，含文件型 Drift 数据库 |
 | iOS | ❌ **未覆盖** | 本机无 macOS / Xcode，条件不具备；iOS 行为仍按 `docs/dev/platform.md` §6 人工确认 |
@@ -142,7 +142,7 @@ Windows 与 Android 两侧都已实测通过。
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过；`tool/check_coverage.dart` 退出码 0（计数与分层覆盖率见 §1） |
+| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**353** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 336/336、`domain` 881/881，均 100%；阈值见 `docs/dev/testing.md` §2） |
 | Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`） |
 | Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | 2 个用例文件全部通过；退出码 0 |
 | Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器自动启动 → 2 个用例文件全部通过 → 自动关闭；退出码 0 |
