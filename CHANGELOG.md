@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ADR-0029 accepted, and ADR-0030 rules the JS engine capacity (2026-10-11)
+
+- **ADR-0029 is accepted** (user-confirmed). Its consequences are written back where they belong:
+  `docs/dev/book-source.md` §6 now owns the operative per-binding shape — synchronous `java.*` /
+  `log.*` / `crypto.*` versus Promise-returning `http.*` / `parse.*` — plus the page-scope boundary
+  of `parse.*` (`rulePath` `js:parse-scope`), and `docs/README.md` §2.1 gained the ownership rows.
+  `PLAN.md` §3.3/§3.4 carry the resulting acceptance criteria; nothing else was restated.
+- **ADR-0030 settles the capacity question ADR-0029 §后果 had left open: one resident worker, one
+  reused runtime, FIFO queue — and the capacity is deliberately *not* part of the `JsBridge`
+  contract.** The concurrency budget stays a request-layer policy (`PLAN.md` 3.8), so 3.8 cannot
+  force a contract change. Evidence: the interrupt budget restarts per evaluation (spike probe 07:
+  the same runtime answered `1 + 1` right after being interrupted), a pool's memory budget is
+  `maxSize × memoryLimit` while the pool enforces no aggregate RSS budget, and the official
+  `soft`-reset recipe (the multi-tenant-safe mode; `hard` costs ~19% throughput with no lower RSS)
+  requires re-registering bridges on every lease.
+- **A deviation from upstream is registered rather than glossed over:** in 3.3 every book source
+  shares one `globalThis` (upstream runs one engine per source). Mitigation: the M1 `java.put` /
+  `java.get` variables live in Dart keyed by `sourceId` inside the same isolate, never in
+  `globalThis`; the reopen triggers (M1 variables, 3.7 corpus evidence of global-defining rules, or
+  a measured queue bottleneck at 3.8) and the escalation path (source-keyed pool with `soft`
+  reset — an implementation change, not a contract change; a per-source worker needs its own ADR)
+  are recorded in ADR-0030 §决策 4/5.
+
 ### ADR-0029 (proposed): the `@js:` bridge shape and the async engine API (2026-10-11)
 
 - **A ruling for 3.3's `@js:` architecture is drafted** as
