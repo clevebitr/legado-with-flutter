@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 3.9: the charset detection result is cached per source and URL (2026-10-12)
+
+Phase 3 is closed: the sniffing step now runs once per `(书源, URL)` instead of once per response,
+which is also `CacheDao`'s first production consumer.
+
+- **`CharsetCache` is a port in `core/network/`** (`charset_cache.dart`) with a `CacheDao`-backed
+  adapter: the key reuses the DAO's stable key (`cacheKeyFor`, `ruleField` fixed to `charset` and
+  a fixed `page`, so the two stages that read one book page share an entry) and its expiry column —
+  **no new column, no new table**. The TTL lives once, as `defaultCharsetCacheTtl` (a week: the label
+  for a URL almost never changes, and the expiry exists so a site that fixes a wrong declaration can
+  take effect).
+- **Only the sniffed lane is cached, and a declaration always wins.** `decodeBody` gained
+  `sniffedCharset` and `DecodedBody.isDetected`: a declared label is re-read from the response every
+  time (a header plus a 2 KB meta scan cost nothing next to the detector), so a cached label can never
+  move a page from one ADR-0031 lane to the other. The client *reads* the cache on every response and
+  *writes* only when the label came from detection.
+- **The cache is a bypass.** A read failure, a write failure or a page without a book source (the key
+  starts with the source id) all mean "sniff again": the page still decodes, and the failure is a
+  `debug` line, because C-ERR-1 does not allow a cache to fail a request.
+- Tests: the decoder's `sniffedCharset` / `isDetected` contract (including "the cached label is used
+  instead of sniffing" and "a declaration beats it"), the DAO-backed adapter (hit, miss, per-source
+  and per-URL separation, expiry, overwrite), and the client's five cache paths. `httpClient` now
+  needs a database, so the two provider tests that read that graph override the device-only executor
+  with `NativeDatabase.memory()`. 499 host cases, coverage exit 0 (`core` 763/763, `domain` 1163/1163).
+- Docs: `book-source.md` §5 (what is cached, where the key and the TTL live), `PLAN.md` §3.1/§3.4/§3.7,
+  `architecture.md` §1.
+
 ### Phase 3.7: the real-source regression, the matrix M0 rows confirmed, and the two JSON gaps it found (2026-10-12)
 
 G3 is met: the matrix's 19 M0 rows all read **已确认**, two sources replay offline end to end, and the

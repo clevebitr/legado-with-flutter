@@ -335,9 +335,13 @@
 - 必须使用 `betto_charset_detector` 检测（C-NET-3），检测顺序：
   HTTP `Content-Type` → HTML `<meta charset>` → 字节嗅探 → 回退 UTF-8。
   前两步是**权威声明**：只要有声明就必须用它，嗅探仅用于两者都缺失的页面。
-- 检测结果必须缓存到「书源 ID + URL」维度，避免重复嗅探。
-  **分期：Phase 3.9；M0 不要求**（§3.1 的 M0 枚举不含此项，本标注用于消除本节与 §3.1 的
-  口径不一致；架构师裁决 F1，验收见 `PLAN.md` §3 的 3.9 行）。
+- 检测结果必须缓存到「书源 ID + URL」维度，避免重复嗅探（**已落地：Phase 3.9**）：
+  缓存的是**嗅探车道的结果**，键复用 `CacheDao` 的稳定键（`ruleField` 固定为 `charset`、`page` 固定，
+  使同书源同 URL 的两个阶段共享一条；C-NET-6 的键形状不变），TTL 是
+  `core/network/charset_cache.dart` 的 `defaultCharsetCacheTtl`（唯一出处）；
+  **声明车道不进缓存**：`Content-Type` / `<meta>` 每次都能自己读到，而且声明永远优先于缓存标签
+  （ADR-0031 的两条车道不因缓存而变）。缓存不可用时（读 / 写失败、无书源 ID）只是一次
+  **重新嗅探**，不得让请求失败（C-ERR-1）。
 - **解码失败的判定按车道区分（ADR-0031，2026-10-11 生效）：**
   - **已声明车道**（HTTP `Content-Type` 的 `charset`、`<meta charset>`）：按**声明出的编码族**宽容
     解码（非法字节 → U+FFFD）并记一条 warning（含书源 ID、URL 摘要、字段路径；不得含正文 /

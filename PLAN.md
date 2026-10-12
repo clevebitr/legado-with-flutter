@@ -72,7 +72,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
-| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）、3.4（`@js:` 接入 + 全部 JS 绑定与额度）、**3.7（真实源回归 → 矩阵 M0 状态列全「已确认」，G3 达成）**已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**当前 = 3.9（charset 缓存）**。细节见 `CHANGELOG.md` |
+| Phase 3 — M0 横向铺开 | ✅ 完成 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）、3.4（`@js:` 接入 + 全部 JS 绑定与额度）、**3.7（真实源回归 → 矩阵 M0 状态列全「已确认」，G3 达成）**已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**3.9（charset 检测结果缓存）** 已完成，Phase 3 全部收口；下一步 = Phase 4（M1）。细节见 `CHANGELOG.md` |
 | Phase 4 — M1 | ⏳ 未开始 | — |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
@@ -150,7 +150,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
    （19 行），四次活站点运行与逐行结论见 `tool/spot_check/README.md` §4b；入库了 `@js:` 语料
    （`legado_js_rules_source.json`）与语法覆盖派生源（`legado_g2b_syntax_rules_source.json`）；
    回归顺带修掉矩阵 #13 的两处保真缺口（JSONPath 命中列表时不展开），并把 `spot_check` 改回可运行。
-8. **3.9**：charset 检测结果缓存。
+8. **3.9** ✅ **已完成（2026-10-12）**：按「书源 ID + URL」缓存嗅探结果（键复用 `CacheDao`，
+   不加列不建表），声明车道不进缓存；`CacheDao` 由此拿到第一个生产消费方。
 
 | 步骤 | 内容 | 验收 |
 |---|---|---|
@@ -162,7 +163,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 3.6 | 失败语义全量：9 个 `ParseFailureKind` 各有触发路径 | 每个 kind ≥1 条单测 |
 | 3.7 | **真实书源验证记录** ✅ | 按 `book-source.md` §10 格式写入 PR（现落为 `tool/spot_check/README.md` §4b），矩阵 19 个 M0 行的状态列已全改「已确认」；`@js:` 语料入库（`legado_js_rules_source.json` + `maoer_search.json` / `maoer_toc.json`） |
 | 3.8 | 同一书源并发上限（默认 3）+ 章节正文串行/有限并发 ✅ | 并发上限可配且有单测；超限请求排队而非并发发出；**并发预算只在此层实现，不改 `JsBridge` 契约**（ADR-0030 §决策 2） |
-| 3.9 | charset 检测结果缓存：按「书源 ID + URL」维度缓存；复用 `CacheDao` 的稳定键与 TTL，**不加列、不新建表**（架构师裁决 F1） | 同 `(书源, URL)` 第二次编码检测**不再嗅探**，有单测；本行同时让 `CacheDao` 拿到第一个生产消费方 |
+| 3.9 | charset 检测结果缓存：按「书源 ID + URL」维度缓存；复用 `CacheDao` 的稳定键与 TTL，**不加列、不新建表**（架构师裁决 F1） ✅ | 同 `(书源, URL)` 第二次编码检测**不再嗅探**，有单测（`CharsetCache` 命中即用缓存标签、声明仍优先）；本行同时让 `CacheDao` 拿到第一个生产消费方 |
 
 **完成判定：** 2 个真实书源完成全链路离线回放；矩阵 M0 行的状态列**全部为「已确认」**。
 
@@ -216,7 +217,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 事项 | 去向 |
 |---|---|
 | 同一书源并发上限 3 + 章节正文有限并发 | ✅ **已闭环（3.8，2026-10-12）**：请求层唯一实现点 `DioHttpClient` + `RequestLimiter`（键 = 书源，无书源时按主机；默认 3 可配、FIFO 排队不报 busy、异常也释放槽位）；语义归 `book-source.md` §8 |
-| charset 检测结果缓存 | **3.9**（本阶段闭环） |
+| ~~charset 检测结果缓存~~ | ✅ **已闭环（3.9，2026-10-12）**：`CharsetCache` 端口 + `CacheDao` 适配器，按「书源 ID + URL」缓存**嗅探**结果（声明车道不进缓存）；语义归 `book-source.md` §5 |
 | 按书源清理缓存（需加列 + 迁移） | **Phase 5.5** |
 | 非顶层字段被拒降级为 warning（ADR-0026） | ✅ **已闭环（3.2）**：唯一实现点为 `PageFetchService`，两类（`unsupportedRule` / `parseFailed`）均降级，顶层 / 非顶层各 ≥1 条测试 |
 | 真实站点 spot-check（G2b） | ✅ **已闭环（2026-10-12）**：四段链路与派生 `@css:` 等价验证记录见 `tool/spot_check/README.md`；衍生的 **ADR-0032**（未知类型 → CSS）已落地，**ADR-0031**（已声明车道宽容解码）已实现 |

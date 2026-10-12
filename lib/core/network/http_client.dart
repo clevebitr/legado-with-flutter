@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/network/charset_cache.dart';
 import 'package:flutter_reader/core/network/charset_decoder.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
@@ -71,12 +72,15 @@ final class DioHttpClient implements HttpClient {
   /// `dio` is injectable so tests can attach a fake adapter instead of touching
   /// the network (`docs/dev/testing.md` §4). [policy] also carries the per-source
   /// concurrency budget, so the limiter is built from it and needs no separate
-  /// injection point.
+  /// injection point. `charsetCache` is optional: `null` means “sniff every response”,
+  /// which is what a caller that has no cache to offer (and every test that does not
+  /// care) gets; the app wires the `CacheDao`-backed one in `http_client_provider.dart`.
   DioHttpClient({
     required this._cookies,
     required this._logger,
     HttpPolicy policy = const HttpPolicy(),
     Dio? dio,
+    this._charsetCache,
   }) : _policy = policy,
        _limiter = RequestLimiter(
          maxConcurrent: policy.maxConcurrentRequestsPerSource,
@@ -100,6 +104,7 @@ final class DioHttpClient implements HttpClient {
   final HttpPolicy _policy;
   final RequestLimiter _limiter;
   final Dio _dio;
+  final CharsetCache? _charsetCache;
 
   @override
   Future<ParseResult<HttpResponse>> get(
@@ -262,19 +267,32 @@ final class DioHttpClient implements HttpClient {
   }
 
   /// Decodes a 2xx body; the only place a [FormatException] is expected.
-  ParseResult<HttpResponse> _decode(
+  ///
+  /// The sniffing step of `book-source.md` §5 runs once per `(书源, URL)`: the label it
+  /// chose is read from [CharsetCache] on the next request and passed to [decodeBody], so
+  /// the detector never runs twice for the same page. Only a **detected** label is stored
+  /// (a declared one is read from the response itself every time and always wins), and a
+  /// cache failure only costs a sniff — it must not fail a page (C-ERR-1).
+  Future<ParseResult<HttpResponse>> _decode(
     Response<List<int>> response, {
     required int status,
     required String rulePath,
     required String? keyword,
     required String url,
     required String? sourceId,
-  }) {
+  }) async {
+    final String? sniffedCharset = await _readCachedCharset(sourceId, url);
+
     try {
       final DecodedBody decoded = decodeBody(
         response.data ?? const <int>[],
         contentType: response.headers.value(HttpHeaders.contentTypeHeader),
+        sniffedCharset: sniffedCharset,
       );
+      if (decoded.isDetected && sniffedCharset == null) {
+        // 命中的标签不需要重写（DAO 已把它当成未过期才会返回）；只有**这次刚嗅探出来**的才写。
+        await _writeCachedCharset(sourceId, url, decoded.charset);
+      }
       if (decoded.toleratedMalformedBytes) {
         // ADR-0031 §决策 1/2：声明车道允许宽容解码，但必须留痕——携带**声明的编码**、
         // 替换数量与书源 ID；正文、Cookie、Token 一律不入日志（C-ERR-8 / C-SEC-4）。
@@ -309,6 +327,55 @@ final class DioHttpClient implements HttpClient {
       );
     }
   }
+
+  /// The charset a previous response for ([sourceId], [url]) was decoded with, if any.
+  ///
+  /// A page without a book source has no cache key (C-NET-6 starts one with the source id),
+  /// so it sniffs every time; a cache failure is logged at debug level and treated as a
+  /// miss.
+  Future<String?> _readCachedCharset(String? sourceId, String url) async {
+    final CharsetCache? cache = _charsetCache;
+    if (cache == null || sourceId == null) {
+      return null;
+    }
+
+    try {
+      return await cache.read(
+        sourceId: sourceId,
+        ruleField: _charsetCacheField,
+        url: url,
+        page: _charsetCachePage,
+      );
+    } on Exception catch (error) {
+      _logger.debug('Charset cache read failed: ${describeError(error)}');
+
+      return null;
+    }
+  }
+
+  /// Stores the detected charset for ([sourceId], [url]); a failure is not the page's.
+  Future<void> _writeCachedCharset(
+    String? sourceId,
+    String url,
+    String charset,
+  ) async {
+    final CharsetCache? cache = _charsetCache;
+    if (cache == null || sourceId == null) {
+      return;
+    }
+
+    try {
+      await cache.write(
+        sourceId: sourceId,
+        ruleField: _charsetCacheField,
+        url: url,
+        page: _charsetCachePage,
+        charset: charset,
+      );
+    } on Exception catch (error) {
+      _logger.debug('Charset cache write failed: ${describeError(error)}');
+    }
+  }
 }
 
 /// Adds stored cookies to requests and records the cookies of responses.
@@ -340,6 +407,18 @@ final class _CookieInterceptor extends Interceptor {
     handler.next(response);
   }
 }
+
+/// The `ruleField` the charset cache uses in the TTL cache's key (`book-source.md` §5).
+///
+/// It is a constant on purpose: §5 caches by 「书源 ID + URL」, and one book page is often
+/// read by two stages (the G2b source reads it for `ruleBookInfo` and again for `ruleToc`),
+/// so a key that carried the stage would miss on the second read and sniff again. The
+/// `page` part of the shared key is fixed for the same reason — a charset does not depend
+/// on it.
+const String _charsetCacheField = 'charset';
+
+/// The `page` the charset cache uses in the TTL cache's key; see [_charsetCacheField].
+const int _charsetCachePage = 1;
 
 /// Maps a non-2xx [status] onto the kinds `book-source.md` §7 names.
 ///
