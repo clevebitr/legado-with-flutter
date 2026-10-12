@@ -148,7 +148,7 @@ Windows 与 Android 两侧都已实测通过。
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**437** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 567/567、`domain` 1111/1111，均 100%；阈值见 `docs/dev/testing.md` §2） |
+| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**438** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 567/567、`domain` 1120/1120，均 100%；阈值见 `docs/dev/testing.md` §2） |
 | Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`），含 `flutter_qjs_next` 从 `cxx/` 源码编译的 QuickJS |
 | Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` 10 项（含 runaway → `js:timeout` 后 worker 仍可用）、`on_disk_database` 1 项）；退出码 0 |
 | Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器自动启动 → 2 个用例文件全部通过 → 自动关闭；退出码 0（当时 `integration_test/` 只有 2 个文件；`js_bridge_test.dart` 的 Android 侧尚未复跑） |

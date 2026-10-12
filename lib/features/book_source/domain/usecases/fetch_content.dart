@@ -1,6 +1,7 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 
 /// Reads the body of one chapter (`PLAN.md` 2.4, `ruleContent`).
 ///
@@ -25,6 +26,7 @@ final class FetchContent {
       nextRulePath: 'contentRule.nextContentUrl',
       headers: source.headers,
       sourceId: source.url,
+      source: source.jsSourceInfo,
     );
 
     return switch (walk) {
@@ -79,6 +81,11 @@ final class FetchContent {
         bodies.join('\n'),
         'contentRule.replaceRegex',
         sourceId: source.url,
+        // 净化规则拿得到它读的那一页：上游 `getString(replaceRegex, contentStr)` 同样有上下文。
+        jsContext: JsPageContext(
+          baseUrl: walk.pages.first.url,
+          source: source.jsSourceInfo,
+        ),
       ),
     );
   }

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review follow-up: a `@js:` purification rule now sees the page it ran on (2026-10-12)
+
+The 3.4 part 1–2 review found one silent wrong value, not a code defect in the API: `replaceRegex`'s
+`@js:` path built its sandbox context as `JsPageContext(baseUrl: '')`, so a purification rule reading
+`baseUrl` got an empty string — upstream evaluates it through `analyzeString(replaceRegex,
+contentStr)`, which has a base URL.
+
+- `applyReplaceRule` takes an optional `JsPageContext`, and `PageFetchService.replaceContent` now
+  requires one; `FetchContent` builds it from the first fetched page and the source view, so the
+  chapter URL and `source.name/url/group` reach the sandbox.
+- The source view became one mapping instead of four hand-rolled ones: `BookSourceJsView.jsSourceInfo`
+  (`name` / `url` / `group` only, `book-source.md` §6), used by all four use cases to fill the page
+  context of the pages they fetch.
+- A unit test pins the context that reaches the sandbox, so the silent empty-string case cannot come
+  back.
+- Gates: format clean, analyze clean, 438 tests, coverage exit 0 (core 567/567, domain 1120/1120).
+
 ### 3.4 part 2: `@js:` runs in the engine, with the sandbox bound to the page (2026-10-12)
 
 The sandbox is now reachable from a rule. `RuleEngine` takes a `JsBridge` (the only door to

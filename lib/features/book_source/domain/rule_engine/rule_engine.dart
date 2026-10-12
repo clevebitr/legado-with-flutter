@@ -574,21 +574,24 @@ final class RuleEngine {
   /// other body as [ParseFailureKind.parseFailed] with [rulePath]. Neither is silently
   /// dropped; the caller degrades the field (ADR-0026 §决策 2).
   ///
-  /// Asynchronous like the rest of the evaluation API: from 3.4 on, a `@js:` body is
-  /// evaluated by the sandbox (upstream applies `replaceRegex` through
-  /// `analyzeRule.getString`, `BookContent.kt:190-193`), and one shared shape keeps a
-  /// caller from branching on which engine entry point it holds.
+  /// Asynchronous like the rest of the evaluation API: a `@js:` body is evaluated by the
+  /// sandbox (upstream applies `replaceRegex` through `analyzeRule.getString`,
+  /// `BookContent.kt:190-193`), and one shared shape keeps a caller from branching on which
+  /// engine entry point it holds. [jsContext] is the page the rule runs against; without it
+  /// a rule reading `baseUrl` would silently see an empty string.
   Future<ParseResult<String>> applyReplaceRule(
     String rule,
     String text, {
     required String rulePath,
+    JsPageContext? jsContext,
   }) async {
     final List<String> parts = rule.split('##');
     final String body = parts.first.trim();
     if (body.toLowerCase().startsWith(_jsFlag)) {
       // 上游把 `replaceRegex` 交给同一套规则求值（`analyzeRule.getString(replaceRegex,
       // contentStr)`），所以 `@js:` 净化规则在沙箱里跑，`result` 是拼接后的整章正文。
-      const JsPageContext context = JsPageContext(baseUrl: '');
+      final JsPageContext context =
+          jsContext ?? const JsPageContext(baseUrl: '');
       final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
         JsJob(
           script: body.substring(_jsFlag.length),

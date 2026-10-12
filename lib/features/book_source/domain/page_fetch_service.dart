@@ -494,11 +494,16 @@ final class PageFetchService {
   /// (ADR-0026 §决策 2), which for a transform means “keep the text as it was
   /// extracted” instead of losing the whole chapter. Asynchronous because the engine's
   /// evaluation API is (ADR-0029 §决策 1).
+  ///
+  /// [jsContext] is the page a `@js:` purification rule runs against — the caller has it (it
+  /// fetched the chapter), and without it a rule reading `baseUrl` would silently get an
+  /// empty string.
   Future<String> replaceContent(
     String? rule,
     String content,
     String rulePath, {
     required String sourceId,
+    required JsPageContext jsContext,
   }) async {
     if (rule == null || rule.trim().isEmpty) {
       return content;
@@ -508,6 +513,7 @@ final class PageFetchService {
       rule,
       content,
       rulePath: rulePath,
+      jsContext: jsContext,
     );
 
     return switch (replaced) {

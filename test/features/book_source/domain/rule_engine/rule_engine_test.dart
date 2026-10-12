@@ -2527,6 +2527,32 @@ void main() {
       },
     );
 
+    test('applyReplaceRule_givenAJsRuleAndAContext_bindsThePage', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'x';
+
+      await _text(
+        _engine(null, bridge).applyReplaceRule(
+          '@js:baseUrl',
+          '正文',
+          rulePath: 'contentRule.replaceRegex',
+          jsContext: const JsPageContext(
+            baseUrl: 'https://example-novel.test/book/1/9.html',
+            source: JsSourceInfo(
+              name: '示例书源',
+              url: 'https://example-novel.test',
+            ),
+          ),
+        ),
+      );
+
+      // 上下文必须真的传到沙箱：否则净化规则里的 baseUrl 会默默变成空串。
+      expect(
+        bridge.jobs.single.baseUrl,
+        'https://example-novel.test/book/1/9.html',
+      );
+      expect(bridge.jobs.single.source.name, '示例书源');
+    });
+
     test(
       'applyReplaceRule_givenTheScriptTimesOut_propagatesTheMarkedFailure',
       () async {

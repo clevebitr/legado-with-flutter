@@ -25,6 +25,7 @@ final class FetchBookInfo {
       rulePath: 'ruleBookInfo',
       headers: source.headers,
       sourceId: source.url,
+      source: source.jsSourceInfo,
     );
 
     return switch (page) {

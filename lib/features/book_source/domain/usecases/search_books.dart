@@ -46,6 +46,7 @@ final class SearchBooks {
       headers: source.headers,
       keyword: keyword,
       sourceId: source.url,
+      source: source.jsSourceInfo,
     );
 
     return switch (response) {
