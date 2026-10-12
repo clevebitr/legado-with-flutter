@@ -170,13 +170,17 @@ final class PageFetchService {
   /// that one field. Escalating a malformed rule instead would be worse than useless:
   /// the callers read `dataOrNull`, so it would turn into a silent `null` with no
   /// record at all. C-SRC-4 is satisfied by the explicit degradation plus its warning.
-  ParseResult<String?> field(
+  ///
+  /// Asynchronous because the engine is: the rule may hold a `@js:` segment
+  /// (ADR-0029 §决策 1). Every caller awaits it in turn, so the use cases stay
+  /// `Future`-returning without a second evaluation path.
+  Future<ParseResult<String?>> field(
     String? rule,
     RuleScope scope,
     String rulePath, {
     required String sourceId,
-  }) {
-    final ParseResult<String?> parsed = _engine.extractFirst(
+  }) async {
+    final ParseResult<String?> parsed = await _engine.extractFirst(
       rule ?? '',
       scope,
       rulePath: rulePath,
@@ -226,12 +230,12 @@ final class PageFetchService {
   /// Returns every match of a **top-level list** rule.
   ///
   /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7).
-  ParseResult<List<RuleScope>> list(
+  Future<ParseResult<List<RuleScope>>> list(
     String? rule,
     RuleScope scope,
     String rulePath,
-  ) {
-    final ParseResult<List<RuleScope>> result = _engine.selectAll(
+  ) async {
+    final ParseResult<List<RuleScope>> result = await _engine.selectAll(
       rule ?? '',
       scope,
       rulePath: rulePath,
@@ -251,8 +255,14 @@ final class PageFetchService {
   /// A rejected `content` rule stays a failure: it is top-level, so ADR-0026 §决策 1
   /// applies and the degradation of [field] deliberately does not. The engine is
   /// therefore called directly here.
-  ParseResult<String> content(String? rule, RuleScope scope, String rulePath) {
-    final ParseResult<String?> parsed = _engine.extractFirst(
+  ///
+  /// Asynchronous for the same reason as [field]: the engine's value API is.
+  Future<ParseResult<String>> content(
+    String? rule,
+    RuleScope scope,
+    String rulePath,
+  ) async {
+    final ParseResult<String?> parsed = await _engine.extractFirst(
       rule ?? '',
       scope,
       rulePath: rulePath,
@@ -339,7 +349,7 @@ final class PageFetchService {
         case ParseSuccess<RuleScope>(:final RuleScope data):
           pages.add(FetchedPage(url: pageUrl, scope: data));
           pending.addAll(
-            nextPageUrls(
+            await nextPageUrls(
               nextRule,
               data,
               nextRulePath,
@@ -373,15 +383,16 @@ final class PageFetchService {
   ///
   /// A rejected or malformed rule degrades to **no next page** plus a warning
   /// (ADR-0026 §决策 2): the field is not top-level, so it must not cost the stage —
-  /// paging simply stops where it is.
-  List<String> nextPageUrls(
+  /// paging simply stops where it is. Asynchronous because the rule may hold a `@js:`
+  /// segment (ADR-0029 §决策 1).
+  Future<List<String>> nextPageUrls(
     String? rule,
     RuleScope scope,
     String rulePath, {
     required String currentUrl,
     required int page,
     required String sourceId,
-  }) {
+  }) async {
     if (rule == null || rule.trim().isEmpty) {
       return const <String>[];
     }
@@ -391,7 +402,7 @@ final class PageFetchService {
       return _pagingUrls(<String>[text], currentUrl, page);
     }
 
-    final ParseResult<List<String>> parsed = _engine.extractAll(
+    final ParseResult<List<String>> parsed = await _engine.extractAll(
       text,
       scope,
       rulePath: rulePath,
@@ -465,18 +476,19 @@ final class PageFetchService {
   ///
   /// A rejected or malformed rule degrades to **no replacement** plus a warning
   /// (ADR-0026 §决策 2), which for a transform means “keep the text as it was
-  /// extracted” instead of losing the whole chapter.
-  String replaceContent(
+  /// extracted” instead of losing the whole chapter. Asynchronous because the engine's
+  /// evaluation API is (ADR-0029 §决策 1).
+  Future<String> replaceContent(
     String? rule,
     String content,
     String rulePath, {
     required String sourceId,
-  }) {
+  }) async {
     if (rule == null || rule.trim().isEmpty) {
       return content;
     }
 
-    final ParseResult<String> replaced = _engine.applyReplaceRule(
+    final ParseResult<String> replaced = await _engine.applyReplaceRule(
       rule,
       content,
       rulePath: rulePath,

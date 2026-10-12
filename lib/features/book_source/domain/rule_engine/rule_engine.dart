@@ -151,11 +151,14 @@ final class RuleEngine {
   /// the caller's decision, because only the caller knows whether [rule] is a
   /// top-level rule (`docs/dev/book-source.md` §7). A blank [rule] is also a
   /// success with no elements, since real exports use `""` for absent fields.
-  ParseResult<List<RuleScope>> selectAll(
+  ///
+  /// Asynchronous because the same rule text may hold a `@js:` segment, and a JS rule
+  /// has to cross into the worker isolate (ADR-0029 §决策 1).
+  Future<ParseResult<List<RuleScope>>> selectAll(
     String rule,
     RuleScope scope, {
     required String rulePath,
-  }) {
+  }) async {
     if (rule.trim().isEmpty) {
       return const ParseSuccess<List<RuleScope>>(<RuleScope>[]);
     }
@@ -357,11 +360,13 @@ final class RuleEngine {
   /// selector (upstream `getStringList`). Values that extract to an empty string
   /// are dropped, duplicates of an attribute value are dropped, and an empty
   /// result is a success.
-  ParseResult<List<String>> extractAll(
+  ///
+  /// Asynchronous because the rule may hold a `@js:` segment (ADR-0029 §决策 1).
+  Future<ParseResult<List<String>>> extractAll(
     String rule,
     RuleScope scope, {
     required String rulePath,
-  }) {
+  }) async {
     if (rule.trim().isEmpty) {
       return const ParseSuccess<List<String>>(<String>[]);
     }
@@ -395,12 +400,14 @@ final class RuleEngine {
   /// Upstream `getString`. A `null` data is not a failure: it keeps an optional
   /// book source field (an absent cover, an absent intro) non-fatal, while a
   /// rejected rule still comes back as a [ParseFailure].
-  ParseResult<String?> extractFirst(
+  ///
+  /// Asynchronous because the rule may hold a `@js:` segment (ADR-0029 §决策 1).
+  Future<ParseResult<String?>> extractFirst(
     String rule,
     RuleScope scope, {
     required String rulePath,
-  }) {
-    final ParseResult<List<String>> values = extractAll(
+  }) async {
+    final ParseResult<List<String>> values = await extractAll(
       rule,
       scope,
       rulePath: rulePath,
@@ -433,11 +440,16 @@ final class RuleEngine {
   /// [ParseFailureKind.unsupportedRule] with the syntax in `rulePath` (C-SRC-4), any
   /// other body as [ParseFailureKind.parseFailed] with [rulePath]. Neither is silently
   /// dropped; the caller degrades the field (ADR-0026 §决策 2).
-  ParseResult<String> applyReplaceRule(
+  ///
+  /// Asynchronous like the rest of the evaluation API: from 3.4 on, a `@js:` body is
+  /// evaluated by the sandbox (upstream applies `replaceRegex` through
+  /// `analyzeRule.getString`, `BookContent.kt:190-193`), and one shared shape keeps a
+  /// caller from branching on which engine entry point it holds.
+  Future<ParseResult<String>> applyReplaceRule(
     String rule,
     String text, {
     required String rulePath,
-  }) {
+  }) async {
     final List<String> parts = rule.split('##');
     final String body = parts.first.trim();
     if (body.isNotEmpty && body.toLowerCase() != 'all') {

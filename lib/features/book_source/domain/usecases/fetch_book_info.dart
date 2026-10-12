@@ -33,7 +33,7 @@ final class FetchBookInfo {
         rulePath: final String failedAt,
       ) =>
         failureAt<BookInfo>(kind: kind, rulePath: failedAt),
-      ParseSuccess<RuleScope>(:final RuleScope data) => _read(
+      ParseSuccess<RuleScope>(:final RuleScope data) => await _read(
         source,
         url,
         data,
@@ -42,51 +42,55 @@ final class FetchBookInfo {
   }
 
   /// Reads every `ruleBookInfo` field out of [scope].
-  ParseResult<BookInfo> _read(BookSource source, String url, RuleScope scope) {
+  Future<ParseResult<BookInfo>> _read(
+    BookSource source,
+    String url,
+    RuleScope scope,
+  ) async {
     final BookInfoRule? rules = source.bookInfoRule;
-    final ParseResult<String?> name = _pages.field(
+    final ParseResult<String?> name = await _pages.field(
       rules?.name,
       scope,
       'bookInfoRule.name',
       sourceId: source.url,
     );
-    final ParseResult<String?> author = _pages.field(
+    final ParseResult<String?> author = await _pages.field(
       rules?.author,
       scope,
       'bookInfoRule.author',
       sourceId: source.url,
     );
-    final ParseResult<String?> kind = _pages.field(
+    final ParseResult<String?> kind = await _pages.field(
       rules?.kind,
       scope,
       'bookInfoRule.kind',
       sourceId: source.url,
     );
-    final ParseResult<String?> coverUrl = _pages.field(
+    final ParseResult<String?> coverUrl = await _pages.field(
       rules?.coverUrl,
       scope,
       'bookInfoRule.coverUrl',
       sourceId: source.url,
     );
-    final ParseResult<String?> intro = _pages.field(
+    final ParseResult<String?> intro = await _pages.field(
       rules?.intro,
       scope,
       'bookInfoRule.intro',
       sourceId: source.url,
     );
-    final ParseResult<String?> lastChapter = _pages.field(
+    final ParseResult<String?> lastChapter = await _pages.field(
       rules?.lastChapter,
       scope,
       'bookInfoRule.lastChapter',
       sourceId: source.url,
     );
-    final ParseResult<String?> wordCount = _pages.field(
+    final ParseResult<String?> wordCount = await _pages.field(
       rules?.wordCount,
       scope,
       'bookInfoRule.wordCount',
       sourceId: source.url,
     );
-    final ParseResult<String?> tocUrl = _pages.field(
+    final ParseResult<String?> tocUrl = await _pages.field(
       rules?.tocUrl,
       scope,
       'bookInfoRule.tocUrl',

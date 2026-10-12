@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 3.4 part 1: the rule evaluation API is asynchronous (ADR-0029 §决策 1) (2026-10-12)
+
+The first half of 3.4, kept as its own step so the mechanical change is reviewable without the JS
+plumbing mixed in: `@js:` can appear on **any** field, and a JS rule has to cross into the worker
+isolate, so the engine cannot stay synchronous.
+
+- `RuleEngine.selectAll` / `extractAll` / `extractFirst` / `applyReplaceRule` now return
+  `Future<ParseResult<…>>`; `PageFetchService.field` / `list` / `content` / `nextPageUrls` /
+  `replaceContent` and the four use cases await them. **One evaluation path only** — the alternative
+  (a second, async entry point for `@js:`) would duplicate §7's failure semantics, the connector
+  handling, the scope rules and the ADR-0026 degradation (`PLAN.md` §6 trap #5).
+- `applyReplaceRule` is included because upstream evaluates `replaceRegex` through the same rule
+  call (`BookContent.kt:190-193`), so a `@js:` replacement belongs on one path too; part 2 wires it.
+- **Breaking change for callers**, recorded here as ADR-0029 §后果 requires. No behaviour change:
+  same values, same failures, same `rulePath`s. What lands in part 2 is the sandbox call itself.
+- `rule_engine_test.dart` absorbed it in the helpers: the six unwrapping helpers take the
+  **unawaited** engine call and await it themselves, so ~200 call sites only gained `await` and
+  `async` rather than being restructured.
+- Gates: format clean, analyze clean, 424 tests, coverage exit 0 (core 567/567, domain 1049/1049).
+
 ### 3.3 review fixes: the sandbox closes its holes, `log.*` gets a ceiling, cancellation stops lying (2026-10-12)
 
 The architect independently re-ran the six host gates and the real-engine device probe (all green) and

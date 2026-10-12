@@ -54,7 +54,7 @@ final class SearchBooks {
         rulePath: final String failedAt,
       ) =>
         failureAt<List<Book>>(kind: kind, rulePath: failedAt),
-      ParseSuccess<RuleScope>(:final RuleScope data) => _read(
+      ParseSuccess<RuleScope>(:final RuleScope data) => await _read(
         source,
         url,
         data,
@@ -63,12 +63,12 @@ final class SearchBooks {
   }
 
   /// Reads every search hit out of [scope].
-  ParseResult<List<Book>> _read(
+  Future<ParseResult<List<Book>>> _read(
     BookSource source,
     String baseUrl,
     RuleScope scope,
-  ) {
-    final ParseResult<List<RuleScope>> items = _pages.list(
+  ) async {
+    final ParseResult<List<RuleScope>> items = await _pages.list(
       source.searchRule.bookList,
       scope,
       'searchRule.bookList',
@@ -80,11 +80,8 @@ final class SearchBooks {
         rulePath: final String failedAt,
       ) =>
         failureAt<List<Book>>(kind: kind, rulePath: failedAt),
-      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) => _books(
-        source,
-        baseUrl,
-        data,
-      ),
+      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) =>
+        await _books(source, baseUrl, data),
     };
   }
 
@@ -95,58 +92,58 @@ final class SearchBooks {
   /// degrades the same way with a warning (ADR-0026 §决策 2): one unsupported field
   /// must not cost the whole search. A rejected `bookList` is top-level and still
   /// fails the stage, which happens in [PageFetchService.list].
-  ParseResult<List<Book>> _books(
+  Future<ParseResult<List<Book>>> _books(
     BookSource source,
     String baseUrl,
     List<RuleScope> items,
-  ) {
+  ) async {
     final SearchRule rules = source.searchRule;
     final List<Book> books = <Book>[];
 
     for (final RuleScope item in items) {
-      final ParseResult<String?> name = _pages.field(
+      final ParseResult<String?> name = await _pages.field(
         rules.name,
         item,
         'searchRule.name',
         sourceId: source.url,
       );
-      final ParseResult<String?> bookUrl = _pages.field(
+      final ParseResult<String?> bookUrl = await _pages.field(
         rules.bookUrl,
         item,
         'searchRule.bookUrl',
         sourceId: source.url,
       );
-      final ParseResult<String?> author = _pages.field(
+      final ParseResult<String?> author = await _pages.field(
         rules.author,
         item,
         'searchRule.author',
         sourceId: source.url,
       );
-      final ParseResult<String?> kind = _pages.field(
+      final ParseResult<String?> kind = await _pages.field(
         rules.kind,
         item,
         'searchRule.kind',
         sourceId: source.url,
       );
-      final ParseResult<String?> coverUrl = _pages.field(
+      final ParseResult<String?> coverUrl = await _pages.field(
         rules.coverUrl,
         item,
         'searchRule.coverUrl',
         sourceId: source.url,
       );
-      final ParseResult<String?> intro = _pages.field(
+      final ParseResult<String?> intro = await _pages.field(
         rules.intro,
         item,
         'searchRule.intro',
         sourceId: source.url,
       );
-      final ParseResult<String?> lastChapter = _pages.field(
+      final ParseResult<String?> lastChapter = await _pages.field(
         rules.lastChapter,
         item,
         'searchRule.lastChapter',
         sourceId: source.url,
       );
-      final ParseResult<String?> wordCount = _pages.field(
+      final ParseResult<String?> wordCount = await _pages.field(
         rules.wordCount,
         item,
         'searchRule.wordCount',
