@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### R1 closed: `isVip` now matches upstream's `isTrue()` predicate, with the lines (2026-10-12)
+
+The review left one debt: the **positive** side of `isVip` (`true` / `1` / `是` → VIP) had no upstream
+`file:line` behind it, so it was either evidence or a registered difference. The fork's source settles
+it — upstream reads the rule result through `String?.isTrue()` (`BookChapterList.kt:261-264` calls
+`if (isVip.isTrue()) bookChapter.isVip = true`; the predicate is `StringExtensions.kt:75-80`):
+
+```kotlin
+fun String?.isTrue(nullIsTrue: Boolean = false): Boolean {
+    if (this.isNullOrBlank() || this == "null") return nullIsTrue
+    return !this.trim().matches("(?i)^(?:false|no|not|0|0.0)$".toRegex())
+}
+```
+
+- **The implementation was narrower than upstream, so it is now upstream's predicate.** The previous
+  compare only rejected `false` and `0`, which made `null`, `no`, `not` and `0.0` VIP — four wrong
+  answers against a real source. `fetch_toc.dart` now ports the predicate literally.
+- **Two upstream quirks are copied on purpose**, because "fixing" them would silently become a
+  difference: the `'null'` compare happens **before** trimming (`' null '` is VIP upstream), and the
+  pattern's `.` is unescaped (`0x0` matches too). Both are spelled out in `book-source.md` §4.1
+  (still the single owner of the semantics) and in the doc comment.
+- The `isVip` case table grew from 6 to 12 chapters so the negation list is pinned: `true` / `1` /
+  `是` / `yes` are VIP; `false` / `FALSE` / `no` / `not` / `0` / `0.0` / the literal `null` / an empty
+  value are not. `PLAN.md` §3.7's R1 row is closed.
+- Gates: `dart format` unchanged, `flutter analyze` clean, `flutter test --coverage` 405 passed,
+  `check_coverage.dart` exit 0 with `core` 385/385 and `domain` 1048/1048.
+
 ### Review of the 3.8 slice: three boundaries registered, no code findings (2026-10-12)
 
 Architect review of `15339cf`, gates re-run in a detached worktree: format clean, `flutter analyze`

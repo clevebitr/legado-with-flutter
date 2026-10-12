@@ -215,7 +215,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 矩阵 #14（`@js:`）无任何真实语料样本 | **3.7**：仓内 `test/fixtures/book_sources/*.json` 的 `@js:` 出现次数为 **0**，因此 #14 的状态列无法改「已确认」；补样前先补语料（ADR-0029 §后果） |
 | JS 绑定是否需要**同步**写法（3.3 只实现 Promise 形态的 `http.*` / `parse.*`） | **3.7** 真实语料回归出证据后，以**新 ADR** 裁决是否追加；不得就地放宽（ADR-0029 §决策 4） |
 | ~~3.8 并发策略与 JS worker 容量的耦合~~ | ✅ **已闭环（ADR-0030）**：裁决为单常驻 worker + 单复用运行时 + FIFO，**容量不进 `JsBridge` 契约**；重开触发条件见 ADR-0030 §决策 5 |
-| `isVip` 的**正侧**真值（`true` / `1` / `是` → VIP）缺上游 `file:line`：若上游只认 `"true"`，本仓判定就是**有意差异**，应按 `book-source.md` §4.1 的体例标注为差异 | **开发组**（不阻塞合并）：直抓 fork 源码补行号，或改写为差异登记；语义已由 `execute_givenIsVipRule_marksOnlyTheTrueishChapters` 钉住，唯一出处仍是 §4.1 |
+| ~~`isVip` 的**正侧**真值缺上游 `file:line`~~ | ✅ **已闭环（R1，2026-10-12）**：直抓 fork 源码 `HapeLee/legado-with-MD3@master`，判定就是上游 `String?.isTrue()`（调用 `BookChapterList.kt:261-264`，谓词 `StringExtensions.kt:75-80`）——`null` / 全空白 / 字面量 `"null"` → 非 VIP，其余值除非匹配 `(?i)^(?:false|no|not|0|0.0)$` 否则算 VIP（因此 `是` / `yes` 是 VIP，`no` / `not` / `0.0` 不是）；代码与测试已按此对齐，两处上游怪癖（`"null"` 在 trim 前比较、模式里 `.` 未转义）按原样照抄并登记在 `book-source.md` §4.1，唯一出处仍是 §4.1 |
 | 并发上限接入**用户设置**时（Phase 5）必须显式校验 `> 0`：`HttpPolicy` / `RequestLimiter` 目前只用 `assert`，release 下会被剥掉，`0` 会让该键的每个请求**永久排队** | **Phase 5（设置页）**：在设置边界校验或钳制；语义归 `book-source.md` §8 |
 | `httpClientProvider` 是 autoDispose，预算存在于 `DioHttpClient` 实例上，所以「同一书源并发上限」在**一次操作内**有效、跨操作会重建 | **Phase 5**：批量下载必须保证整批共用一份预算（该 provider 改 `keepAlive`，或把预算提到 app 级单例）；今天是串行翻页，无影响 |
 
