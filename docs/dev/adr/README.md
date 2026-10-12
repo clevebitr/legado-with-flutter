@@ -50,4 +50,5 @@
 | [0026](0026-optional-field-rejection-degrades-to-warning.md) | 非顶层字段被拒时降级为 warning，顶层规则仍整次失败（登记 F6 裁决） | Accepted（架构师裁决 F6） | 本次新增 |
 | [0027](0027-docs-topic-realignment.md) | 文档按主题重排：事实级归属矩阵与去重 | Accepted（2026-10-11 文档审计裁决） | 本次审计 |
 | [0028](0028-rule-scope-and-json-rules.md) | 规则 scope 显式化为 `RuleScope`，`@json:` 与默认 / `@css:` 规则共用一条读取路径 | Accepted（架构师裁决「RuleScope」；细节由本 PR 登记） | 本次新增 |
-| [0029](0029-js-bridge-shape-and-async-engine-api.md) | `@js:` 接入：引擎 API 转异步，JS 绑定形态逐项定义 | **Proposed（待裁决）** | 本次新增 |
+| [0029](0029-js-bridge-shape-and-async-engine-api.md) | `@js:` 接入：引擎 API 转异步，JS 绑定形态逐项定义 | Accepted（2026-10-11 架构师裁决，用户确认生效） | 本次新增 |
+| [0030](0030-js-engine-capacity-and-queueing.md) | JS 引擎容量与排队：单常驻 worker + 单复用运行时 + FIFO，容量不进 `JsBridge` 契约 | Accepted（2026-10-11 架构师裁决） | 本次新增 |

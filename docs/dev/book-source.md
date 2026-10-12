@@ -316,9 +316,21 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
 `eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。
 
-> **绑定形态（同步 / Promise）的裁决尚未生效：** 见 `docs/dev/adr/0029-js-bridge-shape-and-async-engine-api.md`
-> （状态 **Proposed**，待裁决）。在其中被裁决生效并回写到本表之前，**「形态」列只描述语义**，
-> 不得读作「这些调用在 JS 侧是同步的」这一已生效结论；`await` 要求便归该 ADR 决定。
+> **JS 侧形态（本表是唯一出处；ADR-0029 §决策 3，2026-10-11 生效）：** 本表「形态」列描述的是**值类型**；
+> 调用能否同步取值另有一层，判定标准是「该绑定是否需要在别处执行」：
+>
+> - **立即返回值（同步）**：`java.put` / `java.get`、`log.*`、`crypto.*`。
+>   前提是它们只在运行时所在 isolate 内完成（变量存 Dart 侧、按 `sourceId` 键控，见 ADR-0030 §决策 4）；
+> - **返回 Promise（规则**必须** `await`）**：`http.get` / `http.post`（唯一实现是 `core/network/HttpClient`，
+>   C-NET-1）、`parse.getString` / `parse.getElements`（引擎与 scope 不在该 isolate）。
+>   **同步写法不在支持面**，不得写成 `result.replace(...)` 式的同步链；仅凭 3.7 真实语料证据 + 新 ADR
+>   才可追加（ADR-0029 §决策 4）。
+>
+> **`parse.*` 的 scope 边界（ADR-0029 §决策 5）：** 3.3 只承诺**页级 scope**（worker 侧用页面 body 重建）；
+> 元素级 scope 命中时报 `unsupportedRule` / `parseFailed`，`rulePath` 用 `js:parse-scope`。
+>
+> **排队、超时与隔离（ADR-0030，本表不复述数值）：** 单常驻 worker、单复用运行时、FIFO 串行；
+> 并发预算归请求层；跨书源共用 `globalThis` 属**已登记偏离**；触发条件与重开路径见 ADR-0030 §决策 5。
 
 **配额（必须实现）：**
 
