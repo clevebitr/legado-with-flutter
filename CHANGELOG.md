@@ -20,15 +20,18 @@ charset cache's read and write, and C-ERR-2 (with ADR-0002's revision note) allo
   C-SEC-4). `CharsetCache`'s contract is now documented as **total** — `read` answers `null`, `write`
   does nothing, neither throws — so the request path carries no exception boundary and never has to
   hear about drift. The adapter therefore takes the `AppLogger` the client used to log with.
-- **One exception from the review's list cannot be named:** drift 2.35.2 does not export
-  `ConnectionClosedException` (`remote.dart` / `isolate.dart` export only `DriftRemoteException`), so
-  the “background isolate was closed” path stays outside the named list. Registered in `PLAN.md` §3.7
-  instead of being papered over.
+- **The one exception that cannot be named is covered by a ruling, not by a workaround.** drift
+  2.35.2 does not export `ConnectionClosedException` (`remote.dart` / `isolate.dart` export only
+  `DriftRemoteException`), and letting it escape the adapter would turn a lost cache entry into a
+  throwing page request (C-ERR-1). Under **ADR-0033** `_absorb` therefore carries a fifth clause,
+  `on Exception`, pinned to that one method: `Error` stays uncaught, the failure is still logged, the
+  port stays total — and the clause must be deleted as soon as drift exports the type. The test that
+  exercises it uses a plain `Exception`, for the same reason the type cannot be named there.
 - Tests: the adapter now has four cases (one per absorbed type) proving a failed read is a miss, a
   failed write completes, and both leave a `debug` line; the client keeps hit/miss and
   “no source id” cases, and one new case pins **where** the boundary is — a cache that breaks the
-  total contract propagates instead of being swallowed by the client. 503 host cases, coverage exit 0
-  (`core` 777/777, `domain` 1163/1163).
+  total contract propagates instead of being swallowed by the client. 504 host cases, coverage exit 0
+  (`core` 779/779, `domain` 1163/1163).
 - Docs: `book-source.md` §5 (what the adapter absorbs and why the port is total), `PLAN.md` §3.7.
 
 
