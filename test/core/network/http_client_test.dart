@@ -710,29 +710,22 @@ void main() {
       expect(fixture.cache.writes, isEmpty);
     });
 
-    test('get_whenTheCharsetCacheIsBroken_stillDecodesThePage', () async {
+    test('get_givenACacheThatBreaksItsContract_theFailurePropagates', () async {
+      // `CharsetCache` 的契约是 total（读返回 null / 写 no-op / 绝不抛），失败面在适配器里
+      // 被吸收，所以客户端**故意**没有异常边界：C-ERR-2 的 `on Exception` 只允许出现在
+      // presentation 的 Notifier 里（ADR-0002 的修订注记）。这条用例把边界的位置钉住——
+      // 契约被违反时异常不会被就地吞掉。
       final _Fixture fixture = _buildClient(withCharsetCache: true);
       fixture.cache.failReads = true;
-      fixture.cache.failWrites = true;
-      const List<int> bytes = <int>[0xCC, 0xEC];
-      fixture.adapter.enqueueResponse(bytes: bytes);
+      fixture.adapter.enqueueResponse(bytes: <int>[0xCC, 0xEC]);
 
-      final HttpResponse response = _expectSuccess(
-        await fixture.client.get(
+      await expectLater(
+        fixture.client.get(
           'https://example.com/a',
           rulePath: 'ruleBookInfo',
           sourceId: 'https://example.com',
         ),
-      );
-
-      // 缓存是旁路（C-ERR-1）：读写都炸也不能把页丢掉，只记 debug。
-      expect(response.body, decodeBody(bytes).text);
-      expect(
-        fixture.printer.events.map((LogEvent event) => event.message),
-        containsAll(<Object>[
-          contains('Charset cache read failed'),
-          contains('Charset cache write failed'),
-        ]),
+        throwsA(isA<Exception>()),
       );
     });
 

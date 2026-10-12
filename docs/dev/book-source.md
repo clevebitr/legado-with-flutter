@@ -340,8 +340,11 @@
   使同书源同 URL 的两个阶段共享一条；C-NET-6 的键形状不变），TTL 是
   `core/network/charset_cache.dart` 的 `defaultCharsetCacheTtl`（唯一出处）；
   **声明车道不进缓存**：`Content-Type` / `<meta>` 每次都能自己读到，而且声明永远优先于缓存标签
-  （ADR-0031 的两条车道不因缓存而变）。缓存不可用时（读 / 写失败、无书源 ID）只是一次
-  **重新嗅探**，不得让请求失败（C-ERR-1）。
+  （ADR-0031 的两条车道不因缓存而变）。缓存不可用（读 / 写失败）或无书源 ID 时只是一次
+  **重新嗅探**，不得让请求失败（C-ERR-1）——**失败面在适配器（`CacheDaoCharsetCache`）里被吸收**，
+  该端口的契约因此是 **total**（读返回 `null`、写 no-op、绝不抛）：这样 `core/network` 的请求路径
+  不持有任何异常边界，C-ERR-2 的「`on Exception` 只允许在 `presentation/` 的 Notifier」边界不被触碰，
+  `http_client` 也不需要认识 drift。
 - **解码失败的判定按车道区分（ADR-0031，2026-10-11 生效）：**
   - **已声明车道**（HTTP `Content-Type` 的 `charset`、`<meta charset>`）：按**声明出的编码族**宽容
     解码（非法字节 → U+FFFD）并记一条 warning（含书源 ID、URL 摘要、字段路径；不得含正文 /

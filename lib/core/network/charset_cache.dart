@@ -1,3 +1,9 @@
+import 'package:drift/drift.dart'
+    show DriftWrappedException, InvalidDataException;
+import 'package:drift/isolate.dart' show DriftRemoteException;
+import 'package:drift/native.dart' show SqliteException;
+import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/logging/redaction.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
 
 /// How long one detection result stays usable (`docs/dev/book-source.md` §5).
@@ -13,8 +19,13 @@ const Duration defaultCharsetCacheTtl = Duration(days: 7);
 ///
 /// Only the sniffed lane is cached: a declared charset is read from the response itself on
 /// every request, so it needs no cache and keeps winning over a cached label — which is
-/// what keeps ADR-0031's two lanes stable. A cache miss and a cache failure are the same
-/// thing to a caller: sniff again.
+/// what keeps ADR-0031's two lanes stable.
+///
+/// **The port is total.** A miss, a failure and “this page has no cacheable identity” are
+/// one answer: [read] returns `null` and [write] does nothing, and neither ever throws. The
+/// implementation absorbs its own failure surface (see [CacheDaoCharsetCache]); that is why
+/// the request layer can call this without a `try`, and why `core/network`'s request path
+/// needs no exception boundary of its own (C-ERR-2).
 abstract interface class CharsetCache {
   /// The charset detected for ([sourceId], [url]) earlier, or `null`.
   ///
@@ -43,11 +54,20 @@ abstract interface class CharsetCache {
 /// It reuses the DAO's stable key and expiry column — no new column, no new table — so the
 /// first production consumer of `CacheDao` is also the one that proves the key shape works
 /// for something other than a page payload.
+///
+/// **The cache's failure surface is absorbed here, and only here.** C-ERR-2 allows an
+/// `on Exception` clause in the `presentation/` Notifiers alone (ADR-0002's revision note),
+/// and the request layer must not have to know what a database can throw, so this class
+/// names the exceptions that losing a cache entry can produce — sqlite's [SqliteException]
+/// and drift's [DriftRemoteException] / [InvalidDataException] / [DriftWrappedException] —
+/// and answers “no cache” for them. `Error` stays uncaught, as ADR-0022 requires: a
+/// programming bug must not be filed under “cache miss”.
 final class CacheDaoCharsetCache implements CharsetCache {
   /// Creates the cache on top of the app's TTL cache.
-  const CacheDaoCharsetCache(this._dao);
+  const CacheDaoCharsetCache(this._dao, {required this._logger});
 
   final CacheDao _dao;
+  final AppLogger _logger;
 
   @override
   Future<String?> read({
@@ -55,8 +75,15 @@ final class CacheDaoCharsetCache implements CharsetCache {
     required String ruleField,
     required String url,
     required int page,
-  }) =>
-      _dao.get(sourceId: sourceId, ruleField: ruleField, url: url, page: page);
+  }) => _absorb<String?>(
+    () => _dao.get(
+      sourceId: sourceId,
+      ruleField: ruleField,
+      url: url,
+      page: page,
+    ),
+    url: url,
+  );
 
   @override
   Future<void> write({
@@ -65,12 +92,50 @@ final class CacheDaoCharsetCache implements CharsetCache {
     required String url,
     required int page,
     required String charset,
-  }) => _dao.put(
-    sourceId: sourceId,
-    ruleField: ruleField,
-    url: url,
-    page: page,
-    payload: charset,
-    ttl: defaultCharsetCacheTtl,
-  );
+  }) async {
+    await _absorb(() async {
+      await _dao.put(
+        sourceId: sourceId,
+        ruleField: ruleField,
+        url: url,
+        page: page,
+        payload: charset,
+        ttl: defaultCharsetCacheTtl,
+      );
+
+      return true;
+    }, url: url);
+  }
+
+  /// Runs one cache operation and turns the database's failure surface into “no cache”.
+  ///
+  /// A lost entry costs a sniff, never a page, so the failure is recorded at `debug` level
+  /// (with the URL's digest and the error's digest, C-SEC-4) and reported as a miss.
+  Future<T?> _absorb<T>(
+    Future<T> Function() operation, {
+    required String url,
+  }) async {
+    try {
+      return await operation();
+    } on SqliteException catch (error, stackTrace) {
+      _report(error, stackTrace, url);
+    } on DriftRemoteException catch (error, stackTrace) {
+      _report(error, stackTrace, url);
+    } on DriftWrappedException catch (error, stackTrace) {
+      _report(error, stackTrace, url);
+    } on InvalidDataException catch (error, stackTrace) {
+      _report(error, stackTrace, url);
+    }
+
+    return null;
+  }
+
+  /// Records one absorbed cache failure; never a page body, never a cleartext URL.
+  void _report(Object error, StackTrace stackTrace, String url) {
+    _logger.debug(
+      'Charset cache unavailable: url=${redactUrl(url)}',
+      describeError(error),
+      stackTrace,
+    );
+  }
 }

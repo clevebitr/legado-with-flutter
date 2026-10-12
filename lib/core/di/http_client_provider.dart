@@ -33,5 +33,8 @@ HttpClient httpClient(Ref ref) => DioHttpClient(
   cookies: ref.watch(cookieManagerProvider),
   logger: ref.watch(appLoggerProvider),
   policy: ref.watch(httpPolicyProvider),
-  charsetCache: CacheDaoCharsetCache(ref.watch(cacheDaoProvider)),
+  charsetCache: CacheDaoCharsetCache(
+    ref.watch(cacheDaoProvider),
+    logger: ref.watch(appLoggerProvider),
+  ),
 );

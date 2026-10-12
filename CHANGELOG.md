@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 3.9 review fix: the charset cache absorbs its own failures (2026-10-12)
+
+The review found one rule violation: `core/network/http_client.dart` used `on Exception` for the
+charset cache's read and write, and C-ERR-2 (with ADR-0002's revision note) allows that clause in the
+`presentation/` Notifiers alone — a boundary that must not be widened in place.
+
+- **The catch moved down to `CacheDaoCharsetCache`**, the only class that knows the cache's failure
+  surface, and names the exceptions: sqlite's `SqliteException` plus drift's `DriftRemoteException`,
+  `DriftWrappedException` and `InvalidDataException`. `Error` stays uncaught (ADR-0022), and each
+  absorbed failure is recorded at `debug` level with the URL digest and the error digest (C-ERR-3,
+  C-SEC-4). `CharsetCache`'s contract is now documented as **total** — `read` answers `null`, `write`
+  does nothing, neither throws — so the request path carries no exception boundary and never has to
+  hear about drift. The adapter therefore takes the `AppLogger` the client used to log with.
+- **One exception from the review's list cannot be named:** drift 2.35.2 does not export
+  `ConnectionClosedException` (`remote.dart` / `isolate.dart` export only `DriftRemoteException`), so
+  the “background isolate was closed” path stays outside the named list. Registered in `PLAN.md` §3.7
+  instead of being papered over.
+- Tests: the adapter now has four cases (one per absorbed type) proving a failed read is a miss, a
+  failed write completes, and both leave a `debug` line; the client keeps hit/miss and
+  “no source id” cases, and one new case pins **where** the boundary is — a cache that breaks the
+  total contract propagates instead of being swallowed by the client. 503 host cases, coverage exit 0
+  (`core` 777/777, `domain` 1163/1163).
+- Docs: `book-source.md` §5 (what the adapter absorbs and why the port is total), `PLAN.md` §3.7.
+
+
 ### Phase 3.9: the charset detection result is cached per source and URL (2026-10-12)
 
 Phase 3 is closed: the sniffing step now runs once per `(书源, URL)` instead of once per response,

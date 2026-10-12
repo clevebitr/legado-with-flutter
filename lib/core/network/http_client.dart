@@ -271,8 +271,8 @@ final class DioHttpClient implements HttpClient {
   /// The sniffing step of `book-source.md` §5 runs once per `(书源, URL)`: the label it
   /// chose is read from [CharsetCache] on the next request and passed to [decodeBody], so
   /// the detector never runs twice for the same page. Only a **detected** label is stored
-  /// (a declared one is read from the response itself every time and always wins), and a
-  /// cache failure only costs a sniff — it must not fail a page (C-ERR-1).
+  /// (a declared one is read from the response itself every time and always wins); a cache
+  /// that cannot answer is a miss, because the port is total (C-ERR-2).
   Future<ParseResult<HttpResponse>> _decode(
     Response<List<int>> response, {
     required int status,
@@ -331,29 +331,24 @@ final class DioHttpClient implements HttpClient {
   /// The charset a previous response for ([sourceId], [url]) was decoded with, if any.
   ///
   /// A page without a book source has no cache key (C-NET-6 starts one with the source id),
-  /// so it sniffs every time; a cache failure is logged at debug level and treated as a
-  /// miss.
+  /// so it sniffs every time. Nothing here catches: [CharsetCache] is total — a cache
+  /// failure comes back as `null`, which is why the request path needs no exception
+  /// boundary of its own (C-ERR-2).
   Future<String?> _readCachedCharset(String? sourceId, String url) async {
     final CharsetCache? cache = _charsetCache;
     if (cache == null || sourceId == null) {
       return null;
     }
 
-    try {
-      return await cache.read(
-        sourceId: sourceId,
-        ruleField: _charsetCacheField,
-        url: url,
-        page: _charsetCachePage,
-      );
-    } on Exception catch (error) {
-      _logger.debug('Charset cache read failed: ${describeError(error)}');
-
-      return null;
-    }
+    return cache.read(
+      sourceId: sourceId,
+      ruleField: _charsetCacheField,
+      url: url,
+      page: _charsetCachePage,
+    );
   }
 
-  /// Stores the detected charset for ([sourceId], [url]); a failure is not the page's.
+  /// Stores the detected charset for ([sourceId], [url]); a failed write is not the page's.
   Future<void> _writeCachedCharset(
     String? sourceId,
     String url,
@@ -364,17 +359,13 @@ final class DioHttpClient implements HttpClient {
       return;
     }
 
-    try {
-      await cache.write(
-        sourceId: sourceId,
-        ruleField: _charsetCacheField,
-        url: url,
-        page: _charsetCachePage,
-        charset: charset,
-      );
-    } on Exception catch (error) {
-      _logger.debug('Charset cache write failed: ${describeError(error)}');
-    }
+    await cache.write(
+      sourceId: sourceId,
+      ruleField: _charsetCacheField,
+      url: url,
+      page: _charsetCachePage,
+      charset: charset,
+    );
   }
 }
 
