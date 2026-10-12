@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review of the G2b/ADR-0031/ADR-0032 commit: docs fixed, code items handed over (2026-10-12)
+
+Architect review of the dev team's `4304a19`, run in a detached worktree with the gates re-run
+green: format clean, `flutter analyze` no issues, 369 tests passed, coverage exit 0 with `core`
+357/357 and `domain` 925/925. The code passed; the findings below were fixed here (documentation)
+or handed back to the dev team (code and evidence).
+
+- **Fixed here — `PLAN.md` carried a duplicated Phase 3 item 3** (the commit re-inserted the
+  pre-edit copy of the spot-check paragraph, so §3.4 had two `3.` entries). A duplicated definition
+  is what `docs/README.md` §6.1 forbids, and it was a rebase artefact.
+- **Fixed here — `CHANGELOG.md` had a heading glued to the previous paragraph** (no blank line
+  before the new `###` section), which broke the rendered markdown.
+- **Fixed here — ADR-0032's status line claimed an "架构师裁决" that never happened** (the dev team
+  wrote the ADR and marked it accepted). The ruling is now recorded honestly: the document is the
+  dev team's draft, accepted by the architect on 2026-10-12 after review, and the ADR index says
+  the same.
+- **Fixed here — the `<js>` ledger gap (R1).** The commit rejected `<js>` by name while the matrix
+  had no row for it: exactly the "the engine rejects it correctly, the ledger never recorded it"
+  gap that §3's own #25–#27 note exists to prevent. `book-source.md` §3 gains **row #31**
+  (`<js>…</js>`, M2 / not implemented, `unsupported:<js>`) appended at the tail per the ID rule, §11
+  lists it, and the evidence is cited: the fork's syntax doc lists `<js></js>` as usable **anywhere**
+  and as a rule separator (`tag.li<js></js>//a`), while upstream `AnalyzeUrl.kt`'s `analyzeJs()`
+  ("执行 `@js`，`<js></js>`") matches both wrappers with one `JS_PATTERN`, so it applies to URL rules
+  too. The `else -> doc.select(rule)` citation in ADR-0032 still lacks a `file:line`; that evidence
+  debt is registered in the ADR.
+- **Fixed here — ADR-0032 now records the two measured semantic losses (R2)** that previously lived
+  only in test comments: a **misspelled implemented type** (`clas.odd`) degrades from a warned
+  degradation into a **trace-free non-match** (loud only for top-level rules), and an extraction
+  segment written into a list rule (`class.x&&class.x@href`) loses its `unsupportedRule` failure and
+  becomes a silent empty contribution.
+- **Fixed here — my own ADR-0031 background was wrong (R3).** It claimed every decodable family
+  "has a tolerant entry"; that is true of the codecs but not of this repository's reachability. The
+  measurement: `shift-jis` / `euc-jp` raise `RangeError` (an `Error`, which ADR-0022 forbids
+  catching) before the tolerant path is reachable, `euc-kr` never fails, and `us-ascii` / `utf-16` /
+  `utf-32` are deliberately excluded because a wrong declaration is not a stray byte. ADR-0031 now
+  carries a correction note and points at `book-source.md` §5.1, which owns the split between
+  "unreachable" and "deliberately excluded".
+- **Handed to the dev team:** (1) commit the two spot-check sources (baseline and the derived
+  `@css:` equivalent) so README §4's equal counts / equal `sha256` and the 58.1% figure become
+  reproducible — registered in `PLAN.md` §3.7; (2) add a direct test for the **sniffing lane failing
+  strictly** (the current case only proves the tolerant path was not taken, and asserts with
+  `isNotEmpty`); (3) assert `headers` / `sourceId` arrival for a second use case (search, which also
+  carries `keyword`); (4) fix the test comment that cites the `us-ascii` exclusion to "ADR-0031
+  §决策 4", which is about not degenerating into UTF-8 tolerance — that policy now lives in
+  `book-source.md` §5.1.
+
 ### ADR-0031: tolerant decoding only on the declared-charset lane (2026-10-11)
 
 - **A real site in the G2b spot-check declares UTF-8 but carries a few illegal bytes, and the old
@@ -30,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page carried illegal bytes). The ADR also hands over the C-DOC-1 item: `charset_decoder.dart`'s
   `///` says "must not hide it behind `allowMalformed`" and must be rewritten when the tolerant path
   lands.
+
 ### The G2b live-site spot-check, ADR-0032 and the ADR-0031 implementation (2026-10-12)
 
 - **G2b is met**: a real published source (`笔趣阁③`, `https://www.biquge99.cc`, taken from the
