@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 3.3's freeze precondition is pinned, and PLAN.md no longer contradicts itself (2026-10-11)
+
+- **A real contradiction inside `PLAN.md` is fixed.** Its §3.1 status row said the next step was
+  "spot-check → 3.3", while §3.4 — the single owner of the Phase 3 execution order — puts 3.5 and
+  3.8 before 3.3/3.4. §3.1 now points at §3.4 instead of restating an order (ADR-0013 §3).
+- **The reason is recorded where the gate lives:** `PLAN.md` §3.3 now states its freeze
+  precondition explicitly — G2b spot-check and 3.5 / 3.8 come first, because 3.5's `nextTocUrl` /
+  `nextContentUrl` may have JS return a **URL array** (`book-source.md` §4.1), so the "single value
+  vs list" dimension of the bridge's return contract has to be exercised by a real field before the
+  contract is frozen (user ruling, 2026-10-11).
+- **ADR-0030 carries the matching note:** closing the *capacity* precondition does not mean the
+  contract may be frozen now, and it does not change `PLAN.md` §3.4's order.
+
 ### ADR-0029 accepted, and ADR-0030 rules the JS engine capacity (2026-10-11)
 
 - **ADR-0029 is accepted** (user-confirmed). Its consequences are written back where they belong:

@@ -72,7 +72,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
-| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）已完成；下一步 = 真实站点 spot-check → 3.3。细节见 `CHANGELOG.md` |
+| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）已完成；**下一步顺序以 §3.4 为准**（当前 = 真实站点 spot-check）。细节见 `CHANGELOG.md` |
 | Phase 4 — M1 | ⏳ 未开始 | — |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
@@ -135,7 +135,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|
 | 3.1 | 补齐默认规则语法：#3 / #4 / #6 / #7 / #26 / #28 ✅ | 每条 1 条单测 |
 | 3.2 | `\|\|`（#10）、`&&`（#11）、`@css:`（#12）、`@json:`（#13）、`@css:` 内的 jsoup 索引伪类（#29）；并落地 **ADR-0026** 的非顶层字段降级语义（顶层不降级） ✅ | 连接符分组与跨类型合并拒绝各 ≥1 条单测；降级语义顶层 / 非顶层各 ≥1 条单测 |
-| 3.3 | `JsBridge`：专用 Isolate + 复用运行时 + 引擎级 `timeout` / `memoryLimit` + `Isolate.kill` 兜底 | 验收（依据：ADR-0015、**ADR-0029**（引擎 API 异步 + 逐绑定形态）、**ADR-0030**（单常驻 worker + FIFO，容量不进契约）、C-SRC-2）：`sendMessage` 载荷必须是合法 JSON；并发调用 FIFO 排队且**不得**报 busy（C-SRC-9）；一次超时/中断后同一运行时仍可继续求值（探针 07 口径）；单测走假 `JsBridge`（`testing.md` §4）；逐项绑定形态归 `book-source.md` §6 |
+| 3.3 | `JsBridge`：专用 Isolate + 复用运行时 + 引擎级 `timeout` / `memoryLimit` + `Isolate.kill` 兜底 | 验收（依据：ADR-0015、**ADR-0029**（引擎 API 异步 + 逐绑定形态）、**ADR-0030**（单常驻 worker + FIFO，容量不进契约）、C-SRC-2）：`sendMessage` 载荷必须是合法 JSON；并发调用 FIFO 排队且**不得**报 busy（C-SRC-9）；一次超时/中断后同一运行时仍可继续求值（探针 07 口径）；单测走假 `JsBridge`（`testing.md` §4）；逐项绑定形态归 `book-source.md` §6。**冻结前置（架构师 2026-10-11 裁决）：必须在 G2b spot-check 与 3.5 / 3.8 之后**——3.5 的 `nextTocUrl` / `nextContentUrl` 允许 JS 返回 URL **数组**（`book-source.md` §4.1），先把「JS 返回单值 vs 列表」这一返回契约用真实字段行使定型再冻合同 |
 | 3.4 | `@js:` 规则接入（#14）+ JS 白名单绑定 | `book-source.md` §6 白名单逐项有测试；越权访问被拒绝；单测走假 `JsBridge`（`testing.md` §4），真实引擎只在集成探针里 |
 | 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定、`replaceRegex` 批量替换（含建模 `ContentRule.replaceRegex`） | 各 1 条单测 |
 | 3.6 | 失败语义全量：9 个 `ParseFailureKind` 各有触发路径 | 每个 kind ≥1 条单测 |
