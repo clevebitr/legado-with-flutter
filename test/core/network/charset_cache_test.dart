@@ -210,9 +210,11 @@ void main() {
 
     /// The exceptions the adapter absorbs, i.e. the ones this test can raise.
     ///
-    /// `ConnectionClosedException` is deliberately absent: drift 2.35.2 does not export it
-    /// (`remote.dart` / `isolate.dart` export only `DriftRemoteException`), so it cannot be
-    /// named in `lib/` either — 登记在 `PLAN.md` §3.7。
+    /// `ConnectionClosedException` cannot be listed: drift 2.35.2 does not export it
+    /// (`remote.dart` / `isolate.dart` export only `DriftRemoteException`), which is exactly
+    /// why ADR-0033 pins an `on Exception` fallback in `_absorb`. The last entry stands in
+    /// for that fallback — a plain `Exception`, since the real type cannot be named here
+    /// either.
     final Map<String, Exception> failures = <String, Exception>{
       'SqliteException': SqliteException(
         extendedResultCode: 1,
@@ -221,6 +223,7 @@ void main() {
       'DriftRemoteException': _RemoteFailure(),
       'DriftWrappedException': DriftWrappedException(message: 'wrapped'),
       'InvalidDataException': InvalidDataException('bad data'),
+      'Exception': Exception('a cache failure the adapter cannot name'),
     };
 
     for (final MapEntry<String, Exception> failure in failures.entries) {
