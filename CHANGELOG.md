@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 3.7: the real-source regression, the matrix M0 rows confirmed, and the two JSON gaps it found (2026-10-12)
+
+G3 is met: the matrix's 19 M0 rows all read **已确认**, two sources replay offline end to end, and the
+nine `ParseFailureKind`s all have trigger tests. The evidence is four live runs, recorded row by row in
+`tool/spot_check/README.md` §4b.
+
+- **A real `@js:` source is in the corpus at last.** `test/fixtures/book_sources/legado_js_rules_source.json`
+  (猫耳FM, sanitized) plus two derived response pages (`test/fixtures/json/maoer_search.json` /
+  `maoer_toc.json`, real captures with every readable string and host replaced, array lengths kept).
+  On the live site the chain gives search 30 / bookInfo 1 / toc 34, and both per-item scripts
+  (`$.id@js:'…'+result`, `$.sound_id@js:'…'+result`) produce the URLs — so matrix #14 has a real
+  source behind it now, not just unit tests. The content stage fails there for a site-side reason:
+  the sound endpoint answers an Aliyun WAF challenge page instead of JSON.
+- **The regression found two matrix #13 fidelity gaps, both fixed against upstream.** A JSONPath that
+  matches a **list** was treated as one item: upstream reads such a path as the element list in a list
+  rule (`AnalyzeByJSonPath.kt:137`, `read<ArrayList<Any>>`) and expands it element by element in a value
+  rule (`:83-87`, `for (o in obj) result.add(o.toString())`). Before the fix the live run returned one
+  result with a null name; after it, 30. Maps still travel as JSON text — upstream's Java `toString`
+  (`{a=1}`) is not reproducible, and the difference stays registered.
+- **A second derived source covers the syntaxes the baseline never used.**
+  `legado_g2b_syntax_rules_source.json` rewrites nine rules of the G2b source into equivalent spellings
+  that exercise #3, #4, #6, #7, #10, #25, #26, #27 and #28, and reproduces the baseline's counts **and**
+  content hash `6578ef3efc456856` on the same pages — the same technique the `@css:` derivation used
+  for #12/#29. The per-row mapping is tabulated in `test/fixtures/book_sources/README.md`.
+- **The spot-check harness runs again.** Since 3.4 wired the real `@js:` engine into the chain the tool
+  had been uncompilable under `dart run` (it needs Flutter's `dart:ui`); it now documents and uses a
+  device host (`SPOT_CHECK_ARGS=… flutter run -d windows -t tool/spot_check/spot_check.dart`, because
+  `flutter run` does not forward argv). Its `--list` filter no longer treats `@js:` as a deferred flag:
+  only **list rules** and **URL templates** exclude it. The recomputed snapshot is 266/3907
+  M0-compatible, 192 of them relying on the unknown-type degradation, 69 using a value-rule `@js:` —
+  the ADR-0032 figure (137/197) was that older snapshot, and the README says why it moved.
+- **One evidence debt closed, three registered.** The element-scope `@js:` `result` shape was checked
+  against the fork: upstream hands the script the jsoup `Node` (so `outerHtml()` / `text()` work),
+  while this repository can only offer an HTML string — a rule that needs DOM methods now fails
+  loudly with `js:error` instead of quietly getting something else, and no real source in 1096 with
+  `@js:` writes that form. Registered instead: the multi-element form of `-` has no corpus sample
+  (direction is pinned by unit tests), the list-rule `@js:` contract still has no sample to freeze it,
+  and `--list` does not yet scan `{…}` inside non-search URL fields.
+- Tests: 3 new engine cases for the JSON list/scalar shapes and one chain replay of the `@js:` corpus
+  source (search 30 / toc 34, plus the per-item script arguments). 486 host cases, coverage exit 0
+  (`core` 744/744, `domain` 1163/1163).
+- Docs: `book-source.md` §3 (status column + the 3.7 evidence note, #13 and #14 notes), §3.7 of
+  `PLAN.md`, the gate table (G3), `tool/spot_check/README.md` §2/§3/§4b/§5/§6,
+  `test/fixtures/book_sources/README.md` and `test/fixtures/json/README.md`.
+
 ### Phase 3.4 part 3: the `http.*` / `parse.*` Promise bindings, the call quota and the scope boundaries (2026-10-12)
 
 3.4 is complete: every binding of `book-source.md` §6 exists now, including the two a rule has to

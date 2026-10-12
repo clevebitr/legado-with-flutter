@@ -23,6 +23,18 @@
 | `search.json` | 搜索 | `bookList` `@json:$.all_book_items[*]\|\|@json:$.guess_like_items[*]`、`name` `@json:$.name`、`author` `@json:$.author`、`kind` `@json:$.classes`、`coverUrl` `@json:$.imgUrl`、`lastChapter` `@json:$.lastChapterName` |
 | `book.json` | 详情 + 目录（该书的 `tocUrl` 回落到书籍页本身） | `intro` `@json:$.coverInfo.desc`（**嵌套路径**）、`chapterList` `@json:$.volumes[*].chapters[*]\|\|$.chapters[*]`（注意第二个候选是**裸** `$.` 形式）、`chapterName` `@json:$.chapter_name` |
 | `content.json` | 正文 | `content` `@json:$.content`（含转义 `\n`，用于确认 JSON 字符串里的换行会解成真正的换行） |
+| `maoer_search.json` | 搜索 | `bookList` `$.info.Datas`（**路径命中一个列表**）、`name` `$.name`、`author` `$.author`、`kind` `$.type_name`、`intro` `$.abstract`、`lastChapter` `$.newest`、`coverUrl` `$.cover` |
+| `maoer_toc.json` | 详情 + 目录（该书的 `tocUrl` 回落到书籍页本身） | `name` `$.info.drama.name`、`coverUrl` `$.info.drama.cover`、`chapterList` `$.info.episodes.music&&$.info.episodes.episode`（**第一支为空数组**，并集取第二支的 34 条，矩阵 #11 的 JSON 分支形态）、`chapterName` `$.name` |
+
+## `maoer_*.json`（3.7 的 `@js:` 语料的配套页）
+
+| 项 | 值 |
+|---|---|
+| 来源 | **真实抓取**（2026-10-12，浏览器 UA，各 1 次只读 GET）：`https://www.missevan.com/dramaapi/search?s=剑来&p=1`、`https://www.missevan.com/dramaapi/getdrama?drama_id=59005` |
+| 派生处理 | 只保留规则读到的字段与外层结构（`info.Datas[*]`、`info.drama`、`info.episodes.{music,episode}[*]`）；**所有可读文本换成占位符**（`示例作品N` / `示例章节N` / `示例简介N` / 空作者）、所有主机改保留域（`www.missevan.com` → `example-novel.test`，`static.maoercdn.com` / `static.missevan.com` → `static.example-novel.test`）；**数值与数组长度逐字保留**（30 条搜索结果、34 条章节、`music: []`），因此回放计数与活站点当天一致 |
+| 为何派生 | ADR-0023 决策 2 与 `../book_sources/README.md` 的口径：仓库内不引入真实站点的内容（API 响应含书名、简介、封面地址）；结构、键名与计数保留，所以规则仍然逐字回放 |
+| 配对书源 | `../book_sources/legado_js_rules_source.json` |
+| 正文段 | **无配套页**：`contentRule.content` 要取的 `sound/getsound` 接口被阿里云 WAF 拦住（返回挑战页 HTML，非 JSON），活站点上该段报 `parseFailed`，归属是站点防护而不是本仓（记录见 `tool/spot_check/README.md` §4） |
 
 `search.json` 故意同时给出 `all_book_items` 与 `guess_like_items`：`||` 取**首个非空**候选，
 所以回放测试可以断言「只有 1 条结果、且来自第一个候选」。

@@ -77,6 +77,60 @@ dart run tool/spot_check/spot_check.dart --source=/tmp/g2b.json --keyword=剑来
 > `bookSourceName` 与上表 16 处规则的写法：可以直接用
 > `diff <(jq -S . legado_g2b_default_rules_source.json) <(jq -S . legado_g2b_css_rules_source.json)` 核对。
 
+## `legado_js_rules_source.json`
+
+> 这是 **3.7（真实书源回归）的证据语料**：矩阵 #14（`@js:`）在本文件入库前**仓内语料为 0 条**，
+> 因此状态列无法翻转（ADR-0029 §后果、`PLAN.md` §3.7）。它同样指向一个**活站点**。
+
+| 项 | 值 |
+|---|---|
+| 来源 | `https://legado.aoaostar.com/sources/b778fe6b.json`（公开合集，2026-08-15 同步；2026-10-12 取用，3907 条中的「📻 猫耳FM」） |
+| 处理 | **裁剪**：取 1 条。**脱敏**：`bookSourceName` 改中性名、`bookSourceGroup` 改「示例分组」、`bookSourceUrl` 去掉尾随 `#` 并改保留域 `example-novel.test`、`bookSourceComment` 置空、`enabledExplore` 置 `false`（发现页是 M1） |
+| 原主机 | `www.missevan.com`（仅记录用于复跑）、静态资源 `static.missevan.com` → `static.example-novel.test` |
+| 逐字保留 | 四段规则串逐字（含三条 `@js:` 值规则与 `$.info.episodes.music&&$.info.episodes.episode` 的 JSON `&&`）；被改的只有脚本字面量里的那两个主机 |
+| 配套页面 | `../json/maoer_search.json`、`../json/maoer_toc.json`（**按活站点当天的响应派生**，构造依据见 `../json/README.md`） |
+| 用途 | 矩阵 #14 的真实源证据（逐项 `@js:` 在 `searchRule.bookUrl` / `tocRule.chapterUrl` 上），同时行使矩阵 #13 的「路径命中列表」形态与 #11 的 JSON 分支并集 |
+| 活站点记录 | `tool/spot_check/README.md` §4（四段中前三段跑通：搜索 30 / 详情 1 / 目录 34；正文段被站点的阿里云 WAF 拦住，记录里已写明归属） |
+
+**复跑方式：**
+
+```bash
+# 1) 把保留域换回真实主机（JSON 本身不含真实主机）
+sed 's/example-novel\.test/www.missevan.com/g' \
+  test/fixtures/book_sources/legado_js_rules_source.json > build/maoer.json
+# 2) 跑生产链路（需要真实 JS 引擎 ⇒ 设备宿主；命令与原因见 tool/spot_check/README.md §2）
+SPOT_CHECK_ARGS="--source=build/maoer.json --keyword=剑来" \
+  flutter run -d windows -t tool/spot_check/spot_check.dart
+```
+
+> 离线回放（不联网）由 `test/features/book_source/domain/usecases/search_books_test.dart` 的
+> `chain_givenJsRulesSourceAndCorpusPages_replaysTheListStages` 钉子：搜索 30 条、目录 34 条，
+> 且逐项 `@js:` 脚本拿到的 `result` 就是该项的 JSON 值。
+
+## `legado_g2b_syntax_rules_source.json`（3.7 的语法覆盖派生源）
+
+> 与 `@css:` 派生源同一手法：站点、页面、`searchUrl`、`header` 全部逐字相同，
+> 只把规则**写法**换成等价形式，用来给矩阵 #3 / #4 / #6 / #7 / #10 / #25 / #26 / #27 / #28
+> 补真实回归证据（基线源本身只用到 #1 / #2 / #5 / #8 / #9 / #11）。
+> 两者在活站点上必须得到**相同**的四段计数与正文哈希（记录见 `tool/spot_check/README.md` §4b）。
+
+### 派生映射（9 处，其余字段与基线完全相同）
+
+| 字段 | 基线（默认规则） | 派生（行使的矩阵行） |
+|---|---|---|
+| `ruleSearch.name` | `class.bookname@tag.a@text##…` | `class.bookname@.0@text##…`（**#28** 索引作首规则） |
+| `ruleSearch.author` | `class.author@text##作者：\|<` | `text.作者：@text##作者：\|<`（**#3** 按文本内容匹配） |
+| `ruleSearch.bookUrl` | `class.bookname@tag.a@href` | `class.bookname@tag.a[0]@href`（**#26** `[]` 索引列表） |
+| `ruleSearch.coverUrl` | `class.bookimg@tag.img.0@src` | `class.bookimg@children.0@children.0@src`（**#4** `children`） |
+| `ruleSearch.intro` | `class.bookinfo@p@text` | `class.bookinfo@tag.p!1@text`（**#6** `!` 排除） |
+| `ruleSearch.kind` | `class.cat@text##分类：` | `class.cat@text##分类：####`（**#25** `##match##replace###`） |
+| `ruleSearch.lastChapter` | `class.update@tag.a@text##…` | `class.none@text\|\|class.update@tag.a@text##…`（**#10** `\|\|`） |
+| `ruleBookInfo.name` | `class.info@h1@text##…` | `-class.info@h1@text##…`（**#7** 前导 `-`） |
+| `ruleBookInfo.lastChapter` | `class.info@class.small@tag.span.5@a@text##…` | `…@a@text%%class.none@text##…`（**#27** `%%`） |
+
+> 可以用 `diff <(jq -S . legado_g2b_default_rules_source.json) <(jq -S . legado_g2b_syntax_rules_source.json)`
+> 核对：两者只在上表 9 处规则与 `bookSourceName` 上不同。
+
 ## 语料处理规则（对后续新增语料同样适用）
 
 按 ADR-0023 决策 2：只保留**必要条目**（不整包收录书源合集）、主机名一律改为保留域、

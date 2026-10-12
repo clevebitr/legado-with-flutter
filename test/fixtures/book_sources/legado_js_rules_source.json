@@ -1,0 +1,41 @@
+{
+ "bookSourceComment": "",
+ "bookSourceGroup": "示例分组",
+ "bookSourceName": "示例书源（@js: 值规则，真实导出结构，已脱敏）",
+ "bookSourceType": 1,
+ "bookSourceUrl": "https://example-novel.test",
+ "bookUrlPattern": "",
+ "customOrder": 1047,
+ "enabled": true,
+ "enabledCookieJar": true,
+ "enabledExplore": false,
+ "lastUpdateTime": 1670472756051,
+ "loginUrl": "",
+ "respondTime": 1203,
+ "ruleBookInfo": {
+  "author": "$.info.drama.author",
+  "coverUrl": "$.info.drama.cover",
+  "name": "$.info.drama.name"
+ },
+ "ruleContent": {
+  "content": "$.info.sound.soundurl_64@js:'https://static.example-novel.test/'+result"
+ },
+ "ruleExplore": {},
+ "ruleSearch": {
+  "author": "$.author",
+  "bookList": "$.info.Datas",
+  "bookUrl": "$.id@js:'https://example-novel.test/dramaapi/getdrama?drama_id='+result",
+  "coverUrl": "$.cover",
+  "intro": "$.abstract",
+  "kind": "$.type_name",
+  "lastChapter": "$.newest",
+  "name": "$.name"
+ },
+ "ruleToc": {
+  "chapterList": "$.info.episodes.music&&$.info.episodes.episode",
+  "chapterName": "$.name",
+  "chapterUrl": "$.sound_id@js:'https://example-novel.test/sound/getsound?soundid='+result"
+ },
+ "searchUrl": "https://example-novel.test/dramaapi/search?s={{key}}&p={{page}}",
+ "weight": 0
+}

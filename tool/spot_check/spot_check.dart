@@ -53,8 +53,13 @@ const int _sampleLength = 60;
 
 /// Rule flags a later phase of `book-source.md` §3 owns; a source that uses one of
 /// them cannot be checked before that phase lands.
+///
+/// `@js:` is **not** in the list any more: matrix #14 landed with `PLAN.md` 3.4, so a
+/// value-rule script is evaluable today. It is handled separately below, because it is
+/// only supported outside **list rules** (`bookList` / `chapterList`, whose「JS 返回一列
+/// 元素」 contract does not exist yet) and outside the URL templates (`searchUrl` /
+/// `exploreUrl` never evaluate JS in this repository).
 const List<String> _deferredFlags = <String>[
-  '@js:',
   '@xpath:',
   '@put:',
   '@get:',
@@ -64,23 +69,57 @@ const List<String> _deferredFlags = <String>[
   '<js>',
 ];
 
+/// The matrix #14 flag, checked per field rather than globally.
+const String _jsFlag = '@js:';
+
+/// The rule fields whose `@js:` this repository cannot evaluate yet.
+///
+/// A list rule would need “JS returns a list of elements” (upstream's `getElements`
+/// `Mode.Js` branch), and a URL template is rendered by `renderUrlTemplate`, which has no
+/// place to run a script.
+const List<String> _jsUnsupportedFields = <String>[
+  'searchUrl',
+  'exploreUrl',
+  'ruleSearch.bookList',
+  'ruleToc.chapterList',
+];
+
+/// Reads the arguments from [arguments], or from `SPOT_CHECK_ARGS` when the host does
+/// not forward them.
+///
+/// The chain needs the real JS engine (matrix #14 evaluates `@js:` rules), so this tool
+/// runs on a device through `flutter run -d <device> -t tool/spot_check/spot_check.dart`,
+/// and `flutter run` does not forward extra arguments to the Dart entrypoint. The
+/// environment variable is how the caller passes them there; a plain CLI host
+/// (`dart run`, which cannot compile a Flutter-dependent entrypoint) keeps using argv.
+List<String> _argumentsOf(List<String> arguments) {
+  if (arguments.isNotEmpty) {
+    return arguments;
+  }
+
+  return (Platform.environment['SPOT_CHECK_ARGS'] ?? '')
+      .split(' ')
+      .where((String part) => part.isNotEmpty)
+      .toList(growable: false);
+}
+
 Future<void> main(List<String> arguments) async {
-  final Map<String, String> options = _parseOptions(arguments);
+  final Map<String, String> options = _parseOptions(_argumentsOf(arguments));
   final String? collection = options['list'];
   if (collection != null) {
     _listCandidates(File(collection));
-    return;
+    exit(0);
   }
 
   final String? sourcePath = options['source'];
   if (sourcePath == null) {
     stderr.writeln(
-      'usage: dart run tool/spot_check/spot_check.dart '
-      '--source=<file.json> [--keyword=剑来] [--name=<substring>] [--json]\n'
-      '       dart run tool/spot_check/spot_check.dart --list=<collection.json>',
+      'usage: flutter run -d <device> -t tool/spot_check/spot_check.dart '
+      '-- --source=<file.json> [--keyword=剑来] [--name=<substring>] [--json]\n'
+      '       flutter run -d <device> -t tool/spot_check/spot_check.dart '
+      '-- --list=<collection.json>',
     );
-    exitCode = 2;
-    return;
+    exit(2);
   }
 
   final BookSource source = _loadSource(
@@ -95,7 +134,10 @@ Future<void> main(List<String> arguments) async {
   } else {
     report.print();
   }
-  exitCode = report.isComplete ? 0 : 1;
+  // 显式 exit（而不是只设 exitCode）：本工具链需要真实 JS 引擎，所以它在
+  // `flutter run -d <device> -t tool/spot_check/spot_check.dart` 下运行，而设备宿主不会
+  // 因为 main 返回就退出，退出码也拿不回来。
+  exit(report.isComplete ? 0 : 1);
 }
 
 /// Loads the source to check out of [file].
@@ -236,6 +278,7 @@ void _listCandidates(File file) {
   final List<Object?> entries = decoded is List ? decoded : <Object?>[decoded];
   var compatible = 0;
   var degraded = 0;
+  var withJs = 0;
   for (final Object? item in entries) {
     if (item is! Map<String, Object?>) {
       continue;
@@ -246,12 +289,17 @@ void _listCandidates(File file) {
     compatible++;
     final String rules = jsonEncode(item);
     final bool needsDegradation = _needsUnknownTypeDegradation(item);
+    final bool usesJs = _usesValueRuleJs(item);
     if (needsDegradation) {
       degraded++;
     }
+    if (usesJs) {
+      withJs++;
+    }
     stdout.writeln(
       '${rules.contains('@css:') ? 'css ' : '    '}'
-      '${needsDegradation ? 'degraded' : '        '}\t'
+      '${needsDegradation ? 'degraded' : '        '}'
+      '${usesJs ? '\tjs' : '\t  '}\t'
       '${item['bookSourceName']}\t${item['bookSourceUrl']}',
     );
   }
@@ -261,6 +309,38 @@ void _listCandidates(File file) {
   stdout.writeln(
     '-- $degraded of $compatible M0-compatible sources rely on the unknown-type '
     'degradation (ADR-0032).',
+  );
+  stdout.writeln(
+    '-- $withJs of $compatible M0-compatible sources use a value-rule `@js:` '
+    '(matrix #14); their scripts still have to stay inside `book-source.md` §6.',
+  );
+}
+
+/// Whether [item] carries `@js:` in a field this repository can evaluate (matrix #14).
+bool _usesValueRuleJs(Map<String, Object?> item) {
+  final Map<String, String> rules = <String, String>{};
+  void collect(String prefix, Object? value) {
+    if (value is String) {
+      rules[prefix] = value;
+    } else if (value is Map<String, Object?>) {
+      value.forEach(
+        (String key, Object? nested) => collect('$prefix.$key', nested),
+      );
+    }
+  }
+
+  for (final String key in <String>[
+    'ruleSearch',
+    'ruleBookInfo',
+    'ruleToc',
+    'ruleContent',
+  ]) {
+    collect(key, item[key]);
+  }
+
+  return rules.entries.any(
+    (MapEntry<String, String> rule) =>
+        rule.value.toLowerCase().contains(_jsFlag),
   );
 }
 
@@ -384,6 +464,9 @@ bool _isM0Compatible(Map<String, Object?> item) {
       if (lower.contains(flag)) {
         return false;
       }
+    }
+    if (lower.contains(_jsFlag) && _jsUnsupportedFields.contains(rule.key)) {
+      return false;
     }
     final String trimmed = rule.value.trimLeft();
     if (trimmed.startsWith('{') || trimmed.startsWith(':')) {

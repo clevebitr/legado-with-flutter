@@ -72,7 +72,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
-| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）、**3.4（`@js:` 接入 + 全部 JS 绑定与额度）**已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**下一步顺序以 §3.4 为准**（当前 = 3.7 真实语料回归；`@js:` 语料仍为 0）。细节见 `CHANGELOG.md` |
+| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）、3.4（`@js:` 接入 + 全部 JS 绑定与额度）、**3.7（真实源回归 → 矩阵 M0 状态列全「已确认」，G3 达成）**已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**当前 = 3.9（charset 缓存）**。细节见 `CHANGELOG.md` |
 | Phase 4 — M1 | ⏳ 未开始 | — |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
@@ -146,7 +146,10 @@ Drift      ──► 书源仓库 ──► 缓存/进度
    —— 3.4 ✅ **已完成（2026-10-12，part 1/2/3）**：异步求值 API、值规则上的终段 `@js:` + 页级
    上下文、Promise 绑定 `http.*` / `parse.*`（含页级 scope 边界 `js:parse-scope`）与每规则调用
    额度（含 `log.*`）；新登记的边界见 §3.7。
-7. **3.7**：真实书源回归记录，把矩阵 M0 行的状态列改为「已确认」。
+7. **3.7** ✅ **已完成（2026-10-12）**：真实源回归 → 矩阵 M0 行的状态列全改「已确认」
+   （19 行），四次活站点运行与逐行结论见 `tool/spot_check/README.md` §4b；入库了 `@js:` 语料
+   （`legado_js_rules_source.json`）与语法覆盖派生源（`legado_g2b_syntax_rules_source.json`）；
+   回归顺带修掉矩阵 #13 的两处保真缺口（JSONPath 命中列表时不展开），并把 `spot_check` 改回可运行。
 8. **3.9**：charset 检测结果缓存。
 
 | 步骤 | 内容 | 验收 |
@@ -157,7 +160,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 3.4 | `@js:` 规则接入（#14）+ JS 白名单绑定 ✅ | `book-source.md` §6 白名单逐项有测试（含 Promise 形态的 `http.get` / `http.post` / `parse.getString` / `parse.getElements`）；越权访问被拒绝；单测走假 `JsBridge`（`testing.md` §4），真实引擎只在集成探针里（`integration_test/js_bridge_test.dart`，Windows 实测 16 项） |
 | 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定、`replaceRegex` 批量替换（含建模 `ContentRule.replaceRegex`） ✅ | 各 1 条单测 |
 | 3.6 | 失败语义全量：9 个 `ParseFailureKind` 各有触发路径 | 每个 kind ≥1 条单测 |
-| 3.7 | **真实书源验证记录** | 按 `book-source.md` §10 格式写入 PR，并把矩阵状态列改为「已确认」 |
+| 3.7 | **真实书源验证记录** ✅ | 按 `book-source.md` §10 格式写入 PR（现落为 `tool/spot_check/README.md` §4b），矩阵 19 个 M0 行的状态列已全改「已确认」；`@js:` 语料入库（`legado_js_rules_source.json` + `maoer_search.json` / `maoer_toc.json`） |
 | 3.8 | 同一书源并发上限（默认 3）+ 章节正文串行/有限并发 ✅ | 并发上限可配且有单测；超限请求排队而非并发发出；**并发预算只在此层实现，不改 `JsBridge` 契约**（ADR-0030 §决策 2） |
 | 3.9 | charset 检测结果缓存：按「书源 ID + URL」维度缓存；复用 `CacheDao` 的稳定键与 TTL，**不加列、不新建表**（架构师裁决 F1） | 同 `(书源, URL)` 第二次编码检测**不再嗅探**，有单测；本行同时让 `CacheDao` 拿到第一个生产消费方 |
 
@@ -233,7 +236,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 列表规则（`bookList` / `chapterList`）上的 `@js:` 报 `unsupported:@js:list` | **待语料 + 新契约**：上游 `getElements` 的 `Mode.Js` 分支要的是「JS 返回一列元素」的契约（元素对象 / 裸键取值），仓内无任何 `@js:` 语料可定型，3.4 只实现值规则；触发条件 = 3.7 真实语料出现列表 `@js:` |
 | `parse.*` 的嵌套规则自己又用 `@js:` | **已登记（3.4）**：报 `unsupportedRule` + `js:parse-recursion`。理由：单 worker 正在跑发起它的那个 job（ADR-0030 §决策 1/3），嵌套 evaluate 只会排在自己的队后面；放宽需新 ADR + 真语料 |
 | `parse.getElements` 交给脚本的是 `outerHtml` 字符串 / JSON 值，**不是 DOM 句柄** | **已登记（3.4）**：沙箱无 DOM（ADR-0029 §决策 5），所以上游「`getElements` 后再 `parse.getString(rule, element)`」的写法会在 `doc` 那步报 `js:parse-scope`；要读元素内部就写在嵌套规则里（`class.a@tag.b@text`） |
-| **元素 scope 上独立 `@js:` 的 `result` 形态**：本仓给该元素的 `outerHtml`（JSON 条目给 JSON 文本），理由是沙箱无 DOM 句柄可交（ADR-0029 §决策 5） | **3.7 取证**：上游在元素 scope 上的 `result` 究竟是 `outerHtml` 还是 `text` **未核实**（仓内 `@js:` 语料为 0）。真实语料出现「逐项字段的独立 `@js:`」时，用回归记录确认或改判；行为描述归 `book-source.md` §6 |
+| **元素 scope 上独立 `@js:` 的 `result` 形态**：本仓给该元素的 `outerHtml`（JSON 条目给 JSON 文本），理由是沙箱无 DOM 句柄可交（ADR-0029 §决策 5） | ✅ **已闭环（3.7，2026-10-12）**：读 fork 源码核实——上游 `AnalyzeRule.evalJS(rule, result)` 把当前 `result`（`setContent` 得到的 jsoup `Node`）直接绑给 JS，所以上游能用 `outerHtml()` / `text()` 等 DOM 方法；本仓只能给 HTML 字符串，靠 DOM 方法的脚本会 `js:error` **显式失败**（不会静默给错值）。仓内 1096 条含 `@js:` 的真实源里未出现这种写法（元素级脚本全是字符串运算/拼接），保持为**有意差异**；行为描述归 `book-source.md` §6 |
+| 矩阵 #7（前导 `-`）在真实回归里只行使了**单元素**倒置（恒等） | **待语料**：方向语义由单测钉住（`extractAll` 与列表规则的多元素倒置各 ≥1 条），但仓内没有需要多元素倒置的真实源；触发条件 = 真实回归出现这种规则（选源命令见 `tool/spot_check/README.md` §3） |
+| `spot_check --list` 不检查非搜索字段 URL 里的 `{…}`（矩阵 #19） | **已登记（3.7）**：候选源里出现过 `bookUrl: https://…/{$.novel_id}` 这类 M1 模板，而工具只对 `searchUrl` 查 `{`；选源时靠逐条审查规则串避开，若这类源变多再收紧判据（`tool/spot_check/README.md` §6） |
 | `http.*` 的传输失败不把 `ParseFailureKind`（可重试性）交给字段 | **已登记（3.4）**：失败以 rejected Promise（message = kind 名）交给脚本，脚本可以 `catch` 后改走镜像；未捕获时按 §7 报 `js:error`。把传输 kind 上抛就是猜，需先有真实语料证明「作者不会 catch」 |
 | ~~3.8 并发策略与 JS worker 容量的耦合~~ | ✅ **已闭环（ADR-0030）**：裁决为单常驻 worker + 单复用运行时 + FIFO，**容量不进 `JsBridge` 契约**；重开触发条件见 ADR-0030 §决策 5 |
 | ~~`isVip` 的**正侧**真值缺上游 `file:line`~~ | ✅ **已闭环（R1，2026-10-12）**：直抓 fork 源码 `HapeLee/legado-with-MD3@master`，判定就是上游 `String?.isTrue()`（调用 `BookChapterList.kt:261-264`，谓词 `StringExtensions.kt:75-80`）——`null` / 全空白 / 字面量 `"null"` → 非 VIP，其余值除非匹配 `(?i)^(?:false|no|not|0|0.0)$` 否则算 VIP（因此 `是` / `yes` 是 VIP，`no` / `not` / `0.0` 不是）；代码与测试已按此对齐，两处上游怪癖（`"null"` 在 trim 前比较、模式里 `.` 未转义）按原样照抄并登记在 `book-source.md` §4.1，唯一出处仍是 §4.1 |
@@ -251,7 +256,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | **G1** | 覆盖率门禁全绿（阈值与「未测量源文件」判定见 `docs/dev/testing.md` §2）；`AGENTS.md` §4 的全部命令退出码均为 0 |
 | **G2a** | 1 个**真实书源**的「搜索 → 详情 → 目录 → 正文」**离线回放**通过，且回放必须驱动**生产链路**（UseCase → `renderUrlTemplate` → `HttpClient` → `RuleEngine`）；**已达成**（ADR-0024） |
 | **G2b** | 手动跑通一次**真实站点**链路；依赖矩阵 #12（`@css:`，3.2）。✅ **已达成（2026-10-12）**：`biquge99.cc` 四段跑通 + 同站派生 `@css:` 等价源哈希一致，记录见 `tool/spot_check/README.md` |
-| **G3** | 2 个书源全链路离线回放；矩阵 M0 状态列全部「已确认」；9 个失败 kind 均有测试 |
+| **G3** | 2 个书源全链路离线回放；矩阵 M0 状态列全部「已确认」；9 个失败 kind 均有测试。✅ **已达成（2026-10-12，随 3.7）**：离线回放 = 默认规则源 + JSON 接口源（链测试），并有第三个 `@js:` 语料源回放搜索/详情/目录；矩阵 19 行全「已确认」（逐行证据见 `tool/spot_check/README.md` §4b）；9 个 kind 均有测试 |
 | **G4** | 矩阵 M1 状态列全部「已确认」 |
 | **G5** | C-UI-9 可达；无 `TODO` 占位；无未使用代码 |
 | **G6** | 发布前清单（§5）全过 |

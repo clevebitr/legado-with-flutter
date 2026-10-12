@@ -290,9 +290,27 @@ final class RuleEngine {
       _ParsedValue<Object?>(:final Object? value) =>
         _ParsedValue<List<RuleScope>>(<RuleScope>[
           for (final JsonPathMatch match in json.path.read(value))
-            RuleScope.json(match.value, jsContext: _jsContextOf(scope)),
+            ..._jsonScopesOf(match.value, jsContext: _jsContextOf(scope)),
         ]),
     },
+  };
+
+  /// The scopes one JSON match contributes to a **list** rule (matrix #13).
+  ///
+  /// A match that is a **list** contributes its elements: upstream reads the path as an
+  /// `ArrayList<Any>` (`AnalyzeByJSonPath.kt:137`, `getList`), so a `bookList` of
+  /// `$.info.Datas` yields one item per book rather than one item for the whole array. Real
+  /// JSON API sources are written that way — the `PLAN.md` 3.7 regression found it on 猫耳FM,
+  /// where `$.info.Datas` plus per-item `$.name` rules produced an empty book list before.
+  Iterable<RuleScope> _jsonScopesOf(
+    Object? value, {
+    required JsPageContext jsContext,
+  }) => switch (value) {
+    final List<Object?> list => <RuleScope>[
+      for (final Object? item in list)
+        RuleScope.json(item, jsContext: jsContext),
+    ],
+    _ => <RuleScope>[RuleScope.json(value, jsContext: jsContext)],
   };
 
   /// Returns the elements one DOM branch matches inside [scope].
@@ -793,15 +811,20 @@ final class RuleEngine {
   ///
   /// A JSON string is its own value, a number or a boolean is written the way JSON
   /// writes it, and `null` — like an empty string — yields no value at all, which is
-  /// the same “no value” an unmatched selector gives (matrix #8). A map or a list is
-  /// handed back as JSON text: upstream's Java `toString` of a map (`{a=1}`) is not
-  /// reproducible and no rule can rely on it, so the lossless form is used until a
-  /// real book source says otherwise (`docs/dev/book-source.md` §10 decides that).
+  /// the same “no value” an unmatched selector gives (matrix #8). A **list** is expanded
+  /// into its elements, which is what upstream does (`AnalyzeByJSonPath.kt:83-87`: `for
+  /// (o in obj) result.add(o.toString())`), so `$.data.tags` hands over `a` and `b`
+  /// rather than one JSON text — confirmed against a real source by the `PLAN.md` 3.7
+  /// regression. A **map** stays JSON text: upstream's Java `toString` of a map (`{a=1}`)
+  /// is not reproducible and no rule can rely on it, so the lossless form is used and the
+  /// difference stays registered (`book-source.md` §3, matrix #13).
   Iterable<String> _jsonValues(Object? value) => switch (value) {
     null => const <String>[],
     final String text => text.isEmpty ? const <String>[] : <String>[text],
+    final List<Object?> list => <String>[
+      for (final Object? item in list) ..._jsonValues(item),
+    ],
     final Map<Object?, Object?> map => <String>[jsonEncode(map)],
-    final List<Object?> list => <String>[jsonEncode(list)],
     _ => <String>[value.toString()],
   };
 
