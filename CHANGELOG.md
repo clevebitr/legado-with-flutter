@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 3 closure review: ADR corrections and one narrow ADR added (2026-10-12)
+
+Architect review of 3.7 (`844944b`) and 3.9 (`c64f827` + the F1 fix `27d33ab`), gates re-run in a
+detached worktree (503 tests, `core` 777/777, `domain` 1163/1163) with the device probes re-run
+(`js_bridge` 16/16, `app_boot`). The matrix was checked row by row: all **19 M0 rows** are now
+已确认, and G3's three conditions hold.
+
+- **ADR-0033 (new, Accepted): the cache's failure absorption gets exactly one exemption.** 3.9's F1
+  fix moved the catch into `CacheDaoCharsetCache` with four named types, but drift 2.35.2 does not
+  export `ConnectionClosedException` (`communication.dart:47` completes in-flight requests with it
+  when the isolate connection is cancelled — reachable here, and the symptom is already documented
+  in `test-environment.md` §5), so it cannot be named in a `catch`. The ruling: that one method may
+  add `on Exception` after the named catches, the port stays total, `Error` stays uncatchable, every
+  absorbed failure is logged at debug, and the exemption carries a sunset clause (drop it once drift
+  exports the type). C-ERR-2 links the ADR; `docs/README.md` §2.1 owns the row.
+- **ADR-0028 §决策 5 corrected:** it still said arrays are returned as JSON text. The 3.7 regression
+  and upstream (`AnalyzeByJSonPath.kt:83-87`, `:137`) show lists expand element-wise for value rules
+  and become the item list for list rules, while maps keep the JSON-text form as a registered
+  difference. The behaviour spec stays in `book-source.md` §3's #13 note.
+- **ADR-0032's snapshot numbers qualified:** 197 / 137 came from the `--list` filter that still
+  excluded `@js:`; the current snapshot is 266 M0-compatible / 192 degrading / 69 using value-rule
+  `@js:`, whose single source is `tool/spot_check/README.md` §3.
+- **The `@js:` fixture's restore command was wrong:**
+  `sed 's/example-novel\.test/www.missevan.com/g'` turns `static.example-novel.test` into
+  `static.www.missevan.com`; it now replaces the longer host first, so a re-run reaches the static
+  host the `content` script names.
+
 ### 3.9 review fix: the charset cache absorbs its own failures (2026-10-12)
 
 The review found one rule violation: `core/network/http_client.dart` used `on Exception` for the

@@ -177,4 +177,4 @@ final class HttpClientProvider
   }
 }
 
-String _$httpClientHash() => r'6f897ab78bac01f3c60f8dbcbd229509f2dac417';
+String _$httpClientHash() => r'71af85b34cc9d0db1354757b4190e71a2b7ce3d0';

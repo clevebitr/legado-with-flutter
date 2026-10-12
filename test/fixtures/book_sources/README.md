@@ -96,7 +96,11 @@ dart run tool/spot_check/spot_check.dart --source=/tmp/g2b.json --keyword=剑来
 
 ```bash
 # 1) 把保留域换回真实主机（JSON 本身不含真实主机）
-sed 's/example-novel\.test/www.missevan.com/g' \
+#    注意先替换**更长**的主机：直接 `s/example-novel\.test/www.missevan.com/g` 会把静态主机
+#    变成 `static.www.missevan.com`（错），因为 `ruleContent.content` 的 `@js:` 脚本里带
+#    `https://static.example-novel.test/`。
+sed -e 's/static\.example-novel\.test/static.missevan.com/g' \
+    -e 's/example-novel\.test/www.missevan.com/g' \
   test/fixtures/book_sources/legado_js_rules_source.json > build/maoer.json
 # 2) 跑生产链路（需要真实 JS 引擎 ⇒ 设备宿主；命令与原因见 tool/spot_check/README.md §2）
 SPOT_CHECK_ARGS="--source=build/maoer.json --keyword=剑来" \
