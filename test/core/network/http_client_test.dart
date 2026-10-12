@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -54,6 +55,18 @@ ParseFailureKind _expectFailure(ParseResult<HttpResponse> result) =>
       ParseSuccess<HttpResponse>() => fail('Expected a failure.'),
       ParseFailure<HttpResponse>(:final ParseFailureKind kind) => kind,
     };
+
+/// Pumps the event queue until [condition] holds, failing when it never does.
+///
+/// A bounded loop instead of a wall-clock wait, so the concurrency tests below cannot
+/// flake (`docs/dev/testing.md` §8 forbids sleeping).
+Future<void> _pumpUntil(bool Function() condition) async {
+  for (var attempt = 0; attempt < 200 && !condition(); attempt++) {
+    await pumpEventQueue(times: 1);
+  }
+
+  expect(condition(), isTrue);
+}
 
 void main() {
   group('DioHttpClient', () {
@@ -418,6 +431,84 @@ void main() {
       );
 
       expect(fixture.printer.events.single.message, isNot(contains('hello')));
+    });
+
+    test('get_givenMoreRequestsThanTheSourcesBudget_queuesTheExcess', () async {
+      const String sourceId = 'https://example-novel.test';
+      final _Fixture fixture = _buildClient(
+        policy: const HttpPolicy(maxConcurrentRequestsPerSource: 1),
+      );
+      final List<Completer<void>> gates = <Completer<void>>[
+        Completer<void>(),
+        Completer<void>(),
+      ];
+      var fetchIndex = 0;
+      fixture.adapter.onFetch = () => gates[fetchIndex++].future;
+      fixture.adapter.enqueueResponse(bytes: utf8.encode('first'));
+      fixture.adapter.enqueueResponse(bytes: utf8.encode('second'));
+
+      final Future<ParseResult<HttpResponse>> first = fixture.client.get(
+        'https://example-novel.test/a',
+        rulePath: 'ruleContent',
+        sourceId: sourceId,
+      );
+      final Future<ParseResult<HttpResponse>> second = fixture.client.get(
+        'https://example-novel.test/b',
+        rulePath: 'ruleContent',
+        sourceId: sourceId,
+      );
+
+      await _pumpUntil(() => fixture.adapter.requests.isNotEmpty);
+      // §8：同一书源的预算为 1，第二个请求必须排到第一个结束之后。
+      expect(fixture.adapter.requests, hasLength(1));
+
+      gates[0].complete();
+      await _pumpUntil(() => fixture.adapter.requests.length == 2);
+      gates[1].complete();
+      await Future.wait(<Future<ParseResult<HttpResponse>>>[first, second]);
+
+      expect(_expectSuccess(await first).body, 'first');
+      expect(_expectSuccess(await second).body, 'second');
+    });
+
+    test('get_givenNoSourceId_keysTheBudgetByHost', () async {
+      final _Fixture fixture = _buildClient(
+        policy: const HttpPolicy(maxConcurrentRequestsPerSource: 1),
+      );
+      final Completer<void> gate = Completer<void>();
+      fixture.adapter.onFetch = () => gate.future;
+      fixture.adapter.enqueueResponse(bytes: utf8.encode('a'));
+      fixture.adapter.enqueueResponse(bytes: utf8.encode('b'));
+      fixture.adapter.enqueueResponse(bytes: utf8.encode('c'));
+
+      final Future<ParseResult<HttpResponse>> held = fixture.client.get(
+        'https://one.test/a',
+        rulePath: 'searchUrl',
+      );
+      await _pumpUntil(() => fixture.adapter.requests.isNotEmpty);
+
+      // 另一台主机有它自己的预算，不必等第一个结束。
+      final Future<ParseResult<HttpResponse>> other = fixture.client.get(
+        'https://two.test/b',
+        rulePath: 'searchUrl',
+      );
+      await _pumpUntil(() => fixture.adapter.requests.length == 2);
+
+      // 同一主机仍在同一份预算里排队（无书源上下文时按主机分桶）。
+      final Future<ParseResult<HttpResponse>> sameHost = fixture.client.get(
+        'https://one.test/c',
+        rulePath: 'searchUrl',
+      );
+      await pumpEventQueue();
+      expect(fixture.adapter.requests, hasLength(2));
+
+      gate.complete();
+      await Future.wait(<Future<ParseResult<HttpResponse>>>[
+        held,
+        other,
+        sameHost,
+      ]);
+      expect(fixture.adapter.requests, hasLength(3));
     });
   });
 }

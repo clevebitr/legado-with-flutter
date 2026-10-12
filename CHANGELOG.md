@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 3.8: one concurrency budget per book source, spent in the request layer (2026-10-12)
+
+`book-source.md` §8's per-source concurrency cap is now enforced instead of being a value
+nothing read. ADR-0030 §决策 2 puts the budget in the **request layer** and keeps it out of the
+`JsBridge` contract, so it is spent at the one place every request passes through.
+
+- **New `core/network/request_limiter.dart`**: a FIFO gate. `run(key, action)` takes one of the
+  key's slots or waits until the oldest caller hands one over. A caller over the budget **waits**
+  instead of failing — C-SRC-9 requires concurrent calls to be safe, so "busy" is not an
+  acceptable answer — and the slot is released even when the action throws, so one broken request
+  cannot shrink the budget for the rest of the session. The hand-over leaves the count unchanged,
+  so the gap between releasing and re-taking cannot let an extra request through.
+- **`DioHttpClient` spends it per wire attempt**, keyed by `sourceId` (the book source URL) and by
+  the URL host when a call has no source context. The future batch chapter download (Phase 5) is
+  therefore bounded as soon as it goes through `HttpClient` (C-NET-1), with no caller having to
+  know about the budget; `FetchContent`'s own paging was already serial. A retry spends a second
+  slot only after the first came back, which keeps the budget about requests on the wire.
+- **`HttpPolicy.maxConcurrentRequestsPerSource`** is the knob: it defaults to
+  `defaultMaxConcurrentRequestsPerSource` (3, owned by §8) and is overridable through the
+  `httpPolicyProvider` seam the settings phase already uses. `concurrentRate` (M1) will read a
+  source's own declaration into the same value.
+- 10 new cases (405 total): the limiter's concurrency, queueing, FIFO order, per-key independence
+  and release-on-throw; the client's per-source queueing plus the host fallback key, driven by a
+  new `FakeHttpAdapter.onFetch` hook that holds requests open without any wall-clock wait; and the
+  policy default, a custom value and the non-positive assert.
+- Gates: `dart format` unchanged, `flutter analyze` clean, `flutter test --coverage` 405 passed,
+  `check_coverage.dart` exit 0 with `core` 385/385 and `domain` 1047/1047.
+
 ### Review B1: the paging URL templates are rendered before they are requested (2026-10-12)
 
 Review found that `nextTocUrl` / `nextContentUrl` only went through `resolveAbsoluteUrl`, never

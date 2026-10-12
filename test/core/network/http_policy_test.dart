@@ -10,6 +10,7 @@ void main() {
 
         expect(policy.timeout, const Duration(seconds: 15));
         expect(policy.maxRetries, 1);
+        expect(policy.maxConcurrentRequestsPerSource, 3);
         expect(policy.userAgent, 'flutter_reader');
         expect(policy.allowPlainHttp, isFalse);
       },
@@ -18,5 +19,21 @@ void main() {
     test('HttpPolicy_whenRetriesAreNegative_throwsAssertionError', () {
       expect(() => HttpPolicy(maxRetries: -1), throwsAssertionError);
     });
+
+    test('HttpPolicy_givenAConcurrencyBudget_keepsIt', () {
+      const HttpPolicy policy = HttpPolicy(maxConcurrentRequestsPerSource: 8);
+
+      expect(policy.maxConcurrentRequestsPerSource, 8);
+    });
+
+    test(
+      'HttpPolicy_whenTheConcurrencyBudgetIsNotPositive_throwsAssertionError',
+      () {
+        expect(
+          () => HttpPolicy(maxConcurrentRequestsPerSource: 0),
+          throwsAssertionError,
+        );
+      },
+    );
   });
 }

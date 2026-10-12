@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/network/charset_decoder.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/network/request_limiter.dart';
 
 /// Fetches pages over HTTP for the rest of the app (C-NET-1).
 ///
@@ -40,17 +41,28 @@ abstract interface class HttpClient {
 }
 
 /// [HttpClient] backed by `dio` (C-NET-1).
+///
+/// Every wire request also spends one slot of the book source's concurrency budget
+/// (`book-source.md` §8): the budget is the request layer's policy (ADR-0030 §决策 2),
+/// so enforcing it here is what lets a batch of chapter downloads stay bounded without
+/// any caller having to know about it.
 final class DioHttpClient implements HttpClient {
   /// Creates a client that shares the cookie store and applies the policy.
   ///
   /// `dio` is injectable so tests can attach a fake adapter instead of touching
-  /// the network (`docs/dev/testing.md` §4).
+  /// the network (`docs/dev/testing.md` §4). [policy] also carries the per-source
+  /// concurrency budget, so the limiter is built from it and needs no separate
+  /// injection point.
   DioHttpClient({
     required this._cookies,
     required this._logger,
-    this._policy = const HttpPolicy(),
+    HttpPolicy policy = const HttpPolicy(),
     Dio? dio,
-  }) : _dio = dio ?? Dio() {
+  }) : _policy = policy,
+       _limiter = RequestLimiter(
+         maxConcurrent: policy.maxConcurrentRequestsPerSource,
+       ),
+       _dio = dio ?? Dio() {
     _dio.options = BaseOptions(
       connectTimeout: _policy.timeout,
       receiveTimeout: _policy.timeout,
@@ -67,6 +79,7 @@ final class DioHttpClient implements HttpClient {
   final CookieManager _cookies;
   final AppLogger _logger;
   final HttpPolicy _policy;
+  final RequestLimiter _limiter;
   final Dio _dio;
 
   @override
@@ -104,13 +117,19 @@ final class DioHttpClient implements HttpClient {
     }
 
     var attempt = 0;
+    // 同一书源的请求共用一份并发预算（book-source.md §8）。没有书源时按主机分桶，
+    // 这样「章节正文批量下载」这类无书源上下文的调用也不会对单一域名无限并发。
+    final String limitKey = sourceId ?? uri.host;
     while (true) {
-      final ParseResult<HttpResponse> result = await _send(
-        url,
-        rulePath: rulePath,
-        headers: headers,
-        keyword: keyword,
-        sourceId: sourceId,
+      final ParseResult<HttpResponse> result = await _limiter.run(
+        limitKey,
+        () => _send(
+          url,
+          rulePath: rulePath,
+          headers: headers,
+          keyword: keyword,
+          sourceId: sourceId,
+        ),
       );
 
       switch (result) {

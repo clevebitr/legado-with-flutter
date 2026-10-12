@@ -12,6 +12,13 @@ final class FakeHttpAdapter implements HttpClientAdapter {
   /// Requests seen by the adapter, in order.
   final List<RequestOptions> requests = <RequestOptions>[];
 
+  /// Awaited before the next outcome is delivered, when set.
+  ///
+  /// The hook lets a test hold requests open and observe how many the client really
+  /// has in flight (`docs/dev/book-source.md` §8) without a wall-clock wait: the
+  /// request is recorded first, then the hook decides when it may answer.
+  Future<void> Function()? onFetch;
+
   final List<Object> _queue = <Object>[];
 
   /// Queues a response with [statusCode] and optional raw [bytes].
@@ -41,6 +48,11 @@ final class FakeHttpAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     requests.add(options);
+
+    final Future<void> Function()? hook = onFetch;
+    if (hook != null) {
+      await hook();
+    }
 
     final Object next = _queue.isEmpty
         ? ResponseBody.fromBytes(const <int>[], 200)
