@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### No HANDOVER.md: its content was folded into the owners it belonged to (2026-10-12)
+
+A `HANDOVER.md` (session handover: snapshot, reading order, how to run, traps) was proposed on a
+side branch. It is **not merged**, because by its own opening rule ("restating is a defect") it
+restated four facts that already have owners, and it had already gone stale before it was reviewed:
+its snapshot said the G2b slice was *not* in `main` while `main` had just received it. The decision
+follows ADR-0013/ADR-0027 rather than adding an eighth root-level entry document.
+
+- **The traps moved to their owner, `PLAN.md` §6** ("常见返工陷阱，本项目已实际踩过"): rows 11–17
+  record the measured ones — ADR numbering collisions between parallel writers, running the
+  sanitized fixtures against the live site without restoring the host, deriving a statistic with a
+  throwaway script, treating a live page's hash as a regression baseline, writing a
+  `throwsFormatException` case for the sniffing lane (its reachable labels are tolerant codecs or
+  `Error`-raising families), leaving temporary Dart files where `dart format .` / `flutter analyze`
+  see them, and writing temp files to `/tmp` on Windows. Row 7 already covered "new source file
+  without a test", so it was not duplicated.
+- **The gate counts went to their owner, `docs/dev/test-environment.md` §7** (370 cases, `core`
+  357/357, `domain` 925/925) — the single place the latest-run evidence is stated.
+- **Nothing else needed a new home**: the reading order is `AGENTS.md` §2 plus `docs/README.md`
+  §2.1, the commands are `tool/spot_check/README.md` §2/§3 and `docs/dev/test-environment.md` §3,
+  and the phase snapshot is `PLAN.md` §3.1 with the process record in this file.
+- **One stale comment fixed in `tool/spot_check/spot_check.dart`**: it still called the void
+  "157 of 270" figure reproducible; it now points at ADR-0032 for the number instead of restating it.
+
 ### The upstream evidence debt (review R1) is closed with file:line (2026-10-12)
 
 - **ADR-0032's `else -> doc.select(rule)` claim now cites lines**, which review R1 had to leave open

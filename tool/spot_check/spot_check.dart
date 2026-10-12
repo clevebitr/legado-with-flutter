@@ -266,7 +266,9 @@ const List<String> _implementedTypes = <String>[
 /// List rules (`bookList` / `chapterList`) treat every `@`-segment as a selector, value
 /// rules treat all but the last one that way (the last is the extraction), and `||`
 /// branches are inspected separately — the same check the engine performs. This is what
-/// makes the “157 of 270” figure behind the ruling reproducible rather than trusted.
+/// makes the figure behind ADR-0032 reproducible rather than trusted (the number itself
+/// lives in that ADR and in `book-source.md` §3; it was recomputed here after the first
+/// one turned out to come from a throwaway script).
 bool _needsUnknownTypeDegradation(Map<String, Object?> item) {
   final List<({String rule, bool isList})> rules =
       <({String rule, bool isList})>[
