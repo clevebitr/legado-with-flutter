@@ -15,6 +15,19 @@ final class FakeHttpClient implements HttpClient {
   /// The `rulePath` of every request, in order.
   final List<String> requestedRulePaths = <String>[];
 
+  /// The request-level `headers` of every request, in order.
+  ///
+  /// Kept so a test can assert that the book source's own `header` field really
+  /// reaches the client (`book-source.md` §2) instead of being dropped on the way.
+  final List<Map<String, String>?> requestedHeaders = <Map<String, String>?>[];
+
+  /// The `sourceId` of every request, in order.
+  ///
+  /// The HTTP layer only uses it to name the book source in the logs it owns
+  /// (C-ERR-8, ADR-0031 §决策 2), so a test asserts it arrives rather than keeping it
+  /// in the page service.
+  final List<String?> requestedSourceIds = <String?>[];
+
   final Map<String, String> _bodies = <String, String>{};
   final Map<String, ParseFailureKind> _failures = <String, ParseFailureKind>{};
   final Map<String, Exception> _throws = <String, Exception>{};
@@ -38,9 +51,12 @@ final class FakeHttpClient implements HttpClient {
     required String rulePath,
     Map<String, String>? headers,
     String? keyword,
+    String? sourceId,
   }) async {
     requestedUrls.add(url);
     requestedRulePaths.add(rulePath);
+    requestedHeaders.add(headers);
+    requestedSourceIds.add(sourceId);
 
     final Exception? thrown = _throws[url];
     if (thrown != null) {

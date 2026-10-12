@@ -43,15 +43,29 @@ final class PageFetchService {
   /// [rulePath] names the book source field the request belongs to, so a failure
   /// stays locatable (C-SRC-8); [keyword] is passed through so the HTTP client can
   /// keep a search keyword out of its failure logs (ADR-0006 §5).
+  ///
+  /// [headers] are the book source's own `header` field (`book-source.md` §2, an M0
+  /// field). They are request overrides for the policy defaults — a source that needs
+  /// a browser `User-Agent`, or a `Referer` without which its pages 404, declares it
+  /// there (C-NET-4). Cookies are still added by the `CookieManager` and a source must
+  /// never spell them out (C-NET-5).
+  ///
+  /// [sourceId] is the book source URL. It travels only for the logs the HTTP layer
+  /// owns — the tolerant-decode warning of ADR-0031 §决策 2 names the source, which is
+  /// what C-ERR-8 asks for (C-SEC-4 still forbids the body).
   Future<ParseResult<RuleScope>> fetch(
     String url, {
     required String rulePath,
+    Map<String, String>? headers,
     String? keyword,
+    String? sourceId,
   }) async {
     final ParseResult<HttpResponse> response = await _http.get(
       url,
       rulePath: rulePath,
+      headers: headers,
       keyword: keyword,
+      sourceId: sourceId,
     );
 
     return switch (response) {

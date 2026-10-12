@@ -1,0 +1,113 @@
+# ADR-0032 默认规则的未知类型退化为原始 CSS 选择器（G2b spot-check 裁决）
+
+- **状态：** Accepted（2026-10-12 **架构师审核接受**；**本文档由开发组起草**，触发证据来自 G2b 真实站点 spot-check；审核意见见 §后果 的两条补充与 §决策 3 的 #31 登记）
+- **日期：** 2026-10-12
+- **关联：** C-SRC-4、C-SRC-6、C-SRC-8、ADR-0013、ADR-0014、ADR-0029、ADR-0031、
+  `docs/dev/book-source.md` §3 矩阵 #1/#2/#12、`PLAN.md` §3.4 步骤 3 / §3.7、`RuleEngine`
+
+## 背景
+
+矩阵 #1 把默认规则写成 `类型.名称.位置`，只枚举了 `class` / `id` / `tag` / `text` / `children`
+（矩阵 #2/#3/#4），但**没有规定「类型不是这五个之一」时怎么办**。本仓从 3.2 起的选择是
+**显式拒绝**：`不认识的类型` 报 `unsupportedRule`，`.searchresult` 这种以 `.` 开头的段报
+`parseFailed`（`rule_engine.dart` 里原有的注释也记着「原版会退化成原始 CSS 选择器」）。
+
+G2b spot-check（2026-10-12，`tool/spot_check/`，证据见该目录 README 与 `CHANGELOG.md`）
+把这个缺口量化了：
+
+| 证据 | 数值 |
+|---|---|
+| 公开合集（3907 条）中只含 M0 语法的源 | 197 |
+| 其中至少一处规则依赖「未知类型按 CSS 匹配」 | **137（69.5%）** |
+| 80 个「近更新 M0 源」里站点返回 200 的 | 40 |
+| 其中有真实结果链接、进入四段链路的 | 13 |
+| 其中在**搜索段**就被本仓拒绝的 | **10** |
+
+> **复算（2026-10-12，架构师审核 R4 后）：** 上表数字由**入库的** `tool/spot_check/`
+> （`--list` 的 M0 判据 + 每行的 `degraded` 标记，复算命令见 `tool/spot_check/README.md` §3）
+> 得出。初稿的 157/270（58.1%）与「搜索段失败 9」出自一次未入库的临时脚本，它的判据比
+> harness 宽（未排除 `sourceRegex`）且只检查每个 `||` 分支的首段，已作废。
+
+拒绝形态与真实规则原文：
+
+| 规则原文 | 本仓现状 | 上游语义 |
+|---|---|---|
+| `.searchresult` | `parseFailed`（空类型 → 畸形） | `doc.select(".searchresult")` |
+| `li` / `dd` / `p`（裸标签名） | `unsupportedRule at unsupported:li` | `doc.select("li")` |
+| `tr!0` / `li!0`（裸标签名 + 排除） | `unsupportedRule` | `doc.select("tr")` 后应用 `!0` 排除 |
+| `#txt` / `div.item` | `unsupportedRule` / `parseFailed` | 原始 CSS 选择器 |
+
+「未知类型 → 原始 CSS」不是本仓的方言发明：`rule_engine.dart` 的既有注释、
+`book-source.md` 矩阵 #12 的定位（`@css:` 是**显式**的 CSS 入口）与上游 jsoup 实现
+（`AnalyzeByJSoup` 的 `else -> doc.select(rule)` 分支）三者一致。
+
+> **证据（2026-10-12 核对，含 R1 补的行号）：** 退化分支在 fork `HapeLee/legado-with-MD3@master`
+> 的 `app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeByJSoup.kt`（**:313-320**）：
+> `when (rules[0]) { "children" -> temp.children() … "class" -> temp.getElementsByClass(rules[1]) …
+> "text" -> temp.getElementsContainingOwnText(rules[1]); **else -> temp.select(beforeRule)** }`
+> —— `else`（**第 320 行**）把整段交给 jsoup 的选择器引擎，与本文的决策一致；同级还顺带印证了本仓
+> 矩阵 #2 的 `class` 与 #3 的 `text` 实现。上述行号为开发组 2026-10-12 直抓 raw 源码核对（架构师本机
+> 的 SSRF 守卫挡住了同一动作，该次核对未编行号）。`<js>` 的出处见 §决策 3。
+>
+> **证据补记（2026-10-12，开发组）：** G2b 的两条书源已按 `test/fixtures/book_sources/README.md`
+> 的来源/脱敏格式入库（`legado_g2b_default_rules_source.json` 与
+> `legado_g2b_css_rules_source.json`，附 16 处派生映射表），入库后的两条 fixture 在活站点上
+> 逐字复现了记录的四段计数与 `sha256=6578ef3efc456856`。
+
+## 决策
+
+1. **未知类型的段整段退化为原始 CSS 选择器**：当一段的首类型既不是
+   `class` / `id` / `tag` / `text` / `children`，也不是任何已实现标志（`@css:` / `@json:` /
+   `$.` / `$[`），该段整体作为 CSS 选择器交给 `cascadia`（C-SRC-6 不变：匹配仍只走 cascadia）。
+2. **位置后缀仍按位置解析**：`tr!0` / `li!0` / `[1]` 的 `!` / `[...]` 后缀在退化前被摘出，
+   作为**结果列表的位置选择**（矩阵 #5 / #6 / #26 的同一套实现）作用在 CSS 匹配结果上，
+   不交给 cascadia 解析——`tr!0` 不是合法 CSS。
+3. **`unsupportedRule` 只留给真正未实现的标志**：`@xpath:`（及裸 `//`）、`@put:` / `@get:`、
+   `{{}}`、`@@`、`:正则`、`<js>`。类型未知**不再**等于不支持。
+   > **`<js>` 的登记（架构师审核 R1 补 + 2026-10-12 行号核对）：** 它在 `book-source.md` §3 矩阵里
+   > **已有行**（**#31**，M2 / 暂不实现，命中报 `unsupported:<js>`）并列入 §11。本 ADR 原先只在决策里
+   > 点名 `<js>`，而矩阵没有行，恰好是「引擎拒绝得对、账本却没记」那个缺口；现由 #31 补上。
+   > 行号证据（同一 fork 的 `master`）：`app/src/main/java/io/legado/app/constant/AppPattern.kt:5-6`
+   > —— `JS_PATTERN = Regex("<js>([\\w\\W]*?)</js>|@js:([\\w\\W]*)", IGNORE_CASE)`，一个 pattern
+   > 同时匹配两种包装；`…/analyzeRule/AnalyzeUrl.kt:157`（`//执行@js,<js></js>`）、`:168`
+   > （`private fun analyzeJs()`）、`:171`（`JS_PATTERN.findAll(ruleUrl)`）——所以它在 **URL 规则**里
+   > 同样生效。
+4. **矩阵 #1 的定义不变**，`book-source.md` §3 增加本注记：默认规则的**类型**是
+   「已识别的五个类型 **或** 一段原始 CSS」，并回链本 ADR。
+5. 本决策**不**扩张既有单测的宽容度：原先按「未知类型 = 不支持 / 畸形」断言的用例
+   （`.li`、`div.item`、`li!0` 等）必须改为断言 CSS 匹配结果，而不是删掉断言。
+
+## 后果
+
+- 69.5% 的真实源从「搜索段即失败」变为可求值；G2b 的「存活站点跑通全链路」因此才可能达成。
+- `@css:` 仍然是**显式**、可读的 CSS 入口，但它不再是唯一能进 cascadia 的入口；
+  两者的区别只剩可读性，失败语义（选择器不合法 → `parseFailed`，带字段路径）一致。
+- 未知类型的错误不再有「语法名」可报，因此这类段的 `rulePath` 只能是字段路径——
+  与 §7 的 `<字段名>` 口径一致（原先是 `unsupported:<类型>`）。
+- 仍是显式失败的部分：`//` / `<js>` / `:正则` / M1 模板，行为与 `rulePath` 不变（C-SRC-4）；
+  `<js>` 的账本行是矩阵 **#31**（§11 同列）。
+
+### 审核补充的两条语义损失（2026-10-12，架构师审核 R2）
+
+这两条都是本决策的**已实测代价**，此前只存在于测试代码的注释里；按 ADR-0027「一个事实只在一处
+定义」，代价的出处必须是本文档，因此在此登记：
+
+- **已实现类型的拼写错误从「有痕降级」变成「无痕失配」。** `clas.odd` 这种写法现在会被当作原始
+  CSS（`clas.odd` 是合法 CSS），永远匹配不到：顶层规则仍会因「零匹配」报 `parseFailed`，但
+  **非顶层字段**会变成「成功且无值」，**既不上报也不记 warning**——而 ADR-0032 之前它至少会走
+  ADR-0026 的降级路径留下一条 warning。接受理由：与上游一致，且语法上无法区分「拼错的类型名」
+  与「裸标签名 / 属性选择器」；但**它必须在 3.7 的真实回归里可被观察到**（0 结果统计已由
+  `book-source.md` §9 的书源健康度承担）。
+- **列表规则里写取值段的「响亮失败」消失了。** `class.x&&class.x@href` 这类把取值段写进列表规则
+  的写法，以前报 `unsupportedRule`，现在是「原始 CSS `href` 匹配不到元素」→ 静默空贡献。
+  单元测试已按新语义改写断言（`selectAll_givenAnUnknownTypeInAListRule_matchesItAsCss`），
+  此处补记代价本身。
+
+## 备选方案
+
+| 方案 | 否决原因 |
+|---|---|
+| 维持显式拒绝（本 ADR 之前的状态） | 69.5% 的真实 M0 源在第一步就不可用，与「导入原版书源即可用」的项目目标直接冲突；且 G2b 无法达成 |
+| 只支持 `.` / `#` 开头的段，裸标签名仍拒绝 | `li` / `dd` / `tr!0` 是语料里更高频的形态（137 条中绝大多数为裸标签名），半个修复等于没修 |
+| 把未知类型当成 `tag` 处理 | `li` 能对上，但 `.searchresult` / `#txt` / `div.item` 会静默失配，属 C-SRC-4 禁止的静默忽略 |
+| 顺手把 `//` / `<js>` 也当作 CSS 退化 | `//` 是 XPath（矩阵 #21，M2/不支持），`<js>` 是矩阵之外的 JS 包装；静默当 CSS 会给出拼写正确但永远无匹配的结果 |

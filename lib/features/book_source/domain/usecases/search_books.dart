@@ -43,7 +43,9 @@ final class SearchBooks {
     final ParseResult<RuleScope> response = await _pages.fetch(
       url,
       rulePath: 'searchUrl',
+      headers: source.headers,
       keyword: keyword,
+      sourceId: source.url,
     );
 
     return switch (response) {

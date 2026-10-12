@@ -336,12 +336,14 @@ void main() {
       expect(fixture.adapter.requests.last.headers['cookie'], 'session=abc');
     });
 
-    test('get_whenBodyCannotBeDecoded_returnsEncodingFailed', () async {
+    test('get_whenBodyFallsBackToUtf8AndFails_returnsEncodingFailed', () async {
       final _Fixture fixture = _buildClient();
+      // 未知标签会回退 UTF-8，而回退 / 嗅探车道的解码失败必须显式失败
+      // （C-NET-3、ADR-0031 §决策 2）。
       fixture.adapter.enqueueResponse(
         bytes: <int>[0xFF, 0xFE, 0xFD],
         headers: <String, List<String>>{
-          'content-type': <String>['text/html; charset=utf-8'],
+          'content-type': <String>['text/html; charset=x-unknown'],
         },
       );
 
@@ -354,6 +356,34 @@ void main() {
         ),
         ParseFailureKind.encodingFailed,
       );
+    });
+
+    test('get_whenDeclaredCharsetHasAStrayByte_decodesItAndLogsIt', () async {
+      final _Fixture fixture = _buildClient();
+      fixture.adapter.enqueueResponse(
+        bytes: <int>[0xE5, 0x89, 0x91, 0x8B],
+        headers: <String, List<String>>{
+          'content-type': <String>['text/html; charset=utf-8'],
+        },
+      );
+
+      final HttpResponse response = _expectSuccess(
+        await fixture.client.get(
+          'https://example.com/a',
+          rulePath: 'contentRule.content',
+          sourceId: 'https://example-novel.test',
+        ),
+      );
+
+      final Object? message = fixture.printer.events.single.message;
+      // ADR-0031 §决策 1/2：声明是权威，坏字节用替换字符顶上（整页仍然可用）——但必须留痕，
+      // 且措辞要能解释发生了什么：声明的编码 + 替换数量；同时不得含正文（C-SEC-4）。
+      expect(response.body, contains('\uFFFD'));
+      expect(message, contains('utf-8'));
+      expect(message, contains('1 malformed byte'));
+      expect(message, contains('contentRule.content'));
+      // C-ERR-8：warning 必须能定位到书源。
+      expect(message, contains('https://example-novel.test'));
     });
 
     test('get_whenAnExceptionIsLogged_writesADigestAndARedactedUrl', () async {
