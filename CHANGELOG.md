@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ADR-0029 (proposed): the `@js:` bridge shape and the async engine API (2026-10-11)
+
+- **A ruling for 3.3's `@js:` architecture is drafted** as
+  `docs/dev/adr/0029-js-bridge-shape-and-async-engine-api.md`, status **Proposed** (not in force
+  until accepted). The dev team's option 1 is adopted — `RuleEngine.selectAll` / `extractAll` /
+  `extractFirst` become `Future<ParseResult<…>>` — because C-SRC-2 forces at least one isolate
+  hop for JS and `@js:` can appear in any field, so two parallel evaluation paths would give
+  `book-source.md` §7 a second, drifting implementation. Option 2 (engine + runtime in one
+  resident worker, engine stays synchronous) is rejected.
+- **Two premises of the question were factually wrong, and that is why the ADR exists.**
+  `flutter_qjs_next 1.5.2`'s channel bridge returns the Dart handler's value to JS
+  synchronously (`quickjs_runtime2.dart`, `initChannelFunctions`), and the package's
+  async-bridge recipe shows a `Future`-returning handler becoming a JS Promise. So sync/async is
+  **per binding**, not engine-wide: `log.*` / `crypto.*` stay synchronous in option 1, and
+  `http.*` / `parse.*` are Promises. `http.*` is a Promise in **both** options (Dart has no
+  synchronous network API), so it cannot justify option 2's structural refactor.
+- **The in-repo corpus carries no `@js:` evidence at all** (`test/fixtures/book_sources/*.json`
+  contains 0 occurrences), so no API-frequency argument can be settled from it. The missing
+  sample is registered in `PLAN.md` §3.7 and blocks matrix #14's "已确认" status.
+- `docs/dev/book-source.md` §6 now warns that its "形态" column must not be read as a decided
+  sync/async contract until ADR-0029 is accepted; `PLAN.md` §3.3/§3.4 gained the
+  per-binding-shape and fake-`JsBridge` acceptance criteria, and §3.7 gained the
+  "3.8 before the bridge contract is frozen" coupling.
+
 ### Documentation single-source fixes: coverage counts, gate thresholds, G2a wording (2026-10-11)
 
 - **The run counts and per-layer coverage live in one place again.** The latest-run evidence
