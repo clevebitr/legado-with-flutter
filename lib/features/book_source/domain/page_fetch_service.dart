@@ -7,6 +7,79 @@ import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scop
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:html/parser.dart' as parser;
 
+/// The paging bound of `docs/dev/book-source.md` §9.
+///
+/// It is shared by the table of contents and the chapter body: once a walk has read
+/// this many pages it stops and logs a warning, so a site whose paging rule keeps
+/// naming pages cannot pull an unbounded number of requests.
+const int _maxPagingPages = 50;
+
+/// The URL variables a **paging** rule may use as a template (`book-source.md` §4).
+///
+/// `{{key}}` belongs to `searchUrl` only, and every other name is matrix #18's inner
+/// rule / JS, which is M1 — a paging rule carrying one stays with the engine, which
+/// rejects it as unsupported rather than rendering it to an empty URL.
+const Set<String> _pagingTemplateVariables = <String>{'page', 'baseUrl'};
+
+/// Matches one `{{name}}` placeholder of a paging URL template.
+final RegExp _templatePlaceholder = RegExp(r'\{\{([^{}]*)\}\}');
+
+/// Whether [rule] is a **URL template** rather than a selector rule (§4/§4.1).
+///
+/// A paging field carries a template when the whole text is a URL: it holds at least
+/// one `{{...}}` placeholder, every placeholder names an M0 URL variable, and there is
+/// no `@` segment (which would make it a selector rule). `toc_{{page}}.html` therefore
+/// pages by template, `@css:a#next @href` is evaluated as a rule, and `{{result}}`
+/// stays with the engine (matrix #18 is M1).
+bool _isPagingTemplate(String rule) {
+  if (rule.contains('@')) {
+    return false;
+  }
+
+  final Iterable<RegExpMatch> matches = _templatePlaceholder.allMatches(rule);
+
+  return matches.isNotEmpty &&
+      matches.every(
+        (RegExpMatch match) =>
+            _pagingTemplateVariables.contains((match.group(1) ?? '').trim()),
+      );
+}
+
+/// One page of a [PageWalk]: the URL it was fetched from and its parsed scope.
+///
+/// The URL travels with the scope because a rule on that page may name a **relative**
+/// target, and only the page it was read on can resolve it into an absolute URL
+/// (`docs/dev/book-source.md` §4).
+final class FetchedPage {
+  /// Creates a fetched page.
+  const FetchedPage({required this.url, required this.scope});
+
+  /// The absolute URL the page was fetched from.
+  final String url;
+
+  /// The page, parsed into a scope its rules can read.
+  final RuleScope scope;
+}
+
+/// The pages one paging walk reached, and why it stopped.
+///
+/// [stoppedBy] is `null` when the walk ended on its own — the paging rule stopped
+/// naming pages, or every further page had already been read. Otherwise a **later**
+/// page could not be fetched and [pages] holds the prefix that was read; the two
+/// stages of `PLAN.md` 3.5 interpret that differently, because
+/// `docs/dev/book-source.md` §9 tolerates a missing table-of-contents page but not a
+/// truncated chapter body.
+final class PageWalk {
+  /// Creates a walk result.
+  const PageWalk({required this.pages, this.stoppedBy});
+
+  /// The pages that were read, in reading order: the requested one first.
+  final List<FetchedPage> pages;
+
+  /// The failure that ended the walk early, or `null` when it ended on its own.
+  final ParseFailure<Never>? stoppedBy;
+}
+
 /// Fetches one page of a book source and reads rules from it.
 ///
 /// The four use cases of `PLAN.md` 2.4 share this collaborator so that the failure
@@ -20,7 +93,11 @@ import 'package:html/parser.dart' as parser;
 /// * an empty value of any other field is a **success** with no value, so an absent
 ///   cover or intro stays non-fatal;
 /// * a rejected rule keeps travelling as [ParseFailureKind.unsupportedRule]
-///   (C-SRC-4) instead of being swallowed.
+///   (C-SRC-4) instead of being swallowed;
+/// * a non-top-level field whose rule was **rejected or malformed** degrades to "no
+///   value" plus a warning ([field]), and so do the paging rules ([nextPageUrls]) and
+///   the content replacement rule ([replaceContent]) — ADR-0026 §决策 2, applied in
+///   this one place.
 final class PageFetchService {
   /// Creates the service.
   PageFetchService({
@@ -123,12 +200,27 @@ final class PageFetchService {
     String rulePath,
     ParseFailureKind kind,
   ) {
-    _logger.warning(
-      'Field rule degraded to empty: source=$sourceId field=$rulePath '
-      'kind=${kind.name}',
-    );
+    _warnDegraded(sourceId, rulePath, kind, 'empty');
 
     return const ParseSuccess<String?>(null);
+  }
+
+  /// Logs an optional rule whose failure was degraded to its empty consequence.
+  ///
+  /// [consequence] spells out what “empty” means for the field that degraded — no
+  /// value, no next page, no replacement — so the log keeps one shape per outcome
+  /// while each call site keeps its own fallback. It must never name a page body or a
+  /// keyword (C-ERR-8, C-SEC-4).
+  void _warnDegraded(
+    String sourceId,
+    String rulePath,
+    ParseFailureKind kind,
+    String consequence,
+  ) {
+    _logger.warning(
+      'Field rule degraded to $consequence: source=$sourceId field=$rulePath '
+      'kind=${kind.name}',
+    );
   }
 
   /// Returns every match of a **top-level list** rule.
@@ -175,6 +267,243 @@ final class PageFetchService {
       ParseSuccess<String?>(:final String? data) =>
         data == null || data.isEmpty ? _noMatch(rulePath) : ParseSuccess(data),
     };
+  }
+
+  /// Fetches [url] and walks every page [nextRule] names (`book-source.md` §4.1).
+  ///
+  /// A **first** page that cannot be fetched is the stage's failure, exactly as before;
+  /// a **later** one stops the walk and is reported through [PageWalk.stoppedBy], so
+  /// each stage can decide what a partial walk means.
+  ///
+  /// The walk is a queue, not a fixed chain: a paging rule may name one page or several
+  /// (`nextTocUrl` is a list upstream), so every fetched page contributes its own next
+  /// URLs. Four bounds keep it finite without trusting the site — a page is never read
+  /// twice, a paging rule cannot name the page it was read on ([nextPageUrls]), the
+  /// walk stops at the §9 page bound and logs a warning, and the paging rule itself
+  /// degrades to “no next page” when it is rejected.
+  ///
+  /// [rulePath] is the stage's field (`ruleToc`, `ruleContent`) and travels into every
+  /// request, so a failure stays locatable (C-SRC-8); [nextRulePath] is the paging
+  /// field (`tocRule.nextTocUrl`, `contentRule.nextContentUrl`). [headers] and
+  /// [sourceId] are the book source's own request overrides and id (C-NET-4, C-ERR-8),
+  /// passed the same way [fetch] takes them.
+  Future<ParseResult<PageWalk>> walk({
+    required String url,
+    required String rulePath,
+    required String? nextRule,
+    required String nextRulePath,
+    Map<String, String>? headers,
+    required String sourceId,
+  }) async {
+    final List<FetchedPage> pages = <FetchedPage>[];
+    final Set<String> visited = <String>{};
+    final List<String> pending = <String>[url];
+
+    while (pending.isNotEmpty) {
+      if (pages.length >= _maxPagingPages) {
+        _logger.warning(
+          'Paging stopped at $_maxPagingPages pages: source=$sourceId '
+          'field=$rulePath',
+        );
+        break;
+      }
+
+      final String pageUrl = pending.removeAt(0);
+      if (!visited.add(pageUrl)) {
+        // 翻页规则指回了已经读过的页（本站的页码列表常同时列出上一页）：跳过而不是重读。
+        continue;
+      }
+
+      final ParseResult<RuleScope> page = await fetch(
+        pageUrl,
+        rulePath: rulePath,
+        headers: headers,
+        sourceId: sourceId,
+      );
+
+      switch (page) {
+        case ParseFailure<RuleScope>(
+          :final ParseFailureKind kind,
+          rulePath: final String failedAt,
+        ):
+          if (pages.isEmpty) {
+            return failureAt<PageWalk>(kind: kind, rulePath: failedAt);
+          }
+
+          return ParseSuccess<PageWalk>(
+            PageWalk(
+              pages: pages,
+              stoppedBy: failureAt<Never>(kind: kind, rulePath: failedAt),
+            ),
+          );
+        case ParseSuccess<RuleScope>(:final RuleScope data):
+          pages.add(FetchedPage(url: pageUrl, scope: data));
+          pending.addAll(
+            nextPageUrls(
+              nextRule,
+              data,
+              nextRulePath,
+              currentUrl: pageUrl,
+              // 刚读到的这一页是 `pages.length`（1-based），它指向的下一页就是下一号。
+              page: pages.length + 1,
+              sourceId: sourceId,
+            ),
+          );
+      }
+    }
+
+    return ParseSuccess<PageWalk>(PageWalk(pages: pages));
+  }
+
+  /// Returns the absolute URLs a **paging** rule points at (`book-source.md` §4.1).
+  ///
+  /// [rule] is read as a **list** because `nextTocUrl` / `nextContentUrl` may name one
+  /// page or a whole array of them (upstream `getStringList`,
+  /// `BookChapterList.kt:210-218`); taking only the first value would silently drop
+  /// pages. Every value is resolved against the page it was read on (C-SRC-5), and the
+  /// current page plus any repeat are dropped — upstream filters `redirectUrl`
+  /// (`BookChapterList.kt:212`) and stops its chapter loop on a URL it already has.
+  ///
+  /// The field is also a place where `book-source.md` §4 allows the URL variables
+  /// `{{page}}` and `{{baseUrl}}` ([page] is the 1-based number the value becomes,
+  /// `{{baseUrl}}` is [currentUrl]), so every value is rendered before it is requested,
+  /// and a rule that **is** a template is rendered as a whole — the engine has no node
+  /// to extract from it. Section 4 forbids letting a literal `{{...}}` reach the
+  /// request, so a value that renders to nothing is dropped.
+  ///
+  /// A rejected or malformed rule degrades to **no next page** plus a warning
+  /// (ADR-0026 §决策 2): the field is not top-level, so it must not cost the stage —
+  /// paging simply stops where it is.
+  List<String> nextPageUrls(
+    String? rule,
+    RuleScope scope,
+    String rulePath, {
+    required String currentUrl,
+    required int page,
+    required String sourceId,
+  }) {
+    if (rule == null || rule.trim().isEmpty) {
+      return const <String>[];
+    }
+
+    final String text = rule.trim();
+    if (_isPagingTemplate(text)) {
+      return _pagingUrls(<String>[text], currentUrl, page);
+    }
+
+    final ParseResult<List<String>> parsed = _engine.extractAll(
+      text,
+      scope,
+      rulePath: rulePath,
+    );
+
+    return switch (parsed) {
+      ParseSuccess<List<String>>(:final List<String> data) => _pagingUrls(
+        data,
+        currentUrl,
+        page,
+      ),
+      // 降级 warning 用**字段路径**而不是引擎报的 `unsupported:<语法>`：与 [field] 同
+      // 一口径，书源里要改的是哪个字段（C-SRC-8、ADR-0026 §决策 2）。
+      ParseFailure<List<String>>(:final ParseFailureKind kind) => _noNextPage(
+        sourceId,
+        rulePath,
+        kind,
+      ),
+    };
+  }
+
+  /// Renders, resolves, filters and de-duplicates paging values, keeping rule order.
+  ///
+  /// [page] is the 1-based number the value becomes and `{{baseUrl}}` is [currentUrl],
+  /// which is what §4.1 fixes for these two fields under queue paging.
+  List<String> _pagingUrls(List<String> values, String currentUrl, int page) {
+    final List<String> urls = <String>[];
+
+    for (final String value in values) {
+      if (value.trim().isEmpty) {
+        continue;
+      }
+
+      final String rendered = renderUrl(value, <String, String>{
+        'page': '$page',
+        'baseUrl': currentUrl,
+      }).trim();
+      if (rendered.isEmpty) {
+        continue;
+      }
+
+      final String url = resolveAbsoluteUrl(rendered, currentUrl);
+      if (url == currentUrl || urls.contains(url)) {
+        continue;
+      }
+
+      urls.add(url);
+    }
+
+    return urls;
+  }
+
+  /// Logs a degraded paging rule and turns it into “no next page” (ADR-0026).
+  List<String> _noNextPage(
+    String sourceId,
+    String rulePath,
+    ParseFailureKind kind,
+  ) {
+    _warnDegraded(sourceId, rulePath, kind, 'no next page');
+
+    return const <String>[];
+  }
+
+  /// Applies the `ruleContent.replaceRegex` purification to [content].
+  ///
+  /// The rule is a **standalone** `##regex##replacement` rule run on the joined
+  /// chapter text (matrix #9, `book-source.md` §4.1), so it goes through
+  /// [RuleEngine.applyReplaceRule] rather than [field]: there is no page left to read.
+  /// Upstream's surrounding per-line trim and re-indent (`BookContent.kt:191-194`) is
+  /// reader-side formatting and is deliberately not applied here.
+  ///
+  /// A rejected or malformed rule degrades to **no replacement** plus a warning
+  /// (ADR-0026 §决策 2), which for a transform means “keep the text as it was
+  /// extracted” instead of losing the whole chapter.
+  String replaceContent(
+    String? rule,
+    String content,
+    String rulePath, {
+    required String sourceId,
+  }) {
+    if (rule == null || rule.trim().isEmpty) {
+      return content;
+    }
+
+    final ParseResult<String> replaced = _engine.applyReplaceRule(
+      rule,
+      content,
+      rulePath: rulePath,
+    );
+
+    return switch (replaced) {
+      ParseSuccess<String>(:final String data) => data,
+      // 同 [nextPageUrls]：降级 warning 指向字段而不是 `unsupported:<语法>`。
+      ParseFailure<String>(:final ParseFailureKind kind) => _noReplacement(
+        sourceId,
+        rulePath,
+        kind,
+        content,
+      ),
+    };
+  }
+
+  /// Logs a degraded replacement rule and hands back [content] untouched (ADR-0026).
+  String _noReplacement(
+    String sourceId,
+    String rulePath,
+    ParseFailureKind kind,
+    String content,
+  ) {
+    _warnDegraded(sourceId, rulePath, kind, 'no replacement');
+
+    return content;
   }
 
   /// Renders a URL template with the well-known variables of `book-source.md` §4.

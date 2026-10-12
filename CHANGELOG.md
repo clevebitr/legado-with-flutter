@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review B1: the paging URL templates are rendered before they are requested (2026-10-12)
+
+Review found that `nextTocUrl` / `nextContentUrl` only went through `resolveAbsoluteUrl`, never
+through `renderUrlTemplate`. `book-source.md` §4 gives `{{page}}` to both fields at M0 and forbids
+letting a literal `{{...}}` reach a request (C-SRC-5), so a template paging rule could not work.
+Beyond that, the values the engine extracts are the **result** of a rule: `toc_{{page}}.html` is not
+a selector at all, so the engine had nothing to read and paging stopped on the first page.
+
+`PageFetchService.nextPageUrls` now owns it, in one place:
+
+- a paging rule whose whole text is a URL template (at least one `{{...}}`, only the M0 variables
+  `page` / `baseUrl`, no `@` segment) is rendered as the next address directly;
+- any other rule is still evaluated by the engine, and **every extracted value** is rendered as a
+  template before it is resolved — so a site whose `href` carries `{{baseUrl}}` works too;
+- a value that renders to nothing is dropped, so §4's "never leave `{{...}}` in a request" holds;
+- `{{page}}` is the 1-based number the URL becomes (`pages.length + 1` while reading the page's own
+  next rule, i.e. the page after `{{baseUrl}}`), `{{baseUrl}}` is the page the rule was read on.
+  `book-source.md` §4.1 owns both definitions;
+- matrix #18's `{{...}}` inner rules stay M1: `{{result}}` names no M0 URL variable, so it is *not*
+  treated as a template and the engine still rejects it as unsupported.
+- 3 new cases (395 total): the `{{page}}` template chain, the `{{baseUrl}}` template inside an
+  extracted `href`, and the `{{result}}` boundary. Each asserts that no requested URL contains `{{`.
+- Gates after the fix: `dart format` unchanged, `flutter analyze` clean, `flutter test --coverage`
+  395 passed, `check_coverage.dart` exit 0 with `core` 357/357 and `domain` 1047/1047. The
+  latest-run evidence table `docs/dev/test-environment.md` §7 was still carrying 3.5's numbers
+  (370 / 925), so it is updated here too — that table is the owner of the counts.
+
+### Phase 3.5: late-bound toc paging, content paging, `isVip` and `replaceRegex` (2026-10-12)
+
+The M0 fields `PLAN.md` §3.4 step 4 names are modelled and consumed. The field model gained
+`TocRule.isVip` / `TocRule.nextTocUrl` / `ContentRule.nextContentUrl` / `ContentRule.replaceRegex`,
+and `Chapter` gained `isVip`; the three rule objects therefore no longer carry those keys in
+`extra`, and `book_source_test.dart`'s per-object expectations were updated with the model.
+
+- **Paging is a list-driven walk, once, in `PageFetchService.walk`.** `nextTocUrl` and
+  `nextContentUrl` are read with the engine's `extractAll` (upstream `getStringList`,
+  `BookChapterList.kt:210-218`), because a rule may name one page or a group of them. Each value
+  resolves against the page it was read on (C-SRC-5), the current page and repeats are dropped
+  (upstream filters `redirectUrl`), a page is never read twice, and the walk stops at the §9 bound
+  of 50 pages with a warning. `nextPageUrls` and `replaceContent` keep ADR-0026 §决策 2 where it
+already lives: a rejected or malformed paging / replacement rule degrades to "no next page" /
+  "no replacement" plus a warning whose `field=` is the source field, not the engine's
+  `unsupported:<syntax>`.
+- **A later page does not mean the same thing to both stages.** A missing table-of-contents page
+  keeps the chapters already read and logs a warning (§9), while a chapter body that cannot be
+  fully fetched fails the chapter: returning a truncated body as a success would dress a failure
+  up as success. `book-source.md` §9 gained that row, and §4.1 gained the field-level semantics
+  the old "returns empty, stop" wording left open.
+- **`isVip`** is true-ish: `null`, `""`, case-insensitive `false` and `0` stay non-VIP, while
+  `true`, `1` and any other non-empty value mark the chapter.
+- **`replaceRegex`** is applied to the joined chapter text (pages joined with `\n`, upstream
+  `appendContent`), through the new `RuleEngine.applyReplaceRule`: the standalone `##regex##replacement`
+  form (upstream "used on its own it equals `all##…`") and matrix #25's `##regex##replacement###`.
+  A body naming a selector is `parseFailed` at the field, a body carrying a flag such as `@js:` is
+  `unsupportedRule` — neither is silently dropped. Upstream's surrounding per-line trim and
+  full-width re-indent (`BookContent.kt:191-194`) is reader-side formatting and is deliberately
+  not applied here; §4.1 records that difference.
+- 22 new test cases (392 total, from 370): the field mapping, the replacement-rule engine group,
+  toc paging (chain, array, self-reference, 50-page bound, later-page fetch failure, later page
+  without a chapter list, rejected paging rule), `isVip` truthiness, content paging (join, strict
+  later-page failure) and the replacement rule plus its degradation.
+- Gates: `dart format` unchanged, `flutter analyze` clean, `flutter test --coverage` 392 passed,
+  `check_coverage.dart` exit 0 with `core` 357/357 and `domain` 1030/1030.
+
+### No HANDOVER.md: its content was folded into the owners it belonged to (2026-10-12)
+
+A `HANDOVER.md` (session handover: snapshot, reading order, how to run, traps) was proposed on a
+side branch. It is **not merged**, because by its own opening rule ("restating is a defect") it
+restated four facts that already have owners, and it had already gone stale before it was reviewed:
+its snapshot said the G2b slice was *not* in `main` while `main` had just received it. The decision
+follows ADR-0013/ADR-0027 rather than adding an eighth root-level entry document.
+
+- **The traps moved to their owner, `PLAN.md` §6** ("常见返工陷阱，本项目已实际踩过"): rows 11–17
+  record the measured ones — ADR numbering collisions between parallel writers, running the
+  sanitized fixtures against the live site without restoring the host, deriving a statistic with a
+  throwaway script, treating a live page's hash as a regression baseline, writing a
+  `throwsFormatException` case for the sniffing lane (its reachable labels are tolerant codecs or
+  `Error`-raising families), leaving temporary Dart files where `dart format .` / `flutter analyze`
+  see them, and writing temp files to `/tmp` on Windows. Row 7 already covered "new source file
+  without a test", so it was not duplicated.
+- **The gate counts went to their owner, `docs/dev/test-environment.md` §7** (370 cases, `core`
+  357/357, `domain` 925/925) — the single place the latest-run evidence is stated.
+- **Nothing else needed a new home**: the reading order is `AGENTS.md` §2 plus `docs/README.md`
+  §2.1, the commands are `tool/spot_check/README.md` §2/§3 and `docs/dev/test-environment.md` §3,
+  and the phase snapshot is `PLAN.md` §3.1 with the process record in this file.
+- **One stale comment fixed in `tool/spot_check/spot_check.dart`**: it still called the void
+  "157 of 270" figure reproducible; it now points at ADR-0032 for the number instead of restating it.
+
 ### The upstream evidence debt (review R1) is closed with file:line (2026-10-12)
 
 - **ADR-0032's `else -> doc.select(rule)` claim now cites lines**, which review R1 had to leave open

@@ -21,6 +21,13 @@ const String _sourceFixture =
 /// The book URL that carries the chapter list in the corpus.
 const String _tocUrl = 'https://example-novel.test/book/1/';
 
+/// The second and third table-of-contents pages used by the paging tests.
+const String _toc2Url = 'https://example-novel.test/book/1/toc2.html';
+const String _toc3Url = 'https://example-novel.test/book/1/toc3.html';
+
+/// The next-link rule the paging tests install, pointing at `<a id="next">`.
+const String _nextRule = '@css:a#next @href';
+
 /// Loads the corpus book source.
 BookSource _source() => BookSource.fromLegadoJson(
   jsonDecode(File(_sourceFixture).readAsStringSync()) as Map<String, Object?>,
@@ -29,6 +36,29 @@ BookSource _source() => BookSource.fromLegadoJson(
 /// Reads one page of the offline corpus.
 String _page(String name) =>
     File('test/fixtures/html/$name').readAsStringSync();
+
+/// The corpus source with [rule] installed as its `nextTocUrl` (PLAN 3.5).
+BookSource _pagingSource(String rule) {
+  final BookSource source = _source();
+
+  return source.copyWith(tocRule: source.tocRule.copyWith(nextTocUrl: rule));
+}
+
+/// A table-of-contents page with one `<dd>` per entry of [names].
+///
+/// Each link's URL is `[prefix]<n>.html`, so a test can tell which page a chapter was
+/// read from and can watch a relative URL resolve against **that** page (C-SRC-5).
+String _tocHtml(List<String> names, {String? nextHref, String prefix = 'c'}) {
+  final String links = <String>[
+    for (var index = 0; index < names.length; index++)
+      '<dd><a href="$prefix${index + 1}.html">${names[index]}</a></dd>',
+  ].join();
+  final String next = nextHref == null
+      ? ''
+      : '<a id="next" href="$nextHref">下一页</a>';
+
+  return '<div id="list"><dl>$links</dl></div>$next';
+}
 
 /// Builds the page service under test around [http].
 ({PageFetchService pages, FakeLogPrinter printer}) _service(
@@ -150,5 +180,263 @@ void main() {
         );
       },
     );
+
+    test('execute_givenIsVipRule_marksOnlyTheTrueishChapters', () async {
+      // `book-source.md` §4.1：`null` / `false` / `0` / `""` 都是**非 VIP**，其余值算 VIP。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _tocUrl,
+          '<div id="list"><dl>'
+          '<dd><a href="1.html">第1章</a><em>true</em></dd>'
+          '<dd><a href="2.html">第2章</a><em>1</em></dd>'
+          '<dd><a href="3.html">第3章</a><em>是</em></dd>'
+          '<dd><a href="4.html">第4章</a><em>false</em></dd>'
+          '<dd><a href="5.html">第5章</a><em>0</em></dd>'
+          '<dd><a href="6.html">第6章</a><em></em></dd>'
+          '</dl></div>',
+        );
+      final BookSource source = _source();
+      final BookSource withVip = source.copyWith(
+        tocRule: source.tocRule.copyWith(isVip: '@css:em @text'),
+      );
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages).execute(withVip, _tocUrl),
+      );
+
+      expect(chapters, hasLength(6));
+      expect(chapters.map((Chapter chapter) => chapter.isVip), <bool>[
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+      ]);
+    });
+
+    test('execute_givenNextTocUrl_pagesThroughEveryTocPage', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_tocUrl, _tocHtml(<String>['第1章'], nextHref: 'toc2.html'))
+        ..serve(
+          _toc2Url,
+          _tocHtml(<String>['第2章'], nextHref: 'toc3.html', prefix: 'p2-'),
+        )
+        ..serve(_toc3Url, _tocHtml(<String>['第3章'], prefix: 'p3-'));
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages)
+            .execute(_pagingSource(_nextRule), _tocUrl),
+      );
+
+      expect(http.requestedUrls, <String>[_tocUrl, _toc2Url, _toc3Url]);
+      expect(chapters.map((Chapter chapter) => chapter.name), <String>[
+        '第1章',
+        '第2章',
+        '第3章',
+      ]);
+      // 相对地址仍按**读到它的那一页**解析（C-SRC-5）。
+      expect(chapters.map((Chapter chapter) => chapter.url), <String>[
+        'https://example-novel.test/book/1/c1.html',
+        'https://example-novel.test/book/1/p2-1.html',
+        'https://example-novel.test/book/1/p3-1.html',
+      ]);
+    });
+
+    test('execute_givenSeveralNextTocUrls_readsEachOfThem', () async {
+      // `book-source.md` §4.1：`nextTocUrl` 可以是单个 URL，也可以是 URL 数组。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _tocUrl,
+          '${_tocHtml(<String>['第1章'])}'
+          '<a class="page" href="toc2.html">2</a>'
+          '<a class="page" href="toc3.html">3</a>',
+        )
+        ..serve(_toc2Url, _tocHtml(<String>['第2章']))
+        ..serve(_toc3Url, _tocHtml(<String>['第3章']));
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages)
+            .execute(_pagingSource('@css:a.page @href'), _tocUrl),
+      );
+
+      expect(http.requestedUrls, <String>[_tocUrl, _toc2Url, _toc3Url]);
+      expect(chapters.map((Chapter chapter) => chapter.name), <String>[
+        '第1章',
+        '第2章',
+        '第3章',
+      ]);
+    });
+
+    test(
+      'execute_givenNextTocUrlPointingBack_stopsInsteadOfRereading',
+      () async {
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_tocUrl, _tocHtml(<String>['第1章'], nextHref: 'toc2.html'))
+          ..serve(_toc2Url, _tocHtml(<String>['第2章'], nextHref: '../1/'))
+          ..serve(_toc3Url, _tocHtml(<String>['第3章']));
+
+        final List<Chapter> chapters = _data(
+          await FetchToc(pages: _service(http).pages)
+              .execute(_pagingSource(_nextRule), _tocUrl),
+        );
+
+        // 第二页的「下一页」指回首章目录页：已读过的页不再重读，也不会无限翻页。
+        expect(http.requestedUrls, <String>[_tocUrl, _toc2Url]);
+        expect(chapters, hasLength(2));
+      },
+    );
+
+    test(
+      'execute_givenMorePagesThanTheBound_stopsAtTheBoundWithAWarning',
+      () async {
+        const String base = 'https://example-novel.test/book/9/';
+        final FakeHttpClient http = FakeHttpClient();
+        for (var page = 1; page <= 51; page++) {
+          http.serve(
+            '$base$page.html',
+            _tocHtml(<String>[
+              '第$page章',
+            ], nextHref: page < 51 ? '${page + 1}.html' : null),
+          );
+        }
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
+            _service(http);
+
+        final List<Chapter> chapters = _data(
+          await FetchToc(pages: service.pages)
+              .execute(_pagingSource(_nextRule), '${base}1.html'),
+        );
+
+        // §9：翻页最多 50 页，到顶后停止并记录 warning。
+        expect(http.requestedUrls, hasLength(50));
+        expect(chapters, hasLength(50));
+        expect(service.printer.events, hasLength(1));
+        expect(
+          service.printer.events.single.message.toString(),
+          contains('50 pages'),
+        );
+      },
+    );
+
+    test(
+      'execute_givenALaterTocPageFails_returnsTheChaptersReadSoFar',
+      () async {
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_tocUrl, _tocHtml(<String>['第1章'], nextHref: 'toc2.html'))
+          ..failWith(_toc2Url, ParseFailureKind.networkFailed);
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
+            _service(http);
+
+        final List<Chapter> chapters = _data(
+          await FetchToc(pages: service.pages)
+              .execute(_pagingSource(_nextRule), _tocUrl),
+        );
+
+        // §9 目录缺页：已读到的章节照常返回，只记录 warning（整次失败只留给首页）。
+        expect(chapters, hasLength(1));
+        expect(chapters.single.name, '第1章');
+        expect(
+          service.printer.events.single.message.toString(),
+          contains('stopped before every page was read'),
+        );
+      },
+    );
+
+    test(
+      'execute_givenALaterTocPageWithoutChapters_returnsTheChaptersReadSoFar',
+      () async {
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_tocUrl, _tocHtml(<String>['第1章'], nextHref: 'toc2.html'))
+          ..serve(_toc2Url, '<html><body><p>没有目录</p></body></html>');
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
+            _service(http);
+
+        final List<Chapter> chapters = _data(
+          await FetchToc(pages: service.pages)
+              .execute(_pagingSource(_nextRule), _tocUrl),
+        );
+
+        expect(chapters, hasLength(1));
+        expect(
+          service.printer.events.single.message.toString(),
+          contains('page skipped'),
+        );
+      },
+    );
+
+    test(
+      'execute_givenUnsupportedNextTocUrlRule_stopsPagingWithAWarning',
+      () async {
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_tocUrl, _tocHtml(<String>['第1章'], nextHref: 'toc2.html'));
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
+            _service(http);
+
+        final List<Chapter> chapters = _data(
+          await FetchToc(pages: service.pages)
+              .execute(_pagingSource('@js:result'), _tocUrl),
+        );
+
+        // ADR-0026 §决策 2：非顶层字段被拒 → 降级为「没有下一页」+ warning。
+        expect(http.requestedUrls, <String>[_tocUrl]);
+        expect(chapters, hasLength(1));
+        expect(
+          service.printer.events.last.message.toString(),
+          allOf(contains('tocRule.nextTocUrl'), contains('no next page')),
+        );
+      },
+    );
+
+    test('execute_givenAPageNumberTemplate_pagesThroughIt', () async {
+      // §4 的 `{{page}}` 是 M0：模板规则本身没有选择器，整条规则就是下一页地址。
+      const String base = 'https://example-novel.test/book/8/';
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(base, _tocHtml(<String>['第1章']))
+        ..serve('${base}toc_2.html', _tocHtml(<String>['第2章']))
+        ..serve('${base}toc_3.html', _tocHtml(<String>['第3章']));
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages)
+            .execute(_pagingSource('toc_{{page}}.html'), base),
+      );
+
+      // `{{page}}` 自己接链；第 4 页没被 serve（§9 缺页降级，保留已读到的三章）。
+      expect(http.requestedUrls, <String>[
+        base,
+        '${base}toc_2.html',
+        '${base}toc_3.html',
+        '${base}toc_4.html',
+      ]);
+      expect(
+        http.requestedUrls.any((String url) => url.contains('{{')),
+        isFalse,
+      );
+      expect(chapters.map((Chapter chapter) => chapter.name), <String>[
+        '第1章',
+        '第2章',
+        '第3章',
+      ]);
+    });
+
+    test('execute_givenAnInnerRuleInTheNextUrl_staysUnsupported', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_tocUrl, _tocHtml(<String>['第1章']));
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(http);
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: service.pages)
+            .execute(_pagingSource('{{result}}'), _tocUrl),
+      );
+
+      // 矩阵 #18 的 `{{}}` 内嵌规则是 M1：不按 URL 模板渲染，仍由引擎报 unsupported 后降级。
+      expect(http.requestedUrls, <String>[_tocUrl]);
+      expect(chapters, hasLength(1));
+      expect(
+        service.printer.events.last.message.toString(),
+        contains('no next page'),
+      );
+    });
   });
 }

@@ -31,9 +31,9 @@ enum BookSourceType {
 /// the original Legado keys (`bookSourceName`, `ruleSearch`, ...), so an imported
 /// file round-trips without a translation table.
 ///
-/// Only the fields the Phase 2 vertical slice consumes are modelled; the paging
-/// rules, `isVip` and the display-only counters arrive with Phase 3
-/// (`PLAN.md` 2.1 and 3.5). Everything unmodelled survives in [extra].
+/// Only the fields the implemented stages consume are modelled; the display-only
+/// counters (`lastUpdateTime` / `respondTime` / `weight` / `customOrder`) arrive
+/// with Phase 5 (`PLAN.md` 5.4). Everything unmodelled survives in [extra].
 ///
 /// Import user-supplied files with [BookSource.fromLegadoJson]: it is the only
 /// entry point that keeps unrecognised keys, so a later export cannot lose data.
@@ -166,6 +166,10 @@ abstract class BookInfoRule with _$BookInfoRule {
 }
 
 /// Rules that parse the table of contents (`ruleToc`).
+///
+/// [isVip] marks the chapters a source sells, and [nextTocUrl] names the page(s)
+/// that continue the list; both are rule text, evaluated by the use case
+/// (`docs/dev/book-source.md` §4.1).
 @freezed
 abstract class TocRule with _$TocRule {
   /// Creates a table of contents rule set.
@@ -173,6 +177,8 @@ abstract class TocRule with _$TocRule {
     String? chapterList,
     String? chapterName,
     String? chapterUrl,
+    String? isVip,
+    String? nextTocUrl,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})
     Map<String, Object?> extra,
@@ -191,11 +197,17 @@ abstract class TocRule with _$TocRule {
 }
 
 /// Rules that parse the chapter body (`ruleContent`).
+///
+/// [nextContentUrl] names the page(s) that continue one chapter's body, and
+/// [replaceRegex] is a **standalone** `##regex##replacement` rule applied to the
+/// joined text after every page has been read (`docs/dev/book-source.md` §4.1).
 @freezed
 abstract class ContentRule with _$ContentRule {
   /// Creates a content rule set.
   const factory ContentRule({
     String? content,
+    String? nextContentUrl,
+    String? replaceRegex,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})
     Map<String, Object?> extra,

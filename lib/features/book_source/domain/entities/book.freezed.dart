@@ -588,7 +588,7 @@ as String?,
 /// @nodoc
 mixin _$Chapter {
 
- String get name; String get url;
+ String get name; String get url; bool get isVip;
 /// Create a copy of Chapter
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -600,20 +600,20 @@ $ChapterCopyWith<Chapter> get copyWith => _$ChapterCopyWithImpl<Chapter>(this as
 @override
 bool operator ==(Object other) {
   final _this = this as Chapter;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Chapter&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.url, _this.url) || other.url == _this.url));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Chapter&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.url, _this.url) || other.url == _this.url)&&(identical(other.isVip, _this.isVip) || other.isVip == _this.isVip));
 }
 
 
 @override
 int get hashCode {
   final _this = this as Chapter;
-  return Object.hash(runtimeType,_this.name,_this.url);
+  return Object.hash(runtimeType,_this.name,_this.url,_this.isVip);
 }
 
 @override
 String toString() {
   final _this = this as Chapter;
-  return 'Chapter(name: ${_this.name}, url: ${_this.url})';
+  return 'Chapter(name: ${_this.name}, url: ${_this.url}, isVip: ${_this.isVip})';
 }
 
 
@@ -624,7 +624,7 @@ abstract mixin class $ChapterCopyWith<$Res>  {
   factory $ChapterCopyWith(Chapter value, $Res Function(Chapter) _then) = _$ChapterCopyWithImpl;
 @useResult
 $Res call({
- String name, String url
+ String name, String url, bool isVip
 });
 
 
@@ -641,11 +641,12 @@ class _$ChapterCopyWithImpl<$Res>
 
 /// Create a copy of Chapter
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? url = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? url = null,Object? isVip = null,}) {
   return _then(Chapter(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,
+as String,isVip: null == isVip ? _self.isVip : isVip // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -730,10 +731,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String url)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String url,  bool isVip)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Chapter() when $default != null:
-return $default(_that.name,_that.url);case _:
+return $default(_that.name,_that.url,_that.isVip);case _:
   return orElse();
 
 }
@@ -751,10 +752,10 @@ return $default(_that.name,_that.url);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String url)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String url,  bool isVip)  $default,) {final _that = this;
 switch (_that) {
 case _Chapter():
-return $default(_that.name,_that.url);case _:
+return $default(_that.name,_that.url,_that.isVip);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -771,10 +772,10 @@ return $default(_that.name,_that.url);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String url)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String url,  bool isVip)?  $default,) {final _that = this;
 switch (_that) {
 case _Chapter() when $default != null:
-return $default(_that.name,_that.url);case _:
+return $default(_that.name,_that.url,_that.isVip);case _:
   return null;
 
 }
@@ -786,11 +787,12 @@ return $default(_that.name,_that.url);case _:
 
 
 class _Chapter implements Chapter {
-  const _Chapter({required this.name, required this.url});
+  const _Chapter({required this.name, required this.url, this.isVip = false});
   
 
 @override final  String name;
 @override final  String url;
+@override@JsonKey() final  bool isVip;
 
 /// Create a copy of Chapter
 /// with the given fields replaced by the non-null parameter values.
@@ -802,18 +804,18 @@ _$ChapterCopyWith<_Chapter> get copyWith => __$ChapterCopyWithImpl<_Chapter>(thi
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _Chapter&&(identical(other.name, name) || other.name == name)&&(identical(other.url, url) || other.url == url));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _Chapter&&(identical(other.name, name) || other.name == name)&&(identical(other.url, url) || other.url == url)&&(identical(other.isVip, isVip) || other.isVip == isVip));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,name,url);
+    return Object.hash(runtimeType,name,url,isVip);
 }
 
 @override
 String toString() {
-    return 'Chapter(name: $name, url: $url)';
+    return 'Chapter(name: $name, url: $url, isVip: $isVip)';
 }
 
 
@@ -824,7 +826,7 @@ abstract mixin class _$ChapterCopyWith<$Res> implements $ChapterCopyWith<$Res> {
   factory _$ChapterCopyWith(_Chapter value, $Res Function(_Chapter) _then) = __$ChapterCopyWithImpl;
 @override @useResult
 $Res call({
- String name, String url
+ String name, String url, bool isVip
 });
 
 
@@ -841,11 +843,12 @@ class __$ChapterCopyWithImpl<$Res>
 
 /// Create a copy of Chapter
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? url = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? url = null,Object? isVip = null,}) {
   return _then(_Chapter(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,
+as String,isVip: null == isVip ? _self.isVip : isVip // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

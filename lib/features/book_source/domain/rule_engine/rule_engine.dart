@@ -417,6 +417,46 @@ final class RuleEngine {
     };
   }
 
+  /// Applies a **standalone** `##regex##replacement` rule to [text] (matrix #9).
+  ///
+  /// `ruleContent.replaceRegex` is not evaluated against a page: upstream applies it
+  /// to the chapter text it has already assembled (`BookContent.kt:190-193`,
+  /// `analyzeRule.getString(replaceRegex, contentStr)`), so there is no DOM for a
+  /// selector to read. Real sources therefore spell the rule as the replacement
+  /// segments alone — `##本章未完，点击下一页继续阅读。` — which upstream defines as the
+  /// `all##…` form ("used on its own it equals `all##…`"); `all` is accepted as well
+  /// for the explicit spelling. The four-part `##match##replace###` form of matrix #25
+  /// goes through the same replacement engine.
+  ///
+  /// A body that names a selector has nothing to select in a plain string, and a flag
+  /// such as `@js:` belongs to a later phase: the flag is reported as
+  /// [ParseFailureKind.unsupportedRule] with the syntax in `rulePath` (C-SRC-4), any
+  /// other body as [ParseFailureKind.parseFailed] with [rulePath]. Neither is silently
+  /// dropped; the caller degrades the field (ADR-0026 §决策 2).
+  ParseResult<String> applyReplaceRule(
+    String rule,
+    String text, {
+    required String rulePath,
+  }) {
+    final List<String> parts = rule.split('##');
+    final String body = parts.first.trim();
+    if (body.isNotEmpty && body.toLowerCase() != 'all') {
+      for (final String flag in _deferredFlags) {
+        if (body.toLowerCase().startsWith(flag)) {
+          // 用原文截取，保留作者写的 `@JS:` 这类大小写（§3 前缀大小写不敏感）。
+          return _fail<String>(
+            _unsupported(body.substring(0, flag.length)),
+            field: rulePath,
+          );
+        }
+      }
+
+      return _fail<String>(_malformed(rulePath), field: rulePath);
+    }
+
+    return ParseSuccess<String>(_applyReplacement(<String>[text], parts).first);
+  }
+
   /// Extracts every value of a rule whose branches already parsed into [candidates].
   ///
   /// A candidate that **fails** ends the rule: later candidates are not tried, because a

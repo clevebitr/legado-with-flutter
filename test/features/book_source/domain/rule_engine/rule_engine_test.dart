@@ -193,6 +193,14 @@ String? _first(ParseResult<String?> result) => switch (result) {
 /// Returns the failure of [result], failing the test when it succeeded.
 ///
 /// Rebuilt as `ParseFailure<Never>` so one helper serves every result type.
+/// Returns the data of a successful single-value result, failing the test otherwise.
+String _text(ParseResult<String> result) => switch (result) {
+  ParseSuccess<String>(:final String data) => data,
+  ParseFailure<String>(:final ParseFailureKind kind) => fail(
+    'Expected a success but got $kind.',
+  ),
+};
+
 ParseFailure<Never> _failure<T>(ParseResult<T> result) => switch (result) {
   ParseFailure<T>(:final ParseFailureKind kind, :final String rulePath) =>
     ParseFailure<Never>(kind: kind, rulePath: rulePath),
@@ -836,6 +844,115 @@ void main() {
         ),
         <String>['X'],
       );
+    });
+  });
+
+  group('RuleEngine applyReplaceRule', () {
+    test('applyReplaceRule_givenStandaloneForm_deletesEveryMatch', () {
+      // `ruleContent.replaceRegex` 的真实写法（test/fixtures/book_sources/
+      // legado_export_sanitized.json）：只有替换段，没有选择器。
+      expect(
+        _text(
+          _engine().applyReplaceRule(
+            '##本章未完，点击下一页继续阅读。',
+            '正文。本章未完，点击下一页继续阅读。后续。本章未完，点击下一页继续阅读。',
+            rulePath: 'contentRule.replaceRegex',
+          ),
+        ),
+        '正文。后续。',
+      );
+    });
+
+    test('applyReplaceRule_givenTheExplicitAllBody_appliesIt', () {
+      // 上游文档：「独立使用相当于 `all##正则##替换`」。
+      expect(
+        _text(
+          _engine().applyReplaceRule(
+            r'all##\s+##',
+            '第一段   第二段',
+            rulePath: 'contentRule.replaceRegex',
+          ),
+        ),
+        '第一段第二段',
+      );
+    });
+
+    test('applyReplaceRule_givenGroupReference_expandsTheGroup', () {
+      expect(
+        _text(
+          _engine().applyReplaceRule(
+            r'##(\d+)##[$1]',
+            '共 123 字',
+            rulePath: 'contentRule.replaceRegex',
+          ),
+        ),
+        '共 [123] 字',
+      );
+    });
+
+    test('applyReplaceRule_givenTheFourPartForm_returnsTheFirstMatchOnly', () {
+      // 矩阵 #25：`###` 取第一个匹配并在其内部替换，不是替换整串里的第一处。
+      expect(
+        _text(
+          _engine().applyReplaceRule(
+            '##a##b###',
+            'xax ax',
+            rulePath: 'contentRule.replaceRegex',
+          ),
+        ),
+        'b',
+      );
+    });
+
+    test('applyReplaceRule_givenNoReplacement_passesTheTextThrough', () {
+      expect(
+        _text(
+          _engine().applyReplaceRule(
+            'all',
+            '正文。',
+            rulePath: 'contentRule.replaceRegex',
+          ),
+        ),
+        '正文。',
+      );
+    });
+
+    test('applyReplaceRule_givenDeferredFlag_reportsUnsupportedRule', () {
+      // 标志头按规则原文保留大小写（book-source.md §3 前缀大小写不敏感）。
+      expect(
+        _failure(
+          _engine().applyReplaceRule(
+            '@JS:result',
+            '正文。',
+            rulePath: 'contentRule.replaceRegex',
+          ),
+        ).rulePath,
+        'unsupported:@JS:',
+      );
+      expect(
+        _failure(
+          _engine().applyReplaceRule(
+            '@xpath://div',
+            '正文。',
+            rulePath: 'contentRule.replaceRegex',
+          ),
+        ).kind,
+        ParseFailureKind.unsupportedRule,
+      );
+    });
+
+    test('applyReplaceRule_givenSelectorBody_reportsParseFailedAtTheField', () {
+      // 带选择器的规则体在纯文本上没有可读的节点：报畸形（带字段路径），不静默丢掉选择器。
+      final ParseFailure<Never> failure = _failure(
+        _engine().applyReplaceRule(
+          'class.a@text##x##y',
+          '正文。',
+          rulePath: 'contentRule.replaceRegex',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'contentRule.replaceRegex');
     });
   });
 

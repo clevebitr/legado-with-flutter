@@ -107,5 +107,15 @@ void main() {
       expect(one.copyWith(url: 'https://a.test/2.html'), isNot(one));
       expect(one.copyWith(url: 'https://a.test/2.html').name, '第1章');
     });
+
+    test('Chapter_givenNoIsVip_defaultsToNonVip', () {
+      const Chapter chapter = Chapter(
+        name: '第1章',
+        url: 'https://a.test/1.html',
+      );
+
+      expect(chapter.isVip, isFalse);
+      expect(chapter.copyWith(isVip: true).isVip, isTrue);
+    });
   });
 }

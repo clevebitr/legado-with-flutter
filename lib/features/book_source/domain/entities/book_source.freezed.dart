@@ -1017,7 +1017,7 @@ as Map<String, Object?>,
 /// @nodoc
 mixin _$TocRule {
 
- String? get chapterList; String? get chapterName; String? get chapterUrl;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
+ String? get chapterList; String? get chapterName; String? get chapterUrl; String? get isVip; String? get nextTocUrl;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
 /// Create a copy of TocRule
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1031,20 +1031,20 @@ $TocRuleCopyWith<TocRule> get copyWith => _$TocRuleCopyWithImpl<TocRule>(this as
 @override
 bool operator ==(Object other) {
   final _this = this as TocRule;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is TocRule&&(identical(other.chapterList, _this.chapterList) || other.chapterList == _this.chapterList)&&(identical(other.chapterName, _this.chapterName) || other.chapterName == _this.chapterName)&&(identical(other.chapterUrl, _this.chapterUrl) || other.chapterUrl == _this.chapterUrl)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is TocRule&&(identical(other.chapterList, _this.chapterList) || other.chapterList == _this.chapterList)&&(identical(other.chapterName, _this.chapterName) || other.chapterName == _this.chapterName)&&(identical(other.chapterUrl, _this.chapterUrl) || other.chapterUrl == _this.chapterUrl)&&(identical(other.isVip, _this.isVip) || other.isVip == _this.isVip)&&(identical(other.nextTocUrl, _this.nextTocUrl) || other.nextTocUrl == _this.nextTocUrl)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as TocRule;
-  return Object.hash(runtimeType,_this.chapterList,_this.chapterName,_this.chapterUrl,const DeepCollectionEquality().hash(_this.extra));
+  return Object.hash(runtimeType,_this.chapterList,_this.chapterName,_this.chapterUrl,_this.isVip,_this.nextTocUrl,const DeepCollectionEquality().hash(_this.extra));
 }
 
 @override
 String toString() {
   final _this = this as TocRule;
-  return 'TocRule(chapterList: ${_this.chapterList}, chapterName: ${_this.chapterName}, chapterUrl: ${_this.chapterUrl}, extra: ${_this.extra})';
+  return 'TocRule(chapterList: ${_this.chapterList}, chapterName: ${_this.chapterName}, chapterUrl: ${_this.chapterUrl}, isVip: ${_this.isVip}, nextTocUrl: ${_this.nextTocUrl}, extra: ${_this.extra})';
 }
 
 
@@ -1055,7 +1055,7 @@ abstract mixin class $TocRuleCopyWith<$Res>  {
   factory $TocRuleCopyWith(TocRule value, $Res Function(TocRule) _then) = _$TocRuleCopyWithImpl;
 @useResult
 $Res call({
- String? chapterList, String? chapterName, String? chapterUrl,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? chapterList, String? chapterName, String? chapterUrl, String? isVip, String? nextTocUrl,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -1072,11 +1072,13 @@ class _$TocRuleCopyWithImpl<$Res>
 
 /// Create a copy of TocRule
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? chapterList = freezed,Object? chapterName = freezed,Object? chapterUrl = freezed,Object? extra = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? chapterList = freezed,Object? chapterName = freezed,Object? chapterUrl = freezed,Object? isVip = freezed,Object? nextTocUrl = freezed,Object? extra = null,}) {
   return _then(TocRule(
 chapterList: freezed == chapterList ? _self.chapterList : chapterList // ignore: cast_nullable_to_non_nullable
 as String?,chapterName: freezed == chapterName ? _self.chapterName : chapterName // ignore: cast_nullable_to_non_nullable
 as String?,chapterUrl: freezed == chapterUrl ? _self.chapterUrl : chapterUrl // ignore: cast_nullable_to_non_nullable
+as String?,isVip: freezed == isVip ? _self.isVip : isVip // ignore: cast_nullable_to_non_nullable
+as String?,nextTocUrl: freezed == nextTocUrl ? _self.nextTocUrl : nextTocUrl // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self.extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));
@@ -1163,10 +1165,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? chapterList,  String? chapterName,  String? chapterUrl, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? chapterList,  String? chapterName,  String? chapterUrl,  String? isVip,  String? nextTocUrl, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _TocRule() when $default != null:
-return $default(_that.chapterList,_that.chapterName,_that.chapterUrl,_that.extra);case _:
+return $default(_that.chapterList,_that.chapterName,_that.chapterUrl,_that.isVip,_that.nextTocUrl,_that.extra);case _:
   return orElse();
 
 }
@@ -1184,10 +1186,10 @@ return $default(_that.chapterList,_that.chapterName,_that.chapterUrl,_that.extra
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? chapterList,  String? chapterName,  String? chapterUrl, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? chapterList,  String? chapterName,  String? chapterUrl,  String? isVip,  String? nextTocUrl, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
 switch (_that) {
 case _TocRule():
-return $default(_that.chapterList,_that.chapterName,_that.chapterUrl,_that.extra);case _:
+return $default(_that.chapterList,_that.chapterName,_that.chapterUrl,_that.isVip,_that.nextTocUrl,_that.extra);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1204,10 +1206,10 @@ return $default(_that.chapterList,_that.chapterName,_that.chapterUrl,_that.extra
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? chapterList,  String? chapterName,  String? chapterUrl, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? chapterList,  String? chapterName,  String? chapterUrl,  String? isVip,  String? nextTocUrl, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
 switch (_that) {
 case _TocRule() when $default != null:
-return $default(_that.chapterList,_that.chapterName,_that.chapterUrl,_that.extra);case _:
+return $default(_that.chapterList,_that.chapterName,_that.chapterUrl,_that.isVip,_that.nextTocUrl,_that.extra);case _:
   return null;
 
 }
@@ -1219,12 +1221,14 @@ return $default(_that.chapterList,_that.chapterName,_that.chapterUrl,_that.extra
 @JsonSerializable()
 
 class _TocRule implements TocRule {
-  const _TocRule({this.chapterList, this.chapterName, this.chapterUrl, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
+  const _TocRule({this.chapterList, this.chapterName, this.chapterUrl, this.isVip, this.nextTocUrl, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
   factory _TocRule.fromJson(Map<String, dynamic> json) => _$TocRuleFromJson(json);
 
 @override final  String? chapterList;
 @override final  String? chapterName;
 @override final  String? chapterUrl;
+@override final  String? isVip;
+@override final  String? nextTocUrl;
  final  Map<String, Object?> _extra;
 @override@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra {
   if (_extra is EqualUnmodifiableMapView) return _extra;
@@ -1246,18 +1250,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _TocRule&&(identical(other.chapterList, chapterList) || other.chapterList == chapterList)&&(identical(other.chapterName, chapterName) || other.chapterName == chapterName)&&(identical(other.chapterUrl, chapterUrl) || other.chapterUrl == chapterUrl)&&const DeepCollectionEquality().equals(other.extra, _extra));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _TocRule&&(identical(other.chapterList, chapterList) || other.chapterList == chapterList)&&(identical(other.chapterName, chapterName) || other.chapterName == chapterName)&&(identical(other.chapterUrl, chapterUrl) || other.chapterUrl == chapterUrl)&&(identical(other.isVip, isVip) || other.isVip == isVip)&&(identical(other.nextTocUrl, nextTocUrl) || other.nextTocUrl == nextTocUrl)&&const DeepCollectionEquality().equals(other.extra, _extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,chapterList,chapterName,chapterUrl,const DeepCollectionEquality().hash(_extra));
+    return Object.hash(runtimeType,chapterList,chapterName,chapterUrl,isVip,nextTocUrl,const DeepCollectionEquality().hash(_extra));
 }
 
 @override
 String toString() {
-    return 'TocRule(chapterList: $chapterList, chapterName: $chapterName, chapterUrl: $chapterUrl, extra: $extra)';
+    return 'TocRule(chapterList: $chapterList, chapterName: $chapterName, chapterUrl: $chapterUrl, isVip: $isVip, nextTocUrl: $nextTocUrl, extra: $extra)';
 }
 
 
@@ -1268,7 +1272,7 @@ abstract mixin class _$TocRuleCopyWith<$Res> implements $TocRuleCopyWith<$Res> {
   factory _$TocRuleCopyWith(_TocRule value, $Res Function(_TocRule) _then) = __$TocRuleCopyWithImpl;
 @override @useResult
 $Res call({
- String? chapterList, String? chapterName, String? chapterUrl,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? chapterList, String? chapterName, String? chapterUrl, String? isVip, String? nextTocUrl,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -1285,11 +1289,13 @@ class __$TocRuleCopyWithImpl<$Res>
 
 /// Create a copy of TocRule
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? chapterList = freezed,Object? chapterName = freezed,Object? chapterUrl = freezed,Object? extra = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? chapterList = freezed,Object? chapterName = freezed,Object? chapterUrl = freezed,Object? isVip = freezed,Object? nextTocUrl = freezed,Object? extra = null,}) {
   return _then(_TocRule(
 chapterList: freezed == chapterList ? _self.chapterList : chapterList // ignore: cast_nullable_to_non_nullable
 as String?,chapterName: freezed == chapterName ? _self.chapterName : chapterName // ignore: cast_nullable_to_non_nullable
 as String?,chapterUrl: freezed == chapterUrl ? _self.chapterUrl : chapterUrl // ignore: cast_nullable_to_non_nullable
+as String?,isVip: freezed == isVip ? _self.isVip : isVip // ignore: cast_nullable_to_non_nullable
+as String?,nextTocUrl: freezed == nextTocUrl ? _self.nextTocUrl : nextTocUrl // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self._extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));
@@ -1302,7 +1308,7 @@ as Map<String, Object?>,
 /// @nodoc
 mixin _$ContentRule {
 
- String? get content;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
+ String? get content; String? get nextContentUrl; String? get replaceRegex;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
 /// Create a copy of ContentRule
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1316,20 +1322,20 @@ $ContentRuleCopyWith<ContentRule> get copyWith => _$ContentRuleCopyWithImpl<Cont
 @override
 bool operator ==(Object other) {
   final _this = this as ContentRule;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ContentRule&&(identical(other.content, _this.content) || other.content == _this.content)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ContentRule&&(identical(other.content, _this.content) || other.content == _this.content)&&(identical(other.nextContentUrl, _this.nextContentUrl) || other.nextContentUrl == _this.nextContentUrl)&&(identical(other.replaceRegex, _this.replaceRegex) || other.replaceRegex == _this.replaceRegex)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as ContentRule;
-  return Object.hash(runtimeType,_this.content,const DeepCollectionEquality().hash(_this.extra));
+  return Object.hash(runtimeType,_this.content,_this.nextContentUrl,_this.replaceRegex,const DeepCollectionEquality().hash(_this.extra));
 }
 
 @override
 String toString() {
   final _this = this as ContentRule;
-  return 'ContentRule(content: ${_this.content}, extra: ${_this.extra})';
+  return 'ContentRule(content: ${_this.content}, nextContentUrl: ${_this.nextContentUrl}, replaceRegex: ${_this.replaceRegex}, extra: ${_this.extra})';
 }
 
 
@@ -1340,7 +1346,7 @@ abstract mixin class $ContentRuleCopyWith<$Res>  {
   factory $ContentRuleCopyWith(ContentRule value, $Res Function(ContentRule) _then) = _$ContentRuleCopyWithImpl;
 @useResult
 $Res call({
- String? content,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? content, String? nextContentUrl, String? replaceRegex,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -1357,9 +1363,11 @@ class _$ContentRuleCopyWithImpl<$Res>
 
 /// Create a copy of ContentRule
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? content = freezed,Object? extra = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? content = freezed,Object? nextContentUrl = freezed,Object? replaceRegex = freezed,Object? extra = null,}) {
   return _then(ContentRule(
 content: freezed == content ? _self.content : content // ignore: cast_nullable_to_non_nullable
+as String?,nextContentUrl: freezed == nextContentUrl ? _self.nextContentUrl : nextContentUrl // ignore: cast_nullable_to_non_nullable
+as String?,replaceRegex: freezed == replaceRegex ? _self.replaceRegex : replaceRegex // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self.extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));
@@ -1446,10 +1454,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? content, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? content,  String? nextContentUrl,  String? replaceRegex, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ContentRule() when $default != null:
-return $default(_that.content,_that.extra);case _:
+return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.extra);case _:
   return orElse();
 
 }
@@ -1467,10 +1475,10 @@ return $default(_that.content,_that.extra);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? content, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? content,  String? nextContentUrl,  String? replaceRegex, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
 switch (_that) {
 case _ContentRule():
-return $default(_that.content,_that.extra);case _:
+return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.extra);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1487,10 +1495,10 @@ return $default(_that.content,_that.extra);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? content, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? content,  String? nextContentUrl,  String? replaceRegex, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
 switch (_that) {
 case _ContentRule() when $default != null:
-return $default(_that.content,_that.extra);case _:
+return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.extra);case _:
   return null;
 
 }
@@ -1502,10 +1510,12 @@ return $default(_that.content,_that.extra);case _:
 @JsonSerializable()
 
 class _ContentRule implements ContentRule {
-  const _ContentRule({this.content, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
+  const _ContentRule({this.content, this.nextContentUrl, this.replaceRegex, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
   factory _ContentRule.fromJson(Map<String, dynamic> json) => _$ContentRuleFromJson(json);
 
 @override final  String? content;
+@override final  String? nextContentUrl;
+@override final  String? replaceRegex;
  final  Map<String, Object?> _extra;
 @override@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra {
   if (_extra is EqualUnmodifiableMapView) return _extra;
@@ -1527,18 +1537,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ContentRule&&(identical(other.content, content) || other.content == content)&&const DeepCollectionEquality().equals(other.extra, _extra));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ContentRule&&(identical(other.content, content) || other.content == content)&&(identical(other.nextContentUrl, nextContentUrl) || other.nextContentUrl == nextContentUrl)&&(identical(other.replaceRegex, replaceRegex) || other.replaceRegex == replaceRegex)&&const DeepCollectionEquality().equals(other.extra, _extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,content,const DeepCollectionEquality().hash(_extra));
+    return Object.hash(runtimeType,content,nextContentUrl,replaceRegex,const DeepCollectionEquality().hash(_extra));
 }
 
 @override
 String toString() {
-    return 'ContentRule(content: $content, extra: $extra)';
+    return 'ContentRule(content: $content, nextContentUrl: $nextContentUrl, replaceRegex: $replaceRegex, extra: $extra)';
 }
 
 
@@ -1549,7 +1559,7 @@ abstract mixin class _$ContentRuleCopyWith<$Res> implements $ContentRuleCopyWith
   factory _$ContentRuleCopyWith(_ContentRule value, $Res Function(_ContentRule) _then) = __$ContentRuleCopyWithImpl;
 @override @useResult
 $Res call({
- String? content,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? content, String? nextContentUrl, String? replaceRegex,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -1566,9 +1576,11 @@ class __$ContentRuleCopyWithImpl<$Res>
 
 /// Create a copy of ContentRule
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? content = freezed,Object? extra = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? content = freezed,Object? nextContentUrl = freezed,Object? replaceRegex = freezed,Object? extra = null,}) {
   return _then(_ContentRule(
 content: freezed == content ? _self.content : content // ignore: cast_nullable_to_non_nullable
+as String?,nextContentUrl: freezed == nextContentUrl ? _self.nextContentUrl : nextContentUrl // ignore: cast_nullable_to_non_nullable
+as String?,replaceRegex: freezed == replaceRegex ? _self.replaceRegex : replaceRegex // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self._extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));
