@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review of the 3.8 slice: three boundaries registered, no code findings (2026-10-12)
+
+Architect review of `15339cf`, gates re-run in a detached worktree: format clean, `flutter analyze`
+no issues, **405** tests, coverage exit 0 with `core` 385/385 and `domain` 1047/1047. The limiter
+and its wiring passed review (the slot hand-over leaves the count unchanged, so the gap between
+releasing and re-taking cannot admit an extra request; an action that throws still releases; the
+retry loop spends a second slot only after the first came back). Three boundaries are registered
+here instead of being rediscovered late:
+
+- **The JS bridge will share the per-source budget (3.4).** A JS `http.*` call spends the same
+  source budget as the page fetch, so the implementation must not start a same-source request from
+  inside a call that already holds a slot — with a budget of 3 that would exhaust itself and queue
+  forever. `book-source.md` §8 now states it.
+- **One host can carry two budgets**: calls with a source context bucket by `sourceId`, calls
+  without one bucket by URL host, and the two do not interact. §8 now says so.
+- **Two Phase 5 items landed in `PLAN.md` §3.7**: the budget must be validated `> 0` once it becomes
+  a user setting (the constructors only `assert`, which release builds strip, and a zero budget
+  queues every request forever), and the autoDispose `httpClientProvider` makes the budget effective
+  within one operation — the batch download must keep one budget for the whole batch.
+
+No code change was needed for 3.8 itself. The integration also brought the 3.5-era review fixes
+(B2/B3 and the R1 registry row) back on top of this branch, and refreshed
+`docs/dev/test-environment.md` §7 to the 405 / 385 / 1047 run.
+
 ### Phase 3.8: one concurrency budget per book source, spent in the request layer (2026-10-12)
 
 `book-source.md` §8's per-source concurrency cap is now enforced instead of being a value
