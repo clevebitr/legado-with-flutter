@@ -1,0 +1,157 @@
+import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/quickjs_worker.dart';
+import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
+import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+import 'package:logger/logger.dart';
+
+/// 设备级验证：真实 QuickJS 引擎 + 真实 worker isolate 上跑通 `JsBridge` 的 3.3 契约。
+///
+/// `lib/core/js/quickjs_worker.dart` 依赖 `flutter_qjs_next` 的原生库，`flutter test`
+/// 的宿主 VM 里根本加载不了它（只能由设备构建提供），因此按 ADR-0019 第二类登记在
+/// `tool/coverage_allowlist.txt` 中豁免覆盖率。**本文件是它唯一的自动化验证入口**，
+/// 也是 ADR-0029 §后果 要求的集成探针（`PLAN.md` §6 陷阱 #1：「构建成功」对 JS 路径
+/// 毫无证明力）。运行方式见 `docs/dev/test-environment.md` §4。
+///
+/// 与 `tool/spike/` 的分工：那里验证**引擎架构可行性**（9 项探针），这里验证**产品代码**
+/// ——`QuickJsWorkerBridge` 的排队、超时、`log.*` 转发与 `crypto.*` 绑定确实在真机上成立。
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  late _CollectingPrinter printer;
+  late QuickJsWorkerBridge bridge;
+
+  setUp(() {
+    printer = _CollectingPrinter();
+    bridge = QuickJsWorkerBridge(
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      launch: launchQuickJsWorker,
+    );
+  });
+
+  tearDown(() => bridge.dispose());
+
+  testWidgets('jsBridge_whenEvaluatedOnADevice_exposesTheSandboxVariables', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "String(result) + '|' + page + '|' + source.name + '|' "
+            "+ source.url + '|' + baseUrl",
+      ),
+    );
+
+    expect(
+      _value(result),
+      'raw|2|示例书源|https://example-novel.test|'
+      'https://example-novel.test/search',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheRuleReturnsAnArray_reportsAList', (
+    WidgetTester tester,
+  ) async {
+    // nextTocUrl 这类规则允许 JS 返回 URL 数组（book-source.md §4.1），所以结果必须
+    // 是 JSON 值而不是 `String(...)` 拼出来的字符串。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "['toc_2.html', 'toc_3.html']"),
+    );
+
+    expect(_value(result), <String>['toc_2.html', 'toc_3.html']);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheRuleUsesCrypto_answersSynchronously', (
+    WidgetTester tester,
+  ) async {
+    // `crypto.*` 是同步绑定（ADR-0029 §决策 3）：不需要 await 就能拿到值。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "crypto.md5('abc') + '|' + crypto.base64Encode('a')"),
+    );
+
+    expect(_value(result), '900150983cd24fb0d6963f7d28e17f72|YQ==');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheRuleLogs_forwardsItWithTheField', (
+    WidgetTester tester,
+  ) async {
+    await bridge.evaluate(
+      _job(script: "log.warn('hello from the rule'); 'done'"),
+    );
+
+    expect(printer.lines, contains('[js:searchRule.name] hello from the rule'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenAScriptRunsAway_timesOutAndKeepsTheWorkerUsable', (
+    WidgetTester tester,
+  ) async {
+    // 探针 07 口径搬到产品代码上：引擎中断 runaway 脚本，worker 不被杀，随后仍可用。
+    final ParseResult<Object?> runaway = await bridge.evaluate(
+      _job(script: 'while (true) {}'),
+    );
+
+    expect(switch (runaway) {
+      ParseFailure<Object?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        '$kind $rulePath',
+      ParseSuccess<Object?>() => 'unexpected success',
+    }, 'ParseFailureKind.parseFailed searchRule.name:js:timeout');
+
+    final ParseResult<Object?> after = await bridge.evaluate(
+      _job(script: "'still alive'"),
+    );
+
+    expect(_value(after), 'still alive');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheScriptThrows_reportsJsError', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "throw new Error('boom')"),
+    );
+
+    expect(switch (result) {
+      ParseFailure<Object?>(:final String rulePath) => rulePath,
+      ParseSuccess<Object?>() => 'unexpected success',
+    }, 'searchRule.name:js:error');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+}
+
+/// A job whose script decides the behaviour; the variables are the §6 bindings.
+JsJob _job({required String script}) => JsJob(
+  script: script,
+  rulePath: 'searchRule.name',
+  baseUrl: 'https://example-novel.test/search',
+  page: 2,
+  source: const JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+  result: 'raw',
+);
+
+/// The value of a successful evaluation, failing the test otherwise.
+Object? _value(ParseResult<Object?> result) => switch (result) {
+  ParseSuccess<Object?>(:final Object? data) => data,
+  ParseFailure<Object?>(:final ParseFailureKind kind, :final String rulePath) =>
+    fail('Expected a success but got $kind at $rulePath.'),
+};
+
+/// Collects the log lines the bridge writes, without a test-support dependency.
+///
+/// `integration_test/` does not import `test/support/`, so the printer is local: the
+/// probe must stay runnable on a device exactly as the app would log.
+final class _CollectingPrinter extends LogPrinter {
+  /// Lines written, in order.
+  final List<String> lines = <String>[];
+
+  @override
+  List<String> log(LogEvent event) {
+    lines.add('${event.message}');
+
+    return const <String>[];
+  }
+}

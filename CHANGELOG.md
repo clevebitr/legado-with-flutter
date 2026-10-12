@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 3.3: the `@js:` sandbox — bridge contract, resident worker, sync bindings (2026-10-12)
+
+The freeze preconditions are met (G2b, 3.5, 3.8), so the `JsBridge` contract is now in place: one
+asynchronous evaluation method with **no capacity parameters** (ADR-0030 §决策 2), a resident worker
+with one reused runtime, and the two sync bindings ADR-0029 §决策 3 assigns to this phase.
+
+- **New `core/js/`** (`architecture.md` §1): `JsBridge`, `JsJob` and `JsSourceInfo`. The job carries
+  exactly §6's variables (`baseUrl`, `result`, `page`, `source.name/url/group`) plus the field path
+  that failures and `log.*` need (C-SRC-8).
+- **`QuickJsWorkerBridge` owns the policy ADR-0030 §决策 1/3 fixes.** One worker, created lazily on
+  the first `@js:` rule and released with the provider scope; one reused runtime; **FIFO** queueing,
+  so a caller over capacity waits instead of failing (C-SRC-9 forbids “busy”); the budget is counted
+  from dispatch, not from queueing; and `Isolate.kill` is the fallback when the engine's own
+  interrupt did not fire — the next job then rebuilds the worker.
+- **`quickjs_worker.dart` is the native edge alone** (isolate, `getJavascriptRuntime(timeout:,
+  memoryLimit:)`, the JS prelude), which is why it is on the coverage allowlist under ADR-0019's
+  second category. The queue, the budgets and the rebuild policy live in
+  `quickjs_worker_bridge.dart` and are unit-tested against a fake worker transport, so the gate
+  keeps measuring them.
+- **The sync bindings are real:** `crypto.md5` / `sha1` / `base64Encode` / `base64Decode` (pure Dart
+  in `js_bindings.dart`, unit-tested with RFC vectors) and `log.debug/info/warn/error` (forwarded to
+  `core/logging` with the field attached, as §6 asks). Every `sendMessage` payload is a JSON object,
+  per `tool/spike/README.md` §4.
+- **JS failures mark the field**: `<field>:js:timeout` / `<field>:js:error`, now spelled out in §6.
+  A JS exception and an interrupted script both arrive as `isError` (probe 07), so the worker reports
+  its elapsed time and the bridge classifies: only a run that used up the budget is a timeout.
+- **The integration probe ADR-0029 §后果 requires exists**: `integration_test/js_bridge_test.dart`
+  covers 6 cases on a real engine and a real worker — sandbox variables, an array result (the
+  `nextTocUrl` shape), sync `crypto.*`, `log.*` forwarding, runaway → `js:timeout` **with the worker
+  still usable**, and a JS throw → `js:error`. Windows device run: all 3 device-level files pass,
+  exit 0.
+- 18 new cases (423 total). **Not in this phase, and registered instead of dropped:** the Promise
+  bindings `http.*` / `parse.*`, the `parse.*` page-scope boundary (`js:parse-scope`) and the ≤20
+  calls-per-rule quota — §6's note lists them and `PLAN.md` §3.7 carries the handoff to 3.4.
+- Docs: `architecture.md` §1, `book-source.md` §6 (what landed, the `rulePath` spelling, the `log.*`
+  C-SEC-4 note that a rule must not log page text), `tech-stack.md` §2 and `pubspec.yaml` (`crypto`
+  now also serves the sandbox), `test-environment.md` §4/§7, `PLAN.md` §3.1/§3.4/§3.7.
+- Gates: `dart format` clean, `flutter analyze` clean, `flutter test --coverage` 423 passed,
+  `check_coverage.dart` exit 0 with `core` 563/563 and `domain` 1048/1048; Windows device suite
+  3/3 files green.
+
 ### R1 closed: `isVip` now matches upstream's `isTrue()` predicate, with the lines (2026-10-12)
 
 The review left one debt: the **positive** side of `isVip` (`true` / `1` / `是` → VIP) had no upstream

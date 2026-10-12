@@ -424,6 +424,24 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 
 超时或异常 → `ParseFailure(parseFailed)`，`rulePath` 中标注 `js:timeout` 或 `js:error`。
 
+> **3.3 落地状态与两处边界（2026-10-12，随 `PLAN.md` 3.3 落地）：**
+>
+> - **本阶段落了什么：** 常驻 worker isolate + 单复用运行时的桥（`core/js/`）：引擎级 5 秒中断与
+>   32MB 堆上限由构造参数传入；同步绑定 `log.*`（转发到 `core/logging`，自动附字段路径）与
+>   `crypto.md5` / `sha1` / `base64Encode` / `base64Decode` 已可用。单 worker + FIFO 排队，
+>   超限**等待**而不报 busy（ADR-0030 §决策 1/3）；引擎中断失效时由硬预算 `Isolate.kill` 兜底，
+>   并在下一个 job 重建 worker。
+> - **`rulePath` 的标注形态：** 失败把标注**附在字段路径后**——`<字段路径>:js:timeout` /
+>   `:js:error`（例 `searchRule.name:js:timeout`），这样 C-SRC-8 的「可定位」与本表的「标注」
+>   两个要求同时成立。
+> - **未落的部分归 3.4：** Promise 形态的 `http.*` / `parse.*`（唯一实现分别是
+>   `core/network/HttpClient` 与规则引擎）、`parse.*` 的**页级 scope 边界**（命中报
+>   `js:parse-scope`，ADR-0029 §决策 5），以及「单条规则内 JS 调用次数 ≤ 20」——它数的是
+>   `parse.*` 的递推调用，因此与 `parse.*` 同批实现（ADR-0030 §决策 3 的「按 job 计数」）。
+> - **`log.*` 的 C-SEC-4 边界：** 转发的是**规则作者自己写的**文本，只经 `AppLogger` 的
+>   `redactMessage`（能掩 URL / 凭据，**认不出正文**）。因此规则不得把页面正文交给 `log.*`——
+>   这是书源作者的义务，宿主侧无法代为净化。
+
 ---
 
 ## 7. 失败语义

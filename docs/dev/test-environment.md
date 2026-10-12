@@ -71,6 +71,7 @@ flutter test integration_test/on_disk_database_test.dart -d emulator-5554
 |---|---|
 | `integration_test/app_boot_test.dart` | 设备级 smoke：真实引擎 + 真实平台通道下应用能启动并渲染落地页 |
 | `integration_test/on_disk_database_test.dart` | 设备级验证：文件型 Drift 数据库（原生 SQLite + 后台 isolate）建库、落盘、跨连接读回 |
+| `integration_test/js_bridge_test.dart` | 设备级验证：真实 QuickJS 引擎 + 真实 worker isolate 上的 `JsBridge`（标量 / 数组结果、同步 `crypto.*`、`log.*` 转发、runaway → `js:timeout` 后 worker 仍可用、JS 异常 → `js:error`） |
 | `tool/test/common.ps1` | 共享工具：路径解析、命令执行与失败传播、Android 设备/模拟器辅助（**不单独执行**） |
 | `tool/test/run_unit.ps1` | 主机侧测试 + 覆盖率门禁 |
 | `tool/test/run_windows.ps1` | Windows 设备级用例 |
@@ -83,6 +84,11 @@ flutter test integration_test/on_disk_database_test.dart -d emulator-5554
 （后台 isolate 不可用），因此它按 ADR-0019 第二类登记在 `tool/coverage_allowlist.txt` 中
 豁免覆盖率。`integration_test/on_disk_database_test.dart` 是它唯一的自动化验证入口，
 Windows 与 Android 两侧都已实测通过。
+
+**`js_bridge_test.dart` 同理：** `lib/core/js/quickjs_worker.dart` 需要
+`flutter_qjs_next` 的原生库，宿主 VM 加载不了，因此它也在 allowlist 里（第二类），
+而 `integration_test/js_bridge_test.dart` 是它唯一的自动化验证入口——ADR-0029 §后果 明确
+要求 3.3 落地时补上这个集成探针（`PLAN.md` §6 陷阱 #1：「构建成功」对 JS 路径毫无证明力）。
 
 **规范依据：** 设备级集成测试是独立的一层，其分层、位置与是否进 CI 由
 `docs/dev/testing.md` §3 与 C-TEST-4 定义（ADR-0017 §决策 5）；本文档只负责“怎么跑”。
@@ -138,14 +144,14 @@ Windows 与 Android 两侧都已实测通过。
 
 ---
 
-## 7. 实测证据（2026-10-11，主机侧于 2026-10-12 复跑）
+## 7. 实测证据（2026-10-11；主机侧与 Windows 设备级于 2026-10-12 复跑）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**405** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 385/385、`domain` 1048/1048，均 100%；阈值见 `docs/dev/testing.md` §2） |
-| Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`） |
-| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | 2 个用例文件全部通过；退出码 0 |
-| Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器自动启动 → 2 个用例文件全部通过 → 自动关闭；退出码 0 |
+| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**423** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 563/563、`domain` 1048/1048，均 100%；阈值见 `docs/dev/testing.md` §2） |
+| Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`），含 `flutter_qjs_next` 从 `cxx/` 源码编译的 QuickJS |
+| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` 6 项（含 runaway → `js:timeout` 后 worker 仍可用）、`on_disk_database` 1 项）；退出码 0 |
+| Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器自动启动 → 2 个用例文件全部通过 → 自动关闭；退出码 0（当时 `integration_test/` 只有 2 个文件；`js_bridge_test.dart` 的 Android 侧尚未复跑） |
 | 许可证扫描 | `dart run tool/scan_licenses.dart` | 156 个包全部为宽松许可，无风险项；退出码 0（`NOTICE.md` §5） |
 
 > `flutter doctor` 的网络项在本机报 `A cryptographic error ... checking https://pub.dev/`
