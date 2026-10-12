@@ -28,6 +28,22 @@ final class FakeHttpClient implements HttpClient {
   /// in the page service.
   final List<String?> requestedSourceIds = <String?>[];
 
+  /// The HTTP method of every request, in order (`GET` / `POST`).
+  ///
+  /// `http.post` of `docs/dev/book-source.md` §6 goes through the same seam, so a test
+  /// has to be able to tell which verb a rule really sent.
+  final List<String> requestedMethods = <String>[];
+
+  /// The request body of every request, in order (`null` for a GET).
+  final List<String?> requestedBodies = <String?>[];
+
+  /// Awaited after a request is recorded and before it answers, when set.
+  ///
+  /// The hook lets a test hold a request open and decide when it may answer — needed to
+  /// observe a `http.*` call whose job ends while the request is still in flight — without a
+  /// wall-clock wait (`docs/dev/testing.md` §8 forbids sleeping).
+  Future<void> Function()? onRequest;
+
   final Map<String, String> _bodies = <String, String>{};
   final Map<String, ParseFailureKind> _failures = <String, ParseFailureKind>{};
   final Map<String, Exception> _throws = <String, Exception>{};
@@ -52,11 +68,51 @@ final class FakeHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+  }) => _serve(
+    method: 'GET',
+    url: url,
+    rulePath: rulePath,
+    headers: headers,
+    sourceId: sourceId,
+  );
+
+  @override
+  Future<ParseResult<HttpResponse>> post(
+    String url, {
+    required String rulePath,
+    String? body,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+  }) => _serve(
+    method: 'POST',
+    url: url,
+    rulePath: rulePath,
+    body: body,
+    headers: headers,
+    sourceId: sourceId,
+  );
+
+  /// Records one request and answers from the registered bodies / failures.
+  Future<ParseResult<HttpResponse>> _serve({
+    required String method,
+    required String url,
+    required String rulePath,
+    String? body,
+    Map<String, String>? headers,
+    String? sourceId,
   }) async {
     requestedUrls.add(url);
     requestedRulePaths.add(rulePath);
     requestedHeaders.add(headers);
     requestedSourceIds.add(sourceId);
+    requestedMethods.add(method);
+    requestedBodies.add(body);
+
+    final Future<void> Function()? hook = onRequest;
+    if (hook != null) {
+      await hook();
+    }
 
     final Exception? thrown = _throws[url];
     if (thrown != null) {
@@ -68,8 +124,8 @@ final class FakeHttpClient implements HttpClient {
       return ParseFailure<HttpResponse>(kind: kind, rulePath: rulePath);
     }
 
-    final String? body = _bodies[url];
-    if (body == null) {
+    final String? served = _bodies[url];
+    if (served == null) {
       // 未登记的 URL 视为 404：测试必须显式声明它期望被请求的每一个地址。
       return ParseFailure<HttpResponse>(
         kind: ParseFailureKind.notFound,
@@ -81,7 +137,7 @@ final class FakeHttpClient implements HttpClient {
       HttpResponse(
         statusCode: 200,
         headers: const <String, List<String>>{},
-        body: body,
+        body: served,
       ),
     );
   }

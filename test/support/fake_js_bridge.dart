@@ -22,6 +22,15 @@ final class FakeJsBridge implements JsBridge {
   /// When set, every job fails with this failure instead of answering.
   ParseFailure<Never>? failure;
 
+  /// `parse.*` requests to run through the job's evaluator before the job answers.
+  ///
+  /// A real worker calls [JsJob.parseEvaluator] when the script awaits `parse.*`
+  /// (`book-source.md` §6); this double calls it once per request here, so an engine test can
+  /// exercise the nested evaluation — including its boundaries — without a native engine. The
+  /// **last** result decides the job's answer, which is how a `parse.*` failure becomes visible
+  /// to the caller that asked for the rule.
+  final List<JsParseRequest> parseRequests = <JsParseRequest>[];
+
   /// How many times [dispose] was called.
   int disposeCount = 0;
 
@@ -29,6 +38,9 @@ final class FakeJsBridge implements JsBridge {
   @override
   Future<ParseResult<Object?>> evaluate(JsJob job) async {
     jobs.add(job);
+    if (parseRequests.isNotEmpty) {
+      return _runParseRequests(job);
+    }
     final ParseFailure<Never>? failed = failure;
     if (failed != null) {
       return ParseFailure<Object?>(
@@ -40,6 +52,28 @@ final class FakeJsBridge implements JsBridge {
     return ParseSuccess<Object?>(
       results.isEmpty ? result : results.removeFirst(),
     );
+  }
+
+  /// Runs the queued `parse.*` requests against [job]'s evaluator.
+  Future<ParseResult<Object?>> _runParseRequests(JsJob job) async {
+    final JsParseEvaluator? evaluator = job.parseEvaluator;
+    if (evaluator == null) {
+      // 引擎确实没给 evaluator 时，worker 的边界就是这一条（§6 的 js:parse-scope）。
+      return ParseFailure<Object?>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: '${job.rulePath}:$jsParseScopeMarker',
+      );
+    }
+
+    ParseResult<Object?> parsed = const ParseSuccess<Object?>(null);
+    for (final JsParseRequest request in parseRequests) {
+      parsed = await evaluator(request);
+      if (parsed is ParseFailure<Object?>) {
+        break;
+      }
+    }
+
+    return parsed;
   }
 
   @override

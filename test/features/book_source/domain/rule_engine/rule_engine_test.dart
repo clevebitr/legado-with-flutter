@@ -2574,5 +2574,302 @@ void main() {
         expect(failure.rulePath, 'contentRule.replaceRegex:js:timeout');
       },
     );
+
+    test(
+      'extractFirst_givenABareJsRuleOnAnElementScope_passesTheOuterHtml',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+        final Element element = _document(_listHtml)
+            .querySelectorAll('li')
+            .first;
+
+        await _first(
+          _engine(null, bridge).extractFirst(
+            '@js:result',
+            _scope(element),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        // 沙箱里没有 DOM 句柄（ADR-0029 §决策 5），所以逐项字段的 `@js:` 拿到的是该项的
+        // outerHtml——否则它只能看到一个空串，整个字段就不可能用 JS 写。
+        expect(bridge.jobs.single.result, startsWith('<li class="result">'));
+        expect(bridge.jobs.single.result, contains('One'));
+      },
+    );
+
+    test('extractAll_givenABareJsRule_passesThePageBodyAsAString', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = <Object?>['toc_2.html'];
+
+      await _values(
+        _engine(null, bridge).extractAll(
+          '@js:result.match(/a/)',
+          _pageWithContext(_countHtml),
+          rulePath: 'tocRule.nextTocUrl',
+        ),
+      );
+
+      // 上游 `getStringList` 在 JS 独立成规则时也把整页当作 result（而不是只有一个元素的
+      // 列表）：`nextTocUrl` 的脚本要对页面文本做 `match` / `split`。
+      expect(bridge.jobs.single.result, _countHtml);
+    });
+
+    test('extractFirst_givenAParseCall_evaluatesTheRuleOnThePage', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..parseRequests.add(
+          const JsParseRequest(rule: 'class.count@text', wantsList: false),
+        );
+
+      expect(
+        await _first(
+          _engine(null, bridge).extractFirst(
+            "@js:parse.getString('class.count@text', result)",
+            _pageWithContext(_countHtml),
+            rulePath: 'contentRule.content',
+          ),
+        ),
+        '共 123 字',
+      );
+      expect(bridge.jobs.single.parseEvaluator, isNotNull);
+    });
+
+    test('extractAll_givenAParseElementsCall_answersTheMatches', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..parseRequests.add(
+          const JsParseRequest(
+            rule: 'class.result-list@tag.li',
+            wantsList: true,
+          ),
+        );
+
+      final List<String> values = await _values(
+        _engine(null, bridge).extractAll(
+          "@js:parse.getElements('class.result-list@tag.li', result)",
+          _pageWithContext(_listHtml),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      // `parse.getElements` 把每个匹配交给沙箱：DOM 匹配是它的 outerHtml，JSON 匹配是值本身。
+      expect(values, hasLength(3));
+      expect(values.first, startsWith('<li class="result">'));
+    });
+
+    test(
+      'extractFirst_givenAParseCallOnAnElementScope_failsWithTheScopeMarker',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(rule: 'tag.a@href', wantsList: false),
+          );
+        final Element element = _document(_listHtml)
+            .querySelectorAll('li')
+            .first;
+
+        final ParseFailure<Never> failure = await _failure(
+          _engine(null, bridge).extractFirst(
+            "@js:parse.getString('tag.a@href', result)",
+            _scope(element),
+            rulePath: 'tocRule.chapterUrl',
+          ),
+        );
+
+        // ADR-0029 §决策 5：只承诺页级 scope，元素级命中必须显式失败并带 rulePath。
+        expect(failure.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'tocRule.chapterUrl:js:parse-scope');
+      },
+    );
+
+    test(
+      'extractFirst_givenAParseCallWithAnotherDoc_failsWithTheScopeMarker',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(
+              rule: 'class.count@text',
+              wantsList: false,
+              doc: '<p>另一页</p>',
+            ),
+          );
+
+        final ParseFailure<Never> failure = await _failure(
+          _engine(null, bridge).extractFirst(
+            "@js:parse.getString('class.count@text', result)",
+            _pageWithContext(_countHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // `doc` 只认本 job 的页 body：脚本自己拼出来的片段没有 scope 可读。
+        expect(failure.rulePath, 'contentRule.content:js:parse-scope');
+      },
+    );
+
+    test(
+      'extractFirst_givenANestedJsRuleInParse_failsWithTheRecursionMarker',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(
+              rule: 'class.count@text@js:result',
+              wantsList: false,
+            ),
+          );
+
+        final ParseFailure<Never> failure = await _failure(
+          _engine(null, bridge).extractFirst(
+            "@js:parse.getString('class.count@text@js:result', result)",
+            _pageWithContext(_countHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // 单 worker 正在跑的就是这个 job（ADR-0030 §决策 1/3），所以嵌套的 evaluate 会排在自己
+        // 的队后面；必须显式拒绝而不是静静死锁。
+        expect(failure.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'contentRule.content:js:parse-recursion');
+      },
+    );
+
+    test(
+      'extractAll_givenANestedJsRuleInParse_failsWithTheListBoundary',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(
+              rule: 'class.count@js:result',
+              wantsList: true,
+            ),
+          );
+
+        final ParseFailure<Never> failure = await _failure(
+          _engine(null, bridge).extractAll(
+            "@js:parse.getElements('class.count@js:result', result)",
+            _pageWithContext(_countHtml),
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+
+        // 元素形状由列表规则的柜口拒绝：矩阵 #14 还没有「JS 返回一列元素」的契约，
+        // 所以它的名字是 `unsupported:@js:list`（与顶层列表规则上的 `@js:` 同口径）。
+        expect(failure.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'unsupported:@js:list');
+      },
+    );
+
+    test('extractFirst_givenAParseRuleThatIsRejected_propagatesIt', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..parseRequests.add(
+          const JsParseRequest(rule: '@xpath://div', wantsList: false),
+        );
+
+      final ParseFailure<Never> failure = await _failure(
+        _engine(null, bridge).extractFirst(
+          "@js:parse.getString('@xpath://div', result)",
+          _pageWithContext(_countHtml),
+          rulePath: 'contentRule.content',
+        ),
+      );
+
+      // 嵌套规则的失败就是该 job 的失败（C-SRC-4），并且按 §7 的写法定位到语法。
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@xpath:');
+    });
+
+    test('extractFirst_givenASourceWithHeaders_passesThemIntoTheJob', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+      final RuleScope scope = RuleScope.dom(
+        parser.parse(_countHtml),
+        body: _countHtml,
+        jsContext: const JsPageContext(
+          baseUrl: 'https://example-novel.test/book/1/',
+          headers: <String, String>{'Referer': 'https://book.test/'},
+        ),
+      );
+
+      await _first(
+        _engine(
+          null,
+          bridge,
+        ).extractFirst('@js:result', scope, rulePath: 'searchRule.name'),
+      );
+
+      // 书源自带的 header 是规则里 `http.*` 的默认值（C-NET-4），但不得变成 JS 可见的绑定。
+      expect(bridge.jobs.single.sourceHeaders, <String, String>{
+        'Referer': 'https://book.test/',
+      });
+      expect(bridge.jobs.single.toJson().containsKey('sourceHeaders'), isFalse);
+      expect(
+        bridge.jobs.single.toJson().containsKey('parseEvaluator'),
+        isFalse,
+      );
+    });
+
+    test(
+      'extractAll_givenAParseElementsRuleThatIsRejected_propagatesIt',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(rule: '@xpath://div', wantsList: true),
+          );
+
+        final ParseFailure<Never> failure = await _failure(
+          _engine(null, bridge).extractAll(
+            "@js:parse.getElements('@xpath://div', result)",
+            _pageWithContext(_countHtml),
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+
+        // 两种形状（getString / getElements）的失败都要原样上抛，不得被吞成空值。
+        expect(failure.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'unsupported:@xpath:');
+      },
+    );
+
+    test(
+      'extractFirst_givenAParseCallOnAJsonItem_failsWithTheScopeMarker',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(rule: 'name', wantsList: false),
+          );
+
+        final ParseFailure<Never> failure = await _failure(
+          _engine(null, bridge).extractFirst(
+            "@js:parse.getString('name', result)",
+            RuleScope.json(<String, Object?>{'name': 'One'}),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        // JSON 条目也不是页 scope：拿不到规则要读的那一份文档，只能显式失败。
+        expect(failure.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'searchRule.name:js:parse-scope');
+      },
+    );
+
+    test(
+      'extractAll_givenAParseElementsCallOnAJsonPage_answersTheValues',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(rule: r'$.data.list[*]', wantsList: true),
+          );
+
+        final List<String> values = await _values(
+          _engine(null, bridge).extractAll(
+            r"@js:parse.getElements('$.data.list[*]', result)",
+            _pageWithContext(_jsonBody),
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+
+        // JSON 页上的 `parse.getElements` 把每个匹配的 JSON 值本身交给脚本（无 DOM 句柄）。
+        expect(values, hasLength(2));
+        expect(values.first, contains('One'));
+      },
+    );
   });
 }

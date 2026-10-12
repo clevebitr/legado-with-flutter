@@ -510,5 +510,80 @@ void main() {
       ]);
       expect(fixture.adapter.requests, hasLength(3));
     });
+
+    test('post_whenServerReturns200_sendsTheBodyAndTheMethod', () async {
+      final _Fixture fixture = _buildClient();
+      fixture.adapter.enqueueResponse(
+        bytes: utf8.encode('{"ok":true}'),
+        headers: <String, List<String>>{
+          'content-type': <String>['application/json'],
+        },
+      );
+
+      final HttpResponse response = _expectSuccess(
+        await fixture.client.post(
+          'https://example.com/api',
+          rulePath: 'searchUrl',
+          body: 'q=1',
+          headers: <String, String>{'content-type': 'text/plain'},
+        ),
+      );
+
+      expect(response.body, '{"ok":true}');
+      expect(fixture.adapter.requests.single.method, 'POST');
+      expect(fixture.adapter.requests.single.data, 'q=1');
+      expect(
+        fixture.adapter.requests.single.headers['content-type'],
+        'text/plain',
+      );
+    });
+
+    test('post_whenTheBodyIsAbsent_sendsAnEmptyPayload', () async {
+      // `http.post` 的 options 里没有 body 时不能凭空造一个：POST 与 GET 共用同一条
+      // 决策路径，唯一差别就是 method 与 data。
+      final _Fixture fixture = _buildClient();
+      fixture.adapter.enqueueResponse(bytes: utf8.encode('ok'));
+
+      expect(
+        _expectSuccess(
+          await fixture.client.post(
+            'https://example.com/api',
+            rulePath: 'searchUrl',
+          ),
+        ).body,
+        'ok',
+      );
+      expect(fixture.adapter.requests.single.data, isNull);
+    });
+
+    test('post_sharesTheGetRetryAndRejectionPolicy', () async {
+      final _Fixture fixture = _buildClient(
+        policy: const HttpPolicy(maxRetries: 0),
+      );
+      fixture.adapter.enqueueResponse(statusCode: 403);
+
+      expect(
+        _expectFailure(
+          await fixture.client.post(
+            'https://example.com/api',
+            rulePath: 'searchUrl',
+          ),
+        ),
+        ParseFailureKind.networkForbidden,
+      );
+
+      // 明文 HTTP 与畸形 URL 的拒绝也走同一条 `_request` 守卫。
+      final _Fixture plain = _buildClient();
+      expect(
+        _expectFailure(
+          await plain.client.post(
+            'http://example.com/a',
+            rulePath: 'searchUrl',
+          ),
+        ),
+        ParseFailureKind.networkFailed,
+      );
+      expect(plain.adapter.requests, isEmpty);
+    });
   });
 }

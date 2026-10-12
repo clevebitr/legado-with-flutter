@@ -427,6 +427,7 @@ final class RuleEngine {
     RuleScope scope, {
     required String rulePath,
     required bool single,
+    bool allowJs = true,
   }) async {
     if (rule.trim().isEmpty) {
       return const ParseSuccess<List<String>>(<String>[]);
@@ -464,16 +465,30 @@ final class RuleEngine {
     }
 
     final String? script = parsed.jsScript;
+    if (script != null && !allowJs) {
+      // 嵌套求值（`parse.*` 的递推）不能碰沙箱：单 worker 正在跑的就是发起它的那个 job
+      // （ADR-0030 §决策 1/3），嵌套的 evaluate 只会排在自己的队后面。详见 [_parseEvaluatorFor]。
+      return _fail<List<String>>(
+        _RuleRejection(
+          kind: ParseFailureKind.unsupportedRule,
+          rulePath: '$rulePath:$jsParseRecursionMarker',
+        ),
+        field: rulePath,
+      );
+    }
     if (script == null) {
       return ParseSuccess<List<String>>(_finish(merged, parsed));
     }
 
     final ParseResult<List<String>> evaluated = await _runJs(
       script,
-      merged,
+      // 独立 `@js:` 的 `result` 是整页内容（§6）；有选择器时才是上游 `getString` /
+      // `getStringList` 的形态：单值字段给字符串，多值字段给列表（§4.1 的 URL 数组靠它）。
+      parsed.isBareJs
+          ? _contentOf(scope)
+          : (single ? (merged.isEmpty ? null : merged.first) : merged),
       scope,
       field: rulePath,
-      single: single,
     );
 
     return switch (evaluated) {
@@ -483,21 +498,22 @@ final class RuleEngine {
     };
   }
 
-  /// Runs one terminal `@js:` script on the values the selectors produced (matrix #14).
+  /// Runs one terminal `@js:` script on [result] (matrix #14).
   ///
-  /// The sandbox receives them as `result`, plus the page context the scope carries
-  /// ([JsPageContext]). What it returns becomes the rule's value: a String is one value, a
-  /// List is many — which is how `nextTocUrl` gets an array, and `null` yields no value
-  /// (matrix #8's “no value” for an empty extract).
+  /// The sandbox receives it as `result`, plus the page context the scope carries
+  /// ([JsPageContext]) and the `parse.*` evaluator for that page ([_parseEvaluatorFor]). What
+  /// it returns becomes the rule's value: a String is one value, a List is many — which is how
+  /// `nextTocUrl` gets an array, and `null` yields no value (matrix #8's “no value” for an
+  /// empty extract).
   ///
   /// A timeout or a JS exception comes back as [ParseFailureKind.parseFailed] with the
-  /// bridge's `rulePath` marker (§6); nothing is swallowed (C-SRC-4).
+  /// bridge's `rulePath` marker (§6); a `parse.*` boundary comes back with the boundary's own
+  /// marker. Nothing is swallowed (C-SRC-4).
   Future<ParseResult<List<String>>> _runJs(
     String script,
-    List<String> values,
+    Object? result,
     RuleScope scope, {
     required String field,
-    required bool single,
   }) async {
     final JsPageContext context = _jsContextOf(scope);
     final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
@@ -507,7 +523,9 @@ final class RuleEngine {
         baseUrl: context.baseUrl,
         page: context.page,
         source: context.source,
-        result: single ? (values.isEmpty ? null : values.first) : values,
+        result: result,
+        sourceHeaders: context.headers,
+        parseEvaluator: _parseEvaluatorFor(scope, field: field),
       ),
     );
 
@@ -552,9 +570,88 @@ final class RuleEngine {
   };
 
   /// The page content a bare `@js:` rule receives as `result` (`book-source.md` §6).
+  ///
+  /// A page scope answers with its response body. An **element** scope answers with the
+  /// element's `outerHtml`, because the sandbox has no DOM to hand over (ADR-0029 §决策 5) and
+  /// a rule on a per-item field (`searchRule.name`) still has to see the item it belongs to.
+  /// A JSON scope answers with its JSON text.
   String _contentOf(RuleScope scope) => switch (scope) {
-    DomScope(:final String? body) => body ?? '',
+    DomScope(:final String? body, :final Node node) =>
+      body ?? (node is Element ? node.outerHtml : (node.text ?? '')),
     JsonScope(:final Object? value) => value == null ? '' : jsonEncode(value),
+  };
+
+  /// Builds the `parse.*` evaluator a `@js:` job carries (`book-source.md` §6).
+  ///
+  /// The nested rule is evaluated **here**, on the isolate that owns the engine, so the worker
+  /// never has to rebuild a scope (ADR-0029 §决策 5). Two boundaries are refused by name instead
+  /// of being answered with an empty value (C-SRC-4):
+  ///
+  /// * anything but the page scope (`js:parse-scope`) — an element scope, a JSON item, or a
+  ///   `doc` that is not exactly this page's body has nothing a rule could read;
+  /// * a nested rule that itself needs `@js:` — the one worker is busy running the job that asked
+  ///   (ADR-0030 §决策 1/3), so a nested evaluation could only wait on its own queue. The value
+  ///   shape (`parse.getString`) reports it as `js:parse-recursion`; the element shape
+  ///   (`parse.getElements`) reports `unsupported:@js:list`, because list rules do not accept
+  ///   `@js:` at all (matrix #14's list boundary).
+  ///
+  /// `parse.getString` answers with the first value, or `''` when the nested rule matched
+  /// nothing — upstream's `getString` shape, which rules do string work on. `parse.getElements`
+  /// answers with every match: an element becomes its `outerHtml` and a JSON match its value,
+  /// since the sandbox has no DOM handles.
+  JsParseEvaluator _parseEvaluatorFor(
+    RuleScope scope, {
+    required String field,
+  }) => (JsParseRequest request) async {
+    final String? page = _pageBodyOf(scope);
+    if (page == null || (request.doc != null && request.doc != page)) {
+      return failureAt<Object?>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: '$field:$jsParseScopeMarker',
+      );
+    }
+
+    if (request.wantsList) {
+      return switch (await selectAll(request.rule, scope, rulePath: field)) {
+        ParseFailure<List<RuleScope>>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ) =>
+          failureAt<Object?>(kind: kind, rulePath: rulePath),
+        ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) =>
+          ParseSuccess<Object?>(<Object?>[
+            for (final RuleScope match in data) _jsDocOf(match),
+          ]),
+      };
+    }
+
+    return switch (await _evaluate(
+      request.rule,
+      scope,
+      rulePath: field,
+      single: true,
+      allowJs: false,
+    )) {
+      ParseFailure<List<String>>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        failureAt<Object?>(kind: kind, rulePath: rulePath),
+      ParseSuccess<List<String>>(:final List<String> data) =>
+        ParseSuccess<Object?>(data.isEmpty ? '' : data.first),
+    };
+  };
+
+  /// The response body [scope] carries, or `null` when it is not a page scope.
+  String? _pageBodyOf(RuleScope scope) => switch (scope) {
+    DomScope(:final String? body) => body,
+    JsonScope() => null,
+  };
+
+  /// The value one `parse.getElements` match becomes in the sandbox (§6).
+  Object? _jsDocOf(RuleScope match) => switch (match) {
+    DomScope(:final Node node) => node is Element ? node.outerHtml : node.text,
+    JsonScope(:final Object? value) => value,
   };
 
   /// Applies a **standalone** `##regex##replacement` rule to [text] (matrix #9).

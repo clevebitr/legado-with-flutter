@@ -38,6 +38,25 @@ abstract interface class HttpClient {
     String? keyword,
     String? sourceId,
   });
+
+  /// Sends a POST request to [url], carrying [body] as the request payload.
+  ///
+  /// The contract is [get]'s: the same [rulePath] / [headers] / [keyword] / [sourceId]
+  /// meanings, the same retry, timeout and decoding policy, and the same promise to
+  /// answer with a [ParseResult] instead of throwing (C-ERR-1).
+  ///
+  /// [body] is sent as it is, so the `Content-Type` a site expects has to come from
+  /// [headers] — the client does not guess one. It exists because the JS whitelist of
+  /// `docs/dev/book-source.md` §6 binds `http.post`, and the request layer must stay the
+  /// single door to the network (C-NET-1).
+  Future<ParseResult<HttpResponse>> post(
+    String url, {
+    required String rulePath,
+    String? body,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+  });
 }
 
 /// [HttpClient] backed by `dio` (C-NET-1).
@@ -89,6 +108,45 @@ final class DioHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+  }) => _request(
+    method: 'GET',
+    url: url,
+    rulePath: rulePath,
+    headers: headers,
+    keyword: keyword,
+    sourceId: sourceId,
+  );
+
+  @override
+  Future<ParseResult<HttpResponse>> post(
+    String url, {
+    required String rulePath,
+    String? body,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+  }) => _request(
+    method: 'POST',
+    url: url,
+    body: body,
+    rulePath: rulePath,
+    headers: headers,
+    keyword: keyword,
+    sourceId: sourceId,
+  );
+
+  /// Sends one request of [method] with the shared policy, budget and retry loop.
+  ///
+  /// Both verbs go through here so a later policy change (a new retryable kind, a
+  /// stricter URL check) cannot land on one of them only.
+  Future<ParseResult<HttpResponse>> _request({
+    required String method,
+    required String url,
+    required String rulePath,
+    String? body,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
   }) async {
     final Uri? uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
@@ -125,6 +183,8 @@ final class DioHttpClient implements HttpClient {
         limitKey,
         () => _send(
           url,
+          method: method,
+          body: body,
           rulePath: rulePath,
           headers: headers,
           keyword: keyword,
@@ -152,19 +212,22 @@ final class DioHttpClient implements HttpClient {
   /// Performs one request and maps every outcome onto a [ParseResult].
   Future<ParseResult<HttpResponse>> _send(
     String url, {
+    required String method,
     required String rulePath,
     required Map<String, String>? headers,
     required String? keyword,
     required String? sourceId,
+    String? body,
   }) async {
     final Response<List<int>> response;
     try {
-      response = await _dio.get<List<int>>(
+      response = await _dio.request<List<int>>(
         url,
-        options: Options(headers: headers),
+        data: body,
+        options: Options(method: method, headers: headers),
       );
     } on DioException catch (error, stackTrace) {
-      // 只有 dio 自己的异常到这里：URL 已在 get() 里校验，解码在 _decode 里单独处理。
+      // 只有 dio 自己的异常到这里：URL 已在 [_request] 里校验，解码在 _decode 里单独处理。
       _logger.warning(
         'Request failed for rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
         describeError(error),

@@ -14,6 +14,7 @@ final class JsPageContext {
     required this.baseUrl,
     this.page = 1,
     JsSourceInfo? source,
+    this.headers,
   }) : source = source ?? const JsSourceInfo(name: '', url: '');
 
   /// The URL the page was fetched from (the `baseUrl` binding).
@@ -24,6 +25,12 @@ final class JsPageContext {
 
   /// The sandbox view of the book source (the `source` binding).
   final JsSourceInfo source;
+
+  /// The book source's own `header` field, when the fetch used one.
+  ///
+  /// It is not a binding: it is the default for the `http.*` calls a rule makes on this
+  /// page, because upstream builds those requests from the source too (C-NET-4).
+  final Map<String, String>? headers;
 }
 
 /// The value a rule is evaluated against (`docs/dev/book-source.md` §3.2).

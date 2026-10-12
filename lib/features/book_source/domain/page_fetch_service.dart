@@ -163,7 +163,13 @@ final class PageFetchService {
           parser.parse(data.body),
           body: data.body,
           // §6 的 baseUrl / page / source 绑定就来自这里；逐项字段的 `@js:` 靠它继承。
-          jsContext: JsPageContext(baseUrl: url, page: page, source: source),
+          // 书源自带的 `header` 同时带上：规则里的 `http.*` 也要用它（C-NET-4）。
+          jsContext: JsPageContext(
+            baseUrl: url,
+            page: page,
+            source: source,
+            headers: headers,
+          ),
         ),
       ),
     };

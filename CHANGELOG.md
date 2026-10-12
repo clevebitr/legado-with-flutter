@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 3.4 part 3: the `http.*` / `parse.*` Promise bindings, the call quota and the scope boundaries (2026-10-12)
+
+3.4 is complete: every binding of `book-source.md` §6 exists now, including the two a rule has to
+`await`, and the per-rule quota ADR-0030 §决策 3 fixes.
+
+- **`http.get(url, options)` / `http.post(url, options)` are Promises** (ADR-0029 §决策 3). Both go
+  through `core/network/HttpClient` — C-NET-1 keeps one door to the network — so timeouts, retries,
+  decoding and the plaintext policy are the page layer's; `HttpClient` therefore gained `post`, and
+  `DioHttpClient` answers both verbs from one shared `_request` (policy, per-source budget, retry
+  loop) so a later change cannot land on one verb only. The source's own `header` field is applied
+  under the rule's own headers (C-NET-4), and the source URL keys the same §8 budget the page fetch
+  spends. `options` only honours `headers` and (POST) `body`; anything else — `charset`, `timeout`,
+  `retry`, `webView` — makes that call fail loudly instead of answering a different question.
+- **`parse.getString(rule, doc)` / `parse.getElements(rule, doc)` are Promises**, and the engine
+  evaluates them **on the host** (ADR-0029 §决策 5's page-level scope): the nested rule runs where the
+  engine already is, so the worker never rebuilds a scope. `getString` answers the first value or
+  `''`; `getElements` answers each DOM match as its `outerHtml` and each JSON match as its value
+  (a sandbox without DOM handles cannot do better — registered, with the upstream idiom it closes).
+  The two boundaries §6 registers are explicit and locatable: `js:parse-scope` (a `doc` that is not
+  this job's page body, or a scope that is not a page) and `js:parse-recursion` (a value-shaped
+  nested rule that needs `@js:` itself — the one worker is running the job that asked, so a nested
+  evaluation could only wait on its own queue). An element-shaped nested `@js:` lands on the list
+  rule's own boundary, `unsupported:@js:list`, exactly as a top-level `bookList` would.
+- **The quota is real, and it counts `log.*`.** `QuickJsWorkerBridge` counts every binding call that
+  crosses out of the worker (`log.*`, `http.*`, `parse.*`; `crypto.*` is answered inside it) against
+  §6's 20-per-rule bound and fails the job with `js:quota`; later calls of that script are refused
+  without spending anything.
+- **Fatal versus catchable is a decision, not an accident.** An `http.*` transport failure only
+  rejects that Promise (a rule may `catch` it and try a mirror; uncaught it still fails the job as
+  `js:error`, which is `book-source.md` §7's own classification). The `parse.*` boundaries and the
+  quota decide the whole job, and the decision is **recorded and delivered when the script stops**,
+  not mid-script: the worker must not be handed to the next job while a script is still running (two
+  evaluations on one runtime would share `globalThis` and the engine's job queue), and killing a
+  worker that is actively executing native JS is what turned the first device run of the quota probe
+  into a hang. The hard budget still kills a script that never stops.
+- **The worker's message loop no longer awaits an evaluation.** A script parked on `await
+  http.get(...)` has to let `hostResult` envelopes through, so `evaluate` runs unawaited and the two
+  host bindings travel as a `JsHostCall` / `JsHostReply` round trip (both decoded by the same tested
+  type in `core/js`); `__runRule` returns a **Promise** for an `await`-ing rule and settles it inside
+  JavaScript, so a rejected promise can never escape as an unhandled rejection.
+- **A bare `@js:` now sees the item it belongs to.** On an element scope (a per-item field such as
+  `searchRule.name`) `result` is the element's `outerHtml` instead of an empty string, and a bare
+  `@js:` in a multi-valued field gets the page body (a String) rather than a one-element list — both
+  are what upstream's `getString` / `getStringList` hand over.
+- Tests: 16 new host cases at the bridge (routing, header merge, budget key, malformed calls, the
+  quota, the fatal/rejected split, stale replies), 13 in `js_bindings_test.dart` for the envelope and
+  argument decoding, 13 engine cases for the `parse.*` evaluator and the `result` shapes, and 6 new
+  device cases. 483 host cases, coverage exit 0 (`core` 744/744, `domain` 1157/1157); the Windows
+  device suite is 16/16 for `js_bridge_test.dart` (plus the other two files, all green).
+- Docs: `book-source.md` §6 (binding behaviour, quota counting point, every marker and boundary),
+  §3's #14 note, §8 (what landed, and what the nesting taboo was about), `PLAN.md` §3.1/§3.4/§3.7,
+  `architecture.md` §1, `test-environment.md` §7.
+
 ### Review follow-up: a `@js:` purification rule now sees the page it ran on (2026-10-12)
 
 The 3.4 part 1–2 review found one silent wrong value, not a code defect in the API: `replaceRegex`'s

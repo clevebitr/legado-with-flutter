@@ -26,6 +26,52 @@ final class JsSourceInfo {
   };
 }
 
+/// One `parse.*` call from a running rule (`docs/dev/book-source.md` §6).
+///
+/// The engine owns the rule language, so `parse.getString` / `parse.getElements` cannot be
+/// answered inside the worker isolate: the call travels back to the host, which evaluates
+/// [rule] with the engine and answers the script. [doc] is the second argument the rule
+/// passed; §6 fixes what a rule may pass as it.
+final class JsParseRequest {
+  /// Creates a parse request.
+  const JsParseRequest({required this.rule, required this.wantsList, this.doc});
+
+  /// The nested rule the script asked to evaluate.
+  final String rule;
+
+  /// Whether the call came from `parse.getElements` (`true`) or `parse.getString`.
+  ///
+  /// It is the same split as `getStringList` versus `getString` upstream, and the
+  /// engine needs it: one returns every match, the other the first value.
+  final bool wantsList;
+
+  /// The `doc` argument the rule passed, or `null` when it passed none.
+  final String? doc;
+}
+
+/// The `rulePath` marker of a `parse.*` call without a page-level scope (`book-source.md`
+/// §6).
+///
+/// It lives in the contract rather than in one implementation because the engine refuses the
+/// call (it owns the scope) and the bridge fails the job with it (it owns the job).
+const String jsParseScopeMarker = 'js:parse-scope';
+
+/// The `rulePath` marker of a `parse.*` rule that would need a nested `@js:` (`§6`).
+///
+/// The single worker is busy running the job that asked, so a nested evaluation could only
+/// wait on its own queue (ADR-0030 §决策 1/3). It is refused instead of deadlocking.
+const String jsParseRecursionMarker = 'js:parse-recursion';
+
+/// Evaluates a nested rule for `parse.*` against the page a job runs on (§6).
+///
+/// A job carries one of these when the engine can offer a page-level scope; the bridge
+/// calls it for every `parse.*` request the script makes. The engine returns the nested
+/// rule's own failure — `unsupportedRule` for the boundaries §6 registers — and the job
+/// fails with it instead of the script silently seeing an empty value (C-SRC-4).
+typedef JsParseEvaluator = Future<ParseResult<Object?>> Function(
+  JsParseRequest request,
+);
+
 /// One `@js:` evaluation: the rule script plus the variables §6 exposes to it.
 final class JsJob {
   /// Creates a job.
@@ -36,6 +82,8 @@ final class JsJob {
     required this.page,
     required this.source,
     this.result,
+    this.sourceHeaders,
+    this.parseEvaluator,
   });
 
   /// The JavaScript the rule asked for, with the `@js:` flag already removed.
@@ -58,6 +106,21 @@ final class JsJob {
 
   /// The value the rule produced so far (the `result` binding), when there is one.
   final Object? result;
+
+  /// The book source's own `header` field (`book-source.md` §2), when it declares one.
+  ///
+  /// It is the default for every `http.*` call of this job, because upstream's
+  /// `java.ajax` builds its request from the source (`AnalyzeUrl`), and a source that
+  /// needs a `Referer` needs it for its JS requests too (C-NET-4). It stays on the host
+  /// side: [toJson] does not send it, so `source` remains the only view a rule gets.
+  final Map<String, String>? sourceHeaders;
+
+  /// Evaluates `parse.*` rules for this job (`book-source.md` §6), when the engine can.
+  ///
+  /// `null` means the job may not run `parse.*` at all — every request then fails with
+  /// `js:parse-scope`, which is the explicit boundary ADR-0029 §决策 5 asks for. The
+  /// callback is host-side only; [toJson] does not send it.
+  final JsParseEvaluator? parseEvaluator;
 
   /// The JSON envelope the worker receives.
   Map<String, Object?> toJson() => <String, Object?>{
@@ -114,7 +177,9 @@ abstract interface class JsWorkerHandle {
 /// Starts one worker on demand, with the budgets the bridge will hold it to.
 ///
 /// Passing the budgets in keeps the runtime's interrupt and the bridge's hard budget
-/// on the same numbers, so the two can never disagree.
+/// on the same numbers, so the two can never disagree, and keeps §6's per-rule call
+/// quota in the one place that can count real binding calls (the bridge, ADR-0030
+/// §决策 3).
 typedef JsWorkerLauncher = Future<JsWorkerHandle> Function({
   required Duration timeout,
   required int memoryLimit,
