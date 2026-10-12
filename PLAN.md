@@ -135,8 +135,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|
 | 3.1 | 补齐默认规则语法：#3 / #4 / #6 / #7 / #26 / #28 ✅ | 每条 1 条单测 |
 | 3.2 | `\|\|`（#10）、`&&`（#11）、`@css:`（#12）、`@json:`（#13）、`@css:` 内的 jsoup 索引伪类（#29）；并落地 **ADR-0026** 的非顶层字段降级语义（顶层不降级） ✅ | 连接符分组与跨类型合并拒绝各 ≥1 条单测；降级语义顶层 / 非顶层各 ≥1 条单测 |
-| 3.3 | `JsBridge`：专用 Isolate + 复用运行时 + 引擎级 `timeout` / `memoryLimit` + `Isolate.kill` 兜底 | ADR-0015、C-SRC-2；`sendMessage` 载荷必须是合法 JSON |
-| 3.4 | `@js:` 规则接入（#14）+ JS 白名单绑定 | `book-source.md` §6 白名单逐项有测试；越权访问被拒绝 |
+| 3.3 | `JsBridge`：专用 Isolate + 复用运行时 + 引擎级 `timeout` / `memoryLimit` + `Isolate.kill` 兜底 | ADR-0015、C-SRC-2；`sendMessage` 载荷必须是合法 JSON；**绑定形态（同步 / Promise）与引擎 API 的异步裁决见 ADR-0029**（Proposed，待裁决），逐项形态表归 `book-source.md` §6 |
+| 3.4 | `@js:` 规则接入（#14）+ JS 白名单绑定 | `book-source.md` §6 白名单逐项有测试；越权访问被拒绝；单测走假 `JsBridge`（`testing.md` §4），真实引擎只在集成探针里 |
 | 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定、`replaceRegex` 批量替换（含建模 `ContentRule.replaceRegex`） | 各 1 条单测 |
 | 3.6 | 失败语义全量：9 个 `ParseFailureKind` 各有触发路径 | 每个 kind ≥1 条单测 |
 | 3.7 | **真实书源验证记录** | 按 `book-source.md` §10 格式写入 PR，并把矩阵状态列改为「已确认」 |
@@ -195,6 +195,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `extra` 的导出合并（`toLegadoJson`） | 随**导入 / 导出**功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出 |
 | Big5 / Big5-HKSCS 解码缺口 | 仍待排期（`book-source.md` §5.1） |
 | 文件型数据库（后台 isolate + 原生库）无自动化覆盖 | 由 `integration_test/` 覆盖（`test-environment.md` §4） |
+| 矩阵 #14（`@js:`）无任何真实语料样本 | **3.7**：仓内 `test/fixtures/book_sources/*.json` 的 `@js:` 出现次数为 **0**，因此 #14 的状态列无法改「已确认」；补样前先补语料（ADR-0029 §后果） |
+| JS 绑定是否需要**同步**写法（3.3 只实现 Promise 形态的 `http.*` / `parse.*`） | **3.7** 真实语料回归出证据后，以**新 ADR** 裁决是否追加；不得就地放宽（ADR-0029 §决策 4） |
+| 3.8 并发策略与 JS worker 容量的耦合 | **3.8 先于桥接契约冻结**：worker 的引擎数与排队策略未定就冻结 `JsBridge` 契约，会随并发策略返工（ADR-0029 §后果） |
 
 ---
 
