@@ -387,5 +387,56 @@ void main() {
         );
       },
     );
+
+    test('execute_givenAPageNumberTemplate_pagesThroughIt', () async {
+      // §4 的 `{{page}}` 是 M0：模板规则本身没有选择器，整条规则就是下一页地址。
+      const String base = 'https://example-novel.test/book/8/';
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(base, _tocHtml(<String>['第1章']))
+        ..serve('${base}toc_2.html', _tocHtml(<String>['第2章']))
+        ..serve('${base}toc_3.html', _tocHtml(<String>['第3章']));
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages)
+            .execute(_pagingSource('toc_{{page}}.html'), base),
+      );
+
+      // `{{page}}` 自己接链；第 4 页没被 serve（§9 缺页降级，保留已读到的三章）。
+      expect(http.requestedUrls, <String>[
+        base,
+        '${base}toc_2.html',
+        '${base}toc_3.html',
+        '${base}toc_4.html',
+      ]);
+      expect(
+        http.requestedUrls.any((String url) => url.contains('{{')),
+        isFalse,
+      );
+      expect(chapters.map((Chapter chapter) => chapter.name), <String>[
+        '第1章',
+        '第2章',
+        '第3章',
+      ]);
+    });
+
+    test('execute_givenAnInnerRuleInTheNextUrl_staysUnsupported', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_tocUrl, _tocHtml(<String>['第1章']));
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(http);
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: service.pages)
+            .execute(_pagingSource('{{result}}'), _tocUrl),
+      );
+
+      // 矩阵 #18 的 `{{}}` 内嵌规则是 M1：不按 URL 模板渲染，仍由引擎报 unsupported 后降级。
+      expect(http.requestedUrls, <String>[_tocUrl]);
+      expect(chapters, hasLength(1));
+      expect(
+        service.printer.events.last.message.toString(),
+        contains('no next page'),
+      );
+    });
   });
 }

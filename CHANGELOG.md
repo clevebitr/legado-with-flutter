@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review B1: the paging URL templates are rendered before they are requested (2026-10-12)
+
+Review found that `nextTocUrl` / `nextContentUrl` only went through `resolveAbsoluteUrl`, never
+through `renderUrlTemplate`. `book-source.md` §4 gives `{{page}}` to both fields at M0 and forbids
+letting a literal `{{...}}` reach a request (C-SRC-5), so a template paging rule could not work.
+Beyond that, the values the engine extracts are the **result** of a rule: `toc_{{page}}.html` is not
+a selector at all, so the engine had nothing to read and paging stopped on the first page.
+
+`PageFetchService.nextPageUrls` now owns it, in one place:
+
+- a paging rule whose whole text is a URL template (at least one `{{...}}`, only the M0 variables
+  `page` / `baseUrl`, no `@` segment) is rendered as the next address directly;
+- any other rule is still evaluated by the engine, and **every extracted value** is rendered as a
+  template before it is resolved — so a site whose `href` carries `{{baseUrl}}` works too;
+- a value that renders to nothing is dropped, so §4's "never leave `{{...}}` in a request" holds;
+- `{{page}}` is the 1-based number the URL becomes (`pages.length + 1` while reading the page's own
+  next rule, i.e. the page after `{{baseUrl}}`), `{{baseUrl}}` is the page the rule was read on.
+  `book-source.md` §4.1 owns both definitions;
+- matrix #18's `{{...}}` inner rules stay M1: `{{result}}` names no M0 URL variable, so it is *not*
+  treated as a template and the engine still rejects it as unsupported.
+- 3 new cases (395 total): the `{{page}}` template chain, the `{{baseUrl}}` template inside an
+  extracted `href`, and the `{{result}}` boundary. Each asserts that no requested URL contains `{{`.
+- Gates after the fix: `dart format` unchanged, `flutter analyze` clean, `flutter test --coverage`
+  395 passed, `check_coverage.dart` exit 0 with `core` 357/357 and `domain` 1047/1047. The
+  latest-run evidence table `docs/dev/test-environment.md` §7 was still carrying 3.5's numbers
+  (370 / 925), so it is updated here too — that table is the owner of the counts.
+
 ### Phase 3.5: late-bound toc paging, content paging, `isVip` and `replaceRegex` (2026-10-12)
 
 The M0 fields `PLAN.md` §3.4 step 4 names are modelled and consumed. The field model gained

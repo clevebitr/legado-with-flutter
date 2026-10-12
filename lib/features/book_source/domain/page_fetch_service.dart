@@ -14,6 +14,37 @@ import 'package:html/parser.dart' as parser;
 /// naming pages cannot pull an unbounded number of requests.
 const int _maxPagingPages = 50;
 
+/// The URL variables a **paging** rule may use as a template (`book-source.md` §4).
+///
+/// `{{key}}` belongs to `searchUrl` only, and every other name is matrix #18's inner
+/// rule / JS, which is M1 — a paging rule carrying one stays with the engine, which
+/// rejects it as unsupported rather than rendering it to an empty URL.
+const Set<String> _pagingTemplateVariables = <String>{'page', 'baseUrl'};
+
+/// Matches one `{{name}}` placeholder of a paging URL template.
+final RegExp _templatePlaceholder = RegExp(r'\{\{([^{}]*)\}\}');
+
+/// Whether [rule] is a **URL template** rather than a selector rule (§4/§4.1).
+///
+/// A paging field carries a template when the whole text is a URL: it holds at least
+/// one `{{...}}` placeholder, every placeholder names an M0 URL variable, and there is
+/// no `@` segment (which would make it a selector rule). `toc_{{page}}.html` therefore
+/// pages by template, `@css:a#next @href` is evaluated as a rule, and `{{result}}`
+/// stays with the engine (matrix #18 is M1).
+bool _isPagingTemplate(String rule) {
+  if (rule.contains('@')) {
+    return false;
+  }
+
+  final Iterable<RegExpMatch> matches = _templatePlaceholder.allMatches(rule);
+
+  return matches.isNotEmpty &&
+      matches.every(
+        (RegExpMatch match) =>
+            _pagingTemplateVariables.contains((match.group(1) ?? '').trim()),
+      );
+}
+
 /// One page of a [PageWalk]: the URL it was fetched from and its parsed scope.
 ///
 /// The URL travels with the scope because a rule on that page may name a **relative**
@@ -313,6 +344,8 @@ final class PageFetchService {
               data,
               nextRulePath,
               currentUrl: pageUrl,
+              // 刚读到的这一页是 `pages.length`（1-based），它指向的下一页就是下一号。
+              page: pages.length + 1,
               sourceId: sourceId,
             ),
           );
@@ -331,6 +364,13 @@ final class PageFetchService {
   /// current page plus any repeat are dropped — upstream filters `redirectUrl`
   /// (`BookChapterList.kt:212`) and stops its chapter loop on a URL it already has.
   ///
+  /// The field is also a place where `book-source.md` §4 allows the URL variables
+  /// `{{page}}` and `{{baseUrl}}` ([page] is the 1-based number the value becomes,
+  /// `{{baseUrl}}` is [currentUrl]), so every value is rendered before it is requested,
+  /// and a rule that **is** a template is rendered as a whole — the engine has no node
+  /// to extract from it. Section 4 forbids letting a literal `{{...}}` reach the
+  /// request, so a value that renders to nothing is dropped.
+  ///
   /// A rejected or malformed rule degrades to **no next page** plus a warning
   /// (ADR-0026 §决策 2): the field is not top-level, so it must not cost the stage —
   /// paging simply stops where it is.
@@ -339,10 +379,20 @@ final class PageFetchService {
     RuleScope scope,
     String rulePath, {
     required String currentUrl,
+    required int page,
     required String sourceId,
   }) {
+    if (rule == null || rule.trim().isEmpty) {
+      return const <String>[];
+    }
+
+    final String text = rule.trim();
+    if (_isPagingTemplate(text)) {
+      return _pagingUrls(<String>[text], currentUrl, page);
+    }
+
     final ParseResult<List<String>> parsed = _engine.extractAll(
-      rule ?? '',
+      text,
       scope,
       rulePath: rulePath,
     );
@@ -351,6 +401,7 @@ final class PageFetchService {
       ParseSuccess<List<String>>(:final List<String> data) => _pagingUrls(
         data,
         currentUrl,
+        page,
       ),
       // 降级 warning 用**字段路径**而不是引擎报的 `unsupported:<语法>`：与 [field] 同
       // 一口径，书源里要改的是哪个字段（C-SRC-8、ADR-0026 §决策 2）。
@@ -362,8 +413,11 @@ final class PageFetchService {
     };
   }
 
-  /// Resolves, filters and de-duplicates paging values, keeping rule order.
-  List<String> _pagingUrls(List<String> values, String currentUrl) {
+  /// Renders, resolves, filters and de-duplicates paging values, keeping rule order.
+  ///
+  /// [page] is the 1-based number the value becomes and `{{baseUrl}}` is [currentUrl],
+  /// which is what §4.1 fixes for these two fields under queue paging.
+  List<String> _pagingUrls(List<String> values, String currentUrl, int page) {
     final List<String> urls = <String>[];
 
     for (final String value in values) {
@@ -371,7 +425,15 @@ final class PageFetchService {
         continue;
       }
 
-      final String url = resolveAbsoluteUrl(value, currentUrl);
+      final String rendered = renderUrl(value, <String, String>{
+        'page': '$page',
+        'baseUrl': currentUrl,
+      }).trim();
+      if (rendered.isEmpty) {
+        continue;
+      }
+
+      final String url = resolveAbsoluteUrl(rendered, currentUrl);
       if (url == currentUrl || urls.contains(url)) {
         continue;
       }

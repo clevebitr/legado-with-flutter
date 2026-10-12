@@ -231,5 +231,33 @@ void main() {
         allOf(contains('contentRule.replaceRegex'), contains('no replacement')),
       );
     });
+
+    test(
+      'execute_givenATemplateInTheExtractedUrl_rendersItBeforeRequesting',
+      () async {
+        const String secondPage =
+            'https://example-novel.test/book/1/1.html?p=2';
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            _chapterUrl,
+            '<div id="content">第一页。</div>'
+            '<a id="next" href="{{baseUrl}}?p=2">下一页</a>',
+          )
+          ..serve(secondPage, '<div id="content">第二页。</div>');
+
+        final String content = _data(
+          await FetchContent(pages: _service(http))
+              .execute(_pagingSource('@css:a#next @href'), _chapterUrl),
+        );
+
+        // `{{baseUrl}}` = 读到该规则的那一页（§4.1）；渲染后不得把 `{{}}` 交给 HTTP 层。
+        expect(http.requestedUrls, <String>[_chapterUrl, secondPage]);
+        expect(
+          http.requestedUrls.any((String url) => url.contains('{{')),
+          isFalse,
+        );
+        expect(content, '第一页。\n第二页。');
+      },
+    );
   });
 }
