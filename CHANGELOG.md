@@ -69,7 +69,7 @@ already lives: a rejected or malformed paging / replacement rule degrades to "no
   without a chapter list, rejected paging rule), `isVip` truthiness, content paging (join, strict
   later-page failure) and the replacement rule plus its degradation.
 - Gates: `dart format` unchanged, `flutter analyze` clean, `flutter test --coverage` 392 passed,
-  `check_coverage.dart` exit 0 with `core` 357/357 and `domain` 1032/1032.
+  `check_coverage.dart` exit 0 with `core` 357/357 and `domain` 1030/1030.
 
 ### No HANDOVER.md: its content was folded into the owners it belonged to (2026-10-12)
 
