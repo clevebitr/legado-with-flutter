@@ -474,7 +474,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `parseFailed` | 规则无匹配、JS 异常或超时 | `failureParseFailed` | 否 |
 | `unsupportedRule` | 命中 M2 或未实现语法 | `failureUnsupportedRule` | 否 |
 | `invalidBookSource` | 导入 JSON 缺必填字段或结构非法 | `failureInvalidBookSource` | 否 |
-| `cancelled` | 用户主动取消 | 无（静默） | — |
+| `cancelled` | 用户主动取消，或**桥 / 作用域已释放**（job 被丢弃而未运行；`rulePath` 只带裸字段路径，§6） | 无（静默） | — |
 
 **关键判定：**
 
