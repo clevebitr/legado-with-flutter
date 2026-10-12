@@ -63,5 +63,13 @@ abstract class Chapter with _$Chapter {
   /// whole table of contents (`book-source.md` §9).
   ///
   /// [url] is already resolved to an absolute URL.
-  const factory Chapter({required String name, required String url}) = _Chapter;
+  ///
+  /// [isVip] is `false` unless the source's `isVip` rule produced a value upstream
+  /// reads as true: `null`, an empty string, `false` and `0` all stay non-VIP
+  /// (`book-source.md` §4.1).
+  const factory Chapter({
+    required String name,
+    required String url,
+    @Default(false) bool isVip,
+  }) = _Chapter;
 }

@@ -85,6 +85,28 @@ void main() {
       },
     );
 
+    test('fromJson_givenPagingAndVipRules_mapsThemToTheirFields', () {
+      final BookSource source = BookSource.fromJson(<String, Object?>{
+        ..._minimalJson(),
+        'ruleToc': <String, Object?>{
+          'chapterList': 'id.list@tag.dd',
+          'isVip': 'class.vip@text',
+          'nextTocUrl': 'tag.a.0@href',
+        },
+        'ruleContent': <String, Object?>{
+          'content': 'id.content@tag.p@text',
+          'nextContentUrl': 'tag.a@href',
+          'replaceRegex': '##广告##',
+        },
+      });
+
+      // PLAN 3.5 的四个 M0 字段：目录翻页 / 正文翻页 / VIP 判定 / 正文净化。
+      expect(source.tocRule.isVip, 'class.vip@text');
+      expect(source.tocRule.nextTocUrl, 'tag.a.0@href');
+      expect(source.contentRule.nextContentUrl, 'tag.a@href');
+      expect(source.contentRule.replaceRegex, '##广告##');
+    });
+
     test('fromJson_givenMinimalLegadoExport_appliesTheDocumentedDefaults', () {
       final BookSource source = BookSource.fromJson(_minimalJson());
 
@@ -243,20 +265,41 @@ void main() {
     test(
       'fromLegadoJson_givenUnrecognisedRuleKeys_keepsThemInTheRuleOwnExtra',
       () {
-        final BookSource source = BookSource.fromLegadoJson(_loadFixture());
+        final Map<String, Object?> json = _loadFixture();
+        // 该导出里 ruleToc / ruleContent 的键已全部建模（PLAN 3.5 补齐），所以先加一个
+        // 模型不认识的键，才能验证「规则对象自己也会保留未识别键」（book-source.md §2）。
+        (json['ruleToc']! as Map<String, Object?>)['formatJs'] =
+            'chapter.title';
 
-        // 这三个字段属 M0 但尚未建模（nextTocUrl / nextContentUrl 见 PLAN 3.5，
-        // replaceRegex 见 PLAN 3.5），因此必须原样落在各自对象的 extra 里。
+        final BookSource source = BookSource.fromLegadoJson(json);
+
         expect(
           source.tocRule.extra.keys,
-          unorderedEquals(<String>['nextTocUrl']),
+          unorderedEquals(<String>['formatJs']),
         );
-        expect(
-          source.contentRule.extra.keys,
-          unorderedEquals(<String>['nextContentUrl', 'replaceRegex']),
-        );
+        expect(source.contentRule.extra, isEmpty);
         expect(source.searchRule.extra, isEmpty);
         expect(source.bookInfoRule?.extra, isEmpty);
+      },
+    );
+
+    test(
+      'fromLegadoJson_givenThePagingRules_modelsThemInsteadOfStoringExtras',
+      () {
+        final BookSource source = BookSource.fromLegadoJson(_loadFixture());
+
+        // 这四个字段自 PLAN 3.5 起是 M0 建模字段，不再落进 extra。
+        expect(source.tocRule.extra, isEmpty);
+        expect(source.contentRule.extra, isEmpty);
+        expect(
+          source.tocRule.nextTocUrl,
+          '@css:div#list > dl > dt:eq(0) a:containsOwn(下一页) @href',
+        );
+        expect(
+          source.contentRule.nextContentUrl,
+          '@css:div.bottem2 > a#next_url:contains(下一页) @href',
+        );
+        expect(source.contentRule.replaceRegex, '##本章未完，点击下一页继续阅读。');
       },
     );
 

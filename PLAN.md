@@ -72,7 +72,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|---|
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
-| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**下一步顺序以 §3.4 为准**（当前 = 3.5）。细节见 `CHANGELOG.md` |
+| Phase 3 — M0 横向铺开 | 🔄 进行中 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**下一步顺序以 §3.4 为准**（当前 = 3.8）。细节见 `CHANGELOG.md` |
 | Phase 4 — M1 | ⏳ 未开始 | — |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
@@ -132,6 +132,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 4. **3.5** 在 3.6 之后：字段按「用到才建」分批补 —— 本阶段只补 M0 的 `isVip` / `nextTocUrl` /
    `nextContentUrl` / `replaceRegex`；`canReName` / `updateTime` 留 Phase 4。加字段会同时改动
    `book_source_test.dart` 里 `extra` 的期望清单，同批更新。
+   —— ✅ **已完成（2026-10-12）**：四个字段已建模（`extra` 的期望清单同步改）；目录 / 正文翻页、
+   `isVip` 判定与 `replaceRegex` 净化按 `book-source.md` §4.1 落地，§9 补「正文分页失败整章失败」一行。
 5. **3.8** 在 3.5 之后：同书源并发上限 + 章节正文有限并发。
 6. **3.3 与 3.4**：`JsBridge` 与 `@js:` 接入 —— 白名单里的 `parse.getString(rule, doc)` 委托给
    规则引擎，所以必须等 3.2 / 3.5 的求值路径定型再冻结桥接契约。
@@ -144,7 +146,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 3.2 | `\|\|`（#10）、`&&`（#11）、`@css:`（#12）、`@json:`（#13）、`@css:` 内的 jsoup 索引伪类（#29）；并落地 **ADR-0026** 的非顶层字段降级语义（顶层不降级） ✅ | 连接符分组与跨类型合并拒绝各 ≥1 条单测；降级语义顶层 / 非顶层各 ≥1 条单测 |
 | 3.3 | `JsBridge`：专用 Isolate + 复用运行时 + 引擎级 `timeout` / `memoryLimit` + `Isolate.kill` 兜底 | 验收（依据：ADR-0015、**ADR-0029**（引擎 API 异步 + 逐绑定形态）、**ADR-0030**（单常驻 worker + FIFO，容量不进契约）、C-SRC-2）：`sendMessage` 载荷必须是合法 JSON；并发调用 FIFO 排队且**不得**报 busy（C-SRC-9）；一次超时/中断后同一运行时仍可继续求值（探针 07 口径）；单测走假 `JsBridge`（`testing.md` §4）；逐项绑定形态归 `book-source.md` §6。**冻结前置（架构师 2026-10-11 裁决）：必须在 G2b spot-check 与 3.5 / 3.8 之后**——3.5 的 `nextTocUrl` / `nextContentUrl` 允许 JS 返回 URL **数组**（`book-source.md` §4.1），先把「JS 返回单值 vs 列表」这一返回契约用真实字段行使定型再冻合同 |
 | 3.4 | `@js:` 规则接入（#14）+ JS 白名单绑定 | `book-source.md` §6 白名单逐项有测试；越权访问被拒绝；单测走假 `JsBridge`（`testing.md` §4），真实引擎只在集成探针里 |
-| 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定、`replaceRegex` 批量替换（含建模 `ContentRule.replaceRegex`） | 各 1 条单测 |
+| 3.5 | 目录翻页 `nextTocUrl`、正文分页 `nextContentUrl`、`isVip` 判定、`replaceRegex` 批量替换（含建模 `ContentRule.replaceRegex`） ✅ | 各 1 条单测 |
 | 3.6 | 失败语义全量：9 个 `ParseFailureKind` 各有触发路径 | 每个 kind ≥1 条单测 |
 | 3.7 | **真实书源验证记录** | 按 `book-source.md` §10 格式写入 PR，并把矩阵状态列改为「已确认」 |
 | 3.8 | 同一书源并发上限（默认 3）+ 章节正文串行/有限并发 | 并发上限可配且有单测；超限请求排队而非并发发出；**并发预算只在此层实现，不改 `JsBridge` 契约**（ADR-0030 §决策 2） |

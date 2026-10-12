@@ -146,6 +146,8 @@ _TocRule _$TocRuleFromJson(Map<String, dynamic> json) =>
         chapterList: $checkedConvert('chapterList', (v) => v as String?),
         chapterName: $checkedConvert('chapterName', (v) => v as String?),
         chapterUrl: $checkedConvert('chapterUrl', (v) => v as String?),
+        isVip: $checkedConvert('isVip', (v) => v as String?),
+        nextTocUrl: $checkedConvert('nextTocUrl', (v) => v as String?),
       );
       return val;
     });
@@ -154,15 +156,23 @@ Map<String, dynamic> _$TocRuleToJson(_TocRule instance) => <String, dynamic>{
   'chapterList': instance.chapterList,
   'chapterName': instance.chapterName,
   'chapterUrl': instance.chapterUrl,
+  'isVip': instance.isVip,
+  'nextTocUrl': instance.nextTocUrl,
 };
 
 _ContentRule _$ContentRuleFromJson(Map<String, dynamic> json) =>
     $checkedCreate('_ContentRule', json, ($checkedConvert) {
       final val = _ContentRule(
         content: $checkedConvert('content', (v) => v as String?),
+        nextContentUrl: $checkedConvert('nextContentUrl', (v) => v as String?),
+        replaceRegex: $checkedConvert('replaceRegex', (v) => v as String?),
       );
       return val;
     });
 
 Map<String, dynamic> _$ContentRuleToJson(_ContentRule instance) =>
-    <String, dynamic>{'content': instance.content};
+    <String, dynamic>{
+      'content': instance.content,
+      'nextContentUrl': instance.nextContentUrl,
+      'replaceRegex': instance.replaceRegex,
+    };

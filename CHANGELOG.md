@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 3.5: late-bound toc paging, content paging, `isVip` and `replaceRegex` (2026-10-12)
+
+The M0 fields `PLAN.md` §3.4 step 4 names are modelled and consumed. The field model gained
+`TocRule.isVip` / `TocRule.nextTocUrl` / `ContentRule.nextContentUrl` / `ContentRule.replaceRegex`,
+and `Chapter` gained `isVip`; the three rule objects therefore no longer carry those keys in
+`extra`, and `book_source_test.dart`'s per-object expectations were updated with the model.
+
+- **Paging is a list-driven walk, once, in `PageFetchService.walk`.** `nextTocUrl` and
+  `nextContentUrl` are read with the engine's `extractAll` (upstream `getStringList`,
+  `BookChapterList.kt:210-218`), because a rule may name one page or a group of them. Each value
+  resolves against the page it was read on (C-SRC-5), the current page and repeats are dropped
+  (upstream filters `redirectUrl`), a page is never read twice, and the walk stops at the §9 bound
+  of 50 pages with a warning. `nextPageUrls` and `replaceContent` keep ADR-0026 §决策 2 where it
+already lives: a rejected or malformed paging / replacement rule degrades to "no next page" /
+  "no replacement" plus a warning whose `field=` is the source field, not the engine's
+  `unsupported:<syntax>`.
+- **A later page does not mean the same thing to both stages.** A missing table-of-contents page
+  keeps the chapters already read and logs a warning (§9), while a chapter body that cannot be
+  fully fetched fails the chapter: returning a truncated body as a success would dress a failure
+  up as success. `book-source.md` §9 gained that row, and §4.1 gained the field-level semantics
+  the old "returns empty, stop" wording left open.
+- **`isVip`** is true-ish: `null`, `""`, case-insensitive `false` and `0` stay non-VIP, while
+  `true`, `1` and any other non-empty value mark the chapter.
+- **`replaceRegex`** is applied to the joined chapter text (pages joined with `\n`, upstream
+  `appendContent`), through the new `RuleEngine.applyReplaceRule`: the standalone `##regex##replacement`
+  form (upstream "used on its own it equals `all##…`") and matrix #25's `##regex##replacement###`.
+  A body naming a selector is `parseFailed` at the field, a body carrying a flag such as `@js:` is
+  `unsupportedRule` — neither is silently dropped. Upstream's surrounding per-line trim and
+  full-width re-indent (`BookContent.kt:191-194`) is reader-side formatting and is deliberately
+  not applied here; §4.1 records that difference.
+- 22 new test cases (392 total, from 370): the field mapping, the replacement-rule engine group,
+  toc paging (chain, array, self-reference, 50-page bound, later-page fetch failure, later page
+  without a chapter list, rejected paging rule), `isVip` truthiness, content paging (join, strict
+  later-page failure) and the replacement rule plus its degradation.
+- Gates: `dart format` unchanged, `flutter analyze` clean, `flutter test --coverage` 392 passed,
+  `check_coverage.dart` exit 0 with `core` 357/357 and `domain` 1032/1032.
+
 ### No HANDOVER.md: its content was folded into the owners it belonged to (2026-10-12)
 
 A `HANDOVER.md` (session handover: snapshot, reading order, how to run, traps) was proposed on a
