@@ -41,10 +41,13 @@ G2b spot-check（2026-10-12，`tool/spot_check/`，证据见该目录 README 与
 `book-source.md` 矩阵 #12 的定位（`@css:` 是**显式**的 CSS 入口）与上游 jsoup 实现
 （`AnalyzeByJSoup` 的 `else -> doc.select(rule)` 分支）三者一致。
 
-> **证据债（2026-10-12，架构师审核 R1）：** 上面那条 `AnalyzeByJSoup` 的退化分支目前只有
-> 文件 + 分支形态、**没有行号**；本仓矩阵行历来带 `file:line`（如 `AnalyzeRule.kt:497`）。
-> 下次核对 fork 时补上行号，或把该条改成「据 fork 实现核对」并注明核对日期。
-> `<js>` 的出处已补实（见 §决策 3）。
+> **证据（2026-10-12 核对，含 R1 补的行号）：** 退化分支在 fork `HapeLee/legado-with-MD3@master`
+> 的 `app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeByJSoup.kt`（**:313-320**）：
+> `when (rules[0]) { "children" -> temp.children() … "class" -> temp.getElementsByClass(rules[1]) …
+> "text" -> temp.getElementsContainingOwnText(rules[1]); **else -> temp.select(beforeRule)** }`
+> —— `else`（**第 320 行**）把整段交给 jsoup 的选择器引擎，与本文的决策一致；同级还顺带印证了本仓
+> 矩阵 #2 的 `class` 与 #3 的 `text` 实现。上述行号为开发组 2026-10-12 直抓 raw 源码核对（架构师本机
+> 的 SSRF 守卫挡住了同一动作，该次核对未编行号）。`<js>` 的出处见 §决策 3。
 >
 > **证据补记（2026-10-12，开发组）：** G2b 的两条书源已按 `test/fixtures/book_sources/README.md`
 > 的来源/脱敏格式入库（`legado_g2b_default_rules_source.json` 与
@@ -61,9 +64,14 @@ G2b spot-check（2026-10-12，`tool/spot_check/`，证据见该目录 README 与
    不交给 cascadia 解析——`tr!0` 不是合法 CSS。
 3. **`unsupportedRule` 只留给真正未实现的标志**：`@xpath:`（及裸 `//`）、`@put:` / `@get:`、
    `{{}}`、`@@`、`:正则`、`<js>`。类型未知**不再**等于不支持。
-   > **`<js>` 的登记（架构师审核 R1 补）：** 它在 `book-source.md` §3 矩阵里**已有行**（**#31**，
-   > M2 / 暂不实现，命中报 `unsupported:<js>`）并列入 §11。本 ADR 原先只在决策里点名 `<js>`，
-   > 而矩阵没有行，恰好是「引擎拒绝得对、账本却没记」那个缺口；现由 #31 补上。
+   > **`<js>` 的登记（架构师审核 R1 补 + 2026-10-12 行号核对）：** 它在 `book-source.md` §3 矩阵里
+   > **已有行**（**#31**，M2 / 暂不实现，命中报 `unsupported:<js>`）并列入 §11。本 ADR 原先只在决策里
+   > 点名 `<js>`，而矩阵没有行，恰好是「引擎拒绝得对、账本却没记」那个缺口；现由 #31 补上。
+   > 行号证据（同一 fork 的 `master`）：`app/src/main/java/io/legado/app/constant/AppPattern.kt:5-6`
+   > —— `JS_PATTERN = Regex("<js>([\\w\\W]*?)</js>|@js:([\\w\\W]*)", IGNORE_CASE)`，一个 pattern
+   > 同时匹配两种包装；`…/analyzeRule/AnalyzeUrl.kt:157`（`//执行@js,<js></js>`）、`:168`
+   > （`private fun analyzeJs()`）、`:171`（`JS_PATTERN.findAll(ruleUrl)`）——所以它在 **URL 规则**里
+   > 同样生效。
 4. **矩阵 #1 的定义不变**，`book-source.md` §3 增加本注记：默认规则的**类型**是
    「已识别的五个类型 **或** 一段原始 CSS」，并回链本 ADR。
 5. 本决策**不**扩张既有单测的宽容度：原先按「未知类型 = 不支持 / 畸形」断言的用例

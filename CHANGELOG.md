@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The upstream evidence debt (review R1) is closed with file:line (2026-10-12)
+
+- **ADR-0032's `else -> doc.select(rule)` claim now cites lines**, which review R1 had to leave open
+  because the reviewer's machine routes DNS through a fake-IP range that its SSRF guard blocks. The
+  dev team fetched the fork's raw source directly (`HapeLee/legado-with-MD3@master`, checked
+  2026-10-12) and found the branch in
+  `app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeByJSoup.kt:313-320`: a `when (rules[0])`
+  dispatching `children` / `class` / `tag` / `id` / `text` whose **`else` (line 320) is
+  `temp.select(beforeRule)`** — the whole segment goes to jsoup's CSS engine, exactly what the ADR
+  rules. The same block corroborates this repository's matrix #2 (`class` →
+  `getElementsByClass(rules[1])`, line 316) and #3 (`text` →
+  `getElementsContainingOwnText(rules[1])`, line 319).
+- **Matrix #31's `<js>` evidence is now traceable too**: `…/constant/AppPattern.kt:5-6` defines one
+  `JS_PATTERN = Regex("<js>([\\w\\W]*?)</js>|@js:([\\w\\W]*)", IGNORE_CASE)` covering both
+  wrappers, and `…/analyzeRule/AnalyzeUrl.kt:157`, `:168`, `:171` show `analyzeJs()` using it on
+  URL rules — so the "any position / usable as a separator" claim is backed by code, not only by
+  the fork's prose documentation.
+
 ### Review follow-up: the spot-check evidence is committed and the statistic re-derived (2026-10-12)
 
 - **R4 closed: the two G2b sources are in the repository.** `test/fixtures/book_sources/` gained

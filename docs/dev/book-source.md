@@ -184,12 +184,15 @@
 > **197 条 M0 源中 137 条（69.5%）** 依赖该写法（复算命令与输出见 `tool/spot_check/README.md` §3；
 > ADR-0032 §背景的原始 157/270 已作废）。
 >
-> **`<js>` 的补录依据（2026-10-12，架构师审核 R1）：** 它此前只在代码里被拒绝、矩阵没有行 ——
-> 正是本节 #25–#27 补录注记要防的缺口（「引擎拒绝得对、账本却没记」），故补为 **#31**（追加在表尾，
-> 不插入中间）。上游证据两层：① `HapeLee/legado-with-MD3` 的规则语法文档 §5 JavaScript 表把
-> `<js></js>` 列为「**任意位置**｜可作为其他规则的分隔符」，示例 `tag.li<js></js>//a`；
-> ② 上游 `AnalyzeUrl.kt` 的 `analyzeJs()`（注释「执行 `@js`，`<js></js>`」）用 `JS_PATTERN` 同时
-> 匹配两种包装，说明它在 **URL 规则**里同样生效。因此 #31 与 #14 是同一能力的两种包装。
+> **`<js>` 的补录依据（2026-10-12，架构师审核 R1 + 开发组行号核对）：** 它此前只在代码里被拒绝、矩阵
+> 没有行 —— 正是本节 #25–#27 补录注记要防的缺口（「引擎拒绝得对、账本却没记」），故补为 **#31**
+> （追加在表尾，不插入中间）。上游证据两层，均已在 fork `HapeLee/legado-with-MD3@master` 上核到行号：
+> ① `app/src/main/java/io/legado/app/constant/AppPattern.kt:5-6` 的
+> `JS_PATTERN = Regex("<js>([\\w\\W]*?)</js>|@js:([\\w\\W]*)", IGNORE_CASE)` —— 一个 pattern 同时匹配
+> 两种包装（即「任意位置｜可作为其他规则的分隔符」，示例 `tag.li<js></js>//a`）；
+> ② `app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeUrl.kt:157`（注释「执行 `@js`，`<js></js>`）、
+> `:168`（`private fun analyzeJs()`）、`:171`（`JS_PATTERN.findAll(ruleUrl)`）—— 因此它在 **URL 规则**
+> 里同样生效。核对日期：2026-10-12。
 
 ### 3.1 实现分期（对齐 ADR-0014）
 
