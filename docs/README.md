@@ -58,6 +58,7 @@ ADR-0027 确立：**一个事实只允许在一处定义**，其他位置一律�
 | `RuleEngine` 求值 API 的异步形态、JS 绑定的同步 / Promise 形态与 `parse.*` scope 边界 | `docs/dev/adr/0029-*.md`；操作面形态表归 `docs/dev/book-source.md` §6 | `PLAN.md` §3.3/§3.4 回链 |
 | JS 引擎容量、排队、超时后恢复与跨源隔离边界 | `docs/dev/adr/0030-*.md` | `book-source.md` §6 回链；数值仍归 §6 |
 | 编码车道与「已声明车道」的宽容解码边界 | `docs/dev/book-source.md` §5 | C-NET-3 回链；决策理由归 `docs/dev/adr/0031-*.md` |
+| 默认规则的未知类型退化语义（矩阵 #1/#2） | `docs/dev/book-source.md` §3 的 #1/#2 注记 | C-SRC-4 回链；决策理由归 `docs/dev/adr/0032-*.md` |
 | 书源字段模型、语法矩阵、分期、JS 白名单与配额 | `docs/dev/book-source.md` | C-SRC-* 回链 |
 | 实现顺序、验收、门禁 | `PLAN.md` | — |
 | 变更历史与过程记录 | `CHANGELOG.md` | — |
@@ -90,6 +91,7 @@ ADR-0027 确立：**一个事实只允许在一处定义**，其他位置一律�
 | `tool/scan_licenses.dart` | 依赖许可证扫描脚本（重扫流程见 `NOTICE.md` §6） |
 | `tool/spike/` | JS 引擎架构可行性探针与已知坑（ADR-0015；**不进入** `flutter test` 默认发现路径） |
 | `tool/test/` | 本机测试脚本：`run_all` / `run_unit` / `run_windows` / `run_android` 与共享 `common.ps1`（见 `docs/dev/test-environment.md`） |
+| `tool/spot_check/` | G2b 真实站点链路验证入口与实测记录（`PLAN.md` §3.4 步骤 3 / §3.7；可复现，**不进 CI**） |
 | `integration_test/` | 设备级用例（Windows 桌面 / Android 模拟器）；不参与覆盖率统计（见 `docs/dev/test-environment.md` §4） |
 | `l10n.yaml` | 国际化生成配置 |
 | `lib/l10n/app_en.arb` | 英文文案模板（新增字符串的入口） |

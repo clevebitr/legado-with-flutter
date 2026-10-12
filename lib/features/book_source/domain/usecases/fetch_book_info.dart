@@ -23,6 +23,8 @@ final class FetchBookInfo {
     final ParseResult<RuleScope> page = await _pages.fetch(
       url,
       rulePath: 'ruleBookInfo',
+      headers: source.headers,
+      sourceId: source.url,
     );
 
     return switch (page) {

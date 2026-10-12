@@ -26,11 +26,16 @@ abstract interface class HttpClient {
   ///
   /// Pass [keyword] when [url] was rendered from a search template: it is used
   /// only to keep the keyword out of failure logs (ADR-0006 §5).
+  ///
+  /// Pass [sourceId] (the book source URL) so a warning that belongs to a book
+  /// source can name it without the client having to know the source model
+  /// (C-ERR-8): the tolerant-decode warning of ADR-0031 §决策 2 needs it.
   Future<ParseResult<HttpResponse>> get(
     String url, {
     required String rulePath,
     Map<String, String>? headers,
     String? keyword,
+    String? sourceId,
   });
 }
 
@@ -70,6 +75,7 @@ final class DioHttpClient implements HttpClient {
     required String rulePath,
     Map<String, String>? headers,
     String? keyword,
+    String? sourceId,
   }) async {
     final Uri? uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
@@ -104,6 +110,7 @@ final class DioHttpClient implements HttpClient {
         rulePath: rulePath,
         headers: headers,
         keyword: keyword,
+        sourceId: sourceId,
       );
 
       switch (result) {
@@ -129,6 +136,7 @@ final class DioHttpClient implements HttpClient {
     required String rulePath,
     required Map<String, String>? headers,
     required String? keyword,
+    required String? sourceId,
   }) async {
     final Response<List<int>> response;
     try {
@@ -167,6 +175,7 @@ final class DioHttpClient implements HttpClient {
       rulePath: rulePath,
       keyword: keyword,
       url: url,
+      sourceId: sourceId,
     );
   }
 
@@ -177,22 +186,37 @@ final class DioHttpClient implements HttpClient {
     required String rulePath,
     required String? keyword,
     required String url,
+    required String? sourceId,
   }) {
     try {
+      final DecodedBody decoded = decodeBody(
+        response.data ?? const <int>[],
+        contentType: response.headers.value(HttpHeaders.contentTypeHeader),
+      );
+      if (decoded.toleratedMalformedBytes) {
+        // ADR-0031 §决策 1/2：声明车道允许宽容解码，但必须留痕——携带**声明的编码**、
+        // 替换数量与书源 ID；正文、Cookie、Token 一律不入日志（C-ERR-8 / C-SEC-4）。
+        _logger.warning(
+          'Declared charset ${decoded.charset} carried illegal bytes; '
+          '${decoded.malformedByteCount} malformed byte replacement(s) inserted: '
+          'rule=$rulePath source=${sourceId ?? 'unknown'} '
+          'url=${redactUrl(url, keyword: keyword)}',
+        );
+      }
+
       return ParseSuccess<HttpResponse>(
         HttpResponse(
           statusCode: status,
           headers: response.headers.map,
-          body: decodeBody(
-            response.data ?? const <int>[],
-            contentType: response.headers.value(HttpHeaders.contentTypeHeader),
-          ),
+          body: decoded.text,
         ),
       );
     } on FormatException catch (error, stackTrace) {
-      // 解码失败必须显式失败，禁止用 allowMalformed 静默吞掉（C-NET-3）。
+      // 嗅探 / 回退车道的解码失败必须显式失败，禁止用 allowMalformed 静默吞掉，
+      // 否则「猜错的编码」会变成乱码正文（C-NET-3、ADR-0031 §决策 3）。
       _logger.warning(
-        'Body decoding failed for rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
+        'Body decoding failed for rule=$rulePath source=${sourceId ?? 'unknown'} '
+        'url=${redactUrl(url, keyword: keyword)}',
         describeError(error),
         stackTrace,
       );

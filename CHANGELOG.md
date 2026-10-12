@@ -30,6 +30,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page carried illegal bytes). The ADR also hands over the C-DOC-1 item: `charset_decoder.dart`'s
   `///` says "must not hide it behind `allowMalformed`" and must be rewritten when the tolerant path
   lands.
+### The G2b live-site spot-check, ADR-0032 and the ADR-0031 implementation (2026-10-12)
+
+- **G2b is met**: a real published source (`笔趣阁③`, `https://www.biquge99.cc`, taken from the
+  3907-entry public collection) ran the whole chain against the live site — search (2 hits),
+  detail (「剑来」/ 烽火戏诸侯), table of contents (1310 chapters) and body (3031 characters,
+  `sha256=6578ef3efc456856`) — driven by the **production** pipeline (use case →
+  `renderUrlTemplate` → `HttpClient` → `RuleEngine`), with the source's own `header` field
+  applied to every request. `tool/spot_check/` holds the harness and the record; it is a `tool/`
+  entry point, never discovered by `flutter test` and never run in CI (`testing.md` §1 keeps the
+  network out of tests).
+- **Matrix #12 (`@css:`) now has evidence on real HTML**, not only on constructed fixtures: the
+  same source with its default rules rewritten one-for-one into equivalent `@css:` selectors
+  (including `:eq(0)`, matrix #29) produced the **same stage counts and the same body hash**.
+  The derivation is recorded rather than presented as a published source, because of the two
+  corpus sources that do use `@css:` one site is parked and the other is behind Cloudflare.
+- **A defect in an M0 field was found and fixed**: `BookSource.headers` (the `header` field of
+  `book-source.md` §2) never reached a request — `PageFetchService.fetch` did not pass it — so a
+  source that declares a browser `User-Agent` or a `Referer` was fetched with the project agent
+  and got blocked (`zwdu.com` answers 200 to a browser agent and drops the project one). The use
+  cases now pass `source.headers`, `FakeHttpClient` records the request headers, and
+  `fetch_content_test.dart` asserts that they arrive.
+- **ADR-0032 (architect ruling on the spot-check evidence): an unknown default-rule type degrades
+  to a raw CSS selector.** `.searchresult`, `li`, `dd`, `tr!0`, `#txt`, `div.item` were rejected
+  before (as `parseFailed` / `unsupportedRule`), while upstream hands the segment to jsoup's
+  `doc.select`. The measurement that decided it: **157 of the 270** M0-compatible sources in the
+  collection (58.1%) use at least one such rule, and 9 of the 13 live candidates with real result
+  links died in the search stage. `RuleEngine` now hands such a segment to cascadia, keeping the
+  `!` / `[...]` position suffix out of the CSS (`tr!0` is not valid CSS), and `unsupportedRule` is
+  reserved for the flags that really are unimplemented (`@xpath:` / bare `//` / `<js>` / `:regex`).
+  The old expectations were rewritten, not deleted, and a new test group pins the degradation.
+- **ADR-0031 is implemented** as the ruling specifies: a live book page declared `utf-8` and carried
+  a single invalid byte at offset 130 893 of 131 368 — browsers and upstream render the other
+  131 KB, this repository failed the whole `ruleBookInfo` stage. `decodeBody` now returns
+  `DecodedBody` (`text`, `charset`, `malformedByteCount`); the declared lane retries tolerantly and
+  `DioHttpClient` logs the one warning the ruling asks for — **declared charset, replacement count
+  and book source id** (which is why `HttpClient.get` gained `sourceId`, closing an existing C-ERR-8
+  gap, and why the four use cases pass `source.url`). The **sniffing / fallback lanes stay strict**,
+  because there “the encoding was guessed wrong” and “the bytes are broken” cannot be told apart.
+  Two of the supported families actually meet `book-source.md` §5's “U+FFFD, no dropped or shifted
+  bytes” requirement — `utf-8` and `gbk` (both measured) — so only those are tolerant:
+  `shift-jis` / `euc-jp` raise a `RangeError` (an `Error`, which ADR-0022 forbids catching) on the
+  strict decode and `euc-kr` drops illegal bytes instead of failing. Both facts are registered in
+  `book-source.md` §5.1 and `PLAN.md` §3.7.
+- Documentation follows the single-source rule: `book-source.md` §3 gained the #1/#2 type note
+  (ADR-0032) and §5.1 the per-family tolerance registration, §10 points at the spot-check entry
+  point, `constraints.md` C-SRC-4 / C-NET-3 back-link the two rulings, `docs/README.md` §4 lists
+  `tool/spot_check/`, the ADR index carries 0032, and `PLAN.md` §3.1 / §3.4 / §3.7 / §4 record
+  G2b as met with the next step being 3.5. Gates: `dart format` unchanged, `flutter analyze` no
+  issues, `flutter test --coverage` 369 passed, `check_coverage.dart` exit 0 with `core` and
+  `domain` at 100%.
 
 ### 3.3's freeze precondition is pinned, and PLAN.md no longer contradicts itself (2026-10-11)
 

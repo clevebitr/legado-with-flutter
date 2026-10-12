@@ -27,6 +27,8 @@ final class FetchToc {
     final ParseResult<RuleScope> page = await _pages.fetch(
       url,
       rulePath: 'ruleToc',
+      headers: source.headers,
+      sourceId: source.url,
     );
 
     return switch (page) {
