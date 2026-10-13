@@ -142,6 +142,7 @@ Windows 与 Android 两侧都已实测通过。
 | 脚本报「模拟器进程已消失，未能完成开机」 | 模拟器启动后立刻退出 | 读 `build/test-artifacts/android-emulator-<avd>.log[.err]` |
 | 同上，日志里是 `Change of GLES renderer detected` + `Failed to load snapshot 'default_boot'` | `-Headless` 与残留快照记录的渲染器不一致，快照加载失败后模拟器直接退出 | 去掉 `-Headless` 重跑一次：会重新生成快照，之后两者都能用（实测 2026-10-13） |
 | `dart run tool/check_coverage.dart` 以退出码 3 失败 | 新增了 `lib/core/**` / `domain/**` / `data/**` 源文件却没有测试 | 补测试；确需豁免按 ADR-0019 登记进 `tool/coverage_allowlist.txt`（`testing.md` §2） |
+| **新建 worktree** 里 `flutter test` / `flutter run` 报 `By default, this package downloads a pre-compiled SQLite library` + `SocketException` | native assets 的下载缓存是**按 worktree** 存的（`<worktree>/.dart_tool/hooks_runner/shared/sqlite3/`），新 worktree 没有缓存，一断网就失败（与代码无关，也与 Android 的 `libsqlite3.arm.android.so` 同源） | 从任一已跑通的 worktree 拷 `.dart_tool/hooks_runner/shared/sqlite3/` 过去（实测即时恢复），或等网络恢复后重跑；**不要**为它改 `pubspec.yaml` / 加本地 sqlite3 |
 
 ---
 
