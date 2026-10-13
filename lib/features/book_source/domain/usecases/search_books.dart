@@ -36,10 +36,34 @@ final class SearchBooks {
       );
     }
 
-    final String url = _pages.renderUrl(searchUrl, <String, String>{
-      'key': keyword,
-      'page': '$page',
-    });
+    final ParseResult<String> rendered = await _pages.renderUrl(
+      searchUrl,
+      <String, String>{
+        'key': keyword,
+        'page': '$page',
+        // `{{baseUrl}}` 是 M0 变量（§4）：当模板渲染，不必为一个纯量值拉起 JS 沙箱。
+        'baseUrl': source.url,
+      },
+      rulePath: 'searchUrl',
+      // 搜索 URL 还没有页面可读，所以 `baseUrl` 用书源自己的地址（上游 `AnalyzeUrl` 也
+      // 以书源为基准）；`source` / `header` 随上下文带上，规则里的 `http.*` 要用它（C-NET-4）。
+      context: JsPageContext(
+        baseUrl: source.url,
+        page: page,
+        source: source.jsSourceInfo,
+        headers: source.headers,
+      ),
+    );
+    final String url;
+    switch (rendered) {
+      case ParseFailure<String>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        return failureAt<List<Book>>(kind: kind, rulePath: rulePath);
+      case ParseSuccess<String>(:final String data):
+        url = data;
+    }
     final ParseResult<RuleScope> response = await _pages.fetch(
       url,
       rulePath: 'searchUrl',

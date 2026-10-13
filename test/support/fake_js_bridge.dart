@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 
 /// Hand-written [JsBridge] double: records the jobs it is asked to run and answers with
 /// queued results (`docs/dev/testing.md` §4).
@@ -34,10 +35,25 @@ final class FakeJsBridge implements JsBridge {
   /// How many times [dispose] was called.
   int disposeCount = 0;
 
+  /// The variables the script is pretended to have written through `java.put` (`§6`,
+  /// matrix #17), merged into [variables] for the job's source.
+  ///
+  /// The real bridge merges them out of the worker's result envelope (ADR-0034 §决策 1);
+  /// a double has no worker, so a test states them here. A `null` value clears the
+  /// variable, exactly like the real report.
+  final Map<String, String?> javaPuts = <String, String?>{};
+
+  /// The store [javaPuts] is merged into, when a test wires one.
+  JsVariableStore? variables;
+
   /// The bridge's answer for the job it is evaluating now.
   @override
   Future<ParseResult<Object?>> evaluate(JsJob job) async {
     jobs.add(job);
+    final JsVariableStore? store = variables;
+    if (store != null && javaPuts.isNotEmpty) {
+      store.merge(job.source.url, javaPuts);
+    }
     if (parseRequests.isNotEmpty) {
       return _runParseRequests(job);
     }

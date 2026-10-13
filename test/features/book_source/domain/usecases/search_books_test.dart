@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
@@ -109,7 +110,11 @@ String _jsonPage(String name) =>
 
   return (
     pages: PageFetchService(
-      engine: RuleEngine(logger: logger, jsBridge: jsBridge ?? FakeJsBridge()),
+      engine: RuleEngine(
+        logger: logger,
+        jsBridge: jsBridge ?? FakeJsBridge(),
+        variables: JsVariableStore(),
+      ),
       http: http,
       logger: logger,
     ),
@@ -152,6 +157,52 @@ void main() {
         expect(failure.rulePath, 'searchUrl');
         expect(http.requestedUrls, isEmpty);
         expect(service.printer.events, hasLength(1));
+      },
+    );
+
+    test(
+      'execute_givenARuleHeadInTheSearchUrl_returnsUnsupportedRule',
+      () async {
+        final FakeHttpClient http = FakeHttpClient();
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
+            _service(http);
+        final BookSource source = _source().copyWith(
+          searchUrl: 'https://example-novel.test/search?q={{@@class.a@text}}',
+        );
+
+        final ParseFailure<Never> failure = _failure(
+          await SearchBooks(pages: service.pages).execute(source, '剑来'),
+        );
+
+        // §4：搜索 / 发现 URL 里的 `{{…}}` 只允许 JS，规则头按名拒绝（C-SRC-4）——
+        // 不得把一个选择器当字面量发到网络。
+        expect(failure.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'unsupported:@@');
+        expect(http.requestedUrls, isEmpty);
+      },
+    );
+
+    test(
+      'execute_givenATemplateInTheSearchUrl_rendersTheSandboxValue',
+      () async {
+        const String jsUrl = 'https://example-novel.test/search-js';
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(jsUrl, _page('search_result.html'));
+        final FakeJsBridge jsBridge = FakeJsBridge()..result = jsUrl;
+        final BookSource source = _source().copyWith(
+          searchUrl: '{{java.search()}}',
+        );
+
+        final List<Book> books = _data(
+          await SearchBooks(pages: _service(http, jsBridge: jsBridge).pages)
+              .execute(source, '剑来'),
+        );
+
+        // 矩阵 #18：URL 里的 `{{…}}` 是 JS（§4），且关键词以 `key` 绑定交给脚本。
+        expect(http.requestedUrls, <String>[jsUrl]);
+        expect(jsBridge.jobs.single.script, 'java.search()');
+        expect(jsBridge.jobs.single.key, '剑来');
+        expect(books, hasLength(2));
       },
     );
 

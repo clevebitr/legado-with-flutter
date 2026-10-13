@@ -140,18 +140,19 @@ Windows 与 Android 两侧都已实测通过。
 | Android 侧一直起不来、日志停在 `Showing crashdialog to get consent.` | 崩溃上报对话框阻塞启动 | 脚本已加 `-crash-report-mode disabled`（§5.4） |
 | `AVD 'xxx' 不存在` | AVD 名不对 | `%LOCALAPPDATA%\Android\sdk\emulator\emulator.exe -list-avds` 查名，或 `-AvdName` 指定 |
 | 脚本报「模拟器进程已消失，未能完成开机」 | 模拟器启动后立刻退出 | 读 `build/test-artifacts/android-emulator-<avd>.log[.err]` |
+| 同上，日志里是 `Change of GLES renderer detected` + `Failed to load snapshot 'default_boot'` | `-Headless` 与残留快照记录的渲染器不一致，快照加载失败后模拟器直接退出 | 去掉 `-Headless` 重跑一次：会重新生成快照，之后两者都能用（实测 2026-10-13） |
 | `dart run tool/check_coverage.dart` 以退出码 3 失败 | 新增了 `lib/core/**` / `domain/**` / `data/**` 源文件却没有测试 | 补测试；确需豁免按 ADR-0019 登记进 `tool/coverage_allowlist.txt`（`testing.md` §2） |
 
 ---
 
-## 7. 实测证据（2026-10-11；主机侧与 Windows 设备级于 2026-10-12 复跑）
+## 7. 实测证据（2026-10-11；主机侧与 Windows / Android 设备级于 2026-10-13 复跑，含 M1 的 `java.*` 探针）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**504** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 779/779、`domain` 1163/1163，均 100%；阈值见 `docs/dev/testing.md` §2） |
+| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**583** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 829/829、`domain` 1478/1478，均 100%；阈值见 `docs/dev/testing.md` §2） |
 | Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`），含 `flutter_qjs_next` 从 `cxx/` 源码编译的 QuickJS |
-| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` 16 项（含 `await http.*` / `await parse.*` / `js:parse-scope` / `js:quota`），`on_disk_database` 1 项）；退出码 0 |
-| Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器自动启动 → 2 个用例文件全部通过 → 自动关闭；退出码 0（当时 `integration_test/` 只有 2 个文件；`js_bridge_test.dart` 的 Android 侧尚未复跑） |
+| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` **19 项**（含 `await http.*` / `await parse.*` / `js:parse-scope` / `js:quota` / `java.*` 同步读写与按源隔离 / URL 的 `key` 绑定），`on_disk_database` 1 项）；退出码 0 |
+| Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone` 自动启动 → 3 个用例文件全部通过（`js_bridge` **19 项**，含新增的 `java.*` / `key` 探针）→ 自动关闭；退出码 0 |
 | 许可证扫描 | `dart run tool/scan_licenses.dart` | 156 个包全部为宽松许可，无风险项；退出码 0（`NOTICE.md` §5） |
 
 > `flutter doctor` 的网络项在本机报 `A cryptographic error ... checking https://pub.dev/`

@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4 grammar first: the M1 rule syntaxes #15–#19 (2026-10-12)
+
+The first half of `PLAN.md` Phase 4: the five M1 syntaxes, implemented the way upstream reads them
+— substitute into the rule **text** first, then parse the result (`AnalyzeRule.SourceRule.init` /
+`makeUpRule`, `AnalyzeRule.kt:666-760`). Matrix states stay 待验证: no real source exercises them yet
+(`PLAN.md` §3.7).
+
+- **#15 `@@`** is stripped from the front of a rule body, so `{{@@class.a@text}}` means “run a default
+  rule here” — inside `{{…}}` the default is JavaScript, so a default rule has to say so. A `@@`
+  in the middle still reports `unsupported:@@`, as upstream only accepts it at the front.
+- **#16 `@put:{key:rule}` / `@get:{key}`** runs each value as a rule and writes it to the rules'
+  variable store before the flag is removed; `@get:` is substituted, and a rule that carried a
+  substitution is read the way upstream's `Mode.Regex` reads it: **the substituted text is the
+  value** (that is what makes `地址/{{@get:{x}}}` work). Malformed `@put` bodies are ignored, like
+  upstream's empty put map.
+- **#17 `java.put` / `java.get`** are the same variables, seen from the sandbox. Per **ADR-0034**
+  (the re-adjudication ADR-0030 §决策 5(a) asked for) the store lives on the **host**, keyed by book
+  source URL; each job carries a **snapshot**, `java.*` answers synchronously out of it inside the
+  worker, and the job reports its table back so the bridge can merge it. `java.put(key, null)` clears
+  a variable, a missing one reads as `''`, and `java.*` does not spend §6's per-rule call quota.
+- **#18 `{{…}}`** is JavaScript by default and a **rule** when the inner text starts with a rule head
+  (`@`, `$.`, `$[`, `//`) — upstream's `isRule` split. In the search URL the same `{{…}}` goes to the
+  sandbox through the new **asynchronous URL rendering** (`RuleEngine.renderUrl`), while `{{key}}` /
+  `{{page}}` / `{{baseUrl}}` keep the M0 template semantics (the keyword is still form-encoded
+  exactly once, and a URL made only of template variables never touches the sandbox). A rule head in
+  a URL is refused by name, and a `key` binding — upstream's `AnalyzeUrl.evalJS` has one and the rule
+  field context does not — is handed to URL scripts only.
+- **#19 `{$jsonpath}`** is expanded inside a JSON rule: every balanced template is replaced by its
+  path's value and the whole text is returned as **one** value, which is exactly the legacy
+  `{$.data.name}` form when the rule is nothing but one template.
+- Two registered boundaries: expansion stops at **8 levels** with a locatable `parseFailed` (a
+  per-source variable can hold rule text, so a self-reference could otherwise expand forever), and an
+  unclosed `{{` stays literal inside a rule body (upstream's `{{[\w\W]*?}}` does not match it either)
+  but is a `parseFailed` in a **URL**, where a literal `{{…}}` must never reach the request layer.
+- Tests: the engine gained 47 cases for the five syntaxes and their boundaries, the variable store a
+  suite of its own, the bridge the merge of a reported table, `decodeJsJavaRequest`, and a new
+  `page_fetch_service_test.dart` for paging rendering — **75 new cases in all** (504 → 579), plus the
+  review's 4. Coverage exit 0 (`core` 829/829, `domain` 1478/1478, 583 cases in all).
+  `integration_test/js_bridge_test.dart` gained **three** device probes (per-source variable isolation,
+  the Java ↔ `@get:` round trip in both directions, and the `key` binding being present in a URL job but
+  not in a field job), while its whitelist probe now also asserts the `java.*` entries — 16 → 19 cases.
+- **Architect review (2026-10-13), fixed on the branch:** `book-source.md` §3's case-insensitivity rule
+  was violated by the two new flags — the expansion step's pre-check compared case-sensitively, so
+  `@PUT:` failed with `unsupported:@PUT:` and `@GET:` with `unsupported:nested-rule` instead of
+  reading / writing the variable (upstream's `putPattern` / `getPattern` carry CASE_INSENSITIVE). Both
+  checks are case-insensitive now, with tests for the plain and the `{{…}}`-nested form. The
+  device-level probes were then run for real, on **Windows and Android** (`js_bridge` 19/19 on each,
+  exit 0), which caught the second defect: `jsBridge_whenAScriptWritesAJavaVariable_keepsItPerSource` built its
+  cross-job job by hand without the source **snapshot**, so its second `java.get` could only ever read
+  an empty table; the probe now carries `JsVariableStore.snapshot` in the job the way the engine does
+  and asserts the store merge as well. Also: the two copies of the reported-variable reader collapsed
+  into one `decodeJsVariables`, a `Map<String, String>` literal that would have thrown on
+  `java.put(key, null)` widened to `Map<String, String?>`, and two doc comments that had lost their
+  line break repaired.
+- Docs: `book-source.md` §3 (#15–#19 notes and their registered differences), §4 (URL template
+  boundaries), §6 (the `java.*` / `key` rows, the store, the quota note), §7 (`parseFailed` triggers);
+  `PLAN.md` §3.1/§3.5/§3.7; `docs/README.md` §2.1; `architecture.md` §1; **ADR-0034**.
+
 ### Phase 3 closure review: ADR corrections and one narrow ADR added (2026-10-12)
 
 Architect review of 3.7 (`844944b`) and 3.9 (`c64f827` + the F1 fix `27d33ab`), gates re-run in a

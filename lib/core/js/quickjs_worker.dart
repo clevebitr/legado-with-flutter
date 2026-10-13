@@ -163,6 +163,15 @@ final class _Worker {
   final Map<int, Completer<Object?>> _pending = <int, Completer<Object?>>{};
   int _nextCallId = 0;
 
+  /// The variables of the job being evaluated (`book-source.md` §6, ADR-0034 §决策 1).
+  ///
+  /// Seeded from the job's snapshot and reported back with the result, so `java.get` /
+  /// `java.put` are answered without leaving this isolate — which is what keeps them
+  /// synchronous — while the host stays the single writer of the store. A **null** value
+  /// means the script cleared the variable (`java.put(key, null)`), which the bridge turns
+  /// back into a removal instead of the text "null".
+  Map<String, String?> _variables = <String, String?>{};
+
   /// Registers §6's binding channels.
   ///
   /// The sync bindings (`crypto.*`, `log.*`) complete inside this isolate, so JavaScript
@@ -203,12 +212,22 @@ final class _Worker {
       jsParseBinding,
       (Object? args) => _callHost(jsParseBinding, args),
     );
+    // 矩阵 #17：`java.*` 在本 isolate 内完成，所以 JS 同步拿到值（§6 的形态列）。
+    _runtime.onMessage(jsJavaBinding, _applyJava);
   }
+
+  /// Answers one `java.*` call from the running script (§6, matrix #17).
+  ///
+  /// The value is a JSON envelope ([applyJsJavaCall]) rather than a bare value: a write has
+  /// no value to return, so `null` cannot serve as “failed” here. The variable map is this
+  /// job's snapshot, which the result envelope carries back to the host (ADR-0034 §决策 1).
+  Object? _applyJava(Object? args) => applyJsJavaCall(_variables, args);
 
   /// Runs one job and reports its result envelope.
   Future<void> evaluate(Object? job) async {
     // 上一个 job 的未答复调用（脚本没 await 就结束了）不再有意义，桥也已经不再认它。
     _pending.clear();
+    _variables = <String, String?>{};
     if (job is! Map) {
       _toBridge.send(<String, Object?>{
         'type': 'result',
@@ -221,6 +240,7 @@ final class _Worker {
     }
 
     final Map<String, Object?> fields = Map<String, Object?>.from(job);
+    _variables = decodeJsVariables(fields['variables']);
     final Stopwatch stopwatch = Stopwatch()..start();
     JsEvalResult result = _runtime.evaluate(_evaluationSource(fields));
     if (result.rawResult is Future) {
@@ -237,6 +257,8 @@ final class _Worker {
         'ok': false,
         'error': result.stringResult,
         'elapsedMs': stopwatch.elapsedMilliseconds,
+        // 脚本可能在报错前已经 `java.put` 过：上游的写入是立即生效的，所以失败也回传。
+        'variables': _variables,
       });
 
       return;
@@ -249,6 +271,7 @@ final class _Worker {
         'ok': false,
         'error': 'unreadable result envelope',
         'elapsedMs': stopwatch.elapsedMilliseconds,
+        'variables': _variables,
       });
 
       return;
@@ -260,6 +283,7 @@ final class _Worker {
       'value': decoded['value'],
       'error': decoded['error'],
       'elapsedMs': stopwatch.elapsedMilliseconds,
+      'variables': _variables,
     });
   }
 
@@ -323,13 +347,19 @@ final class _Worker {
 /// keep using either spelling. The script text is passed as a JSON string literal, so
 /// nothing in the rule can break out of it.
 String _evaluationSource(Map<String, Object?> fields) {
+  final Object? key = fields['key'];
   final StringBuffer buffer = StringBuffer()
     ..writeln(_prelude)
     ..writeln('var baseUrl = ${jsonEncode(fields['baseUrl'])};')
     ..writeln('var result = ${jsonEncode(fields['result'])};')
     ..writeln('var page = ${jsonEncode(fields['page'])};')
-    ..writeln('var source = Object.freeze(${jsonEncode(fields['source'])});')
-    ..write('__runRule(${jsonEncode(_asString(fields['script']))})');
+    ..writeln('var source = Object.freeze(${jsonEncode(fields['source'])});');
+  // `key` 只有 URL 规则才有（上游 `AnalyzeUrl.evalJS`，AnalyzeUrl.kt:377）。缺席时用
+  // `globalThis` 删掉而不是 `var` 声明，因为 `var` 建的属性删不掉，上一个 job 的词就会漏进来。
+  if (key != null) {
+    buffer.writeln('globalThis.key = ${jsonEncode(key)};');
+  }
+  buffer.write('__runRule(${jsonEncode(_asString(fields['script']))})');
 
   return buffer.toString();
 }
@@ -375,7 +405,8 @@ const String _prelude = r'''
     'queueMicrotask', 'setImmediate', 'console',
     'atob', 'btoa', 'structuredClone', 'performance',
     'require', 'process', 'XMLHttpRequest', 'fetch',
-    'navigator', 'location', 'window', 'global', 'self'
+    'navigator', 'location', 'window', 'global', 'self',
+    'key'
   ];
   for (var index = 0; index < forbidden.length; index++) {
     delete globalThis[forbidden[index]];
@@ -445,6 +476,32 @@ globalThis.crypto = Object.freeze({
   sha1: function (value) { return __crypto('sha1', value); },
   base64Encode: function (value) { return __crypto('base64Encode', value); },
   base64Decode: function (value) { return __crypto('base64Decode', value); }
+});
+
+globalThis.__java = function (operation, key, value) {
+  var call = { operation: operation, key: String(key) };
+  if (value !== undefined && value !== null) {
+    call.value = String(value);
+  }
+  var envelope = null;
+  try {
+    envelope = JSON.parse(String(sendMessage('java', JSON.stringify(call))));
+  } catch (error) {
+    envelope = null;
+  }
+  if (!envelope || envelope.ok !== true) {
+    // 写没有返回值，所以「拿不到值」不能当失败；畸形的那个由信封的 ok:false 表达。
+    throw new Error('java.' + operation + ' failed');
+  }
+  if (operation === 'get') {
+    return (envelope.value === null || envelope.value === undefined)
+      ? '' : String(envelope.value);
+  }
+};
+
+globalThis.java = Object.freeze({
+  put: function (key, value) { __java('put', key, value); },
+  get: function (key) { return __java('get', key); }
 });
 
 globalThis.__hostCall = function (binding, args) {

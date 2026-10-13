@@ -32,6 +32,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
@@ -171,6 +172,8 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
     logger: logger,
     policy: const HttpPolicy(),
   );
+  // 引擎与桥共一份变量表：`@put:` / `@get:` 与 `java.put` / `java.get` 是同一份（ADR-0034）。
+  final JsVariableStore variables = JsVariableStore();
   final PageFetchService pages = PageFetchService(
     engine: RuleEngine(
       logger: logger,
@@ -178,7 +181,9 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
         logger: logger,
         launch: launchQuickJsWorker,
         http: http,
+        variables: variables,
       ),
+      variables: variables,
     ),
     http: http,
     logger: logger,

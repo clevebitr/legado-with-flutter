@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/redaction.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
@@ -65,6 +66,11 @@ const int defaultJsMaxBindingCalls = 20;
 /// The engine never leaves this file: the isolate, the native library and the JS
 /// prelude live behind [JsWorkerLauncher], which is what keeps the queue, the budgets
 /// and the rebuild policy unit-testable without the native library.
+///
+/// It also owns the rules' variable store: `java.put` is answered **inside** the worker
+/// (that is what makes it synchronous, §6), so the job reports its variables back and this
+/// layer — the one that knows which source the job belongs to — applies them (ADR-0034
+/// §决策 1).
 final class QuickJsWorkerBridge implements JsBridge {
   /// Creates a bridge that starts workers through `launch`.
   ///
@@ -72,10 +78,15 @@ final class QuickJsWorkerBridge implements JsBridge {
   /// budget; the launcher receives it, so the two can never disagree. The `http` client is
   /// the only way a rule reaches the network (C-NET-1) and `maxBindingCalls` is §6's
   /// per-rule quota, counted here because this is the layer that sees every binding call.
+  ///
+  /// [JsVariableStore] is the same store the rule engine writes `@put:` into, so a
+  /// variable a script wrote is visible to `@get:` / `{{name}}` of a later rule of the same
+  /// source.
   QuickJsWorkerBridge({
     required this._logger,
     required this._launch,
     required this._http,
+    required this._variables,
     this._timeout = defaultJsTimeout,
     this._killGrace = defaultJsKillGrace,
     this._memoryLimit = defaultJsMemoryLimitBytes,
@@ -85,6 +96,7 @@ final class QuickJsWorkerBridge implements JsBridge {
   final AppLogger _logger;
   final JsWorkerLauncher _launch;
   final HttpClient _http;
+  final JsVariableStore _variables;
   final Duration _timeout;
   final Duration _killGrace;
   final int _memoryLimit;
@@ -189,6 +201,7 @@ final class QuickJsWorkerBridge implements JsBridge {
       handle: handle,
       logger: _logger,
       http: _http,
+      variables: _variables,
       timeout: _timeout,
       killGrace: _killGrace,
       maxBindingCalls: _maxBindingCalls,
@@ -227,6 +240,7 @@ final class _WorkerSession {
     required this._handle,
     required this._logger,
     required this._http,
+    required this._variables,
     required this._timeout,
     required this._killGrace,
     required this._maxBindingCalls,
@@ -241,6 +255,7 @@ final class _WorkerSession {
   final JsWorkerHandle _handle;
   final AppLogger _logger;
   final HttpClient _http;
+  final JsVariableStore _variables;
   final Duration _timeout;
   final Duration _killGrace;
   final int _maxBindingCalls;
@@ -333,6 +348,13 @@ final class _WorkerSession {
       _logger.debug('Ignoring a JS result that no job is waiting for');
 
       return;
+    }
+
+    // 脚本里 `java.put` 的写入先落地（上游的 put 是立即生效的，失败前写的也算），再决定
+    // 这个 job 的答案（ADR-0034 §决策 1）。
+    final JsJob? job = _inFlightJob;
+    if (job != null) {
+      _variables.merge(job.source.url, decodeJsVariables(message['variables']));
     }
 
     // 致命边界已经决定了这个 job 的答案：脚本自己写出来的值不再算数（C-SRC-4）。

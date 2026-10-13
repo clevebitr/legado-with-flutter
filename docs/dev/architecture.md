@@ -16,7 +16,7 @@ lib/
 ├── core/                         # 无业务语义的共享能力，可被任意层依赖
 │   ├── di/                       # 基础设施 Provider（数据库、HttpClient、Logger）
 │   ├── error/                    # ParseResult / ParseFailureKind / ARB 键名助手
-│   ├── js/                       # `@js:` 沙箱：JsBridge 契约 + 常驻 worker isolate + 白名单绑定（`log` / `crypto` 同步；`http` / `parse` 为 Promise）与每规则调用额度
+│   ├── js/                       # `@js:` 沙箱：JsBridge 契约 + 常驻 worker isolate + 白名单绑定（`log` / `crypto` 同步，`java.*` 在 worker 内同步，`http` / `parse` 为 Promise）、每规则调用额度，以及按书源 URL 键控的规则变量表（ADR-0034）
 │   ├── logging/                  # Logger 门面（唯一日志入口）
 │   ├── network/                  # HttpClient、CookieManager、编码检测与缓存、超时/重试策略与同一书源的并发预算
 │   ├── platform/                 # 平台抽象接口 + 各平台实现 + fallback

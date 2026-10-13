@@ -73,7 +73,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
 | Phase 3 — M0 横向铺开 | ✅ 完成 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）、3.4（`@js:` 接入 + 全部 JS 绑定与额度）、**3.7（真实源回归 → 矩阵 M0 状态列全「已确认」，G3 达成）**已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**3.9（charset 检测结果缓存）** 已完成，Phase 3 全部收口；下一步 = Phase 4（M1）。细节见 `CHANGELOG.md` |
-| Phase 4 — M1 | ⏳ 未开始 | — |
+| Phase 4 — M1 | ⏳ 进行中 | **语法先行（矩阵 #15–#19）已完成（2026-10-12）**：`@@` / `@put:` / `@get:` / `java.put` / `java.get` / `{{}}`（URL 侧也含）/ `{}`，变量语义归 ADR-0034；矩阵状态列仍待真实源回归（见 §3.7）。**未完成：** `exploreUrl` 发现页、`canReName`、`updateTime`（含 `java.timeFormat`）、`concurrentRate` |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
 
@@ -191,6 +191,11 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 ### 3.5 Phase 4 — M1
 
+> **状态（2026-10-12）：** 语法先行那半（矩阵 #15–#19）已落地，细节见 `CHANGELOG.md`；
+> 同时按 ADR-0030 §决策 5(a) 的重开触发条件产出 **ADR-0034**（规则变量的存储与生命周期）。
+> 剩下的是字段与发现页那一半：`exploreUrl`、`canReName`、`updateTime`（含 `java.timeFormat`）、
+> `concurrentRate`。
+
 矩阵 #15–#19 + `exploreUrl` 发现页 + `canReName` + **`updateTime`（依赖 `java.timeFormat`）** +
 `concurrentRate`。`isVip` **不在**本阶段（架构师裁决：归 M0 / Phase 3.5，见 ADR-0014 的修订注记）。
 每条语法同样需要真实书源验证记录。
@@ -217,6 +222,12 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 事项 | 去向 |
 |---|---|
 | 同一书源并发上限 3 + 章节正文有限并发 | ✅ **已闭环（3.8，2026-10-12）**：请求层唯一实现点 `DioHttpClient` + `RequestLimiter`（键 = 书源，无书源时按主机；默认 3 可配、FIFO 排队不报 busy、异常也释放槽位）；语义归 `book-source.md` §8 |
+| M1 语法 #15–#19 的状态列仍为「待验证」（真实书源回归未做） | **待回归**：按 ADR-0024 §决策 2，只有真实抓取页面 / 真实链路才能改状态列；需要在语料里找到用到 `@@` / `@put:` / `@get:` / `java.*` / `{{}}` / `{}` 的真实源（选源命令见 `tool/spot_check/README.md` §3，统计必须由入库工具复算），回归记录写入该文件与 PR |
+| `java.get('bookName')` / `java.get('title')` 的上游特例（取 Book / Chapter 名字，`AnalyzeRule.kt:812-821`） | **Phase 5（bookshelf / reader）**：那两个实体到那时才有；当前按普通变量读（`book-source.md` §3 的 #17 注记） |
+| 规则变量的生命周期：随 Provider 作用域、不落盘（上游持久化在 book / source 上） | **Phase 5**：与书架 / 阅读进度的持久化一起裁决（ADR-0034 §决策 2）；`@put:` / `@get:` 的**同源**语义已完整 |
+| `{{…}}` 在**列表规则**里的语义：本仓替换后按选择器读，上游回文本本身（`Mode.Regex`） | **待语料**：真实源出现「列表规则里用 `{{…}}` 造选择器」时再对齐；差异已登记在 `book-source.md` §3 的 #18 注记 |
+| 模板的 JS 返回**列表**时本仓取第一个值（上游插入数组的 `toString()`） | **已登记（`book-source.md` §3 #18 注记）**：待真实语料出现再定 |
+| `@put:{…}` 的体按 `key:value` 解析（值可带引号或裸写），不走上游 GSON 的严格 / 宽松两级 | **已登记（`book-source.md` §3 #16 注记）**：解析不出键值对的片段被忽略（与上游空 putMap 同结果） |
 | ~~charset 检测结果缓存~~ | ✅ **已闭环（3.9，2026-10-12）**：`CharsetCache` 端口 + `CacheDao` 适配器，按「书源 ID + URL」缓存**嗅探**结果（声明车道不进缓存）；语义归 `book-source.md` §5 |
 | 按书源清理缓存（需加列 + 迁移） | **Phase 5.5** |
 | 非顶层字段被拒降级为 warning（ADR-0026） | ✅ **已闭环（3.2）**：唯一实现点为 `PageFetchService`，两类（`unsupportedRule` / `parseFailed`）均降级，顶层 / 非顶层各 ≥1 条测试 |

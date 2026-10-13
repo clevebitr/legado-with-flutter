@@ -84,6 +84,8 @@ final class JsJob {
     this.result,
     this.sourceHeaders,
     this.parseEvaluator,
+    this.variables = const <String, String>{},
+    this.key,
   });
 
   /// The JavaScript the rule asked for, with the `@js:` flag already removed.
@@ -94,6 +96,25 @@ final class JsJob {
   /// It travels into failures and into everything `log.*` writes, so a JS problem
   /// stays locatable (C-SRC-8, §6).
   final String rulePath;
+
+  /// The variables the script may read and write through `java.get` / `java.put`
+  /// (`book-source.md` §6, matrix #16/#17).
+  ///
+  /// It is a **snapshot** of the source's variables, taken when the job is built: the
+  /// script reads them synchronously inside the worker (ADR-0034 §决策 1), and whatever
+  /// it writes travels back with the job's result, where the bridge merges it into the
+  /// store. A job therefore never sees a variable written by another job that started
+  /// after it.
+  final Map<String, String> variables;
+
+  /// The search keyword (upstream's `key` binding in a URL rule), or `null` when this job
+  /// is not evaluating a URL.
+  ///
+  /// Upstream binds `key` only in `AnalyzeUrl.evalJS` (`AnalyzeUrl.kt:377`), and the URL
+  /// is the one place a rule template cannot get the keyword from anywhere else. It stays
+  /// `null` for every other job, so a field rule reading `key` fails with `js:error`
+  /// instead of silently seeing an empty string (ADR-0034 §决策 3).
+  final String? key;
 
   /// The page the rule was read on (the `baseUrl` binding).
   final String baseUrl;
@@ -130,6 +151,8 @@ final class JsJob {
     'page': page,
     'source': source.toJson(),
     'result': result,
+    'variables': variables,
+    'key': key,
   };
 }
 

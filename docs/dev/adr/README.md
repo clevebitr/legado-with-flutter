@@ -55,3 +55,4 @@
 | [0031](0031-tolerant-decoding-on-the-declared-charset-lane.md) | 编码宽容只对「已声明」车道开放（声明权威 + warning，嗅探/回退保持严格） | Accepted（2026-10-11 架构师裁决，用户指令） | 本次新增 |
 | [0032](0032-unknown-rule-type-degrades-to-css.md) | 默认规则的未知类型退化为原始 CSS 选择器 | Accepted（2026-10-12 开发组起草、**架构师审核接受**；G2b spot-check 触发） | 本次新增 |
 | [0033](0033-cache-failure-exemption-in-its-adapter.md) | 缓存失败吸收的唯一豁免点：`CacheDaoCharsetCache` 允许 `on Exception`（drift 不导出 `ConnectionClosedException`） | Accepted（2026-10-12 架构师裁决；3.9 复核 F1 的事实修正触发） | 本次新增 |
+| [0034](0034-js-rule-variables.md) | M1 规则变量：宿主侧一份表 + 每个 job 一份快照（`@put:` / `@get:` / `java.put` / `java.get`） | Accepted（2026-10-12 架构师裁决；ADR-0030 §决策 5(a) 的重开触发条件） | 本次新增 |

@@ -94,4 +94,75 @@ final class JsBridgeProvider
   }
 }
 
-String _$jsBridgeHash() => r'e932d992d458fc1cd9fadfcefc571f324d06af86';
+String _$jsBridgeHash() => r'1345804b08bde31f4aebebabbeaeb4da22b9fc5e';
+
+/// Provides the rule variables `@put:` / `@get:` and `java.put` / `java.get` share
+/// (`docs/dev/book-source.md` §4 and §6, matrix #16 / #17).
+///
+/// It is one instance per provider scope, keyed by book source inside, and it is watched by
+/// both the engine and the bridge because the two are the two ends of one contract: the
+/// engine reads and writes it while parsing, the bridge applies what a script wrote
+/// (ADR-0034 §决策 1). A scope owns the variables' lifetime, so nothing survives the
+/// operation that created it — which is the registered difference from upstream's
+/// persisted per-book variables (ADR-0034 §决策 2).
+
+@ProviderFor(jsVariableStore)
+final jsVariableStoreProvider = JsVariableStoreProvider._();
+
+/// Provides the rule variables `@put:` / `@get:` and `java.put` / `java.get` share
+/// (`docs/dev/book-source.md` §4 and §6, matrix #16 / #17).
+///
+/// It is one instance per provider scope, keyed by book source inside, and it is watched by
+/// both the engine and the bridge because the two are the two ends of one contract: the
+/// engine reads and writes it while parsing, the bridge applies what a script wrote
+/// (ADR-0034 §决策 1). A scope owns the variables' lifetime, so nothing survives the
+/// operation that created it — which is the registered difference from upstream's
+/// persisted per-book variables (ADR-0034 §决策 2).
+
+final class JsVariableStoreProvider
+    extends
+        $FunctionalProvider<JsVariableStore, JsVariableStore, JsVariableStore>
+    with $Provider<JsVariableStore> {
+  /// Provides the rule variables `@put:` / `@get:` and `java.put` / `java.get` share
+  /// (`docs/dev/book-source.md` §4 and §6, matrix #16 / #17).
+  ///
+  /// It is one instance per provider scope, keyed by book source inside, and it is watched by
+  /// both the engine and the bridge because the two are the two ends of one contract: the
+  /// engine reads and writes it while parsing, the bridge applies what a script wrote
+  /// (ADR-0034 §决策 1). A scope owns the variables' lifetime, so nothing survives the
+  /// operation that created it — which is the registered difference from upstream's
+  /// persisted per-book variables (ADR-0034 §决策 2).
+  JsVariableStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'jsVariableStoreProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$jsVariableStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<JsVariableStore> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  JsVariableStore create(Ref ref) {
+    return jsVariableStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(JsVariableStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<JsVariableStore>(value),
+    );
+  }
+}
+
+String _$jsVariableStoreHash() => r'2757af5cd35b30cfd6127455a7f867c15cc9c1fd';

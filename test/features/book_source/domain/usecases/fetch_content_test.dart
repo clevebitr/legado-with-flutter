@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
@@ -61,7 +62,11 @@ PageFetchService _service(FakeHttpClient http) =>
 
   return (
     pages: PageFetchService(
-      engine: RuleEngine(logger: logger, jsBridge: FakeJsBridge()),
+      engine: RuleEngine(
+        logger: logger,
+        jsBridge: FakeJsBridge(),
+        variables: JsVariableStore(),
+      ),
       http: http,
       logger: logger,
     ),
