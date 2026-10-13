@@ -49,7 +49,7 @@ Phase 2  书源引擎【竖切】                  ✅ 已完成（G2a 达成；
 Phase 3  M0 横向铺开                      ← 当前（3.1 已完成）
    │     矩阵 #1–#14（含 @js: 与 JsBridge）
 Phase 4  M1                              矩阵 #15–#19 + 发现页等
-Phase 5  阅读体验                        阅读器、书架、缓存、设置、法律声明页
+Phase 5  阅读体验                        书源入口（列表/导入/仓储）、阅读器、书架、缓存、设置、法律声明页
 Phase 6  发布前                           清单见 §5
 ```
 
@@ -74,7 +74,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
 | Phase 3 — M0 横向铺开 | ✅ 完成 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）、3.4（`@js:` 接入 + 全部 JS 绑定与额度）、**3.7（真实源回归 → 矩阵 M0 状态列全「已确认」，G3 达成）**已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**3.9（charset 检测结果缓存）** 已完成，Phase 3 全部收口；下一步 = Phase 4（M1）。细节见 `CHANGELOG.md` |
 | Phase 4 — M1 | ⏳ 进行中 | **语法先行（矩阵 #15–#19）已完成（2026-10-12）**；**规格前置已完成（2026-10-13）**：**ADR-0035**（发现页）、**ADR-0036**（`concurrentRate`）、**ADR-0037**（`java.*` 兼容面）。**b1 已完成（2026-10-13，含复核）**：四处 `updateTime` + `java.timeFormat`。**b2 已完成**：`concurrentRate` 与速率门/并发门合成。**b3 已完成**：`canReName`（不求值）+ `variableComment` 建模。**b4a 已完成**：发现页引擎（`exploreUrl` 两种形态 + 分类解析 + 整条回落 + `ExploreBooks`）。**b4b 已完成（2026-10-13，含架构师复核）**：发现页分类 UI（五个界面状态 + 分类行保留 + 重试 + 双语 ARB）。**b1b 已完成（2026-10-13，含架构师复核）**：`java.*` 兼容面 + 真源主流写法回归 + `--list` 普查修正。**下一步：b5（M1 真源缺口，见 §3.5/§3.7）与 Phase 4 出口**（出口含按 **ADR-0038** 的阶段级设备探针，Windows + Android 各一次） |
-| Phase 5 — 阅读体验 | ⏳ 未开始 | — |
+| Phase 5 — 阅读体验 | ⏳ 未开始 | 步骤与验收见 §3.6（P5-0 规格前置 + 5.1 书源入口 + 5.2 正文缓存 + 5.3 阅读器 + 5.4 书架 + 5.5 书源展示 + 5.6 设置 + 5.7 缓存清理 + 5.8 导入导出 + 5.9 平台与法律声明）。**首次引入 `data/` 层**，开工前置是 ADR-0021 复审与书源导入规格（P5-0） |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
 
 > Phase 1 与 Phase 2 的详细完成记录（含每步产出、修订的 ADR、依赖变化）已归档到
@@ -217,19 +217,98 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 ### 3.6 Phase 5 — 阅读体验
 
-阅读器（翻页、字号、进度）、书架、正文缓存、设置页、**「关于 → 法律声明」页（C-UI-9，GPL 要求）**。
+**目标（一句话）：** 让人能在 UI 里走完两条闭环——① **选 / 导入书源 → 搜索或发现 → 详情 → 目录 → 正文 → 阅读**（含翻页、字号、进度）；② **书架 + 设置 + 缓存清理 + 法律声明**可用。
 
-平台体验：`platform.md` §2 中其余三个接口在本阶段落地（不另设阶段）。
+**为什么本阶段容易返工（动手前先读）：** 这是**第一次引入 `data/` 层**、**第一次数据库迁移**（`schemaVersion` 1 → 2，现有 `drift_schemas/` 只有 v1），也是第一次出现「必须由人点着验收」的界面。今天 `lib/features/book_source/di.dart` 的 `currentBookSource` **恒返回 `null`**（ADR-0025 §后果：本仓还没有书源仓储），所以发现页入口按钮是禁用的、UI 里点不进去——**5.1 是其余每一步的前置**。顺序按「先让一个人点通最短闭环，再铺横向」定：**5.1 是 5.2–5.8 的前置**（5.9 的平台件与法律声明页可并行推进），不得跳步。
 
-| 步骤 | 内容 | 验收 |
+#### 5.0 规格前置（P5-0；必须先做，不许边做边定）
+
+| 要定的事 | 为什么现在就要定 | 产出 |
 |---|---|---|
-| 5.1 | 预测性返回接线：`PredictiveBackSupport` → `PageTransitionsTheme` + `AndroidManifest.xml` 的 `enableOnBackInvokedCallback`（C-UI-4、C-PLT-2） | Android 13+ 侧滑返回出现预览动画 |
-| 5.2 | `SystemUiController`：状态栏透明与 edge-to-edge 适配 | edge-to-edge 下内容不被遮挡 |
-| 5.3 | `HapticsController`：触感反馈能力探测与降级 | 不支持的平台 no-op 且不抛异常 |
-| 5.4 | 书源展示与排序字段建模：`lastUpdateTime` / `respondTime` / `weight` / `customOrder` | 书源列表按 `weight` / `customOrder` 排序，`respondTime` 参与展示；四个字段有排序 / 展示单测 |
-| 5.5 | 缓存清理（架构师裁决 F2；**只登记归属与成本分档**）：**① 全量清空缓存** —— 现有三列已够 `DELETE`，零 schema 变更（建议先做）；**② 按书源清理** —— 需给 `cache_entries` 加 `sourceId` 列 → `drift_dev schema dump` → 补迁移测试（`tech-stack.md` §8），成本更高，作为有真实需求时的后续项 | 缓存可被用户清空；若实现「按书源清理」，`DELETE WHERE sourceId = ?` 生效且有迁移测试 |
+| **ADR-0021 复审** | 它的 §后果写明两个复审触发条件：**(1)** 导入 UI 需要 DTO 隔离时、**(3)** `data/` 出现第一个真实消费方时——本阶段同时命中两条 | 新增 ADR（或对 0021 的修订注记），并在其索引里登记 |
+| **书源身份与重复导入语义** | 决定表的主键与「同一个源导入两次」的行为。`bookSourceUrl` 是上游的天然标识，但真实语料存在「同 URL、不同规则串」的实例 | 规格写进 `book-source.md` §2 的注记；表定义按它落地 |
+| **导入的校验与体积边界** | C-SEC-5 要求校验结构 + 限制体积 + 禁止一次性读入超大文件；`checked` 模式（ADR-0022）已经把**畸形单条**变成 `invalidBookSource`，但**批量文件本身**的上限与读法还没有数值 | 数值与失败语义写入新 ADR；用户可见文案按 C-UI-5 落双语 ARB |
+| **新依赖裁决** | 文件选择 / 分享 / 字体等能力很可能要新依赖（C-DEP-1、C-DEP-7） | 结论写入 `tech-stack.md` §1 与 `NOTICE.md` §5；禁止实现时临时加 |
+| **三个新 feature 的边界** | `architecture.md` §1 已把 `reader` / `bookshelf` / `settings` 写进目录示例；书源入口与导入留在 `book_source` | `architecture.md` §1/§6 的页面与路由表同步 |
+| **规则变量是否持久化** | ADR-0034 §决策 2 把这件事留给本阶段与书架一起裁决 | 裁决写入修订后的 ADR-0034 或新 ADR |
+| **本阶段要做哪些「规则面」** | `isVolume` / `formatJs` / `preUpdateJs` 属规则面而不是 UI 面（见 5.4 的处置），做与不做都要在这里写死 | 结论写回 §3.7 对应行 |
 
-完成判定：`C-UI-9` 页面存在且可达（widget 测试断言）；三端平台验收清单（`platform.md` §6）逐项通过。
+#### 5.1 书源入口（第一优先：人类闭环的入口）
+
+- **表**：新增 `book_sources`（列集合按 5.0 的身份裁决落定，至少含启用位、排序字段与原始 JSON 负载），`schemaVersion` 1 → 2；按 `tech-stack.md` §8 走 `drift_dev schema dump` / `schema generate`，**提交生成物**并补迁移测试。
+- **分层**：`domain/` 定义 `BookSourceRepository` 接口；`data/` 出现本仓第一个真实消费方（DTO + DataSource + `RepositoryImpl`，单测用内存 Drift）。
+- **接缝**：`currentBookSource` 从「恒 `null` 的常量」改成**可写 Notifier**（`@riverpod` 生成形态，C-STATE-2），默认选「启用且排序第一」的源；各页面从「无书源空态」变成「引导去导入」。
+- **UI**：书源列表页（启用 / 禁用、切换当前源、删除、进入导入）+ 导入入口（形态由 5.0 裁决）。
+- **验收**：Widget 测试（空列表引导 / 导入成功后出现 / 选中后搜索与发现按钮可用 / 删除后回到空态）；导入畸形 JSON → `invalidBookSource` 文案；体积上限单测；`data/` 层满足 `testing.md` §2（含「未测量源文件」判定）；`on_disk_database` 探针覆盖新表的一次真实写入；Windows 设备级实跑（ADR-0038 的切片口径）。
+
+#### 5.2 正文缓存
+
+- 现状：**没有**正文缓存（`CacheDao` 目前唯一的生产消费方是 charset 嗅探结果）。本步落 `ContentCache` 端口（`domain/`）+ `CacheDao` 适配器，键 = 书源 ID + 章节 URL 的稳定摘要（C-NET-6），**TTL 数值只定义一次**并登记在 `book-source.md` §5。
+- **验收**：命中 / 过期 / 失败吸收各 ≥1 条单测（缓存失败**不得**把阅读变成失败，与 ADR-0033 同口径）；同一章节二次进入不发请求。
+
+#### 5.3 阅读器
+
+- 翻页模式（滚动 / 分页先做一种，另一种登记去向）、字号 / 行距 / 背景（`shared_preferences`，C-NET-9）、章节切换、**阅读进度落盘**（新表：书 + 章节 + 偏移；建表同样走 `tech-stack.md` §8 的 dump / generate 与迁移测试）、`PLAN.md` §3.7 里两条展示项一并收：**`updateTime` 的展示**、**`canReName` 的消费方**（改名何时覆盖已有书名）。
+- **验收**：字号 / 主题切换的 Widget 测试；进度写入 → 恢复的往返测试；`updateTime` 与 `canReName` 各有行为测试；Golden 基线按 `testing.md` §5 **单独 PR**。
+
+#### 5.4 书架
+
+- 书架列表（在追 / 已读、删除、置顶）、从搜索与详情加书、最近阅读排序；`java.get('bookName' | 'title')` 的上游特例（`PLAN.md` §3.7）随 Book / Chapter 上下文落地。
+- **本步必须明确处置三条已登记项**（不得静默跳过）：规则变量持久化（待在 5.0 裁决）、`downloadUrls` / `relatedBooks`、`isVolume` / `formatJs` / `preUpdateJs`。做 → 先补规格；不做 → 在 §3.7 写明触发条件。
+
+#### 5.5 书源展示与排序字段
+
+- `lastUpdateTime` / `respondTime` / `weight` / `customOrder` 的展示与排序（5.1 已用其中两个做默认排序，本步补齐展示），以及**书源校验 / 调试入口**（`checkKeyWord` 一类未建模字段的处置一并收）。
+
+#### 5.6 设置页
+
+- 主题模式、默认字号、并发上限、缓存清理入口、关于页入口。
+- **两条已登记项必须一起收：** ① 并发上限**必须显式校验或钳制 `> 0`**——`HttpPolicy` / `RequestLimiter` 现在只用 `assert`，release 下会被剥掉，`0` 会让该键的每个请求**永久排队**；② 批量下载要**共用一份并发预算**——`httpClientProvider` 是 autoDispose，预算挂在 `DioHttpClient` 实例上。
+
+#### 5.7 缓存清理
+
+- ① **全量清空**：现有三列够 `DELETE`，零 schema 变更（先做）；② **按书源清理**：给 `cache_entries` 加 `sourceId` 列 → dump + 迁移测试（成本更高，按真实需求再做）。
+
+#### 5.8 导入 / 导出保真
+
+- `toLegadoJson` 一类的入口把 `extra` 合并回写（ADR-0021 §后果：今天只兑现了「内存里不丢」的一半），并支持导出全部书源；导入与导出共用同一份校验。
+- **验收**：往返测试（导入 → 导出 → 再导入不丢键，含四层 `extra`）；畸形输入不写出半截文件。
+
+#### 5.9 平台体验 + 法律声明页
+
+- `PredictiveBackSupport` / `SystemUiController` / `HapticsController` 三个接口落地（`platform.md` §2 的契约：不支持的平台返回 `null` 或 no-op，**禁止抛异常**，调用方不得 `!` 解包）。
+- 「关于 → 法律声明」页（C-UI-9 的六个 ARB 键，GPL 门禁），页面存在且可达由 Widget 测试断言。
+- **验收**：`platform.md` §6 的三端清单逐项勾选（Android 13+ 预览动画、edge-to-edge、iOS 边缘手势、Windows 悬停 / 焦点与窗口缩放）。
+
+#### 本阶段必须吸收的 §3.7 登记项（逐条落到步骤，不得丢）
+
+| §3.7 登记项 | 落在 |
+|---|---|
+| ADR-0021 复审触发条件 (1)(3) | 5.0 |
+| 规则变量持久化（ADR-0034 §决策 2） | 5.0 裁决 → 5.4 落地 |
+| `canReName` 的消费方 | 5.3 |
+| `updateTime` 的展示 | 5.3 |
+| `java.get('bookName' / 'title')` 的上游特例 | 5.4 |
+| `downloadUrls` / `relatedBooks` | 5.4 |
+| `isVolume` / `formatJs` / `preUpdateJs` | 5.0 裁决 → 5.4 |
+| `checkKeyWord`（书源校验 / 调试） | 5.5 |
+| 并发上限 `> 0` 的显式校验 | 5.6 |
+| `httpClientProvider` 的预算 keepAlive | 5.6 |
+| 按书源清理缓存（加列 + 迁移） | 5.7 |
+| `extra` 的导出合并（`toLegadoJson`） | 5.8 |
+| C-UI-9 法律声明页 | 5.9 |
+| `platform.md` §2 其余三个平台接口 | 5.9 |
+| 文件型数据库无自动化覆盖 | 5.1 起每个新表都由 `integration_test/on_disk_database_test.dart` 覆盖一次真实写入 |
+
+#### 完成判定（出口）
+
+1. `C-UI-9` 页面存在且可达；`PLAN.md` §5 发布前清单里属于本阶段的项已勾选。
+2. `platform.md` §6 的三端清单逐项通过。
+3. 门禁全绿（命令清单归 `AGENTS.md` §4）；`data/` 层首次进入覆盖率统计（`testing.md` §2 的阈值 + 「未测量源文件」判定）。
+4. **G5**（C-UI-9 可达、无 TODO 占位、无未使用代码）与 **G7**（Windows + Android 各实跑一次设备级用例，ADR-0038）达成；**G6** 留 Phase 6。
+5. §7 的文档同步清单走完：ADR 与索引、`architecture.md` 的页面 / 路由表、`book-source.md` §2/§3/§5（若涉及）、`CHANGELOG.md`、本表 §3.1 与 §3.7。
+
+> **本阶段高发的返工陷阱（对照 §6）：** 新增 `lib/core/**` 或 `lib/features/*/data/**` 文件却不带测试 → 直接命中「未测量源文件」(#7)；手改 `database.g.dart` 或忘记 dump（#8）；同一个数值写在两处（#9）；把模型的 `toJson` 当成无损导出（ADR-0021 §后果）；把「构建成功」当成「功能可用」（#1）。
 
 ### 3.7 未闭环交接登记（不得静默丢弃）
 
@@ -237,17 +316,17 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 |---|---|
 | 同一书源并发上限 3 + 章节正文有限并发 | ✅ **已闭环（3.8，2026-10-12）**：请求层唯一实现点 `DioHttpClient` + `RequestLimiter`（键 = 书源，无书源时按主机；默认 3 可配、FIFO 排队不报 busy、异常也释放槽位）；语义归 `book-source.md` §8 |
 | M1 语法 #15–#19 的状态列仍为「待验证」（真实书源回归未做） | **待回归**：按 ADR-0024 §决策 2，只有真实抓取页面 / 真实链路才能改状态列；需要在语料里找到用到 `@@` / `@put:` / `@get:` / `java.*` / `{{}}` / `{}` 的真实源（选源命令见 `tool/spot_check/README.md` §3，统计必须由入库工具复算），回归记录写入该文件与 PR |
-| `java.get('bookName')` / `java.get('title')` 的上游特例（取 Book / Chapter 名字，`AnalyzeRule.kt:812-821`） | **Phase 5（bookshelf / reader）**：那两个实体到那时才有；当前按普通变量读（`book-source.md` §3 的 #17 注记） |
-| 规则变量的生命周期：随 Provider 作用域、不落盘（上游持久化在 book / source 上） | **Phase 5**：与书架 / 阅读进度的持久化一起裁决（ADR-0034 §决策 2）；`@put:` / `@get:` 的**同源**语义已完整 |
+| `java.get('bookName')` / `java.get('title')` 的上游特例（取 Book / Chapter 名字，`AnalyzeRule.kt:812-821`） | **Phase 5（§3.6 的 5.4）**：那两个实体到那时才有；当前按普通变量读（`book-source.md` §3 的 #17 注记） |
+| 规则变量的生命周期：随 Provider 作用域、不落盘（上游持久化在 book / source 上） | **Phase 5（§3.6 的 5.0 裁决 → 5.4）**：与书架 / 阅读进度的持久化一起裁决（ADR-0034 §决策 2）；`@put:` / `@get:` 的**同源**语义已完整 |
 | `{{…}}` 在**列表规则**里的语义：本仓替换后按选择器读，上游回文本本身（`Mode.Regex`） | **待语料**：真实源出现「列表规则里用 `{{…}}` 造选择器」时再对齐；差异已登记在 `book-source.md` §3 的 #18 注记 |
 | 模板的 JS 返回**列表**时本仓取第一个值（上游插入数组的 `toString()`） | **已登记（`book-source.md` §3 #18 注记）**：待真实语料出现再定 |
 | `@put:{…}` 的体按 `key:value` 解析（值可带引号或裸写），不走上游 GSON 的严格 / 宽松两级 | **已登记（`book-source.md` §3 #16 注记）**：解析不出键值对的片段被忽略（与上游空 putMap 同结果） |
-| **上游有、本仓未建模的字段**：`SearchRule.checkKeyWord`、`BookInfoRule.downloadUrls` / `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay` | **保留在 `extra`（不丢数据）+ 去向待排期**：`checkKeyWord` 只用于「书源校验的默认关键词」（`BookSource.kt:228-238`），属书源校验 / 调试；`downloadUrls` / `relatedBooks` 与 `isVolume` / `formatJs` / `preUpdateJs` 属 Phase 5 的阅读器与书架；未建模期间**不得**声称支持这些字段（清单归 `book-source.md` §2 注记） |
+| **上游有、本仓未建模的字段**：`SearchRule.checkKeyWord`、`BookInfoRule.downloadUrls` / `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay` | **保留在 `extra`（不丢数据）+ 去向见 §3.6 的 5.4（`downloadUrls` / `relatedBooks`、`isVolume` / `formatJs` / `preUpdateJs`）与 5.5（`checkKeyWord`）**：`checkKeyWord` 只用于「书源校验的默认关键词」（`BookSource.kt:228-238`），属书源校验 / 调试；`downloadUrls` / `relatedBooks` 与 `isVolume` / `formatJs` / `preUpdateJs` 属 Phase 5 的阅读器与书架；未建模期间**不得**声称支持这些字段（清单归 `book-source.md` §2 注记） |
 | 发现页整字段 JS 的 `infoMap` 绑定、分类参数（`args` / 临时变量）与排名模块（`executeForRanking`、`MAX_RANKING_BOOKS` / `MAX_RANKING_PAGES`） | **不在 M1（ADR-0035 §决策 6）**：`infoMap` 命中即 `js:error`；表单型分类（`type` 非 `url`）报 `unsupportedRule`；行为归 `book-source.md` §4.2 / §11 |
 | 发现页条目 URL 缺失时，上游把**整段 `exploreUrl`** 当 URL 传下去（`ExploreBooksUseCase.kt:64-72`） | **已登记（ADR-0035 差异②）**：本仓拒绝该条目；真实语料若证明有书源依赖该副作用，再单独裁决 |
 | `java.timeFormatUTC(time, format, sh)`（带时区偏移与自定义 pattern） | **不在 M1**：触发条件 = 真实语料出现；`java.timeFormat` 的入参 / 时区语义归 `book-source.md` §6 |
-| `canReName` 的**消费方**（覆盖已有书名 / 作者） | **Phase 5（书架 / 阅读器）**：上游 `BookInfo.kt:65-84` 只在有 Book 实体时才有意义；M1 只建模 + 把「是否允许改名」传出，且**不求值**该规则（有意差异，归 `book-source.md` §2 注记） |
-| `updateTime` 的**展示**（列表 / 详情 / 目录 UI） | **Phase 5**：M1-b1 只把它落到实体字段（四处），UI 展示随阅读器 / 书架一起做 |
+| `canReName` 的**消费方**（覆盖已有书名 / 作者） | **Phase 5（§3.6 的 5.3）**：上游 `BookInfo.kt:65-84` 只在有 Book 实体时才有意义；M1 只建模 + 把「是否允许改名」传出，且**不求值**该规则（有意差异，归 `book-source.md` §2 注记） |
+| `updateTime` 的**展示**（列表 / 详情 / 目录 UI） | **Phase 5（§3.6 的 5.3）**：M1-b1 只把它落到实体字段（四处），UI 展示随阅读器 / 书架一起做 |
 | `concurrentRate` 的真实源只有 3 条（合集 C 3907 条），且三条都跑不了原样链路 | **已登记（2026-10-13，b2）**：1 条站点不可达（快书网）、2 条用未实现的 URL 形态（`<js>` 包装 / `{...}` URL 选项）；因此 b2 的真链路回归用**派生源**（漫客栈 + 只在 `concurrentRate` 上做 A/B：`1500` → 4.6 s、`0` → 0.6 s），记录在 `tool/spot_check/README.md`。这三条里任何一条变得可跑时，优先用真源复现 |
 | `spot_check --list` 的「非搜索字段 URL 里的 `{…}`」判据（原排期 M1-b4b） | **未做，等你裁决（2026-10-13）**：该判据的原始理由是「`{…}` 模板型 URL 规则在 M0 下无法逐字回放」，而矩阵 **#19 已在 3.7 实现**（`{$jsonpath}` 模板），现在排除这类源会把**能跑**的源挡在候选之外；另一方面收紧判据会改变 `--list` 的 353/253/122（ADR-0032 与 `tool/spot_check/README.md` 多处引用）。**两个选项：** ① 不改（现状，`{…}` 由真实回归逐条看）；② 改判据并同批用工具复算 + 更新引用它的数字（一次做全）。 |
 | ~~b2 的 Android 设备探针在本机跑不了（环境）~~ | ✅ **已闭环（2026-10-13 架构师复核）**：网络恢复后复跑 `tool/test/run_android.ps1` —— `Medium_Phone` 上三个用例文件全过、`js_bridge` **21/21**（退出码 0），记录已写入 `test-environment.md` §7；原阻塞是 `flutter build apk` 的 native assets 要从 `github.com/.../releases/download/` 下载 `libsqlite3.arm.android.so` 超时（与本切片无关） |
@@ -259,8 +338,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | **HTML 实体反转义：本仓不做，上游默认做（新发现，2026-10-13）** | **已登记（`book-source.md` §3 的对照注记）**：上游值规则 `unescape` 默认 `true`，对含 `&` 的结果做 `StringEscapeUtils.unescapeHtml4`（`AnalyzeRule.kt:297-308` / `:362-366`），`java.getString(rule, false)` 可关。实际差异比看起来小（DOM 文本 / 属性已被解析器解码），真正不同的是 `html` / `all` 一类**原样**提取。**触发条件：** 真实语料回归出现「作者依赖实体反转义」的实例（如标题里的 `&amp;`）时，按**新 ADR** 决定是否实现；在此之前 `java.getString(rule, true)` 具名拒绝 |
 | `tool/spot_check` 的 `--list` 判据口径（2026-10-13 更新两次，已闭环） | ✅ **已闭环（架构师 2026-10-13）：** 判据随已实现语法收放（`@js:`、`@put:` / `@get:`、`{{}}` 内嵌不再排除），合集 C 的普查由 266/192/69 变为 353/253/122。**同日修正（b1b 返工）：** 「`{` 开头就排除」那条旧判据（为 `{"method":"POST"}` 写的）把 `{{…}}` 也当对象头，与同一段注释和本行互相矛盾；现在只排除**单**花括号开头，普查复算为 **384/278/142**（架构师用工具判据的独立复刻脚本在同一份 `build/ao.json` 上复现了两组数字）。残留的保守项只有搜索 URL 的裸 `{…}`（**不收紧**，理由与口径归 `tool/spot_check/README.md` §3/§6） |
 | ~~`spot_check --list` 不检查非搜索字段 URL 里的 `{…}`（矩阵 #19）~~ | ✅ **已闭环（架构师 2026-10-13 裁决：不收紧、只改措辞）**：该判据的原始前提是「`{…}` 模板型 URL 规则在 M0 下无法逐字回放」，而矩阵 **#19 已在 3.7 落地**，这类源现在**能跑**；按此收紧会把能跑的源挡在候选之外，放开又会把「搜索 URL 用裸 `{…}`」的源当成可跑。因此判据**不收紧**（`--list` 只做保守筛查，这类源由 §4 的真实回归逐条判定）。**补充（同日）：** 非搜索字段那半边随后以 **bug 修复**的形式放开了 `{{…}}`（见上一行），那是「代码与已写明的判据不一致」，不是收紧/放开之争；搜索 URL 那半边保持不变 |
+| **「开发期书源开关」：让搜索 / 发现页在桌面上可手点（2026-10-13 提出）** | **待裁决（两个方案 + 样例源来源）**：今天 `lib/features/book_source/di.dart` 的 `currentBookSource` 恒返回 `null`（ADR-0025 §后果），所以发现页入口按钮禁用、UI 里点不进去真正的原因不是界面而是缺「选书源」的写方（§3.6 的 5.1）。**① 加一个开发期开关**（`--dart-define` 或等价机制 + 一份样例源），默认关闭、Phase 5 的仓储落地即删（**日落条件**），样例源用**脱敏离线语料**还是 **b1b 的派生真源**需一并定（后者涉及 ADR-0023 的立场）；**② 不做**，等 5.1 的书源入口。选 ① 时不得把它做成第二处「书源来源」（规格只允许一处，见 §2.1 归属矩阵） |
 | ~~charset 检测结果缓存~~ | ✅ **已闭环（3.9，2026-10-12）**：`CharsetCache` 端口 + `CacheDao` 适配器，按「书源 ID + URL」缓存**嗅探**结果（声明车道不进缓存）；语义归 `book-source.md` §5 |
-| 按书源清理缓存（需加列 + 迁移） | **Phase 5.5** |
+| 按书源清理缓存（需加列 + 迁移） | **Phase 5.7**（§3.6） |
 | **页面字段规则的 `page` 绑定与「已取到的那一页」不一致（新发现，2026-10-13）** | 搜得 / 发现阶段调 `PageFetchService.fetch(...)` 时**不传 `page`**，而它的默认值是 `1`；于是第 2 页响应里的字段规则在 JS 里读到 `page = 1`。上游的**字段规则 JS 根本不绑** `page`（`AnalyzeRule.evalJS` 的绑定里没有它，只有 `AnalyzeUrl.evalJS` 有），所以两边都不是「另 一家」。**触发条件：** 真实语料出现「字段规则用 `page` 分支」的源时裁定（要么把 `page` 传下去、要么像上游一样只在 URL 规则绑）；数值语义仍归 `book-source.md` §6 |
 | ~~`.gitattributes` 声称 `* text=auto eol=lf`，但三个文件的 blob 里存的是 CRLF（2026-10-13）~~ | ❌ **不成立，已撤回（架构师 2026-10-13 复测）：** 复现命令给出的是**相反的**结论 —— `git cat-file blob main:PLAN.md \| od -An -tx1 \| tr ' ' '\n' \| grep -c '^0d$'` 对 `PLAN.md` / `CHANGELOG.md` / `docs/dev/book-source.md` 在 `08c19d7`、`33bc9fc`、`2e8eabe`、`a319f52` 四个提交上都返回 **0**；`git ls-files --eol` 对全部受管文本都是 `i/lf w/lf attr/text=auto eol=lf`。原始判断来自 `git show <ref>:<file> \| grep -c $'\r'` 一类检查，它在本机 shell 上会给**每一行**都报 CR（把 `PLAN.md` 的 375 行全数报成 CRLF），属**检查方法错误**，不是仓库行尾问题。真正存在 CRLF 的只是**开发组编辑器新建的 4 个工作树文件**（`explore_page.dart` / `app_en.arb` / `app_zh.arb` / `explore_page_test.dart`），`git add` 时已由 `text=auto` 归一化为 LF——这也解释了 `git status` 里那几条 “CRLF will be replaced by LF” 提示。**结论：** 无需任何仓库卫生动作，也不需要「编辑这三个文件时保持现有行尾」这条临时约束 |
 | **覆盖率门禁 flake：`core` 会随机从 100% 掉到 99.89%（2026-10-13，复核 b1b 时发现）** | ✅ **已闭环（架构师 2026-10-13）：** `lib/core/network/request_limiter.dart` 原有私有 `_wait`（`Future<void>.delayed` 的一行包装）只能在「速率门真的等待」时才被执行，而唯一覆盖它的用例 `run_givenNoInjectedDelay_waitsOnRealTime` 用 **1 毫秒**真实窗口——两次 `run` 之间耗掉 ≥1 ms 时第二次不必等待，该行当次未执行 → `core` 943/944 → 退出码 1。3 连跑可复现（100% / 99.89% / 100%）。**修法：** 删掉 `_wait`，默认值直接是 `Future.delayed` 的 tear-off，本文件不再有「只有等待时才执行」的行；用例窗口放宽到 20 ms 并把这一点写进注释。5 连跑 `core` 稳定 919/919 |
@@ -269,9 +349,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 真实站点 spot-check（G2b） | ✅ **已闭环（2026-10-12）**：四段链路与派生 `@css:` 等价验证记录见 `tool/spot_check/README.md`；衍生的 **ADR-0032**（未知类型 → CSS）已落地，**ADR-0031**（已声明车道宽容解码）已实现 |
 | JSON 接口源的 URL 规则依赖 #16–#19（`@put:` / `@get:` / `{}` / `{{}}`） | **3.3 之后重排 M1 优先级**：211 条真实书源中 2 条用 `@json:`，其 URL 规则全部依赖上述 M1 模板，M0 下无法逐字回放（证据见 ADR-0028 §后果、`test/fixtures/json/README.md`） |
 | `{{}}` 内嵌规则（矩阵 #18）当前按「未定义变量」→ 空串 + warning | **Phase 4** 落地 #18 时改为求值，并同步矩阵状态列 |
-| `extra` 的导出合并（`toLegadoJson`） | 随**导入 / 导出**功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出。**2026-10-13 补充（b1 复核发现）：** freezed 生成的 `BookSource.toJson()` 在顶层把嵌套规则给出**对象**而不是 `Map`，递归成 JSON 得靠 `jsonEncode`（它认 `toJsonableObject`）；`explicit_to_json: true` 是否开由导入 / 导出那一批决定（生成器选项的唯一出处是根 `build.yaml`），本切片不动 |
+| `extra` 的导出合并（`toLegadoJson`） | **Phase 5（§3.6 的 5.8）**：随**导入 / 导出**功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出。**2026-10-13 补充（b1 复核发现）：** freezed 生成的 `BookSource.toJson()` 在顶层把嵌套规则给出**对象**而不是 `Map`，递归成 JSON 得靠 `jsonEncode`（它认 `toJsonableObject`）；`explicit_to_json: true` 是否开由导入 / 导出那一批决定（生成器选项的唯一出处是根 `build.yaml`），本切片不动 |
 | Big5 / Big5-HKSCS 解码缺口 | 仍待排期（`book-source.md` §5.1） |
-| 文件型数据库（后台 isolate + 原生库）无自动化覆盖 | 由 `integration_test/` 覆盖（`test-environment.md` §4） |
+| 文件型数据库（后台 isolate + 原生库）无自动化覆盖 | 由 `integration_test/` 覆盖（`test-environment.md` §4）；§3.6 的 5.1 起，**每个新表**都要在那里加一次真实写入 |
 | ~~G2b 的**证据语料未入库**~~ | ✅ **已闭环（2026-10-12）**：`legado_g2b_default_rules_source.json` 与
 `legado_g2b_css_rules_source.json` 按 `test/fixtures/book_sources/README.md` 的来源/脱敏格式入库（含 16 处派生映射表），
 入库后在活站点上逐字复现「同计数 + `sha256=6578ef3efc456856`」；同时发现并改正了统计口径：`--list` 复算为 **137/197（69.5%）**，
@@ -288,8 +368,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `http.*` 的传输失败不把 `ParseFailureKind`（可重试性）交给字段 | **已登记（3.4）**：失败以 rejected Promise（message = kind 名）交给脚本，脚本可以 `catch` 后改走镜像；未捕获时按 §7 报 `js:error`。把传输 kind 上抛就是猜，需先有真实语料证明「作者不会 catch」 |
 | ~~3.8 并发策略与 JS worker 容量的耦合~~ | ✅ **已闭环（ADR-0030）**：裁决为单常驻 worker + 单复用运行时 + FIFO，**容量不进 `JsBridge` 契约**；重开触发条件见 ADR-0030 §决策 5 |
 | ~~`isVip` 的**正侧**真值缺上游 `file:line`~~ | ✅ **已闭环（R1，2026-10-12）**：直抓 fork 源码 `HapeLee/legado-with-MD3@master`，判定就是上游 `String?.isTrue()`（调用 `BookChapterList.kt:261-264`，谓词 `StringExtensions.kt:75-80`）——`null` / 全空白 / 字面量 `"null"` → 非 VIP，其余值除非匹配 `(?i)^(?:false|no|not|0|0.0)$` 否则算 VIP（因此 `是` / `yes` 是 VIP，`no` / `not` / `0.0` 不是）；代码与测试已按此对齐，两处上游怪癖（`"null"` 在 trim 前比较、模式里 `.` 未转义）按原样照抄并登记在 `book-source.md` §4.1，唯一出处仍是 §4.1 |
-| 并发上限接入**用户设置**时（Phase 5）必须显式校验 `> 0`：`HttpPolicy` / `RequestLimiter` 目前只用 `assert`，release 下会被剥掉，`0` 会让该键的每个请求**永久排队** | **Phase 5（设置页）**：在设置边界校验或钳制；语义归 `book-source.md` §8 |
-| `httpClientProvider` 是 autoDispose，预算存在于 `DioHttpClient` 实例上，所以「同一书源并发上限」在**一次操作内**有效、跨操作会重建 | **Phase 5**：批量下载必须保证整批共用一份预算（该 provider 改 `keepAlive`，或把预算提到 app 级单例）；今天是串行翻页，无影响 |
+| 并发上限接入**用户设置**时（Phase 5）必须显式校验 `> 0`：`HttpPolicy` / `RequestLimiter` 目前只用 `assert`，release 下会被剥掉，`0` 会让该键的每个请求**永久排队** | **Phase 5（§3.6 的 5.6）**：在设置边界校验或钳制；语义归 `book-source.md` §8 |
+| `httpClientProvider` 是 autoDispose，预算存在于 `DioHttpClient` 实例上，所以「同一书源并发上限」在**一次操作内**有效、跨操作会重建 | **Phase 5（§3.6 的 5.6）**：批量下载必须保证整批共用一份预算（该 provider 改 `keepAlive`，或把预算提到 app 级单例）；今天是串行翻页，无影响 |
 
 ---
 
