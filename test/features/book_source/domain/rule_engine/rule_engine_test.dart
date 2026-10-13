@@ -3759,4 +3759,117 @@ void main() {
       },
     );
   });
+  group('RuleEngine java.* rule evaluation (M1-b1b)', () {
+    test(
+      'extractAll_givenALiteralJavaGetString_inlinesItBeforeTheSandbox',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'ran';
+
+        final List<String> values = await _values(
+          _engine(null, bridge).extractAll(
+            "@js:java.getString('class.result.0@tag.a@text') + '|' + page",
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // ADR-0037 §决策 3①：字面量首参在构造 job 之前就被求值并内联。假桥不会真的执行 JS，
+        // 所以可观察的是**交给沙箱的脚本**——那个调用已经被它的值替掉了（`jsonEncode` 给
+        // 双引号字面量），因此表达式拿到的是同步值，而不是 Promise。
+        expect(bridge.jobs.single.script, '"One" + \'|\' + page');
+        expect(values, <String>['ran']);
+      },
+    );
+
+    test('extractAll_givenALiteralJavaGetStringList_inlinesAnArray', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+
+      final List<String> values = await _values(
+        _engine(null, bridge).extractAll(
+          "@js:java.getStringList('class.result@tag.a@href').length",
+          _pageWithContext(_listHtml),
+          rulePath: 'contentRule.content',
+        ),
+      );
+
+      // `getStringList` 内联成 JSON 数组字面量（3 个 `<a>` 的 outerHtml），上游的
+      // `.toArray()` 垫片在沙箱里：这里钉的是「调用已被数组字面量替掉」。
+      expect(bridge.jobs.single.script, startsWith('['));
+      expect(bridge.jobs.single.script, contains('.length'));
+      expect(bridge.jobs.single.script, isNot(contains('java.getStringList')));
+      expect(values, <String>['ok']);
+    });
+
+    test(
+      'extractAll_givenANonLiteralJavaGetString_leavesItForTheSandbox',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'async-value';
+
+        final List<String> values = await _values(
+          _engine(null, bridge).extractAll(
+            r'@js:java.getString(variable)',
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // 非字面量首参留给沙箱：绑定回 Promise（本仓用假桥，所以直接答结果）。
+        expect(values, <String>['async-value']);
+        expect(bridge.jobs.single.script, 'java.getString(variable)');
+      },
+    );
+
+    test(
+      'extractAll_givenALiteralWhoseRuleNeedsTheSandbox_skipsTheFastPath',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'async-value';
+
+        await _values(
+          _engine(null, bridge).extractAll(
+            "@js:java.getString('@js:1+1')",
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // 内层规则自己要沙箱（含 `@js:`）：快路径不接手（否则会在本 job 之前再跑一个 job），
+        // 交给沙箱走 `js:parse-recursion` 那条既有边界。
+        expect(
+          bridge.jobs.single.script,
+          contains("java.getString('@js:1+1')"),
+        );
+      },
+    );
+
+    test('extractAll_givenALiteralWhoseRuleFails_failsTheWholeRule', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().extractAll(
+          r"@js:java.getString('@xpath://div')",
+          _pageWithContext(_listHtml),
+          rulePath: 'contentRule.content',
+        ),
+      );
+
+      // 半个脚本拿着空值比失败更糟：内联失败即整条规则失败（ADR-0037 §决策 3）。
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@xpath:');
+    });
+
+    test(
+      'extractAll_givenALiteralListRuleThatFails_failsTheWholeRule',
+      () async {
+        final ParseFailure<Never> failure = await _failure(
+          _engine().extractAll(
+            r"@js:java.getStringList('@xpath://div').length",
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // 列表形态的内联失败同样整条规则失败（ADR-0037 §决策 3）。
+        expect(failure.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'unsupported:@xpath:');
+      },
+    );
+  });
 }

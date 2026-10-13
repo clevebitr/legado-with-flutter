@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4 b1b: the `java.*` compatibility surface (2026-10-13)
+
+Implements ADR-0037: real sources use upstream's names (540 of 3907 sources use `java.*`;
+`md5Encode` 1221 calls, `getString` 603).
+
+- **Aliases (worker-side, synchronous, upstream semantics):** `java.md5Encode` (hex MD5),
+  `java.base64Encode` / `base64Decode` (no-wrap base64; invalid input throws), `java.encodeURI` and
+  `java.log`. `encodeURI` is Java's `URLEncoder.encode` — the new pure `javaEncodeUri`, **not** the JS
+  builtin of the same name (space -> `+`, different reserved set), because mapping it onto the builtin
+  would silently produce different signed URLs; multi-argument overloads are refused by name.
+- **Rule-evaluation family (`getString` / `getStringList` / `getElement` / `getElements`), two forms,
+  one implementation point.** The **synchronous fast path** runs on the host *before* the job is
+  built: `RuleEngine` scans the script for calls whose first argument is a **string literal**,
+  evaluates each rule against the current scope and inlines the result as JSON. That is what keeps the
+  395 real calls sitting *inside expressions* working
+  (`java.timeFormat(java.getString('$.x')*1000)`), where a Promise would be a type error. A literal
+  whose inner rule itself needs the sandbox (`@js:`, `{{...}}`, `@put:`, `@get:`, `<js>`) is skipped
+  for the **asynchronous** path, which answers through the same host evaluation as `parse.*` (so
+  `js:parse-scope` and `js:parse-recursion` keep their meanings); a failed literal fails the whole
+  rule rather than continuing with half a script.
+- **`Array.prototype.toArray()` shim** (returns `this`) for upstream's Java `List` habit (38 calls),
+  plus **named rejection stubs** for the M2 families (`ajax` / `webView*` / `toast` / key crypto /
+  `base64DecodeToByteArray` / `setContent` / ...) and a throwing proxy for the Rhino interop names
+  (`java.lang`, `java.security`, ...). `get` / `put` deliberately stay the **variable** functions of
+  `book-source.md` §6 (ADR-0034), so upstream's synchronous HTTP verbs of those spellings are covered
+  by the `ajax` family instead.
+- Tests: the pure encoder (form semantics, `%` encoded again, UTF-8 bytes), the call envelope, the
+  fast path (inlined in an expression, list form, non-literal left alone, sandbox-needing literal
+  skipped, failed literal failing the rule in both forms), and three device probes (the alias
+  surface, a rejected member failing readably, and the fast path plus `.toArray()` in a real engine).
+  Coverage exit 0 (`core` 944/944, `domain` 1709/1709).
+- Docs: `PLAN.md` §3.5 marks b1b done; `book-source.md` §6/§11 were already written by ADR-0037's own
+  docs commit. **Still open:** the real-source record for the `getString`-based `updateTime`
+  mainstream spelling.
+
+
 ### Troubleshooting row for the per-worktree native-asset cache (2026-10-13)
 
 Docs only, one row in `test-environment.md` §6: every fresh `git worktree` has its own

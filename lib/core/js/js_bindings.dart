@@ -295,6 +295,14 @@ enum JsJavaOperation {
 
   /// `java.timeFormat(time)`: formats a **milliseconds** timestamp (`book-source.md` §6).
   timeFormat,
+
+  /// `java.encodeURI(str)`: Java's `URLEncoder.encode(str, "UTF-8")` (`book-source.md` §6).
+  ///
+  /// It is **not** JavaScript's `encodeURI`: a space becomes `+` and the reserved set is the
+  /// form-encoder's, which is what upstream's `JsExtensions.encodeURI` calls
+  /// (`JsExtensions.kt:683-689`). Mapping it onto the JS builtin would silently produce different
+  /// URLs for signing and query rules (ADR-0037 §决策 2).
+  encodeUri,
 }
 
 /// One validated `java.*` call, decoded in the worker isolate (§6).
@@ -336,6 +344,7 @@ JsJavaRequest? decodeJsJavaRequest(Object? args) {
     'put' => JsJavaOperation.put,
     'get' => JsJavaOperation.get,
     'timeFormat' => JsJavaOperation.timeFormat,
+    'encodeUri' => JsJavaOperation.encodeUri,
     _ => null,
   };
   if (operation == null) {
@@ -346,6 +355,12 @@ JsJavaRequest? decodeJsJavaRequest(Object? args) {
   final Object? value = call['value'];
   switch (operation) {
     case JsJavaOperation.timeFormat:
+      return JsJavaRequest(operation: operation, value: value);
+    case JsJavaOperation.encodeUri:
+      if (value is! String) {
+        return null;
+      }
+
       return JsJavaRequest(operation: operation, value: value);
     case JsJavaOperation.get:
       if (key is! String) {
@@ -375,6 +390,10 @@ JsJavaRequest? decodeJsJavaRequest(Object? args) {
 /// `putVariable(key, null)`, `RuleDataInterface.kt:8-14`); a read of a variable that was never
 /// written answers an empty string, exactly like upstream's `AnalyzeRule.get`
 /// (`AnalyzeRule.kt:812-825`), so a rule can concatenate it.
+///
+/// The engine answers this inside the worker, so it stays synchronous ([javaEncodeUri], the
+/// `timeFormat` formatter and the variable map) — nothing here crosses an isolate (ADR-0037
+/// §决策 2).
 String applyJsJavaCall(Map<String, String?> variables, Object? args) {
   final JsJavaRequest? call = decodeJsJavaRequest(args);
   if (call == null) {
@@ -409,8 +428,50 @@ String applyJsJavaCall(Map<String, String?> variables, Object? args) {
       return formatted == null
           ? '{"ok":false}'
           : jsonEncode(<String, Object?>{'ok': true, 'value': formatted});
+    case JsJavaOperation.encodeUri:
+      return jsonEncode(<String, Object?>{
+        'ok': true,
+        'value': javaEncodeUri(call.value as String),
+      });
   }
 }
+
+/// Encodes [value] the way upstream's `java.encodeURI` does (`docs/dev/book-source.md` §6).
+///
+/// It is Java's `URLEncoder.encode(value, "UTF-8")` (`JsExtensions.kt:683-689`): `A-Za-z0-9` and
+/// `-`, `_`, `.`, `*` stay as they are, a space becomes `+`, and every other character is written
+/// as the upper-case `%XX` of its UTF-8 bytes. The JS builtin of a similar name is **not** the
+/// same function (it keeps `~`, `!` and friends and writes a space as `%20`), so a rule that signs
+/// a query would silently produce a different URL if this were mapped onto it.
+///
+/// Unlike the URL-template encoder of `url_template.dart` there is **no** already-encoded check:
+/// upstream always encodes, and a second `%` is therefore encoded again (`%` → `%25`).
+String javaEncodeUri(String value) {
+  final StringBuffer buffer = StringBuffer();
+
+  for (final int byte in utf8.encode(value)) {
+    if (byte == 0x20) {
+      buffer.write('+');
+    } else if (_formSafeBytes.contains(byte)) {
+      buffer.write(String.fromCharCode(byte));
+    } else {
+      buffer.write('%${byte.toRadixString(16).toUpperCase().padLeft(2, '0')}');
+    }
+  }
+
+  return buffer.toString();
+}
+
+/// The UTF-8 bytes Java's form encoder leaves alone: `A-Za-z0-9` plus `-`, `_`, `.`, `*`.
+final Set<int> _formSafeBytes = <int>{
+  for (int code = 0x30; code <= 0x39; code++) code,
+  for (int code = 0x41; code <= 0x5A; code++) code,
+  for (int code = 0x61; code <= 0x7A; code++) code,
+  0x2A, // *
+  0x2D, // -
+  0x2E, // .
+  0x5F, // _
+};
 
 /// Formats the timestamp one `java.timeFormat` call passed (`docs/dev/book-source.md` §6,
 /// matrix #17), or `null` when the argument cannot be read as one.
