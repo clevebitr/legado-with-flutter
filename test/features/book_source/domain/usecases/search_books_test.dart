@@ -596,5 +596,20 @@ void main() {
       // 展示用字符串：规则结果原文，模型与实体都不做日期解析（book-source.md §2）。
       expect(books.single.updateTime, '2026/10/13 09:05');
     });
+
+    test(
+      'execute_givenASourceWithConcurrentRate_handsItToTheRequestLayer',
+      () async {
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_searchUrl, _page('search_result.html'));
+        final BookSource source = _source().copyWith(concurrentRate: '5/1000');
+
+        await SearchBooks(pages: _service(http).pages).execute(source, '剑来');
+
+        // 书源自己的限速必须进请求层的预算（book-source.md §8、ADR-0036 §决策 5）：
+        // 键是书源 URL，所以脚本的 `http.*` 也自动共用同一份限速。
+        expect(http.sourceRates, <String, String?>{source.url: '5/1000'});
+      },
+    );
   });
 }

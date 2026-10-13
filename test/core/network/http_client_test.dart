@@ -745,4 +745,54 @@ void main() {
       expect(fixture.cache.writes, isEmpty);
     });
   });
+
+  group('DioHttpClient applySourceRate', () {
+    test('applySourceRate_givenALegalDeclaration_doesNotWarn', () {
+      final _Fixture fixture = _buildClient();
+
+      fixture.client.applySourceRate('https://example.com', '5/1000');
+
+      // 合法声明、`"0"` 与空白都是安静路径：日志里不应该出现 `concurrentRate`。
+      fixture.client.applySourceRate('https://example.com', '0');
+      fixture.client.applySourceRate('https://example.com', '');
+
+      expect(
+        fixture.printer.events.map(
+          (LogEvent event) => event.message.toString(),
+        ),
+        isNot(contains(contains('concurrentRate'))),
+      );
+    });
+
+    test('applySourceRate_givenAnIllegalDeclaration_warnsOnce', () {
+      final _Fixture fixture = _buildClient();
+
+      fixture.client.applySourceRate('https://example.com', 'abc');
+
+      // ADR-0036 §决策 2：非法声明要**可观测**——一条 warning，含书源 ID、字段名与原文。
+      final List<String> messages = fixture.printer.events
+          .map((LogEvent event) => event.message.toString())
+          .toList();
+      expect(messages, hasLength(1));
+      expect(messages.single, contains('source=https://example.com'));
+      expect(messages.single, contains('field=concurrentRate'));
+      expect(messages.single, contains('reason=not an integer'));
+      expect(messages.single, contains('value=abc'));
+    });
+
+    test(
+      'applySourceRate_givenALongIllegalDeclaration_truncatesTheExcerpt',
+      () {
+        final _Fixture fixture = _buildClient();
+        final String long = 'x' * 64;
+
+        fixture.client.applySourceRate('https://example.com', long);
+
+        // 日志里只留前 32 个字符 + 截断标记（C-ERR-8 / C-SEC-4 的「摘要」口径）。
+        final String message = fixture.printer.events.single.message.toString();
+        expect(message, contains('value=${'x' * 32}…'));
+        expect(message, isNot(contains(long)));
+      },
+    );
+  });
 }

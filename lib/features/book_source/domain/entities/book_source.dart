@@ -36,6 +36,11 @@ enum BookSourceType {
 /// counters (`lastUpdateTime` / `respondTime` / `weight` / `customOrder`) arrive
 /// with Phase 5 (`PLAN.md` 5.4). Everything unmodelled survives in [extra].
 ///
+/// [concurrentRate] is the source's own rate declaration (`book-source.md` §8). It stays the
+/// raw text here: the request layer parses it where the budget is spent, because the rate gate
+/// is keyed by the source URL and has to cover the `http.*` calls of `@js:` rules too
+/// (ADR-0036 §决策 5).
+///
 /// Import user-supplied files with [BookSource.fromLegadoJson]: it is the only
 /// entry point that keeps unrecognised keys, so a later export cannot lose data.
 @freezed
@@ -55,6 +60,7 @@ abstract class BookSource with _$BookSource {
     String? searchUrl,
     @JsonKey(name: 'ruleSearch') required SearchRule searchRule,
     @JsonKey(name: 'ruleExplore') ExploreRule? exploreRule,
+    @JsonKey(name: 'concurrentRate') String? concurrentRate,
     @JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,
     @JsonKey(name: 'ruleToc') required TocRule tocRule,
     @JsonKey(name: 'ruleContent') required ContentRule contentRule,

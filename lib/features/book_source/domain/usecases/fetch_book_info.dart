@@ -20,6 +20,8 @@ final class FetchBookInfo {
   /// with its `rulePath` and the book source id (C-SRC-8, C-ERR-8). A *malformed*
   /// rule still travels as a failure (C-SRC-4).
   Future<ParseResult<BookInfo>> execute(BookSource source, String url) async {
+    // 书源自己的限速要在第一个请求之前进预算（book-source.md §8、ADR-0036）。
+    _pages.applySourceRate(source);
     final ParseResult<RuleScope> page = await _pages.fetch(
       url,
       rulePath: 'ruleBookInfo',

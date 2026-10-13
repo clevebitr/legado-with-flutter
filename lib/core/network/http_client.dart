@@ -6,6 +6,7 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/redaction.dart';
 import 'package:flutter_reader/core/network/charset_cache.dart';
 import 'package:flutter_reader/core/network/charset_decoder.dart';
+import 'package:flutter_reader/core/network/concurrent_rate.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
@@ -58,6 +59,21 @@ abstract interface class HttpClient {
     String? keyword,
     String? sourceId,
   });
+
+  /// Applies the `concurrentRate` [sourceId] declares to that source's budget
+  /// (`docs/dev/book-source.md` §8).
+  ///
+  /// Call it when an operation starts using a source. The rate gate is keyed by [sourceId],
+  /// exactly like the concurrency budget, so every later request of that source — including
+  /// the `http.*` calls a `@js:` rule makes (`book-source.md` §6), which never see the
+  /// declaration itself — passes it as well (ADR-0036 §决策 5).
+  ///
+  /// [concurrentRate] is the **raw** declaration text: the request layer owns the syntax and
+  /// its warning, because that is where the budget is spent. `null`, a blank string and `"0"`
+  /// mean “no rate gate”; an illegal declaration is ignored with a warning and the source keeps
+  /// the default concurrency budget (ADR-0036 §决策 2). Registering the same declaration twice
+  /// is harmless and never resets the window.
+  void applySourceRate(String sourceId, String? concurrentRate);
 }
 
 /// [HttpClient] backed by `dio` (C-NET-1).
@@ -105,6 +121,33 @@ final class DioHttpClient implements HttpClient {
   final RequestLimiter _limiter;
   final Dio _dio;
   final CharsetCache? _charsetCache;
+
+  /// Reads [sourceId]'s own rate declaration into its budget (`book-source.md` §8).
+  ///
+  /// The rate gate lives in the same [RequestLimiter] as the concurrency budget and is keyed
+  /// by the source URL, so a `@js:` rule's `http.*` call (which only knows the source URL,
+  /// `book-source.md` §6) passes the same gate without carrying the declaration
+  /// (ADR-0036 §决策 5).
+  ///
+  /// An illegal declaration is **ignored and reported** (ADR-0036 §决策 2): the source keeps
+  /// the default concurrency budget and is not rate limited, instead of being silently limited
+  /// by a number nobody can see. The warning names the source, the field and a bounded excerpt
+  /// of the text, never a page body (C-ERR-8, C-SEC-4).
+  @override
+  void applySourceRate(String sourceId, String? concurrentRate) {
+    final ConcurrentRateDeclaration declaration = parseConcurrentRate(
+      concurrentRate,
+    );
+    if (declaration.isInvalid) {
+      _logger.warning(
+        'Ignoring an invalid concurrentRate: source=$sourceId '
+        'field=concurrentRate reason=${declaration.invalidReason} '
+        'value=${_excerpt(concurrentRate)}',
+      );
+    }
+
+    _limiter.applyRate(sourceId, declaration.rate);
+  }
 
   @override
   Future<ParseResult<HttpResponse>> get(
@@ -431,6 +474,22 @@ ParseFailureKind? _failureKindForStatus(int status) {
 
 /// Maps a dio failure onto the failure taxonomy.
 ///
+/// Returns a bounded excerpt of a declaration for a warning (C-ERR-8, C-SEC-4).
+///
+/// An invalid `concurrentRate` is arbitrary text from an imported file, so the log line keeps
+/// only its first characters: enough to recognise what the source wrote, never unbounded.
+String _excerpt(String? declaration) {
+  final String text = declaration ?? '';
+  if (text.length <= _maxExcerptLength) {
+    return text;
+  }
+
+  return '${text.substring(0, _maxExcerptLength)}…';
+}
+
+/// Longest declaration excerpt a warning carries.
+const int _maxExcerptLength = 32;
+
 /// Every `DioExceptionType` is listed so a dio upgrade that adds a value becomes
 /// a compile error instead of a silent fallback.
 ParseFailureKind _failureKindForDioError(DioException error) {

@@ -3,6 +3,7 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
@@ -174,6 +175,15 @@ final class PageFetchService {
       ),
     };
   }
+
+  /// Applies [source]'s own `concurrentRate` to the request budget (`book-source.md` §8).
+  ///
+  /// The use cases call this when an operation starts, because they are the layer that holds
+  /// the model: the request layer knows only the source id it is given, and the rate gate has to
+  /// be keyed by it so a `@js:` rule's `http.*` calls (which see only that id, §6) pass the same
+  /// gate (ADR-0036 §决策 5).
+  void applySourceRate(BookSource source) =>
+      _http.applySourceRate(source.url, source.concurrentRate);
 
   /// Returns the first value of [rule] in [scope], or the failure that stopped it.
   ///

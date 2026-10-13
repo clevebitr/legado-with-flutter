@@ -133,6 +133,52 @@ flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=/tmp/g2b.j
 > 阻塞与数字见 `PLAN.md` §3.7。复跑命令（派生 JSON 需自行生成）：
 > `flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<derived.json> --keyword=火影`。
 
+**M1-b2（`concurrentRate`）的证据（2026-10-13）：**
+
+```
+语法：`concurrentRate`（book-source.md §8、ADR-0036）
+书源：🎨 漫客栈 (comic.mkzhan.com)，合集 C 中的一条真实导出
+链路：搜索 → 详情 → 目录（content 段同 b1：该源用 java.getStringList，未实现）
+结果（A：声明 1500；B：同源改成 "0"，其余逐字不变）：
+  A  rate: 1500  search ok count=1 | bookInfo ok | toc ok count=5 | content FAILED | elapsed: 4.6s
+  B  rate: 0     search ok count=1 | bookInfo ok | toc ok count=5 | content FAILED | elapsed: 0.6s
+结论：声明 `1500`（每 1500 ms 最多 1 次）下，四次真实请求花了 4.6 s（≥ 3 个窗口 = 4.5 s），
+      同一站点同一规则去掉声明只要 0.6 s ⇒ 速率门在真链路上确实生效，且不阻塞其他书源。
+```
+
+> **派生说明：** 这次**只加/改 `concurrentRate` 一个字段**（A 为 `"1500"`，B 为 `"0"`），
+> searchUrl / header / 四段规则逐字来自真实导出。原因：全量 3907 条里只有 **3 条**声明了
+> `concurrentRate`，且三条都跑不了原样链路（1 条站点已不可达、2 条用未实现的 URL 形态：
+> `<js>` 包装与 `{...}` URL 选项）——这一事实登记在 `PLAN.md` §3.7。
+> 复跑命令（派生 JSON 需自行生成）：
+> `flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<derived.json> --keyword=火影`。
+
+**同一次复算里的 `concurrentRate` 取值分布（`book-source.md` §8、ADR-0036 §决策 8）：**
+
+```bash
+curl -sSL -o build/ao.json https://legado.aoaostar.com/sources/b778fe6b.json
+SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check/spot_check.dart
+```
+
+```
+-- 353 of 3907 sources are M0-compatible.
+-- 253 of 353 M0-compatible sources rely on the unknown-type degradation (ADR-0032).
+-- 122 of 353 M0-compatible sources use a value-rule `@js:` (matrix #14)…
+-- concurrentRate: 3 sources declare one (3 limited, 0 no gate, 0 invalid).
+    1   3000   limited
+    1   2000   limited
+    1   1000   limited
+    intervals(ms): min=1000 median=2000 max=3000
+```
+
+> **单位判断（ADR-0036 §决策 8 要求的记录）：毫秒口径成立，重开条件未满足。**
+> 三条都是**单个整数**（无 `n/m`），值落在 1000–3000：按毫秒读是「1 次 / 1–3 秒」——
+> 对一个阅读 App 完全合理；按秒读则是「1 次 / 1000–3000 秒」（即 17–50 分钟一次），
+> 没有作者会那样写，且会把一个本来正常的源限成不可用。⇒ **无需新 ADR**；一旦将来出现
+> 把 `n/m` 当「n 次 / m 秒」的语料，按 ADR-0036 §决策 8 重开。
+> 另：只有 3/3907 条声明限速，所以这个特性的影响面本身很小；三条都合法（`0 invalid`），
+> 即真实语料里还没出现过 ADR-0036 §决策 2 的那种畸形声明（其行为由单测钉住）。
+
 **矩阵 #12（`@css:`）在真实 HTML 上的证据：** 同一站点、同一批页面，把上一条书源的默认规则**逐条改写为等价的 `@css:` 写法**（`class.bookbox` → `@css:.bookbox`、`id.content@textNodes` →
 `@css:#content@textNodes`、`class.bookimg@tag.img.0@src` → `@css:.bookimg img:eq(0)@src` 等，
 后者同时行使矩阵 #29），得到**同样的四段计数**，且正文 **sha256 完全相同**
