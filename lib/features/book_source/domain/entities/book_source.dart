@@ -150,7 +150,7 @@ abstract class SearchRule with _$SearchRule {
 /// upstream declares that one on the search rule alone.
 ///
 /// A source may omit the object, or declare it with a blank `bookList`: the explore stage then
-/// falls back to the **whole** [BookSource.searchRule] (ADR-0035 §决策 3, `book-source.md`
+/// falls back to the **whole** [BookSource.searchRule] (ADR-0035 §决策 2, `book-source.md`
 /// §4.2). The fallback itself belongs to the explore use case, not to this model.
 @freezed
 abstract class ExploreRule with _$ExploreRule {

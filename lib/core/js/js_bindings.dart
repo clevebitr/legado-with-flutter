@@ -383,12 +383,24 @@ String applyJsJavaCall(Map<String, String?> variables, Object? args) {
 
   switch (call.operation) {
     case JsJavaOperation.get:
+      // 解码器保证 `get` 带 String 键；这里再窄一次，是为了不把「契约被破坏」
+      // 静默变成「读空串」（C-SRC-4：读不出来的调用就是失败）。
+      final String? readKey = call.key;
+      if (readKey == null) {
+        return '{"ok":false}';
+      }
+
       return jsonEncode(<String, Object?>{
         'ok': true,
-        'value': variables[call.key] ?? '',
+        'value': variables[readKey] ?? '',
       });
     case JsJavaOperation.put:
-      variables[call.key ?? ''] = call.value as String?;
+      final String? writeKey = call.key;
+      final Object? writeValue = call.value;
+      if (writeKey == null || writeValue is! String?) {
+        return '{"ok":false}';
+      }
+      variables[writeKey] = writeValue;
 
       return '{"ok":true}';
     case JsJavaOperation.timeFormat:
