@@ -95,6 +95,42 @@ void main() {
       expect(find.text('书名一'), findsOneWidget);
     });
 
+    testWidgets('open_givenACategoryWithoutUsableBooks_showsItsOwnEmptyState', (
+      WidgetTester tester,
+    ) async {
+      // 列表命中了一条，但它的 `bookUrl` 规则取不到地址：条目按 §9 丢弃（warning），
+      // 页面因此是「成功但没有书目」，而不是失败。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/list/c0.html',
+          '<ul class="result-list"><div class="result-item">'
+              '<div class="result-item-title">没有链接</div>'
+              '</div></ul>',
+        );
+
+      await pumpBookSourcePage(
+        tester,
+        page: const ExplorePage(),
+        source: loadCorpusBookSource().copyWith(
+          exploreUrl: _exploreUrl(<String>['玄幻']),
+        ),
+        http: http,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('玄幻'));
+      await tester.pumpAndSettle();
+
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(ExplorePage),
+      );
+
+      // 这个文案不能是搜索的空态（那句话提到「关键词」，而发现页没有关键词）。
+      expect(find.text(l10n.bookSourceExploreEmptyCategory), findsOneWidget);
+      expect(find.text(l10n.bookSourceSearchEmpty), findsNothing);
+    });
+
     testWidgets('open_givenAFailingCategory_keepsTheRowAndShowsTheFailure', (
       WidgetTester tester,
     ) async {

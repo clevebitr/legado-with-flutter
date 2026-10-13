@@ -33,5 +33,6 @@
   "bookSourceExploreTitle": "发现",
   "bookSourceExploreAction": "发现页",
   "bookSourceExplorePrompt": "选择一个分类开始浏览",
-  "bookSourceExploreEmpty": "这本书源没有发现页分类"
+  "bookSourceExploreEmpty": "这本书源没有发现页分类",
+  "bookSourceExploreEmptyCategory": "这个分类下没有书目。"
 }

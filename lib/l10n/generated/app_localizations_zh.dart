@@ -118,4 +118,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookSourceExploreEmpty => '这本书源没有发现页分类';
+
+  @override
+  String get bookSourceExploreEmptyCategory => '这个分类下没有书目。';
 }

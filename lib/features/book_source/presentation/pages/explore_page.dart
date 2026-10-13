@@ -143,8 +143,10 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
               ref.read(exploreProvider.notifier).openCategory(source, selected),
             ),
     ),
+    // 分类页没有可用的书目（列表命中但每一条都没有可用地址，§9）：这里没有关键词，
+    // 所以不能借用搜索的空态文案（它会说「没有匹配该关键词的书」）。
     ExploreBooksLoaded(:final List<Book> books) when books.isEmpty =>
-      StateMessage(message: l10n.bookSourceSearchEmpty),
+      StateMessage(message: l10n.bookSourceExploreEmptyCategory),
     ExploreBooksLoaded(:final List<Book> books) => ListView.builder(
       itemCount: books.length,
       itemBuilder: (BuildContext context, int index) {
@@ -160,8 +162,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         );
       },
     ),
-    ExploreIdle() ||
-    ExploreCategoriesFailed() ||
-    ExploreCategories() => const SizedBox.shrink(),
+    // `ExploreCategories` 已在前面处理（提示选一个分类），这里只剩两个不可达的变体——
+    // 列出来只为让这个 switch 穷尽。
+    ExploreIdle() || ExploreCategoriesFailed() => const SizedBox.shrink(),
   };
 }

@@ -150,5 +150,9 @@
   "bookSourceExploreEmpty": "This book source has no discover categories",
   "@bookSourceExploreEmpty": {
     "description": "Empty state: the source declares no exploreUrl categories."
+  },
+  "bookSourceExploreEmptyCategory": "This category has no books.",
+  "@bookSourceExploreEmptyCategory": {
+    "description": "Shown when a discover category's page listed no usable book; distinct from bookSourceSearchEmpty, which mentions a keyword this screen never has."
   }
 }

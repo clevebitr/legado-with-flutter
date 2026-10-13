@@ -301,6 +301,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This book source has no discover categories'**
   String get bookSourceExploreEmpty;
+
+  /// Shown when a discover category's page listed no usable book; distinct from bookSourceSearchEmpty, which mentions a keyword this screen never has.
+  ///
+  /// In en, this message translates to:
+  /// **'This category has no books.'**
+  String get bookSourceExploreEmptyCategory;
 }
 
 class _AppLocalizationsDelegate

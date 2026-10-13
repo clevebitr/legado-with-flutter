@@ -130,4 +130,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get bookSourceExploreEmpty =>
       'This book source has no discover categories';
+
+  @override
+  String get bookSourceExploreEmptyCategory => 'This category has no books.';
 }
