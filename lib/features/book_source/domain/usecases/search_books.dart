@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/features/book_source/domain/book_list_fields.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
@@ -65,7 +66,8 @@ final class SearchBooks {
       ):
         return failureAt<List<Book>>(kind: kind, rulePath: rulePath);
       case ParseSuccess<String>(:final String data):
-        url = data;
+        // §4：相对 searchUrl（`/search?q={{key}}`）以书源 URL 为基准解析成绝对地址。
+        url = resolveAbsoluteUrl(data, source.url);
     }
     final ParseResult<RuleScope> response = await _pages.fetch(
       url,
@@ -90,123 +92,23 @@ final class SearchBooks {
     };
   }
 
-  /// Reads every search hit out of [scope].
+  /// Reads every search hit out of [scope] through the shared list reader.
+  ///
+  /// The nine list fields and `updateTime` are read by [readBooks], which the explore stage uses
+  /// too: `SearchRule` and `ExploreRule` carry the same shape by upstream's `BookListRule`
+  /// interface (`book-source.md` §2), so one reader keeps them from drifting apart.
   Future<ParseResult<List<Book>>> _read(
     BookSource source,
     String baseUrl,
     RuleScope scope,
-  ) async {
-    final ParseResult<List<RuleScope>> items = await _pages.list(
-      source.searchRule.bookList,
-      scope,
-      'searchRule.bookList',
-    );
-
-    return switch (items) {
-      ParseFailure<List<RuleScope>>(
-        :final ParseFailureKind kind,
-        rulePath: final String failedAt,
-      ) =>
-        failureAt<List<Book>>(kind: kind, rulePath: failedAt),
-      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) =>
-        await _books(source, baseUrl, data),
-    };
-  }
-
-  /// Reads one [Book] per item, dropping the items without a usable URL.
-  ///
-  /// A field whose rule matched nothing falls back to `null` (and to an empty name),
-  /// because only the URL is required to open a hit. A **rejected** optional field
-  /// degrades the same way with a warning (ADR-0026 §决策 2): one unsupported field
-  /// must not cost the whole search. A rejected `bookList` is top-level and still
-  /// fails the stage, which happens in [PageFetchService.list].
-  Future<ParseResult<List<Book>>> _books(
-    BookSource source,
-    String baseUrl,
-    List<RuleScope> items,
-  ) async {
-    final SearchRule rules = source.searchRule;
-    final List<Book> books = <Book>[];
-
-    for (final RuleScope item in items) {
-      final ParseResult<String?> name = await _pages.field(
-        rules.name,
-        item,
-        'searchRule.name',
-        sourceId: source.url,
-      );
-      final ParseResult<String?> bookUrl = await _pages.field(
-        rules.bookUrl,
-        item,
-        'searchRule.bookUrl',
-        sourceId: source.url,
-      );
-      final ParseResult<String?> author = await _pages.field(
-        rules.author,
-        item,
-        'searchRule.author',
-        sourceId: source.url,
-      );
-      final ParseResult<String?> kind = await _pages.field(
-        rules.kind,
-        item,
-        'searchRule.kind',
-        sourceId: source.url,
-      );
-      final ParseResult<String?> coverUrl = await _pages.field(
-        rules.coverUrl,
-        item,
-        'searchRule.coverUrl',
-        sourceId: source.url,
-      );
-      final ParseResult<String?> intro = await _pages.field(
-        rules.intro,
-        item,
-        'searchRule.intro',
-        sourceId: source.url,
-      );
-      final ParseResult<String?> lastChapter = await _pages.field(
-        rules.lastChapter,
-        item,
-        'searchRule.lastChapter',
-        sourceId: source.url,
-      );
-      final ParseResult<String?> wordCount = await _pages.field(
-        rules.wordCount,
-        item,
-        'searchRule.wordCount',
-        sourceId: source.url,
-      );
-      final ParseResult<String?> updateTime = await _pages.field(
-        rules.updateTime,
-        item,
-        'searchRule.updateTime',
-        sourceId: source.url,
-      );
-
-      final String? url = bookUrl.dataOrNull;
-      if (url == null || url.isEmpty) {
-        // §9：单条失败不中断整页结果，只跳过它并记录。
-        _pages.warn('Search hit without URL skipped: source=${source.url}');
-        continue;
-      }
-
-      books.add(
-        Book(
-          name: name.dataOrNull ?? '',
-          url: resolveAbsoluteUrl(url, baseUrl),
-          author: author.dataOrNull,
-          kind: kind.dataOrNull,
-          coverUrl: resolveAbsoluteUrlOrNull(coverUrl.dataOrNull, baseUrl),
-          intro: intro.dataOrNull,
-          lastChapter: lastChapter.dataOrNull,
-          wordCount: wordCount.dataOrNull,
-          // 展示用字符串：规则结果原文，不做日期解析（book-source.md §2）。
-          updateTime: updateTime.dataOrNull,
-        ),
-      );
-    }
-
-    return ParseSuccess<List<Book>>(books);
-  }
+  ) => readBooks(
+    _pages,
+    source.searchRule.bookList,
+    BookListFields.ofSearch(source.searchRule),
+    scope,
+    baseUrl: baseUrl,
+    sourceId: source.url,
+    fieldPrefix: 'searchRule',
+    noun: 'Search hit',
+  );
 }

@@ -426,6 +426,21 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 
 **结果解析（`ruleExplore`）：** `ruleExplore` 缺失或 `bookList` 为空 → **整条回落 `searchRule`**（**不是**逐字段回落），记账字段同样整条来自胜出的一方；唯一实现点是 `ExploreBooks` UseCase（ADR-0035 §决策 2）。列表字段的语义与分期见 §2。
 
+> **状态与实现边界（2026-10-13，M1-b4a 已落地）：** `exploreUrl` 两种形态、条目解析与回落都在
+> `domain/explore_categories.dart`（纯函数）+ `domain/usecases/fetch_explore_categories.dart`
+> （整字段 JS 经引擎的 `RuleEngine.evaluateJs`，绑定同 ADR-0035 §决策 4）与
+> `domain/usecases/explore_books.dart`。四处需要写下来的边界：
+>
+> - **没有 `exploreUrl`（或全空白）的书源答空列表、不是失败**：那不是错误书源，而是没有发现页；
+>   分类 UI 的空态就是它。只有**声明了却读不出来**的 `exploreUrl` 才是 `parseFailed`。
+>   （本节此前未规定这一条，属规格缺口，已在 `PLAN.md` §3.7 登记待确认。）
+> - **分类条目 URL 按 §4 解析成绝对地址**（基准 = 书源 URL，ADR-0035 §决策 4 的 `baseUrl`）：
+>   条目写 `/list/{{page}}.html` 是常态；相对 `searchUrl` 走同一条规则（此前的隐性缺口）。
+> - **`<js>` 未以 `</js>` 收尾** → 该字段 `parseFailed`，`rulePath` 标 `exploreUrl:js-not-closed`，
+>   **不跑脚本**（登记差异 ①）。
+> - **被拒条目**（空标题 / 缺 URL / 无 `::` / 表单型）逐个记一条 warning，含书源 ID、
+>   `field=exploreUrl`、`kind=unsupportedRule` 与原因，其余条目照常（C-SRC-4）。
+
 ---
 
 ## 5. 编码

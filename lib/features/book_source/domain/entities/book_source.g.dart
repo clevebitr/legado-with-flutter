@@ -26,6 +26,7 @@ _BookSource _$BookSourceFromJson(Map<String, dynamic> json) => $checkedCreate(
         (v) => const _HeaderJsonConverter().fromJson(v),
       ),
       searchUrl: $checkedConvert('searchUrl', (v) => v as String?),
+      exploreUrl: $checkedConvert('exploreUrl', (v) => v as String?),
       searchRule: $checkedConvert(
         'ruleSearch',
         (v) => SearchRule.fromJson(v as Map<String, dynamic>),
@@ -77,6 +78,7 @@ Map<String, dynamic> _$BookSourceToJson(_BookSource instance) =>
       'enabled': instance.isEnabled,
       'header': const _HeaderJsonConverter().toJson(instance.headers),
       'searchUrl': instance.searchUrl,
+      'exploreUrl': instance.exploreUrl,
       'ruleSearch': instance.searchRule,
       'ruleExplore': instance.exploreRule,
       'concurrentRate': instance.concurrentRate,
