@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:cascadia/cascadia.dart' as cascadia;
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:html/dom.dart';
 import 'package:json_path/json_path.dart';
 
@@ -18,18 +20,52 @@ import 'package:json_path/json_path.dart';
 /// semantics (a whole rule body written as JavaScript) this repository does not
 /// implement, so it is rejected by name instead of being handed to cascadia as an
 /// unknown type (ADR-0032 §决策 3).
+///
+/// `@put:` / `@get:` / `{{` are gone from this list because matrix #15..#19 implements
+/// them: they are handled before the rule is parsed at all (see the expansion step in
+/// [RuleEngine]). A bare `{` is gone as well: `{$jsonpath}` is matrix #19, and a `{`
+/// without a `$` is not any implemented syntax, so it degrades to a raw CSS selector like
+/// every other unknown type (ADR-0032).
 const List<String> _deferredFlags = <String>[
-  '{{',
   '//',
-  '{',
   ':',
   '@@',
   '@xpath:',
-  '@put:',
-  '@get:',
   '@webjs',
   '<js>',
 ];
+
+/// One `@put:{key:rule,key:rule}` flag of matrix #16.
+///
+/// Upstream's pattern is `@put:(\{[^}]+?\})` with `IGNORE_CASE`
+/// (`AnalyzeRule.kt:944`), so the braces never nest and the flag is dropped from the rule
+/// text before it is evaluated (`AnalyzeRule.kt:668-672`).
+final RegExp _putFlag = RegExp(r'@put:\{([^{}]*)\}', caseSensitive: false);
+
+/// The `@get:{key}` flag of matrix #16, lower-cased for a case-insensitive scan.
+const String _getFlag = '@get:{';
+
+/// The `@put:` flag, lower-cased for a case-insensitive scan.
+const String _putScanFlag = '@put:';
+
+/// The opening brace of matrix #19's legacy JSONPath rule.
+const String _jsonTemplateOpen = r'{$';
+
+/// How many nested `{{…}}` / `@put:` expansions one rule may trigger.
+///
+/// Upstream substitutes embedded rules through recursive `getString` calls with no bound
+/// at all (`AnalyzeRule.kt:736-752`). A per-source variable can hold rule text
+/// (`java.put`), so a self-referencing variable could otherwise make one field expand
+/// forever; the bound turns that into a locatable failure instead of a hung parse
+/// (C-SRC-4).
+const int _maxExpansionDepth = 8;
+
+/// The `@@` default-rule flag of matrix #15.
+///
+/// Upstream strips it from the front of a rule and keeps the default mode
+/// (`AnalyzeRule.kt:612-615`), which is what makes `{{@@class.a@text}}` mean “evaluate a
+/// default rule here” inside a context whose default is JavaScript.
+const String _defaultRuleFlag = '@@';
 
 /// The `@js:` flag of matrix #14, lower-cased for a case-insensitive compare.
 ///
@@ -103,6 +139,11 @@ final RegExp _whitespace = RegExp(r'\s+');
 /// | #12 | the `@css:` flag, handing the rest of the segment to cascadia |
 /// | #13 | the `@json:` flag and the bare `$.` / `$[` form, read as JSONPath |
 /// | #14 | the terminal `@js:` flag, evaluated by the sandbox ([JsBridge]) |
+/// | #15 | the `@@` default-rule flag, including inside a `{{…}}` template |
+/// | #16 | `@put:{key:rule}` and `@get:{key}` over the source's variables |
+/// | #17 | `java.put` / `java.get` inside a script (the same store) |
+/// | #18 | `{{…}}` as a JS template, or as a nested rule when the head is a rule flag |
+/// | #19 | `{$jsonpath}` inside a JSON rule |
 /// | #26 | the `[...]` index list, with ranges, steps and `[!...]` exclusion |
 /// | #28 | an index as the first rule of a segment (`.1` / `[1]` / `children[1]`) |
 /// | #29 | the jsoup index pseudo-classes `:eq` / `:gt` / `:lt`, rewritten onto `:nth-child` |
@@ -142,16 +183,26 @@ final RegExp _whitespace = RegExp(r'\s+');
 /// The engine is stateless, so one instance can evaluate rules concurrently
 /// (C-SRC-9), and it never mutates the scope it is given or its elements.
 final class RuleEngine {
-  /// Creates an engine that reports rejected rules through `logger` and runs `@js:` rules
-  /// on `jsBridge`.
+  /// Creates an engine that reports rejected rules through `logger`, runs `@js:` rules
+  /// on `jsBridge` and reads / writes the rules' variables in `variables`.
   ///
   /// The bridge is the only door to JavaScript (C-SRC-2), which is why the engine takes it
   /// as a collaborator instead of the engine library: a unit test passes a fake
   /// (`docs/dev/testing.md` §4) and `domain/` never imports `flutter_qjs_next`.
-  RuleEngine({required this._logger, required this._jsBridge});
+  ///
+  /// [JsVariableStore] is the host side of the `@put:` / `@get:` / `java.*` contract
+  /// (`book-source.md` §6). The engine reads it for `@get:` and `{{name}}`, writes it for
+  /// `@put:`, and the bridge applies what a script wrote through `java.put` — one store,
+  /// two ends (ADR-0034 §决策 1).
+  RuleEngine({
+    required this._logger,
+    required this._jsBridge,
+    required this._variables,
+  });
 
   final AppLogger _logger;
   final JsBridge _jsBridge;
+  final JsVariableStore _variables;
 
   /// Returns every element matched by the **list** rule [rule] inside [scope].
   ///
@@ -172,12 +223,48 @@ final class RuleEngine {
     String rule,
     RuleScope scope, {
     required String rulePath,
+  }) => _selectAllRule(rule, scope, rulePath: rulePath, depth: 0);
+
+  /// [selectAll] with the `{{…}}` / `@put:` expansion depth of the current recursion.
+  ///
+  /// A list rule expands like a value rule (upstream reads both through one `SourceRule`,
+  /// `AnalyzeRule.kt:380-430`), but it does **not** switch to “the substituted text is the
+  /// value”: a list rule has to produce elements. A rule that builds its selector through
+  /// JS (`{{java.get('listRule')}}`) therefore still works — a registered difference from
+  /// upstream, whose `Mode.Regex` branch returns the text there (`book-source.md` §3, #18).
+  Future<ParseResult<List<RuleScope>>> _selectAllRule(
+    String rule,
+    RuleScope scope, {
+    required String rulePath,
+    required int depth,
   }) async {
     if (rule.trim().isEmpty) {
       return const ParseSuccess<List<RuleScope>>(<RuleScope>[]);
     }
 
-    final _ParsedRule parsed = _parse(rule);
+    final _Parsed<_Expansion> expansion = await _expandRule(
+      rule,
+      scope,
+      rulePath: rulePath,
+      allowJs: true,
+      depth: depth,
+    );
+    final String expanded;
+    final bool substituted;
+    switch (expansion) {
+      case _ParsedFailure<_Expansion>(:final _RuleRejection rejection):
+        return _fail<List<RuleScope>>(rejection, field: rulePath);
+      case _ParsedValue<_Expansion>(:final _Expansion value):
+        expanded = value.text;
+        substituted = value.substituted;
+    }
+
+    if (expanded.trim().isEmpty && !substituted) {
+      // 只剩下 `@put:{…}` 的列表规则：没有选择器可跑，也没有元素产出。
+      return const ParseSuccess<List<RuleScope>>(<RuleScope>[]);
+    }
+
+    final _ParsedRule parsed = _parse(expanded);
     final _Parsed<List<_CheckedCandidate>> check = _check(
       parsed,
       field: rulePath,
@@ -289,8 +376,10 @@ final class RuleEngine {
         _ParsedFailure<List<RuleScope>>(rejection),
       _ParsedValue<Object?>(:final Object? value) =>
         _ParsedValue<List<RuleScope>>(<RuleScope>[
-          for (final JsonPathMatch match in json.path.read(value))
-            ..._jsonScopesOf(match.value, jsContext: _jsContextOf(scope)),
+          // 列表规则只看其中的 JSONPath：字面文本不贡献元素（矩阵 #19 的「只能用 JSONPath」）。
+          for (final _JsonPathPiece piece in json.paths)
+            for (final JsonPathMatch match in piece.path.read(value))
+              ..._jsonScopesOf(match.value, jsContext: _jsContextOf(scope)),
         ]),
     },
   };
@@ -446,12 +535,45 @@ final class RuleEngine {
     required String rulePath,
     required bool single,
     bool allowJs = true,
+    int depth = 0,
   }) async {
     if (rule.trim().isEmpty) {
       return const ParseSuccess<List<String>>(<String>[]);
     }
 
-    final _ParsedRule parsed = _parse(rule);
+    final _Parsed<_Expansion> expansion = await _expandRule(
+      rule,
+      scope,
+      rulePath: rulePath,
+      allowJs: allowJs,
+      depth: depth,
+    );
+    if (expansion case _ParsedFailure<_Expansion>(
+      :final _RuleRejection rejection,
+    )) {
+      return _fail<List<String>>(rejection, field: rulePath);
+    }
+    final _Expansion expanded = (expansion as _ParsedValue<_Expansion>).value;
+    if (expanded.text.trim().isEmpty && !expanded.substituted) {
+      // 规则只剩下 `@put:{…}`（矩阵 #16）：写入已经发生，这条规则没有选择器可跑。
+      // 上游同样把这种规则读成空值（`AnalyzeRule.getString` 对空规则直接返回 ""）。
+      return const ParseSuccess<List<String>>(<String>[]);
+    }
+    if (expanded.substituted) {
+      // 上游把带 `{{}}` / `@get:` 的规则切成 **Regex 模式**（`AnalyzeRule.kt:674-680`），
+      // 而 `AnalyzeByRegex` 不拿它当选择器读：替换后的整段文本就是这一条规则的值。
+      // 这也是 `{{@@class.a@text}}` / `“地址/{{@get:{x}}}”` 这类写法能工作的原因。
+      final _ParsedRule substituted = _parse(expanded.text);
+      if (substituted.body.isEmpty) {
+        return const ParseSuccess<List<String>>(<String>[]);
+      }
+
+      return ParseSuccess<List<String>>(
+        _finish(<String>[substituted.body], substituted),
+      );
+    }
+
+    final _ParsedRule parsed = _parse(expanded.text);
     final List<String> merged;
     if (parsed.isBareJs) {
       // `@js:` 独立成规则：没有选择器要跑，`result` 就是整页内容（§6 的 result 绑定）。
@@ -483,17 +605,6 @@ final class RuleEngine {
     }
 
     final String? script = parsed.jsScript;
-    if (script != null && !allowJs) {
-      // 嵌套求值（`parse.*` 的递推）不能碰沙箱：单 worker 正在跑的就是发起它的那个 job
-      // （ADR-0030 §决策 1/3），嵌套的 evaluate 只会排在自己的队后面。详见 [_parseEvaluatorFor]。
-      return _fail<List<String>>(
-        _RuleRejection(
-          kind: ParseFailureKind.unsupportedRule,
-          rulePath: '$rulePath:$jsParseRecursionMarker',
-        ),
-        field: rulePath,
-      );
-    }
     if (script == null) {
       return ParseSuccess<List<String>>(_finish(merged, parsed));
     }
@@ -507,6 +618,7 @@ final class RuleEngine {
           : (single ? (merged.isEmpty ? null : merged.first) : merged),
       scope,
       field: rulePath,
+      allowJs: allowJs,
     );
 
     return switch (evaluated) {
@@ -532,7 +644,20 @@ final class RuleEngine {
     Object? result,
     RuleScope scope, {
     required String field,
+    required bool allowJs,
   }) async {
+    if (!allowJs) {
+      // 嵌套求值（`parse.*` 的递推，或 `{{}}` 里的 JS）不能碰沙箱：单 worker 正在跑的就是
+      // 发起它的那个 job（ADR-0030 §决策 1/3），嵌套的 evaluate 只会排在自己的队后面。
+      return _fail<List<String>>(
+        _RuleRejection(
+          kind: ParseFailureKind.unsupportedRule,
+          rulePath: '$field:$jsParseRecursionMarker',
+        ),
+        field: field,
+      );
+    }
+
     final JsPageContext context = _jsContextOf(scope);
     final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
       JsJob(
@@ -544,6 +669,7 @@ final class RuleEngine {
         result: result,
         sourceHeaders: context.headers,
         parseEvaluator: _parseEvaluatorFor(scope, field: field),
+        variables: _variables.snapshot(context.source.url),
       ),
     );
 
@@ -569,6 +695,620 @@ final class RuleEngine {
     ],
     _ => <String>[value.toString()],
   };
+
+  /// Applies matrix #15..#19 to [rule] before it is parsed as a selector rule.
+  ///
+  /// Upstream substitutes embedded rules and `@get:` flags into the rule **text** and only
+  /// then reads the result (`AnalyzeRule.SourceRule.init` / `makeUpRule`,
+  /// `AnalyzeRule.kt:666-760`), which is why every branch of a candidate, a list rule and a
+  /// value rule all go through here.
+  ///
+  /// A terminal `@js:` script is **not** expanded: `@js:` swallows the rest of the rule
+  /// (matrix #14), so a `{{…}}` inside the script belongs to the script.
+  ///
+  /// Only a substitution **before the first `##`** flips [\_Expansion.substituted]: upstream
+  /// switches to its regex mode exactly when the first `{{…}}` / `@get:` it finds has no
+  /// `##` in front of it (`AnalyzeRule.kt:674-680`), so a template inside a replacement
+  /// part keeps the rule a normal rule whose replacement is expanded.
+  Future<_Parsed<_Expansion>> _expandRule(
+    String rule,
+    RuleScope scope, {
+    required String rulePath,
+    required bool allowJs,
+    required int depth,
+  }) async {
+    if (!rule.contains('{{') &&
+        !rule.contains(_putScanFlag) &&
+        !rule.contains(_getFlag)) {
+      return _ParsedValue<_Expansion>(
+        _Expansion(text: rule, substituted: false),
+      );
+    }
+    if (depth > _maxExpansionDepth) {
+      _logger.warning(
+        'Rule expansion exceeded $_maxExpansionDepth levels: field=$rulePath',
+      );
+
+      return _ParsedFailure<_Expansion>(_malformed(rulePath));
+    }
+
+    // ① `@put:{…}` 先求值并从**整条**规则里摘掉（上游 `splitPutRule` 在 `init` 里先跑）。
+    // 顺序很重要：`@put` 的值里可以出现 `##`，先切 `##` 会把它当成规则的替换段。
+    final _Parsed<String> stripped = await _stripPutFlags(
+      rule,
+      scope,
+      rulePath: rulePath,
+      allowJs: allowJs,
+      depth: depth,
+    );
+    if (stripped case _ParsedFailure<String>(:final _RuleRejection rejection)) {
+      return _ParsedFailure<_Expansion>(rejection);
+    }
+    final String withoutPuts = (stripped as _ParsedValue<String>).value;
+
+    // ② 切区域：`##` 之前是规则体，`@js:` 之后到 `##` 之前是脚本，`##` 之后是替换段。
+    final int headEnd = withoutPuts.indexOf('##');
+    final String head = headEnd < 0
+        ? withoutPuts
+        : withoutPuts.substring(0, headEnd);
+    final int jsAt = head.toLowerCase().indexOf(_jsFlag);
+    final String body = jsAt < 0 ? head : head.substring(0, jsAt);
+    final String script = jsAt < 0 ? '' : head.substring(jsAt);
+
+    final _Parsed<_Expansion> expandedBody = await _expandText(
+      body,
+      scope,
+      rulePath: rulePath,
+      allowJs: allowJs,
+      depth: depth,
+    );
+    if (expandedBody case _ParsedFailure<_Expansion>(
+      :final _RuleRejection rejection,
+    )) {
+      return _ParsedFailure<_Expansion>(rejection);
+    }
+    final _Expansion before = (expandedBody as _ParsedValue<_Expansion>).value;
+
+    final StringBuffer text = StringBuffer()
+      ..write(before.text)
+      ..write(script);
+    if (headEnd >= 0) {
+      final _Parsed<_Expansion> expandedTail = await _expandText(
+        withoutPuts.substring(headEnd),
+        scope,
+        rulePath: rulePath,
+        allowJs: allowJs,
+        depth: depth,
+      );
+      if (expandedTail case _ParsedFailure<_Expansion>(
+        :final _RuleRejection rejection,
+      )) {
+        return _ParsedFailure<_Expansion>(rejection);
+      }
+      text.write((expandedTail as _ParsedValue<_Expansion>).value.text);
+    }
+
+    return _ParsedValue<_Expansion>(
+      _Expansion(text: text.toString(), substituted: before.substituted),
+    );
+  }
+
+  /// Evaluates every `@put:{key:rule}` of [rule] and removes the flags from its text.
+  ///
+  /// Upstream runs this before anything else (`AnalyzeRule.kt:668-672`), which is what lets a
+  /// put value contain a `##` without being taken for the rule's replacement part.
+  /// A failing value rule fails the whole rule: a `@put` is part of the rule, not an
+  /// optional side note (C-SRC-4).
+  Future<_Parsed<String>> _stripPutFlags(
+    String rule,
+    RuleScope scope, {
+    required String rulePath,
+    required bool allowJs,
+    required int depth,
+  }) async {
+    if (!rule.contains(_putScanFlag)) {
+      return _ParsedValue<String>(rule);
+    }
+
+    var working = rule;
+    for (final RegExpMatch match in _putFlag.allMatches(rule)) {
+      final _Parsed<void> stored = await _storePutEntries(
+        match.group(1) ?? '',
+        scope,
+        rulePath: rulePath,
+        allowJs: allowJs,
+        depth: depth,
+      );
+      if (stored case _ParsedFailure<void>(:final _RuleRejection rejection)) {
+        return _ParsedFailure<String>(rejection);
+      }
+      working = working.replaceFirst(match.group(0) ?? '', '');
+    }
+
+    return _ParsedValue<String>(working);
+  }
+
+  /// Replaces the `@get:` / `{{…}}` occurrences of [text] with their values.
+  ///
+  /// `@get:{key}` and `{{…}}` are replaced in one left-to-right pass, the order upstream's
+  /// single `evalPattern` scan visits them (`AnalyzeRule.kt:944`): `{{@get:{k}}}` therefore
+  /// reaches the template first and the `@get:` is resolved by the nested evaluation, not by
+  /// the outer scan. `@put:{…}` is already gone by then ([_stripPutFlags]).
+  ///
+  /// A substituted value is inserted **verbatim** and never rescanned, so data a rule
+  /// produced can never turn into a new rule.
+  Future<_Parsed<_Expansion>> _expandText(
+    String text,
+    RuleScope scope, {
+    required String rulePath,
+    required bool allowJs,
+    required int depth,
+  }) async {
+    final String lower = text.toLowerCase();
+    final StringBuffer out = StringBuffer();
+    var substituted = false;
+    var index = 0;
+    while (index < text.length) {
+      final int template = text.indexOf('{{', index);
+      final int get = lower.indexOf(_getFlag, index);
+      final int at = template >= 0 && (get < 0 || template <= get)
+          ? template
+          : get;
+      if (at < 0) {
+        out.write(text.substring(index));
+        break;
+      }
+
+      out.write(text.substring(index, at));
+      if (at == template) {
+        final int end = _templateEnd(text, at);
+        if (end < 0) {
+          // 括号不平衡：上游的 `{{[\w\W]*?}}` 也匹配不上，所以原样留下，由后面的解析报错。
+          out.write(text.substring(at));
+          break;
+        }
+        final _Parsed<String> value = await _templateValue(
+          text.substring(at + 2, end - 2).trim(),
+          scope,
+          rulePath: rulePath,
+          allowJs: allowJs,
+          depth: depth,
+        );
+        if (value case _ParsedFailure<String>(
+          :final _RuleRejection rejection,
+        )) {
+          return _ParsedFailure<_Expansion>(rejection);
+        }
+        out.write((value as _ParsedValue<String>).value);
+        index = end;
+      } else {
+        final int close = text.indexOf('}', at);
+        if (close < 0) {
+          // `@get:{` 没闭合：这不是“未定义变量”而是畸形规则，按 C-SRC-4 显式失败。
+          return _ParsedFailure<_Expansion>(_malformed(rulePath));
+        }
+        final String key = text.substring(at + _getFlag.length, close).trim();
+        // §4：未定义的变量渲染为空串，不保留 `{{…}}` 原文。
+        out.write(_variables.read(_sourceIdOf(scope), key) ?? '');
+        index = close + 1;
+      }
+      substituted = true;
+    }
+
+    return _ParsedValue<_Expansion>(
+      _Expansion(text: out.toString(), substituted: substituted),
+    );
+  }
+
+  /// Evaluates one `{{…}}` expression into the text it contributes.
+  ///
+  /// The inner text follows upstream's `isRule` test (`AnalyzeRule.kt:786-791`): a rule head
+  /// (`@…`, `$.`, `$[`, `//`) means “evaluate it as a rule”, anything else means “evaluate it
+  /// as JavaScript”. That is exactly why matrix #15 exists: inside `{{…}}` the default is
+  /// JavaScript, so a default rule has to announce itself with `@@`.
+  ///
+  /// A rule expression returns its **first** value, and a JavaScript expression its single
+  /// scalar; `null` / no value both become an empty string, like upstream inserting
+  /// `jsEval ?: ""` (`AnalyzeRule.kt:744-751`).
+  Future<_Parsed<String>> _templateValue(
+    String inner,
+    RuleScope scope, {
+    required String rulePath,
+    required bool allowJs,
+    required int depth,
+  }) async {
+    if (inner.isEmpty) {
+      return const _ParsedValue<String>('');
+    }
+
+    final ParseResult<List<String>> evaluated;
+    if (_isRuleExpression(inner)) {
+      evaluated = await _evaluate(
+        inner,
+        scope,
+        rulePath: rulePath,
+        single: true,
+        allowJs: allowJs,
+        depth: depth + 1,
+      );
+    } else {
+      evaluated = await _runJs(
+        inner,
+        _contentOf(scope),
+        scope,
+        field: rulePath,
+        allowJs: allowJs,
+      );
+    }
+
+    return switch (evaluated) {
+      ParseFailure<List<String>>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        _ParsedFailure<String>(_RuleRejection(kind: kind, rulePath: rulePath)),
+      ParseSuccess<List<String>>(:final List<String> data) =>
+        _ParsedValue<String>(data.isEmpty ? '' : data.first),
+    };
+  }
+
+  /// Evaluates every entry of one `@put:{key:rule}` flag and writes it to the store.
+  ///
+  /// Each value is a rule of its own, read the way upstream's `getString(value)`
+  /// (`AnalyzeRule.kt:641-647`) reads it: the first value, or an empty string. The value is
+  /// written even when the rule matched nothing, because a source that clears a variable by
+  /// pointing at a missing field expects exactly that.
+  Future<_Parsed<void>> _storePutEntries(
+    String body,
+    RuleScope scope, {
+    required String rulePath,
+    required bool allowJs,
+    required int depth,
+  }) async {
+    final String sourceId = _sourceIdOf(scope);
+    for (final MapEntry<String, String> entry in _putEntries(body).entries) {
+      final ParseResult<List<String>> stored = await _evaluate(
+        entry.value,
+        scope,
+        rulePath: rulePath,
+        single: true,
+        allowJs: allowJs,
+        depth: depth + 1,
+      );
+      switch (stored) {
+        case ParseFailure<List<String>>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ):
+          return _ParsedFailure<void>(
+            _RuleRejection(kind: kind, rulePath: rulePath),
+          );
+        case ParseSuccess<List<String>>(:final List<String> data):
+          _variables.write(sourceId, entry.key, data.isEmpty ? '' : data.first);
+      }
+    }
+
+    return const _ParsedValue<void>(null);
+  }
+
+  /// Renders a **URL** template, including the `{{…}}` JavaScript of matrix #18.
+  ///
+  /// The M0 variables come from [params] and keep their template semantics — `key` in
+  /// particular stays form-encoded exactly once (`book-source.md` §4) — so a source that
+  /// spells `?q={{key}}&page={{page}}` behaves exactly as before. Every other `{{…}}` is
+  /// evaluated as JavaScript, which is what §4 allows in a search or explore URL: a **rule**
+  /// head there (`@@`, `$.`, `//`, `@xpath:`) is rejected by name instead of being guessed
+  /// (C-SRC-4).
+  ///
+  /// The keyword is exposed to that JavaScript as `key` (upstream's `AnalyzeUrl.evalJS`,
+  /// `AnalyzeUrl.kt:377`), because the template form cannot reach it: `{{key}}` is consumed
+  /// by [params] first.
+  ///
+  /// [rulePath] names the field the URL came from (`searchUrl`, `tocRule.nextTocUrl`), so a
+  /// failing script stays locatable (C-SRC-8).
+  Future<ParseResult<String>> renderUrl(
+    String template, {
+    required String rulePath,
+    required Map<String, String> params,
+    required JsPageContext context,
+  }) async {
+    final StringBuffer out = StringBuffer();
+    var index = 0;
+    while (index < template.length) {
+      final int at = template.indexOf('{{', index);
+      if (at < 0) {
+        out.write(template.substring(index));
+        break;
+      }
+      final int end = _templateEnd(template, at);
+      if (end < 0) {
+        // §4：不得把字面 `{{…}}` 交给请求层 —— 在 URL 里它只能显式失败。
+        return _fail<String>(_malformed(rulePath), field: rulePath);
+      }
+
+      out.write(template.substring(index, at));
+      final String inner = template.substring(at + 2, end - 2).trim();
+      if (params.containsKey(inner)) {
+        // 交给同步渲染器统一处理（`key` 只编码一次）：原样搬过去。
+        out.write(template.substring(at, end));
+      } else {
+        final _Parsed<String> value = await _urlJsValue(
+          inner,
+          rulePath: rulePath,
+          context: context,
+          params: params,
+        );
+        if (value case _ParsedFailure<String>(
+          :final _RuleRejection rejection,
+        )) {
+          return _fail<String>(rejection, field: rulePath);
+        }
+        out.write((value as _ParsedValue<String>).value);
+      }
+      index = end;
+    }
+
+    return ParseSuccess<String>(
+      renderUrlTemplate(out.toString(), params, logger: _logger),
+    );
+  }
+
+  /// Evaluates one non-template `{{…}}` of a URL (§4, matrix #18).
+  ///
+  /// A rule head is rejected: a search or explore URL may only run JavaScript there, and
+  /// saying so is what keeps a default selector from being sent to the network as a literal
+  /// URL. The JavaScript runs with the URL's bindings (`baseUrl`, `page`, `source`, `key`)
+  /// and no `result`, because no page has been fetched yet (upstream binds `result` to null
+  /// in `AnalyzeUrl.evalJS`).
+  ///
+  /// Numbers are written without a trailing `.0`, matching upstream's formatting of an
+  /// integral result (`AnalyzeUrl.kt:203-207`): a page number that came back as `2.0` must
+  /// not become `2.0` in the URL.
+  Future<_Parsed<String>> _urlJsValue(
+    String inner, {
+    required String rulePath,
+    required JsPageContext context,
+    required Map<String, String> params,
+  }) async {
+    final String? head = _rejectedUrlRuleHead(inner);
+    if (head != null) {
+      return _ParsedFailure<String>(_unsupported(head));
+    }
+
+    final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
+      JsJob(
+        script: inner,
+        rulePath: rulePath,
+        baseUrl: context.baseUrl,
+        page: context.page,
+        source: context.source,
+        sourceHeaders: context.headers,
+        variables: _variables.snapshot(context.source.url),
+        key: params['key'],
+      ),
+    );
+
+    return switch (evaluated) {
+      ParseFailure<Object?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        _ParsedFailure<String>(_RuleRejection(kind: kind, rulePath: rulePath)),
+      ParseSuccess<Object?>(:final Object? data) => _ParsedValue<String>(
+        switch (data) {
+          null => '',
+          final double number when number == number.roundToDouble() =>
+            number.toInt().toString(),
+          _ => _jsValues(data).isEmpty ? '' : _jsValues(data).first,
+        },
+      ),
+    };
+  }
+
+  /// The rule head [inner] carries when a URL may not evaluate it, or `null` when it is
+  /// JavaScript.
+  String? _rejectedUrlRuleHead(String inner) {
+    if (inner.startsWith(_defaultRuleFlag)) {
+      return _defaultRuleFlag;
+    }
+    if (inner.startsWith(r'$.')) {
+      return r'$';
+    }
+    if (inner.startsWith(r'$[')) {
+      return r'$';
+    }
+    if (inner.startsWith('//')) {
+      return '//';
+    }
+    if (inner.startsWith('@')) {
+      // `_flagOf` 认的是去掉 `@` 之后的部分，所以这里要少传一位（`@css:` → `css:`）。
+      return _flagOf(inner.substring(1)) ?? '@';
+    }
+
+    return null;
+  }
+
+  /// The source id the variables of [scope] are keyed by (`book-source.md` §6).
+  ///
+  /// A scope built without a fetch carries no source, and its variables live under the
+  /// empty key — they are still consistent with themselves, they just belong to nobody.
+  String _sourceIdOf(RuleScope scope) {
+    final JsPageContext context = _jsContextOf(scope);
+
+    return context.source.url;
+  }
+
+  /// Whether [text] is a rule (upstream's `isRule`, `AnalyzeRule.kt:786-791`).
+  bool _isRuleExpression(String text) =>
+      text.startsWith('@') ||
+      text.startsWith(r'$.') ||
+      text.startsWith(r'$[') ||
+      text.startsWith('//');
+
+  /// The end offset of the `{{…}}` template starting at [start], or `-1` when it is not
+  /// balanced.
+  ///
+  /// Every brace counts: `{{@get:{k}}}` is one template, and the `{` of the nested
+  /// `@get:{k}` must not be mistaken for the closing `}}`. Quotes are skipped so a brace
+  /// inside a string literal does not open or close anything — the same tolerance
+  /// upstream's `chompCodeBalanced` gives (`RuleAnalyzer.kt:91`).
+  int _templateEnd(String text, int start) {
+    var depth = 0;
+    String? quote;
+
+    for (var index = start; index < text.length; index++) {
+      final String character = text[index];
+      if (quote != null) {
+        if (character == quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (character == '"' || character == "'") {
+        quote = character;
+        continue;
+      }
+      if (character == '{') {
+        depth++;
+        continue;
+      }
+      if (character == '}') {
+        depth--;
+        if (depth == 0) {
+          return index + 1;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  /// Reads the entries of one `@put:{…}` body.
+  ///
+  /// Upstream parses it as JSON — strictly first, then leniently (`AnalyzeRule.kt:673-686`) —
+  /// which accepts both `@put:{bid:"//*[@bid-data]/@bid-data"}` and the unquoted JSONPath
+  /// form the matrix documents. This reader accepts the same two shapes without a JSON
+  /// parser: `key: value` pairs split on top-level commas, with an optional pair of quotes
+  /// around either half. A pair without a colon is skipped rather than guessed.
+  Map<String, String> _putEntries(String body) {
+    final Map<String, String> entries = <String, String>{};
+    final List<String> parts = <String>[];
+    final StringBuffer current = StringBuffer();
+    var depth = 0;
+    String? quote;
+    var escaped = false;
+
+    for (var index = 0; index < body.length; index++) {
+      final String character = body[index];
+      if (quote != null) {
+        current.write(character);
+        if (escaped) {
+          // 引号里的 `\"` / `\\` 是被转义的字符，不能当引号结束。
+          escaped = false;
+          continue;
+        }
+        if (character == r'\') {
+          escaped = true;
+          continue;
+        }
+        if (character == quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (character == '"' || character == "'") {
+        quote = character;
+        current.write(character);
+        continue;
+      }
+      switch (character) {
+        case '[' || '(' || '{':
+          depth++;
+        case ']' || ')' || '}':
+          depth--;
+        case ',' when depth == 0:
+          parts.add(current.toString());
+          current.clear();
+          continue;
+      }
+      current.write(character);
+    }
+    if (current.isNotEmpty) {
+      parts.add(current.toString());
+    }
+
+    for (final String part in parts) {
+      final int colon = _topLevelColon(part);
+      if (colon < 0) {
+        continue;
+      }
+      final String key = _unquote(part.substring(0, colon).trim());
+      if (key.isEmpty) {
+        continue;
+      }
+      entries[key] = _unquote(part.substring(colon + 1).trim());
+    }
+
+    return entries;
+  }
+
+  /// The offset of the `:` separating a `@put` key from its rule, or `-1` when there is
+  /// none outside brackets and quotes.
+  int _topLevelColon(String text) {
+    var depth = 0;
+    String? quote;
+    var escaped = false;
+
+    for (var index = 0; index < text.length; index++) {
+      final String character = text[index];
+      if (quote != null) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (character == r'\') {
+          escaped = true;
+          continue;
+        }
+        if (character == quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (character == '"' || character == "'") {
+        quote = character;
+        continue;
+      }
+      switch (character) {
+        case '[' || '(' || '{':
+          depth++;
+        case ']' || ')' || '}':
+          depth--;
+        case ':' when depth == 0:
+          return index;
+      }
+    }
+
+    return -1;
+  }
+
+  /// Removes one optional pair of quotes around [text], undoing `\\` and `\"` escapes.
+  String _unquote(String text) {
+    if (text.length < 2) {
+      return text;
+    }
+    final String quote = text[0];
+    if ((quote != '"' && quote != "'") || text[text.length - 1] != quote) {
+      return text;
+    }
+
+    return text
+        .substring(1, text.length - 1)
+        .replaceAllMapped(
+          RegExp(r'\\(.)'),
+          (Match match) => match.group(1) ?? '',
+        );
+  }
 
   /// Applies the `-` reverse and every `##` replacement of [parsed] to [values].
   ///
@@ -799,13 +1539,45 @@ final class RuleEngine {
       _ParsedFailure<Object?>(:final _RuleRejection rejection) =>
         _ParsedFailure<List<String>>(rejection),
       _ParsedValue<Object?>(:final Object? value) => _ParsedValue<List<String>>(
-        <String>[
-          for (final JsonPathMatch match in json.path.read(value))
-            ..._jsonValues(match.value),
-        ],
+        _jsonValuesOf(json, value),
       ),
     },
   };
+
+  /// The values one JSON branch contributes (matrix #13 / #19).
+  ///
+  /// A plain path is read as before. A rule with embedded `{$jsonpath}` templates becomes
+  /// **one** value — the expression with every template replaced by its result, which is
+  /// what upstream does when the substitution succeeded (`AnalyzeByJSonPath.kt:79-90`); an
+  /// embedded path that matched a list joins its elements with a newline, upstream's
+  /// `getString` (`AnalyzeByJSonPath.kt:45-48`).
+  List<String> _jsonValuesOf(_JsonBranch branch, Object? value) {
+    final _JsonPiece first = branch.pieces.first;
+    if (branch.pieces.length == 1 && first is _JsonPathPiece) {
+      return <String>[
+        for (final JsonPathMatch match in first.path.read(value))
+          ..._jsonValues(match.value),
+      ];
+    }
+
+    final StringBuffer expanded = StringBuffer();
+    for (final _JsonPiece piece in branch.pieces) {
+      switch (piece) {
+        case _JsonLiteralPiece(:final String text):
+          expanded.write(text);
+        case _JsonPathPiece(:final JsonPath path):
+          expanded.write(
+            <String>[
+              for (final JsonPathMatch match in path.read(value))
+                ..._jsonValues(match.value),
+            ].join('\n'),
+          );
+      }
+    }
+    final String text = expanded.toString();
+
+    return text.isEmpty ? const <String>[] : <String>[text];
+  }
 
   /// The values one JSON match contributes to a value rule (matrix #13).
   ///
@@ -1034,7 +1806,12 @@ final class RuleEngine {
     // 矩阵 #7：`-` 是整条规则的前缀（`-class.odd@tag.a@href`）。必须在按 `@`
     // 切段之前摘掉，否则它会变成一个空段，后面的标志头也会被切错。
     final bool reverse = rawBody.startsWith('-');
-    final String body = (reverse ? rawBody.substring(1) : rawBody).trim();
+    final String stripped = (reverse ? rawBody.substring(1) : rawBody).trim();
+    // 矩阵 #15：`@@` 是规则体前缀（上游 `AnalyzeRule.kt:612-615`：剥掉两字符、模式不变），
+    // 所以必须比 `@` 切段早——否则它会变成一个空段。
+    final String body = stripped.startsWith(_defaultRuleFlag)
+        ? stripped.substring(_defaultRuleFlag.length).trim()
+        : stripped;
     // 矩阵 #14：`@js:` 贪婪吞掉本条规则剩余部分（上游 `AppPattern.JS_PATTERN` 的
     // `@js:([\w\W]*)`），所以必须在切候选 / 分支 / 段之前先切它——否则 JS 里的
     // `&&` / `||` 会被当成连接符，而那正是真实规则大量使用的写法。
@@ -1538,12 +2315,15 @@ final class RuleEngine {
   }
 
   /// The JSONPath of a branch that is a JSON rule, or `null` when it is not one
-  /// (matrix #13).
+  /// (matrix #13 / #19).
   ///
   /// The flag is case-insensitive like every other flag (`@Json:` works), and it may be
   /// omitted when the path starts with `$.` or `$[` — the two spellings upstream's rule
-  /// documentation lists. A bare `$` is not one of them, so it stays an unknown rule
-  /// type instead of being guessed.
+  /// documentation lists. Matrix #19's `{$jsonpath}` is recognised from its opening
+  /// `{$`: upstream reads those templates **inside** a JSON rule
+  /// (`AnalyzeByJSonPath.kt:41`), and a rule that is nothing but one template is exactly
+  /// the legacy `{$.data.name}` form. A bare `$` is not one of them, so it stays an
+  /// unknown rule type instead of being guessed.
   String? _jsonPathOf(String branch) {
     final String trimmed = branch.trim();
     if (trimmed.toLowerCase().startsWith(_jsonFlag)) {
@@ -1552,16 +2332,20 @@ final class RuleEngine {
     if (trimmed.startsWith(r'$.') || trimmed.startsWith(r'$[')) {
       return trimmed;
     }
+    if (trimmed.contains(_jsonTemplateOpen)) {
+      return trimmed;
+    }
 
     return null;
   }
 
-  /// Reads a `@json:` branch (matrix #13) into the JSONPath it evaluates.
+  /// Reads a JSON branch (matrix #13 / #19) into the pieces it evaluates.
   ///
-  /// The path is parsed while the rule is read, for the same reason `@css:` parses its
+  /// The paths are parsed while the rule is read, for the same reason `@css:` parses its
   /// selector here: a malformed path has to become a locatable
   /// [ParseFailureKind.parseFailed] carrying the field path, instead of an unlocatable
-  /// throw out of the matcher (C-SRC-8).
+  /// throw out of the matcher (C-SRC-8). That includes each `{$jsonpath}` template of
+  /// matrix #19, which is validated the same way.
   _Parsed<_RuleBranch> _readJsonBranch(
     String expression, {
     required String field,
@@ -1571,11 +2355,94 @@ final class RuleEngine {
       return _ParsedFailure<_RuleBranch>(_malformed(field));
     }
 
-    try {
-      return _ParsedValue<_RuleBranch>(_JsonBranch(JsonPath(trimmed)));
-    } on FormatException {
-      return _ParsedFailure<_RuleBranch>(_malformed(field));
+    final List<_JsonPiece>? pieces = _jsonPiecesOf(trimmed);
+
+    return pieces == null
+        ? _ParsedFailure<_RuleBranch>(_malformed(field))
+        : _ParsedValue<_RuleBranch>(_JsonBranch(pieces));
+  }
+
+  /// Splits a JSON expression into the literal text and the paths it evaluates, or `null`
+  /// when a path cannot be parsed.
+  ///
+  /// Without a `{$jsonpath}` template the whole expression is one path (matrix #13). With
+  /// them, the expression is text with embedded paths (matrix #19) — upstream substitutes
+  /// each one with its value in place (`AnalyzeByJSonPath.kt:29-31`).
+  List<_JsonPiece>? _jsonPiecesOf(String expression) {
+    if (!expression.contains(_jsonTemplateOpen)) {
+      return _asJsonPathPiece(expression);
     }
+
+    final List<_JsonPiece> pieces = <_JsonPiece>[];
+    var index = 0;
+    while (index < expression.length) {
+      final int at = expression.indexOf(_jsonTemplateOpen, index);
+      if (at < 0) {
+        pieces.add(_JsonLiteralPiece(expression.substring(index)));
+        break;
+      }
+      if (at > index) {
+        pieces.add(_JsonLiteralPiece(expression.substring(index, at)));
+      }
+      final int end = _jsonTemplateEnd(expression, at);
+      if (end < 0) {
+        return null;
+      }
+      final List<_JsonPiece>? path = _asJsonPathPiece(
+        expression.substring(at + 1, end),
+      );
+      if (path == null) {
+        return null;
+      }
+      pieces.addAll(path);
+      index = end + 1;
+    }
+
+    return pieces.isEmpty ? null : pieces;
+  }
+
+  /// Parses [expression] as a JSONPath, or `null` when it is not one.
+  List<_JsonPiece>? _asJsonPathPiece(String expression) {
+    try {
+      return <_JsonPiece>[_JsonPathPiece(JsonPath(expression.trim()))];
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// The offset of the `}` closing the `{$` template that starts at [start], or `-1` when
+  /// it is not balanced.
+  ///
+  /// Quotes are skipped so a `}` inside a JSONPath string literal does not end the
+  /// template; nesting is counted the same way upstream's `chompCodeBalanced` does it
+  /// (`RuleAnalyzer.kt:91-130`).
+  int _jsonTemplateEnd(String expression, int start) {
+    var depth = 0;
+    String? quote;
+
+    for (var index = start; index < expression.length; index++) {
+      final String character = expression[index];
+      if (quote != null) {
+        if (character == quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (character == '"' || character == "'") {
+        quote = character;
+        continue;
+      }
+      if (character == '{') {
+        depth++;
+      } else if (character == '}') {
+        depth--;
+        if (depth == 0) {
+          return index;
+        }
+      }
+    }
+
+    return -1;
   }
 
   /// Whether [branches] read two different scopes, i.e. a JSON branch merged with a
@@ -1873,6 +2740,22 @@ final class _ParsedRule {
   final List<_RuleCandidate> candidates;
 }
 
+/// One rule after the matrix #15..#19 expansion: the text that is left to parse, and
+/// whether a `{{…}}` / `@get:` substitution happened.
+///
+/// The flag matters: upstream evaluates a rule that carried a substitution in **regex
+/// mode**, where the substituted text *is* the value (`AnalyzeRule.kt:674-680`), so a value
+/// rule has to stop here instead of reading the text as a selector.
+final class _Expansion {
+  const _Expansion({required this.text, required this.substituted});
+
+  /// The rule text after the `@put:` / `@get:` / `{{…}}` occurrences were resolved.
+  final String text;
+
+  /// Whether at least one `{{…}}` or `@get:` was substituted.
+  final bool substituted;
+}
+
 /// A selector name together with the positions written on it (matrix #6 / #26).
 typedef _NamedSelector = ({String name, _IndexSelection? selection});
 
@@ -1966,11 +2849,37 @@ final class _DomBranch extends _RuleBranch {
   final String extraction;
 }
 
-/// A branch that reads JSON: `@json:` and the bare `$.` / `$[` form (matrix #13).
+/// A branch that reads JSON: `@json:`, the bare `$.` / `$[` form (matrix #13) and the
+/// legacy `{$jsonpath}` templates (matrix #19).
 final class _JsonBranch extends _RuleBranch {
-  const _JsonBranch(this.path);
+  const _JsonBranch(this.pieces);
 
-  /// The parsed JSONPath this branch applies to the scope.
+  /// The expression's pieces, in order: one path for a plain JSON rule, or literal text
+  /// with embedded paths for a legacy template.
+  final List<_JsonPiece> pieces;
+
+  /// The paths [pieces] carries, in order (matrix #13 / #19).
+  Iterable<_JsonPathPiece> get paths => pieces.whereType<_JsonPathPiece>();
+}
+
+/// One piece of a JSON expression (matrix #13 / #19).
+sealed class _JsonPiece {
+  const _JsonPiece();
+}
+
+/// Text a JSON expression carries verbatim (matrix #19).
+final class _JsonLiteralPiece extends _JsonPiece {
+  const _JsonLiteralPiece(this.text);
+
+  /// The literal text of the expression.
+  final String text;
+}
+
+/// A JSONPath the expression evaluates against the scope.
+final class _JsonPathPiece extends _JsonPiece {
+  const _JsonPathPiece(this.path);
+
+  /// The parsed path.
   final JsonPath path;
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
@@ -56,13 +57,8 @@ const String _jsonBody =
 /// (`docs/dev/book-source.md` §7).
 const Map<String, String> _unsupportedRules = <String, String>{
   '@xpath://div': 'unsupported:@xpath:',
-  '@put:{a:1}': 'unsupported:@put:',
-  '@get:{a}': 'unsupported:@get:',
   '@webJs': 'unsupported:@webJs',
-  '@@class.a': 'unsupported:@@',
-  '{{result}}': 'unsupported:{{',
   '//div': 'unsupported://',
-  r'{$.data}': 'unsupported:{',
   ':regex': 'unsupported::',
   // 矩阵 #7 的 `-` 先摘掉再识别标志头，所以标志头的报错保持原样（不能被 `-` 顶掉）。
   // 矩阵 #15：中段 `@@`（`@` 切分后留空段，必须在切段前判掉，否则误报畸形）。
@@ -126,11 +122,19 @@ const List<String> _malformedSelectors = <String>[
 ];
 
 /// An engine with a capturing logger, so a test can assert the C-SRC-4 record.
-RuleEngine _engine([FakeLogPrinter? printer, JsBridge? jsBridge]) => RuleEngine(
+///
+/// [variables] is injectable so a test can share one store with the fake bridge, which is
+/// how a `java.put` of matrix #17 reaches `@get:` / `{{name}}` of a later rule.
+RuleEngine _engine([
+  FakeLogPrinter? printer,
+  JsBridge? jsBridge,
+  JsVariableStore? variables,
+]) => RuleEngine(
   logger: AppLogger(
     level: LogLevel.debug,
     printer: printer ?? FakeLogPrinter(),
   ),
+  variables: variables ?? JsVariableStore(),
   jsBridge: jsBridge ?? FakeJsBridge(),
 );
 
@@ -2929,6 +2933,794 @@ void main() {
         // JSON 页上的 `parse.getElements` 把每个匹配的 JSON 值本身交给脚本（无 DOM 句柄）。
         expect(values, hasLength(2));
         expect(values.first, contains('One'));
+      },
+    );
+  });
+
+  group('RuleEngine matrix #15 (@@ default rule flag)', () {
+    test(
+      'extractFirst_givenTheDefaultRuleFlag_matchesLikeTheBareRule',
+      () async {
+        expect(
+          await _first(
+            _engine().extractFirst(
+              '@@class.result.0@tag.a@text',
+              _scope(_document(_listHtml)),
+              rulePath: 'searchRule.name',
+            ),
+          ),
+          'One',
+        );
+      },
+    );
+
+    test(
+      'extractFirst_givenTheFlagAfterTheDash_stillCountsAsReverse',
+      () async {
+        // 矩阵 #7 的 `-` 先摘，矩阵 #15 的 `@@` 后摘，两者可以叠加。
+        final List<String> values = await _values(
+          _engine().extractAll(
+            '-@@class.result@tag.a@href',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        );
+
+        expect(values, <String>['/book/3', '/book/2', '/book/1']);
+      },
+    );
+
+    test('extractAll_givenTheFlagInTheMiddleOfARule_isUnsupported', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().extractAll(
+          'class.result.0@@class.result.1@text',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // 上游的 `@@` 只认规则体开头；中段那个 `@@` 不是任何已实现写法。
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@@');
+    });
+  });
+
+  group('RuleEngine matrix #16 (@put: / @get:)', () {
+    test('extractAll_givenAPutThenAGet_readsTheWrittenValue', () async {
+      final JsVariableStore variables = JsVariableStore();
+
+      final List<String> values = await _values(
+        _engine(null, null, variables).extractAll(
+          '@put:{a:class.result.0@tag.a@text}@get:{a}',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // `@get` 是替换：替换过的规则按上游的 Regex 模式读，整段替换结果就是它的值。
+      expect(values, <String>['One']);
+      expect(variables.read('', 'a'), 'One');
+    });
+
+    test('extractFirst_givenAQuotedPutValue_stripsTheQuotes', () async {
+      final JsVariableStore variables = JsVariableStore();
+
+      final String? value = await _first(
+        _engine(null, null, variables).extractFirst(
+          '@put:{a:"class.result.2@tag.a@text"}@get:{a}',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(value, 'Three');
+    });
+
+    test(
+      'extractFirst_givenAnUnquotedJsonPathPutValue_writesTheJsonValue',
+      () async {
+        final JsVariableStore variables = JsVariableStore();
+
+        // 矩阵 #13 / #16：`@put` 的值本身是一条规则，JSONPath 按原写法不带引号。
+        final String? value = await _first(
+          _engine(null, null, variables).extractFirst(
+            r'@put:{a:$.data.count}@get:{a}',
+            _pageWithContext(_jsonBody),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        expect(value, '3');
+      },
+    );
+
+    test('extractFirst_givenAnUnknownGet_rendersAnEmptyString', () async {
+      final List<String> values = await _values(
+        _engine().extractAll(
+          '@get:{missing}',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // §4：未定义的变量渲染为空串，不保留 `{{…}}` / `@get:{…}` 原文。
+      expect(values, isEmpty);
+    });
+
+    test('extractAll_givenAFlagOnlyPutRule_writesTheVariable', () async {
+      final JsVariableStore variables = JsVariableStore();
+      final RuleEngine engine = _engine(null, null, variables);
+
+      final List<String> values = await _values(
+        engine.extractAll(
+          '@put:{a:class.result.1@tag.a@text}',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+      final String? read = await _first(
+        engine.extractFirst(
+          '@get:{a}',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // 只剩 `@put:` 的规则没有选择器可跑，上游读成空值；写入照常发生。
+      expect(values, isEmpty);
+      expect(read, 'Two');
+    });
+
+    test('extractFirst_givenARejectedPutValue_failsTheWholeRule', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().extractFirst(
+          '@put:{a://div}class.result.0@tag.a@text',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // 写入失败了就没有“后半个规则”可言：按 C-SRC-4 显式失败，不静默跳过。
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported://');
+    });
+
+    test('extractFirst_givenAMalformedPutBody_isIgnored', () async {
+      // 上游对解析不了的 `@put` 体只记一条 debug 并继续（putMap 为空）。
+      expect(
+        await _first(
+          _engine().extractFirst(
+            '@put:{nocolon}class.result.0@tag.a@text',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        'One',
+      );
+    });
+  });
+
+  group('RuleEngine matrix #17 (java.put / java.get)', () {
+    test('extractFirst_givenAJavaPutThenAGet_readsItThroughTheStore', () async {
+      final JsVariableStore variables = JsVariableStore();
+      // 假桥代表 worker 的回报：`java.put` 写下的变量随 job 结果回到桥，再落到同一份表里
+      // （ADR-0034 §决策 1）。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..variables = variables
+        ..javaPuts['token'] = 'abc';
+      final RuleEngine engine = _engine(null, bridge, variables);
+
+      await _values(
+        engine.extractAll(
+          "@js:java.put('token', 'abc')",
+          _pageWithContext(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+      final String? value = await _first(
+        engine.extractFirst(
+          '@get:{token}',
+          _pageWithContext(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(value, 'abc');
+    });
+
+    test('extractAll_givenAJavaCall_handsTheSourceSnapshotToTheJob', () async {
+      const String sourceUrl = 'https://example-novel.test';
+      final JsVariableStore variables = JsVariableStore()
+        ..write(sourceUrl, 'token', 'abc');
+      final FakeJsBridge bridge = FakeJsBridge();
+
+      await _values(
+        _engine(null, bridge, variables).extractAll(
+          "@js:java.get('token')",
+          _pageWithContext(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // 变量按**书源**键控：同一个源的另一条规则看得到它，别的源看不到（C-SRC-9）。
+      expect(bridge.jobs.single.variables, <String, String>{'token': 'abc'});
+    });
+
+    test(
+      'extractAll_givenAZoneWithoutAVariable_carriesAnEmptySnapshot',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge();
+
+        await _values(
+          _engine(null, bridge).extractAll(
+            '@js:1 + 1',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        expect(bridge.jobs.single.variables, isEmpty);
+      },
+    );
+  });
+
+  group('RuleEngine matrix #18 ({{…}} templates)', () {
+    test('extractAll_givenATemplate_runsItInTheSandbox', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'templated';
+
+      final List<String> values = await _values(
+        _engine(null, bridge).extractAll(
+          '{{result}}',
+          _pageWithContext(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(values, <String>['templated']);
+      // §6 的绑定与 `result` 形态：整页 scope 给 responseBody。
+      expect(bridge.jobs.single.script, 'result');
+      expect(bridge.jobs.single.result, _listHtml);
+      expect(bridge.jobs.single.baseUrl, 'https://example-novel.test/book/1/');
+    });
+
+    test(
+      'extractFirst_givenARuleHeadInsideATemplate_evaluatesItAsARule',
+      () async {
+        final JsVariableStore variables = JsVariableStore();
+
+        // `{{…}}` 内直接写默认规则必须带 `@@`（矩阵 #15）：不带标志头时它是 JS。
+        final String? value = await _first(
+          _engine(null, null, variables).extractFirst(
+            '{{@@class.result.0@tag.a@text}}',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        expect(value, 'One');
+      },
+    );
+
+    test(
+      'extractFirst_givenATemplateInsideALargerRule_returnsTheSubstitutedText',
+      () async {
+        // 上游把带替换的规则读成 Regex 模式（AnalyzeRule.kt:674-680）：替换后的整段
+        // 文本就是这条规则的值，不会再当选择器解析。
+        final String? value = await _first(
+          _engine(null, null, JsVariableStore()).extractFirst(
+            '@put:{a:class.result.0@tag.a@text}第{{@get:{a}}}章',
+            _scope(_document(_listHtml)),
+            rulePath: 'tocRule.chapterName',
+          ),
+        );
+
+        expect(value, '第One章');
+      },
+    );
+
+    test('extractAll_givenAnEmptyTemplateResult_yieldsNoValue', () async {
+      // 假桥默认答 null：上游把 null 结果当空串插入，空串不产生值（矩阵 #8 同口径）。
+      final List<String> values = await _values(
+        _engine(null, FakeJsBridge()).extractAll(
+          '{{result}}',
+          _pageWithContext(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(values, isEmpty);
+    });
+
+    test('extractAll_givenAFailingTemplate_returnsTheSandboxFailure', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = failureAt<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'searchRule.name:js:error',
+        );
+
+      final ParseFailure<Never> failure = await _failure(
+        _engine(null, bridge).extractAll(
+          '{{result}}',
+          _pageWithContext(_listHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name:js:error');
+    });
+
+    test('extractAll_givenAnUnbalancedTemplate_yieldsNoValue', () async {
+      // 括号不平衡时上游的 `{{[\w\W]*?}}` 逐不上（`innerRule` 不动它），所以它退回成
+      // 提取段的一部分；此处没有名为 `text{{` 的属性，于是“成功但无值”（矩阵 #8 口径）。
+      final List<String> values = await _values(
+        _engine().extractAll(
+          'class.result.0@tag.a@text{{',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(values, isEmpty);
+    });
+
+    test('extractAll_givenATemplateInsideAScript_isLeftToTheScript', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ran';
+
+      final List<String> values = await _values(
+        _engine(null, bridge).extractAll(
+          "@js:result.replace(/x/, '{{y}}')",
+          _pageWithContext(_listHtml),
+          rulePath: 'contentRule.content',
+        ),
+      );
+
+      // `@js:` 贪婪吞掉剩余部分（矩阵 #14）：脚本里的 `{{…}}` 是脚本文本，不是模板。
+      expect(values, <String>['ran']);
+      expect(bridge.jobs.single.script, "result.replace(/x/, '{{y}}')");
+    });
+  });
+
+  group('RuleEngine matrix #19 ({} legacy JSONPath)', () {
+    test('extractAll_givenTheLegacyRule_readsThePath', () async {
+      expect(
+        await _values(
+          _engine().extractAll(
+            r'{$.data.name}',
+            _pageWithContext(_jsonBody),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One'],
+      );
+    });
+
+    test(
+      'extractFirst_givenATemplateInsideLiteralText_returnsTheText',
+      () async {
+        // 上游在内嵌替换成功时返回整段拼接结果（AnalyzeByJSonPath.kt:79-90）。
+        expect(
+          await _first(
+            _engine().extractFirst(
+              r'第{$.data.count}章',
+              _pageWithContext(_jsonBody),
+              rulePath: 'tocRule.chapterName',
+            ),
+          ),
+          '第3章',
+        );
+      },
+    );
+
+    test('extractAll_givenALegacyRuleOnAListRule_readsTheElements', () async {
+      final List<RuleScope> matches = await _matches(
+        _engine().selectAll(
+          r'{$.data.list[*]}',
+          _pageWithContext(_jsonBody),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(matches, hasLength(2));
+      expect(matches.first, isA<JsonScope>());
+    });
+
+    test('extractAll_givenAnUnbalancedLegacyRule_reportsParseFailed', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().extractAll(
+          r'{$.data.name',
+          _pageWithContext(_jsonBody),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test('extractAll_givenAnInvalidLegacyPath_reportsParseFailed', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().extractAll(
+          r'{$[}',
+          _pageWithContext(_jsonBody),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+  });
+
+  group('RuleEngine renderUrl (matrix #18 in URLs)', () {
+    const JsPageContext context = JsPageContext(
+      baseUrl: 'https://example-novel.test',
+      page: 1,
+      source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+    );
+
+    test('renderUrl_givenM0Variables_encodesTheKeywordOnce', () async {
+      final String url = await _text(
+        _engine().renderUrl(
+          'https://example-novel.test/search?q={{key}}&page={{page}}',
+          rulePath: 'searchUrl',
+          params: <String, String>{'key': '中文 书', 'page': '2'},
+          context: context,
+        ),
+      );
+
+      expect(
+        url,
+        'https://example-novel.test/search?q=%E4%B8%AD%E6%96%87+%E4%B9%A6&page=2',
+      );
+    });
+
+    test('renderUrl_givenAnUnknownTemplate_runsItWithTheKeyBinding', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ENCODED';
+
+      final String url = await _text(
+        _engine(null, bridge).renderUrl(
+          'https://example-novel.test/search?q={{key.toUpperCase()}}',
+          rulePath: 'searchUrl',
+          params: <String, String>{'key': 'abc', 'page': '1'},
+          context: context,
+        ),
+      );
+
+      expect(url, 'https://example-novel.test/search?q=ENCODED');
+      // 上游只在 URL 里绑 `key`（AnalyzeUrl.kt:377），所以模板拿不到的关键词从绑定走。
+      expect(bridge.jobs.single.key, 'abc');
+      expect(bridge.jobs.single.script, 'key.toUpperCase()');
+    });
+
+    test('renderUrl_givenAnIntegralNumber_writesItWithoutDecimals', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 2.0;
+
+      expect(
+        await _text(
+          _engine(null, bridge).renderUrl(
+            'https://example-novel.test/page/{{page + 1}}',
+            rulePath: 'searchUrl',
+            params: <String, String>{'page': '1'},
+            context: context,
+          ),
+        ),
+        'https://example-novel.test/page/2',
+      );
+    });
+
+    test('renderUrl_givenARuleHead_reportsUnsupportedRule', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().renderUrl(
+          'https://example-novel.test/{{@@class.a@text}}',
+          rulePath: 'searchUrl',
+          params: const <String, String>{},
+          context: context,
+        ),
+      );
+
+      // §4：搜索 / 发现 URL 里的 `{{…}}` 只允许 JS，规则头按名拒绝（C-SRC-4）。
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@@');
+    });
+
+    test('renderUrl_givenAnXpathHead_reportsUnsupportedRule', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().renderUrl(
+          'https://example-novel.test/{{//div}}',
+          rulePath: 'searchUrl',
+          params: const <String, String>{},
+          context: context,
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported://');
+    });
+
+    test('renderUrl_givenACssHead_reportsUnsupportedRule', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().renderUrl(
+          'https://example-novel.test/{{@css:.a}}',
+          rulePath: 'searchUrl',
+          params: const <String, String>{},
+          context: context,
+        ),
+      );
+
+      // 带标志的规则头（`@css:` 等）在 URL 里同样不允许：只能写 JS。
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@css:');
+    });
+
+    test('renderUrl_givenTheM0BaseUrl_rendersItWithoutTheSandbox', () async {
+      final FakeJsBridge bridge = FakeJsBridge();
+
+      // §4：`page` / `baseUrl` 是 M0 变量，走同步渲染器；只有名字不在参数表里时才需要
+      // 沙箱，所以这里一个 job 都不应该产生。
+      final String url = await _text(
+        _engine(null, bridge).renderUrl(
+          '{{baseUrl}}/page/{{page}}',
+          rulePath: 'searchUrl',
+          params: <String, String>{
+            'baseUrl': 'https://example-novel.test',
+            'page': '2',
+          },
+          context: context,
+        ),
+      );
+
+      expect(url, 'https://example-novel.test/page/2');
+      expect(bridge.jobs, isEmpty);
+    });
+
+    test('renderUrl_givenAnUnbalancedTemplate_reportsParseFailed', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().renderUrl(
+          'https://example-novel.test/{{page',
+          rulePath: 'searchUrl',
+          params: <String, String>{'page': '2'},
+          context: context,
+        ),
+      );
+
+      // §4：未渲染的 `{{…}}` 不得交给请求层，所以在 URL 里它是显式失败。
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchUrl');
+    });
+
+    test('renderUrl_givenAFailingScript_returnsTheSandboxFailure', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = failureAt<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'searchUrl:js:error',
+        );
+
+      final ParseFailure<Never> failure = await _failure(
+        _engine(null, bridge).renderUrl(
+          'https://example-novel.test/{{nope()}}',
+          rulePath: 'searchUrl',
+          params: const <String, String>{},
+          context: context,
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchUrl:js:error');
+    });
+  });
+
+  group('RuleEngine expansion guards', () {
+    test('selectAll_givenAFailingExpansion_returnsTheFailure', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().selectAll(
+          '@put:{a://div}class.result',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      // 列表规则同样先过展开（矩阵 #16）：展开失败就是整条规则失败（C-SRC-4）。
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported://');
+    });
+
+    test(
+      'extractAll_givenDeeplyNestedTemplates_stopsAtTheDepthBound',
+      () async {
+        // 每层 `{{@@…}}` 都会再递归一次求值；深处那一层超过最大展开深度，必须以可定位的
+        // `parseFailed` 收场，而不是把解析卡死（C-SRC-4）。
+        final String rule = '${'{{@@' * 10}{{x}}${'}}' * 10}';
+
+        final ParseFailure<Never> failure = await _failure(
+          _engine().extractAll(
+            rule,
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        expect(failure.kind, ParseFailureKind.parseFailed);
+        expect(failure.rulePath, 'searchRule.name');
+      },
+    );
+
+    test(
+      'extractAll_givenAFailingPrefixBeforeAScript_returnsTheFailure',
+      () async {
+        final ParseFailure<Never> failure = await _failure(
+          _engine().extractAll(
+            '@put:{a://div}@js:result',
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // `@js:` 之前的展开失败与脚本无关，仍然是这条规则的失败。
+        expect(failure.kind, ParseFailureKind.unsupportedRule);
+        expect(failure.rulePath, 'unsupported://');
+      },
+    );
+
+    test(
+      'extractAll_givenAReplacementPartThatNeedsExpansion_expandsIt',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'page';
+
+        final List<String> values = await _values(
+          _engine(null, bridge).extractAll(
+            '@js:result##{{x}}##y',
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // 脚本区不展开，但 `##` 之后的替换段要展开（上游在 `##` 切分前做替换）。
+        expect(values, <String>['y']);
+      },
+    );
+
+    test('extractAll_givenAFailingReplacementPart_returnsTheFailure', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = failureAt<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'contentRule.content:js:error',
+        );
+
+      final ParseFailure<Never> failure = await _failure(
+        _engine(null, bridge).extractAll(
+          '@js:result##{{x}}##y',
+          _pageWithContext(_listHtml),
+          rulePath: 'contentRule.content',
+        ),
+      );
+
+      // 替换段里的模板也要展开（矩阵 #18）：它报错时整条规则失败。
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'contentRule.content:js:error');
+    });
+
+    test('extractAll_givenAnUnclosedGetFlag_reportsParseFailed', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().extractAll(
+          '@get:{unclosed',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test(
+      'extractAll_givenAQuotedTemplateBody_keepsTheBracesInsideIt',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge();
+
+        await _values(
+          _engine(null, bridge).extractAll(
+            '{{"}}"+result}}',
+            _pageWithContext(_listHtml),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        // 引号里的 `}}` 不结束模板（上游 `chompCodeBalanced` 同口径）。
+        expect(bridge.jobs.single.script, '"}}"+result');
+      },
+    );
+
+    test('extractAll_givenAQuotedPutValue_spansCommasAndBrackets', () async {
+      final JsVariableStore variables = JsVariableStore();
+
+      await _values(
+        _engine(null, null, variables).extractAll(
+          r'@put:{a:"x,y",b:"$.data.list[0].name"}@get:{b}',
+          _pageWithContext(_jsonBody),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // 值里的逗号与方括号都不切分 `@put` 体：`a` 是整串 `x,y`（无匹配→空值）。
+      expect(variables.read('https://example-novel.test', 'a'), '');
+      expect(variables.read('https://example-novel.test', 'b'), 'One');
+    });
+
+    test('extractAll_givenAQuotedPutKey_keepsTheColonInsideIt', () async {
+      final JsVariableStore variables = JsVariableStore();
+
+      final String? value = await _first(
+        _engine(null, null, variables).extractFirst(
+          r'@put:{"a:b":"class.result.0@tag.a@text"}@get:{a:b}',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // `_topLevelColon` 只认引号外的第一个 `:`，所以带 `:` 的键要加引号。
+      expect(value, 'One');
+    });
+
+    test('extractAll_givenABracketedPutKey_keepsTheColonInsideIt', () async {
+      final JsVariableStore variables = JsVariableStore();
+
+      final String? value = await _first(
+        _engine(null, null, variables).extractFirst(
+          r'@put:{[a:b]:"class.result.0@tag.a@text"}@get:{[a:b]}',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // 方括号里的 `:` 同样不是键值分隔符（位置语法的键也能用）。
+      expect(value, 'One');
+    });
+
+    test(
+      'extractAll_givenAnUnquotedPutPathWithBrackets_keepsItWhole',
+      () async {
+        final JsVariableStore variables = JsVariableStore();
+
+        final String? value = await _first(
+          _engine(null, null, variables).extractFirst(
+            r'@put:{a:$.data.list[0].name}@get:{a}',
+            _pageWithContext(_jsonBody),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        // 矩阵 #16 的「`@put` 内 JSONPath 不加引号」：键与值都带位置语法时要整段读走。
+        expect(value, 'One');
+      },
+    );
+
+    test('extractAll_givenAnEscapedQuoteInAPutValue_unescapesIt', () async {
+      final String? value = await _first(
+        _engine(null, null, JsVariableStore()).extractFirst(
+          '@put:{a:"class.result.0@tag.a@text##One##Tw\\"o"}@get:{a}',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      // 上游用 JSON 解析做这件事（`GSONStrict`）；本仓只做 `\x` → `x` 的去转义。
+      expect(value, 'Tw"o');
+    });
+
+    test(
+      'extractAll_givenALegacyTemplateWithAQuotedBrace_keepsItInside',
+      () async {
+        final List<String> values = await _values(
+          _engine().extractAll(
+            r"{$['a}b']}",
+            _pageWithContext(_jsonBody),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        // 引号里的 `}` 不结束矩阵 #19 的模板；路径解不出来（无该属性）就是无值。
+        expect(values, isEmpty);
       },
     );
   });

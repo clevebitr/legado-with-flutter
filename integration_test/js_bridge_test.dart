@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
@@ -31,6 +32,8 @@ void main() {
   late _CollectingPrinter printer;
   late QuickJsWorkerBridge bridge;
   late _ProbeHttpClient http;
+  // 变量表由桥与引擎共用：脚本 `java.put` 写进去的，`@get:` 与 `{{…}}` 要能读到（ADR-0034）。
+  final JsVariableStore variables = JsVariableStore();
 
   setUp(() {
     printer = _CollectingPrinter();
@@ -39,6 +42,7 @@ void main() {
       logger: AppLogger(level: LogLevel.debug, printer: printer),
       launch: launchQuickJsWorker,
       http: http,
+      variables: variables,
     );
   });
 
@@ -204,6 +208,7 @@ void main() {
       final RuleEngine engine = RuleEngine(
         logger: AppLogger(level: LogLevel.debug, printer: printer),
         jsBridge: bridge,
+        variables: variables,
       );
       const String pageHtml = '<div id="c">正文</div>';
       final RuleScope scope = RuleScope.dom(
@@ -290,6 +295,7 @@ void main() {
     final RuleEngine engine = RuleEngine(
       logger: AppLogger(level: LogLevel.debug, printer: printer),
       jsBridge: bridge,
+      variables: variables,
     );
     final RuleScope scope = RuleScope.dom(
       parser.parse(pageHtml),
@@ -317,6 +323,7 @@ void main() {
     final RuleEngine engine = RuleEngine(
       logger: AppLogger(level: LogLevel.debug, printer: printer),
       jsBridge: bridge,
+      variables: variables,
     );
     final RuleScope element = RuleScope.dom(parser.parse(pageHtml));
 
@@ -368,37 +375,180 @@ void main() {
   testWidgets('jsBridge_whenARuleLooksAtTheWhitelist_findsOnlyIt', (
     WidgetTester tester,
   ) async {
-    // C-SRC-3：白名单外的能力不存在（`java` 仍属 M1，未实现），而本阶段的两个宿主绑定存在。
+    // C-SRC-3：白名单外的能力不存在，而 §6 里的绑定都在（`java.*` 是 M1，矩阵 #17）。
     final ParseResult<Object?> result = await bridge.evaluate(
       _job(
         script:
             '[typeof http, typeof http.get, typeof http.post, '
             'typeof parse, typeof parse.getString, typeof parse.getElements, '
-            "typeof java].join(',')",
+            'typeof java, typeof java.put, typeof java.get, '
+            "typeof setTimeout, typeof console].join(',')",
       ),
     );
 
     expect(
       _value(result),
-      'object,function,function,object,function,function,undefined',
+      'object,function,function,object,function,function,'
+      'object,function,function,undefined,undefined',
     );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenAScriptWritesAJavaVariable_keepsItPerSource', (
+    WidgetTester tester,
+  ) async {
+    // 矩阵 #17：`java.*` 在 worker 内同步拿到值（§6），而变量按**书源**键控
+    // （ADR-0030 §决策 4、ADR-0034 §决策 1）。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(script: "java.put('token', 'a'); java.get('token')"),
+        ),
+      ),
+      'a',
+    );
+
+    // 同一书源的下一个 job：变量随上一个 job 的结果回到宿主，又随快照回来。
+    expect(
+      _value(await bridge.evaluate(_job(script: "java.get('token')"))),
+      'a',
+    );
+
+    // 另一个书源看到的是自己的空表，不是前一个书源的。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(
+            script: "java.get('token')",
+            source: const JsSourceInfo(
+              name: '另一个书源',
+              url: 'https://other.test',
+            ),
+          ),
+        ),
+      ),
+      '',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenJavaAndTheEngineShareAStore_seesEachOther', (
+    WidgetTester tester,
+  ) async {
+    // 矩阵 #16 / #17 是**同一份**变量：脚本 `java.put` 写下的，引擎的 `@get:` 要读得到
+    // （ADR-0034 §决策 1）。这也是真引擎才能证明的一段。
+    final RuleEngine engine = RuleEngine(
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      jsBridge: bridge,
+      variables: variables,
+    );
+    const String pageHtml = '<p>x</p>';
+    final RuleScope scope = RuleScope.dom(
+      parser.parse(pageHtml),
+      body: pageHtml,
+      jsContext: const JsPageContext(
+        baseUrl: 'https://example-novel.test/book/1/',
+        source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+      ),
+    );
+
+    await engine.extractFirst(
+      "@js:java.put('token', 'a')",
+      scope,
+      rulePath: 'searchRule.name',
+    );
+
+    expect(
+      _value(
+        await engine.extractFirst(
+          '@get:{token}',
+          scope,
+          rulePath: 'searchRule.name',
+        ),
+      ),
+      'a',
+    );
+
+    // 反过来也一样：`@put:` 写下的，脚本里的 `java.get` 要读得到。
+    await engine.extractFirst(
+      '@put:{token2:tag.p@text}',
+      scope,
+      rulePath: 'searchRule.name',
+    );
+    expect(
+      _value(
+        await engine.extractFirst(
+          "@js:java.get('token2')",
+          scope,
+          rulePath: 'searchRule.name',
+        ),
+      ),
+      'x',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenAUrlRuleUsesKey_bindsItOnlyThere', (
+    WidgetTester tester,
+  ) async {
+    // §4 / 矩阵 #18：搜索 URL 里的 `{{…}}` 是 JS，且只有那里绑 `key`
+    // （上游 `AnalyzeUrl.evalJS`，AnalyzeUrl.kt:377）。
+    final RuleEngine engine = RuleEngine(
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      jsBridge: bridge,
+      variables: variables,
+    );
+    const JsPageContext context = JsPageContext(
+      baseUrl: 'https://example-novel.test',
+      source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+    );
+
+    final ParseResult<String> url = await engine.renderUrl(
+      'https://example-novel.test/search?q={{key.toUpperCase()}}',
+      rulePath: 'searchUrl',
+      params: const <String, String>{'key': 'abc', 'page': '1'},
+      context: context,
+    );
+    expect(switch (url) {
+      ParseSuccess<String>(:final String data) => data,
+      ParseFailure<String>() => 'unexpected failure',
+    }, 'https://example-novel.test/search?q=ABC');
+
+    // 字段规则里没有 `key`：上一条 job 设过的全局名必须被清掉（沙箱每 job 重装）。
+    const String pageHtml = '<p>x</p>';
+    final ParseResult<String?> field = await engine.extractFirst(
+      '{{key}}',
+      RuleScope.dom(
+        parser.parse(pageHtml),
+        body: pageHtml,
+        jsContext: const JsPageContext(
+          baseUrl: 'https://example-novel.test',
+          source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+        ),
+      ),
+      rulePath: 'searchRule.name',
+    );
+    expect(switch (field) {
+      ParseFailure<String?>(:final String rulePath) => rulePath,
+      ParseSuccess<String?>() => 'unexpected success',
+    }, 'searchRule.name:js:error');
   }, timeout: const Timeout(Duration(minutes: 2)));
 }
 
 /// A job whose script decides the behaviour; the variables are the §6 bindings.
-JsJob _job({required String script, Map<String, String>? sourceHeaders}) =>
-    JsJob(
-      script: script,
-      rulePath: 'searchRule.name',
-      baseUrl: 'https://example-novel.test/search',
-      page: 2,
-      source: const JsSourceInfo(
-        name: '示例书源',
-        url: 'https://example-novel.test',
-      ),
-      result: 'raw',
-      sourceHeaders: sourceHeaders,
-    );
+JsJob _job({
+  required String script,
+  Map<String, String>? sourceHeaders,
+  JsSourceInfo source = const JsSourceInfo(
+    name: '示例书源',
+    url: 'https://example-novel.test',
+  ),
+}) => JsJob(
+  script: script,
+  rulePath: 'searchRule.name',
+  baseUrl: 'https://example-novel.test/search',
+  page: 2,
+  source: source,
+  result: 'raw',
+  sourceHeaders: sourceHeaders,
+);
 
 /// The value of a successful evaluation, failing the test otherwise.
 Object? _value(ParseResult<Object?> result) => switch (result) {

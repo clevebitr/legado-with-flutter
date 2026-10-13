@@ -46,6 +46,7 @@ final class FakeJsWorkerHandle implements JsWorkerHandle {
     Object? value,
     String? error,
     int elapsedMs = 0,
+    Map<String, String?>? variables,
   }) {
     _results.add(<String, Object?>{
       'type': 'result',
@@ -53,6 +54,8 @@ final class FakeJsWorkerHandle implements JsWorkerHandle {
       'value': value,
       'error': error,
       'elapsedMs': elapsedMs,
+      // §6 的变量回报：worker 把整份按源变量表随结果一起交回（ADR-0034 §决策 1）。
+      'variables': ?variables,
     });
   }
 

@@ -125,7 +125,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-SRC-6 | CSS 选择器统一 `cascadia`；JSONPath 统一 `json_path`；禁止自研选择器或手写 JSON 遍历。 |
 | C-SRC-7 | `BookSource` 及全部子规则必须使用 `freezed` + `json_serializable`；禁止手写 `fromJson` / `toJson`。模型位于 `domain/entities/`，该层归属的例外见 ADR-0021。 |
 | C-SRC-8 | 失败必须可定位到规则路径：`ParseFailure.rulePath` 必填，供 UI 与日志定位失效规则。 |
-| C-SRC-9 | 同一书源的解析不得共享可变全局状态；`RuleEngine` 必须可并发调用且线程安全。 |
+| C-SRC-9 | 同一书源的解析不得共享可变全局状态；`RuleEngine` 必须可并发调用且线程安全。规则变量（`@put:` / `@get:` / `java.*`）按书源键控的存储与快照语义见 ADR-0034。 |
 
 > 书源模型的**字段映射与分期**归 `docs/dev/book-source.md` §2，类型命名归 `docs/dev/naming.md` §3，
 > 本组不复述；`freezed` + `json_serializable` 的写法示例见 `docs/dev/architecture.md` §3 的例外一。

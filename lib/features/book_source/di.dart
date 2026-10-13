@@ -29,6 +29,7 @@ BookSource? currentBookSource(Ref ref) => null;
 RuleEngine ruleEngine(Ref ref) => RuleEngine(
   logger: ref.watch(appLoggerProvider),
   jsBridge: ref.watch(jsBridgeProvider),
+  variables: ref.watch(jsVariableStoreProvider),
 );
 
 /// Provides the page fetch + rule reading service the use cases are built on.

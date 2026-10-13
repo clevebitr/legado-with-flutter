@@ -187,6 +187,45 @@
 > 在活站点上跑通搜索 30 条 + 目录 34 条，两条逐项 `@js:`（`$.id@js:'…'+result` 与
 > `$.sound_id@js:'…'+result`）均由脚本产出地址；记录见 `tool/spot_check/README.md` §4b。
 
+> **#15–#19 注记（2026-10-12，随 M1 语法先行落地；状态列仍为「待验证」）。**
+> 五条语法的**共同实现点**是引擎的展开步骤：上游先把 `@put:{…}` 抽掉、再把 `@get:{…}` 与
+> `{{…}}` 换成它们的值，**最后**才把结果当规则读（`AnalyzeRule.SourceRule.init` /
+> `makeUpRule`，`AnalyzeRule.kt:666-760`），本仓照此实现，并把结果放进 `_Expansion`。
+> 逐条：
+>
+> - **#15 `@@`**：只认**规则体开头**（`AnalyzeRule.kt:612-615`：剥掉两个字符、模式不变），
+>   所以 `{{@@class.a@text}}` 才等于「在这里跑一条默认规则」——`{{…}}` 的默认是 JS，
+>   默认规则必须自报家门。中段的 `@@` 仍报 `unsupported:@@`（上游也只认开头）。
+> - **#16 `@put:` / `@get:`**：`@put:{key:rule}` 的每个值都是一条规则，在**摘标志之前**逐个求值
+>   并写入变量表（`AnalyzeRule.kt:641-647`）；`@get:{key}` 换成变量值，未定义时为空串。
+>   带替换的规则按上游的 **Regex 模式**读：**替换后的整段文本就是这条规则的值**
+>   （`AnalyzeRule.kt:674-680`，即 `“地址/{{@get:{x}}}”` 这类写法）。
+>   **登记的实现差异：** 本仓按 `key:value` 形状解析 `@put` 体（值可带引号或裸写，
+>   逗号 / 方括号 / 引号内的 `:` 都不切分），**不**走上游 GSON 的「严格优先 + 宽松兜底」
+>   （`AnalyzeRule.kt:673-686`）；解析不出键值对的片段被忽略（上游同样保留空 putMap）。
+> - **#17 `java.put` / `java.get`**：与 #16 是**同一份**变量（上游 `bindings["java"]` 就是那个
+>   `AnalyzeRule`，`AnalyzeRule.kt:835`）。存储位置、快照与回程语义归 **ADR-0034**；
+>   `java.timeFormat` 属 `updateTime`，仍按 §6 表的分期。
+>   **登记的实现差异：** 上游 `java.get` 还有 `bookName` / `title` 两个特例
+>   （`AnalyzeRule.kt:812-821`，取 Book / Chapter 的名字），Phase 5 之前本仓没有这两个实体，
+>   它们按普通变量读（登记在 `PLAN.md` §3.7）。
+> - **#18 `{{…}}`**：内层文本按上游 `isRule` 分流（`AnalyzeRule.kt:736-752`）：以
+>   `@` / `$.` / `$[` / `//` 开头就当**规则**求值（取首个值），否则**当 JS**求值（取单个标量，
+>   `null` / 无值都变空串）。在**搜索 / 发现 URL** 里只允许 JS，规则头按名报
+>   `unsupportedRule`（§4）；URL 脚本的 `key` 绑定只在那里存在（ADR-0034 §决策 3）。
+>   **登记的实现差异（两处）：** ① **列表规则**（`bookList` / `chapterList`）里的 `{{…}}`
+>   替换后仍按**选择器**读（上游在那个分支回的是文本本身）；② 模板的 JS 返回**列表**时
+>   本仓取第一个值，上游插入的是数组的 `toString()`（逗号连接）。
+> - **#19 `{}`**：上游在 **JSON 模式**的规则里把每个平衡的 `{$jsonpath}` 换成它的值，
+>   再把整段作为**一个值**返回（`AnalyzeByJSonPath.kt:29-48`、`:79-90`）；一条规则整好就是一个
+>   模板时，那就是遗留写法 `{$.data.name}`。列表规则里只取其中的 JSONPath，字面文本不贡献元素
+>   （矩阵「只能用 JSONPath」）。
+>
+> **展开的两处边界（已登记，均有测试）：** ① 展开深度上限（8 层）：上游的递归替换没有上限，
+> 而按源变量可以装着规则文本，自引用会让一条字段永远展开下去，故以可定位的 `parseFailed` 收场；
+> ② 未闭合的 `{{…}` 在规则字段里原样留下（上游的 `{{[\w\W]*?}}` 也匹配不上），但在 **URL** 里
+> 是显式 `parseFailed`（§4 不允许字面 `{{…}}` 落到请求层），未闭合的 `@get:{` 也是 `parseFailed`。
+
 **大小写处理：** 原版文档同时出现 `@css:` / `@CSS:`、`@json:` / `@Json:` 等写法。
 本项目按**前缀大小写不敏感**实现，并为每种前缀补一条测试（状态：已确认）。
 
@@ -256,15 +295,16 @@
 
 ## 4. URL 模板与变量
 
-渲染必须统一经 `renderUrlTemplate`（C-SRC-5），禁止手写拼接。
+URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUrlTemplate`，C-SRC-5），禁止手写拼接；
+`{{…}}` 的求值边界见本节末尾的注记。
 
 | 变量 | 适用位置 | 含义 | 分期 |
 |---|---|---|---|
 | `{{key}}` | `searchUrl` | URL 编码后的搜索关键词 | M0 |
 | `{{page}}` | `searchUrl`、`nextTocUrl`、`nextContentUrl` | 页码，从 1 开始 | M0 |
 | `{{baseUrl}}` | 全部 | 当前页 URL（JS 中同名变量） | M0 |
-| `{{}}` 内嵌规则/JS | 其他字段 | 默认按 JS 求值，见矩阵 #18 | M1 |
-| `{{变量名}}` | 全部 | `@put:` / `@get:` 读写的变量 | M1 |
+| `{{}}` 内嵌规则/JS | 全部 | 默认按 JS 求值（内层是规则头时按规则求值），见矩阵 #18 | M1 |
+| `{{变量名}}` | 全部 | `@put:` / `@get:` 读写的变量（见 §3 的 #16 注记） | M1 |
 
 约定：
 
@@ -272,6 +312,14 @@
 - 相对 URL（以 `/` 或非协议开头）必须以当前页 URL 为基准解析为绝对 URL。
 - 未定义的变量渲染为**空字符串**并记录 warning；不得保留 `{{...}}` 原文。
 - 在**搜索 URL 与发现 URL** 中，`{{}}` 内只允许 JS；解析器必须拒绝在其中写非 JS 规则。
+
+> **`{{…}}` 在 URL 里的求值边界（2026-10-12，随矩阵 #18 落地）：** 名字落在上表前三个的
+> 占位符仍走**同步模板渲染**（`key` 只编码一次），其余名字交给**沙箱**当 JS 求值；
+> 内层以规则头开头（`@@` / `$.` / `$[` / `//` / `@xpath:` …）在 URL 里**按名拒绝**
+> （`unsupportedRule`，C-SRC-4）——搜索 / 发现 URL 只允许 JS。URL 脚本的绑定与 §6 一致，
+> 额外多一个 `key`（搜索关键词；ADR-0034 §决策 3）；`result` 尚未取页面，保持不绑。
+> 脚本结果里的整数不带 `.0`（上游对整数结果的格式化，`AnalyzeUrl.kt:203-207`），
+> 未闭合的 `{{` 与渲染失败的 `{{…}}` 都是该字段的 `ParseFailed`（不把字面 `{{…}}` 交给请求层）。
 
 ### 4.1 目录与正文的特殊规则
 
@@ -423,8 +471,9 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `http.post(url, options)` | `String` | 同上 | M0 |
 | `parse.getString(rule, doc)` | `String` | 复用规则引擎，可递归 | M0 |
 | `parse.getElements(rule, doc)` | `List` | 同上 | M0 |
-| `java.put(key, value)` / `java.get(key)` | `void` / `Object?` | 与原版一致：**仅 JS 内可用** | M1 |
+| `java.put(key, value)` / `java.get(key)` | `void` / `String` | 规则变量，与 `@put:` / `@get:` 是同一份（ADR-0034）；**仅 JS 内可用** | M1 |
 | `java.timeFormat(timestamp)` | `String` | `yyyy/MM/dd HH:mm` | M1 |
+| `key` | `String` | 搜索关键词，**只在 URL 规则的 JS 里**存在（ADR-0034 §决策 3） | M1 |
 | `log.debug/info/warn/error(msg)` | `void` | 转发到 `core/logging`，自动附加 `rulePath` | M0 |
 | `crypto.md5/sha1/base64Encode/base64Decode` | `String` | 纯计算 | M0 |
 
@@ -495,8 +544,18 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   `@js:` 落在列表规则的柜口上，报 `unsupported:@js:list`（与顶层列表规则同口径）。三者都是
 >   **整个 job 的失败**，不被脚本吞成空值。
 > - **额度**（上表 20 次/规则）由**桥**按 job 计数，已含 `log.*`：数的是**跨出 worker 的调用**
->   （`log.*` / `http.*` / `parse.*`）；`crypto.*` 在 worker 内完成，不进这个计数。超限使该 job
+>   （`log.*` / `http.*` / `parse.*`）；`crypto.*` 与 `java.*` 在 worker 内完成，不进这个计数。超限使该 job
 >   失败，`rulePath` 标 `js:quota`，并且之后的调用只被拒绝（不再花钱）。
+> - **`java.put(key, value)` / `java.get(key)` 与 `@put:` / `@get:` 是同一份变量表（ADR-0034，矩阵 #16/#17）：**
+>   表在**宿主 isolate** 里按**书源 URL** 键控；每个 job 带一份该源的**快照**进 worker，`java.*` 在 worker 内
+>   **同步**读写这份快照，job 结束时整份表随结果回到宿主、由桥 merge 回去——所以「表不在 worker 里」
+>   与「`java.*` 是同步」同时成立。`java.put(key, null)` 是**清掉**该变量（不是写成空串）；
+>   没写过的键 `java.get` 给空串（上游 `AnalyzeRule.get` 同形），`java.put` 不给返回值
+>   （上游返回写入的值，属已登记差异）。变量的**生命周期**随 Provider 作用域、不落盘：
+>   上游持久化在 book / source 上（`BaseSource.kt:283-295`），本仓在 Phase 5 之前没有 Book 实体，
+>   故登记为有意差异（ADR-0034 §决策 2）。
+> - **`key` 只绑在 URL 规则的 job 上**（ADR-0034 §决策 3）：其余 job 送 `null`，前奏删掉该全局名，
+>   所以字段规则里写 `{{key}}` 是 `js:error`，不会静默拿到空串。
 > - **致命与可吞的区别：** `http.*` 的传输失败只拒绝那次调用；`parse.*` 的边界与额度是**判决**
 >   ——判决先记下、等脚本停下来的那条结果回来时才交给调用方（脚本还在跑时不能把 worker 交给下一个
 >   job：同一运行时上跑两份求值会共享 `globalThis` 与作业队列），硬预算仍是「脚本永远不停」的兜底。
@@ -546,7 +605,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `networkForbidden` | 403 | `failureNetworkForbidden` | 否 |
 | `notFound` | 404 | `failureNotFound` | 否 |
 | `encodingFailed` | 编码检测或解码失败 | `failureEncodingFailed` | 否 |
-| `parseFailed` | 规则无匹配、JS 异常或超时 | `failureParseFailed` | 否 |
+| `parseFailed` | 规则无匹配、JS 异常或超时、规则模板无法展开（未闭合的 `{{…}}` / `@get:{…}`、展开深度超限） | `failureParseFailed` | 否 |
 | `unsupportedRule` | 命中 M2 或未实现语法 | `failureUnsupportedRule` | 否 |
 | `invalidBookSource` | 导入 JSON 缺必填字段或结构非法 | `failureInvalidBookSource` | 否 |
 | `cancelled` | 用户主动取消，或**桥 / 作用域已释放**（job 被丢弃而未运行；`rulePath` 只带裸字段路径，§6） | 无（静默） | — |

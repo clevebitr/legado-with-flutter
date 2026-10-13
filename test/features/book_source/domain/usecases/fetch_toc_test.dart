@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
@@ -62,15 +63,25 @@ String _tocHtml(List<String> names, {String? nextHref, String prefix = 'c'}) {
 }
 
 /// Builds the page service under test around [http].
+///
+/// [jsBridge] / [variables] are injectable so a test can share one variable store between
+/// the engine and the bridge, which is how matrix #17's `java.put` reaches `@get:`
+/// (ADR-0034 §决策 1).
 ({PageFetchService pages, FakeLogPrinter printer}) _service(
-  FakeHttpClient http,
-) {
+  FakeHttpClient http, {
+  FakeJsBridge? jsBridge,
+  JsVariableStore? variables,
+}) {
   final FakeLogPrinter printer = FakeLogPrinter();
   final AppLogger logger = AppLogger(level: LogLevel.debug, printer: printer);
 
   return (
     pages: PageFetchService(
-      engine: RuleEngine(logger: logger, jsBridge: FakeJsBridge()),
+      engine: RuleEngine(
+        logger: logger,
+        jsBridge: jsBridge ?? FakeJsBridge(),
+        variables: variables ?? JsVariableStore(),
+      ),
       http: http,
       logger: logger,
     ),
@@ -434,24 +445,48 @@ void main() {
       ]);
     });
 
-    test('execute_givenAnInnerRuleInTheNextUrl_staysUnsupported', () async {
+    test('execute_givenAnInnerRuleInTheNextUrl_runsItInTheSandbox', () async {
       final FakeHttpClient http = FakeHttpClient()
-        ..serve(_tocUrl, _tocHtml(<String>['第1章']));
+        ..serve(_tocUrl, _tocHtml(<String>['第1章']))
+        ..serve(_toc2Url, _tocHtml(<String>['第2章']));
+      final FakeJsBridge jsBridge = FakeJsBridge()..result = 'toc2.html';
       final ({PageFetchService pages, FakeLogPrinter printer}) service =
-          _service(http);
+          _service(http, jsBridge: jsBridge);
 
       final List<Chapter> chapters = _data(
         await FetchToc(pages: service.pages)
             .execute(_pagingSource('{{result}}'), _tocUrl),
       );
 
-      // 矩阵 #18 的 `{{}}` 内嵌规则是 M1：不按 URL 模板渲染，仍由引擎报 unsupported 后降级。
-      expect(http.requestedUrls, <String>[_tocUrl]);
-      expect(chapters, hasLength(1));
-      expect(
-        service.printer.events.last.message.toString(),
-        contains('no next page'),
-      );
+      // 矩阵 #18：`{{…}}` 不再当成未定义变量，而是交给沙箱；结果按读到它的那一页
+      // 解析成绝对地址（§4.1）。每读一页都会再跑一次翻页规则，所以 job 不止一个。
+      expect(jsBridge.jobs.first.script, 'result');
+      expect(http.requestedUrls, <String>[_tocUrl, _toc2Url]);
+      expect(chapters.map((Chapter chapter) => chapter.name), <String>[
+        '第1章',
+        '第2章',
+      ]);
     });
+
+    test(
+      'execute_givenARuleHeadInTheNextUrlTemplate_evaluatesItAsARule',
+      () async {
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_tocUrl, _tocHtml(<String>['第1章']));
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
+            _service(http);
+
+        final List<Chapter> chapters = _data(
+          await FetchToc(pages: service.pages)
+              .execute(_pagingSource('{{@@class.a@text}}'), _tocUrl),
+        );
+
+        // 翻页**规则**里的 `{{…}}` 走规则字段那一套（矩阵 #18）：`@@` 让内层按默认规则
+        // 求值，匹配不到就是「成功但无值」→ 没有下一页。“URL 模板里的规则头只允许 JS”
+        // 那条边界只在 renderUrl 里（搜索 / 发现 URL），由 search_books_test 钉住。
+        expect(http.requestedUrls, <String>[_tocUrl]);
+        expect(chapters, hasLength(1));
+      },
+    );
   });
 }

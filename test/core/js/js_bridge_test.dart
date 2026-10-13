@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -20,6 +21,7 @@ typedef _Fixture = ({
   FakeLogPrinter printer,
   List<FakeJsWorkerHandle> workers,
   FakeHttpClient http,
+  JsVariableStore variables,
 });
 
 /// Builds a bridge whose launcher hands out [FakeJsWorkerHandle]s.
@@ -32,21 +34,27 @@ _Fixture _buildBridge({
   Duration timeout = const Duration(seconds: 5),
   Duration killGrace = const Duration(seconds: 2),
   int maxBindingCalls = defaultJsMaxBindingCalls,
+  JsVariableStore? variables,
+  void Function(FakeJsWorkerHandle worker)? configure,
 }) {
   final FakeLogPrinter printer = FakeLogPrinter();
   final List<FakeJsWorkerHandle> workers = <FakeJsWorkerHandle>[];
   final FakeHttpClient http = FakeHttpClient();
+  final JsVariableStore store = variables ?? JsVariableStore();
 
   return (
     bridge: QuickJsWorkerBridge(
       logger: AppLogger(level: LogLevel.debug, printer: printer),
       launch: ({required Duration timeout, required int memoryLimit}) async {
         final FakeJsWorkerHandle worker = FakeJsWorkerHandle();
+        // 配置在 worker 收到第一个 job 之前发生，所以测试可以预置它要回的回复。
+        configure?.call(worker);
         workers.add(worker);
 
         return worker;
       },
       http: http,
+      variables: store,
       timeout: timeout,
       killGrace: killGrace,
       maxBindingCalls: maxBindingCalls,
@@ -54,6 +62,7 @@ _Fixture _buildBridge({
     printer: printer,
     workers: workers,
     http: http,
+    variables: store,
   );
 }
 
@@ -281,6 +290,7 @@ void main() {
         launch: ({required Duration timeout, required int memoryLimit}) async =>
             throw IsolateSpawnException('no resources'),
         http: FakeHttpClient(),
+        variables: JsVariableStore(),
       );
 
       final ParseFailure<Never> failure = _failure(
@@ -1041,6 +1051,79 @@ void main() {
         fixture.printer.events.map((LogEvent event) => event.message),
         isNot(contains('[js:searchRule.name] second')),
       );
+    });
+  });
+
+  group('variables', () {
+    test('evaluate_givenAReportedVariable_writesItToTheStore', () async {
+      final _Fixture fixture = _buildBridge(
+        configure: (FakeJsWorkerHandle worker) => worker.enqueueResult(
+          value: 'ok',
+          variables: <String, String?>{'token': 'abc'},
+        ),
+      );
+
+      await fixture.bridge.evaluate(_job());
+
+      // worker 报回的变量按 job 的书源落表（ADR-0034 §决策 1）：
+      // 这正是 `java.put` 在 JS 侧同步写完后的回程。
+      expect(
+        fixture.variables.read('https://example-novel.test', 'token'),
+        'abc',
+      );
+    });
+
+    test('evaluate_givenAClearedVariable_removesItFromTheStore', () async {
+      final JsVariableStore store = JsVariableStore()
+        ..write('https://example-novel.test', 'token', 'abc');
+      final _Fixture fixture = _buildBridge(
+        variables: store,
+        configure: (FakeJsWorkerHandle worker) => worker.enqueueResult(
+          value: 'ok',
+          variables: <String, String?>{'token': null},
+        ),
+      );
+
+      await fixture.bridge.evaluate(_job());
+
+      // `java.put(key, null)` 是清掉变量（RuleDataInterface.kt:8-14），不是写成空串。
+      expect(
+        fixture.variables.read('https://example-novel.test', 'token'),
+        isNull,
+      );
+    });
+
+    test('evaluate_givenAMalformedVariableReport_ignoresIt', () async {
+      final _Fixture fixture = _buildBridge(
+        configure: (FakeJsWorkerHandle worker) {
+          worker.holdJobs = true;
+        },
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(_job());
+      await pumpEventQueue();
+
+      // 信封是传输层：非 map 或错类型的条目一律忽略，不猜也不崩（C-ERR-1）。
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'ok',
+        'variables': 'nonsense',
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+      expect(fixture.variables.snapshot('https://example-novel.test'), isEmpty);
+
+      final Future<ParseResult<Object?>> second = fixture.bridge.evaluate(
+        _job(),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'ok',
+        'variables': <Object?, Object?>{'a': 1, 2: 'b'},
+      });
+      expect(await second, isA<ParseSuccess<Object?>>());
+      expect(fixture.variables.snapshot('https://example-novel.test'), isEmpty);
     });
   });
 }

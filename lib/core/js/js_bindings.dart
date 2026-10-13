@@ -42,6 +42,14 @@ const String jsHttpBinding = 'http';
 /// The binding name of `parse.*` in a [JsHostCall] (`docs/dev/book-source.md` §6).
 const String jsParseBinding = 'parse';
 
+/// The binding name of `java.*` (`docs/dev/book-source.md` §6).
+///
+/// Unlike [jsHttpBinding] and [jsParseBinding] it is **not** a [JsHostCall]: the worker
+/// answers `java.put` / `java.get` inside its own isolate — that is what keeps them
+/// synchronous (§6) and keeps the runtime's state out of `globalThis` (ADR-0030 §决策 4).
+/// The name lives here so the prelude and the worker cannot drift apart.
+const String jsJavaBinding = 'java';
+
 /// One binding call the worker forwards to the host isolate (§6).
 ///
 /// `http.*` and `parse.*` are the two bindings a rule **must** `await` (ADR-0029
@@ -272,6 +280,91 @@ JsHttpRequest? decodeJsHttpRequest(Object? args) {
   }
 
   return JsHttpRequest(method: method, url: url, body: body, headers: headers);
+}
+
+/// The verbs `java.*` binds (`docs/dev/book-source.md` §6, matrix #17).
+///
+/// `java.timeFormat` is matrix #17's sibling and arrives with `updateTime` (`PLAN.md`
+/// Phase 4), so it is deliberately absent here: an unknown verb is answered with `null`
+/// and the prelude turns that into a JS `Error`, which is the explicit boundary C-SRC-4
+/// asks for at a binding boundary.
+enum JsJavaOperation {
+  /// `java.put(key, value)`: writes the source's variable.
+  put,
+
+  /// `java.get(key)`: reads the source's variable.
+  get,
+}
+
+/// One validated `java.*` call, decoded in the worker isolate (§6).
+final class JsJavaRequest {
+  /// Creates a request.
+  const JsJavaRequest({required this.operation, required this.key, this.value});
+
+  /// The verb the rule called.
+  final JsJavaOperation operation;
+
+  /// The variable name.
+  final String key;
+
+  /// The value of a [JsJavaOperation.put]; `null` for a read, or for a write that
+  /// explicitly clears the variable.
+  final String? value;
+}
+
+/// Reads one `java.*` call's arguments, or `null` when they are unusable (§6).///
+/// The arguments are the prelude's, so they are JSON: `{operation, key, value}`. An
+/// unknown verb or a missing key is "malformed", which the prelude answers with a JS
+/// `Error` rather than a silent `undefined`.
+JsJavaRequest? decodeJsJavaRequest(Object? args) {
+  final Map<String, Object?>? call = _jsonObjectOf(args);
+  if (call == null) {
+    return null;
+  }
+  final JsJavaOperation? operation = switch (call['operation']) {
+    'put' => JsJavaOperation.put,
+    'get' => JsJavaOperation.get,
+    _ => null,
+  };
+  final Object? key = call['key'];
+  final Object? value = call['value'];
+  if (operation == null || key is! String || value is! String?) {
+    return null;
+  }
+
+  return JsJavaRequest(operation: operation, key: key, value: value);
+}
+
+/// Applies one `java.*` call to a job's variable snapshot (`docs/dev/book-source.md` §6,
+/// matrix #17) and answers the envelope the prelude reads.
+///
+/// The answer is **JSON text**, never a bare value: `java.put` has no value to return (§6
+/// lists it as `void`), so `null` cannot mean “failed” the way it does for
+/// [applyCryptoOperation]. The envelope says so explicitly — `{"ok":true,"value":…}` for a
+/// read, `{"ok":true}` for a write, `{"ok":false}` for a malformed call — and the prelude
+/// turns `ok:false` into a JS `Error` (C-SRC-4 at a binding boundary).
+///
+/// A `null` [JsJavaRequest.value] on a write **clears** the variable (upstream's
+/// `putVariable(key, null)`, `RuleDataInterface.kt:8-14`); a read of a variable that was never
+/// written answers an empty string, exactly like upstream's `AnalyzeRule.get`
+/// (`AnalyzeRule.kt:812-825`), so a rule can concatenate it.
+String applyJsJavaCall(Map<String, String?> variables, Object? args) {
+  final JsJavaRequest? call = decodeJsJavaRequest(args);
+  if (call == null) {
+    return '{"ok":false}';
+  }
+
+  switch (call.operation) {
+    case JsJavaOperation.get:
+      return jsonEncode(<String, Object?>{
+        'ok': true,
+        'value': variables[call.key] ?? '',
+      });
+    case JsJavaOperation.put:
+      variables[call.key] = call.value;
+
+      return '{"ok":true}';
+  }
 }
 
 /// Reads one `parse.*` call's arguments, or `null` when they are unusable (§6).

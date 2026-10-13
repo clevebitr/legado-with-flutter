@@ -420,8 +420,20 @@ final class PageFetchService {
     }
 
     final String text = rule.trim();
+    final JsPageContext context = _pagingContext(
+      scope,
+      currentUrl: currentUrl,
+      page: page,
+    );
     if (_isPagingTemplate(text)) {
-      return _pagingUrls(<String>[text], currentUrl, page);
+      return _pagingUrls(
+        <String>[text],
+        currentUrl,
+        page,
+        rulePath: rulePath,
+        context: context,
+        sourceId: sourceId,
+      );
     }
 
     final ParseResult<List<String>> parsed = await _engine.extractAll(
@@ -435,6 +447,9 @@ final class PageFetchService {
         data,
         currentUrl,
         page,
+        rulePath: rulePath,
+        context: context,
+        sourceId: sourceId,
       ),
       // 降级 warning 用**字段路径**而不是引擎报的 `unsupported:<语法>`：与 [field] 同
       // 一口径，书源里要改的是哪个字段（C-SRC-8、ADR-0026 §决策 2）。
@@ -449,24 +464,46 @@ final class PageFetchService {
   /// Renders, resolves, filters and de-duplicates paging values, keeping rule order.
   ///
   /// [page] is the 1-based number the value becomes and `{{baseUrl}}` is [currentUrl],
-  /// which is what §4.1 fixes for these two fields under queue paging.
-  List<String> _pagingUrls(List<String> values, String currentUrl, int page) {
+  /// which is what §4.1 fixes for these two fields under queue paging. Rendering goes
+  /// through [renderUrl], so a paging value may also carry matrix #18's `{{…}}` JavaScript;
+  /// when that fails the field degrades to “no next page” plus a warning (ADR-0026 §决策 2),
+  /// exactly like a rejected paging rule.
+  Future<List<String>> _pagingUrls(
+    List<String> values,
+    String currentUrl,
+    int page, {
+    required String rulePath,
+    required JsPageContext context,
+    required String sourceId,
+  }) async {
     final List<String> urls = <String>[];
+    final Map<String, String> params = <String, String>{
+      'page': '$page',
+      'baseUrl': currentUrl,
+    };
 
     for (final String value in values) {
       if (value.trim().isEmpty) {
         continue;
       }
 
-      final String rendered = renderUrl(value, <String, String>{
-        'page': '$page',
-        'baseUrl': currentUrl,
-      }).trim();
-      if (rendered.isEmpty) {
+      final ParseResult<String> rendered = await renderUrl(
+        value,
+        params,
+        rulePath: rulePath,
+        context: context,
+      );
+      if (rendered case ParseFailure<String>(:final ParseFailureKind kind)) {
+        // 降级 warning 用**字段路径**而不是引擎报的 `unsupported:<语法>`：与 [field] 同
+        // 一口径，书源里要改的是哪个字段（C-SRC-8、ADR-0026 §决策 2）。
+        return _noNextPage(sourceId, rulePath, kind);
+      }
+      final String url0 = (rendered as ParseSuccess<String>).data.trim();
+      if (url0.isEmpty) {
         continue;
       }
 
-      final String url = resolveAbsoluteUrl(rendered, currentUrl);
+      final String url = resolveAbsoluteUrl(url0, currentUrl);
       if (url == currentUrl || urls.contains(url)) {
         continue;
       }
@@ -475,6 +512,29 @@ final class PageFetchService {
     }
 
     return urls;
+  }
+
+  /// Builds the page context a **paging** rule's `{{…}}` JavaScript runs against.
+  ///
+  /// `{{baseUrl}}` / the `baseUrl` binding is the page the rule was read on and `page` is
+  /// the number the value becomes (§4.1); the source and its headers travel from the page's
+  /// own context, so `http.*` of a paging script keeps using them (C-NET-4).
+  JsPageContext _pagingContext(
+    RuleScope scope, {
+    required String currentUrl,
+    required int page,
+  }) {
+    final JsPageContext? context = switch (scope) {
+      DomScope(:final JsPageContext? jsContext) => jsContext,
+      JsonScope(:final JsPageContext? jsContext) => jsContext,
+    };
+
+    return JsPageContext(
+      baseUrl: currentUrl,
+      page: page,
+      source: context?.source,
+      headers: context?.headers,
+    );
   }
 
   /// Logs a degraded paging rule and turns it into “no next page” (ADR-0026).
@@ -546,12 +606,24 @@ final class PageFetchService {
     return content;
   }
 
-  /// Renders a URL template with the well-known variables of `book-source.md` §4.
+  /// Renders a URL template with the well-known variables of `book-source.md` §4 and the
+  /// `{{…}}` JavaScript / nested rules of matrix #18.
   ///
   /// Kept here so the logger stays encapsulated: the renderer warns about undefined
-  /// variables without any use case having to hold a logger of its own.
-  String renderUrl(String template, Map<String, String> params) =>
-      renderUrlTemplate(template, params, logger: _logger);
+  /// variables without any use case having to hold a logger of its own. Asynchronous
+  /// because a `{{…}}` that names neither `key` / `page` / `baseUrl` nor an entry of
+  /// [params] is evaluated by the sandbox (ADR-0029 §决策 1).
+  Future<ParseResult<String>> renderUrl(
+    String template,
+    Map<String, String> params, {
+    required String rulePath,
+    required JsPageContext context,
+  }) => _engine.renderUrl(
+    template,
+    rulePath: rulePath,
+    params: params,
+    context: context,
+  );
 
   /// Logs a page-level warning.
   ///

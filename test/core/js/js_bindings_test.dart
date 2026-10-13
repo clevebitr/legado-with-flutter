@@ -267,6 +267,126 @@ void main() {
     });
   });
 
+  group('decodeJsJavaRequest', () {
+    test('decodeJsJavaRequest_givenAPut_returnsItsKeyAndValue', () {
+      final JsJavaRequest? call = decodeJsJavaRequest(<String, Object?>{
+        'operation': 'put',
+        'key': 'token',
+        'value': 'abc',
+      });
+
+      expect(call?.operation, JsJavaOperation.put);
+      expect(call?.key, 'token');
+      expect(call?.value, 'abc');
+    });
+
+    test('decodeJsJavaRequest_givenAGet_returnsANullValue', () {
+      final JsJavaRequest? call = decodeJsJavaRequest(<String, Object?>{
+        'operation': 'get',
+        'key': 'token',
+      });
+
+      expect(call?.operation, JsJavaOperation.get);
+      expect(call?.value, isNull);
+    });
+
+    test('decodeJsJavaRequest_givenAWriteThatClears_keepsTheNullValue', () {
+      final JsJavaRequest? call = decodeJsJavaRequest(<String, Object?>{
+        'operation': 'put',
+        'key': 'token',
+        'value': null,
+      });
+
+      // `java.put(key, null)` 是“清掉这个变量”（RuleDataInterface.kt:8-14），不能被当成缺失值。
+      expect(call?.operation, JsJavaOperation.put);
+      expect(call?.value, isNull);
+    });
+
+    test('decodeJsJavaRequest_givenAMalformedCall_returnsNull', () {
+      // 未知动词、非对象参数、非字符串键与错类型的值都是畸形，由前奏变成 JS `Error`。
+      expect(
+        decodeJsJavaRequest(<String, Object?>{
+          'operation': 'remove',
+          'key': 'token',
+        }),
+        isNull,
+      );
+      expect(decodeJsJavaRequest('put'), isNull);
+      expect(
+        decodeJsJavaRequest(<String, Object?>{'operation': 'get', 'key': 1}),
+        isNull,
+      );
+      expect(
+        decodeJsJavaRequest(<String, Object?>{
+          'operation': 'put',
+          'key': 'token',
+          'value': 1,
+        }),
+        isNull,
+      );
+    });
+  });
+
+  group('applyJsJavaCall', () {
+    test('applyJsJavaCall_givenAWrite_reportsSuccessAndStoresIt', () {
+      final Map<String, String?> variables = <String, String?>{};
+
+      final String envelope = applyJsJavaCall(variables, <String, Object?>{
+        'operation': 'put',
+        'key': 'token',
+        'value': 'abc',
+      });
+
+      // 写没有可回的值，所以信封的 ok 必须是**显式**的：裸 null 会被前奏当成失败。
+      expect(envelope, '{"ok":true}');
+      expect(variables, <String, String?>{'token': 'abc'});
+    });
+
+    test('applyJsJavaCall_givenARead_answersTheValue', () {
+      expect(
+        applyJsJavaCall(
+          <String, String?>{'token': 'abc'},
+          <String, Object?>{'operation': 'get', 'key': 'token'},
+        ),
+        '{"ok":true,"value":"abc"}',
+      );
+    });
+
+    test('applyJsJavaCall_givenAnUnknownKey_readsAnEmptyString', () {
+      // 上游 `AnalyzeRule.get` 对没写过的键给空串（AnalyzeRule.kt:812-825），不是 null。
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'get',
+          'key': 'missing',
+        }),
+        '{"ok":true,"value":""}',
+      );
+    });
+
+    test('applyJsJavaCall_givenAWriteWithANullValue_clearsTheVariable', () {
+      final Map<String, String?> variables = <String, String?>{'token': 'abc'};
+
+      applyJsJavaCall(variables, <String, Object?>{
+        'operation': 'put',
+        'key': 'token',
+      });
+
+      // 清空用 null 表达（RuleDataInterface.kt:8-14），桥据此把宿主侧的键删掉。
+      expect(variables, <String, String?>{'token': null});
+    });
+
+    test('applyJsJavaCall_givenAMalformedCall_reportsFailure', () {
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'remove',
+          'key': 'token',
+        }),
+        '{"ok":false}',
+      );
+      expect(applyJsJavaCall(<String, String?>{}, 'put'), '{"ok":false}');
+    });
+  });
+
   group('mergeJsHttpHeaders', () {
     test('mergeJsHttpHeaders_givenSourceAndRuleHeaders_letsTheRuleWin', () {
       expect(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -30,8 +31,21 @@ JsBridge jsBridge(Ref ref) {
     logger: ref.watch(appLoggerProvider),
     launch: launchQuickJsWorker,
     http: ref.watch(httpClientProvider),
+    variables: ref.watch(jsVariableStoreProvider),
   );
   ref.onDispose(() => unawaited(bridge.dispose()));
 
   return bridge;
 }
+
+/// Provides the rule variables `@put:` / `@get:` and `java.put` / `java.get` share
+/// (`docs/dev/book-source.md` §4 and §6, matrix #16 / #17).
+///
+/// It is one instance per provider scope, keyed by book source inside, and it is watched by
+/// both the engine and the bridge because the two are the two ends of one contract: the
+/// engine reads and writes it while parsing, the bridge applies what a script wrote
+/// (ADR-0034 §决策 1). A scope owns the variables' lifetime, so nothing survives the
+/// operation that created it — which is the registered difference from upstream's
+/// persisted per-book variables (ADR-0034 §决策 2).
+@riverpod
+JsVariableStore jsVariableStore(Ref ref) => JsVariableStore();
