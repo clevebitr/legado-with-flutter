@@ -44,6 +44,18 @@ final class FakeHttpClient implements HttpClient {
   /// wall-clock wait (`docs/dev/testing.md` §8 forbids sleeping).
   Future<void> Function()? onRequest;
 
+  /// The `concurrentRate` declarations this client was told about, keyed by source id.
+  ///
+  /// The real client turns them into a rate gate (`book-source.md` §8); a double only has to
+  /// prove the production chain **handed the source's declaration over**, which is what
+  /// `page_fetch_service` and the use cases are responsible for.
+  final Map<String, String?> sourceRates = <String, String?>{};
+
+  @override
+  void applySourceRate(String sourceId, String? concurrentRate) {
+    sourceRates[sourceId] = concurrentRate;
+  }
+
   final Map<String, String> _bodies = <String, String>{};
   final Map<String, ParseFailureKind> _failures = <String, ParseFailureKind>{};
   final Map<String, Exception> _throws = <String, Exception>{};

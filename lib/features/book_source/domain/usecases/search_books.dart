@@ -36,6 +36,9 @@ final class SearchBooks {
       );
     }
 
+    // 书源自己的限速要在第一个请求之前进预算（book-source.md §8、ADR-0036）。
+    _pages.applySourceRate(source);
+
     final ParseResult<String> rendered = await _pages.renderUrl(
       searchUrl,
       <String, String>{

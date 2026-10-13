@@ -24,6 +24,8 @@ final class FetchToc {
     BookSource source,
     String url,
   ) async {
+    // 书源自己的限速要在第一个请求之前进预算（book-source.md §8、ADR-0036）。
+    _pages.applySourceRate(source);
     final ParseResult<PageWalk> walk = await _pages.walk(
       url: url,
       rulePath: 'ruleToc',

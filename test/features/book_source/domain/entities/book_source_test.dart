@@ -240,7 +240,6 @@ void main() {
         unorderedEquals(<String>[
           'bookSourceComment',
           'bookUrlPattern',
-          'concurrentRate',
           'customOrder',
           'enabledCookieJar',
           'enabledExplore',
@@ -259,7 +258,9 @@ void main() {
       expect(source.extra['lastUpdateTime'], 1676448109528);
       expect(source.extra['enabledReview'], isFalse);
 
-      // `ruleExplore` 自 M1-b1 起是建模字段，因此不再落进 extra（book-source.md §2）。
+      // `concurrentRate` 自 M1-b2 起是建模字段（原文保留，解析在请求层），
+      // `ruleExplore` 自 M1-b1 起是建模字段，两者都不再落进 extra。
+      expect(source.concurrentRate, '');
       expect(source.exploreRule, isNotNull);
       expect(source.exploreRule?.bookList, isNull);
     });

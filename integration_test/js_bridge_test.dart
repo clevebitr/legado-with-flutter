@@ -655,6 +655,17 @@ final class _ProbeHttpClient implements HttpClient {
   /// The request body of the last request.
   String? lastBody;
 
+  /// The `concurrentRate` declarations this double was told about, keyed by source id.
+  ///
+  /// The probe does not exercise the rate gate (that is the request layer's own unit test);
+  /// it only has to accept the call the production chain makes (ADR-0036 §决策 5).
+  final Map<String, String?> sourceRates = <String, String?>{};
+
+  @override
+  void applySourceRate(String sourceId, String? concurrentRate) {
+    sourceRates[sourceId] = concurrentRate;
+  }
+
   @override
   Future<ParseResult<HttpResponse>> get(
     String url, {

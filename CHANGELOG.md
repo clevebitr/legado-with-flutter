@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4 b2: `concurrentRate` as a second gate in the request budget (2026-10-13)
+
+- **The model keeps the declaration as text** (`BookSource.concurrentRate`), and the request layer
+  owns its syntax and its warning, because that is where the budget is spent (`book-source.md` §8,
+  ADR-0036 §决策 5). `HttpClient.applySourceRate(sourceId, declaration)` is the one new method on the
+  request contract; the four use cases call it through `PageFetchService.applySourceRate(source)`
+  before their first request. Keying it by source URL is what makes a `@js:` rule's `http.*` calls
+  share the same gate without carrying the declaration (they only ever see the source URL, §6).
+- **Both gates live in `RequestLimiter`**, and the order is fixed: a rate permit is taken
+  **before** a concurrency slot (ADR-0036 §决策 3), so a request waiting on the window never holds
+  one of the three slots.
+- **The rate window is sliding** — the last `n` permits must all be older than the interval —
+  which is the strict reading of “at most `n` in any `m` milliseconds”. Upstream instead resets a
+  fixed window once it expires (`ConcurrentRateLimiter.kt:88-108`), letting a burst of `n` sit at
+  the end of one window and another `n` at the start of the next; the difference is registered in
+  §8. A declared rate is parsed with surrounding whitespace ignored, which is the one place this
+  reader is more forgiving than upstream's `toInt()` on the raw substring.
+- **An illegal declaration is ignored and reported** (`n <= 0`, `m <= 0`, non-integers), with one
+  warning naming the source, the field, the reason and a 32-character excerpt of the text
+  (ADR-0036 §决策 2). Re-applying the same declaration is a no-op on purpose: every use case hands
+  it over again, and resetting the window there would re-open the gate mid-batch. `null`, blank and
+  `"0"` mean “no rate gate” and `HttpPolicy` gains no default rate field (ADR-0036 §决策 6).
+- **The corpus census and the unit verdict came out of the committed tool**: `tool/spot_check --list`
+  now prints the `concurrentRate` distribution too (classified with the production parser, so what
+  the tool calls illegal is what the request layer refuses). On collection C (3907 sources):
+  **3 sources declare one**, all bare integers (`3000` / `2000` / `1000`), all legal. Reading them
+  as milliseconds gives “1 request per 1–3 seconds”, which is sane; reading them as seconds would
+  mean one request every 17–50 minutes, which nobody would write — so the millisecond unit holds
+  and ADR-0036 §决策 8's re-adjudication trigger is **not** met.
+- **The live regression is an A/B on one real source** (record in `tool/spot_check/README.md`):
+  🎨 漫客栈 (comic.mkzhan.com) from collection C, derived by changing **only** `concurrentRate` —
+  `"1500"` took **4.6 s** for the four-stage run, `"0"` took **0.6 s** with the same site and the
+  same rules. That is the rate gate visible in a real chain, and it is why the regression needed a
+  derived source: only 3 of 3907 sources declare a rate, and none of the three can run its own
+  chain (one site is unreachable, two use URL forms this repository does not implement) — registered
+  in `PLAN.md` §3.7.
+- Tests: the parser's shapes (`n/m`, bare `x`, `"0"`, blank, non-integers, non-positive, whitespace),
+  the rate gate with an injected clock and delay (room in the window, a full window, several callers
+  serialized through it, an exception still spending its permit, re-applying a declaration, removing
+  it, both gates active at once, and the real-time default without an injected delay), the client's
+  warning paths including the excerpt, and one wiring case per page-fetching use case. Coverage exit
+  0 (`core` 920/920, `domain` 1503/1503).
+- Device probes: **Windows `js_bridge` 21/21** after this change. The **Android** run could not be
+  made on this machine: `assembleDebug` downloads `libsqlite3.arm.android.so` from
+  `github.com/.../releases/download/`, and that host times out here while `raw.githubusercontent.com`
+  works (curl exit 28). It is unrelated to this slice — no dependency was added — and it was registered
+  in `PLAN.md` §3.7 with the command to re-run once the network allows it.
+- **Architect review (2026-10-13), verified and merged:** the Android probe ran once the network came
+  back (`Medium_Phone`, three files, `js_bridge` **21/21**, exit 0), the six gates were re-run on the
+  same tree (621 cases, `core` 920/920, `domain` 1503/1503), the corpus census was reproduced exactly
+  (3/3907 declarations, `3000`/`2000`/`1000`, none illegal), and the A/B was reproduced independently
+  (`1500` → **4.6 s**, `0` → **0.5 s**). Two things were added rather than changed: `book-source.md` §8
+  now states that handing the declaration over is a **single funnel** whose omission is silent (a
+  missed `PageFetchService.applySourceRate` merely leaves the source unlimited, so a new read-source
+  operation must add the line and its wiring test), and that `HttpClient.applySourceRate` stays the
+  **only** entry to the rate gate (its argument is the raw declaration; syntax and warning belong to
+  the request layer). `PLAN.md` §3.5/§3.7 and `test-environment.md` §7 carry the outcomes.
+
 ### Phase 4 b1: the four `updateTime` fields and the `java.timeFormat` binding (2026-10-13)
 
 The first slice of the M1 build order in `PLAN.md` §3.5.

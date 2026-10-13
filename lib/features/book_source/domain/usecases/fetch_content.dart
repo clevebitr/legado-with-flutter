@@ -19,6 +19,8 @@ final class FetchContent {
   /// (`book-source.md` §7), because "the page has no body where the rules expect one"
   /// is exactly what a stale rule looks like.
   Future<ParseResult<String>> execute(BookSource source, String url) async {
+    // 书源自己的限速要在第一个请求之前进预算（book-source.md §8、ADR-0036）。
+    _pages.applySourceRate(source);
     final ParseResult<PageWalk> walk = await _pages.walk(
       url: url,
       rulePath: 'ruleContent',

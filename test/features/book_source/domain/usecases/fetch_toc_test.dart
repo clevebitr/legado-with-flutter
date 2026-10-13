@@ -508,5 +508,19 @@ void main() {
       // 章节侧常见的写法是 `@js:java.timeFormat(...)`（§6），但引擎只把结果当字符串。
       expect(chapters.single.updateTime, '2026/10/13 09:05');
     });
+
+    test(
+      'execute_givenASourceWithConcurrentRate_handsItToTheRequestLayer',
+      () async {
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_tocUrl, _tocHtml(<String>['第1章']));
+        final BookSource source = _source().copyWith(concurrentRate: '3/500');
+
+        await FetchToc(pages: _service(http).pages).execute(source, _tocUrl);
+
+        // 翻页 walk 的每一个请求都吃同一份预算，而声明在第一个请求之前就交了下去。
+        expect(http.sourceRates, <String, String?>{source.url: '3/500'});
+      },
+    );
   });
 }

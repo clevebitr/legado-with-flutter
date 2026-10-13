@@ -41,6 +41,7 @@ import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/network/concurrent_rate.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
@@ -135,7 +136,10 @@ Future<void> main(List<String> arguments) async {
     name: options['name'],
   );
   final String keyword = options['keyword'] ?? '剑来';
+  final Stopwatch stopwatch = Stopwatch()..start();
   final _Report report = await _runChain(source, keyword);
+  stopwatch.stop();
+  report.elapsedMilliseconds = stopwatch.elapsedMilliseconds;
 
   if (options.containsKey('json')) {
     stdout.writeln(const JsonEncoder.withIndent('  ').convert(report.toJson()));
@@ -333,7 +337,83 @@ void _listCandidates(File file) {
     '-- $withJs of $compatible M0-compatible sources use a value-rule `@js:` '
     '(matrix #14); their scripts still have to stay inside `book-source.md` §6.',
   );
+  _printConcurrentRateCensus(entries);
 }
+
+/// Prints the `concurrentRate` distribution of [entries] (`book-source.md` §8).
+///
+/// ADR-0036 §决策 8 makes this census part of the M1-b2 acceptance: the syntax is
+/// **milliseconds** upstream, and if authors read `n/m` as “per second” the unit has to be
+/// re-adjudicated with a new ADR — which needs this number rather than an opinion. The
+/// classification uses the production parser (`parseConcurrentRate`), so what the tool counts
+/// as illegal is exactly what the request layer refuses (ADR-0036 §决策 2).
+///
+/// The census covers **every** source of the collection, not only the M0-compatible ones: a
+/// declaration is independent of how far the rule syntax is supported.
+void _printConcurrentRateCensus(List<Object?> entries) {
+  final Map<String, int> declared = <String, int>{};
+  final List<int> intervals = <int>[];
+  var noGate = 0;
+  var limited = 0;
+  var invalid = 0;
+
+  for (final Object? item in entries) {
+    if (item is! Map<String, Object?>) {
+      continue;
+    }
+    final Object? value = item['concurrentRate'];
+    if (value is! String || value.trim().isEmpty) {
+      continue;
+    }
+    declared.update(value.trim(), (int count) => count + 1, ifAbsent: () => 1);
+
+    final ConcurrentRateDeclaration parsed = parseConcurrentRate(value);
+    if (parsed.isInvalid) {
+      invalid++;
+    } else if (parsed.rate case final ConcurrentRate rate) {
+      limited++;
+      intervals.add(rate.intervalMilliseconds);
+    } else {
+      noGate++;
+    }
+  }
+
+  final List<MapEntry<String, int>> sorted = declared.entries.toList()
+    ..sort(
+      (MapEntry<String, int> a, MapEntry<String, int> b) =>
+          b.value.compareTo(a.value),
+    );
+  stdout.writeln(
+    '-- concurrentRate: ${sorted.fold<int>(0, (int sum, MapEntry<String, int> entry) => sum + entry.value)} '
+    'sources declare one ($limited limited, $noGate no gate, $invalid invalid).',
+  );
+  for (final MapEntry<String, int> entry in sorted.take(_maxRateLines)) {
+    final ConcurrentRateDeclaration parsed = parseConcurrentRate(entry.key);
+    stdout.writeln(
+      '    ${entry.value}\t${entry.key}\t'
+      '${parsed.isInvalid
+          ? 'invalid'
+          : parsed.isLimited
+          ? 'limited'
+          : 'no gate'}',
+    );
+  }
+  if (sorted.length > _maxRateLines) {
+    stdout.writeln(
+      '    … ${sorted.length - _maxRateLines} more distinct values',
+    );
+  }
+  if (intervals.isNotEmpty) {
+    intervals.sort();
+    stdout.writeln(
+      '    intervals(ms): min=${intervals.first} '
+      'median=${intervals[intervals.length ~/ 2]} max=${intervals.last}',
+    );
+  }
+}
+
+/// How many distinct `concurrentRate` values the census prints.
+const int _maxRateLines = 20;
 
 /// Whether [item] carries `@js:` in a field this repository can evaluate (matrix #14).
 bool _usesValueRuleJs(Map<String, Object?> item) {
@@ -545,6 +625,13 @@ final class _Report {
   /// The keyword the search template was rendered with.
   final String keyword;
 
+  /// Wall-clock time the whole chain took, in milliseconds.
+  ///
+  /// It is recorded because `concurrentRate` (`book-source.md` §8) is only observable as
+  /// **time**: with a rate declared, `n` requests cannot all happen inside one window, so the
+  /// run's duration is the regression's evidence (see the README's M1-b2 record).
+  int elapsedMilliseconds = 0;
+
   final Map<String, ({int count, List<String> samples})> _stages =
       <String, ({int count, List<String> samples})>{};
   final Map<String, ({ParseFailureKind kind, String rulePath})> _failures =
@@ -575,6 +662,7 @@ final class _Report {
     'keyword': keyword,
     'headers': source.headers,
     'complete': isComplete,
+    'elapsedMs': elapsedMilliseconds,
     'stages': <String, Object?>{
       for (final MapEntry<String, ({int count, List<String> samples})> entry
           in _stages.entries)
@@ -599,6 +687,11 @@ final class _Report {
     stdout.writeln('source : ${source.name} (${source.url})');
     stdout.writeln('keyword: $keyword');
     stdout.writeln('headers: ${source.headers ?? 'none'}');
+    // 限速声明也打出来：`concurrentRate` 会进请求层预算（§8、ADR-0036），所以一次真实源
+    // 回归记录要说清楚这条链路是在哪份声明下跑完的。
+    stdout.writeln(
+      'rate   : ${source.concurrentRate?.trim().isNotEmpty ?? false ? source.concurrentRate : 'none declared'}',
+    );
     for (final String stage in const <String>[
       'search',
       'bookInfo',
@@ -624,6 +717,9 @@ final class _Report {
         '${stage.padRight(8)} ok      count=${ok.count} ${ok.samples.join(' | ')}',
       );
     }
+    stdout.writeln(
+      'elapsed: ${(elapsedMilliseconds / 1000).toStringAsFixed(1)}s',
+    );
     stdout.writeln(isComplete ? 'RESULT  : complete' : 'RESULT  : incomplete');
   }
 }

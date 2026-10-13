@@ -35,6 +35,7 @@ _BookSource _$BookSourceFromJson(Map<String, dynamic> json) => $checkedCreate(
         (v) =>
             v == null ? null : ExploreRule.fromJson(v as Map<String, dynamic>),
       ),
+      concurrentRate: $checkedConvert('concurrentRate', (v) => v as String?),
       bookInfoRule: $checkedConvert(
         'ruleBookInfo',
         (v) =>
@@ -77,6 +78,7 @@ Map<String, dynamic> _$BookSourceToJson(_BookSource instance) =>
       'searchUrl': instance.searchUrl,
       'ruleSearch': instance.searchRule,
       'ruleExplore': instance.exploreRule,
+      'concurrentRate': instance.concurrentRate,
       'ruleBookInfo': instance.bookInfoRule,
       'ruleToc': instance.tocRule,
       'ruleContent': instance.contentRule,
