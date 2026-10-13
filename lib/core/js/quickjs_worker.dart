@@ -227,7 +227,7 @@ final class _Worker {
   Future<void> evaluate(Object? job) async {
     // 上一个 job 的未答复调用（脚本没 await 就结束了）不再有意义，桥也已经不再认它。
     _pending.clear();
-    _variables = <String, String>{};
+    _variables = <String, String?>{};
     if (job is! Map) {
       _toBridge.send(<String, Object?>{
         'type': 'result',
@@ -240,7 +240,7 @@ final class _Worker {
     }
 
     final Map<String, Object?> fields = Map<String, Object?>.from(job);
-    _variables = _variablesOf(fields['variables']);
+    _variables = decodeJsVariables(fields['variables']);
     final Stopwatch stopwatch = Stopwatch()..start();
     JsEvalResult result = _runtime.evaluate(_evaluationSource(fields));
     if (result.rawResult is Future) {
@@ -362,27 +362,6 @@ String _evaluationSource(Map<String, Object?> fields) {
   buffer.write('__runRule(${jsonEncode(_asString(fields['script']))})');
 
   return buffer.toString();
-}
-
-/// Reads the variable snapshot a job carries (`book-source.md` §6).
-///
-/// Everything the host sends is JSON, so a value that is neither a string nor `null` is
-/// dropped rather than coerced: the store only ever holds strings, and a silently
-/// stringified `null` would be indistinguishable from a rule that wrote the text "null".
-Map<String, String?> _variablesOf(Object? value) {
-  if (value is! Map) {
-    return <String, String?>{};
-  }
-  final Map<String, String?> variables = <String, String?>{};
-  for (final MapEntry<Object?, Object?> entry in value.entries) {
-    final Object? entryKey = entry.key;
-    final Object? entryValue = entry.value;
-    if (entryKey is String && entryValue is String?) {
-      variables[entryKey] = entryValue;
-    }
-  }
-
-  return variables;
 }
 
 /// Reads one envelope field as a [String], or an empty string.

@@ -312,7 +312,8 @@ final class JsJavaRequest {
   final String? value;
 }
 
-/// Reads one `java.*` call's arguments, or `null` when they are unusable (§6).///
+/// Reads one `java.*` call's arguments, or `null` when they are unusable (§6).
+///
 /// The arguments are the prelude's, so they are JSON: `{operation, key, value}`. An
 /// unknown verb or a missing key is "malformed", which the prelude answers with a JS
 /// `Error` rather than a silent `undefined`.
@@ -365,6 +366,33 @@ String applyJsJavaCall(Map<String, String?> variables, Object? args) {
 
       return '{"ok":true}';
   }
+}
+
+/// Reads the variable table a job or a result carries, ignoring anything unusable (§6,
+/// matrix #16 / #17).
+///
+/// Both directions use the same shape: the host seeds a job with a snapshot and the worker
+/// reports its table back ([applyJsJavaCall] fills it), so one reader serves both ends and
+/// the two can never disagree about what a `null` means. A `null` **value** is kept —
+/// `java.put(key, null)` is how a script clears a variable, and turning it into `''` would
+/// make “cleared” and “written empty” indistinguishable (ADR-0034 §决策 1). A key that is
+/// not a string or a value that is neither a string nor `null` is dropped rather than
+/// coerced: the store only ever holds strings, and a stringified `null` would be
+/// indistinguishable from a rule that wrote the text "null".
+Map<String, String?> decodeJsVariables(Object? value) {
+  if (value is! Map) {
+    return <String, String?>{};
+  }
+  final Map<String, String?> variables = <String, String?>{};
+  for (final MapEntry<Object?, Object?> entry in value.entries) {
+    final Object? entryKey = entry.key;
+    final Object? entryValue = entry.value;
+    if (entryKey is String && entryValue is String?) {
+      variables[entryKey] = entryValue;
+    }
+  }
+
+  return variables;
 }
 
 /// Reads one `parse.*` call's arguments, or `null` when they are unusable (§6).

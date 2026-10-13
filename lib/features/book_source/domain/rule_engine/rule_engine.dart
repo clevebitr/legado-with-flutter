@@ -717,9 +717,13 @@ final class RuleEngine {
     required bool allowJs,
     required int depth,
   }) async {
+    // 两个扫描常量都是小写，所以必须先折小写再判：`@PUT:` / `@Get:` 与 `@put:` / `@get:`
+    // 是同一条规则（`book-source.md` §3 的前缀大小写不敏感；上游的 `putPattern` /
+    // `getPattern` 也都带 CASE_INSENSITIVE）。大小写不影响长度，后面的偏移量照旧。
+    final String lowered = rule.toLowerCase();
     if (!rule.contains('{{') &&
-        !rule.contains(_putScanFlag) &&
-        !rule.contains(_getFlag)) {
+        !lowered.contains(_putScanFlag) &&
+        !lowered.contains(_getFlag)) {
       return _ParsedValue<_Expansion>(
         _Expansion(text: rule, substituted: false),
       );
@@ -806,7 +810,7 @@ final class RuleEngine {
     required bool allowJs,
     required int depth,
   }) async {
-    if (!rule.contains(_putScanFlag)) {
+    if (!rule.toLowerCase().contains(_putScanFlag)) {
       return _ParsedValue<String>(rule);
     }
 

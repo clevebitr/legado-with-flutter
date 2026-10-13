@@ -23,7 +23,8 @@ final class FakeJsBridge implements JsBridge {
   /// When set, every job fails with this failure instead of answering.
   ParseFailure<Never>? failure;
 
-  /// `parse.*` requests to run through the job's evaluator before the job answers.  ///
+  /// `parse.*` requests to run through the job's evaluator before the job answers.
+  ///
   /// A real worker calls [JsJob.parseEvaluator] when the script awaits `parse.*`
   /// (`book-source.md` §6); this double calls it once per request here, so an engine test can
   /// exercise the nested evaluation — including its boundaries — without a native engine. The

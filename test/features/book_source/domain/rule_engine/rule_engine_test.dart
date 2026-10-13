@@ -3002,6 +3002,41 @@ void main() {
       expect(variables.read('', 'a'), 'One');
     });
 
+    test('extractAll_givenAnUppercaseFlag_isTheSameRule', () async {
+      // `book-source.md` §3 的前缀大小写不敏感：`@PUT:` / `@GET:` 与 `@put:` / `@get:`
+      // 等价（上游的 `putPattern` / `getPattern` 都带 CASE_INSENSITIVE）。
+      final JsVariableStore variables = JsVariableStore();
+
+      final List<String> values = await _values(
+        _engine(null, null, variables).extractAll(
+          '@PUT:{a:class.result.0@tag.a@text}@GET:{a}',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(values, <String>['One']);
+      expect(variables.read('', 'a'), 'One');
+    });
+
+    test(
+      'extractAll_givenAMixedCaseFlagInsideATemplate_isTheSameRule',
+      () async {
+        // 模板里的内层也是规则头，大小写不影响它的识别。
+        final JsVariableStore variables = JsVariableStore();
+
+        final List<String> values = await _values(
+          _engine(null, null, variables).extractAll(
+            '@Put:{a:class.result.1@tag.a@text}第{{@Get:{a}}}章',
+            _scope(_document(_listHtml)),
+            rulePath: 'searchRule.name',
+          ),
+        );
+
+        expect(values, <String>['第Two章']);
+      },
+    );
+
     test('extractFirst_givenAQuotedPutValue_stripsTheQuotes', () async {
       final JsVariableStore variables = JsVariableStore();
 

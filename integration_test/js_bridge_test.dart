@@ -398,6 +398,8 @@ void main() {
   ) async {
     // 矩阵 #17：`java.*` 在 worker 内同步拿到值（§6），而变量按**书源**键控
     // （ADR-0030 §决策 4、ADR-0034 §决策 1）。
+    const String sourceUrl = 'https://example-novel.test';
+    const String otherUrl = 'https://other.test';
     expect(
       _value(
         await bridge.evaluate(
@@ -406,10 +408,20 @@ void main() {
       ),
       'a',
     );
+    // 写入的整份表随结果回到宿主，由桥 merge 进它自己的那份表（ADR-0034 §决策 1）。
+    expect(variables.read(sourceUrl, 'token'), 'a');
 
-    // 同一书源的下一个 job：变量随上一个 job 的结果回到宿主，又随快照回来。
+    // 同一书源的下一个 job：调用方把该源的**快照**装进 job（这就是引擎的做法），
+    // 所以它看得到上一个 job 写入的值。
     expect(
-      _value(await bridge.evaluate(_job(script: "java.get('token')"))),
+      _value(
+        await bridge.evaluate(
+          _job(
+            script: "java.get('token')",
+            variables: variables.snapshot(sourceUrl),
+          ),
+        ),
+      ),
       'a',
     );
 
@@ -419,10 +431,8 @@ void main() {
         await bridge.evaluate(
           _job(
             script: "java.get('token')",
-            source: const JsSourceInfo(
-              name: '另一个书源',
-              url: 'https://other.test',
-            ),
+            variables: variables.snapshot(otherUrl),
+            source: const JsSourceInfo(name: '另一个书源', url: otherUrl),
           ),
         ),
       ),
@@ -533,9 +543,15 @@ void main() {
 }
 
 /// A job whose script decides the behaviour; the variables are the §6 bindings.
+///
+/// [variables] is the source's **snapshot** as the engine takes it (`JsJob.variables`): a
+/// probe that expects a `java.put` of an earlier job to be readable has to carry it, because
+/// the bridge merges the reported table into the store and never injects a snapshot itself
+/// (ADR-0034 §决策 1).
 JsJob _job({
   required String script,
   Map<String, String>? sourceHeaders,
+  Map<String, String> variables = const <String, String>{},
   JsSourceInfo source = const JsSourceInfo(
     name: '示例书源',
     url: 'https://example-novel.test',
@@ -548,6 +564,7 @@ JsJob _job({
   source: source,
   result: 'raw',
   sourceHeaders: sourceHeaders,
+  variables: variables,
 );
 
 /// The value of a successful evaluation, failing the test otherwise.

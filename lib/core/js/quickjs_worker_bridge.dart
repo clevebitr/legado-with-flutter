@@ -354,10 +354,7 @@ final class _WorkerSession {
     // 这个 job 的答案（ADR-0034 §决策 1）。
     final JsJob? job = _inFlightJob;
     if (job != null) {
-      _variables.merge(
-        job.source.url,
-        _reportedVariables(message['variables']),
-      );
+      _variables.merge(job.source.url, decodeJsVariables(message['variables']));
     }
 
     // 致命边界已经决定了这个 job 的答案：脚本自己写出来的值不再算数（C-SRC-4）。
@@ -713,28 +710,6 @@ String? _stringField(Map<String, Object?> message, String key) {
   final Object? value = message[key];
 
   return value is String ? value : null;
-}
-
-/// Reads the variable map a worker reports back with a result (`book-source.md` §6).
-///
-/// A `null` value is kept: it is how a script spells “clear this variable”
-/// (`java.put(key, null)`), and turning it into `''` would make cleared and empty
-/// indistinguishable in the store. Anything that is not a string map is ignored rather
-/// than fixed up — the envelope is transport, not a place to invent data.
-Map<String, String?> _reportedVariables(Object? value) {
-  if (value is! Map) {
-    return const <String, String?>{};
-  }
-  final Map<String, String?> variables = <String, String?>{};
-  for (final MapEntry<Object?, Object?> entry in value.entries) {
-    final Object? entryKey = entry.key;
-    final Object? entryValue = entry.value;
-    if (entryKey is String && entryValue is String?) {
-      variables[entryKey] = entryValue;
-    }
-  }
-
-  return variables;
 }
 
 /// Caps one `log.*` message at [maxJsLogMessageLength], marking what was dropped.

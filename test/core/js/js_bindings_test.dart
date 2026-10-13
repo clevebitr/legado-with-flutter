@@ -387,6 +387,26 @@ void main() {
     });
   });
 
+  group('decodeJsVariables', () {
+    test('decodeJsVariables_givenAReportedTable_keepsStringsAndNulls', () {
+      // 两端用同一个读法：job 的快照与 worker 的回报只差方向（ADR-0034 §决策 1）。
+      expect(
+        decodeJsVariables(<String, Object?>{'token': 'abc', 'gone': null}),
+        <String, String?>{'token': 'abc', 'gone': null},
+      );
+    });
+
+    test('decodeJsVariables_givenAnUnusableValue_dropsIt', () {
+      // 值不是字符串也不是 null 时丢弃而不是强制转换（`3` 与 `"3"` 不是一回事）。
+      expect(
+        decodeJsVariables(<String, Object?>{'n': 3, 'ok': 'x'}),
+        <String, String?>{'ok': 'x'},
+      );
+      expect(decodeJsVariables('token'), isEmpty);
+      expect(decodeJsVariables(null), isEmpty);
+    });
+  });
+
   group('mergeJsHttpHeaders', () {
     test('mergeJsHttpHeaders_givenSourceAndRuleHeaders_letsTheRuleWin', () {
       expect(
