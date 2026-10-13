@@ -117,4 +117,20 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get failureUnsupportedRule =>
       'This book source uses a rule type that is not supported yet.';
+
+  @override
+  String get bookSourceExploreTitle => 'Discover';
+
+  @override
+  String get bookSourceExploreAction => 'Discover page';
+
+  @override
+  String get bookSourceExplorePrompt => 'Pick a category to start browsing';
+
+  @override
+  String get bookSourceExploreEmpty =>
+      'This book source has no discover categories';
+
+  @override
+  String get bookSourceExploreEmptyCategory => 'This category has no books.';
 }

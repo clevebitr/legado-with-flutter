@@ -42,14 +42,15 @@ final class RequestLimiter {
     Future<void> Function(Duration duration)? delay,
   }) : assert(maxConcurrent > 0, 'A concurrency budget must be positive.'),
        _clock = clock ?? const SystemClock(),
-       _delay = delay ?? _wait;
+       _delay = delay ?? Future<void>.delayed;
 
   /// How many requests one key may have in flight.
   final int maxConcurrent;
 
   final Clock _clock;
 
-  /// Waits for the requested duration; injected so a test never sleeps for real.
+  /// Waits for the requested duration, real time by default; injected so a test can move
+  /// time instead of sleeping ([Future.delayed] is the production default).
   final Future<void> Function(Duration duration) _delay;
 
   final Map<String, int> _inFlight = <String, int>{};
@@ -177,10 +178,3 @@ final class RequestLimiter {
     _inFlight[key] = active - 1;
   }
 }
-
-/// The default way the limiter waits for a rate window: real time.
-///
-/// It is a top-level function so [RequestLimiter]'s constructor can keep a `const`-able
-/// default while a test passes its own; the unit tests never sleep
-/// (`docs/dev/testing.md` §4).
-Future<void> _wait(Duration duration) => Future<void>.delayed(duration);

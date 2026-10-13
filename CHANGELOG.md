@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### b1b review, merge and the device-probe cadence (2026-10-13)
+
+- **Merged: the b1b rework.** The five must-fix items are in (`getElement` answers one value on both
+  paths, an unmatched `getString` answers `''` on both, `java.post` is refused by name,
+  `base64Encode` / `base64Decode` refuse the multi-argument overloads, and `book-source.md` §6 /
+  `PLAN.md` really say what the CHANGELOG used to claim). Verified from this side: Windows device
+  probe re-run (`app_boot` 1/1, `js_bridge` **24/24**, `on_disk_database` 1/1), gates green,
+  `gen-l10n` and `build_runner` in sync.
+- **Fixed by the reviewer: the third path-consistency defect.** On a **JSON** scope the literal fast
+  path ran `_selectAllValues`, which stringified every match: `java.getStringList('$.data.page[*].image')`
+  inlined `["a.jpg","7"]` where the asynchronous path (and `book-source.md` §6, "a JSON match its
+  value") hands `7` as a number. `_selectAllValues` now returns the values untouched, and two tests
+  pin the types (list and single-doc forms).
+- **`tool/spot_check --list` census: the `{{...}}` half was fixed, the numbers recomputed to
+  384/278/142.** The old "a rule starting with `{` is a form object" filter also caught `{{...}}`,
+  contradicting both its own comment and `PLAN.md` §3.7. The reviewer reproduced both censuses from
+  the same `build/ao.json` with an independent replica of the filter (353/253/122 before,
+  384/278/142 after), so the change is accepted; the search-URL half stays conservative.
+- **ADR-0038: device probes move to the phase exit.** A slice-level requirement to run
+  `integration_test/` on **both** Windows and Android did not pay for itself — the Android side is
+  30+ minutes per run and exercises the same Dart code and the same `flutter_qjs_next` engine, while
+  the differences live in platform channels and native SQLite. Slices now need Windows; leaving a
+  phase needs both, which is `PLAN.md` §4's new **G7**. `integration_test/` / `core/platform/` /
+  native-project changes stay the exception and must run on the platform they touch.
+- **New work order b5: two real-source gaps** that the b1b regression found and that are unrelated
+  to `java.*` — a `##` **inside** a `{{...}}` template is still read as the replacement separator
+  (`{{$.tag_views##\s+##,}}` fails the field), and the JSONPath dialect `]` followed directly by a
+  member name (`$.data.page[*]image`) is refused by the RFC 9535 parser. Both reproduced by the
+  reviewer; `PLAN.md` §3.5 has the work order, §3.7 the trigger conditions.
+
 ### b1b: the mainstream spelling on a real source, the `{{…}}` census fix, the last review nits (2026-10-13)
 
 The review's leftover acceptance item and three small items, plus a tool bug the acceptance exposed.
@@ -105,6 +135,65 @@ Implements ADR-0037: real sources use upstream's names (540 of 3907 sources use 
   docs commit. **Still open:** the real-source record for the `getString`-based `updateTime`
   mainstream spelling.
 
+### Phase 4 b4b: the discover page UI (2026-10-13)
+
+- **`ExplorePage` + `ExploreNotifier`** (`presentation/`): a horizontally scrolling row of
+  `ChoiceChip`s, then the books of the chosen category as `ListTile`s that open the existing book
+  detail route. The state machine tells apart the five screens the layers below can produce —
+  loading, "this source has no discover page" (empty), "`exploreUrl` is unreadable", "no category
+  opened yet", and "this category failed" — because they are all *successful* answers from the
+  engine. A failed category keeps the chip row visible so another one can be picked
+  (`book-source.md` §9), and it offers a retry.
+- **`BookSourceRoute.explore()`** carries the new page, and the search page's app bar gained a
+  tooltip-labelled entry to it (disabled without a selected source, like the search action itself,
+  C-UI-7). Five ARB keys were added in both locales: `bookSourceExploreTitle`,
+  `bookSourceExploreAction`, `bookSourceExplorePrompt`, `bookSourceExploreEmpty` and
+  `bookSourceExploreEmptyCategory`; `flutter gen-l10n` output is committed and matches the ARB
+  files.
+- Widget tests: no source; a source without categories (empty state); opening a category and
+  listing its books through the offline corpus (`ruleExplore` absent → the whole `searchRule`
+  fallback, ADR-0035 §决策 2); a category whose every hit lacks a usable book URL (its own empty
+  state); and a failing category that keeps the row and shows the failure with a retry. Gates:
+  `core` 919/919, `domain` 1660/1660, 666 cases.
+- **Two review fixes before the merge.** A category with no usable books used to show the *search*
+  empty state, which mentions a keyword this screen never has — it now has its own key and a test
+  that asserts the search text is absent; and the unreachable `ExploreCategories()` arm of the
+  `_below` switch (already handled above it) is gone.
+- **The assigned `tool/spot_check` item was settled, not implemented: the “`{…}` in non-search
+  URL fields” criterion stays as it is.** Its original premise — such URL rules could not be
+  replayed before matrix #19 — was overtaken by #19 landing in 3.7, so tightening it now would
+  filter out *runnable* sources and invalidate the 353/253/122 numbers ADR-0032 and
+  `tool/spot_check/README.md` quote, while loosening the search-URL half would admit sources that
+  still cannot be replayed. The criterion and the numbers therefore stand, the reasoning is written
+  into `tool/spot_check/README.md` §3/§6, and `PLAN.md` §3.7 is closed.
+
+### Stable coverage gate, a withdrawn finding and the b1b review (2026-10-13)
+
+The coverage gate could fail on any PR for a reason unrelated to that PR, and one registered
+finding turned out to be a measurement mistake. Both are settled before the next merge:
+
+- **Fixed: the coverage gate flaked.** `lib/core/network/request_limiter.dart` had a private
+  `_wait` (a one-line wrapper over `Future.delayed`) that only ran when the rate gate really
+  waited, while the only test covering it used a **1 ms** window — so when ≥1 ms passed between the
+  two `run` calls the second one had nothing to wait for, the line stayed unexecuted and `core`
+  dropped to 943/944 (exit code 1). Three consecutive runs reproduced it (100% / 99.89% / 100%).
+  The wrapper is gone: the limiter's default is now `Future.delayed`'s tear-off, so the file has no
+  “only executed while waiting” line left; the test's window moved to 20 ms and its comment says
+  why coverage no longer depends on it. Five consecutive runs are stable at `core` 919/919.
+- **Withdrawn: the `.gitattributes` / CRLF finding from the 2026-10-13 evidence refresh.** The
+  row claimed three files were committed with CRLF; the reproduction command returns the opposite
+  (`git cat-file blob <ref>:PLAN.md | od -An -tx1` has no `0d` byte at four commits, and
+  `git ls-files --eol` reports `i/lf w/lf` for every managed text file). The original check
+  (`git show <ref>:<file> | grep -c $'\r'`) reports CR on **every** line on this host — it was the
+  check that was wrong. The only CRLF that exists is in the four files the development group's
+  editor created in a worktree, which `git add` normalises to LF anyway. `PLAN.md` §3.7 records
+  the corrected state; the earlier entry above is left as history.
+- **Registered: the b1b delivery was reviewed and returned for rework.** `PLAN.md` §3.5 marks the
+  slice as returned and §3.7 carries the must-fix list with file:line — the fast path and the
+  asynchronous path disagree for `getElement` and for an unmatched `getString`, `java.post` is not
+  refused by name, `base64Encode` / `base64Decode` accept the multi-argument overloads the ADR
+  refuses, the CHANGELOG claimed a `PLAN.md` update that was not in the commit, and the real-source
+  regression plus the two device probes are still open. Nothing from that branch was merged.
 
 ### Troubleshooting row for the per-worktree native-asset cache (2026-10-13)
 
