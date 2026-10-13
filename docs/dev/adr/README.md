@@ -58,3 +58,4 @@
 | [0034](0034-js-rule-variables.md) | M1 规则变量：宿主侧一份表 + 每个 job 一份快照（`@put:` / `@get:` / `java.put` / `java.get`） | Accepted（2026-10-12 架构师裁决；ADR-0030 §决策 5(a) 的重开触发条件） | 本次新增 |
 | [0035](0035-explore-url-and-rule-explore-fallback.md) | 发现页：`exploreUrl` 的两种形态（分类串 / 整字段 JS）与 `ruleExplore` → `ruleSearch` 的**整条**回落，含四条登记差异 | Accepted（2026-10-13 架构师裁决；M1-b0 规格前置） | 本次新增 |
 | [0036](0036-concurrent-rate-and-the-budget.md) | `concurrentRate` 的语法与毫秒单位，以及「速率门 → 并发门」的合成顺序 | Accepted（2026-10-13 架构师裁决；M1-b0 规格前置） | 本次新增 |
+| [0037](0037-java-binding-compat-surface.md) | `java.*` 成为兼容面：别名族（`md5Encode` / `base64*` / `encodeURI` / `log`）、规则求值族（字面量宿主内联快路径 + 异步兜底）与具名拒绝 | Accepted（2026-10-13 架构师裁决；合集 C 全量语料取证，M1-b1b 开工前置） | 本次新增 |
