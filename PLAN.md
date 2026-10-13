@@ -73,7 +73,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
 | Phase 3 — M0 横向铺开 | ✅ 完成 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）、3.4（`@js:` 接入 + 全部 JS 绑定与额度）、**3.7（真实源回归 → 矩阵 M0 状态列全「已确认」，G3 达成）**已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**3.9（charset 检测结果缓存）** 已完成，Phase 3 全部收口；下一步 = Phase 4（M1）。细节见 `CHANGELOG.md` |
-| Phase 4 — M1 | ⏳ 进行中 | **语法先行（矩阵 #15–#19）已完成（2026-10-12）**：`@@` / `@put:` / `@get:` / `java.put` / `java.get` / `{{}}`（URL 侧也含）/ `{}`，变量语义归 ADR-0034；矩阵状态列仍待真实源回归（见 §3.7）。**未完成：** `exploreUrl` 发现页、`canReName`、`updateTime`（含 `java.timeFormat`）、`concurrentRate` |
+| Phase 4 — M1 | ⏳ 进行中 | **语法先行（矩阵 #15–#19）已完成（2026-10-12）**：`@@` / `@put:` / `@get:` / `java.put` / `java.get` / `{{}}`（URL 侧也含）/ `{}`，变量语义归 ADR-0034；矩阵状态列仍待真实源回归（见 §3.7）。**规格前置已完成（2026-10-13）**：**ADR-0035**（发现页）与 **ADR-0036**（`concurrentRate`），`book-source.md` §2/§4.2/§6/§8/§9/§11 同步。**未完成（按 §3.5 的 b1–b4）：** `updateTime`（含 `java.timeFormat`）、`concurrentRate`、`canReName` / `variableComment`、`exploreUrl` 发现页 |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
 
@@ -191,15 +191,27 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 ### 3.5 Phase 4 — M1
 
-> **状态（2026-10-12）：** 语法先行那半（矩阵 #15–#19）已落地，细节见 `CHANGELOG.md`；
-> 同时按 ADR-0030 §决策 5(a) 的重开触发条件产出 **ADR-0034**（规则变量的存储与生命周期）。
-> 剩下的是字段与发现页那一半：`exploreUrl`、`canReName`、`updateTime`（含 `java.timeFormat`）、
-> `concurrentRate`。
+> **状态（2026-10-13）：** 「语法先行」那半（矩阵 #15–#19 + 规则变量，ADR-0034）已合并；
+> **规格前置**（M1-b0）也已完成：**ADR-0035**（发现页：`exploreUrl` 两种形态 + `ruleExplore` → `ruleSearch`
+> 整条回落）与 **ADR-0036**（`concurrentRate` 语法/单位 + 「速率门 → 并发门」合成），
+> `book-source.md` §2 / §4.2 / §6 / §8 / §9 / §11 已同步。剩下的按下面的 b1–b4 执行。
 
 矩阵 #15–#19 + `exploreUrl` 发现页 + `canReName` + **`updateTime`（依赖 `java.timeFormat`）** +
 `concurrentRate`。`isVip` **不在**本阶段（架构师裁决：归 M0 / Phase 3.5，见 ADR-0014 的修订注记）。
 每条语法同样需要真实书源验证记录。
-完成判定：M1 行状态列全部为「已确认」。
+完成判定：M1 行状态列全部为「已确认」（ADR-0024 §决策 2：只能由**真实源回归**给出）。
+
+| 步骤 | 内容 | 验收 |
+|---|---|---|
+| **b0** ✅ 已完成（2026-10-13） | **规格前置（架构师）**：ADR-0035 / ADR-0036；`book-source.md` §2（`ExploreRule` 行、四处 `updateTime`、`canReName` 不求值、`variableComment`、未建模字段去向）、新增 §4.2（发现页）、§6（`java.timeFormat` 入参/时区）、§8（`concurrentRate`）、§9、§11 | 开发组可**按规格直接实现**，不需要再猜；本节 b1–b4 的验收与本表一致 |
+| **b1** | `updateTime`（四处：`SearchRule` / `ExploreRule` / `BookInfoRule` / `TocRule`）+ 沙箱 `java.timeFormat`（worker 内同步、**不计**调用额度）；承载值的实体（`Book` / `BookInfo` / `Chapter`）补字段 | 六条门禁；时区 / 毫秒入参 / 非法入参（→ `js:error`）单测；设备探针**实跑** Windows + Android；≥1 条真实源回归记录（`book-source.md` §10 格式） |
+| **b2** | `concurrentRate`：模型字段 + `RequestLimiter` 按 **ADR-0036** 落「先速率门、再并发门」；非法声明降级 + warning | 六条门禁；`n/m` / 单数字 / `"0"` / 空 / 非法 / 两门各自与合成的单测；**语料里 `concurrentRate` 取值分布与单位判断记录**；≥1 条真实源回归 |
+| **b3** | `canReName` + `variableComment` 建模（`canReName` 的规则**不求值**，见 §2 注记；消费方归 Phase 5） | 六条门禁；模型往返（含 `extra` 不丢键）单测；§3.7 登记消费去向 |
+| **b4a** | 发现页引擎 / UseCase：`exploreUrl` 两种形态 + 分类解析 + `ExploreBooks`（含 **整条回落**）+ 条目 URL 走 `renderUrl` | 六条门禁；ADR-0035 的四条登记差异各 ≥1 条单测；≥1 条真实源回归 |
+| **b4b** | 发现页分类 UI（`presentation` + ARB 双语） | 六条门禁；Widget 测试（分类列表 / 空态 / 单分类失败态）；`tool/spot_check` 的「非搜索字段 URL 里的 `{…}`」判据收紧（§3.7） |
+
+> **并行度：** b1 / b2 / b3 互不冲突（分别落在沙箱 + 模型、请求层 + §8 模型、详情页模型），
+> 可并行；**b4a 依赖 b1**（`ExploreRule` 自带 `updateTime`）与 b0（规格），b4b 跟 b4a。
 
 ### 3.6 Phase 5 — 阅读体验
 
@@ -228,6 +240,13 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `{{…}}` 在**列表规则**里的语义：本仓替换后按选择器读，上游回文本本身（`Mode.Regex`） | **待语料**：真实源出现「列表规则里用 `{{…}}` 造选择器」时再对齐；差异已登记在 `book-source.md` §3 的 #18 注记 |
 | 模板的 JS 返回**列表**时本仓取第一个值（上游插入数组的 `toString()`） | **已登记（`book-source.md` §3 #18 注记）**：待真实语料出现再定 |
 | `@put:{…}` 的体按 `key:value` 解析（值可带引号或裸写），不走上游 GSON 的严格 / 宽松两级 | **已登记（`book-source.md` §3 #16 注记）**：解析不出键值对的片段被忽略（与上游空 putMap 同结果） |
+| **上游有、本仓未建模的字段**：`SearchRule.checkKeyWord`、`BookInfoRule.downloadUrls` / `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay` | **保留在 `extra`（不丢数据）+ 去向待排期**：`checkKeyWord` 只用于「书源校验的默认关键词」（`BookSource.kt:228-238`），属书源校验 / 调试；`downloadUrls` / `relatedBooks` 与 `isVolume` / `formatJs` / `preUpdateJs` 属 Phase 5 的阅读器与书架；未建模期间**不得**声称支持这些字段（清单归 `book-source.md` §2 注记） |
+| 发现页整字段 JS 的 `infoMap` 绑定、分类参数（`args` / 临时变量）与排名模块（`executeForRanking`、`MAX_RANKING_BOOKS` / `MAX_RANKING_PAGES`） | **不在 M1（ADR-0035 §决策 6）**：`infoMap` 命中即 `js:error`；表单型分类（`type` 非 `url`）报 `unsupportedRule`；行为归 `book-source.md` §4.2 / §11 |
+| 发现页条目 URL 缺失时，上游把**整段 `exploreUrl`** 当 URL 传下去（`ExploreBooksUseCase.kt:64-72`） | **已登记（ADR-0035 差异②）**：本仓拒绝该条目；真实语料若证明有书源依赖该副作用，再单独裁决 |
+| `java.timeFormatUTC(time, format, sh)`（带时区偏移与自定义 pattern） | **不在 M1**：触发条件 = 真实语料出现；`java.timeFormat` 的入参 / 时区语义归 `book-source.md` §6 |
+| `canReName` 的**消费方**（覆盖已有书名 / 作者） | **Phase 5（书架 / 阅读器）**：上游 `BookInfo.kt:65-84` 只在有 Book 实体时才有意义；M1 只建模 + 把「是否允许改名」传出，且**不求值**该规则（有意差异，归 `book-source.md` §2 注记） |
+| `updateTime` 的**展示**（列表 / 详情 / 目录 UI） | **Phase 5**：M1-b1 只把它落到实体字段（四处），UI 展示随阅读器 / 书架一起做 |
+| ~~`spot_check --list` 不检查非搜索字段 URL 里的 `{…}`（矩阵 #19）~~ | **M1-b4b 验收**：判据扩到全部 URL 字段（`exploreUrl` 条目 / `nextTocUrl` / `bookUrl` / `nextContentUrl`）后再闭环；背景：候选源里出现过 `bookUrl: https://…/{$.novel_id}` 这类 M1 模板，而工具只对 `searchUrl` 查 `{`，选源时靠逐条审查规则串避开（`tool/spot_check/README.md` §6） |
 | ~~charset 检测结果缓存~~ | ✅ **已闭环（3.9，2026-10-12）**：`CharsetCache` 端口 + `CacheDao` 适配器，按「书源 ID + URL」缓存**嗅探**结果（声明车道不进缓存）；语义归 `book-source.md` §5 |
 | 按书源清理缓存（需加列 + 迁移） | **Phase 5.5** |
 | 非顶层字段被拒降级为 warning（ADR-0026） | ✅ **已闭环（3.2）**：唯一实现点为 `PageFetchService`，两类（`unsupportedRule` / `parseFailed`）均降级，顶层 / 非顶层各 ≥1 条测试 |
@@ -250,7 +269,6 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `parse.getElements` 交给脚本的是 `outerHtml` 字符串 / JSON 值，**不是 DOM 句柄** | **已登记（3.4）**：沙箱无 DOM（ADR-0029 §决策 5），所以上游「`getElements` 后再 `parse.getString(rule, element)`」的写法会在 `doc` 那步报 `js:parse-scope`；要读元素内部就写在嵌套规则里（`class.a@tag.b@text`） |
 | **元素 scope 上独立 `@js:` 的 `result` 形态**：本仓给该元素的 `outerHtml`（JSON 条目给 JSON 文本），理由是沙箱无 DOM 句柄可交（ADR-0029 §决策 5） | ✅ **已闭环（3.7，2026-10-12）**：读 fork 源码核实——上游 `AnalyzeRule.evalJS(rule, result)` 把当前 `result`（`setContent` 得到的 jsoup `Node`）直接绑给 JS，所以上游能用 `outerHtml()` / `text()` 等 DOM 方法；本仓只能给 HTML 字符串，靠 DOM 方法的脚本会 `js:error` **显式失败**（不会静默给错值）。仓内 1096 条含 `@js:` 的真实源里未出现这种写法（元素级脚本全是字符串运算/拼接），保持为**有意差异**；行为描述归 `book-source.md` §6 |
 | 矩阵 #7（前导 `-`）在真实回归里只行使了**单元素**倒置（恒等） | **待语料**：方向语义由单测钉住（`extractAll` 与列表规则的多元素倒置各 ≥1 条），但仓内没有需要多元素倒置的真实源；触发条件 = 真实回归出现这种规则（选源命令见 `tool/spot_check/README.md` §3） |
-| `spot_check --list` 不检查非搜索字段 URL 里的 `{…}`（矩阵 #19） | **已登记（3.7）**：候选源里出现过 `bookUrl: https://…/{$.novel_id}` 这类 M1 模板，而工具只对 `searchUrl` 查 `{`；选源时靠逐条审查规则串避开，若这类源变多再收紧判据（`tool/spot_check/README.md` §6） |
 | `http.*` 的传输失败不把 `ParseFailureKind`（可重试性）交给字段 | **已登记（3.4）**：失败以 rejected Promise（message = kind 名）交给脚本，脚本可以 `catch` 后改走镜像；未捕获时按 §7 报 `js:error`。把传输 kind 上抛就是猜，需先有真实语料证明「作者不会 catch」 |
 | ~~3.8 并发策略与 JS worker 容量的耦合~~ | ✅ **已闭环（ADR-0030）**：裁决为单常驻 worker + 单复用运行时 + FIFO，**容量不进 `JsBridge` 契约**；重开触发条件见 ADR-0030 §决策 5 |
 | ~~`isVip` 的**正侧**真值缺上游 `file:line`~~ | ✅ **已闭环（R1，2026-10-12）**：直抓 fork 源码 `HapeLee/legado-with-MD3@master`，判定就是上游 `String?.isTrue()`（调用 `BookChapterList.kt:261-264`，谓词 `StringExtensions.kt:75-80`）——`null` / 全空白 / 字面量 `"null"` → 非 VIP，其余值除非匹配 `(?i)^(?:false|no|not|0|0.0)$` 否则算 VIP（因此 `是` / `yes` 是 VIP，`no` / `not` / `0.0` 不是）；代码与测试已按此对齐，两处上游怪癖（`"null"` 在 trim 前比较、模式里 `.` 未转义）按原样照抄并登记在 `book-source.md` §4.1，唯一出处仍是 §4.1 |

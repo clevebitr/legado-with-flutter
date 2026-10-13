@@ -40,13 +40,14 @@
 | `enabled` | `isEnabled` | `bool` | M0 | 默认 `true` |
 | `header` | `headers` | `Map<String, String>?` | M0 | 原为 JSON 字符串，导入时解析 |
 | `searchUrl` | `searchUrl` | `String?` | M0 | 支持 `{{key}}` / `{{page}}` |
-| `exploreUrl` | `exploreUrl` | `String?` | **M1** | 发现页 |
+| `exploreUrl` | `exploreUrl` | `String?` | **M1** | 发现页；两种形态（分类串 / 整字段 JS）、条目语义与回落规则**全部**见 §4.2（ADR-0035） |
 | `ruleSearch` | `searchRule` | `SearchRule` | M0 | 必填 |
+| `ruleExplore` | `exploreRule` | `ExploreRule?` | **M1** | 发现结果规则；缺失或 `bookList` 为空时**整条回落** `searchRule`（§4.2、ADR-0035） |
 | `ruleBookInfo` | `bookInfoRule` | `BookInfoRule?` | M0 | 缺失时从搜索页继承 |
 | `ruleToc` | `tocRule` | `TocRule` | M0 | 必填 |
 | `ruleContent` | `contentRule` | `ContentRule` | M0 | 必填 |
-| `concurrentRate` | `concurrentRate` | `String?` | **M1** | 并发限速 |
-| `variableComment` | `variableComment` | `String?` | **M1** | 书源变量说明 |
+| `concurrentRate` | `concurrentRate` | `String?` | **M1** | 并发限速；语法、毫秒单位与「速率门 → 并发门」的合成归 §8（ADR-0036） |
+| `variableComment` | `variableComment` | `String?` | **M1** | 书源变量说明；**纯展示**，引擎不读（上游 `BookSource.kt:245-252` 只与校验注释拼接显示） |
 | `loginUrl` / `loginUi` / `loginCheckJs` | — | — | **M2** | 登录相关，暂不实现 |
 | `lastUpdateTime` / `respondTime` / `weight` / `customOrder` | 同名 | `int?` | M0 | 仅用于展示与排序 |
 
@@ -54,14 +55,31 @@
 
 | 规则对象 | 字段 | 分期 |
 |---|---|---|
-| `SearchRule` | `bookList`、`name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl` | M0 |
-| `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName` | M0（`canReName` 为 M1） |
+| `SearchRule` | `bookList`、`name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl`、`updateTime` | M0（`updateTime` 为 M1） |
+| `ExploreRule` | 与 `SearchRule` 的九个列表字段**同形** + `updateTime`（上游 `BookListRule` 接口，`BookListRule.kt:6-18`；无 `checkKeyWord`） | M1 |
+| `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName`、`updateTime` | M0（`canReName`、`updateTime` 为 M1） |
 | `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
 | `ContentRule` | `webJs`、`sourceRegex`、`imageStyle` | **M2** |
 
 模型必须使用 `freezed` + `json_serializable`（C-SRC-7）。未知字段必须**保留而非丢弃**：
 在 `extra` 中承载，以便导出时不丢信息。
+
+> **列表类规则的「同形」约束（M1-b0 裁决，ADR-0035 §决策 1）：** `SearchRule` 与 `ExploreRule` 的九个
+> 列表字段由上游 `BookListRule` 接口固定，两者**必须同批**增减字段，不得只改一处；
+> 上游确实存在而本仓尚未建模的字段（`SearchRule.checkKeyWord`、`BookInfoRule.downloadUrls` /
+> `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay`）按「保留在 `extra` +
+> 去向登记」处理，清单与去向见 `PLAN.md` §3.7，不得在此处另开一份。
+>
+> **`updateTime` 出现在四处（上游事实）：** `SearchRule` / `ExploreRule`（列表项）、`BookInfoRule`（详情）、
+> `TocRule`（章节）。本仓四处**同批建模（M1-b1）**，值都是**展示用字符串**（规则结果原文，不做日期解析；
+> 章节侧可调用 `java.timeFormat`，见 §6）。
+>
+> **`canReName` 的上游语义（2026-10-13 取证，照抄为有意行为）：** 上游只在
+> `BookInfo.kt:65` 判「`canReName` 规则字段非空白」+ 调用方开关（入口自己传 `canReName`，`WebBook.kt:235-238`），
+> 然后**允许覆盖已有的书名 / 作者**（`BookInfo.kt:67-84`）；**规则内容本身不求值**。
+> 因此本仓 M1 只建模该字段并把「是否允许改名」交给调用方；**不得**改成「求值为真才允许」
+> （那会成为与上游的差异，需先登记）。消费方（书架改名）归 Phase 5。
 
 > **层归属与 `extra` 的落地形态**见 ADR-0021（模型位于 `domain/entities/`；`extra` 由
 > `fromLegadoJson` 逐层填充）。本表只拥有字段映射与分期。
@@ -105,7 +123,7 @@
 | 28 | 索引作为 `@` 分段后每段的首规则：`.1` / `[1]` / `!0` / `children[1]`，等价于 `children` + 该索引（可与 #5 / #6 / #26 的位置写法组合） | `head@.1@text`、`head@[1]@text`、`head@children[1]@text`（等价） | 所有字段 | **M0** → Phase 3.1（已实现） | 已确认 |
 | 29 | `@css:` 内的 jsoup 索引伪类 `:eq(n)` / `:gt(n)` / `:lt(n)`（**兄弟索引**，0-based，**不是**结果集索引） | `@css:div#info > p:eq(3) @text` | 所有字段 | **M0** → Phase 3.2 | 已确认 |
 | 30 | 提取段里的**嵌套规则**（末段本身是一条规则，如 `class.a@css:.b`） | `class.a@css:.b` | 所有字段 | **M2 / 暂不实现**（复审触发条件：真实语料统计显示使用率 > 0 且影响可用率时改判 M1） | 不支持 |
-| 31 | `<js>…</js>` JS 包装（**任意位置**，可作其他规则的分隔符；与 #14 同能力、不同包装） | `tag.li<js>…</js>//a`（原版文档示例） | 所有字段 | **M2 / 暂不实现**（复审触发条件：真实语料统计显示使用率 > 0 且影响可用率时改判，与 #30 同口径；需先扩规则串的分段能力） | 不支持 |
+| 31 | `<js>…</js>` JS 包装（**任意位置**，可作其他规则的分隔符；与 #14 同能力、不同包装） | `tag.li<js>…</js>//a`（原版文档示例） | 所有字段 | **M2 / 暂不实现**（复审触发条件：真实语料统计显示使用率 > 0 且影响可用率时改判，与 #30 同口径；需先扩规则串的分段能力）**例外：** 整个 `exploreUrl` 字段就是一个 `<js>…</js>` 时按发现页整字段 JS 支持（§4.2、ADR-0035 §决策 6） | 不支持 |
 
 > **#25–#27 为 2026-10-11 补录（回执 B3）：** 这三条语法此前只存在于上游实现里，本仓矩阵没有行，
 > 于是出现「引擎拒绝得对、账本却没记」的缺口。补录时**追加在表尾而不是插在中间**：`PLAN.md`
@@ -376,6 +394,27 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 >   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
 >   （ADR-0026 §决策 2）。
 
+### 4.2 发现页（`exploreUrl` 与 `ruleExplore`）
+
+本节是发现页的**唯一出处**（决策理由与四条登记差异见 **ADR-0035**；字段分期归 §2）。
+
+**分类来源（`exploreUrl`）** —— 两种形态，按前缀判定、互斥：
+
+| 形态 | 写法 | 语义 |
+|---|---|---|
+| 分类串 | `玄幻::https://a.test/list/{{page}}.html&&都市::https://b.test/...` | `&&` 或换行分隔（上游正则 `(&&\|\n)+`）；条目 `标题::URL`。**空标题**或**缺少 URL** 的条目报 `unsupportedRule` 并记录，**其余条目照常** |
+| 整字段 JS | `@js:…` 或 `<js>…</js>`（大小写不敏感） | `<js>` 形态**必须**以 `</js>` 收尾，否则该字段 `parseFailed`；返回值认 **JSON 数组**（元素含 `title`，可选 `url`）**或**上面的分隔串 |
+
+- **整字段 JS 的绑定：** `baseUrl` = **书源 URL**、`source`、`java.*`（与 `@put:` / `@get:` 同一份变量表，ADR-0034，`sourceId` = 书源 URL）；**不绑 `key`**（字段里写 `key` 即 `js:error`），`page` 固定为 `1`，**无 `infoMap`**（命中即 `js:error`，不静默给 undefined）。
+- **失败面：** 脚本异常或返回值不可解析 → 该字段 `parseFailed` + 日志（上游把错误做成一个 `ERROR:…` 分类展示，属登记差异）。
+- **分类类型：** M1 只支持 `type` 缺省或 `url`；表单型分类（`text` / `button` / `toggle` / `select` 及 `chars` / `default` / `action` / `style`）**不在 M1**，该分类报 `unsupportedRule` 并记录（§11）。
+
+**请求渲染：** 条目 URL 与 `searchUrl` 共用 `renderUrl`（C-SRC-5）；`{{page}}` / `{{baseUrl}}` 与「URL 内其他 `{{…}}` 只允许 JS、规则头按名报 `unsupportedRule`」的边界**归 §4 / 矩阵 #18，本节不另立**。发现页**不绑 `key`**——M1 没有「按关键词发现」入口；将来加入口时按 ADR-0034 §决策 3 扩展。
+
+**一次请求一页：** 页号由调用方给（与 `{{page}}` 同口径），**不自动批量翻页**，因此**不占** §9 的自动队列页数上限；单页失败只影响该分类（§9）。
+
+**结果解析（`ruleExplore`）：** `ruleExplore` 缺失或 `bookList` 为空 → **整条回落 `searchRule`**（**不是**逐字段回落），记账字段同样整条来自胜出的一方；唯一实现点是 `ExploreBooks` UseCase（ADR-0035 §决策 2）。列表字段的语义与分期见 §2。
+
 ---
 
 ## 5. 编码
@@ -514,7 +553,8 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   `##` 替换在脚本**之后**应用（上游同一 `SourceRule` 的 `replaceRegex` 也是最后跑）。
 > - **未落的边界（显式报错，不静默）：** 列表规则（`bookList` / `chapterList`）上的 `@js:` 报
 >   `unsupported:@js:list`（它要的是「JS 返回一列元素」的契约——上游 `getElements` 的
->   `Mode.Js` 分支，`AnalyzeRule.kt:439`——尚未成型）；`<js>…</js>` 仍按矩阵 #31 拒（M2）。
+>   `Mode.Js` 分支，`AnalyzeRule.kt:439`——尚未成型）；`<js>…</js>` 仍按矩阵 #31 拒（M2；
+>   `exploreUrl` 整字段那一个例外见矩阵 #31 的注记与 §4.2）。
 > - **独立 `@js:` 的 `result`：** 整页 scope 给 responseBody；**元素 scope**（逐项字段，如
 >   `searchRule.name`）给它自己的 `outerHtml`——沙箱里没有 DOM 句柄可交（ADR-0029 §决策 5），
 >   但规则总得看见它所属的那一项；JSON 条目 scope 给该条目的 JSON 文本。
@@ -556,6 +596,13 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   故登记为有意差异（ADR-0034 §决策 2）。
 > - **`key` 只绑在 URL 规则的 job 上**（ADR-0034 §决策 3）：其余 job 送 `null`，前奏删掉该全局名，
 >   所以字段规则里写 `{{key}}` 是 `js:error`，不会静默拿到空串。
+> - **`java.timeFormat(timestamp)` 的入参、格式与时区（2026-10-13 取证，上表只记形态与 pattern）：**
+>   入参是**毫秒时间戳**（JS `number` 或可转成数字的字符串，无法转换即 `js:error`）；输出固定
+>   `yyyy/MM/dd HH:mm`、**设备本地时区**、不补零以外的任何本地化（上游
+>   `JsExtensions.kt:678` + `AppConst.kt:40` 的 `FastDateFormat.getInstance("yyyy/MM/dd HH:mm")`，
+>   `FastDateFormat` 默认取 JVM 默认时区）。同为 worker 内同步、**不计**本表的调用额度。
+>   `timeFormatUTC(time, format, sh)`（同族，带时区偏移与自定义 pattern）**不在 M1**，
+>   登记去向见 `PLAN.md` §3.7。
 > - **致命与可吞的区别：** `http.*` 的传输失败只拒绝那次调用；`parse.*` 的边界与额度是**判决**
 >   ——判决先记下、等脚本停下来的那条结果回来时才交给调用方（脚本还在跑时不能把 worker 交给下一个
 >   job：同一运行时上跑两份求值会共享 `globalThis` 与作业队列），硬预算仍是「脚本永远不停」的兜底。
@@ -636,7 +683,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | 项 | 值 | 分期 |
 |---|---|---|
 | 同一书源默认并发上限 | 3 | M0 |
-| `concurrentRate` 覆盖 | 按书源声明解析 | M1 |
+| `concurrentRate` 覆盖 | `n/m` = 每 `m` **毫秒**内最多 `n` 次；单个整数 `x` = 每 `x` 毫秒 1 次；`"0"` / 空 = 不限；非法（非整数、`n <= 0`、`m <= 0`、`x <= 0`）→ 忽略该声明 + 一条 warning（回退默认并发）。与上行的「同一书源默认并发上限」**两门同时生效**，超限排队 | M1 |
 | 章节正文批量下载 | 必须串行或有限并发，禁止对单一域名无限并发 | M0 |
 | 缓存键 | `书源 ID + 规则字段 + URL + 页码` 的稳定哈希，必须带 TTL（C-NET-6） | M0 |
 
@@ -657,6 +704,24 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   —— **已落地（3.4）：** 规则里的 `http.*` 由桥转发到同一个 `HttpClient` 实例，预算键就是
 >   规则 job 的 `source.url`（同 §6）；上面的禁忌针对的是「持有槽位时再嵌套发起」，与桥无关
 >   （页面抓取的槽位在规则求值之前已释放）。
+>
+> **`concurrentRate` 的语法与合成规则（2026-10-13，M1-b0 裁决，理由与备选见 ADR-0036）：**
+> **语法与毫秒单位以上表为唯一出处**；上游依据是 `ConcurrentRateLimiter.kt:17-46`（`n/m` 解析）、
+> `:52-70`（`0` / 空 = 不限）、`:86`（原文注释「次数/毫秒」）、`:88-108`（超限 `delay` 重试），
+> 应用点是所有出网请求（`HttpHelper.kt:164` / `AnalyzeUrl.kt:121` / `JsExtensions.kt:512/538/569`）。
+> 本仓的合成规则：
+>
+> - **两门互不替代**：请求要**同时**通过速率门（`n/m` 滑窗）与并发门（默认 3）；量纲不同，不得用
+>   「取更严格的一条」这种没有定义的说法代替。
+> - **顺序固定为先取速率许可、再占并发槽位**：反过来会让等待中的请求白占并发槽位，
+>   3 个槽位被等待者占满即整源停摆。
+> - **超限排队、不报 busy**（C-SRC-9）；异常也释放槽位（与上文的并发门同一实现）。
+> - **速率门与并发门共用同一个实现点**（`DioHttpClient` 的 `RequestLimiter`，速率状态与并发槽位同键；
+>   该实现点归上文，本节不另立）：脚本的 `http.*` 与页面抓取自动共用同一份限速，**不得**为速率
+>   另开第二个实现点，也不得把速率参数提到 `HttpPolicy` / `JsBridge` 契约里（ADR-0030 §决策 2 的口径不变）。
+> - **默认不限速**：只有书源声明了 `concurrentRate` 才启用速率门；`HttpPolicy` 不新增默认速率字段。
+> - **触发条件：** 真实语料若证明作者把 `n/m` 当「次数/秒」，按 ADR-0036 §决策 8 出新 ADR，
+>   不得就地改单位；M1-b2 的验收包含「语料里 `concurrentRate` 取值分布 + 单位判断记录」。
 
 ---
 
@@ -666,6 +731,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 |---|---|
 | 单章正文失败 | 该章标记失败，不中断整本书的目录展示 |
 | 目录缺页 | 按 `nextTocUrl` 翻页，最多 50 页后停止并记录 warning（正文分页共用同一上限，见 §4.1） |
+| 发现页单页失败 | 只影响该分类：该分类报错 + 记录，其余分类与其余页面照常（发现页不进自动翻页队列，§4.2） |
 | 章节正文分页失败 | 该章**整次失败**，不返回被截断的正文（§4.1） |
 | 规则失效（0 结果） | 记录到书源健康度统计，UI 提示「规则可能已失效」 |
 | 书源整站改版 | 不做自动适配；由用户更新书源 |
@@ -720,3 +786,12 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 - 需要浏览器 DOM/BOM 的网页 JS、依赖 Android WebView 行为的规则
 - 提取段里的嵌套规则（矩阵 #30：末段本身是一条规则，如 `class.a@css:.b`；命中报 `unsupported:nested-rule`）
 - `<js>…</js>` JS 包装（矩阵 #31：任意位置、可作分隔符；命中报 `unsupported:<js>`）
+  —— **唯一例外：** 整个 `exploreUrl` 字段就是一个 `<js>…</js>` 时，按发现页整字段 JS 支持
+  （§4.2、ADR-0035 §决策 6）；它在规则体内的分隔符用法仍属 M2。
+- 发现页的**表单型分类**（`type` 为 `text` / `button` / `toggle` / `select`，以及 `chars` / `default` /
+  `action` / `style`）：M1 只支持 `type` 缺省或 `url`；命中报 `unsupportedRule` 并记录，
+  其余分类照常（§4.2）。
+- 发现页整字段 JS 的 `infoMap` 绑定、分类参数传递（`args` / 临时变量）与排名模块
+  （`executeForRanking` 一套）：均不在 M1；`infoMap` 命中即 `js:error`（§4.2）。
+- `java.timeFormatUTC(time, format, sh)`（带时区偏移与自定义 pattern）：不在 M1；
+  `java.timeFormat` 的语义见 §6。
