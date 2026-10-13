@@ -18,16 +18,23 @@ sealed class BookSourceRoute with _$BookSourceRoute {
   const factory BookSourceRoute.bookDetail({required Book book}) =
       BookDetailRoute;
 
+  /// The route that shows the source's discover page.
+  const factory BookSourceRoute.explore() = ExploreRoute;
+
   /// The route that shows the text of one chapter.
   const factory BookSourceRoute.reader({required Chapter chapter}) =
       ReaderRoute;
 
   /// The path this route is served under.
   String get path => switch (this) {
+    ExploreRoute() => _explorePath,
     BookDetailRoute() => _bookDetailPath,
     ReaderRoute() => _readerPath,
   };
 }
+
+/// Path of [ExploreRoute].
+const String _explorePath = '/explore';
 
 /// Path of [BookDetailRoute].
 const String _bookDetailPath = '/book';

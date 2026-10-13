@@ -59,6 +59,19 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
       appBar: AppBar(
         title: Text(l10n.bookSourceSearchTitle),
         backgroundColor: tokens.colors.surface,
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.explore_outlined),
+            tooltip: l10n.bookSourceExploreAction,
+            // 没有书源就没有可解析的 discover 规则集，与搜索按钮同口径禁用。
+            onPressed: source == null
+                ? null
+                : () => pushBookSourceRoute(
+                    context,
+                    const BookSourceRoute.explore(),
+                  ),
+          ),
+        ],
       ),
       body: Padding(
         padding: EdgeInsets.all(tokens.spacing.lg),

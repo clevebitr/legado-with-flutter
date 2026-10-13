@@ -277,6 +277,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This book source uses a rule type that is not supported yet.'**
   String get failureUnsupportedRule;
+
+  /// Title of the discover (exploreUrl) page.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get bookSourceExploreTitle;
+
+  /// Tooltip of the button that opens the discover page.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover page'**
+  String get bookSourceExploreAction;
+
+  /// Shown on the discover page before a category is opened.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a category to start browsing'**
+  String get bookSourceExplorePrompt;
+
+  /// Empty state: the source declares no exploreUrl categories.
+  ///
+  /// In en, this message translates to:
+  /// **'This book source has no discover categories'**
+  String get bookSourceExploreEmpty;
+
+  /// Shown when a discover category's page listed no usable book; distinct from bookSourceSearchEmpty, which mentions a keyword this screen never has.
+  ///
+  /// In en, this message translates to:
+  /// **'This category has no books.'**
+  String get bookSourceExploreEmptyCategory;
 }
 
 class _AppLocalizationsDelegate

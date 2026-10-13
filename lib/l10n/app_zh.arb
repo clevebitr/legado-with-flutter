@@ -29,5 +29,10 @@
   "legalNoticesViewLicense": "查看完整许可证",
   "legalNoticesCorrespondingSource": "对应源代码",
   "legalNoticesProhibitedUse": "禁止将本应用用于侵犯著作权。通过书源抓取、聚合或传播未经授权的内容属被禁止用途，实施者自行承担全部法律责任。",
-  "failureUnsupportedRule": "该书源使用了暂不支持的规则类型。"
+  "failureUnsupportedRule": "该书源使用了暂不支持的规则类型。",
+  "bookSourceExploreTitle": "发现",
+  "bookSourceExploreAction": "发现页",
+  "bookSourceExplorePrompt": "选择一个分类开始浏览",
+  "bookSourceExploreEmpty": "这本书源没有发现页分类",
+  "bookSourceExploreEmptyCategory": "这个分类下没有书目。"
 }
