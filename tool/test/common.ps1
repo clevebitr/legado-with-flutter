@@ -164,6 +164,7 @@ function Start-AndroidEmulator {
     .DESCRIPTION
         模拟器的 stdout/stderr 写入 `build/test-artifacts/android-emulator-<avd>.log[.err]`：
         模拟器一旦崩溃或自行退出，这是唯一的排错证据（`build/` 已被 .gitignore 覆盖）。
+        同一路径在下一轮启动前会轮转为 `.prev`，不覆盖：失败现场只在**那一轮**的日志里。
 
         **启动方式：优先「脱离当前进程树」。** 实测现象：当模拟器是本脚本的子进程时，
         它会在 `flutter test` 的 Gradle 构建期间被连带终止，随后 `adb install` 报
@@ -172,10 +173,25 @@ function Start-AndroidEmulator {
         powershell 去 `Start-Process` 模拟器：中间进程立即退出，模拟器不再属于本脚本的
         进程树（也不受外层工具可能施加的 job 限制）。
         若 WMI 不可用（权限或服务被禁），回退为普通子进程并给出警告。
+
+        **快照策略：只保证不「读」（`-no-snapshot-load`）。** 快照曾把这批用例的启动从
+        ~30 s 降到 ~10 s，但它也是「一测就半小时」的根源：`adb emu kill` 立刻返回，而模拟器
+        还要跑十几秒才写完快照（那几十字节的 `ram.bin` / `snapshot.pb` 才是关键）；脚本、
+        外层工具或手工 Ctrl-C 在这个窗口里退出，就留下**一份被截断的快照**，而
+        `config.ini` 的 `fastboot.forceFastBoot=yes` 会让之后每一轮都加载它——表现为
+        「加载成功但 guest 卡死、adbd 永远 `offline`、干等到超时」。冷启动一轮总共 ~70 s，
+        快照一轮 ~52 s：拿回这 ~20 s 不值这个不确定性。
+
+        **写入防不住，也不需要防。** 实测这版模拟器即使给了 `-no-snapshot-save`（并且 AVD 的
+        `quickbootChoice.ini` 里 `saveOnExit = false`）仍会在退出时写下
+        `snapshots/default_boot`（4 GB 的 `ram.img` + 几十字节的元数据）。所以本脚本的策略是
+        **只保证不读**：磁盘上那份东西是截断的还是完整的，对回归已经无所谓，也不会阻塞
+        下一轮（想省空间可手工删，本脚本不管）。
     #>
     param(
         [Parameter(Mandatory = $true)][string]$AvdName,
-        [switch]$Headless
+        [switch]$Headless,
+        [switch]$WipeData
     )
 
     $emulator = Get-EmulatorPath
@@ -190,14 +206,36 @@ function Start-AndroidEmulator {
     $logPath = Join-Path $ArtifactDir "android-emulator-$AvdName.log"
     $errorLogPath = "$logPath.err"
 
+    # 上一轮日志先轮转：`-RedirectStandardOutput` 是**截断**写，不转的话失败现场（模拟器
+    # 自己的 boot 检查、`device offline` 时间线）会被下一轮抹掉——实测踩到过。
+    # 转不动（上一轮进程还没完全退出、文件仍被占用）**不当作失败**：模拟器接下来会截断它。
+    foreach ($rotating in @($logPath, $errorLogPath)) {
+        if (-not (Test-Path $rotating)) {
+            continue
+        }
+        try {
+            Move-Item -Path $rotating -Destination "$rotating.prev" -Force -ErrorAction Stop
+        }
+        catch {
+            Write-Warning "日志轮转失败（$rotating）：$($_.Exception.Message)。继续运行，本轮会截断该日志。"
+        }
+    }
+
     $arguments = @('-avd', $AvdName, '-no-boot-anim')
     # `-crash-report-mode disabled`：实测本机在模拟器崩溃过一次后，每次启动都会弹出
     # crash 上报同意对话框（"Showing crashdialog to get consent."）并**阻塞开机**，
     # 无界面运行时永远起不来。关掉上报消除这个不确定性；模拟器自己的日志仍会写入文件。
     $arguments += @('-crash-report-mode', 'disabled')
+    # 快照只关「读」：写入这版模拟器防不住（见上面的快照策略段），但**不读**是可靠性的关键。
+    $arguments += @('-no-snapshot-load', '-no-snapshot-save')
     if ($Headless) {
         # `-no-window`：无界面运行，适合没有桌面会话或需要稳定复现的场景。
         $arguments += '-no-window'
+    }
+    if ($WipeData) {
+        # 真正的「新环境」：重置 userdata（代价是首次开机要重新初始化，比普通冷启动慢）。
+        $arguments += '-wipe-data'
+        Write-Host '    -WipeData：本次重置 AVD 的 userdata（完整首次开机，较慢）' -ForegroundColor Yellow
     }
 
     Write-Host "==> 启动 Android 模拟器：$AvdName（日志：$logPath）" -ForegroundColor Cyan
@@ -284,6 +322,158 @@ function Assert-AndroidDeviceOnline {
     }
 }
 
+function Get-AndroidEmulatorSnapshotPath {
+    <#
+    .SYNOPSIS
+        返回指定 AVD 的 `default_boot` 快照目录，不存在时返回 $null。
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$AvdName
+    )
+
+    $root = $env:ANDROID_AVD_HOME
+    if ([string]::IsNullOrWhiteSpace($root)) {
+        $root = Join-Path $env:USERPROFILE '.android\avd'
+    }
+    $snapshot = Join-Path (Join-Path $root "$AvdName.avd") 'snapshots\default_boot'
+    if (-not (Test-Path $snapshot)) {
+        return $null
+    }
+
+    return (Resolve-Path $snapshot).Path
+}
+
+function Remove-AndroidEmulatorSnapshot {
+    <#
+    .SYNOPSIS
+        删掉 AVD 的 `default_boot` 快照（本轮跑完的清理动作）。
+
+    .DESCRIPTION
+        模拟器每次退出都会写一份（~4 GB 的 `ram.img` + 几十字节元数据），而本脚本从来不读它；
+        不删就是每轮白写 4 GB、且把可能的截断状态一直留在磁盘上。
+        **必须在 `Wait-ForAndroidEmulatorExit` 之后调**，否则模拟器还在写。
+        删不掉只 warning：清理失败不该把一次已经跑完的回归弄成失败。
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$AvdName
+    )
+
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $snapshot = Get-AndroidEmulatorSnapshotPath -AvdName $AvdName
+        if ($null -eq $snapshot) {
+            return
+        }
+        try {
+            Remove-Item -Path $snapshot -Recurse -Force -ErrorAction Stop
+            Write-Host "    已清理本轮快照：$snapshot" -ForegroundColor DarkGray
+            return
+        }
+        catch {
+            if ($attempt -eq 3) {
+                Write-Warning "清理快照失败（$snapshot）：$($_.Exception.Message)。不影响本轮结果（本脚本从不读快照）。"
+                return
+            }
+            Start-Sleep -Seconds 3
+        }
+    }
+}
+
+function Get-AndroidEmulatorProcessIds {
+    <#
+    .SYNOPSIS
+        属于指定 AVD 的模拟器进程：启动器 `emulator.exe` 与它的 `qemu-system-*` 子进程，
+        两者的命令行里都带 `-avd <名字>`（实测核对过），所以不会误伤别的模拟器。
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$AvdName
+    )
+
+    $ids = @()
+    $candidates = Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -eq 'emulator.exe' -or $_.Name -like 'qemu-system*'
+    }
+    foreach ($candidate in $candidates) {
+        if ($candidate.CommandLine -and $candidate.CommandLine -like "*-avd $AvdName*") {
+            $ids += $candidate.ProcessId
+        }
+    }
+    return $ids
+}
+
+function Wait-ForAndroidEmulatorExit {
+    <#
+    .SYNOPSIS
+        等指定 AVD 的模拟器进程全部退出。
+
+    .DESCRIPTION
+        等的是**进程**（命令行带 `-avd <名字>` 的 `emulator.exe` / `qemu-system-*`），
+        而不是 `adb devices` 里的条目：条目比进程先消失，而进程还活着时下一轮的模拟器
+        启动会撞上它（实测：日志文件被占、新模拟器开机中途自己退出）。
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$AvdName,
+        [int]$TimeoutSeconds = 90
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (@(Get-AndroidEmulatorProcessIds -AvdName $AvdName).Count -eq 0) {
+            return $true
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    $ids = @(Get-AndroidEmulatorProcessIds -AvdName $AvdName)
+    if ($ids.Count -gt 0) {
+        Write-Warning "模拟器进程未在 $TimeoutSeconds 秒内退出（pid: $($ids -join ', ')）。"
+        return $false
+    }
+    return $true
+}
+
+function Stop-AndroidEmulator {
+    <#
+    .SYNOPSIS
+        尽力关掉模拟器（缺省挑第一个 `emulator-*`，含 `offline` 僵尸），并等它真正退出。
+
+    .DESCRIPTION
+        `run_android.ps1` 的 `finally` 原先只在 `Wait-ForAndroidBoot` **成功返回**后才关模拟器
+        （`$serial` 那时才被赋值），于是「开机超时」恰好是唯一不关它的路径：留下一个
+        `offline` 的僵尸占着 AVD 锁与 5554 端口，下一轮启动直接撞上。这里把判据交给调用方
+        （「是不是本脚本启动的」），并在这里兼容 `$Serial` 为空与设备处于 `offline` 两种情形。
+    #>
+    param(
+        [Parameter(Mandatory = $true)][string]$AvdName,
+        [string]$Serial,
+        [switch]$CleanSnapshot,
+        [int]$TimeoutSeconds = 90
+    )
+
+    $adb = Get-AdbPath
+    if ([string]::IsNullOrWhiteSpace($Serial)) {
+        # `Get-ConnectedAndroidSerial` 只认 `device` 状态，僵尸是 `offline`，所以另扫一遍。
+        foreach ($line in (& $adb devices)) {
+            if ($line -match '^(emulator-\d+)\s') {
+                $Serial = $Matches[1]
+                break
+            }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Serial)) {
+        Write-Host "==> 关闭模拟器 $AvdName（未拿到 serial，按进程收尾）" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "==> 关闭模拟器 $Serial" -ForegroundColor Cyan
+        & $adb -s $Serial emu kill 2>$null | Out-Null
+    }
+
+    Wait-ForAndroidEmulatorExit -AvdName $AvdName -TimeoutSeconds $TimeoutSeconds | Out-Null
+    if ($CleanSnapshot) {
+        Remove-AndroidEmulatorSnapshot -AvdName $AvdName
+    }
+}
+
 function Get-IntegrationTestFiles {
     <#
     .SYNOPSIS
@@ -307,12 +497,26 @@ function Invoke-IntegrationTests {
         （"Error waiting for a debug connection: The log reader stopped unexpectedly,
         or never started."），逐文件调用是本仓库在 Windows 上实测稳定的方式。
         细节与排错见 docs/dev/test-environment.md §5。
+
+        代价是**每个文件一次构建+安装**（Flutter 对每个测试文件都新建一个
+        `IntegrationTestTestDevice`，`flutter_platform.dart:469`），所以 `-FileFilter`
+        存在的意义就是：改了引擎/桥这类只在 `js_bridge` 里有覆盖的切片时，别再为另外两个
+        文件白付两次构建。合一条 `flutter test integration_test -d <device>` **省不掉**这个
+        （仍然是一文件一设备实例），只有 `-FileFilter` 或合并文件能省。
     #>
     param(
-        [Parameter(Mandatory = $true)][string]$DeviceId
+        [Parameter(Mandatory = $true)][string]$DeviceId,
+        [string]$FileFilter
     )
 
     $files = Get-IntegrationTestFiles
+    if (-not [string]::IsNullOrWhiteSpace($FileFilter)) {
+        $files = @($files | Where-Object { (Split-Path -Leaf $_) -like "*$FileFilter*" })
+        if ($files.Count -eq 0) {
+            throw "integration_test/ 下没有文件名包含 '$FileFilter' 的用例。"
+        }
+        Write-Host "==> 只跑匹配 '$FileFilter' 的用例文件（$($files.Count) 个）" -ForegroundColor Cyan
+    }
     if ($files.Count -eq 0) {
         Write-Host '==> 没有集成测试文件，跳过' -ForegroundColor Yellow
         return
