@@ -41,12 +41,26 @@ The first half of `PLAN.md` Phase 4: the five M1 syntaxes, implemented the way u
   per-source variable can hold rule text, so a self-reference could otherwise expand forever), and an
   unclosed `{{` stays literal inside a rule body (upstream's `{{[\w\W]*?}}` does not match it either)
   but is a `parseFailed` in a **URL**, where a literal `{{…}}` must never reach the request layer.
-- Tests: the engine gained 47 cases for the five syntaxes and their boundaries, the variable store
-  its own suite, the bridge the merge of a reported table, `decodeJsJavaRequest`, and a new
-  `page_fetch_service_test.dart` for paging rendering (60 new cases in all). Coverage exit 0
-  (`core` 822/822, `domain` 1477/1477). `integration_test/js_bridge_test.dart` gained four device
-  probes: the `java.*` whitelist entries, per-source variable isolation, the Java ↔ `@get:` round trip
-  in both directions, and the `key` binding being present in a URL job but not in a field job.
+- Tests: the engine gained 47 cases for the five syntaxes and their boundaries, the variable store a
+  suite of its own, the bridge the merge of a reported table, `decodeJsJavaRequest`, and a new
+  `page_fetch_service_test.dart` for paging rendering — **75 new cases in all** (504 → 579), plus the
+  review's 4. Coverage exit 0 (`core` 829/829, `domain` 1478/1478, 583 cases in all).
+  `integration_test/js_bridge_test.dart` gained **three** device probes (per-source variable isolation,
+  the Java ↔ `@get:` round trip in both directions, and the `key` binding being present in a URL job but
+  not in a field job), while its whitelist probe now also asserts the `java.*` entries — 16 → 19 cases.
+- **Architect review (2026-10-13), fixed on the branch:** `book-source.md` §3's case-insensitivity rule
+  was violated by the two new flags — the expansion step's pre-check compared case-sensitively, so
+  `@PUT:` failed with `unsupported:@PUT:` and `@GET:` with `unsupported:nested-rule` instead of
+  reading / writing the variable (upstream's `putPattern` / `getPattern` carry CASE_INSENSITIVE). Both
+  checks are case-insensitive now, with tests for the plain and the `{{…}}`-nested form. The
+  device-level probes were then run for real, on **Windows and Android** (`js_bridge` 19/19 on each,
+  exit 0), which caught the second defect: `jsBridge_whenAScriptWritesAJavaVariable_keepsItPerSource` built its
+  cross-job job by hand without the source **snapshot**, so its second `java.get` could only ever read
+  an empty table; the probe now carries `JsVariableStore.snapshot` in the job the way the engine does
+  and asserts the store merge as well. Also: the two copies of the reported-variable reader collapsed
+  into one `decodeJsVariables`, a `Map<String, String>` literal that would have thrown on
+  `java.put(key, null)` widened to `Map<String, String?>`, and two doc comments that had lost their
+  line break repaired.
 - Docs: `book-source.md` §3 (#15–#19 notes and their registered differences), §4 (URL template
   boundaries), §6 (the `java.*` / `key` rows, the store, the quota note), §7 (`parseFailed` triggers);
   `PLAN.md` §3.1/§3.5/§3.7; `docs/README.md` §2.1; `architecture.md` §1; **ADR-0034**.
