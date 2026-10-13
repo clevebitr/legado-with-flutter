@@ -575,5 +575,26 @@ void main() {
         expect(http.requestedSourceIds, <String>[source.url]);
       },
     );
+    test('execute_givenAnUpdateTimeRule_carriesItOnTheHit', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _searchUrl,
+          '<div class="result-list"><div class="result-item">'
+          '<div class="result-item-title"><a href="/book/1/">书名一</a></div>'
+          '<span class="time">2026/10/13 09:05</span></div></div>',
+        );
+      final BookSource source = _source();
+      final BookSource withUpdateTime = source.copyWith(
+        searchRule: source.searchRule.copyWith(updateTime: 'class.time@text'),
+      );
+
+      final List<Book> books = _data(
+        await SearchBooks(pages: _service(http).pages)
+            .execute(withUpdateTime, '剑来'),
+      );
+
+      // 展示用字符串：规则结果原文，模型与实体都不做日期解析（book-source.md §2）。
+      expect(books.single.updateTime, '2026/10/13 09:05');
+    });
   });
 }

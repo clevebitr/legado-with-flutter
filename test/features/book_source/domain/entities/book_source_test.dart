@@ -251,7 +251,6 @@ void main() {
           'loginUi',
           'loginUrl',
           'respondTime',
-          'ruleExplore',
           'ruleReview',
           'weight',
         ]),
@@ -259,7 +258,10 @@ void main() {
       expect(source.extra['customOrder'], 60);
       expect(source.extra['lastUpdateTime'], 1676448109528);
       expect(source.extra['enabledReview'], isFalse);
-      expect(source.extra['ruleExplore'], isEmpty);
+
+      // `ruleExplore` 自 M1-b1 起是建模字段，因此不再落进 extra（book-source.md §2）。
+      expect(source.exploreRule, isNotNull);
+      expect(source.exploreRule?.bookList, isNull);
     });
 
     test(
@@ -280,6 +282,7 @@ void main() {
         expect(source.contentRule.extra, isEmpty);
         expect(source.searchRule.extra, isEmpty);
         expect(source.bookInfoRule?.extra, isEmpty);
+        expect(source.exploreRule?.extra, isEmpty);
       },
     );
 
@@ -330,6 +333,10 @@ void main() {
         ...source.contentRule.toJson().keys,
         ...source.contentRule.extra.keys,
       }, containsAll(_nestedKeys(json, 'ruleContent')));
+      expect(<String>{
+        ...?source.exploreRule?.toJson().keys,
+        ...?source.exploreRule?.extra.keys,
+      }, containsAll(_nestedKeys(json, 'ruleExplore')));
     });
 
     test('fromJson_givenUnrecognisedKeys_dropsThem', () {
@@ -339,6 +346,94 @@ void main() {
 
       expect(source.extra, isEmpty);
       expect(source.tocRule.extra, isEmpty);
+    });
+  });
+
+  group('updateTime (M1-b1)', () {
+    /// A minimal source declaring `updateTime` in all four rule objects.
+    Map<String, Object?> sourceWithUpdateTime() => <String, Object?>{
+      'bookSourceName': '示例源',
+      'bookSourceUrl': 'https://example-novel.test',
+      'ruleSearch': <String, Object?>{
+        'bookList': 'li',
+        'updateTime': 'span.time@text',
+      },
+      'ruleExplore': <String, Object?>{
+        'bookList': 'li',
+        'updateTime': 'span.time@text',
+      },
+      'ruleBookInfo': <String, Object?>{'updateTime': 'p.time@text'},
+      'ruleToc': <String, Object?>{
+        'chapterList': 'dd',
+        'updateTime': '@js:java.timeFormat(result)',
+      },
+      'ruleContent': <String, Object?>{'content': 'div'},
+    };
+
+    test('fromLegadoJson_givenUpdateTimeRules_mapsAllFourPlaces', () {
+      // 四处同批建模（book-source.md §2）：值都是规则原文，模型不做日期解析，
+      // 章节侧那句 `java.timeFormat` 也只是一段脚本（§6 的绑定负责格式化）。
+      final BookSource source = BookSource.fromLegadoJson(
+        sourceWithUpdateTime(),
+      );
+
+      expect(source.searchRule.updateTime, 'span.time@text');
+      expect(source.exploreRule?.updateTime, 'span.time@text');
+      expect(source.bookInfoRule?.updateTime, 'p.time@text');
+      expect(source.tocRule.updateTime, '@js:java.timeFormat(result)');
+    });
+
+    test('toJson_givenUpdateTimeRules_reproducesTheLegadoKeys', () {
+      final BookSource source = BookSource.fromLegadoJson(
+        sourceWithUpdateTime(),
+      );
+      // 导出的形状以 `jsonEncode` 为准：freezed 的 `toJson()` 在**顶层**直接给出嵌套对象，
+      // 递归落成 JSON 是 `jsonEncode` 的 `toEncodable` 做的（§3.7 的导出项）。
+      final Map<String, Object?> exported =
+          jsonDecode(jsonEncode(source.toJson())) as Map<String, Object?>;
+
+      expect(
+        exported['ruleSearch'],
+        containsPair('updateTime', 'span.time@text'),
+      );
+      expect(
+        exported['ruleExplore'],
+        containsPair('updateTime', 'span.time@text'),
+      );
+      expect(
+        exported['ruleBookInfo'],
+        containsPair('updateTime', 'p.time@text'),
+      );
+      expect(
+        exported['ruleToc'],
+        containsPair('updateTime', '@js:java.timeFormat(result)'),
+      );
+
+      // 导出 / 导入一次不失真。
+      expect(BookSource.fromLegadoJson(exported), source);
+    });
+
+    test('fromLegadoJson_givenNoExploreRule_leavesItNull', () {
+      final Map<String, Object?> json = sourceWithUpdateTime()
+        ..remove('ruleExplore');
+
+      // 缺失与「声明了但 `bookList` 为空」是两件事：前者 `null`，后者由发现页 UseCase 整条回落
+      // searchRule（ADR-0035 §决策 3）。
+      expect(BookSource.fromLegadoJson(json).exploreRule, isNull);
+    });
+
+    test('fromLegadoJson_givenExploreOnlyKeys_keepsItsOwnExtra', () {
+      final Map<String, Object?> json = sourceWithUpdateTime();
+      (json['ruleExplore']! as Map<String, Object?>)['checkKeyWord'] =
+          'checkKeyWord规则';
+
+      final BookSource source = BookSource.fromLegadoJson(json);
+
+      expect(
+        source.exploreRule?.extra.keys,
+        unorderedEquals(<String>['checkKeyWord']),
+      );
+      expect(source.searchRule.extra, isEmpty);
     });
   });
 

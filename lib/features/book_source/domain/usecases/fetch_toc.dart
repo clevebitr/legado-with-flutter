@@ -153,6 +153,12 @@ final class FetchToc {
         'tocRule.isVip',
         sourceId: source.url,
       );
+      final ParseResult<String?> updateTime = await _pages.field(
+        rules.updateTime,
+        item,
+        'tocRule.updateTime',
+        sourceId: source.url,
+      );
 
       final String? chapterUrl = url.dataOrNull;
       if (chapterUrl == null || chapterUrl.isEmpty) {
@@ -167,6 +173,9 @@ final class FetchToc {
           name: name.dataOrNull ?? '',
           url: resolveAbsoluteUrl(chapterUrl, baseUrl),
           isVip: _isVip(vip.dataOrNull),
+          // 展示用字符串：规则结果原文（`java.timeFormat` 已在脚本里跑过），
+          // 这里不做日期解析（book-source.md §2）。
+          updateTime: updateTime.dataOrNull,
         ),
       );
     }

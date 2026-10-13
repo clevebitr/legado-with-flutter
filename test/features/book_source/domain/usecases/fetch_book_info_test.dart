@@ -211,5 +211,26 @@ void main() {
         expect(info.tocUrl, _bookUrl);
       },
     );
+    test('execute_givenAnUpdateTimeRule_carriesItOnTheBookInfo', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _bookUrl,
+          '<div id="info"><p class="time">2026/10/13 09:05</p></div>',
+        );
+      final BookSource source = _source();
+      final BookSource withUpdateTime = source.copyWith(
+        bookInfoRule: (source.bookInfoRule ?? const BookInfoRule()).copyWith(
+          updateTime: 'class.time@text',
+        ),
+      );
+
+      final BookInfo info = _data(
+        await FetchBookInfo(pages: _service(http))
+            .execute(withUpdateTime, _bookUrl),
+      );
+
+      // 展示用字符串：规则结果原文，模型不做日期解析（book-source.md §2）。
+      expect(info.updateTime, '2026/10/13 09:05');
+    });
   });
 }

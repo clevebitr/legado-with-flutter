@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4 b1: the four `updateTime` fields and the `java.timeFormat` binding (2026-10-13)
+
+The first slice of the M1 build order in `PLAN.md` §3.5.
+
+- **`updateTime` is modelled in all four places** upstream declares it (`SearchRule`, `BookInfoRule`,
+  `TocRule`, `ExploreRule`) and carried on the entities the rules fill (`Book`, `BookInfo`,
+  `Chapter`). The value is the rule result **as the source spelled it**: a display string, never
+  parsed as a date (`book-source.md` §2). The three use cases read it through the same `field()`
+  path every other optional field uses, so a rejected or missing `updateTime` rule degrades to
+  `null` with a warning instead of costing the stage (ADR-0026).
+- **`ExploreRule` is modelled here** (the nine list fields `SearchRule` carries, plus `updateTime`),
+  with `ruleExplore` mapped on `BookSource` and its unrecognised keys kept in `extra`. Upstream
+  fixes that shape in its `BookListRule` interface, so the two objects have to grow together
+  (ADR-0035 §决策 1). The `exploreUrl` forms, the classification parser and the fallback to
+  `searchRule` stay in b4a.
+- **`java.timeFormat(timestamp)`** is bound in the sandbox: milliseconds in (a number or a string
+  that reads as one), `yyyy/MM/dd HH:mm` out, the device's local zone — upstream's
+  `JsExtensions.kt:678` plus `AppConst.kt:40`. It is answered inside the worker, so it stays
+  synchronous and does not spend §6's per-rule call quota. An argument that cannot be read as a
+  timestamp (or is outside Dart's `DateTime` range) fails **that call**: the JSON envelope says
+  `ok:false` and the prelude raises a JS `Error`, which surfaces as `js:error` rather than a wrong
+  date. A fractional number is truncated towards zero, the way a Java `(long)` conversion of a JS
+  number behaves.
+- Tests: model round-trips for the four fields plus `ExploreRule`'s own `extra`, the entity field,
+  one wiring case per use case, the pure formatter (`formatTimestamp`), the millisecond / numeric
+  string / fractional / unusable inputs, and the call envelope. Coverage exit 0 (`core` 854/854,
+  `domain` 1497/1497). Device probes: **Windows `js_bridge` 21/21**, including the two new ones
+  (`java.timeFormat` returning the local rendering of a millisecond timestamp, and an unusable
+  argument failing as `js:error`).
+- **Two acceptance items are still open and belong to the next run**, both because the build
+  environment had no outbound network at the time: the **Android** device probe (its Gradle build
+  downloads `sqlite3`'s precompiled native asset from GitHub and timed out) and the **≥1 real-source
+  regression record** for `updateTime` / `java.timeFormat`. Neither is a code finding; both are
+  registered in `PLAN.md` §3.7 with what has to happen to close them.
+
 ### M1 spec front-loading: the explore page and `concurrentRate` (2026-10-13)
 
 Docs only. The remaining half of M1 needed three specs that did not exist yet (`exploreUrl`'s format and

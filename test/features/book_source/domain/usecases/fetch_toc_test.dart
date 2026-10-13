@@ -488,5 +488,25 @@ void main() {
         expect(chapters, hasLength(1));
       },
     );
+    test('execute_givenAnUpdateTimeRule_carriesItOnTheChapter', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _tocUrl,
+          '<div id="list"><dl><dd><a href="c1.html">第1章</a>'
+          '<span class="time">2026/10/13 09:05</span></dd></dl></div>',
+        );
+      final BookSource source = _source();
+      final BookSource withUpdateTime = source.copyWith(
+        tocRule: source.tocRule.copyWith(updateTime: 'class.time@text'),
+      );
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages)
+            .execute(withUpdateTime, _tocUrl),
+      );
+
+      // 章节侧常见的写法是 `@js:java.timeFormat(...)`（§6），但引擎只把结果当字符串。
+      expect(chapters.single.updateTime, '2026/10/13 09:05');
+    });
   });
 }

@@ -73,7 +73,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
 | Phase 3 — M0 横向铺开 | ✅ 完成 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）、3.4（`@js:` 接入 + 全部 JS 绑定与额度）、**3.7（真实源回归 → 矩阵 M0 状态列全「已确认」，G3 达成）**已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**3.9（charset 检测结果缓存）** 已完成，Phase 3 全部收口；下一步 = Phase 4（M1）。细节见 `CHANGELOG.md` |
-| Phase 4 — M1 | ⏳ 进行中 | **语法先行（矩阵 #15–#19）已完成（2026-10-12）**：`@@` / `@put:` / `@get:` / `java.put` / `java.get` / `{{}}`（URL 侧也含）/ `{}`，变量语义归 ADR-0034；矩阵状态列仍待真实源回归（见 §3.7）。**规格前置已完成（2026-10-13）**：**ADR-0035**（发现页）与 **ADR-0036**（`concurrentRate`），`book-source.md` §2/§4.2/§6/§8/§9/§11 同步。**未完成（按 §3.5 的 b1–b4）：** `updateTime`（含 `java.timeFormat`）、`concurrentRate`、`canReName` / `variableComment`、`exploreUrl` 发现页 |
+| Phase 4 — M1 | ⏳ 进行中 | **语法先行（矩阵 #15–#19）已完成（2026-10-12）**：`@@` / `@put:` / `@get:` / `java.put` / `java.get` / `{{}}`（URL 侧也含）/ `{}`，变量语义归 ADR-0034；矩阵状态列仍待真实源回归（见 §3.7）。**规格前置已完成（2026-10-13）**：**ADR-0035**（发现页）与 **ADR-0036**（`concurrentRate`），`book-source.md` §2/§4.2/§6/§8/§9/§11 同步。**b1 部分完成（2026-10-13）**：四处 `updateTime` + `java.timeFormat` + 承载实体字段（Windows 探针 21/21；Android 探针与真实源回归受构建环境网络阻塞，见 §3.7）。**未完成（按 §3.5 的 b2–b4）：** `concurrentRate`、`canReName` / `variableComment`、`exploreUrl` 发现页 |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
 
@@ -204,7 +204,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 步骤 | 内容 | 验收 |
 |---|---|---|
 | **b0** ✅ 已完成（2026-10-13） | **规格前置（架构师）**：ADR-0035 / ADR-0036；`book-source.md` §2（`ExploreRule` 行、四处 `updateTime`、`canReName` 不求值、`variableComment`、未建模字段去向）、新增 §4.2（发现页）、§6（`java.timeFormat` 入参/时区）、§8（`concurrentRate`）、§9、§11 | 开发组可**按规格直接实现**，不需要再猜；本节 b1–b4 的验收与本表一致 |
-| **b1** | `updateTime`（四处：`SearchRule` / `ExploreRule` / `BookInfoRule` / `TocRule`）+ 沙箱 `java.timeFormat`（worker 内同步、**不计**调用额度）；承载值的实体（`Book` / `BookInfo` / `Chapter`）补字段 | 六条门禁；时区 / 毫秒入参 / 非法入参（→ `js:error`）单测；设备探针**实跑** Windows + Android；≥1 条真实源回归记录（`book-source.md` §10 格式） |
+| **b1** ⏳ 部分完成（2026-10-13） | `updateTime`（四处：`SearchRule` / `ExploreRule` / `BookInfoRule` / `TocRule`）+ 沙箱 `java.timeFormat`（worker 内同步、**不计**调用额度）；承载值的实体（`Book` / `BookInfo` / `Chapter`）补字段 | 六条门禁 ✅；单测（时区 / 毫秒入参 / 非法入参 → `js:error`）✅；设备探针**实跑**：Windows ✅ 21/21（含 2 条新探针）、**Android 被构建环境网络阻塞**（`sqlite3` 原生资产要从 GitHub 下载，超时；见 §3.7）；**≥1 条真实源回归记录：待补**（当时无网络，见 §3.7） |
 | **b2** | `concurrentRate`：模型字段 + `RequestLimiter` 按 **ADR-0036** 落「先速率门、再并发门」；非法声明降级 + warning | 六条门禁；`n/m` / 单数字 / `"0"` / 空 / 非法 / 两门各自与合成的单测；**语料里 `concurrentRate` 取值分布与单位判断记录**；≥1 条真实源回归 |
 | **b3** | `canReName` + `variableComment` 建模（`canReName` 的规则**不求值**，见 §2 注记；消费方归 Phase 5） | 六条门禁；模型往返（含 `extra` 不丢键）单测；§3.7 登记消费去向 |
 | **b4a** | 发现页引擎 / UseCase：`exploreUrl` 两种形态 + 分类解析 + `ExploreBooks`（含 **整条回落**）+ 条目 URL 走 `renderUrl` | 六条门禁；ADR-0035 的四条登记差异各 ≥1 条单测；≥1 条真实源回归 |
@@ -246,6 +246,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `java.timeFormatUTC(time, format, sh)`（带时区偏移与自定义 pattern） | **不在 M1**：触发条件 = 真实语料出现；`java.timeFormat` 的入参 / 时区语义归 `book-source.md` §6 |
 | `canReName` 的**消费方**（覆盖已有书名 / 作者） | **Phase 5（书架 / 阅读器）**：上游 `BookInfo.kt:65-84` 只在有 Book 实体时才有意义；M1 只建模 + 把「是否允许改名」传出，且**不求值**该规则（有意差异，归 `book-source.md` §2 注记） |
 | `updateTime` 的**展示**（列表 / 详情 / 目录 UI） | **Phase 5**：M1-b1 只把它落到实体字段（四处），UI 展示随阅读器 / 书架一起做 |
+| **M1-b1 的两条验收项没做完（2026-10-13）：** ① 真实源回归记录（`updateTime` / `java.timeFormat`）；② Android 那一轮设备探针 | **待补**，原因都是**构建环境当时无外网**（不是代码问题）：① 需要下载真实源合集并访问活站点，做法见 `tool/spot_check/README.md` §3 与 `book-source.md` §10（记录写入前者）；② `flutter build apk` 的 native assets 要从 GitHub 下载 `sqlite3` 预编译产物（`SocketException: 信号灯超时`），恢复网络后按 `tool/test/run_android.ps1` 复跑并把结果写进 `test-environment.md` §4。**Windows 侧已跑：`js_bridge` 21/21（含 2 条新探针）。** |
 | ~~`spot_check --list` 不检查非搜索字段 URL 里的 `{…}`（矩阵 #19）~~ | **M1-b4b 验收**：判据扩到全部 URL 字段（`exploreUrl` 条目 / `nextTocUrl` / `bookUrl` / `nextContentUrl`）后再闭环；背景：候选源里出现过 `bookUrl: https://…/{$.novel_id}` 这类 M1 模板，而工具只对 `searchUrl` 查 `{`，选源时靠逐条审查规则串避开（`tool/spot_check/README.md` §6） |
 | ~~charset 检测结果缓存~~ | ✅ **已闭环（3.9，2026-10-12）**：`CharsetCache` 端口 + `CacheDao` 适配器，按「书源 ID + URL」缓存**嗅探**结果（声明车道不进缓存）；语义归 `book-source.md` §5 |
 | 按书源清理缓存（需加列 + 迁移） | **Phase 5.5** |

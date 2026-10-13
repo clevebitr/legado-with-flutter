@@ -284,39 +284,49 @@ JsHttpRequest? decodeJsHttpRequest(Object? args) {
 
 /// The verbs `java.*` binds (`docs/dev/book-source.md` §6, matrix #17).
 ///
-/// `java.timeFormat` is matrix #17's sibling and arrives with `updateTime` (`PLAN.md`
-/// Phase 4), so it is deliberately absent here: an unknown verb is answered with `null`
-/// and the prelude turns that into a JS `Error`, which is the explicit boundary C-SRC-4
-/// asks for at a binding boundary.
+/// An unknown verb is answered with `ok:false` and the prelude turns that into a JS `Error`,
+/// which is the explicit boundary C-SRC-4 asks for at a binding boundary.
 enum JsJavaOperation {
   /// `java.put(key, value)`: writes the source's variable.
   put,
 
   /// `java.get(key)`: reads the source's variable.
   get,
+
+  /// `java.timeFormat(time)`: formats a **milliseconds** timestamp (`book-source.md` §6).
+  timeFormat,
 }
 
 /// One validated `java.*` call, decoded in the worker isolate (§6).
 final class JsJavaRequest {
   /// Creates a request.
-  const JsJavaRequest({required this.operation, required this.key, this.value});
+  const JsJavaRequest({required this.operation, this.key, this.value});
 
   /// The verb the rule called.
   final JsJavaOperation operation;
 
-  /// The variable name.
-  final String key;
+  /// The variable name of a [JsJavaOperation.put] / [JsJavaOperation.get].
+  final String? key;
 
-  /// The value of a [JsJavaOperation.put]; `null` for a read, or for a write that
-  /// explicitly clears the variable.
-  final String? value;
+  /// The argument the rule passed.
+  ///
+  /// For a [JsJavaOperation.put] it is the value to write (`null` clears the variable); for
+  /// [JsJavaOperation.timeFormat] it is the timestamp the rule asked to format, **not**
+  /// coerced here, because a number and a numeric string are both legal and the type itself
+  /// decides whether the call can be answered (`book-source.md` §6).
+  ///
+  /// It stays `Object?` — the JS bridge boundary C-TYPE-1 allows — and every reader narrows
+  /// it before use.
+  final Object? value;
 }
 
 /// Reads one `java.*` call's arguments, or `null` when they are unusable (§6).
 ///
-/// The arguments are the prelude's, so they are JSON: `{operation, key, value}`. An
-/// unknown verb or a missing key is "malformed", which the prelude answers with a JS
-/// `Error` rather than a silent `undefined`.
+/// The arguments are the prelude's, so they are JSON: `{operation, key, value}`. A missing or
+/// non-string key on `put` / `get` and an unknown verb are "malformed", which the prelude
+/// answers with a JS `Error` rather than a silent `undefined`. `timeFormat`'s argument is
+/// deliberately **not** type-checked here: an unusable timestamp is a failed *call*, not a
+/// malformed envelope, and [applyJsJavaCall] turns it into the same `ok:false`.
 JsJavaRequest? decodeJsJavaRequest(Object? args) {
   final Map<String, Object?>? call = _jsonObjectOf(args);
   if (call == null) {
@@ -325,15 +335,31 @@ JsJavaRequest? decodeJsJavaRequest(Object? args) {
   final JsJavaOperation? operation = switch (call['operation']) {
     'put' => JsJavaOperation.put,
     'get' => JsJavaOperation.get,
+    'timeFormat' => JsJavaOperation.timeFormat,
     _ => null,
   };
-  final Object? key = call['key'];
-  final Object? value = call['value'];
-  if (operation == null || key is! String || value is! String?) {
+  if (operation == null) {
     return null;
   }
 
-  return JsJavaRequest(operation: operation, key: key, value: value);
+  final Object? key = call['key'];
+  final Object? value = call['value'];
+  switch (operation) {
+    case JsJavaOperation.timeFormat:
+      return JsJavaRequest(operation: operation, value: value);
+    case JsJavaOperation.get:
+      if (key is! String) {
+        return null;
+      }
+
+      return JsJavaRequest(operation: operation, key: key);
+    case JsJavaOperation.put:
+      if (key is! String || value is! String?) {
+        return null;
+      }
+
+      return JsJavaRequest(operation: operation, key: key, value: value);
+  }
 }
 
 /// Applies one `java.*` call to a job's variable snapshot (`docs/dev/book-source.md` §6,
@@ -362,11 +388,73 @@ String applyJsJavaCall(Map<String, String?> variables, Object? args) {
         'value': variables[call.key] ?? '',
       });
     case JsJavaOperation.put:
-      variables[call.key] = call.value;
+      variables[call.key ?? ''] = call.value as String?;
 
       return '{"ok":true}';
+    case JsJavaOperation.timeFormat:
+      final String? formatted = formatJsTimestamp(call.value);
+
+      return formatted == null
+          ? '{"ok":false}'
+          : jsonEncode(<String, Object?>{'ok': true, 'value': formatted});
   }
 }
+
+/// Formats the timestamp one `java.timeFormat` call passed (`docs/dev/book-source.md` §6,
+/// matrix #17), or `null` when the argument cannot be read as one.
+///
+/// The specification is upstream's `JsExtensions.timeFormat` (`:678`) plus
+/// `AppConst.dateFormat` (`:40`): the argument is a **milliseconds** timestamp — a JS number
+/// or a string that reads as one — the output is always `yyyy/MM/dd HH:mm`, and the zone is
+/// the **device's local** one (`DateTime.fromMillisecondsSinceEpoch` is local by default,
+/// like `FastDateFormat` reading the JVM default zone).
+///
+/// `null` means "this call cannot be answered": a missing / non-numeric / non-finite
+/// argument, or a value outside Dart's own `DateTime` range. The caller turns that into
+/// `ok:false`, which the prelude raises as a JS `Error` — the same loud boundary
+/// [applyCryptoOperation] uses for base64 it cannot decode. A fractional number is truncated
+/// towards zero, which is what a Java `(long)` conversion of a JS number does; a timestamp in
+/// milliseconds never carries a fraction, so the choice cannot hide a wrong number.
+String? formatJsTimestamp(Object? value) {
+  final num? number = switch (value) {
+    final int millis => millis,
+    final double millis => millis,
+    // JS 传字符串时前奏原样送过来（数字则保持数字），所以两种都要认。
+    final String text => num.tryParse(text.trim()),
+    _ => null,
+  };
+  if (number == null || (number is double && !number.isFinite)) {
+    return null;
+  }
+
+  final num rounded = number is double ? number.truncate() : number;
+  if (rounded > _maxDateTimeMilliseconds ||
+      rounded < -_maxDateTimeMilliseconds) {
+    return null;
+  }
+
+  return formatTimestamp(DateTime.fromMillisecondsSinceEpoch(rounded.toInt()));
+}
+
+/// Formats [instant] as `yyyy/MM/dd HH:mm`, the fixed pattern of `docs/dev/book-source.md` §6.
+///
+/// The zone is whatever [instant] carries: this is the pure half of the binding, so the
+/// pattern can be pinned by a test without depending on the machine's locale or timezone.
+String formatTimestamp(DateTime instant) {
+  final String month = '${instant.month}'.padLeft(2, '0');
+  final String day = '${instant.day}'.padLeft(2, '0');
+  final String hour = '${instant.hour}'.padLeft(2, '0');
+  final String minute = '${instant.minute}'.padLeft(2, '0');
+
+  return '${instant.year}/$month/$day $hour:$minute';
+}
+
+/// Dart's `DateTime` range in milliseconds, i.e. ±100 000 000 days around the epoch.
+///
+/// It is checked before the conversion because `DateTime.fromMillisecondsSinceEpoch` reports
+/// an out-of-range value as an `Error` (`RangeError`), which neither ADR-0022 nor C-ERR-2
+/// allows this layer to catch — and an unanswerable timestamp is a failed call, not a crash.
+const int _maxDateTimeMilliseconds = 8640000000000000;
 
 /// Reads the variable table a job or a result carries, ignoring anything unusable (§6,
 /// matrix #16 / #17).

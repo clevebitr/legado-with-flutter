@@ -8,6 +8,10 @@ part 'book.freezed.dart';
 /// These are plain domain entities: unlike the book source models they carry **no**
 /// JSON annotations, because their JSON form is not part of the domain language
 /// (ADR-0021 §决策 3 — the exception does not spread).
+///
+/// [updateTime] (and [BookInfo.updateTime] / [Chapter.updateTime]) is carried as the source
+/// spelled it: a display string, never a parsed date (`book-source.md` §2). The UI that shows
+/// it arrives with Phase 5, which is where its consumption is registered (`PLAN.md` §3.7).
 @freezed
 abstract class Book with _$Book {
   /// Creates a search hit.
@@ -25,6 +29,7 @@ abstract class Book with _$Book {
     String? intro,
     String? lastChapter,
     String? wordCount,
+    String? updateTime,
   }) = _Book;
 }
 
@@ -50,6 +55,7 @@ abstract class BookInfo with _$BookInfo {
     String? intro,
     String? lastChapter,
     String? wordCount,
+    String? updateTime,
   }) = _BookInfo;
 }
 
@@ -67,9 +73,14 @@ abstract class Chapter with _$Chapter {
   /// [isVip] is `false` unless the source's `isVip` rule produced a value upstream
   /// reads as true: `null`, an empty string, `false` and `0` all stay non-VIP
   /// (`book-source.md` §4.1).
+  ///
+  /// [updateTime] is the chapter's update time as the source spelled it — `null` when the
+  /// rule matched nothing. It is a **display** string: the engine does not parse it, and a
+  /// source that wants a formatted date asks `java.timeFormat` for one (§6).
   const factory Chapter({
     required String name,
     required String url,
     @Default(false) bool isVip,
+    String? updateTime,
   }) = _Chapter;
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
@@ -404,6 +406,122 @@ void main() {
       );
       expect(decodeJsVariables('token'), isEmpty);
       expect(decodeJsVariables(null), isEmpty);
+    });
+  });
+
+  group('formatJsTimestamp / formatTimestamp (M1-b1)', () {
+    test('formatTimestamp_givenAnInstant_writesTheFixedPattern', () {
+      // §6 的 pattern 是固定的 `yyyy/MM/dd HH:mm`，零截断到两位；月 / 日 / 时 / 分都补零。
+      expect(
+        formatTimestamp(DateTime.utc(2026, 10, 13, 9, 5)),
+        '2026/10/13 09:05',
+      );
+      expect(
+        formatTimestamp(DateTime.utc(2026, 1, 2, 3, 4)),
+        '2026/01/02 03:04',
+      );
+      expect(
+        formatTimestamp(DateTime.utc(2026, 12, 31, 23, 59)),
+        '2026/12/31 23:59',
+      );
+    });
+
+    test('formatJsTimestamp_givenMilliseconds_usesTheLocalZone', () {
+      // 入参是**毫秒**（不是秒），时区是设备本地（上游 FastDateFormat 取 JVM 默认时区）。
+      // 断言用同一个本地换算构造期望值，所以这条测试不依赖跑测试的机器在哪个时区。
+      expect(
+        formatJsTimestamp(1700000000000),
+        formatTimestamp(DateTime.fromMillisecondsSinceEpoch(1700000000000)),
+      );
+      expect(
+        formatJsTimestamp(0),
+        formatTimestamp(DateTime.fromMillisecondsSinceEpoch(0)),
+      );
+    });
+
+    test('formatJsTimestamp_givenANumericString_readsItAsMilliseconds', () {
+      // 上游收的是 `Long`，而 JS 里数字与数字串都可能传进来（§6 的入参说明）。
+      expect(
+        formatJsTimestamp('1700000000000'),
+        formatTimestamp(DateTime.fromMillisecondsSinceEpoch(1700000000000)),
+      );
+      expect(
+        formatJsTimestamp(' 1700000000000 '),
+        formatTimestamp(DateTime.fromMillisecondsSinceEpoch(1700000000000)),
+      );
+    });
+
+    test('formatJsTimestamp_givenAFraction_truncatesTowardsZero', () {
+      // Java 的 `(long)` 转换就是向零截断；毫秒时间戳不会有小数位，所以这不隐藏任何数字。
+      expect(
+        formatJsTimestamp(1.9),
+        formatTimestamp(DateTime.fromMillisecondsSinceEpoch(1)),
+      );
+      expect(
+        formatJsTimestamp(-1.9),
+        formatTimestamp(DateTime.fromMillisecondsSinceEpoch(-1)),
+      );
+    });
+
+    test('formatJsTimestamp_givenAnUnusableValue_returnsNull', () {
+      // 无法读成时间戳的入参一律 null（调用方转成 ok:false → JS `Error`，不是静默给错值）。
+      expect(formatJsTimestamp(null), isNull);
+      expect(formatJsTimestamp('abc'), isNull);
+      expect(formatJsTimestamp(''), isNull);
+      expect(formatJsTimestamp(true), isNull);
+      expect(formatJsTimestamp(<int>[1]), isNull);
+      expect(formatJsTimestamp(double.nan), isNull);
+      expect(formatJsTimestamp(double.infinity), isNull);
+      // 超出 Dart `DateTime` 范围的值：在这里就挡住，不去碰会抛 `Error` 的构造。
+      expect(formatJsTimestamp(9000000000000000), isNull);
+      expect(formatJsTimestamp(-9000000000000000), isNull);
+    });
+  });
+
+  group('applyJsJavaCall timeFormat (M1-b1)', () {
+    test('applyJsJavaCall_givenATimeFormatCall_answersTheFormattedValue', () {
+      expect(
+        jsonDecode(
+          applyJsJavaCall(<String, String?>{}, <String, Object?>{
+            'operation': 'timeFormat',
+            'value': 1700000000000,
+          }),
+        ) as Map<String, Object?>,
+        <String, Object?>{
+          'ok': true,
+          'value': formatTimestamp(
+            DateTime.fromMillisecondsSinceEpoch(1700000000000),
+          ),
+        },
+      );
+    });
+
+    test('applyJsJavaCall_givenAnUnusableTimestamp_reportsFailure', () {
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'timeFormat',
+          'value': 'not-a-time',
+        }),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'timeFormat',
+        }),
+        '{"ok":false}',
+      );
+    });
+
+    test('decodeJsJavaRequest_givenATimeFormatCall_keepsTheRawArgument', () {
+      final JsJavaRequest? call = decodeJsJavaRequest(<String, Object?>{
+        'operation': 'timeFormat',
+        'value': 5,
+      });
+
+      expect(call?.operation, JsJavaOperation.timeFormat);
+      expect(call?.key, isNull);
+      // 参数不在这里强制成字符串：数字与数字串都合法，形状由 `formatJsTimestamp` 定（§6）。
+      expect(call?.value, 5);
     });
   });
 
