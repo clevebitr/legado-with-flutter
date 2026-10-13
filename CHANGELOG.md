@@ -22,6 +22,29 @@ Docs only.
   the existing line endings so no whole-file rewrite appeared, and the two ways to settle it (or
   the rule to keep the current endings until then) are written down.
 
+### Phase 4 b4b: the discover page UI (2026-10-13)
+
+- **`ExplorePage` + `ExploreNotifier`** (`presentation/`): a horizontally scrolling row of
+  `ChoiceChip`s, then the books of the chosen category as `ListTile`s that open the existing book
+  detail route. The state machine tells apart the five screens the layers below can produce —
+  loading, "this source has no discover page" (empty), "`exploreUrl` is unreadable", "no category
+  opened yet", and "this category failed" — because they are all *successful* answers from the
+  engine. A failed category keeps the chip row visible so another one can be picked
+  (`book-source.md` §9), and it offers a retry.
+- **`BookSourceRoute.explore()`** carries the new page, and the search page's app bar gained a
+  tooltip-labelled entry to it (disabled without a selected source, like the search action itself,
+  C-UI-7). Four ARB keys were added in both locales: `bookSourceExploreTitle`,
+  `bookSourceExploreAction`, `bookSourceExplorePrompt`, `bookSourceExploreEmpty`.
+- Widget tests: no source; a source without categories (empty state); opening a category and
+  listing its books through the offline corpus (`ruleExplore` absent → the whole `searchRule`
+  fallback, ADR-0035 §决策 2); and a failing category that keeps the row and shows the failure with
+  a retry. Coverage exit 0 (`core` 920/920, `domain` 1660/1660).
+- **One assigned item was deliberately not done: tightening `tool/spot_check`'s “`{…}` in
+  non-search URL fields” criterion.** Its premise — such URL rules cannot be replayed before
+  matrix #19 lands — was overtaken by #19 being implemented in 3.7, so excluding those sources now
+  would filter out *runnable* ones, while changing the criterion moves the 353/253/122 numbers that
+  ADR-0032 and `tool/spot_check/README.md` quote. Registered in `PLAN.md` §3.7 with the two options.
+
 ### Phase 4 b4a: the discover-page engine and `ExploreBooks` (2026-10-13)
 
 - **`exploreUrl`'s two forms are in `domain/explore_categories.dart`** (pure) and

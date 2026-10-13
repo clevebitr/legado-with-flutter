@@ -106,4 +106,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get failureUnsupportedRule => '该书源使用了暂不支持的规则类型。';
+
+  @override
+  String get bookSourceExploreTitle => '发现';
+
+  @override
+  String get bookSourceExploreAction => '发现页';
+
+  @override
+  String get bookSourceExplorePrompt => '选择一个分类开始浏览';
+
+  @override
+  String get bookSourceExploreEmpty => '这本书源没有发现页分类';
 }

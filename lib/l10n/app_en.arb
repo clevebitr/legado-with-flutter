@@ -134,5 +134,21 @@
   "failureUnsupportedRule": "This book source uses a rule type that is not supported yet.",
   "@failureUnsupportedRule": {
     "description": "User-facing message for ParseFailureKind.unsupportedRule."
+  },
+  "bookSourceExploreTitle": "Discover",
+  "@bookSourceExploreTitle": {
+    "description": "Title of the discover (exploreUrl) page."
+  },
+  "bookSourceExploreAction": "Discover page",
+  "@bookSourceExploreAction": {
+    "description": "Tooltip of the button that opens the discover page."
+  },
+  "bookSourceExplorePrompt": "Pick a category to start browsing",
+  "@bookSourceExplorePrompt": {
+    "description": "Shown on the discover page before a category is opened."
+  },
+  "bookSourceExploreEmpty": "This book source has no discover categories",
+  "@bookSourceExploreEmpty": {
+    "description": "Empty state: the source declares no exploreUrl categories."
   }
 }

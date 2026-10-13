@@ -29,7 +29,14 @@ void main() {
         // 没有书源就没有可解析的规则集：按钮必须禁用，但仍带语义标签（C-UI-7）。
         expect(find.byTooltip(l10n.bookSourceSearchAction), findsOneWidget);
         expect(
-          tester.widget<IconButton>(find.byType(IconButton)).onPressed,
+          tester
+              .widget<IconButton>(
+                find.ancestor(
+                  of: find.byTooltip(l10n.bookSourceSearchAction),
+                  matching: find.byType(IconButton),
+                ),
+              )
+              .onPressed,
           isNull,
         );
       },
