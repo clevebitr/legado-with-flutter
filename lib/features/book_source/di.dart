@@ -4,8 +4,10 @@ import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/explore_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/fetch_explore_categories.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -59,3 +61,16 @@ FetchToc fetchToc(Ref ref) =>
 @riverpod
 FetchContent fetchContent(Ref ref) =>
     FetchContent(pages: ref.watch(pageFetchServiceProvider));
+
+/// Provides the use case that reads a source's discover-page categories.
+@riverpod
+FetchExploreCategories fetchExploreCategories(Ref ref) =>
+    FetchExploreCategories(
+      engine: ref.watch(ruleEngineProvider),
+      pages: ref.watch(pageFetchServiceProvider),
+    );
+
+/// Provides the use case that opens one discover-page category.
+@riverpod
+ExploreBooks exploreBooks(Ref ref) =>
+    ExploreBooks(pages: ref.watch(pageFetchServiceProvider));

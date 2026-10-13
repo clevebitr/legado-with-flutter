@@ -36,6 +36,11 @@ enum BookSourceType {
 /// counters (`lastUpdateTime` / `respondTime` / `weight` / `customOrder`) arrive
 /// with Phase 5 (`PLAN.md` 5.4). Everything unmodelled survives in [extra].
 ///
+/// [exploreUrl] is the discover page's declaration (`book-source.md` §4.2): either a separated
+/// `标题::URL` string or one whole-field script. It stays raw text here — the two forms and every
+/// entry rule live in the explore use cases (ADR-0035) — and a source without one is a normal
+/// source whose discover page is simply empty.
+///
 /// [concurrentRate] is the source's own rate declaration (`book-source.md` §8). It stays the
 /// raw text here: the request layer parses it where the budget is spent, because the rate gate
 /// is keyed by the source URL and has to cover the `http.*` calls of `@js:` rules too
@@ -62,6 +67,7 @@ abstract class BookSource with _$BookSource {
     @_HeaderJsonConverter()
     Map<String, String>? headers,
     String? searchUrl,
+    @JsonKey(name: 'exploreUrl') String? exploreUrl,
     @JsonKey(name: 'ruleSearch') required SearchRule searchRule,
     @JsonKey(name: 'ruleExplore') ExploreRule? exploreRule,
     @JsonKey(name: 'concurrentRate') String? concurrentRate,

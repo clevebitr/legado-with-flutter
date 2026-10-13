@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4 b4a: the discover-page engine and `ExploreBooks` (2026-10-13)
+
+- **`exploreUrl`'s two forms are in `domain/explore_categories.dart`** (pure) and
+  `domain/usecases/fetch_explore_categories.dart` (the script form): a separated `标题::URL` string
+  split on runs of `&&` or newlines, or **one whole-field script** (`@js:` / `<js>…</js>`,
+  case-insensitive) whose result may be a JSON array or the very same separated string.
+  `BookSource.exploreUrl` keeps the declaration as raw text; a source without one answers an
+  **empty list** rather than a failure.
+- **The whole-field script runs through the new `RuleEngine.evaluateJs`**, which returns the
+  sandbox's **raw** value: the array form has to survive as a value, and going through
+  `extractFirst` would split it into one value per element (matrix #8). The job carries the field's
+  documented bindings (ADR-0035 §决策 4): `baseUrl` is the book source URL, `page` is 1, `result`
+  is null, no `key` is bound and there is no `parse.*` page scope. Rejected entries (blank title,
+  missing URL, no `::`, form categories) are logged with the field path and a reason and skipped,
+  so the rest of the page still opens (C-SRC-4); a `<js>` without `</js>` fails the field with
+  `exploreUrl:js-not-closed` and runs nothing (registered difference ①), and a script that fails or
+  returns neither shape fails the field as `parseFailed` (registered difference ④).
+- **`ExploreBooks` reads one category page** with the whole-rule fallback ADR-0035 §决策 2 asks
+  for: `ruleExplore` when it declares a `bookList`, otherwise the **entire** `searchRule`, with the
+  bookkeeping field prefix (`exploreRule.` / `searchRule.`) following the winner. The category URL
+  goes through the shared URL rendering and is resolved against the book source URL (§4), so
+  `/list/{{page}}.html` — the normal spelling — works, and a rule head inside it is refused by name
+  (`unsupported:@@`). One call reads one page and never walks pages itself.
+- **The nine list fields gained one reader** (`BookListFields` + `readBooks`): `SearchRule` and
+  `ExploreRule` carry the same shape by upstream's `BookListRule` interface (`book-source.md` §2),
+  so the search stage now uses the same reader instead of its own copy and the two cannot drift.
+  A relative `searchUrl` is resolved the same way a category URL is — a latent gap the same §4 rule
+  closes.
+- Tests: the parsers' shapes (both separators, a single `&` inside a URL, every rejection reason,
+  JSON array / JSON object / broken JSON, all four form category types), the categories use case
+  (no declaration, string form, array result, string result, wrong-typed result, both JS wrappers
+  with case-insensitivity, the unclosed wrapper, a failing script, the job's bindings, the logged
+  rejection), and the books use case (explore rule, both fallback shapes, "only the winner is used",
+  a `{{page}}` template, a rule head in the URL, an item without a URL, a rejected list rule, a
+  failing category page). Coverage exit 0 (`core` 920/920, `domain` 1657/1657).
+- Docs: `book-source.md` §4.2 implementation note, including the two specification gaps this slice
+  had to decide (an absent `exploreUrl`, and resolving relative category URLs) — both registered in
+  `PLAN.md` §3.7; `PLAN.md` §3.1/§3.5/§3.7; `tool/coverage_allowlist.txt` (the new freezed entity).
+  The discover-page **real-source** record waits for b1b, as assigned.
+
+- **Architect integration (2026-10-13):** this slice and b3 were both branched from `22371de` (b2),
+  which predates the ADR-0037 documentation merge, so they were squashed onto the current `main`
+  in review order (b3 first) and the two conflicts resolved by hand — `CHANGELOG.md` (both entries
+  kept) and `PLAN.md` (§3.5's status row and step table). The generated `book_source.freezed.dart`
+  was regenerated from the merged model instead of being hand-merged, which is what the
+  generated-files gate then verified. Re-run on the integrated tree: 661 cases, `core` 920/920,
+  `domain` 1660/1660, Windows `js_bridge` 21/21, all exit 0.
+
 ### Phase 4 b3: `canReName` and `variableComment` are modelled (2026-10-13)
 
 - **`BookInfoRule.canReName` keeps the raw rule text**, because upstream never evaluates it:

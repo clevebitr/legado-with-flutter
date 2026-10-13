@@ -358,3 +358,102 @@ final class FetchContentProvider
 }
 
 String _$fetchContentHash() => r'4a48d6dd089853876a732c1e83fc2b61f1a34f56';
+
+/// Provides the use case that reads a source's discover-page categories.
+
+@ProviderFor(fetchExploreCategories)
+final fetchExploreCategoriesProvider = FetchExploreCategoriesProvider._();
+
+/// Provides the use case that reads a source's discover-page categories.
+
+final class FetchExploreCategoriesProvider
+    extends
+        $FunctionalProvider<
+          FetchExploreCategories,
+          FetchExploreCategories,
+          FetchExploreCategories
+        >
+    with $Provider<FetchExploreCategories> {
+  /// Provides the use case that reads a source's discover-page categories.
+  FetchExploreCategoriesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'fetchExploreCategoriesProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$fetchExploreCategoriesHash();
+
+  @$internal
+  @override
+  $ProviderElement<FetchExploreCategories> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  FetchExploreCategories create(Ref ref) {
+    return fetchExploreCategories(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(FetchExploreCategories value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<FetchExploreCategories>(value),
+    );
+  }
+}
+
+String _$fetchExploreCategoriesHash() =>
+    r'066872b260152d04964c630b72583af2748ce896';
+
+/// Provides the use case that opens one discover-page category.
+
+@ProviderFor(exploreBooks)
+final exploreBooksProvider = ExploreBooksProvider._();
+
+/// Provides the use case that opens one discover-page category.
+
+final class ExploreBooksProvider
+    extends $FunctionalProvider<ExploreBooks, ExploreBooks, ExploreBooks>
+    with $Provider<ExploreBooks> {
+  /// Provides the use case that opens one discover-page category.
+  ExploreBooksProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'exploreBooksProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$exploreBooksHash();
+
+  @$internal
+  @override
+  $ProviderElement<ExploreBooks> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  ExploreBooks create(Ref ref) {
+    return exploreBooks(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ExploreBooks value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ExploreBooks>(value),
+    );
+  }
+}
+
+String _$exploreBooksHash() => r'85b8bacec5fa339e01b4afc0d3e18c4fc42c9989';

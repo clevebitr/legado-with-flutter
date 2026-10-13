@@ -204,6 +204,44 @@ final class RuleEngine {
   final JsBridge _jsBridge;
   final JsVariableStore _variables;
 
+  /// Evaluates one **whole-field** JavaScript expression and returns its raw value.
+  ///
+  /// It exists for `exploreUrl` (`book-source.md` §4.2, ADR-0035 §决策 4): the field may be a
+  /// single JS expression whose result is a JSON **array** or a separated string, and the array
+  /// form has to survive as a value. Going through [extractFirst] would not do: that path turns a
+  /// list into one value per element (matrix #8), which is right for rules and wrong here.
+  ///
+  /// The sandbox sees the same surface as any other `@js:` rule ([JsJob]), with the field's own
+  /// bindings: [context] carries `baseUrl` / `page` / `source` (`page` is 1 and `baseUrl` is the
+  /// book source URL for this field, ADR-0035 §决策 4), `result` is `null` because no page has been
+  /// fetched, and **no `key`** is bound. `parse.*` is not offered: a whole-field expression has no
+  /// page scope, so a rule using it gets `js:parse-scope` instead of an empty answer (C-SRC-4).
+  ///
+  /// The variables of `@put:` / `@get:` / `java.*` are the source's, exactly as everywhere else
+  /// (ADR-0034). A script error, a timeout or a quota overrun come back as
+  /// [ParseFailureKind.parseFailed] with the bridge's marker, never as a thrown exception.
+  Future<ParseResult<Object?>> evaluateJs(
+    String script, {
+    required String rulePath,
+    required JsPageContext context,
+  }) async {
+    if (script.trim().isEmpty) {
+      return const ParseSuccess<Object?>(null);
+    }
+
+    return _jsBridge.evaluate(
+      JsJob(
+        script: script,
+        rulePath: rulePath,
+        baseUrl: context.baseUrl,
+        page: context.page,
+        source: context.source,
+        sourceHeaders: context.headers,
+        variables: _variables.snapshot(context.source.url),
+      ),
+    );
+  }
+
   /// Returns every element matched by the **list** rule [rule] inside [scope].
   ///
   /// Every `@`-separated segment is a selector here, because `bookList` and

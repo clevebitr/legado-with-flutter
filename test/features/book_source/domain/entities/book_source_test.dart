@@ -244,7 +244,6 @@ void main() {
           'enabledCookieJar',
           'enabledExplore',
           'enabledReview',
-          'exploreUrl',
           'lastUpdateTime',
           'loginCheckJs',
           'loginUi',
@@ -261,6 +260,8 @@ void main() {
       // `concurrentRate` 自 M1-b2 起是建模字段（原文保留，解析在请求层），
       // `ruleExplore` 自 M1-b1 起是建模字段，两者都不再落进 extra。
       expect(source.concurrentRate, '');
+      // `exploreUrl` 自 M1-b4a 起是建模字段（两种形态 / 条目语义归 §4.2 与 UseCase）。
+      expect(source.exploreUrl, '');
       expect(source.exploreRule, isNotNull);
       expect(source.exploreRule?.bookList, isNull);
     });
