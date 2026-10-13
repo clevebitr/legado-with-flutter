@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Troubleshooting row for the per-worktree native-asset cache (2026-10-13)
+
+Docs only, one row in `test-environment.md` §6: every fresh `git worktree` has its own
+`.dart_tool/hooks_runner/shared/sqlite3/`, so a new worktree has to download the precompiled
+SQLite library again — and on a network blip `flutter test` / `flutter run` fail with
+`By default, this package downloads a pre-compiled SQLite library` plus a `SocketException`.
+The row records the worked-around fix (copy the cached directory from a worktree that already
+ran) and that changing `pubspec.yaml` or adding a local sqlite3 is the wrong reaction. This is
+the same download that blocked the Android device probe twice.
+
 ### Evidence refresh and two registrations after b3 + b4a (2026-10-13)
 
 Docs only.
