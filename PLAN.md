@@ -73,7 +73,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | Phase 1 — core 基础设施 | ✅ 完成 | 六条门禁全绿（含覆盖率门禁，阈值与判定见 `docs/dev/testing.md` §2）。交付物见 3.2；过程记录见 `CHANGELOG.md` |
 | Phase 2 — 书源引擎竖切 | ✅ 完成（2.1–2.7） | 四个 UseCase + `RuleEngine` + 最小 UI；G2a 达成（ADR-0024）。交付物见 3.3 |
 | Phase 3 — M0 横向铺开 | ✅ 完成 | 3.1 默认规则语法、3.2（连接符 / `@css:` / `@json:` / `RuleScope` / ADR-0026 降级 / 3.6 九个 kind）、3.5（`nextTocUrl` / `nextContentUrl` / `isVip` / `replaceRegex`）、3.8（同一书源并发预算）、3.3（`JsBridge` 机制 + 同步绑定）、3.4（`@js:` 接入 + 全部 JS 绑定与额度）、**3.7（真实源回归 → 矩阵 M0 状态列全「已确认」，G3 达成）**已完成；真实站点 spot-check 已达（**G2b 达成，2026-10-12**，见 `tool/spot_check/`）；**3.9（charset 检测结果缓存）** 已完成，Phase 3 全部收口；下一步 = Phase 4（M1）。细节见 `CHANGELOG.md` |
-| Phase 4 — M1 | ⏳ 进行中 | **语法先行（矩阵 #15–#19）已完成（2026-10-12）**：`@@` / `@put:` / `@get:` / `java.put` / `java.get` / `{{}}`（URL 侧也含）/ `{}`，变量语义归 ADR-0034；矩阵状态列仍待真实源回归（见 §3.7）。**规格前置已完成（2026-10-13）**：**ADR-0035**（发现页）与 **ADR-0036**（`concurrentRate`），`book-source.md` §2/§4.2/§6/§8/§9/§11 同步。**未完成（按 §3.5 的 b1–b4）：** `updateTime`（含 `java.timeFormat`）、`concurrentRate`、`canReName` / `variableComment`、`exploreUrl` 发现页 |
+| Phase 4 — M1 | ⏳ 进行中 | **语法先行（矩阵 #15–#19）已完成（2026-10-12）**：`@@` / `@put:` / `@get:` / `java.put` / `java.get` / `{{}}`（URL 侧也含）/ `{}`，变量语义归 ADR-0034；矩阵状态列仍待真实源回归（见 §3.7）。**规格前置已完成（2026-10-13）**：**ADR-0035**（发现页）与 **ADR-0036**（`concurrentRate`），`book-source.md` §2/§4.2/§6/§8/§9/§11 同步。**b1 已完成（2026-10-13，含复核）**：四处 `updateTime` + `java.timeFormat` + 承载实体字段，双端探针 21/21。**下一步：b1b（`java.*` 规则求值族，需 ADR-0037）与 b2 / b3 可并行；b4a 依赖 b1 + b0（已就绪）** |
 | Phase 5 — 阅读体验 | ⏳ 未开始 | — |
 | Phase 6 — 发布前 | ⏳ 未开始 | 清单见 §5 |
 
@@ -204,7 +204,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 步骤 | 内容 | 验收 |
 |---|---|---|
 | **b0** ✅ 已完成（2026-10-13） | **规格前置（架构师）**：ADR-0035 / ADR-0036；`book-source.md` §2（`ExploreRule` 行、四处 `updateTime`、`canReName` 不求值、`variableComment`、未建模字段去向）、新增 §4.2（发现页）、§6（`java.timeFormat` 入参/时区）、§8（`concurrentRate`）、§9、§11 | 开发组可**按规格直接实现**，不需要再猜；本节 b1–b4 的验收与本表一致 |
-| **b1** | `updateTime`（四处：`SearchRule` / `ExploreRule` / `BookInfoRule` / `TocRule`）+ 沙箱 `java.timeFormat`（worker 内同步、**不计**调用额度）；承载值的实体（`Book` / `BookInfo` / `Chapter`）补字段 | 六条门禁；时区 / 毫秒入参 / 非法入参（→ `js:error`）单测；设备探针**实跑** Windows + Android；≥1 条真实源回归记录（`book-source.md` §10 格式） |
+| **b1** ✅ 已完成（2026-10-13，含架构师复核） | `updateTime`（四处：`SearchRule` / `ExploreRule` / `BookInfoRule` / `TocRule`）+ 沙箱 `java.timeFormat`（worker 内同步、**不计**调用额度）；承载值的实体（`Book` / `BookInfo` / `Chapter`）补字段 | 六条门禁 ✅（599 用例、`core` 858/858、`domain` 1497/1497）；单测（时区 / 毫秒入参 / 小数截断 / 非法入参 → `js:error`）✅；设备探针**实跑**：Windows ✅ 21/21、**Android ✅ 21/21**（网络恢复后架构师复跑，`test-environment.md` §7）；**真实源记录**：派生源已把 `java.timeFormat` 的返回值坐实到 `Chapter.updateTime`（`tool/spot_check/README.md` §4）；语料主流写法依赖 `java.getString` → 归 **b1b** |
+| **b1b**（待开工） | **`java.*` 的规则求值族**：`java.getString` / `getStringList` / `getElement` / `getElements`（对**当前 scope** 的嵌套求值）+ 纯计算成员别名（`md5Encode` / `base64*` / `encodeURI` / `log*`）；**先出 ADR-0037**（形态与白名单逐族裁决，证据见 §3.7） | 六条门禁；每个新成员 ≥1 条单测（含当前 scope 与递归边界）；设备探针实跑双端；用真实语料里 `{{java.timeFormat(java.getString('…')*1000)}}` 的源完成 b1 的语料回归记录 |
 | **b2** | `concurrentRate`：模型字段 + `RequestLimiter` 按 **ADR-0036** 落「先速率门、再并发门」；非法声明降级 + warning | 六条门禁；`n/m` / 单数字 / `"0"` / 空 / 非法 / 两门各自与合成的单测；**语料里 `concurrentRate` 取值分布与单位判断记录**；≥1 条真实源回归 |
 | **b3** | `canReName` + `variableComment` 建模（`canReName` 的规则**不求值**，见 §2 注记；消费方归 Phase 5） | 六条门禁；模型往返（含 `extra` 不丢键）单测；§3.7 登记消费去向 |
 | **b4a** | 发现页引擎 / UseCase：`exploreUrl` 两种形态 + 分类解析 + `ExploreBooks`（含 **整条回落**）+ 条目 URL 走 `renderUrl` | 六条门禁；ADR-0035 的四条登记差异各 ≥1 条单测；≥1 条真实源回归 |
@@ -246,6 +247,9 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | `java.timeFormatUTC(time, format, sh)`（带时区偏移与自定义 pattern） | **不在 M1**：触发条件 = 真实语料出现；`java.timeFormat` 的入参 / 时区语义归 `book-source.md` §6 |
 | `canReName` 的**消费方**（覆盖已有书名 / 作者） | **Phase 5（书架 / 阅读器）**：上游 `BookInfo.kt:65-84` 只在有 Book 实体时才有意义；M1 只建模 + 把「是否允许改名」传出，且**不求值**该规则（有意差异，归 `book-source.md` §2 注记） |
 | `updateTime` 的**展示**（列表 / 详情 / 目录 UI） | **Phase 5**：M1-b1 只把它落到实体字段（四处），UI 展示随阅读器 / 书架一起做 |
+| ~~M1-b1 的两条验收项（2026-10-13 复核）~~ | ① **部分闭环（架构师 2026-10-13）：** 派生源（只改 `ruleToc.updateTime` 一条规则）在活站点上把 `java.timeFormat` 的返回值坐实到了 `Chapter.updateTime`（`2023/11/15 06:13`，记录见 `tool/spot_check/README.md` §4）；**语料主流写法仍未证** —— 184 条用 `java.timeFormat` 的源主流是 `{{java.timeFormat(java.getString('$.x')*1000)}}`，先要 **`java.getString`（见下一行 b1b）**。② ✅ **已闭环（2026-10-13）**：网络恢复后复跑 `tool/test/run_android.ps1` —— 模拟器 `Medium_Phone` 上三个用例文件全过、`js_bridge` **21/21**（退出码 0），记录已写入 `test-environment.md` §7 |
+| **`java.*` 绑定名与真实语料的缺口（2026-10-13 架构师取证；**ADR-0037 待出**）** | 全量 3907 条里 **540 条**用 `java.*`（用法计数）：`md5Encode` 1221 · `put` 1070 · `get` 1048 · `ajax` 866 · **`getString` 603** · `base64DecodeToByteArray` 328 · `timeFormat` 297 · `log` 250 · `encodeURI` 138 · `getElements` 84 · `base64Encode` 84 · `base64Decode` 71 · `setContent` 62 · `getElement` 45 · `getStringList` 36 · crypto 变体（`aesBase64DecodeToString` 51 / `HMacHex` 38 / `createSymmetricCrypto` 16 …） · Rhino 互操作（`java.lang` 234 / `java.security` 45 / `java.util` 34） · UI（`toast` 36 / `longToast` 24 / `startBrowserAwait` 16）。本仓白名单用的是自己的名字（`http.*` / `parse.*` / `log.*` / `crypto.*`），而语料用的是 `java.*` —— **需 ADR-0037 逐族裁决**：纯计算成员可别名（`md5Encode` / `base64*` / `encodeURI` / `log`）；`java.getString` 族 = 「对**当前 scope** 的嵌套求值」（`parse.*` 要显式 `doc`，形态不同，且它是 b1 回归的前置，可能需 Promise 形态）；`ajax` / `get` / `post` 形态冲突（上游同步返回 body）**不别名**；Rhino 互操作、UI / 多步成员、密钥类 crypto 归 M2 并报 `js:error` |
+| `tool/spot_check` 的 `--list` 判据口径（2026-10-13 已更新一次） | ✅ **已闭环（架构师 2026-10-13）：** 判据随已实现语法收放（`@put:` / `@get:` / `{{}}` 不再排除），合集 C 的普查从 266/192/69 变为 **353/253/122**（记录与复跑命令见 `tool/spot_check/README.md` §3）；残留的保守项是搜索 URL 只认三个 M0 模板（`{…}` 一律排除），归 M1-b4b 的判据收紧 |
 | ~~`spot_check --list` 不检查非搜索字段 URL 里的 `{…}`（矩阵 #19）~~ | **M1-b4b 验收**：判据扩到全部 URL 字段（`exploreUrl` 条目 / `nextTocUrl` / `bookUrl` / `nextContentUrl`）后再闭环；背景：候选源里出现过 `bookUrl: https://…/{$.novel_id}` 这类 M1 模板，而工具只对 `searchUrl` 查 `{`，选源时靠逐条审查规则串避开（`tool/spot_check/README.md` §6） |
 | ~~charset 检测结果缓存~~ | ✅ **已闭环（3.9，2026-10-12）**：`CharsetCache` 端口 + `CacheDao` 适配器，按「书源 ID + URL」缓存**嗅探**结果（声明车道不进缓存）；语义归 `book-source.md` §5 |
 | 按书源清理缓存（需加列 + 迁移） | **Phase 5.5** |
@@ -253,7 +257,7 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | 真实站点 spot-check（G2b） | ✅ **已闭环（2026-10-12）**：四段链路与派生 `@css:` 等价验证记录见 `tool/spot_check/README.md`；衍生的 **ADR-0032**（未知类型 → CSS）已落地，**ADR-0031**（已声明车道宽容解码）已实现 |
 | JSON 接口源的 URL 规则依赖 #16–#19（`@put:` / `@get:` / `{}` / `{{}}`） | **3.3 之后重排 M1 优先级**：211 条真实书源中 2 条用 `@json:`，其 URL 规则全部依赖上述 M1 模板，M0 下无法逐字回放（证据见 ADR-0028 §后果、`test/fixtures/json/README.md`） |
 | `{{}}` 内嵌规则（矩阵 #18）当前按「未定义变量」→ 空串 + warning | **Phase 4** 落地 #18 时改为求值，并同步矩阵状态列 |
-| `extra` 的导出合并（`toLegadoJson`） | 随**导入 / 导出**功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出 |
+| `extra` 的导出合并（`toLegadoJson`） | 随**导入 / 导出**功能实现（ADR-0021 §后果）；在那之前不得声称可无损导出。**2026-10-13 补充（b1 复核发现）：** freezed 生成的 `BookSource.toJson()` 在顶层把嵌套规则给出**对象**而不是 `Map`，递归成 JSON 得靠 `jsonEncode`（它认 `toJsonableObject`）；`explicit_to_json: true` 是否开由导入 / 导出那一批决定（生成器选项的唯一出处是根 `build.yaml`），本切片不动 |
 | Big5 / Big5-HKSCS 解码缺口 | 仍待排期（`book-source.md` §5.1） |
 | 文件型数据库（后台 isolate + 原生库）无自动化覆盖 | 由 `integration_test/` 覆盖（`test-environment.md` §4） |
 | ~~G2b 的**证据语料未入库**~~ | ✅ **已闭环（2026-10-12）**：`legado_g2b_default_rules_source.json` 与

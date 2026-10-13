@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
@@ -493,6 +494,44 @@ void main() {
       ),
       'x',
     );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets(
+    'jsBridge_whenAScriptFormatsATimestamp_usesMillisecondsAndItsZone',
+    (WidgetTester tester) async {
+      // M1-b1：`java.timeFormat` 是 §6 表里的同族同步绑定（入参**毫秒**、输出固定 pattern、
+      // 设备本地时区）。pattern 与时区判定在 Dart 侧单测里钉住，这里证明真引擎 + 真 worker
+      // 上这条链路确实存在（`java` 对象上有它，且能拿到格式化的值）。
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script:
+              '[typeof java.timeFormat, java.timeFormat(0), '
+              "java.timeFormat('1700000000000')].join('|')",
+        ),
+      );
+
+      // 期望值用同一套 Dart 本地换算算出来，所以探针在哪个时区的设备上跑都成立。
+      final String expected =
+          '${formatTimestamp(DateTime.fromMillisecondsSinceEpoch(0))}|'
+          '${formatTimestamp(DateTime.fromMillisecondsSinceEpoch(1700000000000))}';
+      expect(_value(result), 'function|$expected');
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets('jsBridge_whenAScriptPassesAnUnusableTimestamp_reportsJsError', (
+    WidgetTester tester,
+  ) async {
+    // 读不成时间戳的入参是那次调用的失败（`ok:false`），前奏把它变成 JS `Error`，
+    // 于是整个 job 按 §7 报 `js:error` —— 不得静默给一个错的时间。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "java.timeFormat('not-a-time')"),
+    );
+
+    expect(switch (result) {
+      ParseFailure<Object?>(:final String rulePath) => rulePath,
+      ParseSuccess<Object?>() => 'unexpected success',
+    }, 'searchRule.name:js:error');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('jsBridge_whenAUrlRuleUsesKey_bindsItOnlyThere', (

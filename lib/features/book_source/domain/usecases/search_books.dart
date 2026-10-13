@@ -174,6 +174,12 @@ final class SearchBooks {
         'searchRule.wordCount',
         sourceId: source.url,
       );
+      final ParseResult<String?> updateTime = await _pages.field(
+        rules.updateTime,
+        item,
+        'searchRule.updateTime',
+        sourceId: source.url,
+      );
 
       final String? url = bookUrl.dataOrNull;
       if (url == null || url.isEmpty) {
@@ -192,6 +198,8 @@ final class SearchBooks {
           intro: intro.dataOrNull,
           lastChapter: lastChapter.dataOrNull,
           wordCount: wordCount.dataOrNull,
+          // 展示用字符串：规则结果原文，不做日期解析（book-source.md §2）。
+          updateTime: updateTime.dataOrNull,
         ),
       );
     }

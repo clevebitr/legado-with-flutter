@@ -54,6 +54,7 @@ abstract class BookSource with _$BookSource {
     Map<String, String>? headers,
     String? searchUrl,
     @JsonKey(name: 'ruleSearch') required SearchRule searchRule,
+    @JsonKey(name: 'ruleExplore') ExploreRule? exploreRule,
     @JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,
     @JsonKey(name: 'ruleToc') required TocRule tocRule,
     @JsonKey(name: 'ruleContent') required ContentRule contentRule,
@@ -81,9 +82,13 @@ abstract class BookSource with _$BookSource {
   factory BookSource.fromLegadoJson(Map<String, Object?> json) {
     final BookSource source = _$BookSourceFromJson(json);
     final Object? bookInfoJson = json['ruleBookInfo'];
+    final Object? exploreJson = json['ruleExplore'];
 
     return source.copyWith(
       searchRule: SearchRule.fromLegadoJson(_nestedObject(json, 'ruleSearch')),
+      exploreRule: exploreJson == null
+          ? null
+          : ExploreRule.fromLegadoJson(_nestedObject(json, 'ruleExplore')),
       bookInfoRule: bookInfoJson == null
           ? null
           : BookInfoRule.fromLegadoJson(_nestedObject(json, 'ruleBookInfo')),
@@ -101,6 +106,10 @@ abstract class BookSource with _$BookSource {
 /// Every field holds the raw Legado rule text; the `RuleEngine` compiles it
 /// (`docs/dev/book-source.md` §3). `null` means the source does not declare that
 /// field, which is different from declaring an empty rule.
+///
+/// [updateTime] is a **display** string: the rule's result is kept as it was read and never
+/// parsed as a date (`docs/dev/book-source.md` §2); a chapter rule may produce it through
+/// `java.timeFormat` (§6).
 @freezed
 abstract class SearchRule with _$SearchRule {
   /// Creates a search rule set.
@@ -114,6 +123,7 @@ abstract class SearchRule with _$SearchRule {
     String? intro,
     String? coverUrl,
     String? bookUrl,
+    String? updateTime,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})
     Map<String, Object?> extra,
@@ -126,6 +136,48 @@ abstract class SearchRule with _$SearchRule {
   /// Parses one `ruleSearch` object and keeps every unrecognised key in [extra].
   factory SearchRule.fromLegadoJson(Map<String, Object?> json) {
     final SearchRule rule = _$SearchRuleFromJson(json);
+
+    return rule.copyWith(extra: _unrecognisedKeys(json, rule.toJson()));
+  }
+}
+
+/// Rules that parse one explore (discover) result page (`ruleExplore`).
+///
+/// Upstream fixes the shape of a list rule in its `BookListRule` interface
+/// (`BookListRule.kt:6-18`), so this object carries exactly the fields [SearchRule] carries
+/// for the nine list fields — the two must grow and shrink in the same batch
+/// (`docs/dev/book-source.md` §2, ADR-0035 §决策 1). There is no `checkKeyWord` here:
+/// upstream declares that one on the search rule alone.
+///
+/// A source may omit the object, or declare it with a blank `bookList`: the explore stage then
+/// falls back to the **whole** [BookSource.searchRule] (ADR-0035 §决策 2, `book-source.md`
+/// §4.2). The fallback itself belongs to the explore use case, not to this model.
+@freezed
+abstract class ExploreRule with _$ExploreRule {
+  /// Creates an explore rule set.
+  const factory ExploreRule({
+    String? bookList,
+    String? name,
+    String? author,
+    String? kind,
+    String? wordCount,
+    String? lastChapter,
+    String? intro,
+    String? coverUrl,
+    String? bookUrl,
+    String? updateTime,
+    @JsonKey(includeFromJson: false, includeToJson: false)
+    @Default(<String, Object?>{})
+    Map<String, Object?> extra,
+  }) = _ExploreRule;
+
+  /// Parses one `ruleExplore` object, dropping keys the model does not know.
+  factory ExploreRule.fromJson(Map<String, Object?> json) =>
+      _$ExploreRuleFromJson(json);
+
+  /// Parses one `ruleExplore` object and keeps every unrecognised key in [extra].
+  factory ExploreRule.fromLegadoJson(Map<String, Object?> json) {
+    final ExploreRule rule = _$ExploreRuleFromJson(json);
 
     return rule.copyWith(extra: _unrecognisedKeys(json, rule.toJson()));
   }
@@ -148,6 +200,7 @@ abstract class BookInfoRule with _$BookInfoRule {
     String? coverUrl,
     String? tocUrl,
     String? wordCount,
+    String? updateTime,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})
     Map<String, Object?> extra,
@@ -179,6 +232,7 @@ abstract class TocRule with _$TocRule {
     String? chapterName,
     String? chapterUrl,
     String? isVip,
+    String? updateTime,
     String? nextTocUrl,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})

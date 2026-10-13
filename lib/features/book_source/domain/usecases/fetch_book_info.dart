@@ -91,6 +91,12 @@ final class FetchBookInfo {
       'bookInfoRule.wordCount',
       sourceId: source.url,
     );
+    final ParseResult<String?> updateTime = await _pages.field(
+      rules?.updateTime,
+      scope,
+      'bookInfoRule.updateTime',
+      sourceId: source.url,
+    );
     final ParseResult<String?> tocUrl = await _pages.field(
       rules?.tocUrl,
       scope,
@@ -112,6 +118,8 @@ final class FetchBookInfo {
         intro: intro.dataOrNull,
         lastChapter: lastChapter.dataOrNull,
         wordCount: wordCount.dataOrNull,
+        // 展示用字符串：规则结果原文，不做日期解析（book-source.md §2）。
+        updateTime: updateTime.dataOrNull,
       ),
     );
   }

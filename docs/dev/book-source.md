@@ -73,7 +73,9 @@
 >
 > **`updateTime` 出现在四处（上游事实）：** `SearchRule` / `ExploreRule`（列表项）、`BookInfoRule`（详情）、
 > `TocRule`（章节）。本仓四处**同批建模（M1-b1）**，值都是**展示用字符串**（规则结果原文，不做日期解析；
-> 章节侧可调用 `java.timeFormat`，见 §6）。
+> 章节侧可调用 `java.timeFormat`，见 §6）。**状态（M1-b1 已落地）：** 四处字段 + 承载实体
+> （`Book` / `BookInfo` / `Chapter`）已入库；展示方（列表 / 详情 / 目录 UI）归 Phase 5
+> （`PLAN.md` §3.7）。
 >
 > **`canReName` 的上游语义（2026-10-13 取证，照抄为有意行为）：** 上游只在
 > `BookInfo.kt:65` 判「`canReName` 规则字段非空白」+ 调用方开关（入口自己传 `canReName`，`WebBook.kt:235-238`），
@@ -601,6 +603,15 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   `yyyy/MM/dd HH:mm`、**设备本地时区**、不补零以外的任何本地化（上游
 >   `JsExtensions.kt:678` + `AppConst.kt:40` 的 `FastDateFormat.getInstance("yyyy/MM/dd HH:mm")`，
 >   `FastDateFormat` 默认取 JVM 默认时区）。同为 worker 内同步、**不计**本表的调用额度。
+>   **状态（M1-b1 已落地）：** 实现是 `core/js/js_bindings.dart` 的 `formatJsTimestamp` +
+>   纯格式化 `formatTimestamp`；设备侧由 `integration_test/js_bridge_test.dart` 的两条探针盯住
+>   （Windows 已实测，Android 那次跑受构建环境网络阻塞，登记在 `PLAN.md` §3.7）。
+>   **两个入参边界（实现可见，归本表）：** ① 小数按**向零截断**（等价于上一次 Java `(long)`
+>   对 JS 数字的转换；毫秒时间戳本不该带小数，所以这个选择不会遮蔽错误值）；
+>   ② 超出 Dart `DateTime` 精度范围的入参（`|ms| > 8.64e15`，即 ±1 亿天）**在转换前就判失败**
+>   —— `DateTime.fromMillisecondsSinceEpoch` 对超范围值报 `RangeError`（属 `Error`，
+>   ADR-0022 / C-ERR-2 不允许本层捕获），所以只能提前挡；结果是该次调用失败（`ok:false` →
+>   `js:error`），不是崩溃也不是钳位。
 >   `timeFormatUTC(time, format, sh)`（同族，带时区偏移与自定义 pattern）**不在 M1**，
 >   登记去向见 `PLAN.md` §3.7。
 > - **致命与可吞的区别：** `http.*` 的传输失败只拒绝那次调用；`parse.*` 的边界与额度是**判决**

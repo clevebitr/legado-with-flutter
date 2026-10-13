@@ -117,5 +117,19 @@ void main() {
       expect(chapter.isVip, isFalse);
       expect(chapter.copyWith(isVip: true).isVip, isTrue);
     });
+
+    test('Chapter_givenNoUpdateTime_readsAsNull', () {
+      // `updateTime` 是展示用字符串（book-source.md §2）：未声明就是 null，没有默认值。
+      const Chapter chapter = Chapter(
+        name: '第1章',
+        url: 'https://a.test/1.html',
+      );
+
+      expect(chapter.updateTime, isNull);
+      expect(
+        chapter.copyWith(updateTime: '2026/10/13 09:05').updateTime,
+        '2026/10/13 09:05',
+      );
+    });
   });
 }

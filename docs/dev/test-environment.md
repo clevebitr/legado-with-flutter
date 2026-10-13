@@ -145,14 +145,14 @@ Windows 与 Android 两侧都已实测通过。
 
 ---
 
-## 7. 实测证据（2026-10-11；主机侧与 Windows / Android 设备级于 2026-10-13 复跑，含 M1 的 `java.*` 探针）
+## 7. 实测证据（2026-10-11；主机侧与 Windows / Android 设备级于 2026-10-13 复跑，含 M1 的 `java.*` 与 `timeFormat` 探针）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**583** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 829/829、`domain` 1478/1478，均 100%；阈值见 `docs/dev/testing.md` §2） |
+| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**599** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 858/858、`domain` 1497/1497，均 100%；阈值见 `docs/dev/testing.md` §2） |
 | Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`），含 `flutter_qjs_next` 从 `cxx/` 源码编译的 QuickJS |
-| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` **19 项**（含 `await http.*` / `await parse.*` / `js:parse-scope` / `js:quota` / `java.*` 同步读写与按源隔离 / URL 的 `key` 绑定），`on_disk_database` 1 项）；退出码 0 |
-| Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone` 自动启动 → 3 个用例文件全部通过（`js_bridge` **19 项**，含新增的 `java.*` / `key` 探针）→ 自动关闭；退出码 0 |
+| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` **21 项**（含 `await http.*` / `await parse.*` / `js:parse-scope` / `js:quota` / `java.*` 同步读写与按源隔离 / URL 的 `key` 绑定 / `java.timeFormat` 的本地渲染与非法入参），`on_disk_database` 1 项）；退出码 0 |
+| Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone` 自动启动 → 3 个用例文件全部通过（`js_bridge` **21 项**）→ 自动关闭；退出码 0 |
 | 许可证扫描 | `dart run tool/scan_licenses.dart` | 156 个包全部为宽松许可，无风险项；退出码 0（`NOTICE.md` §5） |
 
 > `flutter doctor` 的网络项在本机报 `A cryptographic error ... checking https://pub.dev/`

@@ -30,6 +30,11 @@ _BookSource _$BookSourceFromJson(Map<String, dynamic> json) => $checkedCreate(
         'ruleSearch',
         (v) => SearchRule.fromJson(v as Map<String, dynamic>),
       ),
+      exploreRule: $checkedConvert(
+        'ruleExplore',
+        (v) =>
+            v == null ? null : ExploreRule.fromJson(v as Map<String, dynamic>),
+      ),
       bookInfoRule: $checkedConvert(
         'ruleBookInfo',
         (v) =>
@@ -54,6 +59,7 @@ _BookSource _$BookSourceFromJson(Map<String, dynamic> json) => $checkedCreate(
     'isEnabled': 'enabled',
     'headers': 'header',
     'searchRule': 'ruleSearch',
+    'exploreRule': 'ruleExplore',
     'bookInfoRule': 'ruleBookInfo',
     'tocRule': 'ruleToc',
     'contentRule': 'ruleContent',
@@ -70,6 +76,7 @@ Map<String, dynamic> _$BookSourceToJson(_BookSource instance) =>
       'header': const _HeaderJsonConverter().toJson(instance.headers),
       'searchUrl': instance.searchUrl,
       'ruleSearch': instance.searchRule,
+      'ruleExplore': instance.exploreRule,
       'ruleBookInfo': instance.bookInfoRule,
       'ruleToc': instance.tocRule,
       'ruleContent': instance.contentRule,
@@ -94,6 +101,7 @@ _SearchRule _$SearchRuleFromJson(Map<String, dynamic> json) =>
         intro: $checkedConvert('intro', (v) => v as String?),
         coverUrl: $checkedConvert('coverUrl', (v) => v as String?),
         bookUrl: $checkedConvert('bookUrl', (v) => v as String?),
+        updateTime: $checkedConvert('updateTime', (v) => v as String?),
       );
       return val;
     });
@@ -109,6 +117,38 @@ Map<String, dynamic> _$SearchRuleToJson(_SearchRule instance) =>
       'intro': instance.intro,
       'coverUrl': instance.coverUrl,
       'bookUrl': instance.bookUrl,
+      'updateTime': instance.updateTime,
+    };
+
+_ExploreRule _$ExploreRuleFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('_ExploreRule', json, ($checkedConvert) {
+      final val = _ExploreRule(
+        bookList: $checkedConvert('bookList', (v) => v as String?),
+        name: $checkedConvert('name', (v) => v as String?),
+        author: $checkedConvert('author', (v) => v as String?),
+        kind: $checkedConvert('kind', (v) => v as String?),
+        wordCount: $checkedConvert('wordCount', (v) => v as String?),
+        lastChapter: $checkedConvert('lastChapter', (v) => v as String?),
+        intro: $checkedConvert('intro', (v) => v as String?),
+        coverUrl: $checkedConvert('coverUrl', (v) => v as String?),
+        bookUrl: $checkedConvert('bookUrl', (v) => v as String?),
+        updateTime: $checkedConvert('updateTime', (v) => v as String?),
+      );
+      return val;
+    });
+
+Map<String, dynamic> _$ExploreRuleToJson(_ExploreRule instance) =>
+    <String, dynamic>{
+      'bookList': instance.bookList,
+      'name': instance.name,
+      'author': instance.author,
+      'kind': instance.kind,
+      'wordCount': instance.wordCount,
+      'lastChapter': instance.lastChapter,
+      'intro': instance.intro,
+      'coverUrl': instance.coverUrl,
+      'bookUrl': instance.bookUrl,
+      'updateTime': instance.updateTime,
     };
 
 _BookInfoRule _$BookInfoRuleFromJson(Map<String, dynamic> json) =>
@@ -123,6 +163,7 @@ _BookInfoRule _$BookInfoRuleFromJson(Map<String, dynamic> json) =>
         coverUrl: $checkedConvert('coverUrl', (v) => v as String?),
         tocUrl: $checkedConvert('tocUrl', (v) => v as String?),
         wordCount: $checkedConvert('wordCount', (v) => v as String?),
+        updateTime: $checkedConvert('updateTime', (v) => v as String?),
       );
       return val;
     });
@@ -138,6 +179,7 @@ Map<String, dynamic> _$BookInfoRuleToJson(_BookInfoRule instance) =>
       'coverUrl': instance.coverUrl,
       'tocUrl': instance.tocUrl,
       'wordCount': instance.wordCount,
+      'updateTime': instance.updateTime,
     };
 
 _TocRule _$TocRuleFromJson(Map<String, dynamic> json) =>
@@ -147,6 +189,7 @@ _TocRule _$TocRuleFromJson(Map<String, dynamic> json) =>
         chapterName: $checkedConvert('chapterName', (v) => v as String?),
         chapterUrl: $checkedConvert('chapterUrl', (v) => v as String?),
         isVip: $checkedConvert('isVip', (v) => v as String?),
+        updateTime: $checkedConvert('updateTime', (v) => v as String?),
         nextTocUrl: $checkedConvert('nextTocUrl', (v) => v as String?),
       );
       return val;
@@ -157,6 +200,7 @@ Map<String, dynamic> _$TocRuleToJson(_TocRule instance) => <String, dynamic>{
   'chapterName': instance.chapterName,
   'chapterUrl': instance.chapterUrl,
   'isVip': instance.isVip,
+  'updateTime': instance.updateTime,
   'nextTocUrl': instance.nextTocUrl,
 };
 

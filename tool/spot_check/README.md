@@ -48,8 +48,8 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 | 合集 A | `https://raw.githubusercontent.com/Orokapei/BookSource/main/Legado.json`（11 条） |
 | 合集 B | `https://raw.githubusercontent.com/safino9/SourceGo/master/book_source/all.json`（189 条） |
 | 合集 C | `https://legado.aoaostar.com/sources/b778fe6b.json`（3907 条，最近同步 2026-08-15） |
-| 筛选 | `--list` 的判据：`searchUrl` 是 HTTPS GET 且含 `{{key}}`、四段规则非空、不含任何后续阶段的标志（`@xpath:` / `@put:` / `@get:` / `@@` / `<js>` / `{{}}` 内嵌 / 裸 `{…}` / `:正则`）。**`@js:` 自 3.4 起不再是排除项**（矩阵 #14 已落地），只在**列表规则**（`bookList` / `chapterList`）与 **URL 模板**（`searchUrl` / `exploreUrl`）里排除 |
-| 结果（2026-10-12 复算） | 合集 C 中 **266/3907** 条属于 M0；其中 **192** 条依赖未知类型退化（ADR-0032）、**69** 条用值规则 `@js:` |
+| 筛选 | `--list` 的判据：`searchUrl` 是 HTTPS GET 且含 `{{key}}`、四段规则非空、不含**尚未实现**的标志（`@xpath:` / `webjs` / `sourceregex` / `@@` / `<js>` / 裸 `{…}` / `:正则`）。**判据随已实现语法收放：** `@js:` 自 3.4 起不再是排除项（矩阵 #14），只在**列表规则**（`bookList` / `chapterList`）里排除；`@put:` / `@get:` 与 `{{}}` 内嵌（矩阵 #16 / #18，随 3.4 落地）自 **2026-10-13** 起也不再排除。搜索 URL 仍保守：只认 `{{key}}` / `{{page}}` / `{{baseUrl}}`，其余 `{…}` 一并排除 |
+| 结果（2026-10-13 复算） | 合集 C 中 **353/3907** 条属于「本仓今天能跑通四段」的集合（M0 + 已落地的 M1 语法）；其中 **253** 条依赖未知类型退化（ADR-0032）、**122** 条用值规则 `@js:` |
 | 探测 | 80 条各 1 次 GET（浏览器 UA，≤12 s）；**40 条返回 200**，其中 13 条搜索页含真实结果链接 |
 
 **一行复算这三个数字（含 ADR-0032 的依据）：**
@@ -57,18 +57,20 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 ```bash
 curl -sSL -o build/ao.json https://legado.aoaostar.com/sources/b778fe6b.json
 SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check/spot_check.dart | tail -3
-# -- 266 of 3907 sources are M0-compatible.
-# -- 192 of 266 M0-compatible sources rely on the unknown-type degradation (ADR-0032).
-# -- 69 of 266 M0-compatible sources use a value-rule `@js:` (matrix #14); …
+# -- 353 of 3907 sources are M0-compatible.
+# -- 253 of 353 M0-compatible sources rely on the unknown-type degradation (ADR-0032).
+# -- 122 of 353 M0-compatible sources use a value-rule `@js:` (matrix #14); …
 ```
 
-> 每行的第 2 列标 `degraded` 即该源依赖退化（判据与引擎一致：列表规则每个 `@` 段都是选择器，
-> 取值规则除末段外都是选择器），第 3 列标 `js` 即该源用值规则 `@js:`。合集内容会随上游同步变化，
-> 上面是 **2026-08-15 快照**下的数字。
+> 打印里的 `M0-compatible` 现在指「M0 + 已落地的 M1 语法」（判据见上表筛选行）；名字没改是为了
+> 让历次记录可对比。每行的第 2 列标 `degraded` 即该源依赖退化（判据与引擎一致：列表规则每个
+> `@` 段都是选择器，取值规则除末段外都是选择器），第 3 列标 `js` 即该源用值规则 `@js:`。
+> 合集内容会随上游同步变化，上面是 **2026-08-15 快照**下的数字。
 >
 > **为什么条数与 ADR-0032 §背景 的 197/137 不同：** 那两个数字是 3.4 落地前的快照（当时
-> `@js:` 仍在排除列表里，69 条含值规则 `@js:` 的源没被计入）。判据本身只在「`@js:` 算不算 M0」
-> 这一点上变了，ADR-0032 自己的结论（未知类型必须退化为 CSS）不受影响。
+> `@js:` 仍在排除列表里，含值规则 `@js:` 的源没被计入）。判据此后又宽容了两次（`@put:` /
+> `@get:` / `{{}}`，见筛选行），所以 **266 → 353** 是同一份合集上的口径变化，
+> 而不是源变多了。ADR-0032 自己的结论（未知类型必须退化为 CSS）不受影响。
 
 > 只读、低频：每个候选 1 次请求，链路本体每站 ≤4 次（搜索 / 详情 / 目录 / 正文各 1）。
 > 不登录、不批量爬取、不落盘页面。
@@ -95,11 +97,41 @@ SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check
 ```bash
 sed 's/example-novel\.test/www.biquge99.cc/g' \
   test/fixtures/book_sources/legado_g2b_default_rules_source.json > /tmp/g2b.json
-dart run tool/spot_check/spot_check.dart --source=/tmp/g2b.json --keyword=剑来
+flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=/tmp/g2b.json --keyword=剑来
 ```
+
+> **为什么不是 `dart run`（2026-10-13 更正）：** 本工具链需要真实 JS 引擎与 Flutter 原生资源，
+> `dart run` 会在 `dart:ui` 上直接编译失败（实测 exit 254）。入口固定为
+> `flutter run -d <device> -t tool/spot_check/spot_check.dart -- <参数>`。
 
 > 哈希钉的是 **2026-10-12 当天**的站点内容（站点改版后哈希会变，那是事实而不是回归）；
 > fixture 自身不含真实主机，因此需显式还原主机（见 `test/fixtures/book_sources/README.md`）。
+
+**M1-b1（`ruleToc.updateTime` + `java.timeFormat`）的证据（2026-10-13）：**
+
+```
+语法：`java.timeFormat(timestamp)`（book-source.md §6）+ 四处 updateTime 中的 ruleToc.updateTime
+书源：漫客栈 (comic.mkzhan.com)，合集 C 中的一条真实导出
+链路：搜索 → 详情 → 目录（本站正文规则用 `java.getStringList`，故 content 段另见下）
+结果：
+  search   ok  count=1   火影忍者之新的伙伴
+  bookInfo ok  火影忍者之新的伙伴 | toc=https://comic.mkzhan.com/chapter/?comic_id=213560
+  toc      ok  count=5   尸魂界的不速之客 … updateTime=2023/11/15 06:13
+  content  FAILED parseFailed at contentRule.content:js:error（该源正文规则用 `java.getStringList`，未实现）
+结论：`java.timeFormat` 的返回值经真链路落到 `Chapter.updateTime`（本机 +08:00 下
+      1700000000000 ms → 2023/11/15 06:13）。
+```
+
+> **派生说明（与本节 `@css:` 派生同口径）：** 这次只改 `ruleToc.updateTime` 一条规则
+> （原值 `$.change_time@js:result==0?'':java.timeFormat(result*1000)` →
+> `@js:java.timeFormat(1700000000000)`），searchUrl / header / 四段规则其余字段逐字来自真实导出。
+> 原因：该站章节数据的 `change_time` 为 0 或缺失时，原规则走 `''` 分支，取不到 `java.timeFormat`
+> 那一路（实测原规则下 `updateTime` 为空）。
+>
+> **语料里的主流写法仍未证：** 全量 3907 条里 **184** 条用 `java.timeFormat`，主流写法是
+> `{{java.timeFormat(java.getString('$.x')*1000)}}`，需要 `java.getString`（未实现）——
+> 阻塞与数字见 `PLAN.md` §3.7。复跑命令（派生 JSON 需自行生成）：
+> `flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<derived.json> --keyword=火影`。
 
 **矩阵 #12（`@css:`）在真实 HTML 上的证据：** 同一站点、同一批页面，把上一条书源的默认规则**逐条改写为等价的 `@css:` 写法**（`class.bookbox` → `@css:.bookbox`、`id.content@textNodes` →
 `@css:#content@textNodes`、`class.bookimg@tag.img.0@src` → `@css:.bookimg img:eq(0)@src` 等，

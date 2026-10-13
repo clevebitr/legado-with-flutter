@@ -10,8 +10,12 @@
 //
 // Usage (from the repository root):
 //
-//   dart run tool/spot_check/spot_check.dart --source=<file.json> --keyword=剑来
-//   dart run tool/spot_check/spot_check.dart --list=<collection.json>
+//   flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<file.json> --keyword=剑来
+//   flutter run -d windows -t tool/spot_check/spot_check.dart -- --list=<collection.json>
+//
+// `dart run` does **not** work here: the chain needs the real JS engine and the Flutter
+// native assets, so the entry point must run under `flutter run` (the tool's usage message
+// below says the same thing).
 //
 // `--source` accepts a single book source object or an array (a collection export);
 // with an array, `--name=<substring>` picks one entry. `--json` prints the report as
@@ -58,12 +62,14 @@ const int _sampleLength = 60;
 /// `@js:` is **not** in the list any more: matrix #14 landed with `PLAN.md` 3.4, so a
 /// value-rule script is evaluable today. It is handled separately below, because it is
 /// only supported outside **list rules** (`bookList` / `chapterList`, whose「JS 返回一列
-/// 元素」 contract does not exist yet) and outside the URL templates (`searchUrl` /
-/// `exploreUrl` never evaluate JS in this repository).
+/// 元素」 contract does not exist yet).
+///
+/// `@put:` / `@get:` were **removed** by the M1 grammar slice (matrix #16, `PLAN.md` 3.4 / b0),
+/// and `{{…}}` is no longer rejected wholesale below either (matrix #18, same slice), so the
+/// census now covers everything this repository can actually evaluate — “M0-compatible” in
+/// the printed lines means “M0 plus the implemented M1 grammar”.
 const List<String> _deferredFlags = <String>[
   '@xpath:',
-  '@put:',
-  '@get:',
   'webjs',
   'sourceregex',
   '@@',
@@ -76,8 +82,9 @@ const String _jsFlag = '@js:';
 /// The rule fields whose `@js:` this repository cannot evaluate yet.
 ///
 /// A list rule would need “JS returns a list of elements” (upstream's `getElements`
-/// `Mode.Js` branch), and a URL template is rendered by `renderUrlTemplate`, which has no
-/// place to run a script.
+/// `Mode.Js` branch). A URL template never evaluates a bare `@js:` flag: `searchUrl` /
+/// `exploreUrl` run JavaScript only through their `{{…}}` placeholders, and a rule head
+/// there is refused by name (matrix #18, `book-source.md` §4.2).
 const List<String> _jsUnsupportedFields = <String>[
   'searchUrl',
   'exploreUrl',
@@ -201,7 +208,10 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
           books.length,
           books.isEmpty
               ? const <String>[]
-              : <String>['${books.first.name} ${books.first.url}'],
+              : <String>[
+                  '${books.first.name} ${books.first.url}'
+                      ' updateTime=${books.first.updateTime ?? '-'}',
+                ],
         ),
       );
     case ParseFailure<List<Book>>(
@@ -222,7 +232,8 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
       report.record(
         'bookInfo',
         _stage(1, <String>[
-          '${data.name} | author=${data.author} | toc=${data.tocUrl}',
+          '${data.name} | author=${data.author} | toc=${data.tocUrl}'
+              ' | updateTime=${data.updateTime ?? '-'}',
         ]),
       );
     case ParseFailure<BookInfo>(
@@ -243,7 +254,10 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
           chapters.length,
           chapters.isEmpty
               ? const <String>[]
-              : <String>['${chapters.first.name} ${chapters.first.url}'],
+              : <String>[
+                  '${chapters.first.name} ${chapters.first.url}'
+                      ' updateTime=${chapters.first.updateTime ?? '-'}',
+                ],
         ),
       );
     case ParseFailure<List<Chapter>>(
@@ -477,10 +491,8 @@ bool _isM0Compatible(Map<String, Object?> item) {
     if (trimmed.startsWith('{') || trimmed.startsWith(':')) {
       return false;
     }
-    // `{{…}}` 内嵌规则是 M1（矩阵 #18），而搜索 URL 的 `{{key}}` / `{{page}}` 是 M0。
-    if (rule.key != 'searchUrl' && rule.value.contains('{{')) {
-      return false;
-    }
+    // `{{…}}` 已在矩阵 #18 落地（非 searchUrl 的字段里可能是 JS，也可能是内嵌规则），
+    // 所以不再整条排除；searchUrl 的 `{` 判据仍在上面的模板检查里保守地挡掉（宁可少收）。
   }
 
   return true;

@@ -478,11 +478,7 @@ globalThis.crypto = Object.freeze({
   base64Decode: function (value) { return __crypto('base64Decode', value); }
 });
 
-globalThis.__java = function (operation, key, value) {
-  var call = { operation: operation, key: String(key) };
-  if (value !== undefined && value !== null) {
-    call.value = String(value);
-  }
+globalThis.__java = function (call) {
   var envelope = null;
   try {
     envelope = JSON.parse(String(sendMessage('java', JSON.stringify(call))));
@@ -490,18 +486,31 @@ globalThis.__java = function (operation, key, value) {
     envelope = null;
   }
   if (!envelope || envelope.ok !== true) {
-    // 写没有返回值，所以「拿不到值」不能当失败；畸形的那个由信封的 ok:false 表达。
-    throw new Error('java.' + operation + ' failed');
+    // 写没有返回值，所以「拿不到值」不能当失败；畸形的那个由信封的 ok:false 表达（§6）。
+    throw new Error('java.' + call.operation + ' failed');
   }
-  if (operation === 'get') {
-    return (envelope.value === null || envelope.value === undefined)
-      ? '' : String(envelope.value);
-  }
+  return (envelope.value === null || envelope.value === undefined)
+    ? '' : String(envelope.value);
 };
 
 globalThis.java = Object.freeze({
-  put: function (key, value) { __java('put', key, value); },
-  get: function (key) { return __java('get', key); }
+  put: function (key, value) {
+    var call = { operation: 'put', key: String(key) };
+    if (value !== undefined && value !== null) {
+      call.value = String(value);
+    }
+    __java(call);
+  },
+  get: function (key) {
+    return __java({ operation: 'get', key: String(key) });
+  },
+  timeFormat: function (time) {
+    // 时间戳原样送（数字保持数字、字符串保持字符串）：能不能读出来由宿主定（§6）。
+    return __java({
+      operation: 'timeFormat',
+      value: (time === undefined ? null : time)
+    });
+  }
 });
 
 globalThis.__hostCall = function (binding, args) {

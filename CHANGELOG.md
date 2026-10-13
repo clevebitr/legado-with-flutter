@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4 b1: the four `updateTime` fields and the `java.timeFormat` binding (2026-10-13)
+
+The first slice of the M1 build order in `PLAN.md` §3.5.
+
+- **`updateTime` is modelled in all four places** upstream declares it (`SearchRule`, `BookInfoRule`,
+  `TocRule`, `ExploreRule`) and carried on the entities the rules fill (`Book`, `BookInfo`,
+  `Chapter`). The value is the rule result **as the source spelled it**: a display string, never
+  parsed as a date (`book-source.md` §2). The three use cases read it through the same `field()`
+  path every other optional field uses, so a rejected or missing `updateTime` rule degrades to
+  `null` with a warning instead of costing the stage (ADR-0026).
+- **`ExploreRule` is modelled here** (the nine list fields `SearchRule` carries, plus `updateTime`),
+  with `ruleExplore` mapped on `BookSource` and its unrecognised keys kept in `extra`. Upstream
+  fixes that shape in its `BookListRule` interface, so the two objects have to grow together
+  (ADR-0035 §决策 1). The `exploreUrl` forms, the classification parser and the fallback to
+  `searchRule` stay in b4a.
+- **`java.timeFormat(timestamp)`** is bound in the sandbox: milliseconds in (a number or a string
+  that reads as one), `yyyy/MM/dd HH:mm` out, the device's local zone — upstream's
+  `JsExtensions.kt:678` plus `AppConst.kt:40`. It is answered inside the worker, so it stays
+  synchronous and does not spend §6's per-rule call quota. An argument that cannot be read as a
+  timestamp (or is outside Dart's `DateTime` range) fails **that call**: the JSON envelope says
+  `ok:false` and the prelude raises a JS `Error`, which surfaces as `js:error` rather than a wrong
+  date. A fractional number is truncated towards zero, the way a Java `(long)` conversion of a JS
+  number behaves.
+- Tests: model round-trips for the four fields plus `ExploreRule`'s own `extra`, the entity field,
+  one wiring case per use case, the pure formatter (`formatTimestamp`), the millisecond / numeric
+  string / fractional / unusable inputs, and the call envelope. Coverage exit 0 (`core` 858/858,
+  `domain` 1497/1497). Device probes: **Windows `js_bridge` 21/21**, including the two new ones
+  (`java.timeFormat` returning the local rendering of a millisecond timestamp, and an unusable
+  argument failing as `js:error`).
+- **Two acceptance items were left open by the build environment** (no outbound network at the time):
+  the **Android** device probe (its Gradle build downloads `sqlite3`'s precompiled native asset from
+  GitHub and timed out) and the **≥1 real-source regression record** for `updateTime` /
+  `java.timeFormat`. Both were registered in `PLAN.md` §3.7 with what has to happen to close them.
+- **Architect review (2026-10-13), fixed on the branch, and both items closed or narrowed with
+  evidence:**
+  - **The Android probe ran** once the network came back: three files, `js_bridge` **21/21**, exit 0 on
+    `Medium_Phone`; `test-environment.md` §7 now records the host-side (599 cases, `core` 858/858,
+    `domain` 1497/1497), Windows and Android rows for this slice.
+  - **The real-source record is a derived one** (`tool/spot_check/README.md` §4): with the live
+    漫客栈 source and only `ruleToc.updateTime` rewritten to `@js:java.timeFormat(1700000000000)`,
+    the chain returned `updateTime=2023/11/15 06:13` on `Chapter.updateTime` — the binding's value does
+    reach the entity through the real path. The corpus' own idiom stays unproven, and that is the
+    finding: of the **184** sources using `java.timeFormat`, the dominant form is
+    `{{java.timeFormat(java.getString('$.x')*1000)}}`, which needs `java.getString` — not implemented.
+  - **The census was under-counting.** `tool/spot_check`'s `--list` criteria still excluded `@put:`,
+    `@get:` and `{{…}}`, all implemented since the M1 grammar slice, so the same collection reads
+    **353 / 253 / 122** instead of 266 / 192 / 69 (record and re-run command in
+    `tool/spot_check/README.md` §3). The tool now also prints each stage's `updateTime`, and its
+    documented command was corrected: the entry point needs `flutter run -d <device> -t …`, not
+    `dart run` (which fails to compile on `dart:ui`).
+  - **The `java.*` gap is now a registered, counted finding.** 540 of 3907 sources use `java.*`:
+    `md5Encode` 1221, `put` 1070, `get` 1048, `ajax` 866, **`getString` 603**, `base64DecodeToByteArray`
+    328, `timeFormat` 297, `log` 250, `encodeURI` 138, `getElements` 84, `base64Encode` 84,
+    `base64Decode` 71, `setContent` 62, `getElement` 45, `getStringList` 36, crypto variants, Rhino
+    interop (`java.lang` 234) and UI members. This repository's whitelist uses its own names
+    (`http.*` / `parse.*` / `log.*` / `crypto.*`), so the next slice (**b1b**, `PLAN.md` §3.5) needs
+    **ADR-0037** to rule the family: alias the pure-computation members, implement the
+    `java.getString` family as nested evaluation of the **current scope**, keep `ajax` / `get` / `post`
+    un-aliased (shape conflict) and leave Rhino interop, UI members and keyed crypto to M2.
+  - Smaller fixes: `applyJsJavaCall` narrows the key inside its switch instead of falling back to
+    `''` (a broken decoder invariant must fail the call, not write to an empty key); the `ExploreRule`
+    doc comment pointed at ADR-0035 §决策 3 instead of §决策 2; and `book-source.md` §6 now records the
+    two input boundaries the implementation makes visible (fractions truncate towards zero, and
+    `|ms| > 8.64e15` fails the call before `DateTime` would raise an un-catchable `RangeError`).
+
 ### M1 spec front-loading: the explore page and `concurrentRate` (2026-10-13)
 
 Docs only. The remaining half of M1 needed three specs that did not exist yet (`exploreUrl`'s format and
