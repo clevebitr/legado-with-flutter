@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Evidence refresh and two registrations after b3 + b4a (2026-10-13)
+
+Docs only.
+
+- `docs/dev/test-environment.md` §7 now records the latest run: **661 cases**, `core` 920/920 and
+  `domain` 1660/1660 on the host, and `js_bridge` **21/21** on **both** Windows and Android — the
+  Android run was the acceptance item b4a's delivery had left blocked by the network, now closed.
+- `PLAN.md` §3.7 gained two rows found while reviewing b3/b4a: the `page` a **fetched page's field
+  rules** see in JavaScript is `PageFetchService.fetch`'s default `1` (both the search and the
+  explore callers omit it, while upstream does not bind `page` for field rules at all, so neither
+  side is “the other one”), and `.gitattributes` claims `* text=auto eol=lf` while the committed
+  blobs of `PLAN.md` / `CHANGELOG.md` / `docs/dev/book-source.md` carry CRLF — the integration kept
+  the existing line endings so no whole-file rewrite appeared, and the two ways to settle it (or
+  the rule to keep the current endings until then) are written down.
+
 ### Phase 4 b4a: the discover-page engine and `ExploreBooks` (2026-10-13)
 
 - **`exploreUrl`'s two forms are in `domain/explore_categories.dart`** (pure) and

@@ -145,11 +145,11 @@ Windows 与 Android 两侧都已实测通过。
 
 ---
 
-## 7. 实测证据（2026-10-11；主机侧与 Windows / Android 设备级于 2026-10-13 复跑，最新一次含 M1-b2）
+## 7. 实测证据（2026-10-11；主机侧与 Windows / Android 设备级于 2026-10-13 复跑，最新一次含 M1-b3 + b4a）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**621** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 920/920、`domain` 1503/1503，均 100%；阈值见 `docs/dev/testing.md` §2） |
+| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**661** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 920/920、`domain` 1660/1660，均 100%；阈值见 `docs/dev/testing.md` §2） |
 | Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`），含 `flutter_qjs_next` 从 `cxx/` 源码编译的 QuickJS |
 | Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` **21 项**（含 `await http.*` / `await parse.*` / `js:parse-scope` / `js:quota` / `java.*` 同步读写与按源隔离 / URL 的 `key` 绑定 / `java.timeFormat` 的本地渲染与非法入参），`on_disk_database` 1 项）；退出码 0 |
 | Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone` 自动启动 → 3 个用例文件全部通过（`js_bridge` **21 项**）→ 自动关闭；退出码 0 |
