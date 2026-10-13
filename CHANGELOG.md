@@ -7,6 +7,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### b1b review, merge and the device-probe cadence (2026-10-13)
+
+- **Merged: the b1b rework.** The five must-fix items are in (`getElement` answers one value on both
+  paths, an unmatched `getString` answers `''` on both, `java.post` is refused by name,
+  `base64Encode` / `base64Decode` refuse the multi-argument overloads, and `book-source.md` §6 /
+  `PLAN.md` really say what the CHANGELOG used to claim). Verified from this side: Windows device
+  probe re-run (`app_boot` 1/1, `js_bridge` **24/24**, `on_disk_database` 1/1), gates green,
+  `gen-l10n` and `build_runner` in sync.
+- **Fixed by the reviewer: the third path-consistency defect.** On a **JSON** scope the literal fast
+  path ran `_selectAllValues`, which stringified every match: `java.getStringList('$.data.page[*].image')`
+  inlined `["a.jpg","7"]` where the asynchronous path (and `book-source.md` §6, "a JSON match its
+  value") hands `7` as a number. `_selectAllValues` now returns the values untouched, and two tests
+  pin the types (list and single-doc forms).
+- **`tool/spot_check --list` census: the `{{...}}` half was fixed, the numbers recomputed to
+  384/278/142.** The old "a rule starting with `{` is a form object" filter also caught `{{...}}`,
+  contradicting both its own comment and `PLAN.md` §3.7. The reviewer reproduced both censuses from
+  the same `build/ao.json` with an independent replica of the filter (353/253/122 before,
+  384/278/142 after), so the change is accepted; the search-URL half stays conservative.
+- **ADR-0038: device probes move to the phase exit.** A slice-level requirement to run
+  `integration_test/` on **both** Windows and Android did not pay for itself — the Android side is
+  30+ minutes per run and exercises the same Dart code and the same `flutter_qjs_next` engine, while
+  the differences live in platform channels and native SQLite. Slices now need Windows; leaving a
+  phase needs both, which is `PLAN.md` §4's new **G7**. `integration_test/` / `core/platform/` /
+  native-project changes stay the exception and must run on the platform they touch.
+- **New work order b5: two real-source gaps** that the b1b regression found and that are unrelated
+  to `java.*` — a `##` **inside** a `{{...}}` template is still read as the replacement separator
+  (`{{$.tag_views##\s+##,}}` fails the field), and the JSONPath dialect `]` followed directly by a
+  member name (`$.data.page[*]image`) is refused by the RFC 9535 parser. Both reproduced by the
+  reviewer; `PLAN.md` §3.5 has the work order, §3.7 the trigger conditions.
+
+### b1b: the mainstream spelling on a real source, the `{{…}}` census fix, the last review nits (2026-10-13)
+
+The review's leftover acceptance item and three small items, plus a tool bug the acceptance exposed.
+
+- **The requested real-source regression is in, and it exposed the acceptance's blind spot:** every
+  b1b fast-path test used an `@js:` segment; none used the corpus' actual spelling
+  `{{java.timeFormat(java.getString('$.x')*1000)}}`, which is a **`{{…}}` template**. A unit test for
+  that exact form is added (host inlines the literal inside the template; `java.timeFormat` stays a
+  synchronous worker call).
+- **The live record is a derived one, as `b1` and `b2`'s were.** Of the 58 sources whose
+  `ruleToc.updateTime` uses the mainstream spelling, probing every site left none runnable (TLS
+  handshake failures, a WAF 403, POST-form searches, `<js>` wrappers — table in
+  `tool/spot_check/README.md` §4). The 漫客栈 source (collection C #1229, a real export) with **only**
+  `ruleToc.updateTime` rewritten to the mainstream spelling produced
+  `Chapter.updateTime = 2018/10/25 17:05` through the real chain (`$.change_time` is `"0"` on that
+  site, so the same chapter object's real `start_time` is read instead — the derivation says why).
+  That closes b1's remaining half.
+- **Two real-source gaps surfaced; they are registered in `PLAN.md` §3.7, not fixed here** (both
+  predate b1b and are orthogonal to `java.*`): a `##` inside a `{{…}}` template is taken for the
+  rule's replacement split (`{{$.tag_views##\s+##,}}` → `parseFailed`), and `]` followed directly by a
+  member name (`$.data.page[*]image`) is a Legado JSONPath form the RFC 9535 parser refuses. They are
+  why the live 腾讯-search sources and this derived source's `content` stage stop early.
+- **`tool/spot_check --list` was still excluding `{{…}}`.** The criterion had claimed to allow `{{}}`
+  since the M1 grammar slice, but the old “a rule starting with `{` is a POST object” check also
+  caught `{{`. It now rejects only a **single** brace, so the collection C census reads
+  **384 / 278 / 142** (was 353 / 253 / 122); record and re-run command in `tool/spot_check/README.md`
+  §3, ledger row corrected in `PLAN.md` §3.7.
+- **The remaining review nits:** `book-source.md` §6's `java.*` status column really is flipped to
+  ✅ 已落地 now (the previous entry claimed that prematurely); `Packages.*` — Rhino's other interop
+  entry, `Packages.java.lang.…` — is a named rejection and the device probe asserts it; `__hostCall`'s
+  body sits on its own line; and `_selectAllValues`' doc comment lost its stray blank line.
+- **Gates:** `dart format` / `flutter analyze` clean; **674** tests; coverage exit 0 (`core` 944/944,
+  `domain` 1708/1708, both 100%); `build_runner` 0 real changes; generated-file diff empty. Device
+  probe: Windows `js_bridge` **24/24** (the 3 new `java.*` probes included). **Android was not re-run
+  this round** — a full run takes over half an hour and the operator scoped this round to Windows — so
+  `test-environment.md` §7 records it as **not covered**, with the re-run command, rather than as a
+  pass. The numbers above are the branch's own (base `a319f52`, no b4a/b4b yet): the merge review is
+  still the architect's.
+
+### b1b review fixes: one shape per call on both paths, wider refusals, ledger and docs (2026-10-13)
+
+The review found the two evaluation paths disagreeing, three refusals missing, and stale docs.
+
+- **`getElement` is a single value on both paths now.** The literal fast path inlines the first
+  match's `outerHtml` (or JSON value) and the asynchronous binding resolves to the first element of
+  `parse.getElements` (`list.length ? list[0] : null`), so the same call no longer answers a value in
+  one path and an array in the other.
+- **`getString` with no match answers `''` on both paths.** The fast path used to inline `null`,
+  while the asynchronous path (`parse.getString`) answers an empty string; the empty string wins
+  because that is what the binding's documented shape is (`book-source.md` §6).
+- **`java.post` is a named rejection again** (it had been missing, so it fell through to
+  `undefined is not a function`), and `base64Encode` / `base64Decode` now refuse their multi-argument
+  overloads instead of silently ignoring the extra argument (ADR-0037 §决策 2). `get` / `put` stay the
+  **variable** functions of §6 — upstream's synchronous HTTP verbs of those spellings are covered by
+  the `ajax` family — and that reading is now written into **ADR-0037 §决策 5** and `book-source.md`
+  §11 instead of living in a code comment.
+- **Docs:** the b1b real-source work got its own `PLAN.md` §3.7 row (this entry replaces the earlier
+  claim that it was done); `book-source.md` §6's `java.*` status column is flipped in the follow-up
+  entry, not in this one — it still read `M1-b1b` when this was written.
+- **One flaky coverage test hardened** (`request_limiter`'s default-delay case): its 1 ms window
+  could straddle a millisecond boundary and skip the real `Future.delayed`, which is how `core` lost
+  a line. It now uses a 50 ms window and three calls, so the default delay is always exercised.
+
+### Phase 4 b1b: the `java.*` compatibility surface (2026-10-13)
+
+Implements ADR-0037: real sources use upstream's names (540 of 3907 sources use `java.*`;
+`md5Encode` 1221 calls, `getString` 603).
+
+- **Aliases (worker-side, synchronous, upstream semantics):** `java.md5Encode` (hex MD5),
+  `java.base64Encode` / `base64Decode` (no-wrap base64; invalid input throws), `java.encodeURI` and
+  `java.log`. `encodeURI` is Java's `URLEncoder.encode` — the new pure `javaEncodeUri`, **not** the JS
+  builtin of the same name (space -> `+`, different reserved set), because mapping it onto the builtin
+  would silently produce different signed URLs; multi-argument overloads are refused by name.
+- **Rule-evaluation family (`getString` / `getStringList` / `getElement` / `getElements`), two forms,
+  one implementation point.** The **synchronous fast path** runs on the host *before* the job is
+  built: `RuleEngine` scans the script for calls whose first argument is a **string literal**,
+  evaluates each rule against the current scope and inlines the result as JSON. That is what keeps the
+  395 real calls sitting *inside expressions* working
+  (`java.timeFormat(java.getString('$.x')*1000)`), where a Promise would be a type error. A literal
+  whose inner rule itself needs the sandbox (`@js:`, `{{...}}`, `@put:`, `@get:`, `<js>`) is skipped
+  for the **asynchronous** path, which answers through the same host evaluation as `parse.*` (so
+  `js:parse-scope` and `js:parse-recursion` keep their meanings); a failed literal fails the whole
+  rule rather than continuing with half a script.
+- **`Array.prototype.toArray()` shim** (returns `this`) for upstream's Java `List` habit (38 calls),
+  plus **named rejection stubs** for the M2 families (`ajax` / `webView*` / `toast` / key crypto /
+  `base64DecodeToByteArray` / `setContent` / ...) and a throwing proxy for the Rhino interop names
+  (`java.lang`, `java.security`, ...). `get` / `put` deliberately stay the **variable** functions of
+  `book-source.md` §6 (ADR-0034), so upstream's synchronous HTTP verbs of those spellings are covered
+  by the `ajax` family instead.
+- Tests: the pure encoder (form semantics, `%` encoded again, UTF-8 bytes), the call envelope, the
+  fast path (inlined in an expression, list form, non-literal left alone, sandbox-needing literal
+  skipped, failed literal failing the rule in both forms), and three device probes (the alias
+  surface, a rejected member failing readably, and the fast path plus `.toArray()` in a real engine).
+  Coverage exit 0 (`core` 944/944, `domain` 1709/1709).
+- Docs: `PLAN.md` §3.5 marks b1b done; `book-source.md` §6/§11 were already written by ADR-0037's own
+  docs commit. **Still open:** the real-source record for the `getString`-based `updateTime`
+  mainstream spelling.
+
 ### Phase 4 b4b: the discover page UI (2026-10-13)
 
 - **`ExplorePage` + `ExploreNotifier`** (`presentation/`): a horizontally scrolling row of

@@ -83,6 +83,7 @@
    它只加一个方法，不引入任何 I/O / 平台能力，符合 C-SRC-3 的沙箱边界。
    （登记盲区：若将来语料出现 `.size()` 一类 Java 集合方法，再单独裁决，不预造。）
 5. **具名拒绝（M2 / 不在 b1b）：** `ajax` / `get` / `post` / `head` / `ajaxAll` / `connect`（上游**同步**
+   > **实现回执（2026-10-13，b1b）：** `get` / `put` **不在**拒绝族里——§6 已把它们定义为规则变量读写（ADR-0034），名字被占用；上游同步返回 body 的 `get(url)` / `post(url)` 因此由 `ajax` 族覆盖，`post` 已登记具名拒绝。`base64Encode` / `base64Decode` 的多参重载也具名拒绝（无 flags / charset 语义）。`getElement` 是**单值**形态：异步路径也只答第一个匹配，与字面量快路径内联的第一个同形；`getString` 无匹配在两条路径上都给空串。**`getStringList` / `getElement(s)` 的返回值保类型**：JSON 匹配给**值本身**（数字、布尔、对象），两条路径都不许 `toString()`——架构师复核发现快路径曾把 `7` 串成 `"7"`，已随 b1b 合并修掉。
    返回 body，与本仓 `http.*` 的 Promise 形态冲突，别名只会把错误提前成更难懂的错误）、
    `webView*` / `startBrowser*` / `downloadFile` / `cacheFile` / `importScript` / `getVerificationCode` /
    `getCookie`（沙箱禁忌或需要平台能力）、`setContent`（脚本中途改 scope，需要一个规则/作用域 API）、

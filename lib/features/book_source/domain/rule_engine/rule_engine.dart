@@ -60,6 +60,18 @@ const String _jsonTemplateOpen = r'{$';
 /// (C-SRC-4).
 const int _maxExpansionDepth = 8;
 
+/// The start of a `java.*` rule-evaluation call the host can inline (ADR-0037 §决策 3①).
+const String _javaRuleCallPrefix = 'java.get';
+
+/// One inlinable `java.getString('literal')`-shaped call: the verb, a quoted rule and an optional
+/// `false` second argument.
+///
+/// Only a **string literal** first argument qualifies, and a call with a third argument does not
+/// match at all — it stays in the script, where the binding refuses it by name (ADR-0037 §决策 6).
+final RegExp _javaRuleCall = RegExp(
+  r'''java\.(getString|getStringList|getElement|getElements)\(\s*(['"])((?:\\.|(?!\2).)*)\2\s*(?:,\s*false\s*)?\)''',
+);
+
 /// The `@@` default-rule flag of matrix #15.
 ///
 /// Upstream strips it from the front of a rule and keeps the default mode
@@ -696,10 +708,29 @@ final class RuleEngine {
       );
     }
 
+    // ADR-0037 §决策 3①：字面量首参的 `java.getString('规则')` 族在构造 job **之前**就地求值
+    // 并内联——引擎就在宿主上，而且此刻还没有 job 在飞。这让表达式里的嵌套保持同步语义
+    // （`java.timeFormat(java.getString('$.x')*1000)`）。
+    final ParseResult<String> inlined = await _inlineLiteralJavaRules(
+      script,
+      scope,
+      field: field,
+    );
+    final String scriptText;
+    switch (inlined) {
+      case ParseSuccess<String>(:final String data):
+        scriptText = data;
+      case ParseFailure<String>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        return failureAt<List<String>>(kind: kind, rulePath: rulePath);
+    }
+
     final JsPageContext context = _jsContextOf(scope);
     final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
       JsJob(
-        script: script,
+        script: scriptText,
         rulePath: field,
         baseUrl: context.baseUrl,
         page: context.page,
@@ -722,6 +753,118 @@ final class RuleEngine {
       ),
     };
   }
+
+  /// Inlines every `java.getString('literal')`-shaped call of [script] with its value.
+  ///
+  /// This is the synchronous half of ADR-0037 §决策 3: upstream evaluates those rules inside the
+  /// script, and 395 real calls (359 of `getString` alone) sit **inside expressions**
+  /// (`java.timeFormat(java.getString('$.x')*1000)`), where a Promise would be a type error. The
+  /// host can answer them before the worker ever sees the script, so it does: each call whose
+  /// first argument is a **string literal** is evaluated against this scope and replaced by its
+  /// JSON form, which leaves the script without the call at all.
+  ///
+  /// A call that cannot take this path stays in the script and reaches the sandbox, where the
+  /// binding answers a Promise through the same evaluation path; a Promise inside an expression
+  /// then fails loudly as `js:error` rather than silently producing the wrong value (C-SRC-4).
+  ///
+  /// Three rules keep the two paths from disagreeing:
+  ///
+  /// * a literal whose **inner rule needs the sandbox itself** (`@js:`, `{{…}}`, `@put:`, `@get:`,
+  ///   `<js>`) is skipped here — inlining it would run a nested job before this one, and the
+  ///   asynchronous path refuses it through the existing `js:parse-recursion` boundary instead;
+  /// * a failing inner rule fails the whole rule, because half a script with a failed lookup would
+  ///   be a silently different value;
+  /// * the second argument is only accepted as `false`, which is what upstream's
+  ///   `unescape = false` means and what this repository does anyway (ADR-0037 §决策 6).
+  Future<ParseResult<String>> _inlineLiteralJavaRules(
+    String script,
+    RuleScope scope, {
+    required String field,
+  }) async {
+    if (!script.contains(_javaRuleCallPrefix)) {
+      return ParseSuccess<String>(script);
+    }
+
+    // 从后往前替换：前面的 match 下标不会因后面的替换而失效。
+    final List<RegExpMatch> matches = _javaRuleCall
+        .allMatches(script)
+        .toList(growable: false)
+        .reversed
+        .toList(growable: false);
+    String inlined = script;
+
+    for (final RegExpMatch match in matches) {
+      final String? rule = match.group(3);
+      if (rule == null || rule.isEmpty || _needsSandbox(rule)) {
+        continue;
+      }
+
+      final String verb = match.group(1) ?? '';
+      final bool wantsList = verb == 'getStringList' || verb == 'getElements';
+      // `getElement` 是**单值**形态（上游拿一个元素），异步路径同样只答第一个（ADR-0037 §决策 3）。
+      final bool wantsDoc = verb == 'getElement';
+      final ParseResult<List<Object?>> values = wantsList || wantsDoc
+          ? await _selectAllValues(rule, scope, field: field)
+          : await _evaluate(
+              rule,
+              scope,
+              rulePath: field,
+              single: true,
+              depth: 1,
+            );
+      switch (values) {
+        case ParseFailure<List<Object?>>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ):
+          return failureAt<String>(kind: kind, rulePath: rulePath);
+        case ParseSuccess<List<Object?>>(:final List<Object?> data):
+          inlined = inlined.replaceRange(match.start, match.end, switch ((
+            wantsList,
+            wantsDoc,
+          )) {
+            (true, _) => jsonEncode(data),
+            // 单文档形态无匹配时与异步路径一致地给 `null`。
+            (_, true) => jsonEncode(data.isEmpty ? null : data.first),
+            // `getString` 无匹配给空串——异步路径（`parse.getString`）就是这个形状。
+            _ => jsonEncode(data.isEmpty ? '' : data.first),
+          });
+      }
+    }
+
+    return ParseSuccess<String>(inlined);
+  }
+
+  /// Evaluates one nested **list** rule into the values `getStringList` / `getElements` answer.
+  ///
+  /// It reads the matches the way the sandbox's own `parse.getElements` does — an element becomes
+  /// its `outerHtml`, a JSON match **its value** — a JSON match carries numbers, booleans and
+  /// objects, and `book-source.md` §6 keeps them typed — so the inlined value and the
+  /// asynchronous one agree (ADR-0037 §决策 3). Stringifying here would hand `"7"` to a script
+  /// where the asynchronous path hands `7`.
+  Future<ParseResult<List<Object?>>> _selectAllValues(
+    String rule,
+    RuleScope scope, {
+    required String field,
+  }) async => switch (await selectAll(rule, scope, rulePath: field)) {
+    ParseFailure<List<RuleScope>>(
+      :final ParseFailureKind kind,
+      :final String rulePath,
+    ) =>
+      failureAt<List<Object?>>(kind: kind, rulePath: rulePath),
+    ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) =>
+      ParseSuccess<List<Object?>>(<Object?>[
+        for (final RuleScope match in data) _jsDocOf(match),
+      ]),
+  };
+
+  /// Whether [rule] needs the sandbox (or the rule variables), i.e. cannot be inlined.
+  bool _needsSandbox(String rule) =>
+      rule.contains(_jsFlag) ||
+      rule.contains('{{') ||
+      rule.contains(_putScanFlag) ||
+      rule.contains(_getFlag) ||
+      rule.toLowerCase().contains('<js>');
 
   /// The values one `@js:` result contributes: a List is kept element by element, anything
   /// else is one value, and `null` (or a null element) contributes nothing.

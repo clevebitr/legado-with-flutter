@@ -493,25 +493,130 @@ globalThis.__java = function (call) {
     ? '' : String(envelope.value);
 };
 
-globalThis.java = Object.freeze({
-  put: function (key, value) {
-    var call = { operation: 'put', key: String(key) };
-    if (value !== undefined && value !== null) {
-      call.value = String(value);
-    }
-    __java(call);
-  },
-  get: function (key) {
-    return __java({ operation: 'get', key: String(key) });
-  },
-  timeFormat: function (time) {
-    // 时间戳原样送（数字保持数字、字符串保持字符串）：能不能读出来由宿主定（§6）。
-    return __java({
-      operation: 'timeFormat',
-      value: (time === undefined ? null : time)
-    });
+// 具名拒绝族（ADR-0037 §决策 5）：命中即给可读错误，不落到 `undefined is not a function`。
+globalThis.__javaRejected = function (name) {
+  return function () {
+    throw new Error('java.' + name + ' is not supported (M2): see book-source.md §11');
+  };
+};
+
+// 注意：`get` / `put` **不在**这个列表里——`book-source.md` §6 把 `java.get(key)` / `java.put(key,value)`
+// 定义为**变量**读写（ADR-0034），它们的名字被占用；上游那套同步 HTTP 的 `get(url)` / `post(url)`
+// 因此没有可用的拼写，只能靠 `ajax` 这一族具名拒绝（ADR-0037 §决策 5）。
+globalThis.__javaRejectedNames = [
+  'ajax', 'post', 'head', 'ajaxAll', 'connect',
+  'webView', 'webViewGetString', 'webViewGetElements', 'startBrowser', 'startBrowserAwait',
+  'downloadFile', 'cacheFile', 'importScript', 'getVerificationCode', 'getCookie',
+  'setContent', 'toast', 'longToast',
+  'base64DecodeToByteArray', 'hexDecodeToByteArray',
+  'createSymmetricCrypto', 'aesBase64DecodeToString', 'aesEncodeToString', 'aesDecodeToString',
+  'desBase64DecodeToString', 'HMacHex', 'HMacBase64',
+  'md5Encode16', 'htmlFormat', 'refreshBookUrl'
+];
+
+globalThis.__javaInteropNames = ['lang', 'security', 'util', 'net', 'io', 'nio', 'math', 'text'];
+
+// Rhino 的另一条互操作入口 `Packages.java.lang.…`（ADR-0037 §决策 5）：具名拒绝，
+// 不让它落到 `Packages is not defined` 那种更难懂的错误。
+globalThis.Packages = new Proxy({}, {
+  get: function () {
+    throw new Error('Packages.* interop is not supported (M2): see book-source.md §11');
   }
 });
+
+globalThis.java = (function () {
+  var surface = {
+    put: function (key, value) {
+      var call = { operation: 'put', key: String(key) };
+      if (value !== undefined && value !== null) {
+        call.value = String(value);
+      }
+      __java(call);
+    },
+    get: function (key) {
+      return __java({ operation: 'get', key: String(key) });
+    },
+    timeFormat: function (time) {
+      // 时间戳原样送（数字保持数字、字符串保持字符串）：能不能读出来由宿主定（§6）。
+      return __java({
+        operation: 'timeFormat',
+        value: (time === undefined ? null : time)
+      });
+    },
+    // 别名族（ADR-0037 §决策 2）：语义按上游照抄，全部在 worker 内同步完成。
+    md5Encode: function (value) {
+      return __crypto('md5', value);
+    },
+    base64Encode: function (value) {
+      if (arguments.length > 1) {
+        throw new Error('java.base64Encode(str, flags) is not supported: ' +
+          'this repository has no flags semantics (book-source.md §6)');
+      }
+      return __crypto('base64Encode', value);
+    },
+    base64Decode: function (value) {
+      if (arguments.length > 1) {
+        throw new Error('java.base64Decode(str, charset) is not supported: ' +
+          'this repository has no charset semantics (book-source.md §6)');
+      }
+      return __crypto('base64Decode', value);
+    },
+    encodeURI: function (value) {
+      if (arguments.length > 1) {
+        throw new Error('java.encodeURI(str) takes one argument');
+      }
+      return __java({ operation: 'encodeUri', value: String(value) });
+    },
+    log: function (message) {
+      sendMessage('log', JSON.stringify({ level: 'info', message: String(message) }));
+    },
+    // 规则求值族（ADR-0037 §决策 3）：字面量首参已由宿主内联，这里只剩异步兜底；
+    // 内层规则走的是同一条宿主求值通道，scope 就是当前 job 的页级 scope。
+    getString: function (rule, unescape) {
+      if (arguments.length > 2 || unescape === true) {
+        // 上游 `unescape = true`（默认）会对结果做 HTML 实体反转义，本仓不做（ADR-0037 §后果）。
+        throw new Error('java.getString(rule, unescape) supports at most (rule, false)');
+      }
+      return __parse('getString', rule, null);
+    },
+    getStringList: function (rule) {
+      return __parse('getElements', rule, null);
+    },
+    getElement: function (rule) {
+      // 单值形态：异步路径也只答第一个（与快路径内联的第一个匹配同形）——否则同一个调用在
+      // 两条路径上会是「单值 vs 数组」（ADR-0037 §决策 3）。
+      return __parse('getElements', rule, null).then(function (list) {
+        return (list && list.length) ? list[0] : null;
+      });
+    },
+    getElements: function (rule) {
+      return __parse('getElements', rule, null);
+    }
+  };
+  for (var rejectedIndex = 0; rejectedIndex < __javaRejectedNames.length; rejectedIndex++) {
+    surface[__javaRejectedNames[rejectedIndex]] = __javaRejected(
+      __javaRejectedNames[rejectedIndex]
+    );
+  }
+  for (var interopIndex = 0; interopIndex < __javaInteropNames.length; interopIndex++) {
+    surface[__javaInteropNames[interopIndex]] = new Proxy({}, {
+      get: function () {
+        throw new Error('java.* interop is not supported (M2): see book-source.md §11');
+      }
+    });
+  }
+  return Object.freeze(surface);
+})();
+
+// 上游习惯写 Java `List.toArray()`（语料 38 处，ADR-0037 §决策 4）：能力中性的垫片，只返回自身。
+if (Array.prototype.toArray === undefined) {
+  Object.defineProperty(Array.prototype, 'toArray', {
+    value: function () { return this; },
+    enumerable: false,
+    writable: true,
+    configurable: true
+  });
+}
 
 globalThis.__hostCall = function (binding, args) {
   return sendMessage(binding, JSON.stringify(args));

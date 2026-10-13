@@ -579,6 +579,81 @@ void main() {
       ParseSuccess<String?>() => 'unexpected success',
     }, 'searchRule.name:js:error');
   }, timeout: const Timeout(Duration(minutes: 2)));
+  testWidgets(
+    'jsBridge_whenAScriptUsesTheJavaCompatSurface_answersLikeUpstream',
+    (WidgetTester tester) async {
+      // M1-b1b（ADR-0037 §决策 2）：别名族在 worker 内同步完成，语义按上游照抄。
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script:
+              "[java.md5Encode('abc'), java.base64Decode(java.base64Encode('剑来')), "
+              "java.encodeURI('a b'), typeof java.log('x')].join('|')",
+        ),
+      );
+
+      // md5('abc') 是 RFC 1321 的公开向量；base64 往返、空格 → `+`、log 无返回值。
+      expect(
+        _value(result),
+        '900150983cd24fb0d6963f7d28e17f72|剑来|a+b|undefined',
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets('jsBridge_whenAScriptCallsARejectedJavaMember_failsReadably', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0037 §决策 5：M2 的成员命中即给可读错误，不是 `undefined is not a function`。
+    // `Packages.*` 是 Rhino 的另一条互操作入口（`Packages.java.lang.…`），同样具名拒绝——
+    // 不然它是 `Packages is not defined` 这种更难懂的错误。
+    for (final String script in <String>[
+      "java.ajax('https://a.test')",
+      "Packages.java.lang.String('x')",
+    ]) {
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(script: script),
+      );
+
+      expect(
+        switch (result) {
+          ParseFailure<Object?>(:final String rulePath) => rulePath,
+          ParseSuccess<Object?>() => 'unexpected success',
+        },
+        'searchRule.name:js:error',
+        reason: script,
+      );
+    }
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleUsesTheJavaGetStringFastPath_getsSyncValues', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0037 §决策 3①：字面量首参在构造 job 之前由宿主内联，所以表达式里的用法拿到同步值，
+    // 上游 `List.toArray()` 的写法（§决策 4 的垫片）也随之成立。
+    final RuleEngine engine = RuleEngine(
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      jsBridge: bridge,
+      variables: variables,
+    );
+    const String pageHtml =
+        '<ul class="list"><li class="odd"><a href="/book/1">One</a></li></ul>';
+    final RuleScope scope = RuleScope.dom(
+      parser.parse(pageHtml),
+      body: pageHtml,
+      jsContext: const JsPageContext(
+        baseUrl: 'https://example-novel.test/search',
+      ),
+    );
+
+    final ParseResult<String?> result = await engine.extractFirst(
+      "@js:java.getString('class.odd.0@tag.a.0@text') + '|' + "
+      "java.getStringList('class.odd@tag.a').toArray().length",
+      scope,
+      rulePath: 'contentRule.content',
+    );
+
+    expect(_value(result), 'One|1');
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }
 
 /// A job whose script decides the behaviour; the variables are the §6 bindings.

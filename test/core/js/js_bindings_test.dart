@@ -525,6 +525,49 @@ void main() {
     });
   });
 
+  group('javaEncodeUri (M1-b1b)', () {
+    test('javaEncodeUri_givenText_encodesLikeAJavaFormEncoder', () {
+      // 上游是 `URLEncoder.encode(str, "UTF-8")`（JsExtensions.kt:683-689）：空格 → `+`，
+      // 保留 `A-Za-z0-9` 与 `-_.*`，其余按 UTF-8 字节 `%XX` 大写。
+      expect(javaEncodeUri('abc-_.*123'), 'abc-_.*123');
+      expect(javaEncodeUri('a b'), 'a+b');
+      expect(
+        javaEncodeUri('https://a.test/x?q=1&p=2'),
+        'https%3A%2F%2Fa.test%2Fx%3Fq%3D1%26p%3D2',
+      );
+      expect(javaEncodeUri('剑来'), '%E5%89%91%E6%9D%A5');
+    });
+
+    test('javaEncodeUri_givenAnAlreadyEncodedValue_encodesThePercentAgain', () {
+      // 与 url_template 的模板编码器不同：上游**总是**编码，没有再编一次的判断。
+      expect(javaEncodeUri('%20'), '%2520');
+      expect(javaEncodeUri('+'), '%2B');
+    });
+
+    test('applyJsJavaCall_givenAnEncodeUriCall_answersTheEncodedValue', () {
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'encodeUri',
+          'value': 'a b',
+        }),
+        '{"ok":true,"value":"a+b"}',
+      );
+    });
+
+    test(
+      'decodeJsJavaRequest_givenAnEncodeUriCallWithABadValue_isMalformed',
+      () {
+        expect(
+          decodeJsJavaRequest(<String, Object?>{
+            'operation': 'encodeUri',
+            'value': 1,
+          }),
+          isNull,
+        );
+      },
+    );
+  });
+
   group('mergeJsHttpHeaders', () {
     test('mergeJsHttpHeaders_givenSourceAndRuleHeaders_letsTheRuleWin', () {
       expect(

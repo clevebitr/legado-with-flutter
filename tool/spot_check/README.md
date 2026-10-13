@@ -48,8 +48,8 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 | 合集 A | `https://raw.githubusercontent.com/Orokapei/BookSource/main/Legado.json`（11 条） |
 | 合集 B | `https://raw.githubusercontent.com/safino9/SourceGo/master/book_source/all.json`（189 条） |
 | 合集 C | `https://legado.aoaostar.com/sources/b778fe6b.json`（3907 条，最近同步 2026-08-15） |
-| 筛选 | `--list` 的判据：`searchUrl` 是 HTTPS GET 且含 `{{key}}`、四段规则非空、不含**尚未实现**的标志（`@xpath:` / `webjs` / `sourceregex` / `@@` / `<js>` / 裸 `{…}` / `:正则`）。**判据随已实现语法收放：** `@js:` 自 3.4 起不再是排除项（矩阵 #14），只在**列表规则**（`bookList` / `chapterList`）里排除；`@put:` / `@get:` 与 `{{}}` 内嵌（矩阵 #16 / #18，随 3.4 落地）自 **2026-10-13** 起也不再排除。搜索 URL 仍保守：只认 `{{key}}` / `{{page}}` / `{{baseUrl}}`，其余 `{…}` 一并排除 |
-| 结果（2026-10-13 复算） | 合集 C 中 **353/3907** 条属于「本仓今天能跑通四段」的集合（M0 + 已落地的 M1 语法）；其中 **253** 条依赖未知类型退化（ADR-0032）、**122** 条用值规则 `@js:` |
+| 筛选 | `--list` 的判据：`searchUrl` 是 HTTPS GET 且含 `{{key}}`、四段规则非空、不含**尚未实现**的标志（`@xpath:` / `webjs` / `sourceregex` / `@@` / `<js>` / `:正则` / `{"method"…}` 那类对象头）。**判据随已实现语法收放：** `@js:` 自 3.4 起不再是排除项（矩阵 #14），只在**列表规则**（`bookList` / `chapterList`）里排除；`@put:` / `@get:` 与 `{{}}` 内嵌（矩阵 #16 / #18，随 3.4 落地）不再排除。**2026-10-13 修正：** `{{…}}` 开头的规则此前仍被一个「`{` 开头就排除」的旧判据（为 `{"method":"POST"}` 写的）误伤——它把 `{{}}` 也当对象头了，与同一段注释和 `PLAN.md` §3.7 的「`{{}}` 不再排除」互相矛盾。现在只排除**单**花括号开头。搜索 URL 仍保守：只认 `{{key}}` / `{{page}}` / `{{baseUrl}}`，其余 `{…}` 一并排除 |
+| 结果（2026-10-13，含 `{{…}}` 修正后复算） | 合集 C 中 **384/3907** 条属于「本仓今天能跑通四段」的集合（M0 + 已落地的 M1 语法）；其中 **278** 条依赖未知类型退化（ADR-0032）、**142** 条用值规则 `@js:` |
 | 探测 | 80 条各 1 次 GET（浏览器 UA，≤12 s）；**40 条返回 200**，其中 13 条搜索页含真实结果链接 |
 
 **一行复算这三个数字（含 ADR-0032 的依据）：**
@@ -65,9 +65,9 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 ```bash
 curl -sSL -o build/ao.json https://legado.aoaostar.com/sources/b778fe6b.json
 SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check/spot_check.dart | tail -3
-# -- 353 of 3907 sources are M0-compatible.
-# -- 253 of 353 M0-compatible sources rely on the unknown-type degradation (ADR-0032).
-# -- 122 of 353 M0-compatible sources use a value-rule `@js:` (matrix #14); …
+# -- 384 of 3907 sources are M0-compatible.
+# -- 278 of 384 M0-compatible sources rely on the unknown-type degradation (ADR-0032).
+# -- 142 of 384 M0-compatible sources use a value-rule `@js:` (matrix #14); …
 ```
 
 > 打印里的 `M0-compatible` 现在指「M0 + 已落地的 M1 语法」（判据见上表筛选行）；名字没改是为了
@@ -76,9 +76,10 @@ SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check
 > 合集内容会随上游同步变化，上面是 **2026-08-15 快照**下的数字。
 >
 > **为什么条数与 ADR-0032 §背景 的 197/137 不同：** 那两个数字是 3.4 落地前的快照（当时
-> `@js:` 仍在排除列表里，含值规则 `@js:` 的源没被计入）。判据此后又宽容了两次（`@put:` /
-> `@get:` / `{{}}`，见筛选行），所以 **266 → 353** 是同一份合集上的口径变化，
-> 而不是源变多了。ADR-0032 自己的结论（未知类型必须退化为 CSS）不受影响。
+> `@js:` 仍在排除列表里，含值规则 `@js:` 的源没被计入）。判据此后宽容了三次（`@put:` /
+> `@get:`、`{{}}` 内嵌、以及 2026-10-13 真正放开的 `{{…}}` 规则头），所以 **266 → 353 → 384**
+> 是同一份合集上的口径变化，而不是源变多了。ADR-0032 自己的结论（未知类型必须退化为 CSS）
+> 不受影响。
 
 > 只读、低频：每个候选 1 次请求，链路本体每站 ≤4 次（搜索 / 详情 / 目录 / 正文各 1）。
 > 不登录、不批量爬取、不落盘页面。
@@ -187,6 +188,57 @@ SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check
 > 另：只有 3/3907 条声明限速，所以这个特性的影响面本身很小；三条都合法（`0 invalid`），
 > 即真实语料里还没出现过 ADR-0036 §决策 2 的那种畸形声明（其行为由单测钉住）。
 
+**M1-b1b（`java.*` 兼容面 · 语料主流写法）的证据（2026-10-13）：**
+
+```
+语法：`{{java.timeFormat(java.getString('$.x')*1000)}}`（§6 的字面量快路径 + java.* 别名族）
+书源：🎨 漫客栈 (comic.mkzhan.com)，合集 C 第 1229 条的**真实导出**
+链路：搜索 → 详情 → 目录 → 正文
+结果（只改 `ruleToc.updateTime` 一条规则，见派生说明）：
+  search   ok  count=1   火影忍者之新的伙伴 https://comic.mkzhan.com/comic/info/?comic_id=213560
+  bookInfo ok  火影忍者之新的伙伴 | toc=https://comic.mkzhan.com/chapter/?comic_id=213560
+  toc      ok  count=5   尸魂界的不速之客 … updateTime=2018/10/25 17:05
+  content  FAILED parseFailed at contentRule.content（JSONPath 方言缺口，与本切片无关，见下）
+结论：主流写法把真实章节的 `start_time=1540458357` 经 `java.getString`（宿主内联成
+      `"1540458357"`）与 `java.timeFormat` 落到 `Chapter.updateTime = 2018/10/25 17:05`
+      （本机 +08:00）。这同时收口了 b1 剩下的那半：「主流写法未证」。
+```
+
+> **派生说明（与本节 `@css:` / b2 派生同口径）：** 只改 `ruleToc.updateTime`：
+> 原值 `$.change_time@js:result==0?'':java.timeFormat(result*1000)` →
+> `{{java.timeFormat(java.getString('$.start_time')*1000)}}`。
+> `searchUrl` / `header` / 四段规则其余字段逐字来自真实导出。两点理由：
+> ① 该站 5 个章节的 `change_time` 全是 `"0"`，原规则自己把它挡成 `''`（b1 的派生记录已实测），
+> 取不到 `java.timeFormat` 那一路；`start_time` 是**同一个章节对象里的真实 10 位秒级时间戳**，
+> 能让 `java.getString` 读到一个非零值，证明取到的是真数据而不是空串乘 1000；
+> ② 全量 3907 条里 `ruleToc.updateTime` 用主流写法的共 **58 条**，逐个探活后**没有一条能原样跑**：
+>
+> | 站点（源数） | 探活（GET 自己的 searchUrl，浏览器 UA） | 归属 |
+> |---|---|---|
+> | `s.lhdqsb.cn`书香之家×2 | TLS 握手失败；且 `header` 是 `<js>`（本仓无法反序列化） | 站点不可达 + 字段形态 |
+> | `s.pjxhmy.com`值得阅读×4 | TLS 握手失败；`header` 同为 `<js>` | 同上 |
+> | `apifans.dushimh.com`粉丝漫画 | TLS 握手失败 | 站点不可达 |
+> | `www.9comic.cn`好看漫画×2 | 301 → `gcomic.net`，403 / 连接被重置 | WAF |
+> | 其余 49 条 | `searchUrl` 是 POST 表单 / `<js>` / `@js:` 包装 | 本仓不支持（§3 判据已排除） |
+>
+> 复跑命令（派生 JSON 需自行生成）：
+> `flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<derived.json> --keyword=火影 --json`。
+
+> **为什么 content 段是 `parseFailed`（归属：JSONPath 方言，非 b1b）：** 该源正文规则是
+> `java.getStringList("$.data.page[*]image").toArray().map(…)`。`java.getStringList` 的**快路径确实被调用**
+> （失败发生在它求值的**内层规则**上），但 `$.data.page[*]image` 这种「`]` 后直接跟成员名」的 Legado
+> JSONPath 方言被 RFC 9535 解析器（`json_path`）拒掉——同一页真实数据下
+> `$.data.page[*].image` 返回 3 张图、`[*]image` 直接 `parseFailed`。已登记在 `PLAN.md` §3.7。
+
+**腾讯搜索系真实源（未做任何改写）的探活结果（2026-10-13）：** 合集 C 里活着的、用主流写法的真源是
+`●QB女生<kd♛` / `南极 🐧`（`so.html5.qq.com/ajax/real_search_result`，HTTP 200 / 33 KB 真实 JSON）。
+它们把 `{{java.timeFormat(java.getString('$.lastUpdatetime')*1000)}}` 写在 `ruleBookInfo.kind` 里，
+**原样跑不了**，原因是两个已登记的本仓缺口（都发生在 b1b 的代码之前、与 `java.*` 无关）：
+① kind 的第一个模板是 `{{$.tag_views##\s+##,}}`——**`##` 落在 `{{…}}` 内部**时，`_expandRule`
+先按第一个 `##` 切开整条规则，模板因此被判成不平衡，该字段 `parseFailed`（矩阵 #18 × #9）；
+② `bookUrl` 的 `…?bookid={{$.docId##.*_}}` 在 **URL** 里写规则头，按 §4 本就按名拒绝。
+两条的现象与复跑细节都记在 `PLAN.md` §3.7，供架构师排期。
+
 **矩阵 #12（`@css:`）在真实 HTML 上的证据：** 同一站点、同一批页面，把上一条书源的默认规则**逐条改写为等价的 `@css:` 写法**（`class.bookbox` → `@css:.bookbox`、`id.content@textNodes` →
 `@css:#content@textNodes`、`class.bookimg@tag.img.0@src` → `@css:.bookimg img:eq(0)@src` 等，
 后者同时行使矩阵 #29），得到**同样的四段计数**，且正文 **sha256 完全相同**
@@ -283,3 +335,13 @@ Declared charset utf-8 carried illegal bytes; 1 malformed byte replacement(s) in
   §3 已写明口径与理由，选源时仍按 §5 的逐条审查避开放不进规则的源。
 - 绝大多数 2023 年入库的书源站点已死或加防护（本次 69 条含值规则 `@js:` 的 M0 源里
   能活的只有 API 型三条），因此「真实源回归」每次都要重新选源；命令与判据见 §3。
+- **`{{…}}` 模板内部的 `##` 替换**（新发现，2026-10-13，M1-b1b 真源回归）：
+  `{{$.tag_views##\s+##,}}` 这类写法会让 `_expandRule` 先按第一个 `##` 切开整条规则（那个
+  `##` 在模板里面），模板因此被判成不平衡，字段 `parseFailed`。腾讯搜索系真源
+  （`●QB女生<kd♛` / `南极 🐧`）的 `ruleBookInfo.kind` 第一条模板就是它，所以那两条源跑不到
+  主流写法的第二条模板。矩阵 #18 × #9 的交叉，登记在 `PLAN.md` §3.7。
+- **JSONPath 方言：`]` 后直接跟成员名**（新发现，2026-10-13，同一次回归）：
+  `$.data.page[*]image` / `$.a[0]b` 是 Legado 接受的写法，而 RFC 9535 解析器（`json_path`）
+  只认 `$.data.page[*].image`；两者在真实数据上一个 `parseFailed`、一个返回 3 张图。
+  它让 b1b 的派生真源在 content 段失败（`java.getStringList` 的快路径**已被调用**，卡在内层规则），
+  登记在 `PLAN.md` §3.7。
