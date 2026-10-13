@@ -12,6 +12,7 @@
 | 目标 | 状态 | 说明 |
 |---|---|---|
 | 主机侧单元 / Widget 测试 | ✅ 已跑通 | `flutter test --coverage` 全部用例通过，`tool/check_coverage.dart` 退出码 0。用例计数与分层覆盖率只在 §7 的实测证据表里出现一次（该计数随每个切片增长，以**最近一次运行**为准；阈值与判定归 `docs/dev/testing.md` §2） |
+| **执行时点** | — | **切片级只要求 Windows 实跑（约 2 分钟）；阶段出口要求 Windows + Android 各一次（Android 侧单次 ≥ 30 分钟）**；改了 `lib/core/platform/**`、原生工程（`android/` / `windows/` / `ios/`）或 `integration_test/` 的切片是例外，必须在改动的那个平台实跑。谁在何时跑、重开条件与决策理由归 **ADR-0038**，本节不复述；命令见 §3，证据写 §7 |
 | Windows 桌面设备级用例 | ✅ 已跑通 | `integration_test/` 两个用例文件在 `-d windows` 全部通过 |
 | Android 模拟器设备级用例 | ✅ 已跑通 | AVD `Medium_Phone`（API 37）上两个用例文件全部通过，含文件型 Drift 数据库 |
 | iOS | ❌ **未覆盖** | 本机无 macOS / Xcode，条件不具备；iOS 行为仍按 `docs/dev/platform.md` §6 人工确认 |

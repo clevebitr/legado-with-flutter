@@ -803,7 +803,7 @@ final class RuleEngine {
       final bool wantsList = verb == 'getStringList' || verb == 'getElements';
       // `getElement` 是**单值**形态（上游拿一个元素），异步路径同样只答第一个（ADR-0037 §决策 3）。
       final bool wantsDoc = verb == 'getElement';
-      final ParseResult<List<String>> values = wantsList || wantsDoc
+      final ParseResult<List<Object?>> values = wantsList || wantsDoc
           ? await _selectAllValues(rule, scope, field: field)
           : await _evaluate(
               rule,
@@ -813,12 +813,12 @@ final class RuleEngine {
               depth: 1,
             );
       switch (values) {
-        case ParseFailure<List<String>>(
+        case ParseFailure<List<Object?>>(
           :final ParseFailureKind kind,
           :final String rulePath,
         ):
           return failureAt<String>(kind: kind, rulePath: rulePath);
-        case ParseSuccess<List<String>>(:final List<String> data):
+        case ParseSuccess<List<Object?>>(:final List<Object?> data):
           inlined = inlined.replaceRange(match.start, match.end, switch ((
             wantsList,
             wantsDoc,
@@ -838,9 +838,11 @@ final class RuleEngine {
   /// Evaluates one nested **list** rule into the values `getStringList` / `getElements` answer.
   ///
   /// It reads the matches the way the sandbox's own `parse.getElements` does — an element becomes
-  /// its `outerHtml`, a JSON match its value — so the inlined value and the asynchronous one agree
-  /// (ADR-0037 §决策 3).
-  Future<ParseResult<List<String>>> _selectAllValues(
+  /// its `outerHtml`, a JSON match **its value** — a JSON match carries numbers, booleans and
+  /// objects, and `book-source.md` §6 keeps them typed — so the inlined value and the
+  /// asynchronous one agree (ADR-0037 §决策 3). Stringifying here would hand `"7"` to a script
+  /// where the asynchronous path hands `7`.
+  Future<ParseResult<List<Object?>>> _selectAllValues(
     String rule,
     RuleScope scope, {
     required String field,
@@ -849,10 +851,10 @@ final class RuleEngine {
       :final ParseFailureKind kind,
       :final String rulePath,
     ) =>
-      failureAt<List<String>>(kind: kind, rulePath: rulePath),
+      failureAt<List<Object?>>(kind: kind, rulePath: rulePath),
     ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) =>
-      ParseSuccess<List<String>>(<String>[
-        for (final RuleScope match in data) _jsDocOf(match).toString(),
+      ParseSuccess<List<Object?>>(<Object?>[
+        for (final RuleScope match in data) _jsDocOf(match),
       ]),
   };
 

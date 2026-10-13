@@ -41,7 +41,7 @@ ADR-0027 确立：**一个事实只允许在一处定义**，其他位置一律�
 | 覆盖率阈值、「未测量源文件」判定、退出码 | `docs/dev/testing.md` §2 | `constraints.md` C-TEST-1 回链 |
 | 覆盖率豁免条目与理由 | `tool/coverage_allowlist.txt`（文件内注释） | 类别定义见 ADR-0019 §2 |
 | 测试文件位置（镜像 `lib/` / `integration_test/`） | `docs/dev/testing.md` §3 | C-TEST-4、`naming.md` §2、`test-environment.md` §4 回链 |
-| 本机测试环境、脚本、设备级用例、实测证据 | `docs/dev/test-environment.md` | `testing.md` §1 回链 |
+| 本机测试环境、脚本、设备级用例**及其执行时点**、实测证据 | `docs/dev/test-environment.md` | `testing.md` §1 回链；执行时点的决策理由归 ADR-0038 |
 | 依赖清单与版本 | `pubspec.yaml`（代码）；`docs/dev/tech-stack.md` §1、§2–§9（说明） | C-DEP-6 |
 | 依赖版本相互耦合的原因 | `docs/dev/tech-stack.md` §1.1 | — |
 | `m3e_design` API 与 `M3ESpacing` 六阶数值 | `docs/dev/tech-stack.md` §3.1 | `constraints.md` §6 回链 |

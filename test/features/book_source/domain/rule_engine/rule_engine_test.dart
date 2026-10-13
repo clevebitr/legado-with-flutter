@@ -3933,5 +3933,58 @@ void main() {
         expect(script, contains('href=\\"/book/1\\"'));
       },
     );
+
+    test(
+      'extractAll_givenALiteralJavaGetStringListOnJsonScope_keepsTheValueTypes',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'ran';
+
+        await _values(
+          _engine(null, bridge).extractAll(
+            r"@js:java.getStringList('$.data.page[*].image')",
+            RuleScope.json(<String, Object?>{
+              'data': {
+                'page': <Object?>[
+                  <String, Object?>{'image': 'a.jpg'},
+                  <String, Object?>{'image': 7},
+                  <String, Object?>{'image': true},
+                ],
+              },
+            }),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // 快路径内联的是 **JSON 值本身**，不是 `toString()` 后的字符串：异步路径
+        // （`parse.getElements` → `_jsDocOf`，§6「JSON 匹配给值本身」）给 `7` / `true`，
+        // 内联若写成 `"7"` / `"true"` 就会让同一个调用在两条路径上得到不同类型
+        // （ADR-0037 §决策 3）。所以这里断言字面量里**没有引号包着的数字/布尔**。
+        expect(bridge.jobs.single.script, '["a.jpg",7,true]');
+      },
+    );
+
+    test(
+      'extractAll_givenALiteralJavaGetElementOnJsonScope_inlinesTheTypedValue',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'ran';
+
+        await _values(
+          _engine(null, bridge).extractAll(
+            r"@js:java.getElement('$.data.page[*].image')",
+            RuleScope.json(<String, Object?>{
+              'data': {
+                'page': <Object?>[
+                  <String, Object?>{'image': 7},
+                ],
+              },
+            }),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // 单值形态同样保类型：异步路径的 `getElement` 是 `list[0]`（原值），不是字符串。
+        expect(bridge.jobs.single.script, '7');
+      },
+    );
   });
 }
