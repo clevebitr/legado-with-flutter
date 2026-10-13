@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Stable coverage gate, a withdrawn finding and the b1b review (2026-10-13)
+
+The coverage gate could fail on any PR for a reason unrelated to that PR, and one registered
+finding turned out to be a measurement mistake. Both are settled before the next merge:
+
+- **Fixed: the coverage gate flaked.** `lib/core/network/request_limiter.dart` had a private
+  `_wait` (a one-line wrapper over `Future.delayed`) that only ran when the rate gate really
+  waited, while the only test covering it used a **1 ms** window — so when ≥1 ms passed between the
+  two `run` calls the second one had nothing to wait for, the line stayed unexecuted and `core`
+  dropped to 943/944 (exit code 1). Three consecutive runs reproduced it (100% / 99.89% / 100%).
+  The wrapper is gone: the limiter's default is now `Future.delayed`'s tear-off, so the file has no
+  “only executed while waiting” line left; the test's window moved to 20 ms and its comment says
+  why coverage no longer depends on it. Five consecutive runs are stable at `core` 919/919.
+- **Withdrawn: the `.gitattributes` / CRLF finding from the 2026-10-13 evidence refresh.** The
+  row claimed three files were committed with CRLF; the reproduction command returns the opposite
+  (`git cat-file blob <ref>:PLAN.md | od -An -tx1` has no `0d` byte at four commits, and
+  `git ls-files --eol` reports `i/lf w/lf` for every managed text file). The original check
+  (`git show <ref>:<file> | grep -c $'\r'`) reports CR on **every** line on this host — it was the
+  check that was wrong. The only CRLF that exists is in the four files the development group's
+  editor created in a worktree, which `git add` normalises to LF anyway. `PLAN.md` §3.7 records
+  the corrected state; the earlier entry above is left as history.
+- **Registered: the b1b delivery was reviewed and returned for rework.** `PLAN.md` §3.5 marks the
+  slice as returned and §3.7 carries the must-fix list with file:line — the fast path and the
+  asynchronous path disagree for `getElement` and for an unmatched `getString`, `java.post` is not
+  refused by name, `base64Encode` / `base64Decode` accept the multi-argument overloads the ADR
+  refuses, the CHANGELOG claimed a `PLAN.md` update that was not in the commit, and the real-source
+  regression plus the two device probes are still open. Nothing from that branch was merged.
+
+### Troubleshooting row for the per-worktree native-asset cache (2026-10-13)
+
+Docs only, one row in `test-environment.md` §6: every fresh `git worktree` has its own
+`.dart_tool/hooks_runner/shared/sqlite3/`, so a new worktree has to download the precompiled
+SQLite library again — and on a network blip `flutter test` / `flutter run` fail with
+`By default, this package downloads a pre-compiled SQLite library` plus a `SocketException`.
+The row records the worked-around fix (copy the cached directory from a worktree that already
+ran) and that changing `pubspec.yaml` or adding a local sqlite3 is the wrong reaction. This is
+the same download that blocked the Android device probe twice.
+
 ### Evidence refresh and two registrations after b3 + b4a (2026-10-13)
 
 Docs only.
