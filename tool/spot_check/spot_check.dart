@@ -235,8 +235,11 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
       info = data;
       report.record(
         'bookInfo',
+        // `kind` 也打出来：M1-b1b 的真源回归里，主流写法 `{{java.timeFormat(java.getString('$.x')*1000)}}`
+        // 出现在 `ruleBookInfo.kind`（腾讯搜索系书源），所以这一列是那次回归的证据本身。
         _stage(1, <String>[
           '${data.name} | author=${data.author} | toc=${data.tocUrl}'
+              ' | kind=${_sample(data.kind ?? '-')}'
               ' | updateTime=${data.updateTime ?? '-'}',
         ]),
       );
@@ -567,12 +570,14 @@ bool _isM0Compatible(Map<String, Object?> item) {
     if (lower.contains(_jsFlag) && _jsUnsupportedFields.contains(rule.key)) {
       return false;
     }
+    // `{{…}}`（矩阵 #18）已在 3.4 落地，不能再按「`{` 开头 = 表单 / 选项对象」排除——
+    // 只认**单**花括号开头（`{"method":"POST"}` 那类对象）与 `:正则` 头部；
+    // searchUrl 里的裸 `{` 仍由上面的模板检查保守地挡掉（宁可少收）。
     final String trimmed = rule.value.trimLeft();
-    if (trimmed.startsWith('{') || trimmed.startsWith(':')) {
+    if (trimmed.startsWith(':') ||
+        (trimmed.startsWith('{') && !trimmed.startsWith('{{'))) {
       return false;
     }
-    // `{{…}}` 已在矩阵 #18 落地（非 searchUrl 的字段里可能是 JS，也可能是内嵌规则），
-    // 所以不再整条排除；searchUrl 的 `{` 判据仍在上面的模板检查里保守地挡掉（宁可少收）。
   }
 
   return true;

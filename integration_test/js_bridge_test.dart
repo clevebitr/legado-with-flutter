@@ -604,14 +604,25 @@ void main() {
     WidgetTester tester,
   ) async {
     // ADR-0037 §决策 5：M2 的成员命中即给可读错误，不是 `undefined is not a function`。
-    final ParseResult<Object?> result = await bridge.evaluate(
-      _job(script: "java.ajax('https://a.test')"),
-    );
+    // `Packages.*` 是 Rhino 的另一条互操作入口（`Packages.java.lang.…`），同样具名拒绝——
+    // 不然它是 `Packages is not defined` 这种更难懂的错误。
+    for (final String script in <String>[
+      "java.ajax('https://a.test')",
+      "Packages.java.lang.String('x')",
+    ]) {
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(script: script),
+      );
 
-    expect(switch (result) {
-      ParseFailure<Object?>(:final String rulePath) => rulePath,
-      ParseSuccess<Object?>() => 'unexpected success',
-    }, 'searchRule.name:js:error');
+      expect(
+        switch (result) {
+          ParseFailure<Object?>(:final String rulePath) => rulePath,
+          ParseSuccess<Object?>() => 'unexpected success',
+        },
+        'searchRule.name:js:error',
+        reason: script,
+      );
+    }
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('jsBridge_whenARuleUsesTheJavaGetStringFastPath_getsSyncValues', (

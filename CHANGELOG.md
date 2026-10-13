@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### b1b: the mainstream spelling on a real source, the `{{…}}` census fix, the last review nits (2026-10-13)
+
+The review's leftover acceptance item and three small items, plus a tool bug the acceptance exposed.
+
+- **The requested real-source regression is in, and it exposed the acceptance's blind spot:** every
+  b1b fast-path test used an `@js:` segment; none used the corpus' actual spelling
+  `{{java.timeFormat(java.getString('$.x')*1000)}}`, which is a **`{{…}}` template**. A unit test for
+  that exact form is added (host inlines the literal inside the template; `java.timeFormat` stays a
+  synchronous worker call).
+- **The live record is a derived one, as `b1` and `b2`'s were.** Of the 58 sources whose
+  `ruleToc.updateTime` uses the mainstream spelling, probing every site left none runnable (TLS
+  handshake failures, a WAF 403, POST-form searches, `<js>` wrappers — table in
+  `tool/spot_check/README.md` §4). The 漫客栈 source (collection C #1229, a real export) with **only**
+  `ruleToc.updateTime` rewritten to the mainstream spelling produced
+  `Chapter.updateTime = 2018/10/25 17:05` through the real chain (`$.change_time` is `"0"` on that
+  site, so the same chapter object's real `start_time` is read instead — the derivation says why).
+  That closes b1's remaining half.
+- **Two real-source gaps surfaced; they are registered in `PLAN.md` §3.7, not fixed here** (both
+  predate b1b and are orthogonal to `java.*`): a `##` inside a `{{…}}` template is taken for the
+  rule's replacement split (`{{$.tag_views##\s+##,}}` → `parseFailed`), and `]` followed directly by a
+  member name (`$.data.page[*]image`) is a Legado JSONPath form the RFC 9535 parser refuses. They are
+  why the live 腾讯-search sources and this derived source's `content` stage stop early.
+- **`tool/spot_check --list` was still excluding `{{…}}`.** The criterion had claimed to allow `{{}}`
+  since the M1 grammar slice, but the old “a rule starting with `{` is a POST object” check also
+  caught `{{`. It now rejects only a **single** brace, so the collection C census reads
+  **384 / 278 / 142** (was 353 / 253 / 122); record and re-run command in `tool/spot_check/README.md`
+  §3, ledger row corrected in `PLAN.md` §3.7.
+- **The remaining review nits:** `book-source.md` §6's `java.*` status column really is flipped to
+  ✅ 已落地 now (the previous entry claimed that prematurely); `Packages.*` — Rhino's other interop
+  entry, `Packages.java.lang.…` — is a named rejection and the device probe asserts it; `__hostCall`'s
+  body sits on its own line; and `_selectAllValues`' doc comment lost its stray blank line.
+- **Gates:** `dart format` / `flutter analyze` clean; **674** tests; coverage exit 0 (`core` 944/944,
+  `domain` 1708/1708, both 100%); `build_runner` 0 real changes; generated-file diff empty. Device
+  probe: Windows `js_bridge` **24/24** (the 3 new `java.*` probes included). **Android was not re-run
+  this round** — a full run takes over half an hour and the operator scoped this round to Windows — so
+  `test-environment.md` §7 records it as **not covered**, with the re-run command, rather than as a
+  pass. The numbers above are the branch's own (base `a319f52`, no b4a/b4b yet): the merge review is
+  still the architect's.
+
 ### b1b review fixes: one shape per call on both paths, wider refusals, ledger and docs (2026-10-13)
 
 The review found the two evaluation paths disagreeing, three refusals missing, and stale docs.
@@ -24,9 +63,9 @@ The review found the two evaluation paths disagreeing, three refusals missing, a
   **variable** functions of §6 — upstream's synchronous HTTP verbs of those spellings are covered by
   the `ajax` family — and that reading is now written into **ADR-0037 §决策 5** and `book-source.md`
   §11 instead of living in a code comment.
-- **Docs:** `book-source.md` §6's `java.*` rows moved from `M1-b1b` to ✅ 已落地 (the table had never
-  been flipped); the b1b real-source record got the `PLAN.md` §3.7 row this branch's CHANGELOG had
-  claimed; and this entry replaces that claim.
+- **Docs:** the b1b real-source work got its own `PLAN.md` §3.7 row (this entry replaces the earlier
+  claim that it was done); `book-source.md` §6's `java.*` status column is flipped in the follow-up
+  entry, not in this one — it still read `M1-b1b` when this was written.
 - **One flaky coverage test hardened** (`request_limiter`'s default-delay case): its 1 ms window
   could straddle a millisecond boundary and skip the real `Future.delayed`, which is how `core` lost
   a line. It now uses a 50 ms window and three calls, so the default delay is always exercised.

@@ -3781,6 +3781,27 @@ void main() {
       },
     );
 
+    test('extractAll_givenTheMainstreamTemplateSpelling_inlinesTheGetStringInsideIt', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = '2023/11/15 06:13';
+
+      // 验收项点名的写法：`{{java.timeFormat(java.getString('…')*1000)}}`。语料里
+      // 377/379 个字面量嵌套调用就是这样写的（**`{{…}}` 模板**，不是 `@js:` 段）——
+      // 两条路径共用同一个内联实现点，所以这一条必须与 `@js:` 版的一起过。
+      final List<String> values = await _values(
+        _engine(null, bridge).extractAll(
+          r"{{java.timeFormat(java.getString('$.change_time')*1000)}}",
+          RuleScope.json(<String, Object?>{'change_time': 1700000000}),
+          rulePath: 'tocRule.updateTime',
+        ),
+      );
+
+      // `java.getString` 已被内联成它的值的字面量（上游返回 String，所以是带引号的
+      // `"1700000000"`，表达式里的 `*1000` 靠 JS 的数值强转），`java.timeFormat` 保持
+      // worker 内的同步调用（§6）。
+      expect(bridge.jobs.single.script, 'java.timeFormat("1700000000"*1000)');
+      expect(values, <String>['2023/11/15 06:13']);
+    });
+
     test('extractAll_givenALiteralJavaGetStringList_inlinesAnArray', () async {
       final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
 

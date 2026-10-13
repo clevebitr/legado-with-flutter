@@ -548,13 +548,13 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 |---|---|---|
 | `put(key, value)` / `get(key)` | 规则变量，与 `@put:` / `@get:` 同一份（ADR-0034） | ✅ 已落地 |
 | `timeFormat(ms)` | `yyyy/MM/dd HH:mm`、本地时区、worker 内同步（不限额） | ✅ 已落地（M1-b1） |
-| `md5Encode(str)` | = 本表的 `crypto.md5`（UTF-8 字节的十六进制 MD5；上游 `MD5Utils.kt:13-15`） | M1-b1b |
-| `base64Encode(str)` / `base64Decode(str)` | = `crypto.base64Encode` / `crypto.base64Decode`；前者对齐上游 flags = 2（`Base64.NO_WRAP`），非法输入抛错 | M1-b1b |
-| `encodeURI(str)` | **Java `URLEncoder.encode(str, "UTF-8")`**：空格 → `+`，保留 `A-Za-z0-9` 与 `-_.*`，其余 UTF-8 字节 `%XX` 大写——**不是** JS 的 `encodeURI`（上游 `JsExtensions.kt:683-689`） | M1-b1b |
-| `log(msg)` | = `log.info(msg)`（自动附 `rulePath`；上游 `JsExtensions.kt:1128-1132`） | M1-b1b |
-| `getString(rule)` / `getStringList(rule)` / `getElement(rule)` / `getElements(rule)` | **对当前 scope 求值**，两种形态：① 首参是字符串字面量、且内层规则不带 `@js:` / `{{` / `@put:` / `@get:` / `<js>` 时，由**引擎在脚本执行前内联**（同步语义，覆盖语料 377/379 个字面量嵌套调用）；② 其余走宿主调用，形态是 **Promise**（等价 `parse.getString(rule, 当前 scope)` 等）——在表达式内当字符串用会显式 `js:error`，不会静默给错值 | M1-b1b |
-| `getString(rule, false)` | 接受（`false` = 不 unescape，正是本仓行为）；`(rule, true)` 与三参形态**具名拒绝** | M1-b1b |
-| 列表返回值 | JS `Array`；沙箱另装 `Array.prototype.toArray()`（返回 `this`），配上游 Java `List.toArray()` 习惯用法（语料 38 处） | M1-b1b |
+| `md5Encode(str)` | = 本表的 `crypto.md5`（UTF-8 字节的十六进制 MD5；上游 `MD5Utils.kt:13-15`） | ✅ 已落地（M1-b1b） |
+| `base64Encode(str)` / `base64Decode(str)` | = `crypto.base64Encode` / `crypto.base64Decode`；前者对齐上游 flags = 2（`Base64.NO_WRAP`），非法输入抛错 | ✅ 已落地（M1-b1b） |
+| `encodeURI(str)` | **Java `URLEncoder.encode(str, "UTF-8")`**：空格 → `+`，保留 `A-Za-z0-9` 与 `-_.*`，其余 UTF-8 字节 `%XX` 大写——**不是** JS 的 `encodeURI`（上游 `JsExtensions.kt:683-689`） | ✅ 已落地（M1-b1b） |
+| `log(msg)` | = `log.info(msg)`（自动附 `rulePath`；上游 `JsExtensions.kt:1128-1132`） | ✅ 已落地（M1-b1b） |
+| `getString(rule)` / `getStringList(rule)` / `getElement(rule)` / `getElements(rule)` | **对当前 scope 求值**，两种形态：① 首参是字符串字面量、且内层规则不带 `@js:` / `{{` / `@put:` / `@get:` / `<js>` 时，由**引擎在脚本执行前内联**（同步语义，覆盖语料 377/379 个字面量嵌套调用）；② 其余走宿主调用，形态是 **Promise**（等价 `parse.getString(rule, 当前 scope)` 等）——在表达式内当字符串用会显式 `js:error`，不会静默给错值 | ✅ 已落地（M1-b1b） |
+| `getString(rule, false)` | 接受（`false` = 不 unescape，正是本仓行为）；`(rule, true)` 与三参形态**具名拒绝** | ✅ 已落地（M1-b1b） |
+| 列表返回值 | JS `Array`；沙箱另装 `Array.prototype.toArray()`（返回 `this`），配上游 Java `List.toArray()` 习惯用法（语料 38 处） | ✅ 已落地（M1-b1b） |
 | 多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)` / `encodeURI` 两参 …） | 具名拒绝：本仓没有 flags / charset 语义，猜一个只会静默给不同结果 | 拒绝 |
 | 其余成员 | 见 §11 的具名拒绝清单（抛错存根，Rhino 互操作类用抛错 Proxy） | M2 |
 

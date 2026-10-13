@@ -516,6 +516,14 @@ globalThis.__javaRejectedNames = [
 
 globalThis.__javaInteropNames = ['lang', 'security', 'util', 'net', 'io', 'nio', 'math', 'text'];
 
+// Rhino 的另一条互操作入口 `Packages.java.lang.…`（ADR-0037 §决策 5）：具名拒绝，
+// 不让它落到 `Packages is not defined` 那种更难懂的错误。
+globalThis.Packages = new Proxy({}, {
+  get: function () {
+    throw new Error('Packages.* interop is not supported (M2): see book-source.md §11');
+  }
+});
+
 globalThis.java = (function () {
   var surface = {
     put: function (key, value) {
@@ -610,7 +618,8 @@ if (Array.prototype.toArray === undefined) {
   });
 }
 
-globalThis.__hostCall = function (binding, args) {  return sendMessage(binding, JSON.stringify(args));
+globalThis.__hostCall = function (binding, args) {
+  return sendMessage(binding, JSON.stringify(args));
 };
 
 globalThis.__httpOptions = function (operation, options) {

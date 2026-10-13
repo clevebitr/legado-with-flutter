@@ -146,15 +146,17 @@ Windows 与 Android 两侧都已实测通过。
 
 ---
 
-## 7. 实测证据（2026-10-11；主机侧与 Windows / Android 设备级于 2026-10-13 复跑，最新一次含 M1-b3 + b4a）
+## 7. 实测证据（2026-10-11；主机侧与 Windows 设备级于 2026-10-13 复跑，最新一次含 M1-b1b）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 主机侧 | `pwsh -File tool/test/run_unit.ps1` | 全部用例通过（**661** 个用例）；`tool/check_coverage.dart` 退出码 0（`core` 920/920、`domain` 1660/1660，均 100%；阈值见 `docs/dev/testing.md` §2） |
+| 主机侧 | `flutter test --coverage` + `dart run tool/check_coverage.dart` | 全部用例通过（**674** 个用例）；覆盖率门禁退出码 0（`core` 944/944、`domain` 1708/1708，均 100%；阈值见 `docs/dev/testing.md` §2） |
 | Windows 构建前置 | `flutter build windows --debug` | 成功（`build\windows\x64\runner\Debug\flutter_reader.exe`），含 `flutter_qjs_next` 从 `cxx/` 源码编译的 QuickJS |
-| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项、`js_bridge` **21 项**（含 `await http.*` / `await parse.*` / `js:parse-scope` / `js:quota` / `java.*` 同步读写与按源隔离 / URL 的 `key` 绑定 / `java.timeFormat` 的本地渲染与非法入参），`on_disk_database` 1 项）；退出码 0 |
-| Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone` 自动启动 → 3 个用例文件全部通过（`js_bridge` **21 项**）→ 自动关闭；退出码 0 |
+| Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项；`js_bridge` **24 项**，在原有 21 项（`await http.*` / `await parse.*` / `js:parse-scope` / `js:quota` / `java.*` 同步读写与按源隔离 / URL 的 `key` 绑定 / `java.timeFormat` 的本地渲染与非法入参）之上新增 3 项 M1-b1b 探针：`java.*` 别名族（`md5Encode` / `base64*` 往返 / `encodeURI` / `log`）、命中具名拒绝（`java.ajax` 与 `Packages.java.lang.…`）时给可读错误、`java.getString` 字面量快路径 + `Array.prototype.toArray()` 垫片；`on_disk_database` 1 项）；退出码 0 |
+| Android 设备级 | `pwsh -File tool/test/run_android.ps1` | **本轮未复跑（2026-10-13）**：单次完整跑（建 APK + 冷启模拟器 + 三个用例文件）在半小时以上，操作者要求本轮以 Windows 设备级为准（Window 与 Android 跑同一份 Dart 代码与同一份 `flutter_qjs_next` 原生引擎，24 项尺度的差异只在平台通道）。上一条记录的 Android 运行时是 **b4a 集成后的 21/21**（本次新增的 3 项探针尚未在模拟器上跑过），**不计作已覆盖**，需补跑时按下方命令运行 |
 | 许可证扫描 | `dart run tool/scan_licenses.dart` | 156 个包全部为宽松许可，无风险项；退出码 0（`NOTICE.md` §5） |
 
+> Android 补跑命令：`pwsh -File tool/test/run_android.ps1`（`Medium_Phone` 自动启停；需要网络，因 `flutter build apk` 的 native assets 要下载 `libsqlite3.arm.android.so`，见 §6 与本表旧记录）。
+>
 > `flutter doctor` 的网络项在本机报 `A cryptographic error ... checking https://pub.dev/`
 > （代理/中间人证书问题），但 `flutter pub get` 正常，不影响测试。

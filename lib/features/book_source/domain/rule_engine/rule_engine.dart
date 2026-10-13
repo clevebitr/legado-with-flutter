@@ -836,7 +836,6 @@ final class RuleEngine {
   }
 
   /// Evaluates one nested **list** rule into the values `getStringList` / `getElements` answer.
-
   ///
   /// It reads the matches the way the sandbox's own `parse.getElements` does — an element becomes
   /// its `outerHtml`, a JSON match its value — so the inlined value and the asynchronous one agree
