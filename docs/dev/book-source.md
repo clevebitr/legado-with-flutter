@@ -748,6 +748,13 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 > - **单位判定结论：** 全量合集统计（3/3907 条声明、均为 1000–3000 的单整数 → 读成毫秒才合理）
 >   支持毫秒口径，ADR-0036 §决策 8 的重开条件**未满足**；数字、A/B 回归与复跑命令见
 >   `tool/spot_check/README.md`（M1-b2 一节）。
+> - **接线是一处 funnel（b2 复核补充，2026-10-13）：** 声明由 `PageFetchService.applySourceRate(source)`
+>   转给请求层，四个 UseCase 在**首个请求之前**调用它；`RequestLimiter.applyRate` 对相同声明**幂等**
+>   （不重置窗口），所以重复调用无副作用。反过来，**漏调不会报错**：该源只是不被限速——因此新增
+>   任何读源操作时必须补这一行，且每个 UseCase 都要有一条「把源声明交给客户端」的接线测试。
+>   `HttpClient.applySourceRate(sourceId, 声明原文)` 是**唯一入口**（语法解析与非法声明的 warning 都
+>   留在请求层，因为它才是花预算的那一层），不得在别处再实现一份速率门或把速率参数搬进
+>   `HttpPolicy` / `JsBridge`（ADR-0036 §决策 5）。
 
 ---
 

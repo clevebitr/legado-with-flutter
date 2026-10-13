@@ -52,8 +52,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Device probes: **Windows `js_bridge` 21/21** after this change. The **Android** run could not be
   made on this machine: `assembleDebug` downloads `libsqlite3.arm.android.so` from
   `github.com/.../releases/download/`, and that host times out here while `raw.githubusercontent.com`
-  works (curl exit 28). It is unrelated to this slice — no dependency was added — and it is registered
+  works (curl exit 28). It is unrelated to this slice — no dependency was added — and it was registered
   in `PLAN.md` §3.7 with the command to re-run once the network allows it.
+- **Architect review (2026-10-13), verified and merged:** the Android probe ran once the network came
+  back (`Medium_Phone`, three files, `js_bridge` **21/21**, exit 0), the six gates were re-run on the
+  same tree (621 cases, `core` 920/920, `domain` 1503/1503), the corpus census was reproduced exactly
+  (3/3907 declarations, `3000`/`2000`/`1000`, none illegal), and the A/B was reproduced independently
+  (`1500` → **4.6 s**, `0` → **0.5 s**). Two things were added rather than changed: `book-source.md` §8
+  now states that handing the declaration over is a **single funnel** whose omission is silent (a
+  missed `PageFetchService.applySourceRate` merely leaves the source unlimited, so a new read-source
+  operation must add the line and its wiring test), and that `HttpClient.applySourceRate` stays the
+  **only** entry to the rate gate (its argument is the raw declaration; syntax and warning belong to
+  the request layer). `PLAN.md` §3.5/§3.7 and `test-environment.md` §7 carry the outcomes.
 
 ### Phase 4 b1: the four `updateTime` fields and the `java.timeFormat` binding (2026-10-13)
 
