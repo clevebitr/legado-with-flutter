@@ -36,6 +36,7 @@ _BookSource _$BookSourceFromJson(Map<String, dynamic> json) => $checkedCreate(
             v == null ? null : ExploreRule.fromJson(v as Map<String, dynamic>),
       ),
       concurrentRate: $checkedConvert('concurrentRate', (v) => v as String?),
+      variableComment: $checkedConvert('variableComment', (v) => v as String?),
       bookInfoRule: $checkedConvert(
         'ruleBookInfo',
         (v) =>
@@ -79,6 +80,7 @@ Map<String, dynamic> _$BookSourceToJson(_BookSource instance) =>
       'ruleSearch': instance.searchRule,
       'ruleExplore': instance.exploreRule,
       'concurrentRate': instance.concurrentRate,
+      'variableComment': instance.variableComment,
       'ruleBookInfo': instance.bookInfoRule,
       'ruleToc': instance.tocRule,
       'ruleContent': instance.contentRule,
@@ -166,6 +168,7 @@ _BookInfoRule _$BookInfoRuleFromJson(Map<String, dynamic> json) =>
         tocUrl: $checkedConvert('tocUrl', (v) => v as String?),
         wordCount: $checkedConvert('wordCount', (v) => v as String?),
         updateTime: $checkedConvert('updateTime', (v) => v as String?),
+        canReName: $checkedConvert('canReName', (v) => v as String?),
       );
       return val;
     });
@@ -182,6 +185,7 @@ Map<String, dynamic> _$BookInfoRuleToJson(_BookInfoRule instance) =>
       'tocUrl': instance.tocUrl,
       'wordCount': instance.wordCount,
       'updateTime': instance.updateTime,
+      'canReName': instance.canReName,
     };
 
 _TocRule _$TocRuleFromJson(Map<String, dynamic> json) =>

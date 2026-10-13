@@ -92,6 +92,18 @@ void main() {
     });
   });
 
+  test('BookInfo_givenNoCanReName_defaultsToFalse', () {
+    const BookInfo info = BookInfo(
+      name: '书',
+      url: 'https://a.test/1',
+      tocUrl: 'https://a.test/1',
+    );
+
+    // 上游只在书源声明了 `canReName` 时才允许改名（book-source.md §2）。
+    expect(info.canReName, isFalse);
+    expect(info.copyWith(canReName: true).canReName, isTrue);
+  });
+
   group('Chapter', () {
     test('Chapter_givenTheSameFields_isEqual', () {
       const Chapter one = Chapter(name: '第1章', url: 'https://a.test/1.html');

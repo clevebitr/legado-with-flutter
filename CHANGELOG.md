@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4 b3: `canReName` and `variableComment` are modelled (2026-10-13)
+
+- **`BookInfoRule.canReName` keeps the raw rule text**, because upstream never evaluates it:
+  `BookInfo.kt:65` only asks whether the field is non-blank and then lets a caller switch decide
+  whether a book's name and author may be overwritten (`WebBook.kt:235-238`, `book-source.md` §2).
+  `FetchBookInfo` turns that into `BookInfo.canReName` through the pure
+  `declaresCanReName(BookInfoRule?)`, so the consumer — the bookshelf that actually renames a
+  book — can arrive with Phase 5 without the engine ever reading the rule.
+- **`BookSource.variableComment` is modelled as display-only text**: nothing in the engine reads
+  it (upstream only concatenates it into its validation output, `BookSource.kt:245-252`), and it
+  now round-trips instead of landing in `extra`.
+- Tests: the model round-trip for both fields (including `ruleBookInfo.canReName` staying in the
+  modelled keys and `variableComment` no longer being an extra), a blank `canReName` still being
+  kept verbatim as the author wrote it, the entity default, the pure predicate's four shapes, and
+  one wiring case per outcome (declared → `true`, not declared → `false`). Coverage exit 0
+  (`core` 920/920, `domain` 1506/1506).
+- Docs: `book-source.md` §2 implementation notes; `PLAN.md` §3.5. The consumer of `canReName` was
+  already registered as Phase 5 work in §3.7, so no ledger row moved here.
+
 ### ADR-0037: the `java.*` compatibility surface, and the b1b work order (2026-10-13)
 
 Docs only. The real corpus showed that the b1 regression's remaining half was not blocked by the network but
@@ -49,6 +68,7 @@ by a missing binding family, so the architect measured the whole corpus and rule
   §6 (the `java.*` compatibility table), §11 (the named refusals); `docs/README.md` §2.1 (ownership row); the
   ADR index; `PLAN.md` §3.5 (b1b's scope and acceptance) and §3.7 (the decision outcome plus the two new
   registrations).
+
 
 ### Phase 4 b2: `concurrentRate` as a second gate in the request budget (2026-10-13)
 

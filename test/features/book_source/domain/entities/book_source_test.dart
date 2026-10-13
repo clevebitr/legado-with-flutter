@@ -438,6 +438,65 @@ void main() {
     });
   });
 
+  group('canReName / variableComment (M1-b3)', () {
+    /// A minimal source declaring both M1-b3 fields.
+    Map<String, Object?> sourceWithRenameFields() => <String, Object?>{
+      'bookSourceName': '示例源',
+      'bookSourceUrl': 'https://example-novel.test',
+      'variableComment': '这本书源用到的变量说明',
+      'ruleSearch': <String, Object?>{'bookList': 'li'},
+      'ruleBookInfo': <String, Object?>{
+        'name': 'h1@text',
+        'canReName': '@get:{rename}',
+      },
+      'ruleToc': <String, Object?>{'chapterList': 'dd'},
+      'ruleContent': <String, Object?>{'content': 'div'},
+    };
+
+    test('fromLegadoJson_givenCanReName_keepsTheRuleText', () {
+      final BookSource source = BookSource.fromLegadoJson(
+        sourceWithRenameFields(),
+      );
+
+      // 上游只看这个字段**非空白**，不求值它（book-source.md §2）：模型存原文。
+      expect(source.bookInfoRule?.canReName, '@get:{rename}');
+      expect(source.bookInfoRule?.extra, isEmpty);
+    });
+
+    test('fromLegadoJson_givenVariableComment_keepsItAsDisplayText', () {
+      final BookSource source = BookSource.fromLegadoJson(
+        sourceWithRenameFields(),
+      );
+
+      // 纯展示：引擎不读，但导入 / 导出不得丢（book-source.md §2）。
+      expect(source.variableComment, '这本书源用到的变量说明');
+      expect(source.extra, isEmpty);
+    });
+
+    test('toJson_givenTheRenameFields_reproducesTheLegadoKeys', () {
+      final BookSource source = BookSource.fromLegadoJson(
+        sourceWithRenameFields(),
+      );
+      final Map<String, Object?> exported =
+          jsonDecode(jsonEncode(source.toJson())) as Map<String, Object?>;
+
+      expect(exported['variableComment'], '这本书源用到的变量说明');
+      expect(
+        exported['ruleBookInfo'],
+        containsPair('canReName', '@get:{rename}'),
+      );
+      expect(BookSource.fromLegadoJson(exported), source);
+    });
+
+    test('fromLegadoJson_givenBlankCanReName_stillKeepsTheBlankText', () {
+      final Map<String, Object?> json = sourceWithRenameFields();
+      (json['ruleBookInfo']! as Map<String, Object?>)['canReName'] = '   ';
+
+      // 模型不强加语义：空白也是作者写的值「是否允许改名」的判定在 UseCase 与调用方。
+      expect(BookSource.fromLegadoJson(json).bookInfoRule?.canReName, '   ');
+    });
+  });
+
   group('BookSource serialisation', () {
     test('toJson_givenImportedSource_reproducesTheLegadoKeys', () {
       final BookSource source = BookSource.fromLegadoJson(_loadFixture());

@@ -41,6 +41,10 @@ enum BookSourceType {
 /// is keyed by the source URL and has to cover the `http.*` calls of `@js:` rules too
 /// (ADR-0036 §决策 5).
 ///
+/// [variableComment] is the variable documentation a source author writes for other authors.
+/// It is **display only**: nothing in the engine reads it (upstream only concatenates it into
+/// its validation output, `BookSource.kt:245-252`, `book-source.md` §2).
+///
 /// Import user-supplied files with [BookSource.fromLegadoJson]: it is the only
 /// entry point that keeps unrecognised keys, so a later export cannot lose data.
 @freezed
@@ -61,6 +65,7 @@ abstract class BookSource with _$BookSource {
     @JsonKey(name: 'ruleSearch') required SearchRule searchRule,
     @JsonKey(name: 'ruleExplore') ExploreRule? exploreRule,
     @JsonKey(name: 'concurrentRate') String? concurrentRate,
+    @JsonKey(name: 'variableComment') String? variableComment,
     @JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,
     @JsonKey(name: 'ruleToc') required TocRule tocRule,
     @JsonKey(name: 'ruleContent') required ContentRule contentRule,
@@ -193,6 +198,12 @@ abstract class ExploreRule with _$ExploreRule {
 ///
 /// Legado allows the whole object to be absent: the search page then supplies
 /// the fields it already returned (`docs/dev/book-source.md` §2).
+///
+/// [canReName] is **not a rule that is evaluated**: upstream only checks whether this field is
+/// non-blank and lets a caller switch decide whether a book may be renamed (`BookInfo.kt:65`,
+/// caller at `WebBook.kt:235-238`; `book-source.md` §2). The model therefore keeps the raw text
+/// and the book info use case passes “the source declares one” on as a boolean; the consumer
+/// (the bookshelf that renames a book) arrives with Phase 5.
 @freezed
 abstract class BookInfoRule with _$BookInfoRule {
   /// Creates a book info rule set.
@@ -207,6 +218,7 @@ abstract class BookInfoRule with _$BookInfoRule {
     String? tocUrl,
     String? wordCount,
     String? updateTime,
+    String? canReName,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})
     Map<String, Object?> extra,
