@@ -232,5 +232,43 @@ void main() {
       // 展示用字符串：规则结果原文，模型不做日期解析（book-source.md §2）。
       expect(info.updateTime, '2026/10/13 09:05');
     });
+    test('execute_givenACanReNameRule_reportsItWithoutEvaluatingIt', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_bookUrl, '<div id="info"><p>x</p></div>');
+      final BookSource source = _source();
+      final BookSource withRename = source.copyWith(
+        bookInfoRule: (source.bookInfoRule ?? const BookInfoRule()).copyWith(
+          // 规则内容本身不会被求值（上游 `BookInfo.kt:65`）——它甚至不是一条可跑的规则。
+          canReName: '随便什么字符串',
+        ),
+      );
+
+      final BookInfo info = _data(
+        await FetchBookInfo(pages: _service(http))
+            .execute(withRename, _bookUrl),
+      );
+
+      expect(info.canReName, isTrue);
+    });
+
+    test('execute_givenNoCanReNameRule_reportsFalse', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_bookUrl, '<div id="info"><p>x</p></div>');
+
+      final BookInfo info = _data(
+        await FetchBookInfo(pages: _service(http)).execute(_source(), _bookUrl),
+      );
+
+      expect(info.canReName, isFalse);
+    });
+
+    test('declaresCanReName_givenBlankOrMissingText_isFalse', () {
+      // 上游判的是「字段非空白」（`BookInfo.kt:65`）：空白、空串、缺失都不算声明。
+      expect(declaresCanReName(null), isFalse);
+      expect(declaresCanReName(const BookInfoRule()), isFalse);
+      expect(declaresCanReName(const BookInfoRule(canReName: '')), isFalse);
+      expect(declaresCanReName(const BookInfoRule(canReName: '   ')), isFalse);
+      expect(declaresCanReName(const BookInfoRule(canReName: 'true')), isTrue);
+    });
   });
 }

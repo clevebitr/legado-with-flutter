@@ -122,7 +122,17 @@ final class FetchBookInfo {
         wordCount: wordCount.dataOrNull,
         // 展示用字符串：规则结果原文，不做日期解析（book-source.md §2）。
         updateTime: updateTime.dataOrNull,
+        canReName: declaresCanReName(rules),
       ),
     );
   }
 }
+
+/// Whether [rules] declares a `canReName` rule at all (`book-source.md` §2).
+///
+/// This is upstream's check, **not** an evaluation of the rule: `BookInfo.kt:65` only asks
+/// whether the field is non-blank, and the caller decides what to do with that
+/// (`WebBook.kt:235-238`). Evaluating the rule would be a difference that has to be registered
+/// before it is made.
+bool declaresCanReName(BookInfoRule? rules) =>
+    (rules?.canReName ?? '').trim().isNotEmpty;

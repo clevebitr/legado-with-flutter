@@ -303,7 +303,7 @@ as String?,
 /// @nodoc
 mixin _$BookInfo {
 
- String get name; String get url; String get tocUrl; String? get author; String? get kind; String? get coverUrl; String? get intro; String? get lastChapter; String? get wordCount; String? get updateTime;
+ String get name; String get url; String get tocUrl; String? get author; String? get kind; String? get coverUrl; String? get intro; String? get lastChapter; String? get wordCount; String? get updateTime; bool get canReName;
 /// Create a copy of BookInfo
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -315,20 +315,20 @@ $BookInfoCopyWith<BookInfo> get copyWith => _$BookInfoCopyWithImpl<BookInfo>(thi
 @override
 bool operator ==(Object other) {
   final _this = this as BookInfo;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is BookInfo&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.url, _this.url) || other.url == _this.url)&&(identical(other.tocUrl, _this.tocUrl) || other.tocUrl == _this.tocUrl)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.coverUrl, _this.coverUrl) || other.coverUrl == _this.coverUrl)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.lastChapter, _this.lastChapter) || other.lastChapter == _this.lastChapter)&&(identical(other.wordCount, _this.wordCount) || other.wordCount == _this.wordCount)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BookInfo&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.url, _this.url) || other.url == _this.url)&&(identical(other.tocUrl, _this.tocUrl) || other.tocUrl == _this.tocUrl)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.coverUrl, _this.coverUrl) || other.coverUrl == _this.coverUrl)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.lastChapter, _this.lastChapter) || other.lastChapter == _this.lastChapter)&&(identical(other.wordCount, _this.wordCount) || other.wordCount == _this.wordCount)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime)&&(identical(other.canReName, _this.canReName) || other.canReName == _this.canReName));
 }
 
 
 @override
 int get hashCode {
   final _this = this as BookInfo;
-  return Object.hash(runtimeType,_this.name,_this.url,_this.tocUrl,_this.author,_this.kind,_this.coverUrl,_this.intro,_this.lastChapter,_this.wordCount,_this.updateTime);
+  return Object.hash(runtimeType,_this.name,_this.url,_this.tocUrl,_this.author,_this.kind,_this.coverUrl,_this.intro,_this.lastChapter,_this.wordCount,_this.updateTime,_this.canReName);
 }
 
 @override
 String toString() {
   final _this = this as BookInfo;
-  return 'BookInfo(name: ${_this.name}, url: ${_this.url}, tocUrl: ${_this.tocUrl}, author: ${_this.author}, kind: ${_this.kind}, coverUrl: ${_this.coverUrl}, intro: ${_this.intro}, lastChapter: ${_this.lastChapter}, wordCount: ${_this.wordCount}, updateTime: ${_this.updateTime})';
+  return 'BookInfo(name: ${_this.name}, url: ${_this.url}, tocUrl: ${_this.tocUrl}, author: ${_this.author}, kind: ${_this.kind}, coverUrl: ${_this.coverUrl}, intro: ${_this.intro}, lastChapter: ${_this.lastChapter}, wordCount: ${_this.wordCount}, updateTime: ${_this.updateTime}, canReName: ${_this.canReName})';
 }
 
 
@@ -339,7 +339,7 @@ abstract mixin class $BookInfoCopyWith<$Res>  {
   factory $BookInfoCopyWith(BookInfo value, $Res Function(BookInfo) _then) = _$BookInfoCopyWithImpl;
 @useResult
 $Res call({
- String name, String url, String tocUrl, String? author, String? kind, String? coverUrl, String? intro, String? lastChapter, String? wordCount, String? updateTime
+ String name, String url, String tocUrl, String? author, String? kind, String? coverUrl, String? intro, String? lastChapter, String? wordCount, String? updateTime, bool canReName
 });
 
 
@@ -356,7 +356,7 @@ class _$BookInfoCopyWithImpl<$Res>
 
 /// Create a copy of BookInfo
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? url = null,Object? tocUrl = null,Object? author = freezed,Object? kind = freezed,Object? coverUrl = freezed,Object? intro = freezed,Object? lastChapter = freezed,Object? wordCount = freezed,Object? updateTime = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? url = null,Object? tocUrl = null,Object? author = freezed,Object? kind = freezed,Object? coverUrl = freezed,Object? intro = freezed,Object? lastChapter = freezed,Object? wordCount = freezed,Object? updateTime = freezed,Object? canReName = null,}) {
   return _then(BookInfo(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
@@ -368,7 +368,8 @@ as String?,intro: freezed == intro ? _self.intro : intro // ignore: cast_nullabl
 as String?,lastChapter: freezed == lastChapter ? _self.lastChapter : lastChapter // ignore: cast_nullable_to_non_nullable
 as String?,wordCount: freezed == wordCount ? _self.wordCount : wordCount // ignore: cast_nullable_to_non_nullable
 as String?,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,canReName: null == canReName ? _self.canReName : canReName // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -453,10 +454,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String url,  String tocUrl,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  String? wordCount,  String? updateTime)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String url,  String tocUrl,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  String? wordCount,  String? updateTime,  bool canReName)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BookInfo() when $default != null:
-return $default(_that.name,_that.url,_that.tocUrl,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.wordCount,_that.updateTime);case _:
+return $default(_that.name,_that.url,_that.tocUrl,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.wordCount,_that.updateTime,_that.canReName);case _:
   return orElse();
 
 }
@@ -474,10 +475,10 @@ return $default(_that.name,_that.url,_that.tocUrl,_that.author,_that.kind,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String url,  String tocUrl,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  String? wordCount,  String? updateTime)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String url,  String tocUrl,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  String? wordCount,  String? updateTime,  bool canReName)  $default,) {final _that = this;
 switch (_that) {
 case _BookInfo():
-return $default(_that.name,_that.url,_that.tocUrl,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.wordCount,_that.updateTime);case _:
+return $default(_that.name,_that.url,_that.tocUrl,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.wordCount,_that.updateTime,_that.canReName);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -494,10 +495,10 @@ return $default(_that.name,_that.url,_that.tocUrl,_that.author,_that.kind,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String url,  String tocUrl,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  String? wordCount,  String? updateTime)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String url,  String tocUrl,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  String? wordCount,  String? updateTime,  bool canReName)?  $default,) {final _that = this;
 switch (_that) {
 case _BookInfo() when $default != null:
-return $default(_that.name,_that.url,_that.tocUrl,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.wordCount,_that.updateTime);case _:
+return $default(_that.name,_that.url,_that.tocUrl,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.wordCount,_that.updateTime,_that.canReName);case _:
   return null;
 
 }
@@ -509,7 +510,7 @@ return $default(_that.name,_that.url,_that.tocUrl,_that.author,_that.kind,_that.
 
 
 class _BookInfo implements BookInfo {
-  const _BookInfo({required this.name, required this.url, required this.tocUrl, this.author, this.kind, this.coverUrl, this.intro, this.lastChapter, this.wordCount, this.updateTime});
+  const _BookInfo({required this.name, required this.url, required this.tocUrl, this.author, this.kind, this.coverUrl, this.intro, this.lastChapter, this.wordCount, this.updateTime, this.canReName = false});
   
 
 @override final  String name;
@@ -522,6 +523,7 @@ class _BookInfo implements BookInfo {
 @override final  String? lastChapter;
 @override final  String? wordCount;
 @override final  String? updateTime;
+@override@JsonKey() final  bool canReName;
 
 /// Create a copy of BookInfo
 /// with the given fields replaced by the non-null parameter values.
@@ -533,18 +535,18 @@ _$BookInfoCopyWith<_BookInfo> get copyWith => __$BookInfoCopyWithImpl<_BookInfo>
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _BookInfo&&(identical(other.name, name) || other.name == name)&&(identical(other.url, url) || other.url == url)&&(identical(other.tocUrl, tocUrl) || other.tocUrl == tocUrl)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.coverUrl, coverUrl) || other.coverUrl == coverUrl)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.lastChapter, lastChapter) || other.lastChapter == lastChapter)&&(identical(other.wordCount, wordCount) || other.wordCount == wordCount)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _BookInfo&&(identical(other.name, name) || other.name == name)&&(identical(other.url, url) || other.url == url)&&(identical(other.tocUrl, tocUrl) || other.tocUrl == tocUrl)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.coverUrl, coverUrl) || other.coverUrl == coverUrl)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.lastChapter, lastChapter) || other.lastChapter == lastChapter)&&(identical(other.wordCount, wordCount) || other.wordCount == wordCount)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime)&&(identical(other.canReName, canReName) || other.canReName == canReName));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,name,url,tocUrl,author,kind,coverUrl,intro,lastChapter,wordCount,updateTime);
+    return Object.hash(runtimeType,name,url,tocUrl,author,kind,coverUrl,intro,lastChapter,wordCount,updateTime,canReName);
 }
 
 @override
 String toString() {
-    return 'BookInfo(name: $name, url: $url, tocUrl: $tocUrl, author: $author, kind: $kind, coverUrl: $coverUrl, intro: $intro, lastChapter: $lastChapter, wordCount: $wordCount, updateTime: $updateTime)';
+    return 'BookInfo(name: $name, url: $url, tocUrl: $tocUrl, author: $author, kind: $kind, coverUrl: $coverUrl, intro: $intro, lastChapter: $lastChapter, wordCount: $wordCount, updateTime: $updateTime, canReName: $canReName)';
 }
 
 
@@ -555,7 +557,7 @@ abstract mixin class _$BookInfoCopyWith<$Res> implements $BookInfoCopyWith<$Res>
   factory _$BookInfoCopyWith(_BookInfo value, $Res Function(_BookInfo) _then) = __$BookInfoCopyWithImpl;
 @override @useResult
 $Res call({
- String name, String url, String tocUrl, String? author, String? kind, String? coverUrl, String? intro, String? lastChapter, String? wordCount, String? updateTime
+ String name, String url, String tocUrl, String? author, String? kind, String? coverUrl, String? intro, String? lastChapter, String? wordCount, String? updateTime, bool canReName
 });
 
 
@@ -572,7 +574,7 @@ class __$BookInfoCopyWithImpl<$Res>
 
 /// Create a copy of BookInfo
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? url = null,Object? tocUrl = null,Object? author = freezed,Object? kind = freezed,Object? coverUrl = freezed,Object? intro = freezed,Object? lastChapter = freezed,Object? wordCount = freezed,Object? updateTime = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? url = null,Object? tocUrl = null,Object? author = freezed,Object? kind = freezed,Object? coverUrl = freezed,Object? intro = freezed,Object? lastChapter = freezed,Object? wordCount = freezed,Object? updateTime = freezed,Object? canReName = null,}) {
   return _then(_BookInfo(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
@@ -584,7 +586,8 @@ as String?,intro: freezed == intro ? _self.intro : intro // ignore: cast_nullabl
 as String?,lastChapter: freezed == lastChapter ? _self.lastChapter : lastChapter // ignore: cast_nullable_to_non_nullable
 as String?,wordCount: freezed == wordCount ? _self.wordCount : wordCount // ignore: cast_nullable_to_non_nullable
 as String?,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,canReName: null == canReName ? _self.canReName : canReName // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

@@ -82,6 +82,8 @@
 > 然后**允许覆盖已有的书名 / 作者**（`BookInfo.kt:67-84`）；**规则内容本身不求值**。
 > 因此本仓 M1 只建模该字段并把「是否允许改名」交给调用方；**不得**改成「求值为真才允许」
 > （那会成为与上游的差异，需先登记）。消费方（书架改名）归 Phase 5。
+> **状态（M1-b3 已落地）：** 字段已建模（`BookInfoRule.canReName`），
+> `FetchBookInfo` 经 `declaresCanReName` 把「是否声明」传成 `BookInfo.canReName`（布值，不求值）。
 
 > **层归属与 `extra` 的落地形态**见 ADR-0021（模型位于 `domain/entities/`；`extra` 由
 > `fromLegadoJson` 逐层填充）。本表只拥有字段映射与分期。

@@ -45,6 +45,11 @@ abstract class BookInfo with _$BookInfo {
   /// [tocUrl] is already resolved to an absolute URL; when the source declares no
   /// `tocUrl` rule it is the book URL itself, which is where upstream expects the
   /// chapter list to live.
+  ///
+  /// [canReName] does **not** come from the page: it reports whether the source declares a
+  /// `canReName` rule at all, which is what upstream checks before it lets a caller overwrite a
+  /// book's name and author (`BookInfo.kt:65-84`; `book-source.md` §2). The rule text itself is
+  /// never evaluated, and the consumer that acts on it arrives with Phase 5.
   const factory BookInfo({
     required String name,
     required String url,
@@ -56,6 +61,7 @@ abstract class BookInfo with _$BookInfo {
     String? lastChapter,
     String? wordCount,
     String? updateTime,
+    @Default(false) bool canReName,
   }) = _BookInfo;
 }
 
