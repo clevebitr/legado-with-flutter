@@ -249,6 +249,13 @@
 **大小写处理：** 原版文档同时出现 `@css:` / `@CSS:`、`@json:` / `@Json:` 等写法。
 本项目按**前缀大小写不敏感**实现，并为每种前缀补一条测试（状态：已确认）。
 
+> **HTML 实体反转义（登记差异，2026-10-13 取证）：** 上游值规则的 `unescape` 默认为 `true`，对含 `&` 的
+> 结果做 `StringEscapeUtils.unescapeHtml4`（`AnalyzeRule.kt:297-308`、`:362-366`），
+> `java.getString(rule, false)` 可关掉。本仓**不做**实体反转义。实际差异比看起来小：DOM 的文本 /
+> 属性提取本来就被 HTML 解析器解码过，真正不同的是 `html` / `all` 一类**原样**提取
+> （上游会把 `&lt;b&gt;` 还原成 `<b>`）。去向与触发条件登记在 `PLAN.md` §3.7；
+> `java.getString(rule, true)` 因此具名拒绝（ADR-0037 §决策 6）。
+
 > **状态列的 3.7 证据（2026-10-12）：** 全部 19 条 M0 行的状态列已由真实回归改为「已确认」，
 > 逐行结论（语法 / 书源 / 链路 / 结论）与四次活站点运行的输出在 `tool/spot_check/README.md` §4b；
 > 用到的四类证据分别是：
@@ -517,6 +524,26 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `key` | `String` | 搜索关键词，**只在 URL 规则的 JS 里**存在（ADR-0034 §决策 3） | M1 |
 | `log.debug/info/warn/error(msg)` | `void` | 转发到 `core/logging`，自动附加 `rulePath` | M0 |
 | `crypto.md5/sha1/base64Encode/base64Decode` | `String` | 纯计算 | M0 |
+
+**`java.*` 兼容面（ADR-0037；本节是它的唯一出处）：**
+
+| `java.*` 成员 | 形态与语义 | 状态 |
+|---|---|---|
+| `put(key, value)` / `get(key)` | 规则变量，与 `@put:` / `@get:` 同一份（ADR-0034） | ✅ 已落地 |
+| `timeFormat(ms)` | `yyyy/MM/dd HH:mm`、本地时区、worker 内同步（不限额） | ✅ 已落地（M1-b1） |
+| `md5Encode(str)` | = 本表的 `crypto.md5`（UTF-8 字节的十六进制 MD5；上游 `MD5Utils.kt:13-15`） | M1-b1b |
+| `base64Encode(str)` / `base64Decode(str)` | = `crypto.base64Encode` / `crypto.base64Decode`；前者对齐上游 flags = 2（`Base64.NO_WRAP`），非法输入抛错 | M1-b1b |
+| `encodeURI(str)` | **Java `URLEncoder.encode(str, "UTF-8")`**：空格 → `+`，保留 `A-Za-z0-9` 与 `-_.*`，其余 UTF-8 字节 `%XX` 大写——**不是** JS 的 `encodeURI`（上游 `JsExtensions.kt:683-689`） | M1-b1b |
+| `log(msg)` | = `log.info(msg)`（自动附 `rulePath`；上游 `JsExtensions.kt:1128-1132`） | M1-b1b |
+| `getString(rule)` / `getStringList(rule)` / `getElement(rule)` / `getElements(rule)` | **对当前 scope 求值**，两种形态：① 首参是字符串字面量、且内层规则不带 `@js:` / `{{` / `@put:` / `@get:` / `<js>` 时，由**引擎在脚本执行前内联**（同步语义，覆盖语料 377/379 个字面量嵌套调用）；② 其余走宿主调用，形态是 **Promise**（等价 `parse.getString(rule, 当前 scope)` 等）——在表达式内当字符串用会显式 `js:error`，不会静默给错值 | M1-b1b |
+| `getString(rule, false)` | 接受（`false` = 不 unescape，正是本仓行为）；`(rule, true)` 与三参形态**具名拒绝** | M1-b1b |
+| 列表返回值 | JS `Array`；沙箱另装 `Array.prototype.toArray()`（返回 `this`），配上游 Java `List.toArray()` 习惯用法（语料 38 处） | M1-b1b |
+| 多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)` / `encodeURI` 两参 …） | 具名拒绝：本仓没有 flags / charset 语义，猜一个只会静默给不同结果 | 拒绝 |
+| 其余成员 | 见 §11 的具名拒绝清单（抛错存根，Rhino 互操作类用抛错 Proxy） | M2 |
+
+> **规则求值族的时机（登记差异）：** ①在脚本执行前求值，②在脚本执行到那一行时求值。脚本无法改变
+> scope（`java.setContent` 属 M2），所以这个时机差在实践中不可观测；两条路径**共用同一实现点**，
+> 同一 (规则, scope) 的结果必然一致。URL 规则里**没有**页面 scope，该族命中即按 `js:parse-scope` 同族拒绝。
 
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
 `eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。
@@ -828,3 +855,14 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
   （`executeForRanking` 一套）：均不在 M1；`infoMap` 命中即 `js:error`（§4.2）。
 - `java.timeFormatUTC(time, format, sh)`（带时区偏移与自定义 pattern）：不在 M1；
   `java.timeFormat` 的语义见 §6。
+- **`java.*` 的具名拒绝族（ADR-0037 §决策 5；形态与实现档位见 §6 的兼容面表）：**
+  `ajax` / `get` / `post` / `head` / `ajaxAll` / `connect`（上游**同步**返回 body，与本仓 `http.*` 的
+  Promise 形态冲突）、`webView*` / `startBrowser*` / `downloadFile` / `cacheFile` / `importScript` /
+  `getVerificationCode` / `getCookie`（沙箱禁忌或需要平台能力）、`setContent`（脚本中途改 scope，
+  需要一个规则 / 作用域 API）、`toast` / `longToast`（UI）、`base64DecodeToByteArray` /
+  `hexDecodeToByteArray`（Rhino 字节数组；语料里 326/328 处直接喂给 `IvParameterSpec` /
+  `SecretKeySpec`，即密钥类 crypto）、`createSymmetricCrypto` / `aes*` / `des*` / `HMac*`（密钥类 crypto）、
+  `md5Encode16` / `htmlFormat` / `refreshBookUrl`（零散）——命中即抛**可读错误**，不得落到
+  `undefined is not a function`。
+- Rhino Java 互操作（`java.lang` / `java.security` / `java.util` / `java.net`，以及 `Packages.*`）：
+  `new java.util.ArrayList()` 这类写法命中**抛错 Proxy**，报可读原因。

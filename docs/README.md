@@ -60,6 +60,7 @@ ADR-0027 确立：**一个事实只允许在一处定义**，其他位置一律�
 | 规则变量（`@put:` / `@get:` / `java.put` / `java.get`）的存储位置、快照与生命周期，以及只存在于 URL 规则的 `key` 绑定 | `docs/dev/adr/0034-*.md` | `book-source.md` §4 / §6 回链（行为面） |
 | 发现页：`exploreUrl` 的两种形态、分类条目语义、`ruleExplore` → `ruleSearch` 的**整条**回落 | `docs/dev/book-source.md` §4.2 | ADR-0035 回链；模型字段归 §2 |
 | `concurrentRate` 的语法、毫秒单位与「速率门 → 并发门」的合成顺序 | `docs/dev/book-source.md` §8 | ADR-0036 回链；默认并发上限数值仍归 §8 |
+| `java.*` 兼容面：别名族的语义、规则求值族的两种形态（宿主内联 / 异步兜底）与具名拒绝清单 | `docs/dev/book-source.md` §6（形态表）与 §11（拒绝清单） | ADR-0037 回链 |
 | 编码车道与「已声明车道」的宽容解码边界 | `docs/dev/book-source.md` §5 | C-NET-3 回链；决策理由归 `docs/dev/adr/0031-*.md` |
 | 缓存失败吸收的唯一豁免点（`on Exception`） | `docs/dev/adr/0033-*.md` | C-ERR-2 回链；行为归 `book-source.md` §5 |
 | 默认规则的未知类型退化语义（矩阵 #1/#2） | `docs/dev/book-source.md` §3 的 #1/#2 注记 | C-SRC-4 回链；决策理由归 `docs/dev/adr/0032-*.md` |

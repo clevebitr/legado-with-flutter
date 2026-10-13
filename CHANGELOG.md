@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ADR-0037: the `java.*` compatibility surface, and the b1b work order (2026-10-13)
+
+Docs only. The real corpus showed that the b1 regression's remaining half was not blocked by the network but
+by a missing binding family, so the architect measured the whole corpus and ruled on it before b1b starts.
+
+- **The evidence (collection C, 3907 sources, `tool/spot_check/README.md` §3):** 540 sources use `java.*`
+  (`md5Encode` 1221, `put` 1070, `get` 1048, `ajax` 866, **`getString` 603**, `base64DecodeToByteArray` 328,
+  `timeFormat` 297, `log` 250, `encodeURI` 138, `getElements` 84, `base64Encode` 84, `base64Decode` 71,
+  `setContent` 62, `getElement` 45, `getStringList` 36, plus keyed crypto, Rhino interop and UI members).
+  Of the rule-evaluating calls — `getString` / `getStringList` / `getElement` / `getElements` — **395 are used
+  inside an expression** (needing a synchronous value; 379 of them with a string-literal rule) and 372 stand
+  alone (a Promise would do). Only **2** of the literal calls have an inner rule that needs the sandbox or the
+  variables (`@js:` / `{{` / `@put:` / `@get:`), 38 are followed by a Java `List.toArray()`, none use a
+  template literal, and none appear in a URL rule.
+- **ADR-0037 (new, Accepted) turns `java` into a compatibility surface** (`book-source.md` §6 owns the shapes,
+  §11 owns the refusals):
+  - **Alias family** (worker-side, synchronous, no quota): `md5Encode` → `crypto.md5`, `base64Encode` /
+    `base64Decode` → `crypto.*` (upstream's flags = 2 is `Base64.NO_WRAP`), `encodeURI` → a new pure helper
+    matching **Java `URLEncoder.encode(…, "UTF-8")`** (space → `+`; deliberately *not* JS `encodeURI`), and
+    `log` → `log.info`.
+  - **Rule-evaluating family, two shapes over one implementation point:** a **literal fast path** — the engine
+    evaluates `java.getString('rule')`-style calls *before* the script reaches the worker and inlines the
+    JSON-encoded result, which keeps the nested idiom `java.timeFormat(java.getString('$.x')*1000)`
+    synchronous (377 of 379 literal nested calls) — and an **async fallback** bound to the current scope
+    (`parse.getString(rule, currentScope)`), which works when the script returns the promise and fails loudly
+    inside an expression. The timing difference is unobservable because a script cannot mutate the scope
+    (`setContent` is M2).
+  - **List results are JS `Array`s**, with `Array.prototype.toArray()` installed in the sandbox so the 38
+    upstream `List.toArray()` uses keep working; the shim adds no capability.
+  - **Everything else is refused by name** with throwing stubs (and throwing Proxies for the Rhino interop
+    namespace): sync-body HTTP (`ajax` / `get` / `post` / `connect` — a shape conflict with our promise
+    `http.*`), the platform/UI members, `setContent`, the byte-array and keyed-crypto members, and the
+    multi-argument overloads (`base64Encode(str, flags)`, `base64Decode(str, charset)`, the `unescape` form).
+- **A second finding, registered rather than fixed:** upstream's value rules unescape HTML entities by default
+  (`AnalyzeRule.kt:297-308`, `:362-366`, `StringEscapeUtils.unescapeHtml4`), which this repository never did.
+  The practical gap is narrow — the HTML parser already decodes text and attribute values, so only `html` /
+  `all`-style raw extractions differ — and it is registered in `book-source.md` §3 and `PLAN.md` §3.7 with its
+  trigger condition.
+- **Files:** new `docs/dev/adr/0037-java-binding-compat-surface.md`; `book-source.md` §3 (the entity note),
+  §6 (the `java.*` compatibility table), §11 (the named refusals); `docs/README.md` §2.1 (ownership row); the
+  ADR index; `PLAN.md` §3.5 (b1b's scope and acceptance) and §3.7 (the decision outcome plus the two new
+  registrations).
+
 ### Phase 4 b2: `concurrentRate` as a second gate in the request budget (2026-10-13)
 
 - **The model keeps the declaration as text** (`BookSource.concurrentRate`), and the request layer
