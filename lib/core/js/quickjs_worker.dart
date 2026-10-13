@@ -504,7 +504,7 @@ globalThis.__javaRejected = function (name) {
 // 定义为**变量**读写（ADR-0034），它们的名字被占用；上游那套同步 HTTP 的 `get(url)` / `post(url)`
 // 因此没有可用的拼写，只能靠 `ajax` 这一族具名拒绝（ADR-0037 §决策 5）。
 globalThis.__javaRejectedNames = [
-  'ajax', 'head', 'ajaxAll', 'connect',
+  'ajax', 'post', 'head', 'ajaxAll', 'connect',
   'webView', 'webViewGetString', 'webViewGetElements', 'startBrowser', 'startBrowserAwait',
   'downloadFile', 'cacheFile', 'importScript', 'getVerificationCode', 'getCookie',
   'setContent', 'toast', 'longToast',
@@ -540,9 +540,17 @@ globalThis.java = (function () {
       return __crypto('md5', value);
     },
     base64Encode: function (value) {
+      if (arguments.length > 1) {
+        throw new Error('java.base64Encode(str, flags) is not supported: ' +
+          'this repository has no flags semantics (book-source.md §6)');
+      }
       return __crypto('base64Encode', value);
     },
     base64Decode: function (value) {
+      if (arguments.length > 1) {
+        throw new Error('java.base64Decode(str, charset) is not supported: ' +
+          'this repository has no charset semantics (book-source.md §6)');
+      }
       return __crypto('base64Decode', value);
     },
     encodeURI: function (value) {
@@ -567,7 +575,11 @@ globalThis.java = (function () {
       return __parse('getElements', rule, null);
     },
     getElement: function (rule) {
-      return __parse('getElements', rule, null);
+      // 单值形态：异步路径也只答第一个（与快路径内联的第一个匹配同形）——否则同一个调用在
+      // 两条路径上会是「单值 vs 数组」（ADR-0037 §决策 3）。
+      return __parse('getElements', rule, null).then(function (list) {
+        return (list && list.length) ? list[0] : null;
+      });
     },
     getElements: function (rule) {
       return __parse('getElements', rule, null);

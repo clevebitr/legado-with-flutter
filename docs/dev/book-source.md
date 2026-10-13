@@ -873,6 +873,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 - `java.timeFormatUTC(time, format, sh)`（带时区偏移与自定义 pattern）：不在 M1；
   `java.timeFormat` 的语义见 §6。
 - **`java.*` 的具名拒绝族（ADR-0037 §决策 5；形态与实现档位见 §6 的兼容面表）：**
+  **其中 `get` / `put` 不在拒绝族里：** §6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**读写（ADR-0034），名字被占用；上游那套同步返回 body 的 `get(url)` / `post(url)` 因此没有可用拼写，只能靠 `ajax` 族具名拒绝（`java.post` 也已登记具名拒绝）。另：`base64Encode` / `base64Decode` 的多参重载**具名拒绝**（本仓没有 `flags` / `charset` 语义）。
   `ajax` / `get` / `post` / `head` / `ajaxAll` / `connect`（上游**同步**返回 body，与本仓 `http.*` 的
   Promise 形态冲突）、`webView*` / `startBrowser*` / `downloadFile` / `cacheFile` / `importScript` /
   `getVerificationCode` / `getCookie`（沙箱禁忌或需要平台能力）、`setContent`（脚本中途改 scope，

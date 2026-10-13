@@ -282,12 +282,15 @@ void main() {
     test('run_givenNoInjectedDelay_waitsOnRealTime', () async {
       // 默认等待走 `Future.delayed`（生产路径）：这里用一个 1 毫秒的窗口把它跑一遍，
       // 不依赖秒级等待（`docs/dev/testing.md` §6 的毫秒级口径）。
+      // 窗口取 50 毫秒：两次调用必定落在同一个窗口内（微秒级），所以第三次**一定**要等
+      // 默认的 `Future.delayed`——这比 1 毫秒的窗口稳（后者可能刚好跨过毫秒边界而没等）。
       final RequestLimiter limiter = RequestLimiter(maxConcurrent: 3)
         ..applyRate(
           'source',
-          const ConcurrentRate(times: 1, intervalMilliseconds: 1),
+          const ConcurrentRate(times: 2, intervalMilliseconds: 50),
         );
 
+      await limiter.run('source', () async {});
       await limiter.run('source', () async {});
       await limiter
           .run('source', () async {})

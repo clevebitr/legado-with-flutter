@@ -3871,5 +3871,46 @@ void main() {
         expect(failure.rulePath, 'unsupported:@xpath:');
       },
     );
+
+    test(
+      'extractAll_givenALiteralJavaGetStringWithNoMatch_inlinesAnEmptyString',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'ran';
+
+        await _values(
+          _engine(null, bridge).extractAll(
+            r"@js:java.getString('class.missing@text') + '|'",
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // 无匹配时快路径内联空串——异步路径（`parse.getString`）就是这个形状，两条必须一致
+        // （ADR-0037 §决策 3；复核发现原本内联 `null`）。
+        expect(bridge.jobs.single.script, startsWith('"" +'));
+      },
+    );
+
+    test(
+      'extractAll_givenALiteralJavaGetElement_inlinesTheFirstMatchOnly',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'ran';
+
+        await _values(
+          _engine(null, bridge).extractAll(
+            "@js:java.getElement('class.result@tag.a')",
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // `getElement` 是**单值**形态：内联的是第一个匹配的 `outerHtml`（一个 JSON 字符串），
+        // 不是数组——异步路径同样只取第一个。
+        final String script = bridge.jobs.single.script;
+        expect(script, startsWith('"'));
+        expect(script, isNot(startsWith('[')));
+        expect(script, contains('href=\\"/book/1\\"'));
+      },
+    );
   });
 }

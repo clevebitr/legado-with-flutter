@@ -799,8 +799,11 @@ final class RuleEngine {
         continue;
       }
 
-      final bool wantsList = _wantsList(match);
-      final ParseResult<List<String>> values = wantsList
+      final String verb = match.group(1) ?? '';
+      final bool wantsList = verb == 'getStringList' || verb == 'getElements';
+      // `getElement` 是**单值**形态（上游拿一个元素），异步路径同样只答第一个（ADR-0037 §决策 3）。
+      final bool wantsDoc = verb == 'getElement';
+      final ParseResult<List<String>> values = wantsList || wantsDoc
           ? await _selectAllValues(rule, scope, field: field)
           : await _evaluate(
               rule,
@@ -816,13 +819,16 @@ final class RuleEngine {
         ):
           return failureAt<String>(kind: kind, rulePath: rulePath);
         case ParseSuccess<List<String>>(:final List<String> data):
-          inlined = inlined.replaceRange(
-            match.start,
-            match.end,
-            wantsList
-                ? jsonEncode(data)
-                : jsonEncode(data.isEmpty ? null : data.first),
-          );
+          inlined = inlined.replaceRange(match.start, match.end, switch ((
+            wantsList,
+            wantsDoc,
+          )) {
+            (true, _) => jsonEncode(data),
+            // 单文档形态无匹配时与异步路径一致地给 `null`。
+            (_, true) => jsonEncode(data.isEmpty ? null : data.first),
+            // `getString` 无匹配给空串——异步路径（`parse.getString`）就是这个形状。
+            _ => jsonEncode(data.isEmpty ? '' : data.first),
+          });
       }
     }
 
@@ -850,10 +856,6 @@ final class RuleEngine {
         for (final RuleScope match in data) _jsDocOf(match).toString(),
       ]),
   };
-
-  /// Whether [match] asks for a list (`getStringList` / `getElements`).
-  bool _wantsList(RegExpMatch match) =>
-      match.group(1) == 'getStringList' || match.group(1) == 'getElements';
 
   /// Whether [rule] needs the sandbox (or the rule variables), i.e. cannot be inlined.
   bool _needsSandbox(String rule) =>

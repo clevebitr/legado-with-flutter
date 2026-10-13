@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### b1b review fixes: one shape per call on both paths, wider refusals, ledger and docs (2026-10-13)
+
+The review found the two evaluation paths disagreeing, three refusals missing, and stale docs.
+
+- **`getElement` is a single value on both paths now.** The literal fast path inlines the first
+  match's `outerHtml` (or JSON value) and the asynchronous binding resolves to the first element of
+  `parse.getElements` (`list.length ? list[0] : null`), so the same call no longer answers a value in
+  one path and an array in the other.
+- **`getString` with no match answers `''` on both paths.** The fast path used to inline `null`,
+  while the asynchronous path (`parse.getString`) answers an empty string; the empty string wins
+  because that is what the binding's documented shape is (`book-source.md` §6).
+- **`java.post` is a named rejection again** (it had been missing, so it fell through to
+  `undefined is not a function`), and `base64Encode` / `base64Decode` now refuse their multi-argument
+  overloads instead of silently ignoring the extra argument (ADR-0037 §决策 2). `get` / `put` stay the
+  **variable** functions of §6 — upstream's synchronous HTTP verbs of those spellings are covered by
+  the `ajax` family — and that reading is now written into **ADR-0037 §决策 5** and `book-source.md`
+  §11 instead of living in a code comment.
+- **Docs:** `book-source.md` §6's `java.*` rows moved from `M1-b1b` to ✅ 已落地 (the table had never
+  been flipped); the b1b real-source record got the `PLAN.md` §3.7 row this branch's CHANGELOG had
+  claimed; and this entry replaces that claim.
+- **One flaky coverage test hardened** (`request_limiter`'s default-delay case): its 1 ms window
+  could straddle a millisecond boundary and skip the real `Future.delayed`, which is how `core` lost
+  a line. It now uses a 50 ms window and three calls, so the default delay is always exercised.
+
 ### Phase 4 b1b: the `java.*` compatibility surface (2026-10-13)
 
 Implements ADR-0037: real sources use upstream's names (540 of 3907 sources use `java.*`;
