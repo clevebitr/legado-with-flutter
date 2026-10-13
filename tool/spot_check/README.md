@@ -54,6 +54,14 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 
 **一行复算这三个数字（含 ADR-0032 的依据）：**
 
+> **搜索 URL 的 `{…}` 保守口径为什么保留（2026-10-13 架构师裁决）：** 它最初的理由是
+> 「`{…}` 模板型 URL 规则在 M0 下无法逐字回放」，而矩阵 **#19（`{$jsonpath}`）已在 3.7 落地**——
+> 按现在的语法，这类源**能跑**。收紧判据（把检查扩到 `exploreUrl` 条目 / `nextTocUrl` /
+> `bookUrl` / `nextContentUrl`）会把能跑的源挡在候选之外，而放开判据又会把「搜索 URL 用裸 `{…}`」
+> 的源当成可跑（那一条仍然不可回放）。因此**判据不动**：`--list` 继续只做保守筛查，
+> 这类源的真实可用性由 §4 的**逐条真实回归**判定（本文件 §5/§6 记录每次选源时的逐条审查）。
+> 于是 353/253/122 这组数字**保持有效**，ADR-0032 与本文件的引用无需复算。
+
 ```bash
 curl -sSL -o build/ao.json https://legado.aoaostar.com/sources/b778fe6b.json
 SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check/spot_check.dart | tail -3
@@ -270,6 +278,8 @@ Declared charset utf-8 carried illegal bytes; 1 malformed byte replacement(s) in
   （1096 条含 `@js:` 的源中一部分），但仓内没有入库样本可定型「JS 返回一列元素」的契约。
 - `--list` 的判据不检查非搜索字段 URL 里的 `{…}`（矩阵 #19）：候选源里出现过
   `bookUrl: https://…/{$.novel_id}` 这类 M1 模板，而工具只对 `searchUrl` 查 `{`——
-  选源时靠逐条审查规则串避开。
+  **2026-10-13 架构师裁决：作为已知取舍保留，不再归 b4b 验收。** 该判据的原始前提（`{…}`
+  在 3.7 之前无法回放）已不成立，但收紧它会把**能跑**的源排除、并让 353/253/122 这组数字失效；
+  §3 已写明口径与理由，选源时仍按 §5 的逐条审查避开放不进规则的源。
 - 绝大多数 2023 年入库的书源站点已死或加防护（本次 69 条含值规则 `@js:` 的 M0 源里
   能活的只有 API 型三条），因此「真实源回归」每次都要重新选源；命令与判据见 §3。

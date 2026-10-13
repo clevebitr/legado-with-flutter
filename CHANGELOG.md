@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4 b4b: the discover page UI (2026-10-13)
+
+- **`ExplorePage` + `ExploreNotifier`** (`presentation/`): a horizontally scrolling row of
+  `ChoiceChip`s, then the books of the chosen category as `ListTile`s that open the existing book
+  detail route. The state machine tells apart the five screens the layers below can produce —
+  loading, "this source has no discover page" (empty), "`exploreUrl` is unreadable", "no category
+  opened yet", and "this category failed" — because they are all *successful* answers from the
+  engine. A failed category keeps the chip row visible so another one can be picked
+  (`book-source.md` §9), and it offers a retry.
+- **`BookSourceRoute.explore()`** carries the new page, and the search page's app bar gained a
+  tooltip-labelled entry to it (disabled without a selected source, like the search action itself,
+  C-UI-7). Five ARB keys were added in both locales: `bookSourceExploreTitle`,
+  `bookSourceExploreAction`, `bookSourceExplorePrompt`, `bookSourceExploreEmpty` and
+  `bookSourceExploreEmptyCategory`; `flutter gen-l10n` output is committed and matches the ARB
+  files.
+- Widget tests: no source; a source without categories (empty state); opening a category and
+  listing its books through the offline corpus (`ruleExplore` absent → the whole `searchRule`
+  fallback, ADR-0035 §决策 2); a category whose every hit lacks a usable book URL (its own empty
+  state); and a failing category that keeps the row and shows the failure with a retry. Gates:
+  `core` 919/919, `domain` 1660/1660, 666 cases.
+- **Two review fixes before the merge.** A category with no usable books used to show the *search*
+  empty state, which mentions a keyword this screen never has — it now has its own key and a test
+  that asserts the search text is absent; and the unreachable `ExploreCategories()` arm of the
+  `_below` switch (already handled above it) is gone.
+- **The assigned `tool/spot_check` item was settled, not implemented: the “`{…}` in non-search
+  URL fields” criterion stays as it is.** Its original premise — such URL rules could not be
+  replayed before matrix #19 — was overtaken by #19 landing in 3.7, so tightening it now would
+  filter out *runnable* sources and invalidate the 353/253/122 numbers ADR-0032 and
+  `tool/spot_check/README.md` quote, while loosening the search-URL half would admit sources that
+  still cannot be replayed. The criterion and the numbers therefore stand, the reasoning is written
+  into `tool/spot_check/README.md` §3/§6, and `PLAN.md` §3.7 is closed.
+
 ### Stable coverage gate, a withdrawn finding and the b1b review (2026-10-13)
 
 The coverage gate could fail on any PR for a reason unrelated to that PR, and one registered
@@ -59,29 +91,6 @@ Docs only.
   blobs of `PLAN.md` / `CHANGELOG.md` / `docs/dev/book-source.md` carry CRLF — the integration kept
   the existing line endings so no whole-file rewrite appeared, and the two ways to settle it (or
   the rule to keep the current endings until then) are written down.
-
-### Phase 4 b4b: the discover page UI (2026-10-13)
-
-- **`ExplorePage` + `ExploreNotifier`** (`presentation/`): a horizontally scrolling row of
-  `ChoiceChip`s, then the books of the chosen category as `ListTile`s that open the existing book
-  detail route. The state machine tells apart the five screens the layers below can produce —
-  loading, "this source has no discover page" (empty), "`exploreUrl` is unreadable", "no category
-  opened yet", and "this category failed" — because they are all *successful* answers from the
-  engine. A failed category keeps the chip row visible so another one can be picked
-  (`book-source.md` §9), and it offers a retry.
-- **`BookSourceRoute.explore()`** carries the new page, and the search page's app bar gained a
-  tooltip-labelled entry to it (disabled without a selected source, like the search action itself,
-  C-UI-7). Four ARB keys were added in both locales: `bookSourceExploreTitle`,
-  `bookSourceExploreAction`, `bookSourceExplorePrompt`, `bookSourceExploreEmpty`.
-- Widget tests: no source; a source without categories (empty state); opening a category and
-  listing its books through the offline corpus (`ruleExplore` absent → the whole `searchRule`
-  fallback, ADR-0035 §决策 2); and a failing category that keeps the row and shows the failure with
-  a retry. Coverage exit 0 (`core` 920/920, `domain` 1660/1660).
-- **One assigned item was deliberately not done: tightening `tool/spot_check`'s “`{…}` in
-  non-search URL fields” criterion.** Its premise — such URL rules cannot be replayed before
-  matrix #19 lands — was overtaken by #19 being implemented in 3.7, so excluding those sources now
-  would filter out *runnable* ones, while changing the criterion moves the 353/253/122 numbers that
-  ADR-0032 and `tool/spot_check/README.md` quote. Registered in `PLAN.md` §3.7 with the two options.
 
 ### Phase 4 b4a: the discover-page engine and `ExploreBooks` (2026-10-13)
 
