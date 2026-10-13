@@ -120,12 +120,12 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-SRC-1 | 解析引擎必须为纯 Dart，且无 Flutter / UI 依赖（受 C-ARCH-7 约束）。 |
 | C-SRC-2 | JS 规则必须在**独立 Isolate** 中执行，禁止阻塞 UI 线程（ADR-0015）。超时、内存上限与调用次数配额见 `docs/dev/book-source.md` §6（本文档不复述数值）；`Isolate.kill(priority: immediate)` 必须保留为硬预算兜底。 |
 | C-SRC-3 | JS 桥接只暴露 `book-source.md` 声明的白名单 API；禁止暴露文件系统、进程、网络与原生日志。 |
-| C-SRC-4 | 不支持的规则类型必须返回 `ParseFailure(unsupportedRule)` 并记录日志；**禁止静默忽略**。顶层规则（`bookList` / `chapterList` / `content`）被拒时必须整次失败；非顶层字段被拒时的降级语义（置空 + warning）见 **ADR-0026**；**类型未知不等于不支持**（退化为原始 CSS，见 **ADR-0032**）。 |
-| C-SRC-5 | URL 模板必须统一经 `renderUrlTemplate` 渲染；禁止手写字符串拼接。 |
+| C-SRC-4 | 不支持的规则类型必须返回 `ParseFailure(unsupportedRule)` 并记录日志；**禁止静默忽略**。顶层规则（`bookList` / `chapterList` / `content`）被拒时必须整次失败；非顶层字段被拒时的降级语义（置空 + warning）见 **ADR-0026**；**类型未知不等于不支持**（退化为原始 CSS，见 **ADR-0032**）；发现页的分类条目与 `ruleExplore` → `ruleSearch` 的**整条回落**见 **ADR-0035**。 |
+| C-SRC-5 | URL 模板必须统一经渲染入口（`PageFetchService.renderUrl`；同步部分仍是 `renderUrlTemplate`）渲染；禁止手写字符串拼接。`{{…}}` 的求值边界（搜索 / 发现 URL 内只允许 JS）见 `docs/dev/book-source.md` §4 / §4.2。 |
 | C-SRC-6 | CSS 选择器统一 `cascadia`；JSONPath 统一 `json_path`；禁止自研选择器或手写 JSON 遍历。 |
 | C-SRC-7 | `BookSource` 及全部子规则必须使用 `freezed` + `json_serializable`；禁止手写 `fromJson` / `toJson`。模型位于 `domain/entities/`，该层归属的例外见 ADR-0021。 |
 | C-SRC-8 | 失败必须可定位到规则路径：`ParseFailure.rulePath` 必填，供 UI 与日志定位失效规则。 |
-| C-SRC-9 | 同一书源的解析不得共享可变全局状态；`RuleEngine` 必须可并发调用且线程安全。规则变量（`@put:` / `@get:` / `java.*`）按书源键控的存储与快照语义见 ADR-0034。 |
+| C-SRC-9 | 同一书源的解析不得共享可变全局状态；`RuleEngine` 必须可并发调用且线程安全。规则变量（`@put:` / `@get:` / `java.*`）按书源键控的存储与快照语义见 ADR-0034；书源限速（`concurrentRate`）与并发预算的「速率门 → 并发门」合成见 ADR-0036（数值归 `book-source.md` §8）。 |
 
 > 书源模型的**字段映射与分期**归 `docs/dev/book-source.md` §2，类型命名归 `docs/dev/naming.md` §3，
 > 本组不复述；`freezed` + `json_serializable` 的写法示例见 `docs/dev/architecture.md` §3 的例外一。

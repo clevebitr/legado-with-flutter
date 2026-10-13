@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M1 spec front-loading: the explore page and `concurrentRate` (2026-10-13)
+
+Docs only. The remaining half of M1 needed three specs that did not exist yet (`exploreUrl`'s format and
+fallback, `concurrentRate`'s syntax and how it composes with the concurrency budget, `java.timeFormat`'s
+input and timezone), so the architect front-loaded them instead of letting the dev team guess
+(`AGENTS.md` §2). No Dart changed; the six gates were re-run on an unchanged tree.
+
+- **ADR-0035 (new, Accepted): the explore page.** `exploreUrl` recognises two mutually exclusive forms — a
+  kind list (`&&` / newline separated, `title::url`) and a whole-field JS (`@js:` or `<js>…</js>`) — and
+  `ruleExplore` falls back to the **whole** `ruleSearch` when it is missing or its `bookList` is blank
+  (upstream `BookList.kt:83-87`; not a per-field fallback, and the accounting fields come from the winner
+  wholesale). Four differences are registered: the `</js>` suffix requirement, a URL-less kind being
+  rejected instead of upstream's "pass the whole field down as the URL" side effect, `page = 1` plus no
+  `key` in the kinds script, and a failing script being a `parseFailed` instead of upstream's visible
+  `ERROR:` kind. Form-type kinds (`type != url`), `infoMap`, `args`/temporary variables and the ranking
+  modules are out of M1 and registered in `PLAN.md` §3.7.
+- **ADR-0036 (new, Accepted): `concurrentRate`.** The upstream syntax is kept verbatim — `n/m` is n accesses
+  per m **milliseconds** (upstream's own comment, `ConcurrentRateLimiter.kt:86`), a bare integer is one per
+  x milliseconds, `"0"`/empty is unlimited — with one deliberate difference: a malformed declaration is
+  ignored **with a warning** instead of being silently swallowed. The rate gate and the existing per-source
+  concurrency gate both apply, in the fixed order **rate permit, then concurrency slot** (the reverse lets
+  waiting requests hold all three slots); over-limit **queues**, and the single implementation point stays
+  `RequestLimiter` inside `DioHttpClient`, so a rule's `http.*` inherits the same limit.
+- **`book-source.md`**: §2 (the `ruleExplore` row, `updateTime` in four rule objects, the list-rule "same
+  shape" constraint, `canReName`'s not-evaluated semantics, `variableComment`, and the upstream fields this
+  repo does not model yet), new **§4.2** (the explore page, its single source of truth), §6
+  (`java.timeFormat`'s input, format and timezone), §8 (`concurrentRate` syntax and composition), §9 (a
+  failing explore page only costs that kind), §11 (the `<js>` exception boundary and the M2 rows the explore
+  page needs).
+- **Ownership and ledgers**: `docs/README.md` §2.1 gained the two new fact rows (explore page → §4.2 /
+  ADR-0035; `concurrentRate` → §8 / ADR-0036); the ADR index gained 0035/0036; `constraints.md` C-SRC-4,
+  C-SRC-5 and C-SRC-9 now carry the ADR backlinks, and **C-SRC-5's wording was corrected** — since the M1
+  grammar slice the URL entry point is the engine's asynchronous `renderUrl`, with `renderUrlTemplate` as
+  its synchronous part, which the old wording ("must go through `renderUrlTemplate`") no longer described.
+- **`PLAN.md`**: §3.5 replaced the "what is left" prose with the **b0–b4 step table** (b0 done here; b1
+  `updateTime` + `java.timeFormat`, b2 `concurrentRate`, b3 `canReName` / `variableComment`, b4a explore
+  engine + use case, b4b explore UI) including each step's acceptance, its parallelism, and the note that
+  b4a depends on b1; §3.7 gained eight registration rows (unmodelled upstream fields, `infoMap` / form kinds
+  / ranking modules, the URL-less kind difference, `java.timeFormatUTC`, `canReName`'s consumer,
+  `updateTime`'s UI, and the `spot_check` URL check that b4b must tighten).
+
 ### Phase 4 grammar first: the M1 rule syntaxes #15–#19 (2026-10-12)
 
 The first half of `PLAN.md` Phase 4: the five M1 syntaxes, implemented the way upstream reads them

@@ -56,3 +56,5 @@
 | [0032](0032-unknown-rule-type-degrades-to-css.md) | 默认规则的未知类型退化为原始 CSS 选择器 | Accepted（2026-10-12 开发组起草、**架构师审核接受**；G2b spot-check 触发） | 本次新增 |
 | [0033](0033-cache-failure-exemption-in-its-adapter.md) | 缓存失败吸收的唯一豁免点：`CacheDaoCharsetCache` 允许 `on Exception`（drift 不导出 `ConnectionClosedException`） | Accepted（2026-10-12 架构师裁决；3.9 复核 F1 的事实修正触发） | 本次新增 |
 | [0034](0034-js-rule-variables.md) | M1 规则变量：宿主侧一份表 + 每个 job 一份快照（`@put:` / `@get:` / `java.put` / `java.get`） | Accepted（2026-10-12 架构师裁决；ADR-0030 §决策 5(a) 的重开触发条件） | 本次新增 |
+| [0035](0035-explore-url-and-rule-explore-fallback.md) | 发现页：`exploreUrl` 的两种形态（分类串 / 整字段 JS）与 `ruleExplore` → `ruleSearch` 的**整条**回落，含四条登记差异 | Accepted（2026-10-13 架构师裁决；M1-b0 规格前置） | 本次新增 |
+| [0036](0036-concurrent-rate-and-the-budget.md) | `concurrentRate` 的语法与毫秒单位，以及「速率门 → 并发门」的合成顺序 | Accepted（2026-10-13 架构师裁决；M1-b0 规格前置） | 本次新增 |
