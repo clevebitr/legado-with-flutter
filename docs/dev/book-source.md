@@ -85,8 +85,31 @@
 > **状态（M1-b3 已落地）：** 字段已建模（`BookInfoRule.canReName`），
 > `FetchBookInfo` 经 `declaresCanReName` 把「是否声明」传成 `BookInfo.canReName`（布值，不求值）。
 
+> **`init` 的语义（2026-10-14，b6 落地）：** 上游 `BookInfo.kt:58-64`——`init` 规则**非空白**时，
+> 先对它求值，并把**结果**当成后续每个 `ruleBookInfo` 字段的内容
+> （`analyzeRule.setContent(analyzeRule.getElement(init))`）；空白 / 缺失时沿用整页，行为与从前一致。
+> 它是「换 scope」的字段而不是值字段，因此**不适用** ADR-0026 的非顶层降级：求不出 scope
+> 时整次详情失败（上游 `setContent(null)` 同样直接失败）——命不中报 `parseFailed`、`rulePath`
+> 为 `ruleBookInfo.init`，命中未实现语法则按 §7 报 `unsupportedRule`、`rulePath` 为
+> `unsupported:<语法名>`。
+> 这正是真实语料的主流形态：`init: "$.data.bookInfo"` 之后，`name` / `author` / `coverUrl`
+> 等字段的规则是**相对子对象**写的（`$.resourceName` / `$.picurl`…），此前逐字段对着整页读
+> 必然全空。
+> **本仓口径与登记差异：** `init` 复用列表规则的元素语义（`RuleEngine.selectAll`）——JSON 规则
+> 给出 `JsonScope`（后续字段从该子结构读），DOM 规则给出命中元素的 `DomScope`；命中多个时
+> **取第一个**，命中零个按 §7 报 `parseFailed`。**差异：** `init` 本身是裸 `@js:` 时报
+> `unsupported:@js:list`（列表规则尚无「JS 返回元素」的契约，见 §3 的 #14 注记）。
+
 > **层归属与 `extra` 的落地形态**见 ADR-0021（模型位于 `domain/entities/`；`extra` 由
 > `fromLegadoJson` 逐层填充）。本表只拥有字段映射与分期。
+>
+> **书源身份与重复导入（2026-10-14，P5-0；决策、数值与失败语义的唯一出处是 ADR-0040，待接受）：**
+> `bookSourceUrl` **不是**主键——合集普查（`tool/spot_check/README.md` §3）显示同一 URL 下既有
+> 完全等价的重复条目、也有行为不同的多条，所以落库身份取 **`(bookSourceUrl, 行为指纹)`**：
+> 行为字段 = `bookSourceName` / `searchUrl` / `header` / `ruleSearch` / `ruleBookInfo` / `ruleToc` /
+> `ruleContent` / `ruleExplore`（递归按键排序后序列化的 sha256）。同 `(url, 指纹)` 重复导入**幂等**，
+> 同 URL 不同指纹**共存**（与上游「URL 即主键、后者覆盖」的登记差异）；`enabled` / `customOrder`
+> 属**用户态**，导入永不覆盖。体积上限、校验分档与失败 `rulePath` 的数值不在本表。
 
 ---
 
@@ -331,6 +354,10 @@
         → 取出内容（text / textNodes / ownText / html / all / 属性）
   → 最后按顺序应用所有 `##` 替换
 ```
+
+> **字段集的前置步（2026-10-14，b6）：** 一个**字段集**（`ruleBookInfo`）在逐字段解析之前，
+> 先应用它的 `init`（若有）：按本节顺序求值 `init`，再把结果当作后面每个字段的 scope。
+> 语义、失败档位与本仓差异见 §2 的 `init` 注记。
 
 ### 3.3 默认规则的段结构（原版语义）
 
