@@ -654,6 +654,11 @@ class $BookSourcesTable extends BookSources
 
 class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
   /// Synthetic primary key; never the URL, so a row keeps its identity across re-imports.
+  ///
+  /// `AUTOINCREMENT` is deliberate rather than a plain `INTEGER PRIMARY KEY`: without it SQLite
+  /// may hand a deleted row's id out again, and a stale "current source" reference would then
+  /// silently point at **another** source (ADR-0040 §决策 1). Monotonic ids make reuse
+  /// impossible, and with a few thousand rows the extra bookkeeping costs nothing.
   final int id;
 
   /// `bookSourceUrl` — upstream's natural identifier (`book-source.md` §2).

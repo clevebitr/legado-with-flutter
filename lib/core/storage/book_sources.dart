@@ -16,6 +16,11 @@ import 'package:drift/drift.dart';
 @DataClassName('BookSourceRow')
 class BookSources extends Table {
   /// Synthetic primary key; never the URL, so a row keeps its identity across re-imports.
+  ///
+  /// `AUTOINCREMENT` is deliberate rather than a plain `INTEGER PRIMARY KEY`: without it SQLite
+  /// may hand a deleted row's id out again, and a stale "current source" reference would then
+  /// silently point at **another** source (ADR-0040 §决策 1). Monotonic ids make reuse
+  /// impossible, and with a few thousand rows the extra bookkeeping costs nothing.
   IntColumn get id => integer().autoIncrement()();
 
   /// `bookSourceUrl` — upstream's natural identifier (`book-source.md` §2).
