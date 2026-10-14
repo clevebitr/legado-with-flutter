@@ -17,7 +17,7 @@
 | 集成回放测试 | 书源全链路 | 搜索→详情→目录→正文（离线语料） | 否 |
 | 设备级集成测试 | 真实引擎 / 平台通道 / 原生 SQLite | `integration_test/`（Windows 桌面、Android 模拟器） | 否 |
 
-**设备级用例的执行时点**（切片级只要求 Windows、阶段出口要求 Windows + Android 各一次，以及例外与重开条件）归 `docs/dev/test-environment.md` §1/§3，决策理由见 **ADR-0038**；本节不复述。
+**设备级用例的执行时点**（**切片级双端各一次**、阶段出口双端全量，以及环境阻塞的降级路径与重开条件）归 `docs/dev/test-environment.md` §1/§3，决策理由见 **ADR-0039**；本节不复述。
 
 设备级集成测试**不进 CI**（§7 的命令清单与 `AGENTS.md` §4 不变）；要把它接入 CI 需另开 PR/ADR
 （ADR-0017 §决策 5：需要 Android SDK/模拟器，iOS 还需 macOS）。

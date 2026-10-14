@@ -59,4 +59,5 @@
 | [0035](0035-explore-url-and-rule-explore-fallback.md) | 发现页：`exploreUrl` 的两种形态（分类串 / 整字段 JS）与 `ruleExplore` → `ruleSearch` 的**整条**回落，含四条登记差异 | Accepted（2026-10-13 架构师裁决；M1-b0 规格前置） | 本次新增 |
 | [0036](0036-concurrent-rate-and-the-budget.md) | `concurrentRate` 的语法与毫秒单位，以及「速率门 → 并发门」的合成顺序 | Accepted（2026-10-13 架构师裁决；M1-b0 规格前置） | 本次新增 |
 | [0037](0037-java-binding-compat-surface.md) | `java.*` 成为兼容面：别名族（`md5Encode` / `base64*` / `encodeURI` / `log`）、规则求值族（字面量宿主内联快路径 + 异步兜底）与具名拒绝 | Accepted（2026-10-13 架构师裁决；合集 C 全量语料取证，M1-b1b 开工前置） | 本次新增 |
-| [0038](0038-device-probe-at-phase-exit.md) | 设备级探针按**阶段出口**要求（Windows + Android 各一次），切片级只要求 Windows | Accepted（2026-10-13 架构师裁决，用户指令确认） | 本次新增 |
+| [0038](0038-device-probe-at-phase-exit.md) | 设备级探针按**阶段出口**要求（Windows + Android 各一次），切片级只要求 Windows | **Superseded by ADR-0039** | 本次新增 |
+| [0039](0039-device-probe-per-slice-again.md) | 设备级探针回到**切片级双端**（代价前提已消失；环境阻塞走「写明 + 架构师补跑」） | Accepted（2026-10-13 架构师裁决；取代 0038） | 取代 0038 |

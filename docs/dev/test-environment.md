@@ -12,7 +12,7 @@
 | 目标 | 状态 | 说明 |
 |---|---|---|
 | 主机侧单元 / Widget 测试 | ✅ 已跑通 | `flutter test --coverage` 全部用例通过，`tool/check_coverage.dart` 退出码 0。用例计数与分层覆盖率只在 §7 的实测证据表里出现一次（该计数随每个切片增长，以**最近一次运行**为准；阈值与判定归 `docs/dev/testing.md` §2） |
-| **执行时点** | — | **切片级只要求 Windows 实跑（约 2 分钟）；阶段出口要求 Windows + Android 各一次（Android 侧单次 ≥ 30 分钟）**；改了 `lib/core/platform/**`、原生工程（`android/` / `windows/` / `ios/`）或 `integration_test/` 的切片是例外，必须在改动的那个平台实跑。谁在何时跑、重开条件与决策理由归 **ADR-0038**，本节不复述；命令见 §3，证据写 §7 |
+| **执行时点** | — | **切片级：Windows 与 Android 各实跑一次**（2026-10-13 实测：Windows 108 s、Android 163 s，含模拟器冷启动）；**阶段出口：双端全量**（`PLAN.md` §4 的 G7）。Android 因**环境**失败时可以降级为「Windows 实跑 + 写明环境阻塞」，由架构师在下一个切片前补跑——**不得**写成通过。改了 `lib/core/platform/**`、原生工程或 `integration_test/` 的切片必须在改动的那个平台实跑。降级路径、重开条件与理由归 **ADR-0039**，本节不复述；命令见 §3，证据写 §7 |
 | Windows 桌面设备级用例 | ✅ 已跑通 | `integration_test/` 两个用例文件在 `-d windows` 全部通过 |
 | Android 模拟器设备级用例 | ✅ 已跑通 | AVD `Medium_Phone`（API 37）上两个用例文件全部通过，含文件型 Drift 数据库 |
 | iOS | ❌ **未覆盖** | 本机无 macOS / Xcode，条件不具备；iOS 行为仍按 `docs/dev/platform.md` §6 人工确认 |
@@ -165,6 +165,7 @@ Windows 与 Android 两侧都已实测通过。
 | `dart run tool/check_coverage.dart` 以退出码 3 失败 | 新增了 `lib/core/**` / `domain/**` / `data/**` 源文件却没有测试 | 补测试；确需豁免按 ADR-0019 登记进 `tool/coverage_allowlist.txt`（`testing.md` §2） |
 | **新建 worktree** 里 `flutter test` / `flutter run` 报 `By default, this package downloads a pre-compiled SQLite library` + `SocketException` | native assets 的下载缓存是**按 worktree** 存的（`<worktree>/.dart_tool/hooks_runner/shared/sqlite3/`），新 worktree 没有缓存，一断网就失败（与代码无关，也与 Android 的 `libsqlite3.arm.android.so` 同源） | 从任一已跑通的 worktree 拷 `.dart_tool/hooks_runner/shared/sqlite3/` 过去（实测即时恢复），或等网络恢复后重跑；**不要**为它改 `pubspec.yaml` / 加本地 sqlite3 |
 | Android 模拟器日志里 `Successfully loaded snapshot` 之后就一直是 `adb.exe: device offline`，脚本干等到 `-BootTimeoutSeconds` 超时 | `snapshots/<avd>/default_boot` 是**被截断**的（`emu kill` 立即返回，而模拟器还要写十几秒；在窗口里退出就会撕坏它），`fastboot.forceFastBoot=yes` 又让每轮都加载它 | 现在 `run_android.ps1` **不读快照**并在跑完清理，所以不会再发生；手工碰到时删掉 `snapshots/<avd>/default_boot` 或加 `-no-snapshot-load` 启动。**注意**：`bootcompleted.ini` 恒为 0 字节是正常的，_不是_失败指纹（看快照目录里各文件的时间戳是否互相对不上） |
+| 跑完 Android 后删 worktree 报 `Filename too long` | Gradle 会在 `build/integration_test/.transforms/…` 下生成超过 Windows 260 字符上限的路径，`git worktree remove` 与 PowerShell `Remove-Item` 都删不掉（2026-10-13 架构师实际踩到）。**做法：** 先把 git 元数据摘掉（`git worktree remove --force` 失败无妨，`git worktree prune` 即可），再用 `cmd //c "robocopy <空目录> <worktree路径> /MIR"`（robocopy 支持长路径）镜像清空，最后 `rmdir` 掉剩下的空目录 |
 
 ---
 
