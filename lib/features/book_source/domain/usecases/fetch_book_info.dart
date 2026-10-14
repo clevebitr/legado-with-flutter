@@ -36,11 +36,19 @@ final class FetchBookInfo {
         rulePath: final String failedAt,
       ) =>
         failureAt<BookInfo>(kind: kind, rulePath: failedAt),
-      ParseSuccess<RuleScope>(:final RuleScope data) => await _read(
-        source,
-        url,
-        data,
-      ),
+      ParseSuccess<RuleScope>(:final RuleScope data) =>
+        switch (await _initScope(source, data)) {
+          ParseFailure<RuleScope>(
+            :final ParseFailureKind kind,
+            rulePath: final String failedAt,
+          ) =>
+            failureAt<BookInfo>(kind: kind, rulePath: failedAt),
+          ParseSuccess<RuleScope>(:final RuleScope data) => await _read(
+            source,
+            url,
+            data,
+          ),
+        },
     };
   }
 
@@ -125,6 +133,27 @@ final class FetchBookInfo {
         canReName: declaresCanReName(rules),
       ),
     );
+  }
+
+  /// Returns the scope every `ruleBookInfo` field is read from.
+  ///
+  /// `init` is upstream's “read this first” field (`BookInfo.kt:58-64`): a non-blank value is
+  /// evaluated and its result becomes the content of every later field, so the fields of a
+  /// source that declares `init: "$.data.bookInfo"` are the **sub**-object's fields. A blank or
+  /// absent `init` keeps the page itself, which is the behaviour from before. A rule that cannot
+  /// build a scope is the stage's failure — no ADR-0026 degradation, because losing the scope
+  /// would silently empty every field at once — with the failure pointing at `ruleBookInfo.init`
+  /// when nothing matched, or at §7's `unsupported:<flag>` marker when the rule was rejected
+  /// (`book-source.md` §2).
+  Future<ParseResult<RuleScope>> _initScope(
+    BookSource source,
+    RuleScope page,
+  ) async {
+    final String init = (source.bookInfoRule?.init ?? '').trim();
+
+    return init.isEmpty
+        ? ParseSuccess<RuleScope>(page)
+        : _pages.selectScope(init, page, 'ruleBookInfo.init');
   }
 }
 

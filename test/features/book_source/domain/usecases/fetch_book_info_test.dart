@@ -270,5 +270,112 @@ void main() {
       expect(declaresCanReName(const BookInfoRule(canReName: '   ')), isFalse);
       expect(declaresCanReName(const BookInfoRule(canReName: 'true')), isTrue);
     });
+
+    test('execute_givenABlankInit_readsThePageAsBefore', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_bookUrl, _page('book_page.html'));
+      final BookSource source = _source();
+      final BookSource withBlankInit = source.copyWith(
+        bookInfoRule: source.bookInfoRule?.copyWith(init: '   '),
+      );
+
+      final BookInfo info = _data(
+        await FetchBookInfo(pages: _service(http))
+            .execute(withBlankInit, _bookUrl),
+      );
+
+      // 空白 init = 没声明（上游 `BookInfo.kt:59` 的 isNotBlank 判据）。
+      expect(info.name, '书名一');
+      expect(info.author, '作 者：作者甲');
+    });
+
+    test('execute_givenAJsonInit_readsEveryFieldFromTheSubScope', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _bookUrl,
+          '{"data":{"bookInfo":{"title":"书名乙","authorName":"作者乙",'
+          '"pic":"https://img.test/2.jpg"}}}',
+        );
+      const BookInfoRule rules = BookInfoRule(
+        init: r'$.data.bookInfo',
+        name: r'$.title',
+        author: r'$.authorName',
+        coverUrl: r'$.pic',
+      );
+
+      final BookInfo info = _data(
+        await FetchBookInfo(pages: _service(http))
+            .execute(_source().copyWith(bookInfoRule: rules), _bookUrl),
+      );
+
+      // init 之后字段读的是子对象（上游 `setContent(getElement(init))`）。
+      expect(info.name, '书名乙');
+      expect(info.author, '作者乙');
+      expect(info.coverUrl, 'https://img.test/2.jpg');
+    });
+
+    test('execute_givenADomInit_readsFieldsInsideThatElement', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _bookUrl,
+          '<div class="wrap"><p class="n">书名丙</p><p class="a">作者丙</p></div>',
+        );
+      const BookInfoRule rules = BookInfoRule(
+        init: 'class.wrap',
+        name: 'class.n@text',
+        author: 'class.a@text',
+      );
+
+      final BookInfo info = _data(
+        await FetchBookInfo(pages: _service(http))
+            .execute(_source().copyWith(bookInfoRule: rules), _bookUrl),
+      );
+
+      expect(info.name, '书名丙');
+      expect(info.author, '作者丙');
+    });
+
+    test('execute_givenAnInitThatMatchesNothing_failsAtTheInitRule', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_bookUrl, '{"data":{}}');
+
+      final ParseFailure<Never> failure = _failure(
+        await FetchBookInfo(pages: _service(http)).execute(
+          _source().copyWith(
+            bookInfoRule: const BookInfoRule(
+              init: r'$.data.bookInfo',
+              name: r'$.title',
+            ),
+          ),
+          _bookUrl,
+        ),
+      );
+
+      // 规则无匹配按 §7 是 parseFailed；init 不降级，所以整次详情失败。
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'ruleBookInfo.init');
+    });
+
+    test('execute_givenARejectedInit_failsWithoutDegrading', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_bookUrl, _page('book_page.html'));
+
+      final ParseFailure<Never> failure = _failure(
+        await FetchBookInfo(pages: _service(http)).execute(
+          _source().copyWith(
+            bookInfoRule: const BookInfoRule(
+              init: '@xpath://div',
+              name: 'class.book-name@text',
+            ),
+          ),
+          _bookUrl,
+        ),
+      );
+
+      // init 不适用 ADR-0026 的非顶层降级：丢掉 scope 会静默清空所有字段。
+      // rulePath 按 §7 取语法标记（而非字段路径），与被拒规则的通用口径一致。
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:@xpath:');
+    });
   });
 }

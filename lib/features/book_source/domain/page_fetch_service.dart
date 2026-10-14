@@ -276,6 +276,41 @@ final class PageFetchService {
     };
   }
 
+  /// Returns the scope [rule] selects on [scope] — the `ruleBookInfo.init` entry
+  /// (`book-source.md` §2).
+  ///
+  /// Upstream evaluates `init` and makes its **result** the content every later
+  /// `ruleBookInfo` field is read from (`BookInfo.kt:58-64`), so this returns a scope and not a
+  /// value: a JSON rule yields a [JsonScope] (the later fields then read that sub-structure,
+  /// which is the shape the real corpus uses — `init: "$.data.bookInfo"`), a DOM rule yields
+  /// the [DomScope] of a matched element.
+  ///
+  /// Unlike [field] it **never degrades**: `init` decides where every later field is read, so a
+  /// rule that was rejected, is malformed or matched nothing is the stage's failure (upstream fails
+  /// the same way when nothing matched, because `setContent(null)` throws). Matching several things
+  /// keeps the first, the element semantics of `RuleEngine.selectAll` (`book-source.md` §2).
+  Future<ParseResult<RuleScope>> selectScope(
+    String? rule,
+    RuleScope scope,
+    String rulePath,
+  ) async {
+    final ParseResult<List<RuleScope>> result = await _engine.selectAll(
+      rule ?? '',
+      scope,
+      rulePath: rulePath,
+    );
+
+    return switch (result) {
+      ParseFailure<List<RuleScope>>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ) =>
+        failureAt<RuleScope>(kind: kind, rulePath: failedAt),
+      ParseSuccess<List<RuleScope>>(:final List<RuleScope> data) =>
+        data.isEmpty ? _noMatch(rulePath) : ParseSuccess<RuleScope>(data.first),
+    };
+  }
+
   /// Returns the single value of the **top-level content** rule.
   ///
   /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7).

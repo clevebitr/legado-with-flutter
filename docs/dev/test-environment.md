@@ -170,7 +170,7 @@ Windows 与 Android 两侧都已实测通过。
 
 ---
 
-## 7. 实测证据（2026-10-11；最新一次 **G4，2026-10-14**，双端按 ADR-0039）
+## 7. 实测证据（2026-10-11；最新一次 **b6，2026-10-14**，双端按 ADR-0039）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
@@ -185,6 +185,10 @@ Windows 与 Android 两侧都已实测通过。
 | **G4 #15 闭环复跑（2026-10-14）** | 三条命令同上 | 门禁同上（**692** 用例、`core` 943/943、`domain` 1740/1740）；Windows **79 s**、Android **186 s**（含冷启动），两侧各 3 个用例文件全过、`js_bridge` **24/24**，退出码 0；Android 跑完按 PR #34 的策略清理了本轮快照 |
 
 | **Phase 4 出口（G7，2026-10-14）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + `pwsh -File tool/test/run_windows.ps1` + `pwsh -File tool/test/run_android.ps1`（在冻结的 `main` = `473ff1e` 上） | 主机侧 **692** 用例全过、覆盖率退出码 0（`core` 943/943、`domain` 1740/1740，均 100%）；设备级 **Windows 92 s、Android 182 s（含模拟器冷启动）**，两侧 3 个用例文件全过（`js_bridge` **24/24**）、退出码 0。**注：** 运行前本机 pub cache 又出现 5 个半下载包（见 §6 那一行），按判据清理并重拉后跑通——CI 侧用的是干净 cache，不受影响 |
+| **b6 主机侧（2026-10-14）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` | **697** 个用例全过；覆盖率退出码 0（`core` 943/943、`domain` 1759/1759，均 100%） |
+| **b6 Windows 设备级** | `pwsh -File tool/test/run_windows.ps1` | 3 个用例文件全过（`app_boot` 1/1、`js_bridge` **24/24**、`on_disk_database` 1/1）；退出码 0，**80 s** |
+| **b6 Android 设备级** | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone`（含冷启动）3 个用例文件全过（`js_bridge` **24/24**）；退出码 0，**151 s**；跑完按 PR #34 的策略清理了本轮快照 |
+
 > Android 补跑命令：`pwsh -File tool/test/run_android.ps1`（`Medium_Phone` 自动启停；需要网络，因 `flutter build apk` 的 native assets 要下载 `libsqlite3.arm.android.so`，见 §6 与本表旧记录）。
 >
 > `flutter doctor` 的网络项在本机报 `A cryptographic error ... checking https://pub.dev/`

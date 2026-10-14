@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### P5-0's first evidence: the duplicate shape of the corpus (2026-10-14)
+
+- `PLAN.md` section 3.6 5.0 has to rule on the book-source primary key and on what importing the
+  same source twice does. `bookSourceUrl` alone cannot be trusted for that, so the harness
+  (`--list`) now prints the shape (`_printBookSourceIdentityCensus`: two entries are "the same"
+  only when name, `searchUrl`, `header` and all five rule objects are equal, compared key-order
+  free).
+- On the 2026-08-15 snapshot: **3907 entries, 2596 distinct URLs; 1217 URLs repeat (max 3), of which
+  1012 repeat *identically* and 205 have at least one entry that differs.** Both shapes are real,
+  and picking either "URL is the primary key" or "URL unique index + overwrite" loses one of them —
+  which is why the ruling is the architect's, not the implementation's.
+- Numbers and criterion: `tool/spot_check/README.md` section 3; the ruling itself is still open (no
+  ADR yet, and P5-0's other rulings - ADR-0021 review, import size limits, new dependencies,
+  feature boundaries, rule-variable persistence - are untouched).
+
+### b7's evidence step: a JSON item as `result` in 85 real sources (2026-10-14)
+
+- **What was measured.** `book-source.md` section 6 hands a script the item's **JSON text** on a
+  JSON scope, while upstream binds the item **object** — so `result.comic_id` works upstream and is
+  `undefined` here. b7 is "gather evidence first, then decide whether the contract changes", so the
+  harness (`tool/spot_check`, `--list`) now prints that census instead of a throwaway script
+  (`docs/dev/test-environment.md` section 6, trap 13).
+- **The criterion** (in `_printJsonItemResultCensus`): the sibling fields of a **JSON** list rule
+  (`bookList` / `chapterList`) plus `ruleBookInfo.*` when `init` is a JSON rule (b6's new scope),
+  whose `@js:` tail or `{{…}}` body reads `result.<member>` / `result['<member>']`. `@js:` and
+  `{{…}}` are both counted because both bind the current scope; `JSON.parse(result)` is counted
+  separately because it reads the text correctly.
+- **The number on the 2026-08-15 snapshot: 85 sources, 98 fields** (top fields
+  `ruleSearch.coverUrl` 18, `ruleSearch.lastChapter` 16, `ruleToc.chapterName` 10,
+  `ruleSearch.bookUrl` 10, `ruleToc.isVip` 9), with 7 further fields using `JSON.parse(result)`.
+  The reviewer reproduced all three figures and the per-field distribution with an independent
+  script over the same `build/ao.json`.
+- **Step 2 is a decision, not a todo:** changing section 6's binding needs a new ADR first
+  (`PLAN.md` section 3.5 b7). The census and its criterion are recorded in
+  `tool/spot_check/README.md` section 3 and `PLAN.md` section 3.7.
+
+### b6 lands: `ruleBookInfo.init` now scopes the detail fields (2026-10-14)
+
+- **The bug:** `book-source.md` section 2 has always marked `BookInfoRule.init` as **M0**, but
+  `FetchBookInfo` read every field straight off the page scope and nothing ever evaluated `init`
+  (the Phase 4 exit caught it). On a real source that declares `init: "$.data.bookInfo"` the sibling
+  rules are written **relative to that sub-object**, so every detail field came back empty - the
+  "white read" the exit registered.
+- **The fix:** upstream's semantics (`BookInfo.kt:58-64`) are now applied. A non-blank `init` is
+  evaluated first and its result becomes the scope of every later field
+  (`PageFetchService.selectScope` + `FetchBookInfo._initScope`); a blank or absent `init` keeps the
+  page, so nothing else changed.
+- **`init` is a scope switch, not a value field,** so it deliberately does not take ADR-0026's
+  non-top-level degradation: losing the scope would empty every field at once. A rule that matches
+  nothing fails as `parseFailed` with `rulePath=ruleBookInfo.init`; an unimplemented flag fails as
+  `unsupportedRule` with section 7's syntax marker. Registered difference: a bare `@js:` `init`
+  reports `unsupported:@js:list`, because list rules still have no "JS returns elements" contract.
+- Spec: `book-source.md` section 2 gained the `init` semantics and the registered difference,
+  section 3.2 the "field set gets a pre-step" line. Tests: five cases - blank init keeps the page,
+  JSON sub-scope, DOM sub-scope, no match, rejected rule.
+- Gates green: **697** cases, `core` 943/943, `domain` 1759/1759; device probes **Windows 80 s** and
+  **Android 151 s** (three files each, `js_bridge` 24/24, exit code 0).
+- **Real source:** the G4 RUN 2 derived source (`●QB女生<kd♛`, only `ruleSearch.bookUrl` changed)
+  now reads `author` / `name` / `toc` / `kind` / `lastChapter` / `intro` / `wordCount` instead of
+  empty values, and `lastChapter` goes from `• 1970-01-01` to
+  `第1279章 也曾少年思无邪 • 2026-06-02` - that date is `$.lastUpdatetime`, which the field rules
+  could not see before. Evidence in `tool/spot_check/README.md` section 4 (RUN 4).
+
 ### Phase 4 (M1) exits (2026-10-14)
 
 - **G4 is green**: all five matrix M1 rows (#15-#19) are 已确认 with per-row evidence, and the

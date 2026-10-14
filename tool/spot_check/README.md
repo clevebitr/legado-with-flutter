@@ -89,6 +89,53 @@ SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check
 > 是同一份合集上的口径变化，而不是源变多了。ADR-0032 自己的结论（未知类型必须退化为 CSS）
 > 不受影响。
 
+**b7 取证（2026-10-14，JSON 条目上的 `result` 绑定）：** 同一条 `--list` 命令的末尾会打印
+「JSON 条目 scope + 脚本读 `result.<成员>`」的源数与字段分布。判据与实现见 `spot_check.dart` 的
+`_printJsonItemResultCensus`（JSON 列表规则 `bookList` / `chapterList` 的**兄弟字段**，以及
+`init` 为 JSON 规则时的 `ruleBookInfo.*`；`@js:` 尾段与 `{{…}}` 脚本都算——两者都把当前 scope 绑成
+`result`；`JSON.parse(result)` 单列，它读 JSON 文本是对的，不受绑定差异影响）。2026-08-15 快照下：
+
+```text
+-- JSON items bound to a script as `result` (b7 evidence, whole collection; PLAN §3.5): 85 sources, 98 fields.
+    ruleSearch.coverUrl: 18
+    ruleSearch.lastChapter: 16
+    ruleToc.chapterName: 10
+    ruleSearch.bookUrl: 10
+    ruleToc.isVip: 9
+    ruleExplore.coverUrl: 6
+    ruleSearch.kind: 5
+    ruleSearch.name: 5
+    ruleExplore.bookUrl: 4
+    ruleToc.updateTime: 3
+    ruleToc.chapterUrl: 3
+    ruleSearch.intro: 3
+    ruleExplore.kind: 2
+    ruleExplore.wordCount: 2
+    ruleBookInfo.kind: 1
+    ruleToc.nextTocUrl: 1
+    samples: 酷我小说 (ruleSearch.kind, ruleBookInfo.kind) | 大文学无错小说网 (ruleSearch.coverUrl) | 思路客 (ruleSearch.coverUrl)
+    7 fields use `JSON.parse(result)` instead (they read the JSON text correctly, so they are not affected by the binding difference).
+```
+
+> 这组数字由架构师用一份独立复刻脚本在同一份 `build/ao.json` 上复算，**源数 / 字段数 / `JSON.parse`
+> 数与逐字段分布均一致**（85 / 98 / 7）。是否据这些数字改 `book-source.md` §6 的 `result` 绑定，
+> 待架构师裁决（改契约须配新 ADR，见 `PLAN.md` §3.5 的 b7 行）。
+
+**P5-0 的入库证据（2026-10-14，书源身份与重复导入）：** 同一条 `--list` 命令还会打印合集里的 URL 重复形状，
+供 `PLAN.md` §3.6 5.0 的「主键 / 重复导入」裁决用（判据见 `spot_check.dart` 的
+`_printBookSourceIdentityCensus`：书名 + `searchUrl` + `header` + 五个规则对象全部相等才算「同一条」，
+比较前对键排序，所以重新导出导致的键序差异不会被算成差异）：
+
+```text
+-- book source identity (whole collection; PLAN §3.6 5.0): 3907 entries, 2596 distinct bookSourceUrl.
+    1217 URLs appear more than once (max 3 entries): 1012 of them have every entry identical on the behaviour fields, 205 carry at least one that differs.
+```
+
+> 两种形态**都真实存在**：**1012 个 URL 下是完全等价的重复条目**（重新导出 / 多份合集的产物），
+> **205 个 URL 下有多条行为不同的源**（例：`https://www.qidian.com` 的「起点中文」与「💰起点中文」）。
+> 「URL 直接做主键」会丢掉后者，「URL 唯一索引 + 覆盖」会丢掉前者里的来源信息——怎么裁由架构师定，
+> 本节只提供形状与计数。
+
 > 只读、低频：每个候选 1 次请求，链路本体每站 ≤4 次（搜索 / 详情 / 目录 / 正文各 1）。
 > 不登录、不批量爬取、不落盘页面。
 
@@ -352,6 +399,30 @@ RUN 3b（#15，证据）源：笔趣阁③（`https://www.biquge99.cc/`，本快
       实测 jsoup 1.16.2（fork 的版本）doc.select("https://a.test/book/1") **抛**
       Selector.SelectorParseException: unexpected token at '//a.test/book/1'。
       ⇒ 上游不会把字面量 URL 当值返回；本仓的 parseFailed 只是把同一件事显式化。
+```
+
+**b6：`ruleBookInfo.init` 的真实源证据（2026-10-14）：**
+
+口径与 G4 RUN 2 相同（同一源、同一条 `ruleSearch.bookUrl` 派生、同一条命令、同一个关键词）：
+
+```bash
+python -c "import json;d=json.load(open('build/ao.json',encoding='utf-8'));s=d[1463];s['ruleSearch']['bookUrl']=\"https://bookshelf.html5.qq.com/qbread/api/novel/intro-info?bookid={{java.getString('$.docId').split('_')[1]}}\";json.dump(s,open('build/b6_qb.json','w',encoding='utf-8'),ensure_ascii=False)"
+SPOT_CHECK_ARGS="--source=build/b6_qb.json --keyword=剑来 --json" flutter run -d windows -t tool/spot_check/spot_check.dart
+```
+
+```text
+RUN 4（b6 · ruleBookInfo.init）源：●QB女生<kd♛（第 1463 条），派生与 G4 RUN 2 **逐字相同**（只改 ruleSearch.bookUrl）
+  init = $.data.bookInfo（源自带，未改）
+  bookInfo 样本对比（同一条命令、同一个关键词）：
+    G4 RUN 2： " | author=null | toc=...?bookId= | kind=分 连载中 | lastChapter=• 1970-01-01 | ..."
+    b6 本次： 剑来 | author=烽火戏诸侯 | toc=...bookId=3000000243 | kind=9.9分 玄幻 已完结
+              | lastChapter=第1279章 也曾少年思无邪 • 2026-06-02
+              | intro=<p>🏷️ 古典仙侠, 草根崛起, 智商在线, 三观正</p> &lrm; <p>同名动漫正在热播。"大千世界，无奇不…
+              | wordCount=13059574
+  即 author / name / toc / kind / lastChapter / intro / wordCount 全部从「空」变成响应里的真实值；
+  lastChapter 里那个日期就是 `$.lastUpdatetime`（init 之前该字段读不到 → java.getString 给 '' → 0 → 1970-01-01）。
+  toc 段仍不是 complete：`tocRule.chapterUrl` 是 POST JSON 形态（ADR-0037 §决策 5 的具名拒绝）、
+  `tocRule.isVip` 报 `unsupported://`，两者与 b6 无关（G4 RUN 2 同样如此）。
 ```
 
 **腾讯搜索系真实源（未做任何改写）的探活结果（2026-10-13）：** 合集 C 里活着的、用主流写法的真源是
