@@ -380,6 +380,8 @@ void _listCandidates(File file) {
   _printConcurrentRateCensus(entries);
   _printM1GrammarCensus(entries);
   _printLiteralUrlCensus(entries);
+  _printJsonItemResultCensus(entries);
+  _printBookSourceIdentityCensus(entries);
 }
 
 /// The rule strings of [item], keyed by `section.field`.
@@ -534,6 +536,228 @@ void _printLiteralUrlCensus(List<Object?> entries) {
     stdout.writeln('    ${entry.key}: ${entry.value}');
   }
 }
+
+/// Prints how many sources script against a **JSON item** as `result` (b7's evidence step).
+///
+/// `book-source.md` §6 writes that a JSON scope hands a script the item's **JSON text**
+/// (`_contentOf(JsonScope) = jsonEncode(value)`), while upstream `AnalyzeRule.evalJS(rule, result)`
+/// binds the item **object** - so `result.comic_id` works upstream and is `undefined` here.
+/// `PLAN.md` §3.5 b7 asks for the count and the field distribution **before** the contract is
+/// touched, and this census is that evidence (`PLAN.md` §3.7); a throwaway script may not produce
+/// the numbers (`docs/dev/test-environment.md` §6, trap 13).
+///
+/// Two shapes put a script on a JSON item: a **JSON list rule** (`bookList` / `chapterList`, whose
+/// sibling fields are read once per item) and a **JSON `init`** (`ruleBookInfo.init` makes the later
+/// detail fields read a sub-object, `PLAN.md` §3.5 b6). A whole JSON page is deliberately **not**
+/// counted: there upstream's `result` is the response String, exactly as here (§6).
+///
+/// A script that reads the text correctly - `JSON.parse(result)` - is counted separately, because
+/// it is *not* affected by the binding difference (upstream would break on it instead).
+void _printJsonItemResultCensus(List<Object?> entries) {
+  // 成员访问的两种写法：`result.member` 与 `result['member']`。`JSON.parse(result).x` 不会命中
+  // （`result` 后面紧跟 `)`），因此两类计数天然互斥。
+  final RegExp memberAccess = RegExp(
+    r'''result\s*(?:\.\s*[A-Za-z_$][\w$]*|\[\s*['"][^'"]+['"]\s*\])''',
+  );
+  final RegExp jsonParseOfResult = RegExp(
+    r'JSON\s*\.\s*parse\s*\(\s*result\s*\)',
+  );
+  final Map<String, int> byField = <String, int>{};
+  final List<String> samples = <String>[];
+  var sources = 0;
+  var parsedInstead = 0;
+
+  for (final Object? item in entries) {
+    if (item is! Map<String, Object?>) {
+      continue;
+    }
+    final Map<String, String> fields = _ruleFieldsOf(item);
+    final Set<String> itemFields = <String>{};
+    // 列表规则的兄弟字段读的是**每一条**（上游 `getElements` 的 item），所以它们落在 JSON 条目上。
+    const Map<String, String> listRules = <String, String>{
+      'ruleSearch': 'bookList',
+      'ruleExplore': 'bookList',
+      'ruleToc': 'chapterList',
+    };
+    for (final MapEntry<String, String> section in listRules.entries) {
+      if (!_isJsonRule(fields['${section.key}.${section.value}'])) {
+        continue;
+      }
+      itemFields.addAll(
+        fields.keys.where(
+          (String key) =>
+              key.startsWith('${section.key}.') &&
+              key != '${section.key}.${section.value}',
+        ),
+      );
+    }
+    // b6 之后 `init` 也让详情字段落在 JSON 子对象上（上游 `setContent(getElement(init))`）。
+    if (_isJsonRule(fields['ruleBookInfo.init'])) {
+      itemFields.addAll(
+        fields.keys.where(
+          (String key) =>
+              key.startsWith('ruleBookInfo.') && key != 'ruleBookInfo.init',
+        ),
+      );
+    }
+
+    final List<String> hits = <String>[];
+    for (final String field in itemFields) {
+      final String scripts = _jsSegmentsOf(fields[field] ?? '');
+      if (jsonParseOfResult.hasMatch(scripts)) {
+        parsedInstead++;
+      }
+      if (memberAccess.hasMatch(scripts)) {
+        hits.add(field);
+      }
+    }
+    if (hits.isEmpty) {
+      continue;
+    }
+    sources++;
+    for (final String field in hits) {
+      byField.update(field, (int count) => count + 1, ifAbsent: () => 1);
+    }
+    if (samples.length < 3) {
+      samples.add('${item['bookSourceName']} (${hits.join(', ')})');
+    }
+  }
+
+  final int fieldCount = byField.values.fold(
+    0,
+    (int sum, int count) => sum + count,
+  );
+  stdout.writeln(
+    '-- JSON items bound to a script as `result` (b7 evidence, whole collection; PLAN §3.5): '
+    '$sources sources, $fieldCount fields.',
+  );
+  final List<MapEntry<String, int>> sorted = byField.entries.toList()
+    ..sort(
+      (MapEntry<String, int> a, MapEntry<String, int> b) =>
+          b.value.compareTo(a.value),
+    );
+  for (final MapEntry<String, int> entry in sorted) {
+    stdout.writeln('    ${entry.key}: ${entry.value}');
+  }
+  if (samples.isNotEmpty) {
+    stdout.writeln('    samples: ${samples.join(' | ')}');
+  }
+  stdout.writeln(
+    '    $parsedInstead fields use `JSON.parse(result)` instead (they read the JSON text '
+    'correctly, so they are not affected by the binding difference).',
+  );
+}
+
+/// Whether [rule] is read as JSON by the engine (matrix #13, `book-source.md` §3.2).
+///
+/// The engine decides this from the rule text itself, so the census does the same instead of
+/// guessing a page type: a bare `$.` / `$[` form or an explicit `@json:` flag is JSON.
+bool _isJsonRule(String? rule) {
+  final String text = (rule ?? '').trim();
+
+  return text.contains(r'$.') ||
+      text.contains(r'$[') ||
+      text.toLowerCase().contains('@json:');
+}
+
+/// The JavaScript segments of [rule]: every `@js:` tail and every `{{…}}` body.
+///
+/// `@js:` is terminal (it swallows the rest of the rule, `book-source.md` §3 #14), so the tail is
+/// the script; a `{{…}}` holds a script when its inner text is not a rule head (§3 #18). Both are
+/// collected because both bind `result` to the current scope - the G4 case that opened b7 used
+/// `@js:`, and `{{result.x}}` is the same family.
+String _jsSegmentsOf(String rule) {
+  final StringBuffer scripts = StringBuffer();
+  for (final RegExpMatch match in RegExp(
+    '@js:',
+    caseSensitive: false,
+  ).allMatches(rule)) {
+    scripts.writeln(rule.substring(match.end));
+  }
+  for (final RegExpMatch match in RegExp(
+    r'\{\{([^{}]*)\}\}',
+  ).allMatches(rule)) {
+    scripts.writeln(match.group(1));
+  }
+
+  return scripts.toString();
+}
+
+/// Prints the duplicate shape of [entries] - evidence for the import-identity ruling (P5-0).
+///
+/// `PLAN.md` §3.6 5.0 has to decide the `book_sources` primary key and what importing the same
+/// source twice does. `bookSourceUrl` is upstream's natural id, but the real corpus also has
+/// “same URL, different rules” instances, so the ruling needs the **shape** rather than an
+/// assumption - and it comes from the harness (`docs/dev/test-environment.md` §6, trap 13).
+///
+/// Two entries count as the same when every field that makes a source **behave** the same way is
+/// equal (name, `searchUrl`, `header` and the five rule objects); the comparison is order-free, so
+/// a re-export with reordered keys is not reported as a difference.
+void _printBookSourceIdentityCensus(List<Object?> entries) {
+  const List<String> behaviorFields = <String>[
+    'bookSourceName',
+    'searchUrl',
+    'header',
+    'ruleSearch',
+    'ruleBookInfo',
+    'ruleToc',
+    'ruleContent',
+    'ruleExplore',
+  ];
+  final Map<String, List<String>> byUrl = <String, List<String>>{};
+  var total = 0;
+  for (final Object? item in entries) {
+    if (item is! Map<String, Object?>) {
+      continue;
+    }
+    total++;
+    byUrl
+        .putIfAbsent('${item['bookSourceUrl']}', () => <String>[])
+        .add(
+          _canonicalJson(<String, Object?>{
+            for (final String key in behaviorFields) key: item[key],
+          }),
+        );
+  }
+
+  var repeated = 0;
+  var identical = 0;
+  var differing = 0;
+  var most = 1;
+  for (final List<String> fingerprints in byUrl.values) {
+    if (fingerprints.length > most) {
+      most = fingerprints.length;
+    }
+    if (fingerprints.length < 2) {
+      continue;
+    }
+    repeated++;
+    if (fingerprints.toSet().length == 1) {
+      identical++;
+    } else {
+      differing++;
+    }
+  }
+
+  stdout.writeln(
+    '-- book source identity (whole collection; PLAN §3.6 5.0): $total entries, '
+    '${byUrl.length} distinct bookSourceUrl.',
+  );
+  stdout.writeln(
+    '    $repeated URLs appear more than once (max $most entries): $identical of them have '
+    'every entry identical on the behaviour fields, $differing carry at least one that '
+    'differs.',
+  );
+}
+
+/// Serialises [value] with map keys in a stable order, so two equal JSON objects compare equal
+/// even when their key order differs (`jsonEncode` keeps insertion order).
+String _canonicalJson(Object? value) => switch (value) {
+  final Map<String, Object?> map =>
+    '{${(map.keys.toList()..sort()).map((String key) => '${jsonEncode(key)}:${_canonicalJson(map[key])}').join(',')}}',
+  final List<Object?> list => '[${list.map(_canonicalJson).join(',')}]',
+  _ => jsonEncode(value),
+};
 
 /// Prints the `concurrentRate` distribution of [entries] (`book-source.md` §8).
 ///
