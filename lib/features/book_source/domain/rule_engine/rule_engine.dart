@@ -932,7 +932,8 @@ final class RuleEngine {
     final String withoutPuts = (stripped as _ParsedValue<String>).value;
 
     // ② 切区域：`##` 之前是规则体，`@js:` 之后到 `##` 之前是脚本，`##` 之后是替换段。
-    final int headEnd = withoutPuts.indexOf('##');
+    // `##` 的定位要**跳过 `{{…}}` 内部**：`{{$.a##x##y}}` 里那个 `##` 是内层规则的替换段。
+    final int headEnd = _replacementIndex(withoutPuts);
     final String head = headEnd < 0
         ? withoutPuts
         : withoutPuts.substring(0, headEnd);
@@ -1011,6 +1012,38 @@ final class RuleEngine {
     }
 
     return _ParsedValue<String>(working);
+  }
+
+  /// The offset of the first `##` in [text] that is **not inside** a `{{…}}` template, or `-1`.
+  ///
+  /// The replacement split has to ignore a `##` inside a template: `{{$.a##x##y}}` is
+  /// **one** inline rule whose own `##` is the inner rule's replacement (matrix #9), not a
+  /// terminator of the outer rule. Splitting there used to truncate the template at the
+  /// first `##`, which made the field `parseFailed` (b5: 腾讯搜索系真源的
+  /// `{{$.tag_views##\s+##,}}` is exactly that shape).
+  ///
+  /// Brace and quote counting is [_templateEnd]'s, so a `}}` / `##` inside a JS string
+  /// literal of the template does not end anything. An **unclosed** `{{…` keeps the old
+  /// behaviour of “leave it to the parser to complain”: no replacement split is reported.
+  int _replacementIndex(String text) {
+    var index = 0;
+    while (index < text.length) {
+      final int replacement = text.indexOf('##', index);
+      if (replacement < 0) {
+        return -1;
+      }
+      final int template = text.indexOf('{{', index);
+      if (template < 0 || replacement < template) {
+        return replacement;
+      }
+      final int end = _templateEnd(text, template);
+      if (end < 0) {
+        return -1;
+      }
+      index = end;
+    }
+
+    return -1;
   }
 
   /// Replaces the `@get:` / `{{…}}` occurrences of [text] with their values.
@@ -2587,12 +2620,74 @@ final class RuleEngine {
   }
 
   /// Parses [expression] as a JSONPath, or `null` when it is not one.
+  ///
+  /// The expression is first put through [_normalizeJsonPath]: Legado's JsonPath accepts a
+  /// member name directly after a bracket, RFC 9535's does not (b5).
   List<_JsonPiece>? _asJsonPathPiece(String expression) {
     try {
-      return <_JsonPiece>[_JsonPathPiece(JsonPath(expression.trim()))];
+      return <_JsonPiece>[
+        _JsonPathPiece(JsonPath(_normalizeJsonPath(expression.trim()))),
+      ];
     } on FormatException {
       return null;
     }
+  }
+
+  /// Rewrites the Legado JSONPath shorthand `]member` into the RFC 9535 spelling `].member`.
+  ///
+  /// Upstream's JsonPath (the library Legado ships) reads `$.a[0]b` and
+  /// `$.data.page[*]image`; the RFC 9535 parser behind [JsonPath] only reads `$.a[0].b`
+  /// (`$.data.page[*]image` was a real source's `contentRule.content` that b1b's regression
+  /// could not run). Only an identifier start is joined — letters, `_` and non-ASCII (a
+  /// Chinese member name) — so `].`, `][`, a trailing `]` and `]` followed by whitespace are
+  /// left exactly as written, and a `]` **inside a quoted member** (`$['a]']b`) is skipped
+  /// because it is not a bracket at all.
+  String _normalizeJsonPath(String path) {
+    if (!path.contains(']')) {
+      return path;
+    }
+
+    final StringBuffer out = StringBuffer();
+    String? quote;
+    for (var index = 0; index < path.length; index++) {
+      final String character = path[index];
+      if (quote != null) {
+        out.write(character);
+        if (character == quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (character == '"' || character == "'") {
+        quote = character;
+        out.write(character);
+        continue;
+      }
+
+      out.write(character);
+      if (character != ']' || index + 1 >= path.length) {
+        continue;
+      }
+      final String next = path[index + 1];
+      if (_isJsonMemberStart(next)) {
+        out.write('.');
+      }
+    }
+
+    return out.toString();
+  }
+
+  /// Whether [character] can start an unquoted JSONPath member name (RFC 9535
+  /// `name-first`: a letter, `_`, or any non-ASCII character).
+  bool _isJsonMemberStart(String character) {
+    final int code = character.codeUnitAt(0);
+    if (code >= 0x80) {
+      return true;
+    }
+    final bool isAsciiLetter =
+        (code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A);
+
+    return isAsciiLetter || character == '_';
   }
 
   /// The offset of the `}` closing the `{$` template that starts at [start], or `-1` when

@@ -2237,6 +2237,105 @@ void main() {
       expect(failure.kind, ParseFailureKind.parseFailed);
       expect(failure.rulePath, 'searchRule.bookList');
     });
+
+    test(
+      'extractAll_givenABracketFollowedByAMemberName_readsItLikeUpstream',
+      () async {
+        // b5：Legado 接受 `]` 后直接跟成员名（漫客栈的正文规则就是
+        // `$.data.page[*]image`），RFC 9535 只认 `[*].image`。
+        expect(
+          await _values(
+            _engine().extractAll(
+              r'$.data.page[*]image',
+              _page('{"data":{"page":[{"image":"a.jpg"},{"image":"b.jpg"}]}}'),
+              rulePath: 'contentRule.content',
+            ),
+          ),
+          <String>['a.jpg', 'b.jpg'],
+        );
+      },
+    );
+
+    test(
+      'extractAll_givenABracketFollowedByAMemberNameAtTheRoot_readsIt',
+      () async {
+        // `$[0]b`（裸 `$[` 头）也要归一成 `$[0].b`。
+        expect(
+          await _values(
+            _engine().extractAll(
+              r'$[0]b',
+              _page('[{"b":"v"}]'),
+              rulePath: 'searchRule.name',
+            ),
+          ),
+          <String>['v'],
+        );
+      },
+    );
+
+    test(
+      'extractAll_givenAClosedBracketInsideAQuotedMember_keepsItIntact',
+      () async {
+        // 边界：引号里的 `]` 不是括号，只在真正的 `]` 后面补点。
+        expect(
+          await _values(
+            _engine().extractAll(
+              r"$['a]']b",
+              _page('{"a]":{"b":"v"}}'),
+              rulePath: 'searchRule.name',
+            ),
+          ),
+          <String>['v'],
+        );
+      },
+    );
+
+    test('extractAll_givenABracketFollowedByANonAsciiMember_readsIt', () async {
+      // 边界：非 ASCII 成员名（中文键）也算标识符开头。
+      expect(
+        await _values(
+          _engine().extractAll(
+            r'$.data.列表[0]名称',
+            _page('{"data":{"列表":[{"名称":"v"}]}}'),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['v'],
+      );
+    });
+
+    test(
+      'extractAll_givenAnAlreadyDottedOrBracketedPath_leavesItAlone',
+      () async {
+        // 边界：`].` 与 `][` 那些写法一个字符也不动。
+        expect(
+          await _values(
+            _engine().extractAll(
+              r'$.data.list[0][1]',
+              _page('{"data":{"list":[[1,2,3]]}}'),
+              rulePath: 'searchRule.name',
+            ),
+          ),
+          <String>['2'],
+        );
+      },
+    );
+
+    test(
+      'extractAll_givenAMemberNameAfterWhitespace_leavesItToTheParser',
+      () async {
+        // 边界：`]` 后是空白时不补点（本仓不猜它对不对），仍然由解析器报错。
+        final ParseFailure<Never> failure = await _failure(
+          _engine().extractAll(
+            r'$.data.page[*] image',
+            _page('{"data":{"page":[{"image":"a.jpg"}]}}'),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        expect(failure.kind, ParseFailureKind.parseFailed);
+      },
+    );
   });
 
   group('RuleEngine ADR-0032 (unknown type degrades to CSS)', () {
@@ -3314,6 +3413,75 @@ void main() {
       expect(values, <String>['ran']);
       expect(bridge.jobs.single.script, "result.replace(/x/, '{{y}}')");
     });
+
+    test('extractAll_givenReplacementMarkersInsideATemplate_keepsThemInTheTemplate', () async {
+      // b5：`{{$.a##x##y}}` 是**一条**内嵌规则，里面的 `##` 属于矩阵 #9。外层规则不能在
+      // 那里切开：切开会把模板截成 `{{$.a`，模板被判不平衡 → 该字段 `parseFailed`（腾讯
+      // 搜索系真源的 `{{$.tag_views##\s+##,}}` 就是这种形状）。
+      expect(
+        await _values(
+          _engine().extractAll(
+            r'{{$.a##x##y}}',
+            RuleScope.json(const <String, Object?>{'a': '1x2x'}),
+            rulePath: 'tocRule.updateTime',
+          ),
+        ),
+        <String>['1y2y'],
+      );
+    });
+
+    test(
+      'extractAll_givenATemplateWithItsOwnReplacement_takesTheOuterMarker',
+      () async {
+        // 边界：模板内、外各有一个 `##`，分界必须落在**外层**那个上。
+        expect(
+          await _values(
+            _engine().extractAll(
+              r'{{$.a##x##y}}##/##-',
+              RuleScope.json(const <String, Object?>{'a': '1/2'}),
+              rulePath: 'tocRule.updateTime',
+            ),
+          ),
+          <String>['1-2'],
+        );
+      },
+    );
+
+    test(
+      'extractAll_givenATemplateOfPlainScript_handsTheMarkersToTheSandbox',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'ran';
+
+        final List<String> values = await _values(
+          _engine(null, bridge).extractAll(
+            '{{a##b##c}}',
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        // 模板内不是规则头，所以整段是 JS：`##` 原样交给沙箱（旧写法会先在这里切开，模板
+        // 被判不平衡，根本到不了沙箱）。
+        expect(values, <String>['ran']);
+        expect(bridge.jobs.single.script, 'a##b##c');
+      },
+    );
+
+    test(
+      'extractAll_givenAnUnclosedTemplateWithAMarker_leavesItToTheParser',
+      () async {
+        // 边界：未闭合的 `{{…` 不做替换分界（与本仓一直以来的“留给解析器报错”一致）。
+        final ParseFailure<Never> failure = await _failure(
+          _engine().extractAll(
+            r'{{$.a##x',
+            RuleScope.json(const <String, Object?>{'a': '1'}),
+            rulePath: 'tocRule.updateTime',
+          ),
+        );
+
+        expect(failure.kind, ParseFailureKind.parseFailed);
+      },
+    );
   });
 
   group('RuleEngine matrix #19 ({} legacy JSONPath)', () {
@@ -3384,6 +3552,20 @@ void main() {
 
       expect(failure.kind, ParseFailureKind.parseFailed);
       expect(failure.rulePath, 'searchRule.name');
+    });
+
+    test('extractAll_givenTheLegacyTemplateForm_normalizesThePath', () async {
+      // 边界：b5 的归一化在 `{$…}` 模板里也生效（同一个 `_asJsonPathPiece` 入口）。
+      expect(
+        await _values(
+          _engine().extractAll(
+            r'{$[0]b}',
+            _page('[{"b":"v"}]'),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['v'],
+      );
     });
   });
 
