@@ -65,17 +65,48 @@ const int _sampleLength = 60;
 /// only supported outside **list rules** (`bookList` / `chapterList`, whose「JS 返回一列
 /// 元素」 contract does not exist yet).
 ///
-/// `@put:` / `@get:` were **removed** by the M1 grammar slice (matrix #16, `PLAN.md` 3.4 / b0),
-/// and `{{…}}` is no longer rejected wholesale below either (matrix #18, same slice), so the
-/// census now covers everything this repository can actually evaluate — “M0-compatible” in
-/// the printed lines means “M0 plus the implemented M1 grammar”.
+/// `@put:` / `@get:` left the list with the M1 grammar slice (matrix #16, `PLAN.md` 3.4 / b0),
+/// `{{…}}` is no longer rejected wholesale below either (matrix #18, same slice), and `@@`
+/// **left the list with G4**: matrix #15 has been implemented since that slice, so only a
+/// **misplaced** `@@` — the engine's `unsupported:@@` — is rejected now
+/// ([_hasMisplacedDefaultFlag]); the census counts both, because G4 needs a selectable one.
+/// “M0-compatible” in the printed lines means “M0 plus the implemented M1 grammar”.
 const List<String> _deferredFlags = <String>[
   '@xpath:',
   'webjs',
   'sourceregex',
-  '@@',
   '<js>',
 ];
+
+/// Whether [rule] carries a `@@` the engine cannot evaluate (matrix #15).
+///
+/// `@@` is a **prefix** of the rule body or of a `{{…}}` template's inner rule; anywhere else
+/// the `@`-split leaves an empty segment and `RuleEngine` reports `unsupported:@@`
+/// (`class.a@@class.b@text`), so a source written that way is not selectable today.
+bool _hasMisplacedDefaultFlag(String rule) {
+  var index = rule.indexOf('@@');
+  while (index >= 0) {
+    if (!_isDefaultFlagStart(rule.substring(0, index))) {
+      return true;
+    }
+    index = rule.indexOf('@@', index + 2);
+  }
+  return false;
+}
+
+/// Whether the text [before] a `@@` can end a rule body: the value / branch / template start,
+/// optionally preceded by matrix #7's `-` (`-@@class.a@text` reverses after the flag).
+bool _isDefaultFlagStart(String before) {
+  String trimmed = before.trimRight();
+  if (trimmed.endsWith('-')) {
+    trimmed = trimmed.substring(0, trimmed.length - 1).trimRight();
+  }
+  return trimmed.isEmpty ||
+      trimmed.endsWith('||') ||
+      trimmed.endsWith('&&') ||
+      trimmed.endsWith('%%') ||
+      trimmed.endsWith('{{');
+}
 
 /// The matrix #14 flag, checked per field rather than globally.
 const String _jsFlag = '@js:';
@@ -236,11 +267,16 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
       info = data;
       report.record(
         'bookInfo',
-        // `kind` 也打出来：M1-b1b 的真源回归里，主流写法 `{{java.timeFormat(java.getString('$.x')*1000)}}`
-        // 出现在 `ruleBookInfo.kind`（腾讯搜索系书源），所以这一列是那次回归的证据本身。
+        // 逐字段打出来（都过 `_sample`）：G4 要为矩阵 #15–#19 每行给出「源名 + 字段 +
+        // 产出样本」，而 `@@` / `@put:` / `@get:` / `java.*` 这些语法散落在各字段里
+        // （b1b 的 `kind`、#17 的 `lastChapter`、#15 的 `intro` / `wordCount`），
+        // 只打 name/author 的话这些行拿不到样本。
         _stage(1, <String>[
           '${data.name} | author=${data.author} | toc=${data.tocUrl}'
               ' | kind=${_sample(data.kind ?? '-')}'
+              ' | lastChapter=${_sample(data.lastChapter ?? '-')}'
+              ' | intro=${_sample(data.intro ?? '-')}'
+              ' | wordCount=${_sample(data.wordCount ?? '-')}'
               ' | updateTime=${data.updateTime ?? '-'}',
         ]),
       );
@@ -342,6 +378,161 @@ void _listCandidates(File file) {
     '(matrix #14); their scripts still have to stay inside `book-source.md` §6.',
   );
   _printConcurrentRateCensus(entries);
+  _printM1GrammarCensus(entries);
+  _printLiteralUrlCensus(entries);
+}
+
+/// The rule strings of [item], keyed by `section.field`.
+///
+/// The same sections the filter inspects, plus `ruleExplore`'s own fields: `exploreUrl` is a
+/// URL field (a category list), not a rule, so it is not collected here.
+Map<String, String> _ruleFieldsOf(Map<String, Object?> item) {
+  final Map<String, String> rules = <String, String>{};
+  void collect(String prefix, Object? value) {
+    if (value is String) {
+      rules[prefix] = value;
+    } else if (value is Map<String, Object?>) {
+      value.forEach(
+        (String key, Object? nested) => collect('$prefix.$key', nested),
+      );
+    }
+  }
+
+  for (final String key in <String>[
+    'ruleSearch',
+    'ruleBookInfo',
+    'ruleToc',
+    'ruleContent',
+    'ruleExplore',
+  ]) {
+    collect(key, item[key]);
+  }
+  return rules;
+}
+
+/// Prints how many sources use each M1 row, and how many of those are selectable today.
+///
+/// G4 (`PLAN.md` §4) has to name a real source per row, and the harness is the only place
+/// statistics may come from (`docs/dev/test-environment.md` §6, trap 13: a throwaway script
+/// once produced the unreproducible 58.1%). The patterns therefore live here and the command
+/// is the `--list` run itself.
+void _printM1GrammarCensus(List<Object?> entries) {
+  // #19's `{$jsonpath}` template: a `{$` whose `{` is **not** the `{` of `{{…}}` (matrix
+  // #18). A substring count would report every `{{$.x}}` as a legacy template as well.
+  final RegExp legacyTemplate = RegExp(r'(?<!\{)\{\$');
+  final RegExp putFlag = RegExp(r'@put:|@get:');
+  final RegExp javaVariable = RegExp(r'java\.(put|get)\s*\(');
+  // Upstream's *synchronous HTTP* spelling of the same name (ADR-0037 §决策 5 refuses it):
+  // `java.get(url, {...})`. #17 may only be evidenced by the variable form, so the two are
+  // counted apart.
+  final RegExp javaHttpVerb = RegExp(r'java\.get\s*\([^)]*,\s*\{');
+
+  final List<({String row, bool Function(String) uses})> rows =
+      <({String row, bool Function(String) uses})>[
+        (row: '#15 @@', uses: (String r) => r.contains('@@')),
+        (row: '#16 @put:/@get:', uses: putFlag.hasMatch),
+        (row: '#17 java.put/java.get', uses: javaVariable.hasMatch),
+        (row: '#18 {{…}}', uses: (String r) => r.contains('{{')),
+        (row: r'#19 {$…}', uses: legacyTemplate.hasMatch),
+      ];
+
+  final Map<String, int> total = <String, int>{
+    for (final ({String row, bool Function(String) uses}) row in rows)
+      row.row: 0,
+  };
+  final Map<String, int> selectable = <String, int>{
+    for (final ({String row, bool Function(String) uses}) row in rows)
+      row.row: 0,
+  };
+  var variableForm = 0;
+  var httpOnlyForm = 0;
+
+  for (final Object? item in entries) {
+    if (item is! Map<String, Object?>) {
+      continue;
+    }
+    final Map<String, String> fields = _ruleFieldsOf(item);
+    final bool compatible = _isM0Compatible(item);
+    for (final ({String row, bool Function(String) uses}) row in rows) {
+      if (!fields.values.any(row.uses)) {
+        continue;
+      }
+      total.update(row.row, (int count) => count + 1);
+      if (compatible) {
+        selectable.update(row.row, (int count) => count + 1);
+      }
+    }
+
+    final List<String> javaUses = fields.values
+        .where(javaVariable.hasMatch)
+        .toList();
+    if (javaUses.isNotEmpty) {
+      if (javaUses.any((String value) => !javaHttpVerb.hasMatch(value))) {
+        variableForm++;
+      } else {
+        httpOnlyForm++;
+      }
+    }
+  }
+
+  stdout.writeln(
+    '-- M1 grammar census (whole collection; G4 needs one source per row):',
+  );
+  for (final ({String row, bool Function(String) uses}) row in rows) {
+    stdout.writeln(
+      '    ${row.row}: ${total[row.row]} sources'
+      ' (${selectable[row.row]} of them selectable today)',
+    );
+  }
+  stdout.writeln(
+    '    #17 form: $variableForm sources use the **variable** form (usable as evidence), '
+    '$httpOnlyForm only the refused synchronous-HTTP one (ADR-0037 §决策 5).',
+  );
+}
+
+/// Prints how many sources have a rule field whose **entire** value is a literal URL.
+///
+/// Registered in `PLAN.md` §3.7 as “gather evidence first, then schedule”: such a value has no
+/// rule head, so it falls into the default type, ADR-0032 degrades it to a CSS selector and the
+/// field fails (b5 bumped into it through a derived `bookUrl`). Only a census over the real
+/// sources can say whether that is worth a fix, hence the count *and* the field distribution.
+void _printLiteralUrlCensus(List<Object?> entries) {
+  // A literal URL carries **no** rule syntax at all: braces (a `{{…}}` template), `@` (a flag)
+  // or `#` (a `##` replacement) would make it a rule. `searchUrl` / `exploreUrl` are URL fields
+  // by design and are not inspected here (see [_ruleFieldsOf]).
+  final RegExp literalUrl = RegExp(r'^https?://[^\s{}@#]+$');
+  final Map<String, int> byField = <String, int>{};
+  var sources = 0;
+
+  for (final Object? item in entries) {
+    if (item is! Map<String, Object?>) {
+      continue;
+    }
+    final List<String> hits = <String>[
+      for (final MapEntry<String, String> entry in _ruleFieldsOf(item).entries)
+        if (literalUrl.hasMatch(entry.value.trim())) entry.key,
+    ];
+    if (hits.isEmpty) {
+      continue;
+    }
+    sources++;
+    for (final String field in hits) {
+      byField.update(field, (int count) => count + 1, ifAbsent: () => 1);
+    }
+  }
+
+  stdout.writeln(
+    '-- rule fields that are an entirely literal URL (whole collection; PLAN §3.7): '
+    '$sources sources.',
+  );
+  final List<MapEntry<String, int>> sorted = byField.entries.toList()
+    ..sort(
+      (MapEntry<String, int> a, MapEntry<String, int> b) =>
+          b.value.compareTo(a.value),
+    );
+  for (final MapEntry<String, int> entry in sorted) {
+    stdout.writeln('    ${entry.key}: ${entry.value}');
+  }
 }
 
 /// Prints the `concurrentRate` distribution of [entries] (`book-source.md` §8).
@@ -569,6 +760,9 @@ bool _isM0Compatible(Map<String, Object?> item) {
       }
     }
     if (lower.contains(_jsFlag) && _jsUnsupportedFields.contains(rule.key)) {
+      return false;
+    }
+    if (_hasMisplacedDefaultFlag(rule.value)) {
       return false;
     }
     // `{{…}}`（矩阵 #18）已在 3.4 落地，不能再按「`{` 开头 = 表单 / 选项对象」排除——

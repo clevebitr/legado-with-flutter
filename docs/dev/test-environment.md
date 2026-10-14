@@ -169,7 +169,7 @@ Windows 与 Android 两侧都已实测通过。
 
 ---
 
-## 7. 实测证据（2026-10-11；主机侧与 Windows 设备级于 2026-10-13 复跑，最新一次含 M1-b1b）
+## 7. 实测证据（2026-10-11；最新一次 **G4，2026-10-14**，双端按 ADR-0039）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
@@ -178,6 +178,9 @@ Windows 与 Android 两侧都已实测通过。
 | Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | **3 个用例文件全部通过**（`app_boot` 1 项；`js_bridge` **24 项**，在原有 21 项（`await http.*` / `await parse.*` / `js:parse-scope` / `js:quota` / `java.*` 同步读写与按源隔离 / URL 的 `key` 绑定 / `java.timeFormat` 的本地渲染与非法入参）之上新增 3 项 M1-b1b 探针：`java.*` 别名族（`md5Encode` / `base64*` 往返 / `encodeURI` / `log`）、命中具名拒绝（`java.ajax` 与 `Packages.java.lang.…`）时给可读错误、`java.getString` 字面量快路径 + `Array.prototype.toArray()` 垫片；`on_disk_database` 1 项）；退出码 0 |
 | Android 设备级 | `pwsh -File tool/test/run_android.ps1` | **本轮未复跑（2026-10-13）**：单次完整跑（建 APK + 冷启模拟器 + 三个用例文件）在半小时以上，操作者要求本轮以 Windows 设备级为准（Window 与 Android 跑同一份 Dart 代码与同一份 `flutter_qjs_next` 原生引擎，24 项尺度的差异只在平台通道）。上一条记录的 Android 运行时是 **b4a 集成后的 21/21**（本次新增的 3 项探针尚未在模拟器上跑过），**不计作已覆盖**，需补跑时按下方命令运行 |
 | 许可证扫描 | `dart run tool/scan_licenses.dart` | 156 个包全部为宽松许可，无风险项；退出码 0（`NOTICE.md` §5） |
+| **G4 主机侧（2026-10-14）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` | **692** 个用例全过；覆盖率退出码 0（`core` 943/943、`domain` 1740/1740，均 100%） |
+| **G4 Windows 设备级** | `pwsh -File tool/test/run_windows.ps1` | 3 个用例文件全过（`js_bridge` **24/24**、`app_boot` 1/1、`on_disk_database` 1/1）；退出码 0，**81 s** |
+| **G4 Android 设备级** | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone`（含冷启动）3 个用例文件全过（`js_bridge` **24/24**）；退出码 0，**171 s**；跑完按 PR #34 的策略清理了本轮快照 |
 
 > Android 补跑命令：`pwsh -File tool/test/run_android.ps1`（`Medium_Phone` 自动启停；需要网络，因 `flutter build apk` 的 native assets 要下载 `libsqlite3.arm.android.so`，见 §6 与本表旧记录）。
 >
