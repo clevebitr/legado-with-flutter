@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### b5: the two real-source gaps (`{{…}}` with `##`, JSONPath `]name`) (2026-10-13)
+
+`RuleEngine` only; the M1 #15-#19 status column is flipped by the separate G4 change.
+
+- **A `##` inside a `{{…}}` template no longer splits the rule.** `_replacementIndex` finds the
+  first `##` **outside** any template (reusing `_templateEnd` for brace / quote counting), so
+  `{{$.tag_views##\s+##,}}` keeps its `##` as the inner rule's replacement (matrix #9) while
+  `{{…}}##/##-` still splits where it should. An unclosed `{{…` reports no split and stays with the
+  parser, as before.
+- **Legado's `]member` JSONPath shorthand is normalized to `].member`** before the RFC 9535 parser
+  sees it, so `$.data.page[*]image` (漫客栈's real `contentRule.content`) and `$.a[0]b` read. Only an
+  identifier start (letter / `_` / non-ASCII) is joined and quoted members are skipped, so `].`,
+  `][`, a trailing `]`, `]` + whitespace and `$['a]']b` are untouched.
+- 11 unit tests; **9 of them fail on the old engine** (the other two pin “leave it alone”
+  boundaries). Exactly one new line needed a test for the coverage gate (the unclosed-`{{` branch),
+  and it is covered.
+- Real sources (`tool/spot_check/README.md` §4): the derived 漫客栈 source is **complete** for the
+  first time (content 458 chars, `sha256=30cc59e176f7ac3c`) — `java.getStringList("$.data.page[*]image")`
+  finally succeeds on a real source; the derived QB女生 source's search `kind` reads
+  `仙侠,古典仙侠,草根崛起 已完结` where b1b had 18/18 `parseFailed`. The spot-check tool's search sample
+  now prints `kind=` as well.
+- Gates: 692 tests, `core` 943/943, `domain` 1740/1740, format / analyze / build_runner /
+  generated-file diff clean. Windows device probe 108 s, `js_bridge` 24/24 (Android belongs to the
+  Phase 4 exit, ADR-0038).
+
+
 ### Android probe harness: no snapshots, kill on failure, clean up (2026-10-13)
 
 `tool/test/{common,run_android}.ps1` only — no `lib/` change. Documented in

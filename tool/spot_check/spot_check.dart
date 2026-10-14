@@ -214,6 +214,7 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
               ? const <String>[]
               : <String>[
                   '${books.first.name} ${books.first.url}'
+                      ' | kind=${_sample(books.first.kind ?? '-')}'
                       ' updateTime=${books.first.updateTime ?? '-'}',
                 ],
         ),

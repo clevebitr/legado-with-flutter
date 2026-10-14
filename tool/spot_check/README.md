@@ -230,6 +230,43 @@ SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check
 > JSONPath 方言被 RFC 9535 解析器（`json_path`）拒掉——同一页真实数据下
 > `$.data.page[*].image` 返回 3 张图、`[*]image` 直接 `parseFailed`。已登记在 `PLAN.md` §3.7。
 
+**M1-b5（`{{…}}` 内的 `##` · JSONPath `]name`）的真源复跑（2026-10-13）：**
+
+```
+语法：① `{{rule##a##b}}`（`##` 在模板内部，归内层规则）  ② `$.a[*]name`（`]` 后直接跟成员名）
+源：均为合集 C 的真实导出 + 只改一条规则（见下）
+
+RUN 1 = 🎨 漫客栈（只改 ruleToc.updateTime 为 `{{java.timeFormat(java.getString('$.start_time')*1000)}}`，
+        其余逐字来自真实导出；它的 contentRule.content 本来就写 `$.data.page[*]image`）
+  search   ok  count=1  火影忍者之新的伙伴 https://comic.mkzhan.com/comic/info/?comic_id=213560
+  bookInfo ok  火影忍者之新的伙伴 | toc=https://comic.mkzhan.com/chapter/?comic_id=213560
+  toc      ok  count=5  尸魂界的不速之客 … updateTime=2018/10/25 17:05
+  content  ok  458 字符 sha256=30cc59e176f7ac3c   ← b1b 时这一段是 `parseFailed`
+  RESULT: complete（首次四段全通）
+结论（②）：`java.getStringList("$.data.page[*]image")` 的**成功路径**在真源上跑通（快路径内联 +
+      `.toArray()` 垫片 + `.map(...).join()`），输出 3 个 `<img>` 标签。
+
+RUN 2 = ●QB女生<kd♛（只改 ruleSearch.bookUrl 为 `…?bookid={{java.getString('$.docId').split('_')[1]}}`；
+        原值 `…?bookid={{$.docId##.*_}}` 在 **URL** 里写规则头，按 §4 本就被拒；其余逐字不动）
+  search   ok  count=18  剑来 https://bookshelf…/intro-info?bookid=3000000243
+            | kind=仙侠,古典仙侠,草根崛起 已完结 updateTime=-
+  bookInfo ok  | kind=分 连载中 | toc=https://…/all-chapter?bookId=
+  toc      FAILED parseFailed at tocRule.chapterList（派生把 18 条都指向同一本，章节接口拿不到行）
+结论（①）：`ruleSearch.kind` 的 `{{$.tag_views##\s+##,}}` 不再 `parseFailed`（b1b 当时 18/18 都
+      是这个错），“ `##` 属于内层规则”已经生效：`仙侠,古典仙侠,草根崛起` 就是 `##\s+##,` 对真实
+      `tag_views` 的替换结果；后半段 `已完结` 是 b1b 的 `java.getString` 快路径在同一真源上生效。
+```
+
+> **两条“为什么派生”都只改了一个字段，原因逐条写明：** RUN 1 与 b1b 的派生完全相同（只改
+> `ruleToc.updateTime`），这样 content 段的差异可以完全归因于 b5 的 JSONPath 归一化；RUN 2 改
+> `bookUrl` 是因为原值把规则头写在 URL 里（§4 的登记拒绝），不改就一条书都产出不了，而这条
+> 运行的目的是看 **search 条目的 `kind`**（fix ① 的形状只在 `ruleSearch.kind` 里）。
+> **派生源的两个字段都不是“测出来的”：** `tools/spot_check/spot_check.dart` 的 search 样本也
+> 开始打印 `kind=`（与 bookInfo 样本同口径），证据才可以从 JSON 里直接取。
+>
+> **失败但已定位的第三方：** RUN 2 的 `tocRule.chapterList` 报 `parseFailed`，是因为派生把 18 条
+> 搜索结果都指向同一本（`bookid=3000000243`），章节接口返回的 `$.rows` 为空——与本切片无关。
+
 **腾讯搜索系真实源（未做任何改写）的探活结果（2026-10-13）：** 合集 C 里活着的、用主流写法的真源是
 `●QB女生<kd♛` / `南极 🐧`（`so.html5.qq.com/ajax/real_search_result`，HTTP 200 / 33 KB 真实 JSON）。
 它们把 `{{java.timeFormat(java.getString('$.lastUpdatetime')*1000)}}` 写在 `ruleBookInfo.kind` 里，
