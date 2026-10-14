@@ -165,7 +165,7 @@ Windows 与 Android 两侧都已实测通过。
 | `dart run tool/check_coverage.dart` 以退出码 3 失败 | 新增了 `lib/core/**` / `domain/**` / `data/**` 源文件却没有测试 | 补测试；确需豁免按 ADR-0019 登记进 `tool/coverage_allowlist.txt`（`testing.md` §2） |
 | **新建 worktree** 里 `flutter test` / `flutter run` 报 `By default, this package downloads a pre-compiled SQLite library` + `SocketException` | native assets 的下载缓存是**按 worktree** 存的（`<worktree>/.dart_tool/hooks_runner/shared/sqlite3/`），新 worktree 没有缓存，一断网就失败（与代码无关，也与 Android 的 `libsqlite3.arm.android.so` 同源） | 从任一已跑通的 worktree 拷 `.dart_tool/hooks_runner/shared/sqlite3/` 过去（实测即时恢复），或等网络恢复后重跑；**不要**为它改 `pubspec.yaml` / 加本地 sqlite3 |
 | Android 模拟器日志里 `Successfully loaded snapshot` 之后就一直是 `adb.exe: device offline`，脚本干等到 `-BootTimeoutSeconds` 超时 | `snapshots/<avd>/default_boot` 是**被截断**的（`emu kill` 立即返回，而模拟器还要写十几秒；在窗口里退出就会撕坏它），`fastboot.forceFastBoot=yes` 又让每轮都加载它 | 现在 `run_android.ps1` **不读快照**并在跑完清理，所以不会再发生；手工碰到时删掉 `snapshots/<avd>/default_boot` 或加 `-no-snapshot-load` 启动。**注意**：`bootcompleted.ini` 恒为 0 字节是正常的，_不是_失败指纹（看快照目录里各文件的时间戳是否互相对不上） |
-| `flutter build windows` 报一堆 `jNullReference` / `JObject isn't a type`，或某包解析不出类 | pub cache 里有**半下载**的包（2026-10-14 G4 交付时本机踩到：`jni-1.1.0` 目录为空；`dynamic_color` / `flutter_qjs_next` / `path_provider_windows` / `shared_preferences_windows` 缺 `pubspec.yaml`）——中断的 `pub get` 留下的残目录会被当成已安装 | 判据一行可扫（找没有 `pubspec.yaml` 的包目录）；删掉这些目录再 `flutter pub get` 即恢复 |
+| `flutter build windows` 报一堆 `jNullReference` / `JObject isn't a type`，或某包解析不出类 | pub cache 里有**半下载**的包（2026-10-14 G4 交付时本机踩到：`jni-1.1.0` 目录为空；`dynamic_color` / `flutter_qjs_next` / `path_provider_windows` / `shared_preferences_windows` 缺 `pubspec.yaml`）——中断的 `pub get` 留下的残目录会被当成已安装 | 判据一行可扫（找没有 `pubspec.yaml` 的包目录）；删掉这些目录再 `flutter pub get` 即恢复。**可疑诱因（2026-10-14 二次复发）：** 两个 worktree 并发跑 `pub get` 共用同一份 cache——同一批包两次都缺，建议新 worktree 逐个拉、别并发 |
 | 跑完 Android 后删 worktree 报 `Filename too long` | Gradle 会在 `build/integration_test/.transforms/…` 下生成超过 Windows 260 字符上限的路径，`git worktree remove` 与 PowerShell `Remove-Item` 都删不掉（2026-10-13 架构师实际踩到）。**做法：** 先把 git 元数据摘掉（`git worktree remove --force` 失败无妨，`git worktree prune` 即可），再用 `cmd //c "robocopy <空目录> <worktree路径> /MIR"`（robocopy 支持长路径）镜像清空，最后 `rmdir` 掉剩下的空目录 |
 
 ---
@@ -182,6 +182,7 @@ Windows 与 Android 两侧都已实测通过。
 | **G4 主机侧（2026-10-14）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` | **692** 个用例全过；覆盖率退出码 0（`core` 943/943、`domain` 1740/1740，均 100%） |
 | **G4 Windows 设备级** | `pwsh -File tool/test/run_windows.ps1` | 3 个用例文件全过（`js_bridge` **24/24**、`app_boot` 1/1、`on_disk_database` 1/1）；退出码 0，**81 s** |
 | **G4 Android 设备级** | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone`（含冷启动）3 个用例文件全过（`js_bridge` **24/24**）；退出码 0，**171 s**；跑完按 PR #34 的策略清理了本轮快照 |
+| **G4 #15 闭环复跑（2026-10-14）** | 三条命令同上 | 门禁同上（**692** 用例、`core` 943/943、`domain` 1740/1740）；Windows **79 s**、Android **186 s**（含冷启动），两侧各 3 个用例文件全过、`js_bridge` **24/24**，退出码 0；Android 跑完按 PR #34 的策略清理了本轮快照 |
 
 > Android 补跑命令：`pwsh -File tool/test/run_android.ps1`（`Medium_Phone` 自动启停；需要网络，因 `flutter build apk` 的 native assets 要下载 `libsqlite3.arm.android.so`，见 §6 与本表旧记录）。
 >
