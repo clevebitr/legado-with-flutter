@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Android probe harness: no snapshots, kill on failure, clean up (2026-10-13)
+
+`tool/test/{common,run_android}.ps1` only — no `lib/` change. Documented in
+`docs/dev/test-environment.md` §3 / §5 / §6 (PR #34).
+
+- **Root cause of “Android takes half an hour”:** `adb emu kill` returns immediately while the
+  emulator keeps writing its snapshot for ~15-20 s. Exiting inside that window tears
+  `snapshots/<avd>/default_boot`, and the AVD's `fastboot.forceFastBoot=yes` makes every later run
+  load it — “loaded successfully, guest wedged, adbd `offline` forever”, i.e. the full 300 s boot
+  timeout, a left-behind emulator, and the same poisoning on the next run.
+- **Never load a snapshot** (`-no-snapshot-load`). Writing it cannot be prevented on this emulator
+  build (`-no-snapshot-save` and `quickbootChoice.ini`'s `saveOnExit = false` are both ignored —
+  `ram.img` is written anyway), so the guarantee is “never read one”, plus a cleanup of this run's
+  snapshot once the emulator process has really exited.
+- **Kill the emulator in `finally` even when the boot failed.** The old condition required `$serial`,
+  which is only assigned after a *successful* boot, so the timeout path was the one path that left
+  an `offline` zombie holding the AVD lock and port 5554.
+- `-TestFile <name>` (one build+install instead of three — Flutter builds per test file),
+  `-WipeData` (genuinely fresh guest), emulator logs rotated to `.prev` instead of truncated
+  (tolerating a still-locked file), and an explicit `exit` because `pwsh -File` printed the error and
+  then stayed alive after a failed run.
+- **Parameter surface is backwards compatible:** `run_all.ps1`, `-SkipDeviceTests` / `-SkipWindows` /
+  `-SkipAndroid`, `-Headless`, `-KeepEmulator`, `-AvdName`, `-BootTimeoutSeconds` behave as before
+  (`-Headless` no longer needs snapshot handling because snapshots are never read).
+- Measured (2026-10-13, `Medium_Phone`): full three-file run **2 m 8 s** warm, 3 m 18 s on a fresh
+  worktree (was 30+ min); a single file ~70 s; the Windows device probe 1 m 39 s.
+
 ### b1b review, merge and the device-probe cadence (2026-10-13)
 
 - **Merged: the b1b rework.** The five must-fix items are in (`getElement` answers one value on both
