@@ -37,7 +37,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bookSourceSearchEmpty => '没有匹配该关键词的书。';
 
   @override
-  String get bookSourceMissingSource => '尚未选择书源。书源导入将在后续版本提供。';
+  String get bookSourceMissingSource => '还没有导入任何书源。导入书源后即可开始阅读。';
 
   @override
   String get bookSourceDetailTitle => '书籍详情';
@@ -131,4 +131,51 @@ class AppLocalizationsZh extends AppLocalizations {
   String bookSourceImportPartiallySkipped(int count, int skipped) {
     return '已导入 $count 个书源，跳过 $skipped 条无效条目。';
   }
+
+  @override
+  String get actionCancel => '取消';
+
+  @override
+  String get actionDelete => '删除';
+
+  @override
+  String get bookSourceMissingSourceAction => '管理书源';
+
+  @override
+  String get bookSourceListEmpty => '还没有导入任何书源。';
+
+  @override
+  String get bookSourceListLoadFailed => '读取已导入的书源失败。';
+
+  @override
+  String get bookSourceCurrentLabel => '当前书源';
+
+  @override
+  String get bookSourceVariantLabel => '同站点的另一份规则';
+
+  @override
+  String get bookSourceListDeleteTitle => '删除这个书源？';
+
+  @override
+  String bookSourceListDeleteBody(String name) {
+    return '将删除 $name 及其已存的规则。';
+  }
+
+  @override
+  String get bookSourceImportTitle => '导入书源';
+
+  @override
+  String get bookSourceImportTextLabel => '书源 JSON';
+
+  @override
+  String get bookSourceImportTextHint => '在这里粘贴导出的书源文件';
+
+  @override
+  String get bookSourceImportUrlLabel => '或一个 URL';
+
+  @override
+  String get bookSourceImportUrlHint => 'https://example.com/sources.json';
+
+  @override
+  String get bookSourceImportFileAction => '选择 JSON 文件';
 }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
-import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_queries.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/widgets/failure_message.dart';
 import 'package:flutter_reader/features/book_source/presentation/widgets/state_message.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';

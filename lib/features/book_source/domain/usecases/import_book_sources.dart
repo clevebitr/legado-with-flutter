@@ -1,0 +1,330 @@
+import 'dart:convert';
+
+import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/network/http_client.dart';
+import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'import_book_sources.freezed.dart';
+
+/// The largest file one import accepts, in UTF-8 bytes (ADR-0040 §决策 5).
+///
+/// The size is derived there rather than guessed: the largest known collection is 20.9 MB, so
+/// 32 MiB fits one of the same order while keeping a single `jsonDecode`'s peak memory bounded on
+/// a phone. The number is defined **once**, here; `ImportBookSources` takes an override only so a
+/// test can exercise the cap without allocating it (production never passes one).
+const int bookSourceImportSizeLimitBytes = 32 * 1024 * 1024;
+
+/// Where the JSON of one import comes from (`PLAN.md` 5.1, ADR-0040 §决策 9).
+///
+/// The two shapes are the ones 5.1 supports without a native dependency; a picked file joins them
+/// in 5.8 together with export.
+sealed class BookSourceImportInput {
+  /// Const constructor for the sealed hierarchy.
+  const BookSourceImportInput();
+}
+
+/// A JSON document the user pasted.
+final class BookSourceImportText extends BookSourceImportInput {
+  /// Creates the text input.
+  const BookSourceImportText(this.text);
+
+  /// The pasted document.
+  final String text;
+}
+
+/// A URL the JSON document is downloaded from.
+final class BookSourceImportUrl extends BookSourceImportInput {
+  /// Creates the URL input.
+  const BookSourceImportUrl(this.url);
+
+  /// The download address.
+  final String url;
+}
+
+/// What one import did (ADR-0040 §决策 6/8).
+///
+/// `copyWith` is off: a report is a result value nobody derives a variant of (`ParseResult` turns
+/// it off for the same reason).
+@Freezed(copyWith: false)
+abstract class BookSourceImportReport with _$BookSourceImportReport {
+  /// Const constructor so the computed count can live next to the fields.
+  const BookSourceImportReport._();
+
+  /// Creates an import report.
+  const factory BookSourceImportReport({
+    /// How many entries were new identities.
+    required int inserted,
+
+    /// How many entries matched a stored row and only refreshed its payload.
+    required int refreshed,
+
+    /// How many entries were rejected and left out (`ADR-0040` §决策 6).
+    required int skipped,
+  }) = _BookSourceImportReport;
+
+  /// The count the summary reports as “imported” (ADR-0040 §决策 8's `{count}`).
+  ///
+  /// A refreshed re-import counts: for the user the import did happen, it just did not add a row.
+  int get imported => inserted + refreshed;
+}
+
+/// Imports book sources from pasted text or a URL (`PLAN.md` 5.1, ADR-0040).
+///
+/// The use case owns the **acceptance** decision: the byte cap (before any parsing), the
+/// file-level rejections and which single entries are skipped. Storing is delegated to
+/// [BookSourceRepository], which owns the identity decision — so “what a valid file is” and
+/// “what the same source is” stay in one place each.
+final class ImportBookSources {
+  /// Creates the use case.
+  ///
+  /// `sizeLimit` defaults to ADR-0040's number and exists for tests: exercising the cap with the
+  /// real value would mean allocating 32 MiB inside a unit test.
+  const ImportBookSources({
+    required this._repository,
+    required this._http,
+    required this._logger,
+    this._sizeLimit = bookSourceImportSizeLimitBytes,
+  });
+
+  final BookSourceRepository _repository;
+  final HttpClient _http;
+  final AppLogger _logger;
+  final int _sizeLimit;
+
+  /// Imports [input] and reports what was stored and what was skipped.
+  ///
+  /// Failures are file-level and reuse [ParseFailureKind.invalidBookSource] with a locating
+  /// `rulePath` (`import.sizeLimit` / `import.notJson` / `import.noEntries`), because the user
+  /// consequence of all of them is the same file being unusable (ADR-0040 §决策 7). Single
+  /// entries that fail are **skipped and counted**, never silently dropped (C-SRC-4).
+  Future<ParseResult<BookSourceImportReport>> execute(
+    BookSourceImportInput input,
+  ) async {
+    final ParseResult<String> json = switch (input) {
+      BookSourceImportText(:final String text) => _fromText(text),
+      BookSourceImportUrl(:final String url) => await _fromUrl(url),
+    };
+
+    return switch (json) {
+      ParseFailure<String>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ) =>
+        failureAt<BookSourceImportReport>(kind: kind, rulePath: failedAt),
+      ParseSuccess<String>(:final String data) => await _store(data),
+    };
+  }
+
+  /// Checks the pasted document against the byte cap **before** anything parses it.
+  ParseResult<String> _fromText(String text) =>
+      text.length > _sizeLimit || utf8.encode(text).length > _sizeLimit
+      ? failureAt<String>(
+          kind: ParseFailureKind.invalidBookSource,
+          rulePath: 'import.sizeLimit',
+        )
+      : ParseSuccess<String>(text);
+
+  /// Downloads [url] with the cap applied to the **download** (C-PERF-5).
+  Future<ParseResult<String>> _fromUrl(String url) async {
+    final ParseResult<HttpResponse> response = await _http.get(
+      url,
+      rulePath: 'import.url',
+      maxBytes: _sizeLimit,
+    );
+
+    return switch (response) {
+      // 请求层只知道自己被限流，不知道调用方要这些字节做什么；上限触发时它把上限对象放进
+      // `cause`，由这里改写成导入契约的 rulePath（ADR-0040 §决策 5）。
+      ParseFailure<HttpResponse>(cause: final BodyTooLargeException _) =>
+        failureAt<String>(
+          kind: ParseFailureKind.invalidBookSource,
+          rulePath: 'import.sizeLimit',
+        ),
+      ParseFailure<HttpResponse>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ) =>
+        failureAt<String>(kind: kind, rulePath: failedAt),
+      ParseSuccess<HttpResponse>(:final HttpResponse data) =>
+        ParseSuccess<String>(data.body),
+    };
+  }
+
+  /// Decodes [json], keeps the usable entries and stores them.
+  Future<ParseResult<BookSourceImportReport>> _store(String json) async {
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(json);
+    } on FormatException {
+      return failureAt<BookSourceImportReport>(
+        kind: ParseFailureKind.invalidBookSource,
+        rulePath: 'import.notJson',
+      );
+    }
+
+    // 单条导出与批量导出的顶层形状不同：一个对象也是一个合法的导入文件。
+    final List<Object?> entries = decoded is List<Object?>
+        ? decoded
+        : <Object?>[decoded];
+    if (entries.isEmpty) {
+      return failureAt<BookSourceImportReport>(
+        kind: ParseFailureKind.invalidBookSource,
+        rulePath: 'import.noEntries',
+      );
+    }
+
+    final List<Map<String, Object?>> accepted = <Map<String, Object?>>[];
+    var skipped = 0;
+    for (var index = 0; index < entries.length; index++) {
+      final Object? entry = entries[index];
+      if (entry is! Map<String, Object?>) {
+        skipped++;
+        _logSkipped(index: index, entry: null, field: 'entry');
+
+        continue;
+      }
+      final String? missing = _missingRequiredField(entry);
+      if (missing != null) {
+        skipped++;
+        _logSkipped(index: index, entry: entry, field: missing);
+
+        continue;
+      }
+      // 其余字段由模型裁决（checked 模式点名出错的 JSON 键，ADR-0022）；这里只决定拿这份裁决
+      // 怎么办：可降级的字段去掉后照常导入，别的（结构缺失）跳过该条。
+      final Map<String, Object?>? usable = _sanitise(entry, index: index);
+      if (usable == null) {
+        skipped++;
+
+        continue;
+      }
+      accepted.add(usable);
+    }
+
+    final BookSourceSaveReport saved = await _repository.saveAll(accepted);
+
+    return ParseSuccess<BookSourceImportReport>(
+      BookSourceImportReport(
+        inserted: saved.inserted,
+        refreshed: saved.refreshed,
+        skipped: skipped,
+      ),
+    );
+  }
+
+  /// The **required** field [entry] misses, or `null` when both are there.
+  ///
+  /// ADR-0040 §决策 6 names exactly these two, and a blank string counts as missing the same way the
+  /// model treats a missing key.
+  String? _missingRequiredField(Map<String, Object?> entry) {
+    final Object? url = entry['bookSourceUrl'];
+    if (url is! String || url.trim().isEmpty) {
+      return 'bookSourceUrl';
+    }
+    final Object? name = entry['bookSourceName'];
+    if (name is! String || name.trim().isEmpty) {
+      return 'bookSourceName';
+    }
+
+    return null;
+  }
+
+  /// Returns [entry] with its unreadable **optional** fields removed, or `null` when it cannot be
+  /// imported at all.
+  ///
+  /// This is where ADR-0026's spirit reaches the import path: one bad optional field must not cost
+  /// the whole source. The model is the judge — checked mode names the offending JSON key
+  /// (ADR-0022) — and this method decides what to do with that verdict:
+  ///
+  /// * a [_degradableFields] key is dropped **with a warning**, so the source keeps working with the
+  ///   model's default for it (no UA header, type `text`) instead of disappearing;
+  /// * anything else (a missing rule object, an unknown structural problem) skips the entry, which
+  ///   the caller counts and reports.
+  ///
+  /// The loop is bounded by the number of degradable keys: every iteration removes one.
+  Map<String, Object?>? _sanitise(
+    Map<String, Object?> entry, {
+    required int index,
+  }) {
+    Map<String, Object?> candidate = entry;
+
+    while (true) {
+      try {
+        BookSource.fromLegadoJson(candidate);
+
+        return candidate;
+      } on CheckedFromJsonException catch (error) {
+        final String? key = error.key;
+        if (key == null ||
+            !_degradableFields.contains(key) ||
+            !candidate.containsKey(key)) {
+          _logSkipped(
+            index: index,
+            entry: entry,
+            field: key ?? 'ruleSearch/ruleToc/ruleContent',
+          );
+
+          return null;
+        }
+        _logDegraded(index: index, entry: entry, field: key);
+        candidate = Map<String, Object?>.of(candidate)..remove(key);
+      }
+    }
+  }
+
+  /// The single-entry fields an import may drop so the rest of the entry still arrives.
+  ///
+  /// **Only `header`.** A real 504-source export wrote 27 headers in forms this build cannot read —
+  /// a rule (`@js:` / `<js>`) or malformed/lenient JSON — and losing a source over its user agent is
+  /// a worse outcome than importing it without one, so the field is dropped with a warning and the
+  /// requests simply carry the policy default (ADR-0040 §决策 6's revision note). The raw value
+  /// stays in the stored payload, so nothing is lost from the file itself.
+  ///
+  /// Deliberately **not** here: `bookSourceType`. An unknown type must keep failing the entry
+  /// instead of silently becoming `text`, because that would present an audio or image source as a
+  /// text one (ADR-0022 §决策 5); the enum models every value the fork documents (0-4), and this
+  /// build has no fifth meaning to guess.
+  static const List<String> _degradableFields = <String>['header'];
+
+  /// Logs one entry that imports **without** a field, naming which one.
+  ///
+  /// Degrading silently is what C-SRC-4 forbids; this line is what makes the loss visible and
+  /// located (index + field + URL), while still not logging the entry's body (C-ERR-8).
+  void _logDegraded({
+    required int index,
+    required Map<String, Object?>? entry,
+    required String field,
+  }) {
+    _logger.warning(
+      'Importing book source with a degraded field: index=$index field=$field '
+      'url=${_label(entry?['bookSourceUrl'])} '
+      'name=${_label(entry?['bookSourceName'])}',
+    );
+  }
+
+  /// Logs one skipped entry so it can be found again without logging its body (C-ERR-8).
+  ///
+  /// The id, the URL and the failing field are what an author needs to fix a file; the entry's
+  /// JSON is not, and must not end up in a log (C-SEC-4). An entry that is not even an object has
+  /// no URL to name, which is exactly why the index is part of the message.
+  void _logSkipped({
+    required int index,
+    required Map<String, Object?>? entry,
+    required String field,
+  }) {
+    _logger.warning(
+      'Skipping imported book source: index=$index field=$field '
+      'url=${_label(entry?['bookSourceUrl'])} '
+      'name=${_label(entry?['bookSourceName'])}',
+    );
+  }
+
+  /// A log-safe rendering of an entry's identifying fields.
+  String _label(Object? value) =>
+      value is String && value.trim().isNotEmpty ? value : '<missing>';
+}

@@ -21,6 +21,12 @@ sealed class BookSourceRoute with _$BookSourceRoute {
   /// The route that shows the source's discover page.
   const factory BookSourceRoute.explore() = ExploreRoute;
 
+  /// The route that lists the imported sources (`PLAN.md` 5.1).
+  const factory BookSourceRoute.importedSources() = BookSourceListRoute;
+
+  /// The route that imports sources from pasted text or a URL (`PLAN.md` 5.1).
+  const factory BookSourceRoute.importSources() = BookSourceImportRoute;
+
   /// The route that shows the text of one chapter.
   const factory BookSourceRoute.reader({required Chapter chapter}) =
       ReaderRoute;
@@ -30,6 +36,8 @@ sealed class BookSourceRoute with _$BookSourceRoute {
     ExploreRoute() => _explorePath,
     BookDetailRoute() => _bookDetailPath,
     ReaderRoute() => _readerPath,
+    BookSourceListRoute() => _sourceListPath,
+    BookSourceImportRoute() => _sourceImportPath,
   };
 }
 
@@ -41,6 +49,12 @@ const String _bookDetailPath = '/book';
 
 /// Path of [ReaderRoute].
 const String _readerPath = '/reader';
+
+/// Path of [BookSourceListRoute].
+const String _sourceListPath = '/sources';
+
+/// Path of [BookSourceImportRoute].
+const String _sourceImportPath = '/sources/import';
 
 /// Pushes [route] through the app's route table (ADR-0011 §4).
 void pushBookSourceRoute(BuildContext context, BookSourceRoute route) =>

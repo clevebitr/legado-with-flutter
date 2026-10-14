@@ -38,7 +38,7 @@
 | `bookSourceGroup` | `group` | `String?` | M0 | — |
 | `bookSourceType` | `sourceType` | `BookSourceType` | M0 | 0 文本 / 1 音频 / 2 图片 / 3 文件 |
 | `enabled` | `isEnabled` | `bool` | M0 | 默认 `true` |
-| `header` | `headers` | `Map<String, String>?` | M0 | 原为 JSON 字符串，导入时解析 |
+| `header` | `headers` | `Map<String, String>?` | M0 | 原为 JSON 字符串，导入时解析；单个引号的宽松写法（GSON 接受）也解析；**写成规则**（`@js:` / `<js>`）尚未求值，导入时降级为无 header + warning（ADR-0040 §决策 6 的修订注记、`PLAN.md` §3.7） |
 | `searchUrl` | `searchUrl` | `String?` | M0 | 支持 `{{key}}` / `{{page}}` |
 | `exploreUrl` | `exploreUrl` | `String?` | **M1** | 发现页；两种形态（分类串 / 整字段 JS）、条目语义与回落规则**全部**见 §4.2（ADR-0035） |
 | `ruleSearch` | `searchRule` | `SearchRule` | M0 | 必填 |
@@ -110,6 +110,9 @@
 > `ruleContent` / `ruleExplore`（递归按键排序后序列化的 sha256）。同 `(url, 指纹)` 重复导入**幂等**，
 > 同 URL 不同指纹**共存**（与上游「URL 即主键、后者覆盖」的登记差异）；`enabled` / `customOrder`
 > 属**用户态**，导入永不覆盖。体积上限、校验分档与失败 `rulePath` 的数值不在本表。
+> **5.1 的落地（2026-10-14）：** 入口是**粘贴 JSON 文本**与**从 URL 拉取**（文件选择与分享归 5.8，ADR-0040 §决策 9）；
+> 单条被跳过时**计数并写日志**（下标 + 失败字段 + URL，不写正文），文件级失败复用 `invalidBookSource`；
+> 多条同 URL 的变体在列表里逐条呈现并带「同站点的另一份规则」标记。
 
 ---
 
@@ -453,6 +456,16 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 >   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
 >   （ADR-0026 §决策 2）。
 
+> **正文缓存（2026-10-14，`PLAN.md` 5.2）：** 一章的**成品正文**（分页已拼好、`replaceRegex` 已跑过）
+> 存进与 charset 缓存同一张 `cache_entries`，键复用 `CacheDao` 的稳定键（`ruleField` 固定为
+> `content`、`page` 固定为 1，键含**书源 ID**，所以两个书源发布同一章节 URL 也不会串味）；
+> TTL 的唯一出处是 `lib/features/book_source/domain/content_cache.dart` 的 `chapterCacheTtl`
+> （半天：覆盖一次阅读会话与当天回访，同时让被站点改过的章节一天内回来）。
+> **只缓存成功**：失败路径在写入之前就返回，一章的失败不会被永久粘住；
+> **失败面在适配器（`CacheDaoContentCache`）里被吸收**，端口因此是 total——丢一条缓存只值一次请求，
+> 绝不把章节变成失败（C-ERR-1、ADR-0033）。过期条目在**读**时即未命中，物理清理归 `PLAN.md` 5.7。
+> 命中时 `FetchContent` 连书源限速都不进预算，因为这次操作一个请求都不发。
+
 ### 4.2 发现页（`exploreUrl` 与 `ruleExplore`）
 
 本节是发现页的**唯一出处**（决策理由与四条登记差异见 **ADR-0035**；字段分期归 §2）。
@@ -496,6 +509,7 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 - 必须使用 `betto_charset_detector` 检测（C-NET-3），检测顺序：
   HTTP `Content-Type` → HTML `<meta charset>` → 字节嗅探 → 回退 UTF-8。
   前两步是**权威声明**：只要有声明就必须用它，嗅探仅用于两者都缺失的页面。
+- 本节的缓存只讲**编码检测**；**正文缓存**复用同一张表与同一种键形状，其键与 TTL 归 §4.1。
 - 检测结果必须缓存到「书源 ID + URL」维度，避免重复嗅探（**已落地：Phase 3.9**）：
   缓存的是**嗅探车道的结果**，键复用 `CacheDao` 的稳定键（`ruleField` 固定为 `charset`、`page` 固定，
   使同书源同 URL 的两个阶段共享一条；C-NET-6 的键形状不变），TTL 是

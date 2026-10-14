@@ -56,12 +56,14 @@ extension BookSourceRoutePatterns on BookSourceRoute {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( BookDetailRoute value)?  bookDetail,TResult Function( ExploreRoute value)?  explore,TResult Function( ReaderRoute value)?  reader,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( BookDetailRoute value)?  bookDetail,TResult Function( ExploreRoute value)?  explore,TResult Function( BookSourceListRoute value)?  importedSources,TResult Function( BookSourceImportRoute value)?  importSources,TResult Function( ReaderRoute value)?  reader,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that);case ExploreRoute() when explore != null:
-return explore(_that);case ReaderRoute() when reader != null:
+return explore(_that);case BookSourceListRoute() when importedSources != null:
+return importedSources(_that);case BookSourceImportRoute() when importSources != null:
+return importSources(_that);case ReaderRoute() when reader != null:
 return reader(_that);case _:
   return orElse();
 
@@ -80,12 +82,14 @@ return reader(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( BookDetailRoute value)  bookDetail,required TResult Function( ExploreRoute value)  explore,required TResult Function( ReaderRoute value)  reader,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( BookDetailRoute value)  bookDetail,required TResult Function( ExploreRoute value)  explore,required TResult Function( BookSourceListRoute value)  importedSources,required TResult Function( BookSourceImportRoute value)  importSources,required TResult Function( ReaderRoute value)  reader,}){
 final _that = this;
 switch (_that) {
 case BookDetailRoute():
 return bookDetail(_that);case ExploreRoute():
-return explore(_that);case ReaderRoute():
+return explore(_that);case BookSourceListRoute():
+return importedSources(_that);case BookSourceImportRoute():
+return importSources(_that);case ReaderRoute():
 return reader(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
@@ -100,12 +104,14 @@ return reader(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( BookDetailRoute value)?  bookDetail,TResult? Function( ExploreRoute value)?  explore,TResult? Function( ReaderRoute value)?  reader,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( BookDetailRoute value)?  bookDetail,TResult? Function( ExploreRoute value)?  explore,TResult? Function( BookSourceListRoute value)?  importedSources,TResult? Function( BookSourceImportRoute value)?  importSources,TResult? Function( ReaderRoute value)?  reader,}){
 final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that);case ExploreRoute() when explore != null:
-return explore(_that);case ReaderRoute() when reader != null:
+return explore(_that);case BookSourceListRoute() when importedSources != null:
+return importedSources(_that);case BookSourceImportRoute() when importSources != null:
+return importSources(_that);case ReaderRoute() when reader != null:
 return reader(_that);case _:
   return null;
 
@@ -123,11 +129,13 @@ return reader(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Book book)?  bookDetail,TResult Function()?  explore,TResult Function( Chapter chapter)?  reader,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Book book)?  bookDetail,TResult Function()?  explore,TResult Function()?  importedSources,TResult Function()?  importSources,TResult Function( Chapter chapter)?  reader,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that.book);case ExploreRoute() when explore != null:
-return explore();case ReaderRoute() when reader != null:
+return explore();case BookSourceListRoute() when importedSources != null:
+return importedSources();case BookSourceImportRoute() when importSources != null:
+return importSources();case ReaderRoute() when reader != null:
 return reader(_that.chapter);case _:
   return orElse();
 
@@ -146,11 +154,13 @@ return reader(_that.chapter);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Book book)  bookDetail,required TResult Function()  explore,required TResult Function( Chapter chapter)  reader,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Book book)  bookDetail,required TResult Function()  explore,required TResult Function()  importedSources,required TResult Function()  importSources,required TResult Function( Chapter chapter)  reader,}) {final _that = this;
 switch (_that) {
 case BookDetailRoute():
 return bookDetail(_that.book);case ExploreRoute():
-return explore();case ReaderRoute():
+return explore();case BookSourceListRoute():
+return importedSources();case BookSourceImportRoute():
+return importSources();case ReaderRoute():
 return reader(_that.chapter);}
 }
 /// A variant of `when` that fallback to returning `null`
@@ -165,11 +175,13 @@ return reader(_that.chapter);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Book book)?  bookDetail,TResult? Function()?  explore,TResult? Function( Chapter chapter)?  reader,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Book book)?  bookDetail,TResult? Function()?  explore,TResult? Function()?  importedSources,TResult? Function()?  importSources,TResult? Function( Chapter chapter)?  reader,}) {final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that.book);case ExploreRoute() when explore != null:
-return explore();case ReaderRoute() when reader != null:
+return explore();case BookSourceListRoute() when importedSources != null:
+return importedSources();case BookSourceImportRoute() when importSources != null:
+return importSources();case ReaderRoute() when reader != null:
 return reader(_that.chapter);case _:
   return null;
 
@@ -279,6 +291,70 @@ int get hashCode => runtimeType.hashCode;
 @override
 String toString() {
     return 'BookSourceRoute.explore()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class BookSourceListRoute extends BookSourceRoute {
+  const BookSourceListRoute(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceListRoute);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'BookSourceRoute.importedSources()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class BookSourceImportRoute extends BookSourceRoute {
+  const BookSourceImportRoute(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceImportRoute);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'BookSourceRoute.importSources()';
 }
 
 

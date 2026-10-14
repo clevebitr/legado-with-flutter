@@ -748,6 +748,7 @@ final class _ProbeHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    int? maxBytes,
   }) async {
     requestedUrls.add(url);
     requestedMethods.add('GET');

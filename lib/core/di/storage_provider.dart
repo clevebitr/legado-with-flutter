@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/database_executor_provider.dart';
+import 'package:flutter_reader/core/storage/book_source_dao.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -22,6 +23,13 @@ ReaderDatabase readerDatabase(Ref ref) {
 /// Provides the TTL cache for network payloads (C-NET-6).
 @riverpod
 CacheDao cacheDao(Ref ref) => CacheDao(
+  ref.watch(readerDatabaseProvider),
+  clock: ref.watch(clockProvider),
+);
+
+/// Provides the DAO of the imported book sources (`PLAN.md` 5.1, ADR-0040).
+@riverpod
+BookSourceDao bookSourceDao(Ref ref) => BookSourceDao(
   ref.watch(readerDatabaseProvider),
   clock: ref.watch(clockProvider),
 );

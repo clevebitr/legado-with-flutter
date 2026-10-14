@@ -145,3 +145,71 @@ final class PlatformDynamicColorProvider
 
 String _$platformDynamicColorHash() =>
     r'2e2a1cce18f3fde23676be4d723a6b63a58fe1a2';
+
+/// Provides the platform file picker for book source imports (`PLAN.md` 5.8, C-PLT-1).
+///
+/// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
+/// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
+/// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
+/// plugin (`docs/dev/testing.md` §4).
+
+@ProviderFor(bookSourceFilePicker)
+final bookSourceFilePickerProvider = BookSourceFilePickerProvider._();
+
+/// Provides the platform file picker for book source imports (`PLAN.md` 5.8, C-PLT-1).
+///
+/// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
+/// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
+/// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
+/// plugin (`docs/dev/testing.md` §4).
+
+final class BookSourceFilePickerProvider
+    extends
+        $FunctionalProvider<
+          BookSourceFilePicker,
+          BookSourceFilePicker,
+          BookSourceFilePicker
+        >
+    with $Provider<BookSourceFilePicker> {
+  /// Provides the platform file picker for book source imports (`PLAN.md` 5.8, C-PLT-1).
+  ///
+  /// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
+  /// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
+  /// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
+  /// plugin (`docs/dev/testing.md` §4).
+  BookSourceFilePickerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceFilePickerProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceFilePickerHash();
+
+  @$internal
+  @override
+  $ProviderElement<BookSourceFilePicker> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BookSourceFilePicker create(Ref ref) {
+    return bookSourceFilePicker(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookSourceFilePicker value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookSourceFilePicker>(value),
+    );
+  }
+}
+
+String _$bookSourceFilePickerHash() =>
+    r'03ffd09c149b1f20aaab463e862cc267bead4c59';

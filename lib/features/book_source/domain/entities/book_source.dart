@@ -23,6 +23,11 @@ enum BookSourceType {
   /// File content (Legado `bookSourceType` 3).
   @JsonValue(3)
   file,
+
+  /// Video content (Legado `bookSourceType` 4; the fork documents "0 文本，1 音频, 2 图片, 3 文件,
+  /// 4 视频"). Real exports carry it, so an unknown-value rejection would cost whole sources.
+  @JsonValue(4)
+  video,
 }
 
 /// One imported Legado book source: the rule set that drives search, book info,
@@ -336,12 +341,34 @@ final class _HeaderJsonConverter
 }
 
 /// Parses a `header` JSON string, or returns `null` when it declares nothing.
+/// Decodes the `header` string, with one **narrow** leniency pass for a dialect real exports carry.
+///
+/// Upstream parses this field with GSON, which accepts single-quoted objects; a real 504-source
+/// export contained 11 of them, and rejecting the whole source over a quote style would be a
+/// fidelity bug, not strictness. The fallback applies **only** when the text contains no double
+/// quote at all, so a malformed object that already uses `"` still fails loudly (C-SRC-4).
+///
+/// Everything else — a rule-based header (`@js:` / `<js>`), a truncated object, a bare user agent —
+/// stays a rejection here and is handled by the importer, which drops the field with a warning
+/// (`PLAN.md` §3.7 registers the rule-based header as an unimplemented feature).
+Object? _decodeHeaderObject(String raw) {
+  try {
+    return jsonDecode(raw);
+  } on FormatException {
+    if (raw.contains('"')) {
+      rethrow;
+    }
+
+    return jsonDecode(raw.replaceAll("'", '"'));
+  }
+}
+
 Map<String, String>? _parseHeaderString(String raw) {
   if (raw.trim().isEmpty) {
     return null;
   }
 
-  final Object? decoded = jsonDecode(raw);
+  final Object? decoded = _decodeHeaderObject(raw);
   if (decoded is! Map<Object?, Object?>) {
     throw FormatException(
       'The Legado "header" string must decode to a JSON object, '

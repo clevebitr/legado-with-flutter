@@ -114,6 +114,12 @@ ParseFailureKind _expectFailure(ParseResult<HttpResponse> result) =>
       ParseFailure<HttpResponse>(:final ParseFailureKind kind) => kind,
     };
 
+/// Returns the `cause` of a failed [result], failing the test otherwise.
+Object? _failureCause(ParseResult<HttpResponse> result) => switch (result) {
+  ParseSuccess<HttpResponse>() => fail('Expected a failure.'),
+  ParseFailure<HttpResponse>(:final Object? cause) => cause,
+};
+
 /// Pumps the event queue until [condition] holds, failing when it never does.
 ///
 /// A bounded loop instead of a wall-clock wait, so the concurrency tests below cannot
@@ -128,6 +134,70 @@ Future<void> _pumpUntil(bool Function() condition) async {
 
 void main() {
   group('DioHttpClient', () {
+    test(
+      'get_givenABodyLargerThanTheCallersCap_abandonsItWithATypedCause',
+      () async {
+        // PLAN.md 5.1 / ADR-0040 §决策 5：上限在**读**的时候生效（C-PERF-5），
+        // 并带一个可识别的 cause，让导入层把它改写成自己的 rulePath。
+        final _Fixture fixture = _buildClient();
+        fixture.adapter.enqueueResponse(bytes: utf8.encode('0123456789'));
+
+        final ParseResult<HttpResponse> result = await fixture.client.get(
+          'https://example.test/sources.json',
+          rulePath: 'import.url',
+          maxBytes: 4,
+        );
+
+        expect(_expectFailure(result), ParseFailureKind.invalidBookSource);
+        expect(_failureCause(result), isA<BodyTooLargeException>());
+        expect(
+          _failureCause(result).toString(),
+          'Response body exceeded 4 bytes',
+        );
+        expect(
+          fixture.printer.events.last.message.toString(),
+          contains('limit=4'),
+        );
+      },
+    );
+
+    test('get_givenABodyWithinTheCallersCap_decodesIt', () async {
+      final _Fixture fixture = _buildClient();
+      fixture.adapter.enqueueResponse(
+        bytes: utf8.encode('{}'),
+        headers: <String, List<String>>{
+          'content-type': <String>['application/json; charset=utf-8'],
+        },
+      );
+
+      final HttpResponse response = _expectSuccess(
+        await fixture.client.get(
+          'https://example.test/sources.json',
+          rulePath: 'import.url',
+          maxBytes: 4,
+        ),
+      );
+
+      expect(response.body, '{}');
+    });
+
+    test('get_givenANonSuccessStatusWithACap_releasesTheBody', () async {
+      // 流模式下 4xx/5xx 的正文还握在 dio 手里；不取消订阅就把连接留着（[_discard]）。
+      final _Fixture fixture = _buildClient();
+      fixture.adapter.enqueueResponse(
+        statusCode: 404,
+        bytes: utf8.encode('nope'),
+      );
+
+      final ParseResult<HttpResponse> result = await fixture.client.get(
+        'https://example.test/sources.json',
+        rulePath: 'import.url',
+        maxBytes: 4,
+      );
+
+      expect(_expectFailure(result), ParseFailureKind.notFound);
+    });
+
     test('get_whenServerReturns200_decodesTheBody', () async {
       final _Fixture fixture = _buildClient();
       fixture.adapter.enqueueResponse(

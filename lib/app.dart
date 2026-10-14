@@ -5,6 +5,8 @@ import 'package:flutter_reader/core/router/app_router.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/book_source_list_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/reader_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/search_books_page.dart';
@@ -38,6 +40,8 @@ class ReaderApp extends ConsumerWidget {
   /// instead of tripping an assertion.
   static Widget _pageFor(Object? arguments) => switch (arguments) {
     ExploreRoute() => const ExplorePage(),
+    BookSourceListRoute() => const BookSourceListPage(),
+    BookSourceImportRoute() => const BookSourceImportPage(),
     final BookDetailRoute route => BookDetailPage(book: route.book),
     final ReaderRoute route => ReaderPage(chapter: route.chapter),
     _ => const SearchBooksPage(),

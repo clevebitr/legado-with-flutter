@@ -36,10 +36,7 @@
   "@bookSourceSearchEmpty": {
     "description": "Empty state shown when a search returned no results."
   },
-  "bookSourceMissingSource": "No book source is selected yet. Importing book sources arrives in a later version.",
-  "@bookSourceMissingSource": {
-    "description": "Empty state shown while no book source is available (the Phase 2.5 seam of currentBookSourceProvider)."
-  },
+  "bookSourceMissingSource": "No book source is stored yet. Import one to start reading.",
   "bookSourceDetailTitle": "Book details",
   "@bookSourceDetailTitle": {
     "description": "Title of the book detail page."
@@ -175,5 +172,70 @@
         "type": "int"
       }
     }
+  },
+  "actionCancel": "Cancel",
+  "@actionCancel": {
+    "description": "Label of the button that dismisses a confirmation without acting."
+  },
+  "actionDelete": "Delete",
+  "@actionDelete": {
+    "description": "Label of the destructive action (a stored book source, a cache entry)."
+  },
+  "bookSourceMissingSourceAction": "Manage book sources",
+  "@bookSourceMissingSourceAction": {
+    "description": "Button of the empty state that opens the book source list."
+  },
+  "bookSourceListEmpty": "No book source is stored yet.",
+  "@bookSourceListEmpty": {
+    "description": "Empty state of the book source list; the import button below it is the way in."
+  },
+  "bookSourceListLoadFailed": "The stored book sources could not be read.",
+  "@bookSourceListLoadFailed": {
+    "description": "Shown when reading the stored book sources failed; the retry button reloads them."
+  },
+  "bookSourceCurrentLabel": "Current book source",
+  "@bookSourceCurrentLabel": {
+    "description": "Accessible label of the marker on the row the pages currently use."
+  },
+  "bookSourceVariantLabel": "Same site, another rule set",
+  "@bookSourceVariantLabel": {
+    "description": "Subtitle line on a row whose bookSourceUrl is shared by another stored source, so the two rows are not read as duplicates."
+  },
+  "bookSourceListDeleteTitle": "Delete this book source?",
+  "@bookSourceListDeleteTitle": {
+    "description": "Title of the confirmation before deleting one stored book source."
+  },
+  "bookSourceListDeleteBody": "{name} and its stored rules will be removed.",
+  "@bookSourceListDeleteBody": {
+    "description": "Body of the delete confirmation; the name is the source name and never a user keyword.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceImportTitle": "Import book sources",
+  "@bookSourceImportTitle": {
+    "description": "Title of the import screen."
+  },
+  "bookSourceImportTextLabel": "Book source JSON",
+  "@bookSourceImportTextLabel": {
+    "description": "Label of the field that takes a pasted JSON document."
+  },
+  "bookSourceImportTextHint": "Paste an exported book source file here",
+  "@bookSourceImportTextHint": {
+    "description": "Hint of the paste field."
+  },
+  "bookSourceImportUrlLabel": "Or a URL",
+  "@bookSourceImportUrlLabel": {
+    "description": "Label of the field that downloads a book source file."
+  },
+  "bookSourceImportUrlHint": "https://example.com/sources.json",
+  "@bookSourceImportUrlHint": {
+    "description": "Hint of the URL field; an example address, not a real source."
+  },
+  "bookSourceImportFileAction": "Choose a JSON file",
+  "@bookSourceImportFileAction": {
+    "description": "Label of the button that opens the platform file dialog on the import screen."
   }
 }

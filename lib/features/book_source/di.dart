@@ -1,30 +1,41 @@
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/js_bridge_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
-import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/core/di/storage_provider.dart';
+import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
+import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
+import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/explore_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_explore_categories.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'di.g.dart';
 
-/// The book source the UI works with.
+/// Provides the persistence of the imported book sources (`PLAN.md` 5.1, ADR-0040).
 ///
-/// This is the **single seam** for "which source is selected": importing book sources
-/// and the book source repository are Phase 5 work, and the feature has no `data/`
-/// layer yet (ADR-0025 §后果). The seam therefore answers `null`, and the pages show
-/// an empty state instead of requesting pages with an empty rule set.
-///
-/// Tests override it with the offline corpus of `test/fixtures/book_sources/`, which
-/// is how the widget tests drive the production chain without a network (C-NET-8).
+/// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
+/// consumes the `domain/` model directly instead of a DTO.
 @riverpod
-BookSource? currentBookSource(Ref ref) => null;
+BookSourceRepository bookSourceRepository(Ref ref) => BookSourceRepositoryImpl(
+  dao: ref.watch(bookSourceDaoProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
+/// Provides the import use case (pasted text or a URL, `PLAN.md` 5.1, ADR-0040 §决策 9).
+@riverpod
+ImportBookSources importBookSources(Ref ref) => ImportBookSources(
+  repository: ref.watch(bookSourceRepositoryProvider),
+  http: ref.watch(httpClientProvider),
+  logger: ref.watch(appLoggerProvider),
+);
 
 /// Provides the rule engine every book source use case shares.
 @riverpod
@@ -57,10 +68,22 @@ FetchBookInfo fetchBookInfo(Ref ref) =>
 FetchToc fetchToc(Ref ref) =>
     FetchToc(pages: ref.watch(pageFetchServiceProvider));
 
+/// Provides the chapter body cache (`PLAN.md` 5.2, C-NET-6).
+///
+/// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
+/// the expiry column were already there, so 5.2 adds no column and no table.
+@riverpod
+ContentCache contentCache(Ref ref) => CacheDaoContentCache(
+  ref.watch(cacheDaoProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
 /// Provides the chapter body use case.
 @riverpod
-FetchContent fetchContent(Ref ref) =>
-    FetchContent(pages: ref.watch(pageFetchServiceProvider));
+FetchContent fetchContent(Ref ref) => FetchContent(
+  pages: ref.watch(pageFetchServiceProvider),
+  cache: ref.watch(contentCacheProvider),
+);
 
 /// Provides the use case that reads a source's discover-page categories.
 @riverpod

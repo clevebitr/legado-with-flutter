@@ -45,6 +45,8 @@ import 'package:flutter_reader/core/network/concurrent_rate.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
+import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
+import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
@@ -141,6 +143,26 @@ List<String> _argumentsOf(List<String> arguments) {
       .split(' ')
       .where((String part) => part.isNotEmpty)
       .toList(growable: false);
+}
+
+/// The harness reads every chapter live: a cache would hide the very behaviour it measures, so the
+/// spot-check runs with the port answering “nothing stored” and dropping writes.
+const ContentCache _noContentCache = _NoContentCache();
+
+/// A [ContentCache] that never stores anything (`tool/spot_check` must always hit the network).
+final class _NoContentCache implements ContentCache {
+  const _NoContentCache();
+
+  @override
+  Future<String?> read({required String sourceId, required String url}) async =>
+      null;
+
+  @override
+  Future<void> write({
+    required String sourceId,
+    required String url,
+    required String body,
+  }) async {}
 }
 
 Future<void> main(List<String> arguments) async {
@@ -314,8 +336,10 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
     return report;
   }
 
-  switch (await FetchContent(pages: pages)
-      .execute(source, chapters.first.url)) {
+  switch (await FetchContent(
+    pages: pages,
+    cache: _noContentCache,
+  ).execute(source, chapters.first.url)) {
     case ParseSuccess<String>(:final String data):
       report.record(
         'content',
@@ -690,20 +714,11 @@ String _jsSegmentsOf(String rule) {
 /// “same URL, different rules” instances, so the ruling needs the **shape** rather than an
 /// assumption - and it comes from the harness (`docs/dev/test-environment.md` §6, trap 13).
 ///
-/// Two entries count as the same when every field that makes a source **behave** the same way is
-/// equal (name, `searchUrl`, `header` and the five rule objects); the comparison is order-free, so
-/// a re-export with reordered keys is not reported as a difference.
+/// Two entries count as the same when [bookSourceFingerprint] says so - i.e. when every field
+/// that makes a source **behave** the same way is equal. The rule itself lives in `domain/`
+/// (`lib/features/book_source/domain/book_source_fingerprint.dart`), so the census and the
+/// repository cannot drift apart; this file only groups by URL and counts.
 void _printBookSourceIdentityCensus(List<Object?> entries) {
-  const List<String> behaviorFields = <String>[
-    'bookSourceName',
-    'searchUrl',
-    'header',
-    'ruleSearch',
-    'ruleBookInfo',
-    'ruleToc',
-    'ruleContent',
-    'ruleExplore',
-  ];
   final Map<String, List<String>> byUrl = <String, List<String>>{};
   var total = 0;
   for (final Object? item in entries) {
@@ -713,11 +728,7 @@ void _printBookSourceIdentityCensus(List<Object?> entries) {
     total++;
     byUrl
         .putIfAbsent('${item['bookSourceUrl']}', () => <String>[])
-        .add(
-          _canonicalJson(<String, Object?>{
-            for (final String key in behaviorFields) key: item[key],
-          }),
-        );
+        .add(bookSourceFingerprint(item));
   }
 
   var repeated = 0;
@@ -749,15 +760,6 @@ void _printBookSourceIdentityCensus(List<Object?> entries) {
     'differs.',
   );
 }
-
-/// Serialises [value] with map keys in a stable order, so two equal JSON objects compare equal
-/// even when their key order differs (`jsonEncode` keeps insertion order).
-String _canonicalJson(Object? value) => switch (value) {
-  final Map<String, Object?> map =>
-    '{${(map.keys.toList()..sort()).map((String key) => '${jsonEncode(key)}:${_canonicalJson(map[key])}').join(',')}}',
-  final List<Object?> list => '[${list.map(_canonicalJson).join(',')}]',
-  _ => jsonEncode(value),
-};
 
 /// Prints the `concurrentRate` distribution of [entries] (`book-source.md` §8).
 ///

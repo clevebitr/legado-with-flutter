@@ -251,6 +251,14 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 #### 5.1 书源入口（第一优先：人类闭环的入口）
 
+> **状态（2026-10-14）：✅ 已完成。** 表 `book_sources`（`schemaVersion` 1 → 2，`drift_schemas/drift_schema_v2.json` + 迁移测试三件套）、
+> `BookSourceDao` + `BookSourceRepository`（domain 端口 / data 实现；身份规则 = `bookSourceFingerprint`，与入库工具的普查**共用同一个实现**）、
+> `ImportBookSources`（粘贴文本 / URL；32 MiB 上限在解析前按 UTF-8 字节判、URL 按块累加**超限即中止**；
+> `import.sizeLimit` / `import.notJson` / `import.noEntries`；单条跳过 + 计数 + 可定位日志）、
+> `SelectedBookSource`（可写；默认 = 启用 → `customOrder` → `id`；选中的行被删后**回落**）、
+> 书源列表页 + 导入页 + 双语 ARB、`on_disk_database` 的真实写入与跨连接读回。
+> 证据：全量 **763** 用例、`core` 1014/1014、`domain` 1837/1837、`data` 54/54；设备级 **Windows 99 s / Android 169 s**（各 3 文件、`js_bridge` 24/24，见 `test-environment.md` §7）。
+
 - **表**：新增 `book_sources`（列集合按 5.0 的身份裁决落定，至少含启用位、排序字段与原始 JSON 负载），`schemaVersion` 1 → 2；按 `tech-stack.md` §8 走 `drift_dev schema dump` / `schema generate`，**提交生成物**并补迁移测试。
 - **分层**：`domain/` 定义 `BookSourceRepository` 接口；`data/` 出现本仓第一个真实消费方（DTO + DataSource + `RepositoryImpl`，单测用内存 Drift）。
 - **接缝**：`currentBookSource` 从「恒 `null` 的常量」改成**可写 Notifier**（`@riverpod` 生成形态，C-STATE-2），默认选「启用且排序第一」的源；各页面从「无书源空态」变成「引导去导入」。
@@ -258,6 +266,13 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 - **验收**：Widget 测试（空列表引导 / 导入成功后出现 / 选中后搜索与发现按钮可用 / 删除后回到空态）；导入畸形 JSON → `invalidBookSource` 文案；体积上限单测；`data/` 层满足 `testing.md` §2（含「未测量源文件」判定）；`on_disk_database` 探针覆盖新表的一次真实写入；Windows 与 Android 设备级各实跑一次（ADR-0039 的切片口径）。
 
 #### 5.2 正文缓存
+
+> **状态（2026-10-14）：✅ 已完成。** `ContentCache` 端口（`domain/`）+ `CacheDaoContentCache` 适配器
+> （复用 `CacheDao` 的键形状与过期列：`ruleField=content`、`page=1`、TTL = `chapterCacheTtl` 半天），
+> `FetchContent` 命中即跳过整个引擎（**一个请求都不发**，连限速都不进预算）、只缓存成功结果；
+> 失败面抽成**唯一**的 `absorbCacheFailure`（ADR-0033 的修订注记把豁免落点移过去），端口保持 total。
+> 验收：命中 / 过期 / 另一书源同 URL / 读失败 / 写失败吸收各 ≥1 条单测，`FetchContent` 的
+> 「同一章节两次只请求一次」也有单测。
 
 - 现状：**没有**正文缓存（`CacheDao` 目前唯一的生产消费方是 charset 嗅探结果）。本步落 `ContentCache` 端口（`domain/`）+ `CacheDao` 适配器，键 = 书源 ID + 章节 URL 的稳定摘要（C-NET-6），**TTL 数值只定义一次**并登记在 `book-source.md` §5。
 - **验收**：命中 / 过期 / 失败吸收各 ≥1 条单测（缓存失败**不得**把阅读变成失败，与 ADR-0033 同口径）；同一章节二次进入不发请求。
@@ -286,6 +301,11 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 - ① **全量清空**：现有三列够 `DELETE`，零 schema 变更（先做）；② **按书源清理**：给 `cache_entries` 加 `sourceId` 列 → dump + 迁移测试（成本更高，按真实需求再做）。
 
 #### 5.8 导入 / 导出保真
+
+> **状态（2026-10-14）：文件选择器部分已提前落地**（用户要求「导入书源要能直接导入文件」）：
+> `core/platform/` 的 `BookSourceFilePicker` 端口 + `file_selector` 实现（BSD-3-Clause，官方联邦插件，
+> `tech-stack.md` §6 / `NOTICE.md` §5 同批更新），导入页第三条入口。**导出与分享仍归本步**；
+> 规则型 `header` 的求值登记在 §3.7。
 
 - `toLegadoJson` 一类的入口把 `extra` 合并回写（ADR-0021 §后果：今天只兑现了「内存里不丢」的一半），并支持导出全部书源；导入与导出共用同一份校验。
 - **验收**：往返测试（导入 → 导出 → 再导入不丢键，含四层 `extra`）；畸形输入不写出半截文件。
@@ -360,6 +380,8 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 | ~~`spot_check --list` 不检查非搜索字段 URL 里的 `{…}`（矩阵 #19）~~ | ✅ **已闭环（架构师 2026-10-13 裁决：不收紧、只改措辞）**：该判据的原始前提是「`{…}` 模板型 URL 规则在 M0 下无法逐字回放」，而矩阵 **#19 已在 3.7 落地**，这类源现在**能跑**；按此收紧会把能跑的源挡在候选之外，放开又会把「搜索 URL 用裸 `{…}`」的源当成可跑。因此判据**不收紧**（`--list` 只做保守筛查，这类源由 §4 的真实回归逐条判定）。**补充（同日）：** 非搜索字段那半边随后以 **bug 修复**的形式放开了 `{{…}}`（见上一行），那是「代码与已写明的判据不一致」，不是收紧/放开之争；搜索 URL 那半边保持不变 |
 | ~~「开发期书源开关」：让搜索 / 发现页在桌面上可手点（2026-10-13 提出）~~ | ❌ **不采纳（2026-10-13 用户裁决：不需要，Phase 5 一并解决）**：今天点不进去的原因是缺「选书源」的写方（`currentBookSource` 恒 `null`），而它正是 §3.6 的 **5.1 书源入口**；为此加一个第二处「书源来源」的过渡机制不值。UI 里手点发现页 / 搜索的验收从 5.1 起即可进行 |
 | ~~charset 检测结果缓存~~ | ✅ **已闭环（3.9，2026-10-12）**：`CharsetCache` 端口 + `CacheDao` 适配器，按「书源 ID + URL」缓存**嗅探**结果（声明车道不进缓存）；语义归 `book-source.md` §5 |
+| **`header` 写成规则（`@js:` / `<js>`）尚未求值（新发现，2026-10-14，用户提供的 504 条真实导出带出）** | **已登记，未排期**：上游在**每个请求**上求值 `header` 规则（`BookSource.getHeaderMap`），本仓把它当 JSON 字符串解析；真实语料 21 条这样写。当前处置：导入时**降级为无 header + warning**（ADR-0040 §决策 6 的修订注记），源能进来、请求少一个 UA。触发条件 = 这批源在真机上因缺 header 普遍失败（或用户点名要），届时按 ADR 评估「请求时求值 header 规则」 |
+| **`bookSourceType=4`（视频）已建模（2026-10-14）** | ✅ **已闭环**：枚举补到上游文档的全部取值（0-4），未知值仍按 ADR-0022 §决策 5 拒绝整条 |
 | 按书源清理缓存（需加列 + 迁移） | **Phase 5.7**（§3.6） |
 | **页面字段规则的 `page` 绑定与「已取到的那一页」不一致（新发现，2026-10-13）** | 搜得 / 发现阶段调 `PageFetchService.fetch(...)` 时**不传 `page`**，而它的默认值是 `1`；于是第 2 页响应里的字段规则在 JS 里读到 `page = 1`。上游的**字段规则 JS 根本不绑** `page`（`AnalyzeRule.evalJS` 的绑定里没有它，只有 `AnalyzeUrl.evalJS` 有），所以两边都不是「另 一家」。**触发条件：** 真实语料出现「字段规则用 `page` 分支」的源时裁定（要么把 `page` 传下去、要么像上游一样只在 URL 规则绑）；数值语义仍归 `book-source.md` §6 |
 | ~~`.gitattributes` 声称 `* text=auto eol=lf`，但三个文件的 blob 里存的是 CRLF（2026-10-13）~~ | ❌ **不成立，已撤回（架构师 2026-10-13 复测）：** 复现命令给出的是**相反的**结论 —— `git cat-file blob main:PLAN.md \| od -An -tx1 \| tr ' ' '\n' \| grep -c '^0d$'` 对 `PLAN.md` / `CHANGELOG.md` / `docs/dev/book-source.md` 在 `08c19d7`、`33bc9fc`、`2e8eabe`、`a319f52` 四个提交上都返回 **0**；`git ls-files --eol` 对全部受管文本都是 `i/lf w/lf attr/text=auto eol=lf`。原始判断来自 `git show <ref>:<file> \| grep -c $'\r'` 一类检查，它在本机 shell 上会给**每一行**都报 CR（把 `PLAN.md` 的 375 行全数报成 CRLF），属**检查方法错误**，不是仓库行尾问题。真正存在 CRLF 的只是**开发组编辑器新建的 4 个工作树文件**（`explore_page.dart` / `app_en.arb` / `app_zh.arb` / `explore_page_test.dart`），`git add` 时已由 `text=auto` 归一化为 LF——这也解释了 `git status` 里那几条 “CRLF will be replaced by LF” 提示。**结论：** 无需任何仓库卫生动作，也不需要「编辑这三个文件时保持现有行尾」这条临时约束 |

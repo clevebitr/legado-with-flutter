@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### File import for book sources, and the two gaps a real export exposed (2026-10-14)
+
+- **A file can be picked directly.** The user asked for it, so ADR-0040 decision 9's file half moved
+  forward from 5.8: `BookSourceFilePicker` lives in `core/platform/` (C-PLT-1) with a `file_selector`
+  implementation - the Flutter team's federated plugin, BSD-3-Clause, official Android/iOS/Windows
+  implementations - and a fallback for platforms without a dialog that answers "nothing picked"
+  instead of throwing. `pubspec.yaml`, `tech-stack.md` section 6 and `NOTICE.md` section 5 were
+  updated as one batch (C-DEP-6); the licence rescan is 165 packages, no risky items. The size cap is
+  checked on the file's **size before it is read**, so an oversized file never enters memory.
+- **A real 504-source export drove two fixes** (evidence in ADR-0040's revision note):
+  - `bookSourceType` 4 is now modelled as **video** (upstream documents 0-4), which alone recovered
+    8 entries; an *unknown* value still skips the entry, because silently presenting an audio source
+    as text is worse than a visible failure (ADR-0022 section 5).
+  - `header` became the **one degradable single-entry field**: a rule-based (`@js:` / `<js>`) or
+    malformed header is dropped with a warning and the source still imports - losing a source over
+    its user agent is the worse outcome. The lenient single-quote dialect upstream's GSON accepts is
+    handled by the field itself (strict JSON first; the fallback applies only when the text carries
+    no double quote at all).
+  - Result on that file: **503 imported, 1 skipped** (its `ruleToc` is missing, which decision 6
+    skips on purpose), 36 headers degraded with warnings - against 457/47 before.
+- Gates: **788** cases, `core` 1032/1032, `domain` 1857/1857, `data` 64/64; device probes
+  **Windows 93 s** and **Android 158 s** (three files each) - re-run because a native plugin changes
+  both builds (ADR-0039). The import screen carries a third action next to paste and URL.
+
+### P5-2 lands: the chapter body cache (2026-10-14)
+
+- **`ContentCache`** (a `domain/` port) + `CacheDaoContentCache`: the finished chapter body - paging
+  already joined and `replaceRegex` already applied - is stored in the existing `cache_entries` table
+  under the DAO's stable key (`ruleField=content`, `page=1`, keyed by book source too), with
+  `chapterCacheTtl` (half a day) as the one TTL definition. No column, no table, no schema change.
+- **`FetchContent` consults it first**: a hit skips the whole engine and sends no request at all
+  (not even entering the source's rate budget), and only a successful body is written, so a failure
+  is never cached as content.
+- **The absorption became one function:** `absorbCacheFailure` in `core/storage/` is now the app's
+  single `on Exception` point, shared by the charset cache and the chapter cache; ADR-0033 gained a
+  revision note moving its exemption anchor from `CacheDaoCharsetCache._absorb` to that function
+  (one auditable clause, `Error` still uncaught, named clauses first).
+- Gates: **773** cases, `core` 1017/1017, `domain` 1840/1840, `data` 64/64; the harness overrides the
+  cache with an in-memory double, so the page tests keep running without a database.
+
+### P5-1 lands: the book source entry (2026-10-14)
+
+- **The feature's first `data/` consumer.** `book_sources` (`schemaVersion` 1 -> 2) stores every
+  imported source under ADR-0040's identity - a synthetic `id` plus `UNIQUE (url, fingerprint)` -
+  with the raw payload column that 5.8 exports from, and with `enabled` / `customOrder` as user
+  state an import never overwrites. `BookSourceDao` owns the row shape and the row order
+  (enabled -> `customOrder` -> `id`); `BookSourceRepositoryImpl` owns "what the same source is" via
+  `bookSourceFingerprint`, which `tool/spot_check` now imports instead of keeping its own copy, so
+  the census and the repository cannot drift apart.
+- **Import** (`ImportBookSources`) takes pasted JSON or a URL. The 32 MiB cap is enforced in UTF-8
+  bytes *before* parsing for text, and **while downloading** for a URL: the request layer streams
+  the body and abandons it the moment the cap is passed (`BodyTooLargeException`, C-PERF-5) rather
+  than buffering it, and the import rewrites that marker into `import.sizeLimit`. File-level
+  rejections are `import.notJson` / `import.noEntries`; single entries are skipped, counted and
+  logged with their index, failing field and URL - never their body (C-ERR-8).
+- **The selection is real:** `SelectedBookSource` (`keepAlive`) resolves ADR-0040's default order
+  and falls back to it when the selected row is deleted, while `currentBookSourceProvider` stays a
+  synchronous projection so the four parsing pages keep reading a `BookSource?` unchanged.
+- **UI:** the source list (current marker, enable switch, delete with confirmation, and a marker on
+  rows that share a URL with another source) and the import screen (paste / URL, plus the
+  "imported / skipped" summary), reachable from the search page's app bar and from its empty state -
+  which no longer claims that imports arrive in a later version.
+- Gates: **763** cases, `core` 1014/1014, `domain` 1837/1837, `data` 54/54; device probes
+  **Windows 99 s** and **Android 169 s** (three files each, `js_bridge` 24/24), including a new
+  `on_disk_database` case that writes a `book_sources` row and reads it back across connections.
+
 ### P5-0 is drafted: the Phase 5 specs, as four Proposed ADRs (2026-10-14)
 
 - **What landed.** The Phase 5 prerequisite (`PLAN.md` section 3.6, 5.0) is written out: the import

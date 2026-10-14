@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
-import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/search_results_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/widgets/failure_message.dart';
 import 'package:flutter_reader/features/book_source/presentation/widgets/state_message.dart';
@@ -61,6 +61,15 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
         backgroundColor: tokens.colors.surface,
         actions: <Widget>[
           IconButton(
+            icon: const Icon(Icons.library_books_outlined),
+            tooltip: l10n.bookSourceListTitle,
+            // 书源管理是 5.1 的入口：列表页里能启用 / 切换 / 删除 / 导入。
+            onPressed: () => pushBookSourceRoute(
+              context,
+              const BookSourceRoute.importedSources(),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.explore_outlined),
             tooltip: l10n.bookSourceExploreAction,
             // 没有书源就没有可解析的 discover 规则集，与搜索按钮同口径禁用。
@@ -100,7 +109,7 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
               ],
             ),
             SizedBox(height: tokens.spacing.lg),
-            Expanded(child: _results(source, l10n)),
+            Expanded(child: _results(context, source, l10n)),
           ],
         ),
       ),
@@ -117,10 +126,15 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
   }
 
   /// Builds the result area: the seam's empty state, or the search state machine.
-  Widget _results(BookSource? source, AppLocalizations l10n) {
+  Widget _results(
+    BuildContext context,
+    BookSource? source,
+    AppLocalizations l10n,
+  ) {
     if (source == null) {
-      // 导入书源属于 Phase 5；在此之前界面走空态，而不是拿空规则集去请求。
-      return StateMessage(message: l10n.bookSourceMissingSource);
+      // 5.1 之前这里的文案是「导入书源以后再说」；现在它把人带到书源页——
+      // 没有书源时不去请求，也不让按钮静默不可用。
+      return _missingSource(context, l10n);
     }
 
     final SearchResultsState state = ref.watch(searchResultsProvider);
@@ -139,6 +153,35 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
         kind: kind,
       ),
     };
+  }
+
+  /// The empty state of “no usable source”, with the way to fix it.
+  Widget _missingSource(BuildContext context, AppLocalizations l10n) {
+    final M3ETheme tokens = context.m3e;
+
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(tokens.spacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              l10n.bookSourceMissingSource,
+              textAlign: TextAlign.center,
+              style: tokens.typography.base.bodyLarge,
+            ),
+            SizedBox(height: tokens.spacing.lg),
+            FilledButton(
+              onPressed: () => pushBookSourceRoute(
+                context,
+                const BookSourceRoute.importedSources(),
+              ),
+              child: Text(l10n.bookSourceMissingSourceAction),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Builds the lazily built hit list and its navigation (C-PERF-2).

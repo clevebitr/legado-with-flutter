@@ -39,7 +39,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookSourceMissingSource =>
-      'No book source is selected yet. Importing book sources arrives in a later version.';
+      'No book source is stored yet. Import one to start reading.';
 
   @override
   String get bookSourceDetailTitle => 'Book details';
@@ -143,4 +143,53 @@ class AppLocalizationsEn extends AppLocalizations {
   String bookSourceImportPartiallySkipped(int count, int skipped) {
     return 'Imported $count book sources; $skipped entries were skipped as invalid.';
   }
+
+  @override
+  String get actionCancel => 'Cancel';
+
+  @override
+  String get actionDelete => 'Delete';
+
+  @override
+  String get bookSourceMissingSourceAction => 'Manage book sources';
+
+  @override
+  String get bookSourceListEmpty => 'No book source is stored yet.';
+
+  @override
+  String get bookSourceListLoadFailed =>
+      'The stored book sources could not be read.';
+
+  @override
+  String get bookSourceCurrentLabel => 'Current book source';
+
+  @override
+  String get bookSourceVariantLabel => 'Same site, another rule set';
+
+  @override
+  String get bookSourceListDeleteTitle => 'Delete this book source?';
+
+  @override
+  String bookSourceListDeleteBody(String name) {
+    return '$name and its stored rules will be removed.';
+  }
+
+  @override
+  String get bookSourceImportTitle => 'Import book sources';
+
+  @override
+  String get bookSourceImportTextLabel => 'Book source JSON';
+
+  @override
+  String get bookSourceImportTextHint =>
+      'Paste an exported book source file here';
+
+  @override
+  String get bookSourceImportUrlLabel => 'Or a URL';
+
+  @override
+  String get bookSourceImportUrlHint => 'https://example.com/sources.json';
+
+  @override
+  String get bookSourceImportFileAction => 'Choose a JSON file';
 }
