@@ -94,6 +94,12 @@ SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check
 
 ## 4. 结果（2026-10-12，Windows 11 / Flutter 3.47.7）
 
+> **记录里怎么标识一个源（2026-10-14 架构师补的引证规则）：** 合集 C 是**上游同步的快照**（本文件引的是 2026-08-15 那份），
+> 条数会随同步漂移；而且同名同 URL 的源在合集里**可能重复出现**（`笔趣阁③`/`www.biquge99.cc` 就有 5 条，位置 64/553/619/2343/2416）。
+> 所以记录的主标识是三件：**书源名 + `bookSourceUrl` + 派生文件**（`build/*.json`，它才是真正被跑的那份），
+> 「合集 C 第 N 条」只作为**该次快照下的辅助定位**并在引用时写明是哪一份快照（历史记录里既有 0 基也有 1 基写法，
+> 如 §4b 的「第 42 条」与 G4 记录的「第 63 条」指向同一条源——2026-10-14 复核时已确认，不再按数字互相校对）。
+
 **跑通完整四段链路（G2b 达成）：**
 
 ```
@@ -323,7 +329,8 @@ RUN 3a（#15 的基座校正）源：漫客栈（第 1229 条），只把 ruleSe
   `parseFailed`（JsonScope 没有 DOM）。所以裁决里的「基座」必须换成 HTML 真源；语料分布也印证这点
   （`{{@@class…}}` 那类写法都长在 HTML 页上）。
 
-RUN 3b（#15，证据）源：笔趣阁③（第 63 条，https://www.biquge99.cc/ —— G2b 已证实四段的 **HTML** 真源），
+RUN 3b（#15，证据）源：笔趣阁③（`https://www.biquge99.cc/`，本快照第 63 条 —— 即 §4b 的 G2b **HTML** 基线源同一份），
+  派生文件：`build/g4b_bq_flag.json`（只给 `ruleSearch.kind` 加 `@@`；`build/g4b_bq.json` 是加 flag 前的对照），
   **只改一条字段**：`ruleSearch.kind` 从 `class.cat@text##分类：` 改成 `@@class.cat@text##分类：`
   （只加矩阵 #15 的 flag，选择器与替换段逐字不动）：
       search   ok  count=2     剑来 https://www.biquge99.cc/book/1869698028/ | kind=武侠

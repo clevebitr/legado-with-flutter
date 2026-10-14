@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### G4 closes: #15 confirmed on a derived HTML base (2026-10-14)
+
+- **The reviewer approved the base correction.** The ruling asked for a derived live run; the
+  delivery first tried the suggested base (漫客栈) and found it cannot work: `@@` is the
+  default CSS/jsoup flag and all four of that site's stages are JSON, so the flag degrades to CSS
+  through ADR-0032 and `_matchElements` fails it (RUN 3a, with the rejection and the degradation
+  logged). The evidence therefore comes from the **HTML** source that G2b already verified
+  (笔趣阁③, `https://www.biquge99.cc/`) with exactly one field changed - `ruleSearch.kind` gains
+  an `@@` prefix - and the other three stages match the G2b baseline byte for byte
+  (`toc` 1310, `content` 3031 / `sha256=6578ef3efc456856`), which is what the derivation discipline
+  asks for. **G4 is met: all five M1 rows are 已确认, each with source + field + sample.**
+- **Verified from this side**: gates re-run (692 cases, `core` 943/943, `domain` 1740/1740), both
+  device probes re-run (Windows 74 s, Android 136 s, `js_bridge` 24/24 each), and the census figures
+  reproduced with an independent replica.
+- **How a source is cited in these records is now written down** (`tool/spot_check/README.md`
+  section 4): the collection is an upstream snapshot that drifts, and it contains duplicate
+  name+URL entries (five for `笔趣阁③`), so the identity is **name + `bookSourceUrl` + the derived
+  file**, with "collection C entry N" only as an auxiliary locator. That also settles why the G2b
+  record says "entry 42" and the G4 record "entry 63" for the same source.
+- **Registered, not scheduled**: a default / `@@` rule on a JSON scope always fails here. That is
+  per spec in this repository, but upstream picks its analyser by page type, so the check to run is
+  whether upstream reads such a rule as JSONPath - plus a real "JSON page + `@@`" instance, which
+  the source-level census (319/25) cannot identify.
+- `test-environment.md` section 6's pub-cache row gains the suspected trigger for its second
+  occurrence: two worktrees running `pub get` against the same cache at the same time.
+
 ### G4 closed: #15 `@@` confirmed on a derived HTML base (2026-10-14)
 
 - **#15 `@@` is 已确认 now**, so the M1 matrix column is green end to end (the other four rows landed with
