@@ -166,6 +166,14 @@ m3e.spacing.md;
 | `drift_flutter` | `^0.3.1` | 各平台原生 SQLite 与数据库路径 | MIT | C-NET-9 |
 | `shared_preferences` | `^2.5.3` | 仅轻量开关（主题模式、字号） | BSD-3-Clause | C-NET-9 |
 | `path_provider` | `^2.1.6` | 跨平台路径（唯一来源） | BSD-3-Clause | C-PLT-3 |
+| `file_selector` | `^1.1.0` | 书源文件选择（平台对话框；只在 `core/platform/` 内使用） | BSD-3-Clause | C-PLT-1、C-SEC-5、ADR-0040 §决策 9 的修订注记 |
+
+> **关于 `file_selector`（2026-10-14 新增）：** 它是 **Flutter 团队维护的联邦插件**
+> （`file_selector_android` / `_ios` / `_windows` / `_macos` / `_linux` 由 pub 求解器自动带入，
+> 许可证均为 BSD-3-Clause，`NOTICE.md` §5 已重扫）。选它而不是 `file_picker` 的理由：
+> 官方仓库维护 + 三端（Android / iOS / Windows）都有官方实现，符合 §13 第 2 条的平台支持要求。
+> 用法约束：**只允许 `core/platform/` 引用它**（C-PLT-1），页面与用例只看见
+> `BookSourceFilePicker` 端口；体积上限在读取之前按文件大小判（C-SEC-5）。
 
 > **关于 `sqlite3_flutter_libs`：** 不要**直接**声明它。
 > `drift_flutter 0.3.1` 自己会传递依赖 `sqlite3_flutter_libs: ^0.6.0+eol`

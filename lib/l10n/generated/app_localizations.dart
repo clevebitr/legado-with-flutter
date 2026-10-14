@@ -403,6 +403,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'https://example.com/sources.json'**
   String get bookSourceImportUrlHint;
+
+  /// Label of the button that opens the platform file dialog on the import screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a JSON file'**
+  String get bookSourceImportFileAction;
 }
 
 class _AppLocalizationsDelegate

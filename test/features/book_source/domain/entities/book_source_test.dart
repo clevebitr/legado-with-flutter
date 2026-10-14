@@ -164,14 +164,50 @@ void main() {
         // 未知类型一律拒绝整份书源，而不是回落到 text：回落会把音频/图片源
         // 静默当成文本源，比导入失败更难排查（ADR-0022 §决策 5）。
         expect(
-          () => BookSource.fromJson(_minimalJsonWith('bookSourceType', 4)),
+          () => BookSource.fromJson(_minimalJsonWith('bookSourceType', 99)),
           _failsAt('bookSourceType', because: isA<ArgumentError>()),
         );
       },
     );
+
+    test('fromJson_givenBookSourceTypeFour_readsItAsVideo', () {
+      // fork 的字段说明写着「0 文本，1 音频，2 图片，3 文件，4 视频」，真实导出里就有 4；
+      // 把它当未知值拒绝会让短剧源整条进不来。
+      expect(
+        BookSource.fromJson(_minimalJsonWith('bookSourceType', 4)).sourceType,
+        BookSourceType.video,
+      );
+    });
   });
 
   group('BookSource header conversion', () {
+    test('fromJson_givenSingleQuotedHeaderString_parsesItLikeGsonDoes', () {
+      // 上游用 GSON 解析这个字段，它接受单引号对象；真实导出里有 11 条这样的 header，
+      // 为引号风格丢掉整条书源属于保真缺口（严格车道只在文本里还有双引号时才拒绝）。
+      final BookSource source = BookSource.fromJson(
+        _minimalJsonWith(
+          'header',
+          "{'User-Agent':'Mozilla/5.0','Referer':'https://example-novel.test'}",
+        ),
+      );
+
+      expect(source.headers?['User-Agent'], 'Mozilla/5.0');
+      expect(source.headers?['Referer'], 'https://example-novel.test');
+    });
+
+    test(
+      'fromJson_givenMalformedHeaderThatAlreadyUsesDoubleQuotes_stillFails',
+      () {
+        // 宽松只处理「一个双引号都没有」的情形：用双引号还写坏的对象必须继续响亮失败。
+        expect(
+          () => BookSource.fromJson(
+            _minimalJsonWith('header', '{"User-Agent": "x",}'),
+          ),
+          _failsAt('header'),
+        );
+      },
+    );
+
     test('fromJson_givenHeaderJsonString_parsesTheHeaderMap', () {
       final BookSource source = BookSource.fromJson(
         _minimalJsonWith(

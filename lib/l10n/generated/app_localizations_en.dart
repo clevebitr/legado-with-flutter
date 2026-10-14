@@ -189,4 +189,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookSourceImportUrlHint => 'https://example.com/sources.json';
+
+  @override
+  String get bookSourceImportFileAction => 'Choose a JSON file';
 }

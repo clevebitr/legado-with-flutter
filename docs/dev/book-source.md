@@ -38,7 +38,7 @@
 | `bookSourceGroup` | `group` | `String?` | M0 | — |
 | `bookSourceType` | `sourceType` | `BookSourceType` | M0 | 0 文本 / 1 音频 / 2 图片 / 3 文件 |
 | `enabled` | `isEnabled` | `bool` | M0 | 默认 `true` |
-| `header` | `headers` | `Map<String, String>?` | M0 | 原为 JSON 字符串，导入时解析 |
+| `header` | `headers` | `Map<String, String>?` | M0 | 原为 JSON 字符串，导入时解析；单个引号的宽松写法（GSON 接受）也解析；**写成规则**（`@js:` / `<js>`）尚未求值，导入时降级为无 header + warning（ADR-0040 §决策 6 的修订注记、`PLAN.md` §3.7） |
 | `searchUrl` | `searchUrl` | `String?` | M0 | 支持 `{{key}}` / `{{page}}` |
 | `exploreUrl` | `exploreUrl` | `String?` | **M1** | 发现页；两种形态（分类串 / 整字段 JS）、条目语义与回落规则**全部**见 §4.2（ADR-0035） |
 | `ruleSearch` | `searchRule` | `SearchRule` | M0 | 必填 |

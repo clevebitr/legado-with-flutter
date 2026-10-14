@@ -116,6 +116,14 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 > 同时 `tool/scan_licenses.dart` 改为按 `pubspec.lock` 的 `source: sdk` 识别 SDK 包
 > （原先按硬编码包名名单，会把这两个新 SDK 包误报为「无许可证文件」）。
 
+> **2026-10-14 增量（书源文件导入）：** `dependencies` 新增 `file_selector ^1.1.0`
+> （Flutter 团队维护的联邦插件，**BSD-3-Clause**），带入 9 个传递依赖：
+> `file_selector_android` / `_ios` / `_linux` / `_macos` / `_windows`（均 BSD-3-Clause）、
+> `file_selector_platform_interface`、`cross_file`、`plugin_platform_interface`、`flutter_web_plugins`
+> （后四个均 BSD-3-Clause）。因此基线由 **156 包 / BSD-3 95 / MIT 37 / Apache 10 / BSD-2 6 / SDK 8**
+> 变为 **165 包 / BSD-3 104 / MIT 37 / Apache 10 / BSD-2 6 / SDK 8**（`dart run tool/scan_licenses.dart`
+> 复算，Risky items: none）。风险判定不变：**GPL / LGPL / AGPL / MPL / 无许可证 / 未识别 = 0**。
+
 > **本次修正了什么：** 旧结果（BSD-2 = 98 / BSD-3 = 1）是因为 §6 的分类特征串写成了
 > `3. Neither the name`。Dart 官方包把 BSD 第三条写成**项目符号** `* Neither the name`，
 > 带序号的形式只能匹配到 `cascadia` 一个包，其余 93 个 BSD-3 全被误归为 BSD-2。

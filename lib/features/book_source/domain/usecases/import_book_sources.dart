@@ -188,14 +188,22 @@ final class ImportBookSources {
 
         continue;
       }
-      final String? invalidField = _invalidField(entry);
-      if (invalidField != null) {
+      final String? missing = _missingRequiredField(entry);
+      if (missing != null) {
         skipped++;
-        _logSkipped(index: index, entry: entry, field: invalidField);
+        _logSkipped(index: index, entry: entry, field: missing);
 
         continue;
       }
-      accepted.add(entry);
+      // 其余字段由模型裁决（checked 模式点名出错的 JSON 键，ADR-0022）；这里只决定拿这份裁决
+      // 怎么办：可降级的字段去掉后照常导入，别的（结构缺失）跳过该条。
+      final Map<String, Object?>? usable = _sanitise(entry, index: index);
+      if (usable == null) {
+        skipped++;
+
+        continue;
+      }
+      accepted.add(usable);
     }
 
     final BookSourceSaveReport saved = await _repository.saveAll(accepted);
@@ -209,12 +217,11 @@ final class ImportBookSources {
     );
   }
 
-  /// The field that makes [entry] unusable, or `null` when it can be stored.
+  /// The **required** field [entry] misses, or `null` when both are there.
   ///
-  /// The required fields are checked here because ADR-0040 §决策 6 names them; everything else is
-  /// the model's call, and checked mode (ADR-0022) turns a malformed entry into a nameable
-  /// exception rather than an `Error`.
-  String? _invalidField(Map<String, Object?> entry) {
+  /// ADR-0040 §决策 6 names exactly these two, and a blank string counts as missing the same way the
+  /// model treats a missing key.
+  String? _missingRequiredField(Map<String, Object?> entry) {
     final Object? url = entry['bookSourceUrl'];
     if (url is! String || url.trim().isEmpty) {
       return 'bookSourceUrl';
@@ -224,13 +231,80 @@ final class ImportBookSources {
       return 'bookSourceName';
     }
 
-    try {
-      BookSource.fromLegadoJson(entry);
-    } on CheckedFromJsonException catch (error) {
-      return error.key ?? 'ruleSearch/ruleToc/ruleContent';
-    }
-
     return null;
+  }
+
+  /// Returns [entry] with its unreadable **optional** fields removed, or `null` when it cannot be
+  /// imported at all.
+  ///
+  /// This is where ADR-0026's spirit reaches the import path: one bad optional field must not cost
+  /// the whole source. The model is the judge — checked mode names the offending JSON key
+  /// (ADR-0022) — and this method decides what to do with that verdict:
+  ///
+  /// * a [_degradableFields] key is dropped **with a warning**, so the source keeps working with the
+  ///   model's default for it (no UA header, type `text`) instead of disappearing;
+  /// * anything else (a missing rule object, an unknown structural problem) skips the entry, which
+  ///   the caller counts and reports.
+  ///
+  /// The loop is bounded by the number of degradable keys: every iteration removes one.
+  Map<String, Object?>? _sanitise(
+    Map<String, Object?> entry, {
+    required int index,
+  }) {
+    Map<String, Object?> candidate = entry;
+
+    while (true) {
+      try {
+        BookSource.fromLegadoJson(candidate);
+
+        return candidate;
+      } on CheckedFromJsonException catch (error) {
+        final String? key = error.key;
+        if (key == null ||
+            !_degradableFields.contains(key) ||
+            !candidate.containsKey(key)) {
+          _logSkipped(
+            index: index,
+            entry: entry,
+            field: key ?? 'ruleSearch/ruleToc/ruleContent',
+          );
+
+          return null;
+        }
+        _logDegraded(index: index, entry: entry, field: key);
+        candidate = Map<String, Object?>.of(candidate)..remove(key);
+      }
+    }
+  }
+
+  /// The single-entry fields an import may drop so the rest of the entry still arrives.
+  ///
+  /// **Only `header`.** A real 504-source export wrote 27 headers in forms this build cannot read —
+  /// a rule (`@js:` / `<js>`) or malformed/lenient JSON — and losing a source over its user agent is
+  /// a worse outcome than importing it without one, so the field is dropped with a warning and the
+  /// requests simply carry the policy default (ADR-0040 §决策 6's revision note). The raw value
+  /// stays in the stored payload, so nothing is lost from the file itself.
+  ///
+  /// Deliberately **not** here: `bookSourceType`. An unknown type must keep failing the entry
+  /// instead of silently becoming `text`, because that would present an audio or image source as a
+  /// text one (ADR-0022 §决策 5); the enum models every value the fork documents (0-4), and this
+  /// build has no fifth meaning to guess.
+  static const List<String> _degradableFields = <String>['header'];
+
+  /// Logs one entry that imports **without** a field, naming which one.
+  ///
+  /// Degrading silently is what C-SRC-4 forbids; this line is what makes the loss visible and
+  /// located (index + field + URL), while still not logging the entry's body (C-ERR-8).
+  void _logDegraded({
+    required int index,
+    required Map<String, Object?>? entry,
+    required String field,
+  }) {
+    _logger.warning(
+      'Importing book source with a degraded field: index=$index field=$field '
+      'url=${_label(entry?['bookSourceUrl'])} '
+      'name=${_label(entry?['bookSourceName'])}',
+    );
   }
 
   /// Logs one skipped entry so it can be found again without logging its body (C-ERR-8).

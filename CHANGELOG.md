@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### File import for book sources, and the two gaps a real export exposed (2026-10-14)
+
+- **A file can be picked directly.** The user asked for it, so ADR-0040 decision 9's file half moved
+  forward from 5.8: `BookSourceFilePicker` lives in `core/platform/` (C-PLT-1) with a `file_selector`
+  implementation - the Flutter team's federated plugin, BSD-3-Clause, official Android/iOS/Windows
+  implementations - and a fallback for platforms without a dialog that answers "nothing picked"
+  instead of throwing. `pubspec.yaml`, `tech-stack.md` section 6 and `NOTICE.md` section 5 were
+  updated as one batch (C-DEP-6); the licence rescan is 165 packages, no risky items. The size cap is
+  checked on the file's **size before it is read**, so an oversized file never enters memory.
+- **A real 504-source export drove two fixes** (evidence in ADR-0040's revision note):
+  - `bookSourceType` 4 is now modelled as **video** (upstream documents 0-4), which alone recovered
+    8 entries; an *unknown* value still skips the entry, because silently presenting an audio source
+    as text is worse than a visible failure (ADR-0022 section 5).
+  - `header` became the **one degradable single-entry field**: a rule-based (`@js:` / `<js>`) or
+    malformed header is dropped with a warning and the source still imports - losing a source over
+    its user agent is the worse outcome. The lenient single-quote dialect upstream's GSON accepts is
+    handled by the field itself (strict JSON first; the fallback applies only when the text carries
+    no double quote at all).
+  - Result on that file: **503 imported, 1 skipped** (its `ruleToc` is missing, which decision 6
+    skips on purpose), 36 headers degraded with warnings - against 457/47 before.
+- Gates: **788** cases, `core` 1032/1032, `domain` 1857/1857, `data` 64/64; device probes
+  **Windows 93 s** and **Android 158 s** (three files each) - re-run because a native plugin changes
+  both builds (ADR-0039). The import screen carries a third action next to paste and URL.
+
 ### P5-2 lands: the chapter body cache (2026-10-14)
 
 - **`ContentCache`** (a `domain/` port) + `CacheDaoContentCache`: the finished chapter body - paging

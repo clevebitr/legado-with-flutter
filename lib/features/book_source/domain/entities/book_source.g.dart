@@ -93,6 +93,7 @@ const _$BookSourceTypeEnumMap = {
   BookSourceType.audio: 1,
   BookSourceType.image: 2,
   BookSourceType.file: 3,
+  BookSourceType.video: 4,
 };
 
 _SearchRule _$SearchRuleFromJson(Map<String, dynamic> json) =>

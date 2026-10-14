@@ -233,5 +233,9 @@
   "bookSourceImportUrlHint": "https://example.com/sources.json",
   "@bookSourceImportUrlHint": {
     "description": "Hint of the URL field; an example address, not a real source."
+  },
+  "bookSourceImportFileAction": "Choose a JSON file",
+  "@bookSourceImportFileAction": {
+    "description": "Label of the button that opens the platform file dialog on the import screen."
   }
 }

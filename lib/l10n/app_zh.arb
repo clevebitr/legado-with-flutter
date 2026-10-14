@@ -50,5 +50,6 @@
   "bookSourceImportTextLabel": "书源 JSON",
   "bookSourceImportTextHint": "在这里粘贴导出的书源文件",
   "bookSourceImportUrlLabel": "或一个 URL",
-  "bookSourceImportUrlHint": "https://example.com/sources.json"
+  "bookSourceImportUrlHint": "https://example.com/sources.json",
+  "bookSourceImportFileAction": "选择 JSON 文件"
 }

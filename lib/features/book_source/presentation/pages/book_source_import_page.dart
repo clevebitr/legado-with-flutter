@@ -95,6 +95,18 @@ class _BookSourceImportPageState extends ConsumerState<BookSourceImportPage> {
               tooltip: l10n.actionImport,
             ),
             SizedBox(height: tokens.spacing.lg),
+            // 直接选文件是 5.8 提前落地的部分（ADR-0040 §决策 9 的修订注记）：文本与 URL 之外
+            // 的第三条入口，走 core/platform 的选择器端口，页面上看不到任何平台代码（C-PLT-1）。
+            FilledButton.tonalIcon(
+              onPressed: isImporting
+                  ? null
+                  : () => unawaited(
+                      ref.read(bookSourceImportProvider.notifier).pickFile(),
+                    ),
+              icon: const Icon(Icons.folder_open_outlined),
+              label: Text(l10n.bookSourceImportFileAction),
+            ),
+            SizedBox(height: tokens.spacing.lg),
             if (isImporting) const Center(child: CircularProgressIndicator()),
             if (state case BookSourceImportDone(
               :final BookSourceImportReport report,

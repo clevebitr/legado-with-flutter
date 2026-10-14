@@ -223,6 +223,56 @@ void main() {
       );
     });
 
+    test('execute_givenARuleBasedHeader_importsTheEntryWithoutIt', () async {
+      // 真实 504 条导出里有 27 条把 header 写成规则或非严格 JSON：为一条 UA 丢掉整个书源
+      // 比「少一个 header」更糟，所以字段降级 + warning（ADR-0040 §决策 6 的修订注记）。
+      repository.inserted = 1;
+      final Map<String, Object?> withRuleHeader = _entry()
+        ..['header'] = '@js: JSON.stringify({"User-Agent": "x"})';
+
+      final ParseResult<BookSourceImportReport> result = await useCase()
+          .execute(BookSourceImportText(jsonEncode(<Object?>[withRuleHeader])));
+
+      expect(result.dataOrNull?.inserted, 1);
+      expect(result.dataOrNull?.skipped, 0);
+      // 存下去的那条不再带 header（模型默认值），但其余字段逐字在。
+      final Map<String, Object?> stored = repository.saved.single.single;
+      expect(stored.containsKey('header'), isFalse);
+      expect(stored['bookSourceUrl'], 'https://a.test');
+      expect(
+        printer.events
+            .map((event) => event.message.toString())
+            .any(
+              (String message) =>
+                  message.contains('degraded field') &&
+                  message.contains('field=header'),
+            ),
+        isTrue,
+      );
+    });
+
+    test('execute_givenAnUnknownBookSourceType_skipsTheEntry', () async {
+      // 类型**不**降级：静默变成 text 会让音频/图片源以文本源的样子出现（ADR-0022 §决策 5）。
+      final Map<String, Object?> unknownType = _entry()
+        ..['bookSourceType'] = 99;
+
+      final ParseResult<BookSourceImportReport> result = await useCase()
+          .execute(BookSourceImportText(jsonEncode(<Object?>[unknownType])));
+
+      expect(result.dataOrNull?.skipped, 1);
+      expect(repository.saved.single, isEmpty);
+      expect(
+        printer.events
+            .map((event) => event.message.toString())
+            .any(
+              (String message) =>
+                  message.contains('field=bookSourceType') &&
+                  message.contains('Skipping imported'),
+            ),
+        isTrue,
+      );
+    });
+
     test('execute_givenAnUrl_downloadsWithTheCallersCap', () async {
       http.serve(
         'https://sources.test/all.json',

@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
@@ -141,6 +142,7 @@ Future<void> pumpSourceManagementPage(
   required Widget page,
   required FakeBookSourceRepository repository,
   FakeHttpClient? http,
+  BookSourceFilePicker? picker,
 }) async {
   _fixViewSize(tester);
 
@@ -150,6 +152,10 @@ Future<void> pumpSourceManagementPage(
         bookSourceRepositoryProvider.overrideWithValue(repository),
         httpClientProvider.overrideWithValue(http ?? FakeHttpClient()),
         appLoggerProvider.overrideWithValue(_logger()),
+        // 文件选择器的默认实现要走平台通道；测试永远覆盖端口（testing.md §4）。
+        bookSourceFilePickerProvider.overrideWithValue(
+          picker ?? const UnsupportedBookSourceFilePicker(),
+        ),
       ],
       child: MaterialApp(
         locale: const Locale('en'),

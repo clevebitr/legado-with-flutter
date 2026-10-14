@@ -175,4 +175,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookSourceImportUrlHint => 'https://example.com/sources.json';
+
+  @override
+  String get bookSourceImportFileAction => '选择 JSON 文件';
 }

@@ -1,4 +1,6 @@
+import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
+import 'package:flutter_reader/core/platform/file_selector_book_source_file_picker.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -25,3 +27,18 @@ PlatformInfo platformInfo(Ref ref) => const SystemPlatformInfo();
 @riverpod
 DynamicColorProvider? platformDynamicColor(Ref ref) =>
     resolveDynamicColorProvider(ref.watch(platformInfoProvider));
+
+/// Provides the platform file picker for book source imports (`PLAN.md` 5.8, C-PLT-1).
+///
+/// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
+/// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
+/// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
+/// plugin (`docs/dev/testing.md` §4).
+@riverpod
+BookSourceFilePicker bookSourceFilePicker(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBookSourceFilePicker()
+      : const UnsupportedBookSourceFilePicker();
+}
