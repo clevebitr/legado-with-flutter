@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Device probes back to per-slice, and three registrations (2026-10-13)
+
+- **ADR-0039 supersedes ADR-0038: device probes are a slice-level requirement again.** The only
+  reason for the phase-exit cadence was cost - Android cost 30+ minutes per run - and that premise
+  is gone: the rewritten `run_android.ps1` (#34) brings a full three-file run to **163 seconds**
+  including the emulator's cold boot (measured from this side; Windows is 108 s), so both platforms
+  per slice costs about four minutes. Leaving a phase still needs the full both-platform run
+  (`PLAN.md` section 4's G7), and an Android run blocked by the *environment* must be recorded as
+  "blocked, not covered" and back-filled by the reviewer - never written down as passed.
+  `testing.md` section 1 and `test-environment.md` section 1 now say both ends.
+- **Registered: a rule field holding a fully literal URL** (`bookUrl: https://a.test/book/1`, no
+  rule head and no `{{...}}`) is read as a rule, degrades to CSS through ADR-0032, and fails. The
+  b5 regression hit it while deriving a source, so the row asks for evidence first: a census of
+  real sources with a committed tool (section 6's trap 13) plus a check of what upstream does with
+  such a field.
+- **Withdrawn: the interim "dev book source switch".** The user ruled it out - the real fix is
+  Phase 5's 5.1 book source entry, and a temporary second source of sources is not worth it.
+- **`test-environment.md` section 6 gains the trap this round hit:** after an Android run the
+  worktree holds Gradle paths under `build/integration_test/.transforms/...` that
+  `git worktree remove` cannot delete (`Filename too long`); mirror an empty directory over it
+  (`robocopy /MIR`) and `rmdir` the rest.
+
 ### b5: the two real-source gaps (`{{…}}` with `##`, JSONPath `]name`) (2026-10-13)
 
 `RuleEngine` only; the M1 #15-#19 status column is flipped by the separate G4 change.
