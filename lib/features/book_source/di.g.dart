@@ -8,75 +8,119 @@ part of 'di.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// The book source the UI works with.
+/// Provides the persistence of the imported book sources (`PLAN.md` 5.1, ADR-0040).
 ///
-/// This is the **single seam** for "which source is selected": importing book sources
-/// and the book source repository are Phase 5 work, and the feature has no `data/`
-/// layer yet (ADR-0025 §后果). The seam therefore answers `null`, and the pages show
-/// an empty state instead of requesting pages with an empty rule set.
-///
-/// Tests override it with the offline corpus of `test/fixtures/book_sources/`, which
-/// is how the widget tests drive the production chain without a network (C-NET-8).
+/// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
+/// consumes the `domain/` model directly instead of a DTO.
 
-@ProviderFor(currentBookSource)
-final currentBookSourceProvider = CurrentBookSourceProvider._();
+@ProviderFor(bookSourceRepository)
+final bookSourceRepositoryProvider = BookSourceRepositoryProvider._();
 
-/// The book source the UI works with.
+/// Provides the persistence of the imported book sources (`PLAN.md` 5.1, ADR-0040).
 ///
-/// This is the **single seam** for "which source is selected": importing book sources
-/// and the book source repository are Phase 5 work, and the feature has no `data/`
-/// layer yet (ADR-0025 §后果). The seam therefore answers `null`, and the pages show
-/// an empty state instead of requesting pages with an empty rule set.
-///
-/// Tests override it with the offline corpus of `test/fixtures/book_sources/`, which
-/// is how the widget tests drive the production chain without a network (C-NET-8).
+/// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
+/// consumes the `domain/` model directly instead of a DTO.
 
-final class CurrentBookSourceProvider
-    extends $FunctionalProvider<BookSource?, BookSource?, BookSource?>
-    with $Provider<BookSource?> {
-  /// The book source the UI works with.
+final class BookSourceRepositoryProvider
+    extends
+        $FunctionalProvider<
+          BookSourceRepository,
+          BookSourceRepository,
+          BookSourceRepository
+        >
+    with $Provider<BookSourceRepository> {
+  /// Provides the persistence of the imported book sources (`PLAN.md` 5.1, ADR-0040).
   ///
-  /// This is the **single seam** for "which source is selected": importing book sources
-  /// and the book source repository are Phase 5 work, and the feature has no `data/`
-  /// layer yet (ADR-0025 §后果). The seam therefore answers `null`, and the pages show
-  /// an empty state instead of requesting pages with an empty rule set.
-  ///
-  /// Tests override it with the offline corpus of `test/fixtures/book_sources/`, which
-  /// is how the widget tests drive the production chain without a network (C-NET-8).
-  CurrentBookSourceProvider._()
+  /// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
+  /// consumes the `domain/` model directly instead of a DTO.
+  BookSourceRepositoryProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'currentBookSourceProvider',
+        name: r'bookSourceRepositoryProvider',
         isAutoDispose: true,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$currentBookSourceHash();
+  String debugGetCreateSourceHash() => _$bookSourceRepositoryHash();
 
   @$internal
   @override
-  $ProviderElement<BookSource?> $createElement($ProviderPointer pointer) =>
-      $ProviderElement(pointer);
+  $ProviderElement<BookSourceRepository> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
 
   @override
-  BookSource? create(Ref ref) {
-    return currentBookSource(ref);
+  BookSourceRepository create(Ref ref) {
+    return bookSourceRepository(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(BookSource? value) {
+  Override overrideWithValue(BookSourceRepository value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<BookSource?>(value),
+      providerOverride: $SyncValueProvider<BookSourceRepository>(value),
     );
   }
 }
 
-String _$currentBookSourceHash() => r'4dd4e09cbcee95d949a15967fdf0a862f70e0cec';
+String _$bookSourceRepositoryHash() =>
+    r'52294acdca35c53c8abc4c34afc3628eecbe7554';
+
+/// Provides the import use case (pasted text or a URL, `PLAN.md` 5.1, ADR-0040 §决策 9).
+
+@ProviderFor(importBookSources)
+final importBookSourcesProvider = ImportBookSourcesProvider._();
+
+/// Provides the import use case (pasted text or a URL, `PLAN.md` 5.1, ADR-0040 §决策 9).
+
+final class ImportBookSourcesProvider
+    extends
+        $FunctionalProvider<
+          ImportBookSources,
+          ImportBookSources,
+          ImportBookSources
+        >
+    with $Provider<ImportBookSources> {
+  /// Provides the import use case (pasted text or a URL, `PLAN.md` 5.1, ADR-0040 §决策 9).
+  ImportBookSourcesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'importBookSourcesProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$importBookSourcesHash();
+
+  @$internal
+  @override
+  $ProviderElement<ImportBookSources> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  ImportBookSources create(Ref ref) {
+    return importBookSources(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ImportBookSources value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ImportBookSources>(value),
+    );
+  }
+}
+
+String _$importBookSourcesHash() => r'e7e4eeefd10c4f2e40171a1809a46e56d3a6eb32';
 
 /// Provides the rule engine every book source use case shares.
 

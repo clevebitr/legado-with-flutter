@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/book_source_list_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/search_books_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,26 @@ import '../../../../support/offline_corpus.dart';
 
 void main() {
   group('SearchBooksPage', () {
+    testWidgets('sources_givenTheManageAction_opensTheListAndTheImportScreen', (
+      WidgetTester tester,
+    ) async {
+      // 5.1 的验收包含「入口可达」：搜索页 → 书源列表 → 导入页（PLAN.md 5.1）。
+      await pumpReaderApp(
+        tester,
+        source: loadCorpusBookSource(),
+        http: serveCorpusPages(FakeHttpClient()),
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.bookSourceListTitle));
+      await tester.pumpAndSettle();
+      expect(find.byType(BookSourceListPage), findsOneWidget);
+
+      await tester.tap(find.byTooltip(l10n.actionImport));
+      await tester.pumpAndSettle();
+      expect(find.byType(BookSourceImportPage), findsOneWidget);
+    });
+
     testWidgets(
       'build_givenNoBookSource_showsTheEmptyStateAndDisablesTheAction',
       (WidgetTester tester) async {
@@ -173,3 +195,7 @@ Future<void> _search(WidgetTester tester, String keyword) async {
   );
   await tester.pumpAndSettle();
 }
+
+/// The strings the search page renders, taken from its own localization.
+AppLocalizations _l10n(WidgetTester tester) =>
+    localizationOf(tester, find.byType(SearchBooksPage));

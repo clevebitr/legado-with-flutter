@@ -11,11 +11,13 @@ import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import 'fake_book_source_repository.dart';
 import 'fake_http_client.dart';
 import 'fake_log_printer.dart';
 
@@ -66,6 +68,7 @@ Future<void> pumpReaderApp(
   WidgetTester tester, {
   required BookSource? source,
   required FakeHttpClient http,
+  FakeBookSourceRepository? repository,
 }) async {
   _fixViewSize(tester);
 
@@ -77,6 +80,11 @@ Future<void> pumpReaderApp(
         currentBookSourceProvider.overrideWithValue(source),
         httpClientProvider.overrideWithValue(http),
         appLoggerProvider.overrideWithValue(_logger()),
+        // 5.1 的页面（书源列表 / 导入）走仓储；不传时给一个空库，
+        // 免得整条链在 widget 测试里去找真实数据库（testing.md §4）。
+        bookSourceRepositoryProvider.overrideWithValue(
+          repository ?? FakeBookSourceRepository(),
+        ),
       ],
       child: const ReaderApp(),
     ),
@@ -105,6 +113,38 @@ Future<void> pumpBookSourcePage(
       ],
       child: MaterialApp(
         // 固定英文：断言取的是 `AppLocalizations` 的值，而不是写死的字面量。
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: buildReaderTheme(fallbackLightColorScheme()),
+        home: page,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Pumps a source-management [page] (the source list, the import screen) against an in-memory
+/// repository (`PLAN.md` 5.1).
+///
+/// The database is what `testing.md` §4 replaces with a double: 5.1's screens talk to
+/// `BookSourceRepository`, so overriding the port is enough to drive them without Drift.
+Future<void> pumpSourceManagementPage(
+  WidgetTester tester, {
+  required Widget page,
+  required FakeBookSourceRepository repository,
+  FakeHttpClient? http,
+}) async {
+  _fixViewSize(tester);
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        bookSourceRepositoryProvider.overrideWithValue(repository),
+        httpClientProvider.overrideWithValue(http ?? FakeHttpClient()),
+        appLoggerProvider.overrideWithValue(_logger()),
+      ],
+      child: MaterialApp(
         locale: const Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,

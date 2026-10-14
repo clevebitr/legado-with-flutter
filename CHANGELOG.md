@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### P5-1 lands: the book source entry (2026-10-14)
+
+- **The feature's first `data/` consumer.** `book_sources` (`schemaVersion` 1 -> 2) stores every
+  imported source under ADR-0040's identity - a synthetic `id` plus `UNIQUE (url, fingerprint)` -
+  with the raw payload column that 5.8 exports from, and with `enabled` / `customOrder` as user
+  state an import never overwrites. `BookSourceDao` owns the row shape and the row order
+  (enabled -> `customOrder` -> `id`); `BookSourceRepositoryImpl` owns "what the same source is" via
+  `bookSourceFingerprint`, which `tool/spot_check` now imports instead of keeping its own copy, so
+  the census and the repository cannot drift apart.
+- **Import** (`ImportBookSources`) takes pasted JSON or a URL. The 32 MiB cap is enforced in UTF-8
+  bytes *before* parsing for text, and **while downloading** for a URL: the request layer streams
+  the body and abandons it the moment the cap is passed (`BodyTooLargeException`, C-PERF-5) rather
+  than buffering it, and the import rewrites that marker into `import.sizeLimit`. File-level
+  rejections are `import.notJson` / `import.noEntries`; single entries are skipped, counted and
+  logged with their index, failing field and URL - never their body (C-ERR-8).
+- **The selection is real:** `SelectedBookSource` (`keepAlive`) resolves ADR-0040's default order
+  and falls back to it when the selected row is deleted, while `currentBookSourceProvider` stays a
+  synchronous projection so the four parsing pages keep reading a `BookSource?` unchanged.
+- **UI:** the source list (current marker, enable switch, delete with confirmation, and a marker on
+  rows that share a URL with another source) and the import screen (paste / URL, plus the
+  "imported / skipped" summary), reachable from the search page's app bar and from its empty state -
+  which no longer claims that imports arrive in a later version.
+- Gates: **763** cases, `core` 1014/1014, `domain` 1837/1837, `data` 54/54; device probes
+  **Windows 99 s** and **Android 169 s** (three files each, `js_bridge` 24/24), including a new
+  `on_disk_database` case that writes a `book_sources` row and reads it back across connections.
+
 ### P5-0 is drafted: the Phase 5 specs, as four Proposed ADRs (2026-10-14)
 
 - **What landed.** The Phase 5 prerequisite (`PLAN.md` section 3.6, 5.0) is written out: the import

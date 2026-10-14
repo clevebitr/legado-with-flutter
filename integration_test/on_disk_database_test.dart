@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:flutter_reader/core/di/database_path_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
+import 'package:flutter_reader/core/storage/book_source_dao.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
+import 'package:flutter_reader/core/storage/database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -39,6 +41,14 @@ void main() {
   ) => container.listen<CacheDao>(
     cacheDaoProvider,
     (CacheDao? previous, CacheDao next) {},
+  );
+
+  /// 订阅 [bookSourceDaoProvider] 并返回订阅句柄；理由同 [keepCacheDaoAlive]。
+  ProviderSubscription<BookSourceDao> keepBookSourceDaoAlive(
+    ProviderContainer container,
+  ) => container.listen<BookSourceDao>(
+    bookSourceDaoProvider,
+    (BookSourceDao? previous, BookSourceDao next) {},
   );
 
   setUpAll(() {
@@ -116,6 +126,68 @@ void main() {
       );
     } finally {
       readerCache.close();
+      reader.dispose();
+    }
+  });
+
+  testWidgets('bookSourceDao_givenAFileDatabase_persistsTheImportedSource', (
+    WidgetTester tester,
+  ) async {
+    // PLAN.md 5.1：`book_sources` 是 v2 新增的表，与 cache 一样必须证明「真写进文件」，
+    // 而不只是在内存库里跑通（ADR-0019 §2；每个新表都要在这里加一次真实写入）。
+    const String sourceUrl = 'https://integration.test';
+    const String fingerprint = 'integration-fingerprint';
+    const String storedPayload = '{"bookSourceName":"集成用例书源"}';
+
+    final ProviderContainer writer = ProviderContainer();
+    final ProviderSubscription<BookSourceDao> writerDao =
+        keepBookSourceDaoAlive(writer);
+    late int id;
+    try {
+      id = await writer
+          .read(bookSourceDaoProvider)
+          .insertNew(
+            url: sourceUrl,
+            fingerprint: fingerprint,
+            payload: storedPayload,
+            name: '集成用例书源',
+            groupName: null,
+            sourceType: 0,
+            isEnabled: true,
+            customOrder: 0,
+            weight: 0,
+            lastUpdateTime: null,
+            respondTime: null,
+          );
+      await writer
+          .read(bookSourceDaoProvider)
+          .setEnabled(id: id, isEnabled: false);
+    } finally {
+      writerDao.close();
+      writer.dispose();
+    }
+
+    expect(
+      File(databasePath).existsSync(),
+      isTrue,
+      reason: '原生 SQLite 应已建库：$databasePath',
+    );
+
+    final ProviderContainer reader = ProviderContainer();
+    final ProviderSubscription<BookSourceDao> readerDao =
+        keepBookSourceDaoAlive(reader);
+    try {
+      final BookSourceRow? row = await reader
+          .read(bookSourceDaoProvider)
+          .findIdentity(url: sourceUrl, fingerprint: fingerprint);
+
+      // 跨连接读回：证明行、负载与**用户态列**都落在文件里。`row` 为 null 时下面三条
+      // 都会失败，所以不需要再单独断言非空（也避开 drift 与 matcher 同名的 `isNotNull`）。
+      expect(row?.id, id);
+      expect(row?.payload, storedPayload);
+      expect(row?.isEnabled, isFalse);
+    } finally {
+      readerDao.close();
       reader.dispose();
     }
   });

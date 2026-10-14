@@ -99,3 +99,49 @@ final class CacheDaoProvider
 }
 
 String _$cacheDaoHash() => r'4ac549853cf2d91614cb0c24570a9f68e458110d';
+
+/// Provides the DAO of the imported book sources (`PLAN.md` 5.1, ADR-0040).
+
+@ProviderFor(bookSourceDao)
+final bookSourceDaoProvider = BookSourceDaoProvider._();
+
+/// Provides the DAO of the imported book sources (`PLAN.md` 5.1, ADR-0040).
+
+final class BookSourceDaoProvider
+    extends $FunctionalProvider<BookSourceDao, BookSourceDao, BookSourceDao>
+    with $Provider<BookSourceDao> {
+  /// Provides the DAO of the imported book sources (`PLAN.md` 5.1, ADR-0040).
+  BookSourceDaoProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceDaoProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceDaoHash();
+
+  @$internal
+  @override
+  $ProviderElement<BookSourceDao> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  BookSourceDao create(Ref ref) {
+    return bookSourceDao(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookSourceDao value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookSourceDao>(value),
+    );
+  }
+}
+
+String _$bookSourceDaoHash() => r'2876b7e038c32c3aa0fa82b43ec0f2bbcacbca56';

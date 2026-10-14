@@ -152,10 +152,10 @@ abstract class AppLocalizations {
   /// **'No book matched this keyword.'**
   String get bookSourceSearchEmpty;
 
-  /// Empty state shown while no book source is available (the Phase 2.5 seam of currentBookSourceProvider).
+  /// No description provided for @bookSourceMissingSource.
   ///
   /// In en, this message translates to:
-  /// **'No book source is selected yet. Importing book sources arrives in a later version.'**
+  /// **'No book source is stored yet. Import one to start reading.'**
   String get bookSourceMissingSource;
 
   /// Title of the book detail page.
@@ -319,6 +319,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Imported {count} book sources; {skipped} entries were skipped as invalid.'**
   String bookSourceImportPartiallySkipped(int count, int skipped);
+
+  /// Label of the button that dismisses a confirmation without acting.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get actionCancel;
+
+  /// Label of the destructive action (a stored book source, a cache entry).
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get actionDelete;
+
+  /// Button of the empty state that opens the book source list.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage book sources'**
+  String get bookSourceMissingSourceAction;
+
+  /// Empty state of the book source list; the import button below it is the way in.
+  ///
+  /// In en, this message translates to:
+  /// **'No book source is stored yet.'**
+  String get bookSourceListEmpty;
+
+  /// Shown when reading the stored book sources failed; the retry button reloads them.
+  ///
+  /// In en, this message translates to:
+  /// **'The stored book sources could not be read.'**
+  String get bookSourceListLoadFailed;
+
+  /// Accessible label of the marker on the row the pages currently use.
+  ///
+  /// In en, this message translates to:
+  /// **'Current book source'**
+  String get bookSourceCurrentLabel;
+
+  /// Subtitle line on a row whose bookSourceUrl is shared by another stored source, so the two rows are not read as duplicates.
+  ///
+  /// In en, this message translates to:
+  /// **'Same site, another rule set'**
+  String get bookSourceVariantLabel;
+
+  /// Title of the confirmation before deleting one stored book source.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this book source?'**
+  String get bookSourceListDeleteTitle;
+
+  /// Body of the delete confirmation; the name is the source name and never a user keyword.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} and its stored rules will be removed.'**
+  String bookSourceListDeleteBody(String name);
+
+  /// Title of the import screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Import book sources'**
+  String get bookSourceImportTitle;
+
+  /// Label of the field that takes a pasted JSON document.
+  ///
+  /// In en, this message translates to:
+  /// **'Book source JSON'**
+  String get bookSourceImportTextLabel;
+
+  /// Hint of the paste field.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste an exported book source file here'**
+  String get bookSourceImportTextHint;
+
+  /// Label of the field that downloads a book source file.
+  ///
+  /// In en, this message translates to:
+  /// **'Or a URL'**
+  String get bookSourceImportUrlLabel;
+
+  /// Hint of the URL field; an example address, not a real source.
+  ///
+  /// In en, this message translates to:
+  /// **'https://example.com/sources.json'**
+  String get bookSourceImportUrlHint;
 }
 
 class _AppLocalizationsDelegate

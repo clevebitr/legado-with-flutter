@@ -251,6 +251,14 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 #### 5.1 书源入口（第一优先：人类闭环的入口）
 
+> **状态（2026-10-14）：✅ 已完成。** 表 `book_sources`（`schemaVersion` 1 → 2，`drift_schemas/drift_schema_v2.json` + 迁移测试三件套）、
+> `BookSourceDao` + `BookSourceRepository`（domain 端口 / data 实现；身份规则 = `bookSourceFingerprint`，与入库工具的普查**共用同一个实现**）、
+> `ImportBookSources`（粘贴文本 / URL；32 MiB 上限在解析前按 UTF-8 字节判、URL 按块累加**超限即中止**；
+> `import.sizeLimit` / `import.notJson` / `import.noEntries`；单条跳过 + 计数 + 可定位日志）、
+> `SelectedBookSource`（可写；默认 = 启用 → `customOrder` → `id`；选中的行被删后**回落**）、
+> 书源列表页 + 导入页 + 双语 ARB、`on_disk_database` 的真实写入与跨连接读回。
+> 证据：全量 **763** 用例、`core` 1014/1014、`domain` 1837/1837、`data` 54/54；设备级 **Windows 99 s / Android 169 s**（各 3 文件、`js_bridge` 24/24，见 `test-environment.md` §7）。
+
 - **表**：新增 `book_sources`（列集合按 5.0 的身份裁决落定，至少含启用位、排序字段与原始 JSON 负载），`schemaVersion` 1 → 2；按 `tech-stack.md` §8 走 `drift_dev schema dump` / `schema generate`，**提交生成物**并补迁移测试。
 - **分层**：`domain/` 定义 `BookSourceRepository` 接口；`data/` 出现本仓第一个真实消费方（DTO + DataSource + `RepositoryImpl`，单测用内存 Drift）。
 - **接缝**：`currentBookSource` 从「恒 `null` 的常量」改成**可写 Notifier**（`@riverpod` 生成形态，C-STATE-2），默认选「启用且排序第一」的源；各页面从「无书源空态」变成「引导去导入」。
