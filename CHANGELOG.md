@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 4 (M1) exits (2026-10-14)
+
+- **G4 is green**: all five matrix M1 rows (#15-#19) are 已确认 with per-row evidence, and the
+  reviewer re-verified the census figures, the gates and both device probes independently.
+- **The exit probe (G7) ran on the frozen main (`473ff1e`):** host side 692 cases with `core` 943/943
+  and `domain` 1740/1740; device level **Windows 92 s** and **Android 182 s** (including the
+  emulator's cold boot), three files each, `js_bridge` 24/24, exit code 0.
+- **Gate applicability is now written down** in `PLAN.md` section 4: G1-G4 belong to the engine
+  phases, G5 depends on Phase 5's legal-notes page, G6 is the pre-release checklist, G7 applies to
+  every phase exit - so the Phase 4 -> Phase 5 threshold is G1-G4 + G7. The old "all of them" reading
+  would have demanded a page that does not exist yet, which is exactly the ambiguity this exit hit.
+- **Two registrations do not block the exit** and are scheduled as their own work orders: b6
+  (`ruleBookInfo.init` is marked M0 but never applied) and b7 (a bare `@js:` on a JSON item binds the
+  item's JSON text where upstream binds the object).
+- **The environment bit again:** five half-downloaded packages in the local pub cache made
+  `m3e_design` fail to compile (`Color.harmonizeWith` missing, because `dynamic_color`'s cache entry
+  was empty). Removing the five directories and re-running `pub get` restored the build;
+  `test-environment.md` section 6 documents both the symptom and the suspected trigger (two
+  worktrees sharing one cache).
+
 ### G4 closes: #15 confirmed on a derived HTML base (2026-10-14)
 
 - **The reviewer approved the base correction.** The ruling asked for a derived live run; the
