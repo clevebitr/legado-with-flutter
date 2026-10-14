@@ -314,10 +314,27 @@ RUN 2（#17）源：●QB女生<kd♛（第 1463 条），只改 ruleSearch.book
   形态：本行只用变量形态 java.put(key,value) / java.get(key)（两参、无 URL）；上游那个同步 HTTP 形态
   java.get(url) / java.get(url,{...}) 是 ADR-0037 §决策 5 的具名拒绝，普查里 9 条源只用了后者。
 
-RUN 3（#15，未确认）源：☘️笔趣阁4☘️（第 341 条）→ search 阶段 parseFailed at searchRule.bookList；
-  另试 新笔趣阁new（489，同失败）与 🚬 读书（775，searchUrl networkFailed，curl 侧 200 但 Dart 侧失败）。
-  #15 保持「待验证」：普查 319 条用 @@、其中 25 条可选中，逐个探活后 22 条站点已死 / WAF / 搜索段失败，
-  剩下 3 条（341/752/1976）搜索段全部失败——**没有可用活源，不写成通过**。
+RUN 3a（#15 的基座校正）源：漫客栈（第 1229 条），只把 ruleSearch.kind 设成 @@ 规则
+  （ruleSearch.kind = @@class.cat@text##分类：）。结果：`kind=` 拿不到值，日志给出
+  `Rejected rule: field=searchRule.kind reason=searchRule.kind kind=parseFailed` 与
+  `Field rule degraded to empty: ... field=searchRule.kind`；其余三段仍是 complete=true。
+  原因：`@@` 是**默认（CSS / jsoup）规则**的 flag，而漫客栈四段页面（search / info / toc / content）
+  **全是 JSON**——默认规则打在 JSON scope 上按 ADR-0032 退化成 CSS，再被 `_matchElements` 判成
+  `parseFailed`（JsonScope 没有 DOM）。所以裁决里的「基座」必须换成 HTML 真源；语料分布也印证这点
+  （`{{@@class…}}` 那类写法都长在 HTML 页上）。
+
+RUN 3b（#15，证据）源：笔趣阁③（第 63 条，https://www.biquge99.cc/ —— G2b 已证实四段的 **HTML** 真源），
+  **只改一条字段**：`ruleSearch.kind` 从 `class.cat@text##分类：` 改成 `@@class.cat@text##分类：`
+  （只加矩阵 #15 的 flag，选择器与替换段逐字不动）：
+      search   ok  count=2     剑来 https://www.biquge99.cc/book/1869698028/ | kind=武侠
+      bookInfo ok  剑来 | author=烽火戏诸侯 | toc=https://www.biquge99.cc/book/1869698028/
+                  | kind=2026-10-07 06:23:06 | lastChapter=第83章 今日无事 | intro=大千世界，无奇不有。…
+      toc      ok  count=1310  第一章 惊蛰 https://www.biquge99.cc/book/1869698028/986558553.html
+      content  ok  3031 字符 sha256=6578ef3efc456856
+      RESULT: complete
+  结论：`@@` 被剥掉后按**默认规则**求值，产出样本就是 search 的 `kind=武侠`；派生只动了那一条，
+  其余三段的计数与哈希与 §4b 的 G2b 基线**逐字相同**（toc 1310、content 3031 / `6578ef3efc456856`），
+  说明这次派生没有扰动链路。
 
 字面量 URL 的取证（PLAN §3.7 的待裁决项，同一趟用入库工具做）：
   入库工具普查：12 条源（首版正则把 {{…}} 也算进去了，已修）——

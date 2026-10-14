@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### G4 closed: #15 `@@` confirmed on a derived HTML base (2026-10-14)
+
+- **#15 `@@` is 已确认 now**, so the M1 matrix column is green end to end (the other four rows landed with
+  PR #37). The ruling asked for a derived source on 漫客栈; the intent is kept but the **base had to
+  change**: `@@` is the *default* (CSS / jsoup) mode flag, and 漫客栈's four pages are JSON — a default rule
+  on a JSON scope degrades to CSS and `_matchElements` reports `parseFailed`. Measured first (RUN 3a):
+  the derived field is rejected (`Rejected rule: field=searchRule.kind … parseFailed`) and degrades to empty.
+- The evidence therefore comes from **笔趣阁③ (collection C #63 — the HTML source G2b already proved
+  four-stage)** with **one** field changed: `ruleSearch.kind` goes from `class.cat@text##分类：` to
+  `@@class.cat@text##分类：` (selector and replacement untouched). It yields `kind=武侠` in the search
+  sample while the other three stages keep G2b's counts and hashes exactly (toc 1310,
+  content 3031 chars / `sha256=6578ef3efc456856`) — the derivation disturbs nothing else.
+- The live-source census (319 sources use `@@`, 25 selectable, none of them runnable) stays as background
+  evidence in `tool/spot_check/README.md` §4.
+
+
 ### G4: four of the five M1 rows confirmed, plus two new work orders (2026-10-14)
 
 - **Matrix #16 / #17 / #18 / #19 are 已确认**, each with a per-row record (source, field, sample) in
