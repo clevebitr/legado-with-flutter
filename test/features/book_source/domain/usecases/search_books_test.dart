@@ -16,6 +16,7 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.da
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../../support/fake_content_cache.dart';
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/fake_js_bridge.dart';
 import '../../../../support/fake_log_printer.dart';
@@ -370,8 +371,10 @@ void main() {
       expect(chapters.first.url, _chapterUrl);
 
       final String content = _data(
-        await FetchContent(pages: service.pages)
-            .execute(source, chapters.first.url),
+        await FetchContent(
+          pages: service.pages,
+          cache: FakeContentCache(),
+        ).execute(source, chapters.first.url),
       );
       expect(content, '正文第一段。\n正文第二段。\n正文第三段。');
 
@@ -435,8 +438,10 @@ void main() {
       expect(chapters.last.name, '第2章 转折');
 
       final String content = _data(
-        await FetchContent(pages: service.pages)
-            .execute(source, chapters.first.url),
+        await FetchContent(
+          pages: service.pages,
+          cache: FakeContentCache(),
+        ).execute(source, chapters.first.url),
       );
       // JSON 里的 `\n` 是转义序列，解出来是一个真正的换行。
       expect(content, '正文第一段。\n正文第二段。');

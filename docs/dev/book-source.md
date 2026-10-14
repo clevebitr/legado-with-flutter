@@ -456,6 +456,16 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 >   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
 >   （ADR-0026 §决策 2）。
 
+> **正文缓存（2026-10-14，`PLAN.md` 5.2）：** 一章的**成品正文**（分页已拼好、`replaceRegex` 已跑过）
+> 存进与 charset 缓存同一张 `cache_entries`，键复用 `CacheDao` 的稳定键（`ruleField` 固定为
+> `content`、`page` 固定为 1，键含**书源 ID**，所以两个书源发布同一章节 URL 也不会串味）；
+> TTL 的唯一出处是 `lib/features/book_source/domain/content_cache.dart` 的 `chapterCacheTtl`
+> （半天：覆盖一次阅读会话与当天回访，同时让被站点改过的章节一天内回来）。
+> **只缓存成功**：失败路径在写入之前就返回，一章的失败不会被永久粘住；
+> **失败面在适配器（`CacheDaoContentCache`）里被吸收**，端口因此是 total——丢一条缓存只值一次请求，
+> 绝不把章节变成失败（C-ERR-1、ADR-0033）。过期条目在**读**时即未命中，物理清理归 `PLAN.md` 5.7。
+> 命中时 `FetchContent` 连书源限速都不进预算，因为这次操作一个请求都不发。
+
 ### 4.2 发现页（`exploreUrl` 与 `ruleExplore`）
 
 本节是发现页的**唯一出处**（决策理由与四条登记差异见 **ADR-0035**；字段分期归 §2）。
@@ -499,6 +509,7 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 - 必须使用 `betto_charset_detector` 检测（C-NET-3），检测顺序：
   HTTP `Content-Type` → HTML `<meta charset>` → 字节嗅探 → 回退 UTF-8。
   前两步是**权威声明**：只要有声明就必须用它，嗅探仅用于两者都缺失的页面。
+- 本节的缓存只讲**编码检测**；**正文缓存**复用同一张表与同一种键形状，其键与 TTL 归 §4.1。
 - 检测结果必须缓存到「书源 ID + URL」维度，避免重复嗅探（**已落地：Phase 3.9**）：
   缓存的是**嗅探车道的结果**，键复用 `CacheDao` 的稳定键（`ruleField` 固定为 `charset`、`page` 固定，
   使同书源同 URL 的两个阶段共享一条；C-NET-6 的键形状不变），TTL 是

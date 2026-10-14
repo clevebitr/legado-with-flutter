@@ -61,3 +61,20 @@
 | `on Object` + `is Exception`，或 `then(onError:)` / `catchError` | 绕过「必须点名类型」的可审计性，是就地放宽的变体；且后者连 lint 都拦不住，更隐蔽 |
 | 把 `CacheDao.get` / `put` 改成 total | 失败面只是搬进 DAO，仍然要点名那个未导出的类型；还会让 DAO 对**所有**消费方静默吞错（超出「缓存」这一语义） |
 | 关闭数据库前确保没有在途请求 | 请求由页面抓取驱动，缓存无法保证；`database.close()` 的时机不在缓存控制范围内 |
+
+---
+
+## 修订注记（2026-10-14，Phase 5 的 5.2）
+
+**豁免的落点从 `CacheDaoCharsetCache._absorb` 移到共享的 `absorbCacheFailure`**
+（`lib/core/storage/cache_failure_absorber.dart`）。
+
+- **为什么：** 5.2 的正文缓存需要一个形状完全相同的适配器（`CacheDaoContentCache`），而
+  C-ERR-2 只允许一个可审计的 `on Exception`。复制一份就等于第二个豁免点，所以把吸收逻辑抽成
+  一个函数，两个适配器都经它——`on Exception` 因此仍然**只有一处**，`scope` 参数（`Charset cache` /
+  `Chapter cache`）让日志仍然分得清是谁。
+- **不变的边界：** 具名 catch 在前（`SqliteException` / `DriftRemoteException` /
+  `DriftWrappedException` / `InvalidDataException`）；`Error` 仍原样向上（ADR-0022）；
+  drift 导出 `ConnectionClosedException` 之后仍必须换回具名 catch 并删掉这一支。
+- **验证方式不变：** 现有那份表驱动测试（`test/core/network/charset_cache_test.dart`）改走共享函数，
+  `core` 覆盖率门禁仍为 100%（`absorbCacheFailure` 的每一支都被它覆盖）。

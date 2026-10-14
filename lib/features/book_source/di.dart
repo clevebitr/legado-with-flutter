@@ -3,6 +3,8 @@ import 'package:flutter_reader/core/di/js_bridge_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
+import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
+import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
@@ -66,10 +68,22 @@ FetchBookInfo fetchBookInfo(Ref ref) =>
 FetchToc fetchToc(Ref ref) =>
     FetchToc(pages: ref.watch(pageFetchServiceProvider));
 
+/// Provides the chapter body cache (`PLAN.md` 5.2, C-NET-6).
+///
+/// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
+/// the expiry column were already there, so 5.2 adds no column and no table.
+@riverpod
+ContentCache contentCache(Ref ref) => CacheDaoContentCache(
+  ref.watch(cacheDaoProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
 /// Provides the chapter body use case.
 @riverpod
-FetchContent fetchContent(Ref ref) =>
-    FetchContent(pages: ref.watch(pageFetchServiceProvider));
+FetchContent fetchContent(Ref ref) => FetchContent(
+  pages: ref.watch(pageFetchServiceProvider),
+  cache: ref.watch(contentCacheProvider),
+);
 
 /// Provides the use case that reads a source's discover-page categories.
 @riverpod

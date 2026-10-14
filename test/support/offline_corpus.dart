@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import 'fake_book_source_repository.dart';
+import 'fake_content_cache.dart';
 import 'fake_http_client.dart';
 import 'fake_log_printer.dart';
 
@@ -79,6 +80,9 @@ Future<void> pumpReaderApp(
         platformDynamicColorProvider.overrideWithValue(null),
         currentBookSourceProvider.overrideWithValue(source),
         httpClientProvider.overrideWithValue(http),
+        // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
+        // （端口是 total，替身与适配器对页面是同一件事）。
+        contentCacheProvider.overrideWithValue(FakeContentCache()),
         appLoggerProvider.overrideWithValue(_logger()),
         // 5.1 的页面（书源列表 / 导入）走仓储；不传时给一个空库，
         // 免得整条链在 widget 测试里去找真实数据库（testing.md §4）。
@@ -109,6 +113,9 @@ Future<void> pumpBookSourcePage(
       overrides: <Override>[
         currentBookSourceProvider.overrideWithValue(source),
         httpClientProvider.overrideWithValue(http),
+        // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
+        // （端口是 total，替身与适配器对页面是同一件事）。
+        contentCacheProvider.overrideWithValue(FakeContentCache()),
         appLoggerProvider.overrideWithValue(_logger()),
       ],
       child: MaterialApp(

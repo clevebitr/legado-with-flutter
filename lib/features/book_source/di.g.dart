@@ -357,6 +357,61 @@ final class FetchTocProvider
 
 String _$fetchTocHash() => r'8335386d48a19a74d44d8ce23c0940adc791c7e1';
 
+/// Provides the chapter body cache (`PLAN.md` 5.2, C-NET-6).
+///
+/// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
+/// the expiry column were already there, so 5.2 adds no column and no table.
+
+@ProviderFor(contentCache)
+final contentCacheProvider = ContentCacheProvider._();
+
+/// Provides the chapter body cache (`PLAN.md` 5.2, C-NET-6).
+///
+/// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
+/// the expiry column were already there, so 5.2 adds no column and no table.
+
+final class ContentCacheProvider
+    extends $FunctionalProvider<ContentCache, ContentCache, ContentCache>
+    with $Provider<ContentCache> {
+  /// Provides the chapter body cache (`PLAN.md` 5.2, C-NET-6).
+  ///
+  /// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
+  /// the expiry column were already there, so 5.2 adds no column and no table.
+  ContentCacheProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'contentCacheProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$contentCacheHash();
+
+  @$internal
+  @override
+  $ProviderElement<ContentCache> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  ContentCache create(Ref ref) {
+    return contentCache(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ContentCache value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ContentCache>(value),
+    );
+  }
+}
+
+String _$contentCacheHash() => r'2f1a62a958994768b915678dbd0bc914c864b921';
+
 /// Provides the chapter body use case.
 
 @ProviderFor(fetchContent)
@@ -401,7 +456,7 @@ final class FetchContentProvider
   }
 }
 
-String _$fetchContentHash() => r'4a48d6dd089853876a732c1e83fc2b61f1a34f56';
+String _$fetchContentHash() => r'f778bcebf4143d26704370a08269f10212a1c2a0';
 
 /// Provides the use case that reads a source's discover-page categories.
 

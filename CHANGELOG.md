@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### P5-2 lands: the chapter body cache (2026-10-14)
+
+- **`ContentCache`** (a `domain/` port) + `CacheDaoContentCache`: the finished chapter body - paging
+  already joined and `replaceRegex` already applied - is stored in the existing `cache_entries` table
+  under the DAO's stable key (`ruleField=content`, `page=1`, keyed by book source too), with
+  `chapterCacheTtl` (half a day) as the one TTL definition. No column, no table, no schema change.
+- **`FetchContent` consults it first**: a hit skips the whole engine and sends no request at all
+  (not even entering the source's rate budget), and only a successful body is written, so a failure
+  is never cached as content.
+- **The absorption became one function:** `absorbCacheFailure` in `core/storage/` is now the app's
+  single `on Exception` point, shared by the charset cache and the chapter cache; ADR-0033 gained a
+  revision note moving its exemption anchor from `CacheDaoCharsetCache._absorb` to that function
+  (one auditable clause, `Error` still uncaught, named clauses first).
+- Gates: **773** cases, `core` 1017/1017, `domain` 1840/1840, `data` 64/64; the harness overrides the
+  cache with an in-memory double, so the page tests keep running without a database.
+
 ### P5-1 lands: the book source entry (2026-10-14)
 
 - **The feature's first `data/` consumer.** `book_sources` (`schemaVersion` 1 -> 2) stores every

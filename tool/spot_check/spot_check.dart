@@ -46,6 +46,7 @@ import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
 import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
+import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
@@ -142,6 +143,26 @@ List<String> _argumentsOf(List<String> arguments) {
       .split(' ')
       .where((String part) => part.isNotEmpty)
       .toList(growable: false);
+}
+
+/// The harness reads every chapter live: a cache would hide the very behaviour it measures, so the
+/// spot-check runs with the port answering “nothing stored” and dropping writes.
+const ContentCache _noContentCache = _NoContentCache();
+
+/// A [ContentCache] that never stores anything (`tool/spot_check` must always hit the network).
+final class _NoContentCache implements ContentCache {
+  const _NoContentCache();
+
+  @override
+  Future<String?> read({required String sourceId, required String url}) async =>
+      null;
+
+  @override
+  Future<void> write({
+    required String sourceId,
+    required String url,
+    required String body,
+  }) async {}
 }
 
 Future<void> main(List<String> arguments) async {
@@ -315,8 +336,10 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
     return report;
   }
 
-  switch (await FetchContent(pages: pages)
-      .execute(source, chapters.first.url)) {
+  switch (await FetchContent(
+    pages: pages,
+    cache: _noContentCache,
+  ).execute(source, chapters.first.url)) {
     case ParseSuccess<String>(:final String data):
       report.record(
         'content',

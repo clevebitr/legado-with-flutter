@@ -267,6 +267,13 @@ Drift      ──► 书源仓库 ──► 缓存/进度
 
 #### 5.2 正文缓存
 
+> **状态（2026-10-14）：✅ 已完成。** `ContentCache` 端口（`domain/`）+ `CacheDaoContentCache` 适配器
+> （复用 `CacheDao` 的键形状与过期列：`ruleField=content`、`page=1`、TTL = `chapterCacheTtl` 半天），
+> `FetchContent` 命中即跳过整个引擎（**一个请求都不发**，连限速都不进预算）、只缓存成功结果；
+> 失败面抽成**唯一**的 `absorbCacheFailure`（ADR-0033 的修订注记把豁免落点移过去），端口保持 total。
+> 验收：命中 / 过期 / 另一书源同 URL / 读失败 / 写失败吸收各 ≥1 条单测，`FetchContent` 的
+> 「同一章节两次只请求一次」也有单测。
+
 - 现状：**没有**正文缓存（`CacheDao` 目前唯一的生产消费方是 charset 嗅探结果）。本步落 `ContentCache` 端口（`domain/`）+ `CacheDao` 适配器，键 = 书源 ID + 章节 URL 的稳定摘要（C-NET-6），**TTL 数值只定义一次**并登记在 `book-source.md` §5。
 - **验收**：命中 / 过期 / 失败吸收各 ≥1 条单测（缓存失败**不得**把阅读变成失败，与 ADR-0033 同口径）；同一章节二次进入不发请求。
 

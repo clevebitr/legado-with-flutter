@@ -170,7 +170,7 @@ Windows 与 Android 两侧都已实测通过。
 
 ---
 
-## 7. 实测证据（2026-10-11；最新一次 **P5-1，2026-10-14**，双端按 ADR-0039）
+## 7. 实测证据（2026-10-11；最新一次 **P5-2，2026-10-14**，双端按 ADR-0039）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
@@ -192,6 +192,10 @@ Windows 与 Android 两侧都已实测通过。
 | **P5-1 主机侧（2026-10-14）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` | **763** 个用例全过；覆盖率退出码 0（`core` 1014/1014、`domain` 1837/1837、`data` 54/54，均 100%） |
 | **P5-1 Windows 设备级** | `pwsh -File tool/test/run_windows.ps1` | 3 个用例文件全过（`app_boot` 1/1、`js_bridge` **24/24**、`on_disk_database` **2/2**，新增的 `bookSourceDao_…persistsTheImportedSource` 在列）；退出码 0，**99 s** |
 | **P5-1 Android 设备级** | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone`（含冷启动）3 个用例文件全过（`js_bridge` **24/24**、`on_disk_database` 含新的 `book_sources` 真实写入）；退出码 0，**169 s**；跑完按 PR #34 的策略清理了本轮快照 |
+
+| **P5-2 主机侧（2026-10-14）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` | **773** 个用例全过；覆盖率退出码 0（`core` 1017/1017、`domain` 1840/1840、`data` 64/64，均 100%） |
+| **P5-2 Windows 设备级** | `pwsh -File tool/test/run_windows.ps1` | 3 个用例文件全过（`app_boot` 1/1、`js_bridge` **24/24**、`on_disk_database` 2/2）；退出码 0，**93 s** |
+| **P5-2 Android 设备级** | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone`（含冷启动）3 个用例文件全过（`js_bridge` **24/24**）；退出码 0，**164 s**；跑完按 PR #34 的策略清理了本轮快照 |
 
 > Android 补跑命令：`pwsh -File tool/test/run_android.ps1`（`Medium_Phone` 自动启停；需要网络，因 `flutter build apk` 的 native assets 要下载 `libsqlite3.arm.android.so`，见 §6 与本表旧记录）。
 >
