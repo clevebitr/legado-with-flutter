@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### G4: four of the five M1 rows confirmed, plus two new work orders (2026-10-14)
+
+- **Matrix #16 / #17 / #18 / #19 are 已确认**, each with a per-row record (source, field, sample) in
+  `tool/spot_check/README.md` section 4: the untouched 漫客栈 source carries `@put:`/`@get:`, `{{...}}`
+  and the `{$...}` template, and a one-field derivation of QB女生 carries the *variable* form of
+  `java.put`/`java.get` (the synchronous-HTTP form stays refused by ADR-0037 decision 5, and the tool
+  counts the two apart). **#15 `@@` stays 待验证** - 319 sources use it, 25 are selectable, and every
+  live candidate fails (dead site, WAF, search stage) - which the delivery recorded honestly instead
+  of writing it down as passed. The reviewer ruled that #15 closes with a **derived** live run
+  (precedent: b1, b1b, b2 and b5 all used one), so the phase exit is one derivation away.
+- **The census is now part of the committed tool** (M1 grammar census, literal-URL census, the
+  `(?<!\{)\{\$` fix for #19) and `@@` became position-aware, so the selectable count moves
+  384 -> 409. The reviewer reproduced every figure with an independent replica of the filter
+  (409; #15 319/25, #16 438/61, #17 348/16, #18 980/128, #19 193/23; #17 forms 339/9; 12
+  literal-URL sources with the same field distribution) and re-ran both device probes
+  (Windows 74 s, Android 136 s, `js_bridge` 24/24 each).
+- **Two findings became work orders.** **b6**: `ruleBookInfo.init` is marked M0 but nothing reads it
+  - the specification only has the field's phase, not its semantics, so b6 first writes that line
+  (upstream `AnalyzeRule.SourceRule.init` -> `setContent`) and then applies it. **b7**: a bare
+  `@js:` on a JSON item binds the item's JSON *text*, where upstream binds the object, so
+  `result.comic_id` is `undefined`; b7 starts with a census and any contract change needs an ADR,
+  because section 6 documents the current binding.
+- **The literal-URL finding is closed as parity, not a gap**: upstream also reads such a field as a
+  rule and jsoup throws `SelectorParseException`, so the explicit `parseFailed` here only says the
+  same thing in a locatable form.
+- **Docs repaired in the same round**: the G4 status note was inserted in the middle of the matrix
+  table in `book-source.md` (it split the table in two) and now trails the table with the other
+  notes; a duplicate ledger row about the `--list` criterion - which still said "waiting for a
+  ruling" while the row below it was closed - is gone; and `test-environment.md` section 6 gains the
+  half-downloaded pub-cache trap (an empty `jni-1.1.0` directory once made the Windows build report
+  `jNullReference`).
+
+### G4: flip the M1 matrix rows #16-#19, block #15, census two findings (2026-10-14)
+
+- **#16 `@put:` / `@get:`, #17 `java.put` / `java.get` (variable form), #18 `{{…}}` and #19 `{$…}` are
+  已确认 now**, each with a real-source record in `tool/spot_check/README.md` §4: 漫客栈 (collection C
+  #1229, not a character changed) covers #16 / #18 / #19 — `complete`, content 458 chars
+  `sha256=30cc59e176f7ac3c`; ●QB女生<kd♛ with **only** `ruleSearch.bookUrl` rewritten (the original puts a
+  rule head inside a URL, which §4 refuses) covers #17 — `java.put('time', …)` (variable form) is read back
+  by `java.get('time')` in the printed `lastChapter`.
+- **#15 `@@` stays 待验证**: 319 sources use it, 25 are selectable, and probing all 25 left none runnable
+  (22 dead / WAF / search-stage failures, the last 3 fail in the search stage too). Reported as blocked
+  rather than written as a pass.
+- **The harness now produces the numbers.** `--list` gained the M1-grammar census (#15 319/25 · #16 438/61 ·
+  #17 348/16 · #18 980/128 · #19 193/23, plus #17's 339 variable-form vs 9 HTTP-only split) and the
+  literal-URL census (12 sources + field distribution). #19 counts with `(?<!\{)\{\$` instead of a
+  substring, and the `@@` criterion is position-aware (a branch / template-start `@@` is the matrix #15
+  flag, only a mid-rule one is refused), which lifts the selectable set from 384 to **409**.
+- **Two findings registered in `PLAN.md` §3.7** (both surfaced while gathering #17's evidence, neither fixed
+  here): `ruleBookInfo.init` is **never applied** although §2 lists it as M0 (fields are read against the page
+  scope, so real sources with `init: "$.data.bookInfo"` read empty), and a bare `@js:` on a JSON item scope
+  hands the script the JSON **text** as `result` where upstream hands the object (`result.x` is `undefined`).
+- **The literal-URL question is answered**: 12 real sources write a rule field as a bare URL, and upstream
+  reads those as rules too (`mode` stays Default → `temp.select(beforeRule)`, and jsoup 1.16.2 throws
+  `SelectorParseException`) — so it is not an “upstream returns the literal” fidelity gap.
+
+
 ### Device probes back to per-slice, and three registrations (2026-10-13)
 
 - **ADR-0039 supersedes ADR-0038: device probes are a slice-level requirement again.** The only

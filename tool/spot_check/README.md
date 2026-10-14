@@ -49,7 +49,7 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 | 合集 B | `https://raw.githubusercontent.com/safino9/SourceGo/master/book_source/all.json`（189 条） |
 | 合集 C | `https://legado.aoaostar.com/sources/b778fe6b.json`（3907 条，最近同步 2026-08-15） |
 | 筛选 | `--list` 的判据：`searchUrl` 是 HTTPS GET 且含 `{{key}}`、四段规则非空、不含**尚未实现**的标志（`@xpath:` / `webjs` / `sourceregex` / `@@` / `<js>` / `:正则` / `{"method"…}` 那类对象头）。**判据随已实现语法收放：** `@js:` 自 3.4 起不再是排除项（矩阵 #14），只在**列表规则**（`bookList` / `chapterList`）里排除；`@put:` / `@get:` 与 `{{}}` 内嵌（矩阵 #16 / #18，随 3.4 落地）不再排除。**2026-10-13 修正：** `{{…}}` 开头的规则此前仍被一个「`{` 开头就排除」的旧判据（为 `{"method":"POST"}` 写的）误伤——它把 `{{}}` 也当对象头了，与同一段注释和 `PLAN.md` §3.7 的「`{{}}` 不再排除」互相矛盾。现在只排除**单**花括号开头。搜索 URL 仍保守：只认 `{{key}}` / `{{page}}` / `{{baseUrl}}`，其余 `{…}` 一并排除 |
-| 结果（2026-10-13，含 `{{…}}` 修正后复算） | 合集 C 中 **384/3907** 条属于「本仓今天能跑通四段」的集合（M0 + 已落地的 M1 语法）；其中 **278** 条依赖未知类型退化（ADR-0032）、**142** 条用值规则 `@js:` |
+| 结果（2026-10-14，含 `{{…}}` 与 `@@` 两次修正后复算） | 合集 C 中 **409/3907** 条属于「本仓库今天能跑通四段」的集合（M0 + 已落地的 M1 语法）；其中 **296** 条依赖未知类型退化（ADR-0032）、**157** 条用值规则 `@js:` |
 | 探测 | 80 条各 1 次 GET（浏览器 UA，≤12 s）；**40 条返回 200**，其中 13 条搜索页含真实结果链接 |
 
 **一行复算这三个数字（含 ADR-0032 的依据）：**
@@ -64,10 +64,18 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 
 ```bash
 curl -sSL -o build/ao.json https://legado.aoaostar.com/sources/b778fe6b.json
-SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check/spot_check.dart | tail -3
-# -- 384 of 3907 sources are M0-compatible.
-# -- 278 of 384 M0-compatible sources rely on the unknown-type degradation (ADR-0032).
-# -- 142 of 384 M0-compatible sources use a value-rule `@js:` (matrix #14); …
+SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check/spot_check.dart | tail -12
+# -- 409 of 3907 sources are M0-compatible.
+# -- 296 of 409 M0-compatible sources rely on the unknown-type degradation (ADR-0032).
+# -- 157 of 409 M0-compatible sources use a value-rule `@js:` (matrix #14); …
+# -- M1 grammar census (whole collection; G4 needs one source per row):
+#     #15 @@: 319 sources (25 of them selectable today)
+#     #16 @put:/@get:: 438 sources (61 of them selectable today)
+#     #17 java.put/java.get: 348 sources (16 of them selectable today)
+#     #18 {{…}}: 980 sources (128 of them selectable today)
+#     #19 {$…}: 193 sources (23 of them selectable today)
+#     #17 form: 339 sources use the **variable** form (usable as evidence), 9 only the refused synchronous-HTTP one (ADR-0037 §决策 5).
+# -- rule fields that are an entirely literal URL (whole collection; PLAN §3.7): 12 sources.
 ```
 
 > 打印里的 `M0-compatible` 现在指「M0 + 已落地的 M1 语法」（判据见上表筛选行）；名字没改是为了
@@ -77,7 +85,7 @@ SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check
 >
 > **为什么条数与 ADR-0032 §背景 的 197/137 不同：** 那两个数字是 3.4 落地前的快照（当时
 > `@js:` 仍在排除列表里，含值规则 `@js:` 的源没被计入）。判据此后宽容了三次（`@put:` /
-> `@get:`、`{{}}` 内嵌、以及 2026-10-13 真正放开的 `{{…}}` 规则头），所以 **266 → 353 → 384**
+> `@get:`、`{{}}` 内嵌、以及 2026-10-13 真正放开的 `{{…}}` 规则头），所以 **266 → 353 → 384 → 409**
 > 是同一份合集上的口径变化，而不是源变多了。ADR-0032 自己的结论（未知类型必须退化为 CSS）
 > 不受影响。
 
@@ -266,6 +274,61 @@ RUN 2 = ●QB女生<kd♛（只改 ruleSearch.bookUrl 为 `…?bookid={{java.get
 >
 > **失败但已定位的第三方：** RUN 2 的 `tocRule.chapterList` 报 `parseFailed`，是因为派生把 18 条
 > 搜索结果都指向同一本（`bookid=3000000243`），章节接口返回的 `$.rows` 为空——与本切片无关。
+
+**G4：矩阵 M1 #15–#19 的真实源证据（2026-10-14）：**
+
+口径：源取自合集 C（2026-08-15 快照）；样本取自 `--json` 报告，正文只出现截断样本与 sha256（§2）。
+三个 fixture 由同一条命令从合集抽出、**未改任何字段**（只有 RUN 2 按下方理由改了一条）：
+
+```bash
+python -c "import json;d=json.load(open('build/ao.json',encoding='utf-8'));json.dump(d[1229],open('build/g4_mkz.json','w',encoding='utf-8'),ensure_ascii=False)"
+# 同理 d[1463] -> build/g4_qb.json（#17 的派生基线）与 d[341] -> build/g4_bq4.json（#15 的尝试）
+SPOT_CHECK_ARGS="--source=build/g4_mkz.json --keyword=火影 --json" flutter run -d windows -t tool/spot_check/spot_check.dart
+```
+
+```text
+RUN 1（#16 · #18 · #19）源：漫客栈（合集 C 第 1229 条，http://comic.mkzhan.com）
+  complete=true；search 1 / bookInfo 1 / toc 5 / content 458 字符 sha256=30cc59e176f7ac3c
+  #16 @put:/@get:
+      ruleSearch.name       = $.title@put:{comic_id:$.comic_id}        ← 写
+      ruleToc.chapterUrl    = ...?chapter_id={{$.chapter_id}}&comic_id=@get:{comic_id}&...   ← 读
+      产出样本：尸魂界的不速之客 https://comic.mkzhan.com/chapter/content/v1/?chapter_id=750783&comic_id=213560&format=1&quality=1&sign=0&type=1&uid=0
+  #18 {{…}}:
+      ruleToc.chapterUrl    = 同上，其中 chapter_id={{$.chapter_id}}
+      产出样本：同一行 URL 的 chapter_id=750783（模板里的规则头求值）
+  #19 {$…}:
+      ruleSearch.bookUrl    = https://comic.mkzhan.com/comic/info/?comic_id={$.comic_id}
+      产出样本：火影忍者之新的伙伴 https://comic.mkzhan.com/comic/info/?comic_id=213560
+      （同源 ruleBookInfo.tocUrl 的 {$.data.comic_id} 在 toc= 一栏同步生效：...?comic_id=213560）
+
+RUN 2（#17）源：●QB女生<kd♛（第 1463 条），只改 ruleSearch.bookUrl
+  理由：原值 ...?bookid={{$.docId##.*_}} 把规则头写在 URL 里，按 §4 被拒 → 一条书都产出不了，
+  字段规则（含 java.put/get）因此永远不跑；改成同义的 JS 模板
+  ...?bookid={{java.getString('$.docId').split('_')[1]}}，其余逐字不动。--keyword=剑来
+      ruleBookInfo.kind        = ...{{java.put('time', String(java.timeFormat(java.getString('$.lastUpdatetime')*1000))...)}}  ← 写（变量形态）
+      ruleBookInfo.lastChapter = {{$.lastSerialname}} • {{java.get('time')}}      ← 读
+      产出样本：bookInfo  " | author=null | toc=...?bookId= | kind=分 连载中 | lastChapter=• 1970-01-01 | ..."
+  说明：1970 是因为该响应的 data.bookInfo.lastUpdatetime 没被字段规则看见（下面登记的 `init` 缺口），
+  java.getString 给 '' → ''*1000 = 0 → timeFormat(0) → 源自己的 replace(/\s.*/,'') → 1970-01-01；
+  **往返本身成立**（读回的就是写进去的那个格式化值）。
+  形态：本行只用变量形态 java.put(key,value) / java.get(key)（两参、无 URL）；上游那个同步 HTTP 形态
+  java.get(url) / java.get(url,{...}) 是 ADR-0037 §决策 5 的具名拒绝，普查里 9 条源只用了后者。
+
+RUN 3（#15，未确认）源：☘️笔趣阁4☘️（第 341 条）→ search 阶段 parseFailed at searchRule.bookList；
+  另试 新笔趣阁new（489，同失败）与 🚬 读书（775，searchUrl networkFailed，curl 侧 200 但 Dart 侧失败）。
+  #15 保持「待验证」：普查 319 条用 @@、其中 25 条可选中，逐个探活后 22 条站点已死 / WAF / 搜索段失败，
+  剩下 3 条（341/752/1976）搜索段全部失败——**没有可用活源，不写成通过**。
+
+字面量 URL 的取证（PLAN §3.7 的待裁决项，同一趟用入库工具做）：
+  入库工具普查：12 条源（首版正则把 {{…}} 也算进去了，已修）——
+      ruleSearch.lastChapter 4 · ruleToc.chapterUrl 3 · ruleSearch.checkKeyWord 2 ·
+      ruleSearch.kind 1 · ruleSearch.intro 1 · ruleExplore.intro 1
+  上游行为（fork AnalyzeRule + AnalyzeByJSoup）：完全字面量 URL 没有规则头 → mode 保持 Default →
+      AnalyzeByJSoup.getElementsSingle 的 else -> temp.select(beforeRule)，即**上游也把它当规则读**；
+      实测 jsoup 1.16.2（fork 的版本）doc.select("https://a.test/book/1") **抛**
+      Selector.SelectorParseException: unexpected token at '//a.test/book/1'。
+      ⇒ 上游不会把字面量 URL 当值返回；本仓的 parseFailed 只是把同一件事显式化。
+```
 
 **腾讯搜索系真实源（未做任何改写）的探活结果（2026-10-13）：** 合集 C 里活着的、用主流写法的真源是
 `●QB女生<kd♛` / `南极 🐧`（`so.html5.qq.com/ajax/real_search_result`，HTTP 200 / 33 KB 真实 JSON）。
