@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### P5-0 is drafted: the Phase 5 specs, as four Proposed ADRs (2026-10-14)
+
+- **What landed.** The Phase 5 prerequisite (`PLAN.md` section 3.6, 5.0) is written out: the import
+  contract (**ADR-0040**), the feature boundaries (**ADR-0041**), the ADR-0021 **review note**
+  (the exception stays; its triggers are rewritten) and the ADR-0034 **revision note** (rule
+  variables are *not* persisted). Specs synced in the same change: `book-source.md` section 2
+  (source identity and duplicate import), `architecture.md` sections 1/2/6 (feature list, the
+  cross-feature port rule, the page/route table), and two bilingual ARB keys for the import
+  screen (`bookSourceImportSucceeded` / `bookSourceImportPartiallySkipped`).
+- **Both new ADRs are `Proposed`,** so nothing may be implemented from them until the architect
+  accepts them (`docs/dev/adr/README.md`: Proposed does not take effect). 5.1 is what unblocks
+  5.2-5.8, and it depends on ADR-0040.
+- **The rulings, one line each:**
+  - *Identity* - synthetic `id` primary key plus `UNIQUE (url, behaviour fingerprint)`, because the
+    corpus is 3907 entries over 2596 URLs, 1217 of which repeat (1012 identically, 205 not).
+    Importing the same pair twice is idempotent; the same URL with different rules coexists (a
+    registered difference from upstream, which overwrites by URL); `enabled` / `customOrder` are
+    user state that import never overwrites.
+  - *Limits* - one import is capped at 32 MiB measured in UTF-8 bytes **before** parsing, and the
+    download aborts past the cap instead of reading the body (C-SEC-5 / C-PERF-5). Oversized,
+    non-JSON and empty inputs reuse `invalidBookSource` with the reason in `rulePath`
+    (`import.sizeLimit` / `import.notJson` / `import.noEntries`) - no new `ParseFailureKind`,
+    because the sealed 9-value contract is switched over in three layers while the user-visible
+    consequence is the same.
+  - *Entry form and dependencies* - 5.1 imports by pasting JSON text or by fetching a URL, so **no
+    new dependency**; the file picker and sharing move to 5.8 together with export, where
+    `pubspec.yaml` + `tech-stack.md` section 1 + `NOTICE.md` section 5 are updated as one batch
+    (C-DEP-6). This changes the earlier scheduling note's "add `file_picker`" recommendation, and
+    ADR-0040 decision 9 registers the difference.
+  - *Boundaries* - `reader` / `bookshelf` / `settings` become features; cross-feature needs go
+    through consumer-side ports bound once at the composition root (`appProviderOverrides`), so no
+    feature imports another; reading progress belongs to `bookshelf`; `isVolume` / `formatJs` /
+    `preUpdateJs` stay out of scope until a corpus census justifies them.
+
 ### P5-0's first evidence: the duplicate shape of the corpus (2026-10-14)
 
 - `PLAN.md` section 3.6 5.0 has to rule on the book-source primary key and on what importing the

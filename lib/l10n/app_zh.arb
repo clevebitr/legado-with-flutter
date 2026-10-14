@@ -34,5 +34,7 @@
   "bookSourceExploreAction": "发现页",
   "bookSourceExplorePrompt": "选择一个分类开始浏览",
   "bookSourceExploreEmpty": "这本书源没有发现页分类",
-  "bookSourceExploreEmptyCategory": "这个分类下没有书目。"
+  "bookSourceExploreEmptyCategory": "这个分类下没有书目。",
+  "bookSourceImportSucceeded": "已导入 {count} 个书源。",
+  "bookSourceImportPartiallySkipped": "已导入 {count} 个书源，跳过 {skipped} 条无效条目。"
 }

@@ -307,6 +307,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This category has no books.'**
   String get bookSourceExploreEmptyCategory;
+
+  /// Summary after an import where every entry was accepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count} book sources.'**
+  String bookSourceImportSucceeded(int count);
+
+  /// Summary after an import where some entries were skipped; the reasons are logged, never shown per entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count} book sources; {skipped} entries were skipped as invalid.'**
+  String bookSourceImportPartiallySkipped(int count, int skipped);
 }
 
 class _AppLocalizationsDelegate

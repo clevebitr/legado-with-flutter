@@ -91,3 +91,23 @@ Phase 2.1 落地书源模型时，三条已生效的规范互相冲突：
 | 用 `JsonKey(fromJson: ..., toJson: ...)` 解析嵌套规则与 `header` | json_serializable 只读取 `JsonKey` 的 `name` / `defaultValue` / `includeFromJson` 等字段，**不读取** `fromJson` / `toJson`（已核实 `json_key_utils.dart`）；唯一受支持的机制是 `JsonConverter` |
 | 用「整类转换器」承载原始 map 来实现 `extra` | 与生成的 `fromJson` 职责重叠，且会让 C-SRC-7 要求的 `fromJson` 失去意义 |
 | 现在就实现 `toLegadoJson` 合并 `extra` | 会产生一个没有生产消费方的公共 API（C-BAN-1、`PLAN.md` Phase 2「禁止做任何『以后会用到』的抽象」）；合并语义应由导入 / 导出功能按真实需求定义 |
+
+---
+
+## 复审注记（2026-10-14，Phase 5 的 P5-0；架构师待裁决）
+
+**触发：** §后果 的两个条件同时命中——**(1)** 导入 UI 来了（`PLAN.md` §3.6 的 5.1）、
+**(3)** `data/` 出现第一个真实消费方（5.1 的 `BookSourceRepositoryImpl` + Drift 的 `book_sources` 表）。
+
+**结论：例外保持，不拆「DTO + 同形实体 + Mapper」。**
+
+- 决策 3「例外不扩散」不变：其它领域实体仍不得携带 JSON 序列化注解。
+- 触发条件 (3) 的本意是「同形 DTO 不再触及 C-BAN-1」，而 5.1 的做法是 **`data/` 直接消费
+  `domain/` 的书源模型**（仓储把模型序列化进 `payload` 列、读回时反序列化，ADR-0040 §决策 4），
+  因此根本不存在第二份同形模型——C-BAN-1 的问题没有重新出现，例外也没有扩散的必要。
+- 决策 4 的 `extra` 逐层保留继续有效；**导出回写（`toLegadoJson`）仍缺**，其落点改为
+  `PLAN.md` §3.6 的 5.8，并以导入时落库的原始负载列为导出源。
+- **触发条件重写（本注记生效后取代 §后果 的原三条）：** (1) 导入**预览 / 校验**需要与领域模型
+  解耦（例如要在不构造 `BookSource` 的前提下展示差异）；(2) `RuleEngine` 不再直接消费规则串
+  （规则先编译成中间表示）；(3) 出现**第二个** consumer 需要一份与领域模型不同形的书源表示
+  （例如按规则字段拆表检索）。

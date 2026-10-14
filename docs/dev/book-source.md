@@ -103,7 +103,7 @@
 > **层归属与 `extra` 的落地形态**见 ADR-0021（模型位于 `domain/entities/`；`extra` 由
 > `fromLegadoJson` 逐层填充）。本表只拥有字段映射与分期。
 >
-> **书源身份与重复导入（2026-10-14，P5-0；决策、数值与失败语义的唯一出处是 ADR-0040，待接受）：**
+> **书源身份与重复导入（2026-10-14，P5-0；决策、数值与失败语义的唯一出处是 ADR-0040，已接受）：**
 > `bookSourceUrl` **不是**主键——合集普查（`tool/spot_check/README.md` §3）显示同一 URL 下既有
 > 完全等价的重复条目、也有行为不同的多条，所以落库身份取 **`(bookSourceUrl, 行为指纹)`**：
 > 行为字段 = `bookSourceName` / `searchUrl` / `header` / `ruleSearch` / `ruleBookInfo` / `ruleToc` /
