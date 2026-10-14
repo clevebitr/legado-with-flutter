@@ -154,5 +154,26 @@
   "bookSourceExploreEmptyCategory": "This category has no books.",
   "@bookSourceExploreEmptyCategory": {
     "description": "Shown when a discover category's page listed no usable book; distinct from bookSourceSearchEmpty, which mentions a keyword this screen never has."
+  },
+  "bookSourceImportSucceeded": "Imported {count} book sources.",
+  "@bookSourceImportSucceeded": {
+    "description": "Summary after an import where every entry was accepted.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceImportPartiallySkipped": "Imported {count} book sources; {skipped} entries were skipped as invalid.",
+  "@bookSourceImportPartiallySkipped": {
+    "description": "Summary after an import where some entries were skipped; the reasons are logged, never shown per entry.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
   }
 }

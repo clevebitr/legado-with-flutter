@@ -42,7 +42,7 @@
 | [0018](0018-android-min-sdk-baseline.md) | Android 平台基线：保留 `minSdk 26`，并重建其依据 | Accepted | 本次新增 |
 | [0019](0019-coverage-gate-must-detect-unmeasured-files.md) | 覆盖率门禁必须检测「未出现在报告中的源文件」 | Accepted | 本次新增 |
 | [0020](0020-dynamic-color-provider-builder-shape.md) | 动态取色接口以 builder 包装形态提供，并在根部注入 | Accepted | 本次新增 |
-| [0021](0021-book-source-models-live-in-domain.md) | 书源模型位于 domain 实体，并携带 JSON 序列化注解 | Accepted | 本次新增 |
+| [0021](0021-book-source-models-live-in-domain.md) | 书源模型位于 domain 实体，并携带 JSON 序列化注解 | Accepted（**2026-10-14 P5-0 复审注记：例外保持，触发条件已重写**） | 本次新增 |
 | [0022](0022-json-serializable-checked-mode.md) | 书源 JSON 解析启用 json_serializable 的 `checked` 模式 | Accepted（架构师复审裁决） | 本次新增 |
 | [0023](0023-legal-stance-after-upstream-shutdown.md) | 上游停运后的法律立场：方言兼容继续、真实语料最小化脱敏、免责与用途限制加强 | Accepted（架构师裁决三件事） | 本次新增 |
 | [0024](0024-g2-split-offline-replay-vs-live-link.md) | G2 拆分为 G2a（离线回放）与 G2b（真实链路） | Accepted（架构师复审裁决） | 本次新增 |
@@ -55,9 +55,11 @@
 | [0031](0031-tolerant-decoding-on-the-declared-charset-lane.md) | 编码宽容只对「已声明」车道开放（声明权威 + warning，嗅探/回退保持严格） | Accepted（2026-10-11 架构师裁决，用户指令） | 本次新增 |
 | [0032](0032-unknown-rule-type-degrades-to-css.md) | 默认规则的未知类型退化为原始 CSS 选择器 | Accepted（2026-10-12 开发组起草、**架构师审核接受**；G2b spot-check 触发） | 本次新增 |
 | [0033](0033-cache-failure-exemption-in-its-adapter.md) | 缓存失败吸收的唯一豁免点：`CacheDaoCharsetCache` 允许 `on Exception`（drift 不导出 `ConnectionClosedException`） | Accepted（2026-10-12 架构师裁决；3.9 复核 F1 的事实修正触发） | 本次新增 |
-| [0034](0034-js-rule-variables.md) | M1 规则变量：宿主侧一份表 + 每个 job 一份快照（`@put:` / `@get:` / `java.put` / `java.get`） | Accepted（2026-10-12 架构师裁决；ADR-0030 §决策 5(a) 的重开触发条件） | 本次新增 |
+| [0034](0034-js-rule-variables.md) | M1 规则变量：宿主侧一份表 + 每个 job 一份快照（`@put:` / `@get:` / `java.put` / `java.get`） | Accepted（2026-10-12 架构师裁决；ADR-0030 §决策 5(a) 的重开触发条件；**2026-10-14 P5-0 修订注记：§决策 2 裁决为不落盘**） | 本次新增 |
 | [0035](0035-explore-url-and-rule-explore-fallback.md) | 发现页：`exploreUrl` 的两种形态（分类串 / 整字段 JS）与 `ruleExplore` → `ruleSearch` 的**整条**回落，含四条登记差异 | Accepted（2026-10-13 架构师裁决；M1-b0 规格前置） | 本次新增 |
 | [0036](0036-concurrent-rate-and-the-budget.md) | `concurrentRate` 的语法与毫秒单位，以及「速率门 → 并发门」的合成顺序 | Accepted（2026-10-13 架构师裁决；M1-b0 规格前置） | 本次新增 |
 | [0037](0037-java-binding-compat-surface.md) | `java.*` 成为兼容面：别名族（`md5Encode` / `base64*` / `encodeURI` / `log`）、规则求值族（字面量宿主内联快路径 + 异步兜底）与具名拒绝 | Accepted（2026-10-13 架构师裁决；合集 C 全量语料取证，M1-b1b 开工前置） | 本次新增 |
 | [0038](0038-device-probe-at-phase-exit.md) | 设备级探针按**阶段出口**要求（Windows + Android 各一次），切片级只要求 Windows | **Superseded by ADR-0039** | 本次新增 |
 | [0039](0039-device-probe-per-slice-again.md) | 设备级探针回到**切片级双端**（代价前提已消失；环境阻塞走「写明 + 架构师补跑」） | Accepted（2026-10-13 架构师裁决；取代 0038） | 取代 0038 |
+| [0040](0040-book-source-import-contract.md) | Phase 5 的书源导入契约：合成 `id` 主键 + `(url, 指纹)` 唯一索引、重复导入幂等、32 MiB 体积上限、不扩 `ParseFailureKind`、5.1 不引入新依赖 | Accepted（2026-10-14 架构师裁决） | 本次新增 |
+| [0041](0041-phase5-feature-boundaries.md) | Phase 5 的 feature 边界：`reader` / `bookshelf` / `settings`，跨 feature 一律走「消费方端口 + 装配根绑定」，进度归 `bookshelf` | Accepted（2026-10-14 架构师裁决） | 本次新增 |

@@ -25,7 +25,8 @@ lib/
 │   ├── theme/                    # M3ETheme 安装、动态取色接线
 │   └── utils/                    # 纯函数工具（禁止 IO，禁止依赖 Flutter）
 ├── features/
-│   └── <feature>/                # book_source / reader / bookshelf / settings ...
+│   └── <feature>/                # book_source（书源 / 搜索 / 发现 / 详情）；Phase 5 新增
+│                                 #   reader / bookshelf / settings（边界见 ADR-0041）
 │       ├── data/                 # DTO(freezed) + DataSource + RepositoryImpl
 │       ├── domain/               # Entity + Repository 接口 + UseCase
 │       ├── presentation/         # pages / widgets / notifiers（Notifier 与该 feature 的派生 provider 同放 notifiers/）
@@ -56,6 +57,12 @@ features/<f>/presentation ──► features/<f>/domain ──► features/<f>/d
 - `core/` 不得 import 任何 `features/`。
 - `features/A` 不得 import `features/B` 的内部文件（C-ARCH-2）；
   确有共享需求时，把共享部分上移到 `core/`，或把场景合入同一个 feature。
+- **跨 feature 共享的第三种（也是唯一允许的第三种）机制（ADR-0041）：** 消费方在自己的
+  `domain/` 定义**端口**，生产实现由装配根（`app.dart` 的 `appProviderOverrides`）绑定到提供方；
+  `features/A` 因此**永远不 import** `features/B`，端口的默认实现是「未绑定」的 null object
+  （返回 `ParseFailure(unsupportedRule)` + warning，不抛）。端口只收发原语与**消费方自己的**实体；
+  跨 feature 的实体映射同样只发生在装配根的适配器里（§3 的「Mapper 在 `data/`」针对的是
+  feature 内的 DTO ↔ Entity）。
 
 ---
 
@@ -174,6 +181,18 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 - 路由参数必须为**类型化对象**（`freezed`），禁止传递裸 `Map<String, Object?>`。
 - 页面间传参不得传递 Entity 之外的未序列化状态；需要跨页共享的数据放入 Notifier。
 - 预测性返回接线见 `docs/dev/platform.md`（C-UI-4、C-PLT-2）。
+
+| 路由类型（`features/<f>/presentation/<f>_route.dart`） | 页面 | feature | 分期 |
+|---|---|---|---|
+| `BookDetailRoute`、`ExploreRoute` | `BookDetailPage`、`ExplorePage` | `book_source` | 已落地 |
+| `BookSourceListRoute`、`BookSourceImportRoute` | 书源列表页、导入页 | `book_source` | 5.1 |
+| `ReaderRoute` | `ReaderPage` | `reader` | 5.3（从 `book_source` **迁入**） |
+| `BookshelfRoute` | 书架页 | `bookshelf` | 5.4 |
+| `SettingsRoute` | 设置页 | `settings` | 5.6 |
+
+> 页面与路由的**归属**由 **ADR-0041** 裁决（2026-10-14 已接受）：`ReaderRoute` / `ReaderPage` 从
+> `book_source/presentation/` 迁入 `reader/`（5.3），三个新 feature 的路由类型各自落在自己的
+> `presentation/`，四者都只在 `app.dart` 的页面表里登记。
 
 > 不引入 `go_router` 是为避免未经评审的依赖（C-DEP-1）；若后续需要深链接与
 > 嵌套路由，必须先写 ADR 再改依赖。

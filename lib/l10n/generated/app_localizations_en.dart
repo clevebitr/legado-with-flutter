@@ -133,4 +133,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookSourceExploreEmptyCategory => 'This category has no books.';
+
+  @override
+  String bookSourceImportSucceeded(int count) {
+    return 'Imported $count book sources.';
+  }
+
+  @override
+  String bookSourceImportPartiallySkipped(int count, int skipped) {
+    return 'Imported $count book sources; $skipped entries were skipped as invalid.';
+  }
 }

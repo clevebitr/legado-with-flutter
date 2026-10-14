@@ -121,4 +121,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookSourceExploreEmptyCategory => '这个分类下没有书目。';
+
+  @override
+  String bookSourceImportSucceeded(int count) {
+    return '已导入 $count 个书源。';
+  }
+
+  @override
+  String bookSourceImportPartiallySkipped(int count, int skipped) {
+    return '已导入 $count 个书源，跳过 $skipped 条无效条目。';
+  }
 }
