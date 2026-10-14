@@ -50,11 +50,13 @@
 | 全量（门禁 + 两端设备级用例） | `pwsh -File tool/test/run_all.ps1` | 顺序与 CI 一致；Android 默认用完关闭模拟器 |
 | 只跑主机侧 | `pwsh -File tool/test/run_unit.ps1` | 等价于 CI 的测试 + 覆盖率两步 |
 | 只跑 Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | 需要开发者模式 |
-| 只跑 Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 没有在线设备时自动启动 AVD |
+| 只跑 Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 没有在线设备时自动启动 AVD；**不用快照**，开机后跑完就关并清理。本机实测：全量 3 个文件 **~2 min**（新 worktree 首次要构建，~3 min 20 s），单文件 ~70 s（2026-10-13） |
+| 只跑其中一个用例文件 | `-TestFile <名字>` | 如 `-TestFile js_bridge`。逐文件运行意味着**一文件一次构建+安装**，引擎/桥类切片只需 `js_bridge_test.dart` |
+| 真正全新的 guest | `-WipeData` | 重置 AVD 的 userdata（完整首次开机，比普通冷启动慢）；只有需要排除残留用户数据时才用 |
 | 全量但跳过设备级 | `pwsh -File tool/test/run_all.ps1 -SkipDeviceTests` | 没有设备时的收敛选项 |
 | 跳过其中一端 | `-SkipWindows` / `-SkipAndroid` | — |
 | 保留模拟器 | `-KeepEmulator` | 默认只关闭「本脚本启动的」模拟器，复用在线设备时不会去关别人的环境 |
-| 无界面跑 Android | `-Headless` | 追加 `-no-window`，适合没有桌面会话的场景 |
+| 无界面跑 Android | `-Headless` | 追加 `-no-window`，适合没有桌面会话的场景（快照本来就不读，所以与有窗口无差别） |
 | 换 AVD / 放宽等待 | `-AvdName <名字>` / `-BootTimeoutSeconds 600` | 默认 300 秒 |
 
 等价的裸命令（排查时用，注意 §5 的坑）：
@@ -101,7 +103,7 @@ Windows 与 Android 两侧都已实测通过。
 
 ## 5. 关键差异与踩坑（脚本为什么这么写）
 
-这四条都是本机实测踩出来的坑，改动脚本前请先读：
+这几条都是本机实测踩出来的坑，改动脚本前请先读：
 
 1. **逐个用例文件运行，而不是 `flutter test integration_test -d <device>`。**
    桌面端在同一次 `flutter test` 里跑第二个文件时会二次启动同一个 exe 并失败：
@@ -127,6 +129,24 @@ Windows 与 Android 两侧都已实测通过。
    本机模拟器崩溃过一次之后，每次启动都会弹出崩溃上报同意对话框
    （日志里 `Showing crashdialog to get consent.`）并**阻塞开机**，无界面运行时永远起不来。
 
+5. **不用快照（`-no-snapshot-load`），跑完清理 `snapshots/<avd>/default_boot`。**
+   这是 2026-10-13 “Android 一测半小时”的根因链：`adb emu kill` **立刻返回**，而模拟器
+   还要跑十几秒才写完快照（关键的其实是几十字节的 `ram.bin` / `snapshot.pb`）；脚本、外层
+   工具或手工 Ctrl-C 在这个窗口里退出，就留下**一份被截断的快照**，而 AVD `config.ini` 的
+   `fastboot.forceFastBoot=yes` 会让之后每一轮都加载它——表现为「**加载成功但 guest 卡死、
+   adbd 永远 `offline`、干等到 300 s 超时**」，且一轮轮重复。
+   写入这版模拟器**防不住**（`-no-snapshot-save` 与 `quickbootChoice.ini` 的
+   `saveOnExit = false` 实测都被忽略，`ram.img` 照样写出 4 GB），所以脚本保证的是
+   「**不读**」，并在等进程真正退出后删掉本轮那份（不删就是每轮白写 4 GB）。
+   另一条预防措施：**别再改 AVD 的状​态**：`-WipeData` 只在你主动要全新 guest 时才用。
+
+6. **失败路径也一定要关模拟器，并在脚本末尾显式 `exit`。**
+   旧 `finally` 的判据是 `$null -ne $serial`，而 `$serial` 只在 `Wait-ForAndroidBoot`
+   **成功**后才被赋值——于是「开机超时」恰好是唯一不关模拟器的路径，留下一个 `offline`
+   僵尸占着 AVD 锁与 5554 端口，下一轮启动直接撞上。另外，`pwsh -File` 在「WMI 启过模拟器 +
+   抛终止性错误」之后会打完异常却**不退出**（无子进程、线程全在 UserRequest），所以
+   `run_android.ps1` 把异常收成一行消息 + `exit 1`，不依赖 PowerShell 默认的收尾。
+
 ---
 
 ## 6. 排错
@@ -144,6 +164,7 @@ Windows 与 Android 两侧都已实测通过。
 | 同上，日志里是 `Change of GLES renderer detected` + `Failed to load snapshot 'default_boot'` | `-Headless` 与残留快照记录的渲染器不一致，快照加载失败后模拟器直接退出 | 去掉 `-Headless` 重跑一次：会重新生成快照，之后两者都能用（实测 2026-10-13） |
 | `dart run tool/check_coverage.dart` 以退出码 3 失败 | 新增了 `lib/core/**` / `domain/**` / `data/**` 源文件却没有测试 | 补测试；确需豁免按 ADR-0019 登记进 `tool/coverage_allowlist.txt`（`testing.md` §2） |
 | **新建 worktree** 里 `flutter test` / `flutter run` 报 `By default, this package downloads a pre-compiled SQLite library` + `SocketException` | native assets 的下载缓存是**按 worktree** 存的（`<worktree>/.dart_tool/hooks_runner/shared/sqlite3/`），新 worktree 没有缓存，一断网就失败（与代码无关，也与 Android 的 `libsqlite3.arm.android.so` 同源） | 从任一已跑通的 worktree 拷 `.dart_tool/hooks_runner/shared/sqlite3/` 过去（实测即时恢复），或等网络恢复后重跑；**不要**为它改 `pubspec.yaml` / 加本地 sqlite3 |
+| Android 模拟器日志里 `Successfully loaded snapshot` 之后就一直是 `adb.exe: device offline`，脚本干等到 `-BootTimeoutSeconds` 超时 | `snapshots/<avd>/default_boot` 是**被截断**的（`emu kill` 立即返回，而模拟器还要写十几秒；在窗口里退出就会撕坏它），`fastboot.forceFastBoot=yes` 又让每轮都加载它 | 现在 `run_android.ps1` **不读快照**并在跑完清理，所以不会再发生；手工碰到时删掉 `snapshots/<avd>/default_boot` 或加 `-no-snapshot-load` 启动。**注意**：`bootcompleted.ini` 恒为 0 字节是正常的，_不是_失败指纹（看快照目录里各文件的时间戳是否互相对不上） |
 
 ---
 
