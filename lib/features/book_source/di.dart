@@ -7,12 +7,15 @@ import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_view_store_impl.dart';
 import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
+import 'package:flutter_reader/features/book_source/data/search_scope_store_impl.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_view_store.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/search_scope_store.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/aggregate_search_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/check_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/explore_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
@@ -147,5 +150,19 @@ RunSourceDebug runSourceDebug(Ref ref) => RunSourceDebug(
 @riverpod
 Future<BookSourceViewStore> bookSourceViewStore(Ref ref) async =>
     BookSourceViewStoreImpl(
+      store: await ref.watch(preferenceStoreProvider.future),
+    );
+
+/// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
+@riverpod
+AggregateSearchBooks aggregateSearchBooks(Ref ref) => AggregateSearchBooks(
+  search: ref.watch(searchBooksProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
+/// Provides the stored search scope (ADR-0046 §决策 1).
+@riverpod
+Future<SearchScopeStore> searchScopeStore(Ref ref) async =>
+    SearchScopeStoreImpl(
       store: await ref.watch(preferenceStoreProvider.future),
     );

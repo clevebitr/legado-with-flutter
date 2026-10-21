@@ -767,3 +767,100 @@ final class BookSourceViewStoreProvider
 
 String _$bookSourceViewStoreHash() =>
     r'ed684284448cfde53d9ac00ecd256368f3fd307d';
+
+/// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
+
+@ProviderFor(aggregateSearchBooks)
+final aggregateSearchBooksProvider = AggregateSearchBooksProvider._();
+
+/// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
+
+final class AggregateSearchBooksProvider
+    extends
+        $FunctionalProvider<
+          AggregateSearchBooks,
+          AggregateSearchBooks,
+          AggregateSearchBooks
+        >
+    with $Provider<AggregateSearchBooks> {
+  /// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
+  AggregateSearchBooksProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'aggregateSearchBooksProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$aggregateSearchBooksHash();
+
+  @$internal
+  @override
+  $ProviderElement<AggregateSearchBooks> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  AggregateSearchBooks create(Ref ref) {
+    return aggregateSearchBooks(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(AggregateSearchBooks value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<AggregateSearchBooks>(value),
+    );
+  }
+}
+
+String _$aggregateSearchBooksHash() =>
+    r'4b247c6d51efc5cc47d0010dd49956d1154936f2';
+
+/// Provides the stored search scope (ADR-0046 §决策 1).
+
+@ProviderFor(searchScopeStore)
+final searchScopeStoreProvider = SearchScopeStoreProvider._();
+
+/// Provides the stored search scope (ADR-0046 §决策 1).
+
+final class SearchScopeStoreProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<SearchScopeStore>,
+          SearchScopeStore,
+          FutureOr<SearchScopeStore>
+        >
+    with $FutureModifier<SearchScopeStore>, $FutureProvider<SearchScopeStore> {
+  /// Provides the stored search scope (ADR-0046 §决策 1).
+  SearchScopeStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'searchScopeStoreProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$searchScopeStoreHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<SearchScopeStore> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<SearchScopeStore> create(Ref ref) {
+    return searchScopeStore(ref);
+  }
+}
+
+String _$searchScopeStoreHash() => r'0a82eb64b85b32c0364f86c5baa3dc6df811f379';

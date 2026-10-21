@@ -50,3 +50,7 @@ lib/features/reader/domain/repositories/reader_settings_repository.dart  # 纯�
 # --- 5.5 书源列表排序/筛选（ADR-0045）新增的豁免项 ---
 lib/features/book_source/domain/entities/book_source_sort_order.dart  # 纯枚举声明（无可测量行），属 ADR-0019 §2 的「源文件无可测量行」子情形；行为由 DAO / 仓储 / 页面测试逐键行使
 lib/features/book_source/domain/repositories/book_source_view_store.dart  # 纯接口声明（只有抽象方法签名），同属「无可测量行」子情形；契约由 BookSourceViewStoreImpl 与其测试行使
+
+# --- 3.8 聚合搜索（ADR-0046）新增的豁免项 ---
+lib/features/book_source/domain/search_match_mode.dart  # 纯枚举声明（无可测量行），属 ADR-0019 §2 的「源文件无可测量行」子情形；行为由 search_result_merger_test.dart 逐桶行使
+lib/features/book_source/domain/repositories/search_scope_store.dart  # 纯接口声明（只有抽象方法签名），同属「无可测量行」子情形；契约由 SearchScopeStoreImpl 与其测试行使

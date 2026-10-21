@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Aggregate search engine: scopes, type filters, match buckets and merging (M11, first half)
+
+- **Search scope** (`BookSearchScope`: all / groups / named sources) with upstream's JSON payload, and the fallback
+  rule: a scope that names something gone falls back to "every enabled source" instead of searching nothing
+  (ADR-0046 §decision 1).
+- **Source-type filter, defaulting to text only.** The app reads text chapters, so pulling audio / image / file
+  sources into results would offer rows that cannot be opened — a deliberate difference from upstream, which has
+  players for them (ADR-0046 §decision 2).
+- **Match modes are bucket ordering, not filtering**, ported from upstream: `equal` / `tags` / `contains` / `other`,
+  and `exact` keeps only `equal` — the part that surprises is written out as a table so it cannot be misread
+  (ADR-0046 §decision 3).
+- **Merging** de-duplicates by `(name, author)` and records every source URL as an origin, which is what the
+  "N sources" marker will count; inside a bucket the rows sort by origin count, the cap is 1000, and eviction follows
+  upstream's order (ADR-0046 §decision 4/7).
+- **One source cannot sink the batch**: per-source 60 s timeout (injected for tests), failures only counted, and an
+  all-failed batch is the only failure. "The list rule matched nothing" is read as *no results*, not as an error —
+  otherwise a keyword nobody has would be reported as every source being broken (ADR-0046 §decision 5).
+- **Pause, resume and cancel** are cooperative and land between sources, and a cancelled batch keeps what it found
+  (ADR-0046 §decision 6). Paging skips sources that declare no `page` support instead of asking them for the same
+  page again (ADR-0046 §decision 7).
+- **`resolveSearchSources`** is the one place that answers "which sources take part", so search and the 5.10 consoles
+  will share it instead of growing two selection implementations.
+- Not in this slice: the search page's scope / type / match UI and the merged result list (registered in
+  `docs/dev/roadmap.md` §3.8 as the remaining half of M11).
+- Gates: format 0 changed, analyze clean, **1150** tests, `core` 1245/1245, `domain` 2456/2456, `data` 98.47%.
+
 ### The source list can be sorted, filtered and dragged (5.5)
 
 - **Four sort keys with a fixed tie-breaker.** Manual order (the default), weight descending, response time

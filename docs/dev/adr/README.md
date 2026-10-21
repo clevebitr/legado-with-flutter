@@ -67,3 +67,4 @@
 | [0043](0043-source-check-mechanism.md) | 书源测试机制：结果写回 `book_sources`（+ `comment` 列）、`checkKeyWord` 建模与「像规则」判据、`LongRunningTask` 平台端口、失败语义不动 `ParseFailureKind` | Accepted（2026-10-21，M10 规格前置，用户裁决四项） | 本次新增 |
 | [0044](0044-reader-session-and-progress.md) | 阅读器会话：自有字号/行距/背景（与全局 textScale 叠乘）、进度端口读写、`books.tocUrl` 列（v5）、两种翻页模式与偏移估算、`canReName` 在加入书架时消费 | Accepted（2026-10-21，M4 规格前置，用户裁决四项） | 本次新增 |
 | [0045](0045-book-source-list-order-and-display.md) | 书源列表以投影列为准、四排序键 + 固定 tie-breaker、拖拽只写归一化 `customOrder`、排序与分组筛选持久化、行内展示与格式 | Accepted（2026-10-21，M6 规格前置，用户裁决四项） | 本次新增 |
+| [0046](0046-aggregate-search-scope-match-and-merge.md) | 聚合搜索：范围三态与回落、类型默认文本、匹配模式=分桶排序（equal/tags/contains/other）、`(name,author)` 去重 + origins、并发/60 s 单源超时/失败语义、暂停取消、分页与 `hasMore`、1000 条上限 | Accepted（2026-10-21，M11 规格前置，范围由 #6 裁决） | 本次新增 |
