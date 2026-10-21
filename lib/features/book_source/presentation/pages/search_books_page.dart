@@ -162,7 +162,7 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
       SearchResultsLoaded(:final List<Book> books) =>
         books.isEmpty
             ? StateMessage(message: l10n.bookSourceSearchEmpty)
-            : _books(books),
+            : _books(context, books),
       // 搜索失败后重按搜索按钮即是重试，因此这里不给重试动作。
       SearchResultsFailed(:final ParseFailureKind kind) => FailureMessage(
         kind: kind,
@@ -200,19 +200,37 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
   }
 
   /// Builds the lazily built hit list and its navigation (C-PERF-2).
-  Widget _books(List<Book> books) => ListView.builder(
+  Widget _books(BuildContext context, List<Book> books) => ListView.builder(
     itemCount: books.length,
     itemBuilder: (BuildContext context, int index) {
       final Book book = books[index];
-      // 作者缺失时不显示副标题；不做字符串拼接，用户可见文本只来自 ARB/书源。
+      // 作者 / 更新时间缺失时不显示对应行；不做字符串拼接，用户可见文本只来自 ARB/书源。
       final String? author = switch (book.author) {
+        final String value when value.isNotEmpty => value,
+        _ => null,
+      };
+      final String? updated = switch (book.updateTime) {
         final String value when value.isNotEmpty => value,
         _ => null,
       };
 
       return ListTile(
         title: Text(book.name),
-        subtitle: author == null ? null : Text(author),
+        subtitle: switch ((author, updated)) {
+          (null, null) => null,
+          // 两行都有时用换行分成两行，避免和「作者：…」的格式混在一行里读不清。
+          (final String by, final String at) => Text(
+            '${AppLocalizations.of(context).bookSourceAuthorLine(by)}\n'
+            '${AppLocalizations.of(context).bookSourceUpdateTimeLine(at)}',
+          ),
+          (final String by, null) => Text(
+            AppLocalizations.of(context).bookSourceAuthorLine(by),
+          ),
+          (null, final String at) => Text(
+            AppLocalizations.of(context).bookSourceUpdateTimeLine(at),
+          ),
+        },
+        isThreeLine: author != null && updated != null,
         onTap: () => pushBookSourceRoute(
           context,
           BookSourceRoute.bookDetail(book: book),

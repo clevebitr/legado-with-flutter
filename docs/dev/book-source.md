@@ -76,8 +76,8 @@
 > **`updateTime` 出现在四处（上游事实）：** `SearchRule` / `ExploreRule`（列表项）、`BookInfoRule`（详情）、
 > `TocRule`（章节）。本仓四处**同批建模（M1-b1）**，值都是**展示用字符串**（规则结果原文，不做日期解析；
 > 章节侧可调用 `java.timeFormat`，见 §6）。**状态（M1-b1 已落地）：** 四处字段 + 承载实体
-> （`Book` / `BookInfo` / `Chapter`）已入库；展示方（列表 / 详情 / 目录 UI）归 Phase 5
-> （`docs/dev/roadmap.md` §3.7）。
+> （`Book` / `BookInfo` / `Chapter`）已入库；展示方（列表 / 详情 / 目录 UI）**已在 5.3 落地**
+> （2026-10-21，`bookSourceUpdateTimeLine`，空值不显示）。
 >
 > **`canReName` 的上游语义（2026-10-13 取证，照抄为有意行为）：** 上游只在
 > `BookInfo.kt:65` 判「`canReName` 规则字段非空白」+ 调用方开关（入口自己传 `canReName`，`WebBook.kt:235-238`），

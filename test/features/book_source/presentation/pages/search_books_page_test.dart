@@ -102,11 +102,37 @@ void main() {
       );
       await _search(tester, corpusKeyword);
 
+      final AppLocalizations l10n = _l10n(tester);
       // 命中的是生产链路：模板渲染 + 关键词编码 + 规则引擎都由真实实现完成。
       expect(http.requestedUrls, <String>[corpusSearchUrl]);
       expect(find.text('书名一'), findsOneWidget);
-      expect(find.text('作者甲'), findsOneWidget);
+      // 作者行现在走 ARB（与详情页同一句话），不再是裸的作者名。
+      expect(find.text(l10n.bookSourceAuthorLine('作者甲')), findsOneWidget);
       expect(find.text('书名二'), findsOneWidget);
+    });
+
+    testWidgets('search_givenAnUpdateTimeRule_showsTheUpdateLine', (
+      WidgetTester tester,
+    ) async {
+      // §3.7 的「updateTime 的展示」：规则给了就显示，没给就不显示（不写「未知」）。
+      final BookSource source = loadCorpusBookSource().copyWith(
+        searchRule: loadCorpusBookSource().searchRule.copyWith(
+          updateTime: 'class.result-game-item-info-tag.2@tag.span.1@text',
+        ),
+      );
+
+      await pumpBookSourcePage(
+        tester,
+        page: const SearchBooksPage(),
+        source: source,
+        http: serveCorpusPages(FakeHttpClient()),
+      );
+      await _search(tester, corpusKeyword);
+
+      expect(
+        find.textContaining(_l10n(tester).bookSourceUpdateTimeLine('')),
+        findsWidgets,
+      );
     });
 
     testWidgets('search_givenHitsWithoutUrl_showsTheEmptyResultMessage', (

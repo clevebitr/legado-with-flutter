@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The reader lands: its own typography, both page modes and remembered positions (2026-10-21)
+
+- **New `reader` feature (5.3).** `ReaderPage` / `ReaderRoute` moved out of `book_source`; the page shows one chapter
+  with the chapter list, the reading settings and previous / next around it, and it opens from a detail page's chapter
+  row (at that chapter) or from a shelf row (where the reader stopped).
+- **Reading settings are the reader's own**: text size, line spacing, background and page mode, stored in
+  `shared_preferences` and **multiplied on top of** the app-wide text scale instead of sharing one knob. Backgrounds
+  are derived from theme colours (system / paper / sepia / dark), so the reader still follows the theme and dynamic
+  colour (ADR-0044 §decision 1).
+- **Both page modes** (user decision): a scrolling body and pages split by a real `TextPainter` measurement, with an
+  end-of-chapter page that offers the next chapter. The character offset is a documented **estimate**
+  (fraction read x body length), which is what survives a font change (ADR-0044 §decision 4).
+- **Progress is read and written through one port.** ADR-0041 listed only a writer; restoring a position needs a
+  reader, so `ReadingProgressStore` is read + write and the composition root binds it to the shelf, which owns the
+  table. A cancelled/absent binding degrades to "start at the first chapter" plus a warning (ADR-0044 §decision 2).
+- **`books.tocUrl`** (schemaVersion 4 -> 5, dumped schema, migration tests, a real write in `on_disk_database_test`)
+  so opening from the shelf does not have to guess where a source keeps its chapters (ADR-0044 §decision 3).
+- **Two registered items are closed:** `updateTime` is shown in the hit list, the detail block and the chapter rows
+  (empty means no line, never "unknown"), and `canReName` found its consumer: adding an already-stored book only
+  overwrites its title and author when the source declares the rule (ADR-0044 §decision 5).
+- **ADR-0044** records the four decisions this slice had to make; the new open items (exact character anchors, page
+  break approximation, cross-chapter paging, golden baselines) are registered in `docs/dev/roadmap.md` §3.7 with
+  their triggers.
+- Gates: format 0 changed, analyze clean, **1050** tests, `core` 1225/1225, `domain` 2198/2198, `data` 98.2%,
+  generated files in sync; Windows and Android device-level tests re-run.
+
 ### The book-source check mechanism lands: batch verdicts and a single-source console (2026-10-21)
 
 - **Batch check (5.10).** `CheckBookSource` walks search -> detail -> chapters -> body (explore the same way) on one

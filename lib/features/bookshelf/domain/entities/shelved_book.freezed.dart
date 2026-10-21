@@ -15,7 +15,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ShelvedBook {
 
- int get id; String get sourceUrl; String get bookUrl; String get name; String? get author; String? get kind; String? get coverUrl; String? get intro; String? get lastChapter; ShelfStatus get status; bool get isPinned; DateTime get addedAt; ReadingProgressPosition? get progress;
+ int get id; String get sourceUrl; String get bookUrl;/// The table-of-contents URL the detail page resolved; `null` for rows stored before 5.3.
+ String? get tocUrl;/// The title shown on the shelf.
+ String get name; String? get author; String? get kind; String? get coverUrl; String? get intro; String? get lastChapter; ShelfStatus get status; bool get isPinned; DateTime get addedAt; ReadingProgressPosition? get progress;
 /// Create a copy of ShelvedBook
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,20 +29,20 @@ $ShelvedBookCopyWith<ShelvedBook> get copyWith => _$ShelvedBookCopyWithImpl<Shel
 @override
 bool operator ==(Object other) {
   final _this = this as ShelvedBook;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ShelvedBook&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.sourceUrl, _this.sourceUrl) || other.sourceUrl == _this.sourceUrl)&&(identical(other.bookUrl, _this.bookUrl) || other.bookUrl == _this.bookUrl)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.coverUrl, _this.coverUrl) || other.coverUrl == _this.coverUrl)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.lastChapter, _this.lastChapter) || other.lastChapter == _this.lastChapter)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.isPinned, _this.isPinned) || other.isPinned == _this.isPinned)&&(identical(other.addedAt, _this.addedAt) || other.addedAt == _this.addedAt)&&(identical(other.progress, _this.progress) || other.progress == _this.progress));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ShelvedBook&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.sourceUrl, _this.sourceUrl) || other.sourceUrl == _this.sourceUrl)&&(identical(other.bookUrl, _this.bookUrl) || other.bookUrl == _this.bookUrl)&&(identical(other.tocUrl, _this.tocUrl) || other.tocUrl == _this.tocUrl)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.coverUrl, _this.coverUrl) || other.coverUrl == _this.coverUrl)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.lastChapter, _this.lastChapter) || other.lastChapter == _this.lastChapter)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.isPinned, _this.isPinned) || other.isPinned == _this.isPinned)&&(identical(other.addedAt, _this.addedAt) || other.addedAt == _this.addedAt)&&(identical(other.progress, _this.progress) || other.progress == _this.progress));
 }
 
 
 @override
 int get hashCode {
   final _this = this as ShelvedBook;
-  return Object.hash(runtimeType,_this.id,_this.sourceUrl,_this.bookUrl,_this.name,_this.author,_this.kind,_this.coverUrl,_this.intro,_this.lastChapter,_this.status,_this.isPinned,_this.addedAt,_this.progress);
+  return Object.hash(runtimeType,_this.id,_this.sourceUrl,_this.bookUrl,_this.tocUrl,_this.name,_this.author,_this.kind,_this.coverUrl,_this.intro,_this.lastChapter,_this.status,_this.isPinned,_this.addedAt,_this.progress);
 }
 
 @override
 String toString() {
   final _this = this as ShelvedBook;
-  return 'ShelvedBook(id: ${_this.id}, sourceUrl: ${_this.sourceUrl}, bookUrl: ${_this.bookUrl}, name: ${_this.name}, author: ${_this.author}, kind: ${_this.kind}, coverUrl: ${_this.coverUrl}, intro: ${_this.intro}, lastChapter: ${_this.lastChapter}, status: ${_this.status}, isPinned: ${_this.isPinned}, addedAt: ${_this.addedAt}, progress: ${_this.progress})';
+  return 'ShelvedBook(id: ${_this.id}, sourceUrl: ${_this.sourceUrl}, bookUrl: ${_this.bookUrl}, tocUrl: ${_this.tocUrl}, name: ${_this.name}, author: ${_this.author}, kind: ${_this.kind}, coverUrl: ${_this.coverUrl}, intro: ${_this.intro}, lastChapter: ${_this.lastChapter}, status: ${_this.status}, isPinned: ${_this.isPinned}, addedAt: ${_this.addedAt}, progress: ${_this.progress})';
 }
 
 
@@ -51,7 +53,7 @@ abstract mixin class $ShelvedBookCopyWith<$Res>  {
   factory $ShelvedBookCopyWith(ShelvedBook value, $Res Function(ShelvedBook) _then) = _$ShelvedBookCopyWithImpl;
 @useResult
 $Res call({
- int id, String sourceUrl, String bookUrl, String name, String? author, String? kind, String? coverUrl, String? intro, String? lastChapter, ShelfStatus status, bool isPinned, DateTime addedAt, ReadingProgressPosition? progress
+ int id, String sourceUrl, String bookUrl, String? tocUrl, String name, String? author, String? kind, String? coverUrl, String? intro, String? lastChapter, ShelfStatus status, bool isPinned, DateTime addedAt, ReadingProgressPosition? progress
 });
 
 
@@ -68,12 +70,13 @@ class _$ShelvedBookCopyWithImpl<$Res>
 
 /// Create a copy of ShelvedBook
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? sourceUrl = null,Object? bookUrl = null,Object? name = null,Object? author = freezed,Object? kind = freezed,Object? coverUrl = freezed,Object? intro = freezed,Object? lastChapter = freezed,Object? status = null,Object? isPinned = null,Object? addedAt = null,Object? progress = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? sourceUrl = null,Object? bookUrl = null,Object? tocUrl = freezed,Object? name = null,Object? author = freezed,Object? kind = freezed,Object? coverUrl = freezed,Object? intro = freezed,Object? lastChapter = freezed,Object? status = null,Object? isPinned = null,Object? addedAt = null,Object? progress = freezed,}) {
   return _then(ShelvedBook(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,sourceUrl: null == sourceUrl ? _self.sourceUrl : sourceUrl // ignore: cast_nullable_to_non_nullable
 as String,bookUrl: null == bookUrl ? _self.bookUrl : bookUrl // ignore: cast_nullable_to_non_nullable
-as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,tocUrl: freezed == tocUrl ? _self.tocUrl : tocUrl // ignore: cast_nullable_to_non_nullable
+as String?,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,author: freezed == author ? _self.author : author // ignore: cast_nullable_to_non_nullable
 as String?,kind: freezed == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
 as String?,coverUrl: freezed == coverUrl ? _self.coverUrl : coverUrl // ignore: cast_nullable_to_non_nullable
@@ -180,10 +183,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String sourceUrl,  String bookUrl,  String name,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  ShelfStatus status,  bool isPinned,  DateTime addedAt,  ReadingProgressPosition? progress)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String sourceUrl,  String bookUrl,  String? tocUrl,  String name,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  ShelfStatus status,  bool isPinned,  DateTime addedAt,  ReadingProgressPosition? progress)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ShelvedBook() when $default != null:
-return $default(_that.id,_that.sourceUrl,_that.bookUrl,_that.name,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.status,_that.isPinned,_that.addedAt,_that.progress);case _:
+return $default(_that.id,_that.sourceUrl,_that.bookUrl,_that.tocUrl,_that.name,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.status,_that.isPinned,_that.addedAt,_that.progress);case _:
   return orElse();
 
 }
@@ -201,10 +204,10 @@ return $default(_that.id,_that.sourceUrl,_that.bookUrl,_that.name,_that.author,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String sourceUrl,  String bookUrl,  String name,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  ShelfStatus status,  bool isPinned,  DateTime addedAt,  ReadingProgressPosition? progress)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String sourceUrl,  String bookUrl,  String? tocUrl,  String name,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  ShelfStatus status,  bool isPinned,  DateTime addedAt,  ReadingProgressPosition? progress)  $default,) {final _that = this;
 switch (_that) {
 case _ShelvedBook():
-return $default(_that.id,_that.sourceUrl,_that.bookUrl,_that.name,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.status,_that.isPinned,_that.addedAt,_that.progress);case _:
+return $default(_that.id,_that.sourceUrl,_that.bookUrl,_that.tocUrl,_that.name,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.status,_that.isPinned,_that.addedAt,_that.progress);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -221,10 +224,10 @@ return $default(_that.id,_that.sourceUrl,_that.bookUrl,_that.name,_that.author,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String sourceUrl,  String bookUrl,  String name,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  ShelfStatus status,  bool isPinned,  DateTime addedAt,  ReadingProgressPosition? progress)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String sourceUrl,  String bookUrl,  String? tocUrl,  String name,  String? author,  String? kind,  String? coverUrl,  String? intro,  String? lastChapter,  ShelfStatus status,  bool isPinned,  DateTime addedAt,  ReadingProgressPosition? progress)?  $default,) {final _that = this;
 switch (_that) {
 case _ShelvedBook() when $default != null:
-return $default(_that.id,_that.sourceUrl,_that.bookUrl,_that.name,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.status,_that.isPinned,_that.addedAt,_that.progress);case _:
+return $default(_that.id,_that.sourceUrl,_that.bookUrl,_that.tocUrl,_that.name,_that.author,_that.kind,_that.coverUrl,_that.intro,_that.lastChapter,_that.status,_that.isPinned,_that.addedAt,_that.progress);case _:
   return null;
 
 }
@@ -236,12 +239,15 @@ return $default(_that.id,_that.sourceUrl,_that.bookUrl,_that.name,_that.author,_
 
 
 class _ShelvedBook implements ShelvedBook {
-  const _ShelvedBook({required this.id, required this.sourceUrl, required this.bookUrl, required this.name, this.author, this.kind, this.coverUrl, this.intro, this.lastChapter, this.status = ShelfStatus.tracking, this.isPinned = false, required this.addedAt, this.progress});
+  const _ShelvedBook({required this.id, required this.sourceUrl, required this.bookUrl, this.tocUrl, required this.name, this.author, this.kind, this.coverUrl, this.intro, this.lastChapter, this.status = ShelfStatus.tracking, this.isPinned = false, required this.addedAt, this.progress});
   
 
 @override final  int id;
 @override final  String sourceUrl;
 @override final  String bookUrl;
+/// The table-of-contents URL the detail page resolved; `null` for rows stored before 5.3.
+@override final  String? tocUrl;
+/// The title shown on the shelf.
 @override final  String name;
 @override final  String? author;
 @override final  String? kind;
@@ -263,18 +269,18 @@ _$ShelvedBookCopyWith<_ShelvedBook> get copyWith => __$ShelvedBookCopyWithImpl<_
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ShelvedBook&&(identical(other.id, id) || other.id == id)&&(identical(other.sourceUrl, sourceUrl) || other.sourceUrl == sourceUrl)&&(identical(other.bookUrl, bookUrl) || other.bookUrl == bookUrl)&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.coverUrl, coverUrl) || other.coverUrl == coverUrl)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.lastChapter, lastChapter) || other.lastChapter == lastChapter)&&(identical(other.status, status) || other.status == status)&&(identical(other.isPinned, isPinned) || other.isPinned == isPinned)&&(identical(other.addedAt, addedAt) || other.addedAt == addedAt)&&(identical(other.progress, progress) || other.progress == progress));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ShelvedBook&&(identical(other.id, id) || other.id == id)&&(identical(other.sourceUrl, sourceUrl) || other.sourceUrl == sourceUrl)&&(identical(other.bookUrl, bookUrl) || other.bookUrl == bookUrl)&&(identical(other.tocUrl, tocUrl) || other.tocUrl == tocUrl)&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.coverUrl, coverUrl) || other.coverUrl == coverUrl)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.lastChapter, lastChapter) || other.lastChapter == lastChapter)&&(identical(other.status, status) || other.status == status)&&(identical(other.isPinned, isPinned) || other.isPinned == isPinned)&&(identical(other.addedAt, addedAt) || other.addedAt == addedAt)&&(identical(other.progress, progress) || other.progress == progress));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,id,sourceUrl,bookUrl,name,author,kind,coverUrl,intro,lastChapter,status,isPinned,addedAt,progress);
+    return Object.hash(runtimeType,id,sourceUrl,bookUrl,tocUrl,name,author,kind,coverUrl,intro,lastChapter,status,isPinned,addedAt,progress);
 }
 
 @override
 String toString() {
-    return 'ShelvedBook(id: $id, sourceUrl: $sourceUrl, bookUrl: $bookUrl, name: $name, author: $author, kind: $kind, coverUrl: $coverUrl, intro: $intro, lastChapter: $lastChapter, status: $status, isPinned: $isPinned, addedAt: $addedAt, progress: $progress)';
+    return 'ShelvedBook(id: $id, sourceUrl: $sourceUrl, bookUrl: $bookUrl, tocUrl: $tocUrl, name: $name, author: $author, kind: $kind, coverUrl: $coverUrl, intro: $intro, lastChapter: $lastChapter, status: $status, isPinned: $isPinned, addedAt: $addedAt, progress: $progress)';
 }
 
 
@@ -285,7 +291,7 @@ abstract mixin class _$ShelvedBookCopyWith<$Res> implements $ShelvedBookCopyWith
   factory _$ShelvedBookCopyWith(_ShelvedBook value, $Res Function(_ShelvedBook) _then) = __$ShelvedBookCopyWithImpl;
 @override @useResult
 $Res call({
- int id, String sourceUrl, String bookUrl, String name, String? author, String? kind, String? coverUrl, String? intro, String? lastChapter, ShelfStatus status, bool isPinned, DateTime addedAt, ReadingProgressPosition? progress
+ int id, String sourceUrl, String bookUrl, String? tocUrl, String name, String? author, String? kind, String? coverUrl, String? intro, String? lastChapter, ShelfStatus status, bool isPinned, DateTime addedAt, ReadingProgressPosition? progress
 });
 
 
@@ -302,12 +308,13 @@ class __$ShelvedBookCopyWithImpl<$Res>
 
 /// Create a copy of ShelvedBook
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? sourceUrl = null,Object? bookUrl = null,Object? name = null,Object? author = freezed,Object? kind = freezed,Object? coverUrl = freezed,Object? intro = freezed,Object? lastChapter = freezed,Object? status = null,Object? isPinned = null,Object? addedAt = null,Object? progress = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? sourceUrl = null,Object? bookUrl = null,Object? tocUrl = freezed,Object? name = null,Object? author = freezed,Object? kind = freezed,Object? coverUrl = freezed,Object? intro = freezed,Object? lastChapter = freezed,Object? status = null,Object? isPinned = null,Object? addedAt = null,Object? progress = freezed,}) {
   return _then(_ShelvedBook(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,sourceUrl: null == sourceUrl ? _self.sourceUrl : sourceUrl // ignore: cast_nullable_to_non_nullable
 as String,bookUrl: null == bookUrl ? _self.bookUrl : bookUrl // ignore: cast_nullable_to_non_nullable
-as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,tocUrl: freezed == tocUrl ? _self.tocUrl : tocUrl // ignore: cast_nullable_to_non_nullable
+as String?,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,author: freezed == author ? _self.author : author // ignore: cast_nullable_to_non_nullable
 as String?,kind: freezed == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
 as String?,coverUrl: freezed == coverUrl ? _self.coverUrl : coverUrl // ignore: cast_nullable_to_non_nullable

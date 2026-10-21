@@ -34,12 +34,14 @@ void main() {
     Future<int> insert({
       String sourceUrl = 'https://source.test',
       String bookUrl = 'https://source.test/book/1',
+      String? tocUrl = 'https://source.test/book/1/toc',
       String name = '剑来',
       String? author = '烽火戏诸侯',
       String? lastChapter = '第1279章',
     }) => dao.insertNew(
       sourceUrl: sourceUrl,
       bookUrl: bookUrl,
+      tocUrl: tocUrl,
       name: name,
       author: author,
       kind: '玄幻',
@@ -89,6 +91,45 @@ void main() {
       );
     });
 
+    test('insertNew_whenCalled_keepsTheTocUrl', () async {
+      await insert();
+
+      expect(
+        (await dao.findAll()).single.book.tocUrl,
+        'https://source.test/book/1/toc',
+      );
+    });
+
+    test(
+      'refreshDetails_givenNoRenamePermission_keepsTheStoredTitle',
+      () async {
+        // ADR-0044 §决策 5：没声明 `canReName` 的源不得改写用户已看到的书名 / 作者，
+        // 但封面、简介、最新章节这些页面派生的字段照样刷新。
+        final int id = await insert();
+
+        await dao.refreshDetails(
+          id: id,
+          tocUrl: 'https://source.test/book/1/toc2',
+          name: '别的名字',
+          author: '别的作者',
+          kind: '武侠',
+          coverUrl: 'https://source.test/c.jpg',
+          intro: '新简介',
+          lastChapter: '第1281章',
+          rewritesTitle: false,
+        );
+
+        final BookRow row = (await dao.findAll()).single.book;
+        expect(row.name, '剑来');
+        expect(row.author, '烽火戏诸侯');
+        expect(row.kind, '武侠');
+        expect(row.coverUrl, 'https://source.test/c.jpg');
+        expect(row.intro, '新简介');
+        expect(row.lastChapter, '第1281章');
+        expect(row.tocUrl, 'https://source.test/book/1/toc2');
+      },
+    );
+
     test('refreshDetails_whenCalled_keepsTheUserState', () async {
       final int id = await insert();
       await dao.updateUserState(id: id, status: 1, isPinned: true);
@@ -96,6 +137,8 @@ void main() {
 
       await dao.refreshDetails(
         id: id,
+        tocUrl: 'https://source.test/book/1/toc',
+        rewritesTitle: true,
         name: '剑来（修订）',
         author: '烽火戏诸侯',
         kind: '玄幻',

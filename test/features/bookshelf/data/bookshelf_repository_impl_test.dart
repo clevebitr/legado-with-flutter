@@ -40,16 +40,22 @@ void main() {
     ShelfCandidate candidate({
       String sourceUrl = 'https://source.test',
       String bookUrl = 'https://source.test/book/1',
+      String? tocUrl = 'https://source.test/book/1/toc',
       String name = '剑来',
       String? author = '烽火戏诸侯',
+      bool canReName = false,
+      String? coverUrl = 'https://source.test/cover.jpg',
+      String? intro = '简介',
     }) => ShelfCandidate(
       sourceUrl: sourceUrl,
       bookUrl: bookUrl,
+      tocUrl: tocUrl,
+      canReName: canReName,
       name: name,
       author: author,
       kind: '玄幻',
-      coverUrl: 'https://source.test/cover.jpg',
-      intro: '简介',
+      coverUrl: coverUrl,
+      intro: intro,
       lastChapter: '第1279章',
     );
 
@@ -84,7 +90,9 @@ void main() {
         isPinned: true,
       );
 
-      await repository.add(candidate(name: '剑来（全本）'));
+      // 快照刷新（含改名）只在源声明 `canReName` 时发生，用户态任何时候都不动
+      // （ADR-0044 §决策 5）。
+      await repository.add(candidate(name: '剑来（全本）', canReName: true));
 
       final List<ShelvedBook> books = await repository.getAll();
       expect(books, hasLength(1));
@@ -122,6 +130,45 @@ void main() {
       await repository.remove(added.id);
 
       expect(await repository.getAll(), isEmpty);
+    });
+
+    test('add_whenNew_keepsTheTocUrl', () async {
+      // ADR-0044 §决策 3：目录地址随加入书架一起入库，书架打开阅读器时不必猜。
+      await repository.add(candidate());
+
+      expect(
+        (await repository.getAll()).single.tocUrl,
+        'https://source.test/book/1/toc',
+      );
+    });
+
+    test('add_givenNoRenamePermission_keepsTheStoredTitleAndAuthor', () async {
+      await repository.add(candidate());
+
+      await repository.add(
+        candidate(
+          name: '剑来（修订）',
+          author: '别的作者',
+          coverUrl: 'https://source.test/cover2.jpg',
+        ),
+      );
+
+      final ShelvedBook row = (await repository.getAll()).single;
+      // ADR-0044 §决策 5：没声明 canReName 的源不得改名，但页面派生字段照常刷新。
+      expect(row.name, '剑来');
+      expect(row.author, '烽火戏诸侯');
+      expect(row.coverUrl, 'https://source.test/cover2.jpg');
+    });
+
+    test('add_givenRenamePermission_overwritesTheTitleAndAuthor', () async {
+      await repository.add(candidate());
+
+      await repository.add(
+        candidate(name: '剑来（修订）', author: '烽火戏诸侯', canReName: true),
+      );
+
+      final ShelvedBook row = (await repository.getAll()).single;
+      expect(row.name, '剑来（修订）');
     });
 
     test('saveProgress_whenCalled_showsUpOnTheShelfEntry', () async {

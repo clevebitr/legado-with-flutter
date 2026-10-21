@@ -1222,6 +1222,15 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _tocUrlMeta = const VerificationMeta('tocUrl');
+  @override
+  late final GeneratedColumn<String> tocUrl = GeneratedColumn<String>(
+    'toc_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -1332,6 +1341,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
     id,
     sourceUrl,
     bookUrl,
+    tocUrl,
     name,
     author,
     kind,
@@ -1373,6 +1383,12 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
       );
     } else if (isInserting) {
       context.missing(_bookUrlMeta);
+    }
+    if (data.containsKey('toc_url')) {
+      context.handle(
+        _tocUrlMeta,
+        tocUrl.isAcceptableOrUnknown(data['toc_url']!, _tocUrlMeta),
+      );
     }
     if (data.containsKey('name')) {
       context.handle(
@@ -1468,6 +1484,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
         DriftSqlType.string,
         data['${effectivePrefix}book_url'],
       )!,
+      tocUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}toc_url'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -1527,6 +1547,13 @@ class BookRow extends DataClass implements Insertable<BookRow> {
   /// The detail page URL — the book's identity inside one source.
   final String bookUrl;
 
+  /// The table-of-contents URL the detail page resolved (`ruleBookInfo.tocUrl`, 5.3).
+  ///
+  /// It is a **nullable** column rather than something the reader can derive: a source may keep its
+  /// chapters on a page of their own, and the book page is then the wrong address. Opening the
+  /// reader from the shelf falls back to [bookUrl] when the row predates this column (ADR-0044 §决策 3).
+  final String? tocUrl;
+
   /// The title shown on the shelf.
   final String name;
 
@@ -1560,6 +1587,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     required this.id,
     required this.sourceUrl,
     required this.bookUrl,
+    this.tocUrl,
     required this.name,
     this.author,
     this.kind,
@@ -1577,6 +1605,9 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     map['id'] = Variable<int>(id);
     map['source_url'] = Variable<String>(sourceUrl);
     map['book_url'] = Variable<String>(bookUrl);
+    if (!nullToAbsent || tocUrl != null) {
+      map['toc_url'] = Variable<String>(tocUrl);
+    }
     map['name'] = Variable<String>(name);
     if (!nullToAbsent || author != null) {
       map['author'] = Variable<String>(author);
@@ -1605,6 +1636,9 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       id: Value(id),
       sourceUrl: Value(sourceUrl),
       bookUrl: Value(bookUrl),
+      tocUrl: tocUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tocUrl),
       name: Value(name),
       author: author == null && nullToAbsent
           ? const Value.absent()
@@ -1635,6 +1669,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       id: serializer.fromJson<int>(json['id']),
       sourceUrl: serializer.fromJson<String>(json['sourceUrl']),
       bookUrl: serializer.fromJson<String>(json['bookUrl']),
+      tocUrl: serializer.fromJson<String?>(json['tocUrl']),
       name: serializer.fromJson<String>(json['name']),
       author: serializer.fromJson<String?>(json['author']),
       kind: serializer.fromJson<String?>(json['kind']),
@@ -1654,6 +1689,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       'id': serializer.toJson<int>(id),
       'sourceUrl': serializer.toJson<String>(sourceUrl),
       'bookUrl': serializer.toJson<String>(bookUrl),
+      'tocUrl': serializer.toJson<String?>(tocUrl),
       'name': serializer.toJson<String>(name),
       'author': serializer.toJson<String?>(author),
       'kind': serializer.toJson<String?>(kind),
@@ -1671,6 +1707,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     int? id,
     String? sourceUrl,
     String? bookUrl,
+    Value<String?> tocUrl = const Value.absent(),
     String? name,
     Value<String?> author = const Value.absent(),
     Value<String?> kind = const Value.absent(),
@@ -1685,6 +1722,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     id: id ?? this.id,
     sourceUrl: sourceUrl ?? this.sourceUrl,
     bookUrl: bookUrl ?? this.bookUrl,
+    tocUrl: tocUrl.present ? tocUrl.value : this.tocUrl,
     name: name ?? this.name,
     author: author.present ? author.value : this.author,
     kind: kind.present ? kind.value : this.kind,
@@ -1701,6 +1739,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       id: data.id.present ? data.id.value : this.id,
       sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
       bookUrl: data.bookUrl.present ? data.bookUrl.value : this.bookUrl,
+      tocUrl: data.tocUrl.present ? data.tocUrl.value : this.tocUrl,
       name: data.name.present ? data.name.value : this.name,
       author: data.author.present ? data.author.value : this.author,
       kind: data.kind.present ? data.kind.value : this.kind,
@@ -1722,6 +1761,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
           ..write('id: $id, ')
           ..write('sourceUrl: $sourceUrl, ')
           ..write('bookUrl: $bookUrl, ')
+          ..write('tocUrl: $tocUrl, ')
           ..write('name: $name, ')
           ..write('author: $author, ')
           ..write('kind: $kind, ')
@@ -1741,6 +1781,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     id,
     sourceUrl,
     bookUrl,
+    tocUrl,
     name,
     author,
     kind,
@@ -1759,6 +1800,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
           other.id == this.id &&
           other.sourceUrl == this.sourceUrl &&
           other.bookUrl == this.bookUrl &&
+          other.tocUrl == this.tocUrl &&
           other.name == this.name &&
           other.author == this.author &&
           other.kind == this.kind &&
@@ -1775,6 +1817,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
   final Value<int> id;
   final Value<String> sourceUrl;
   final Value<String> bookUrl;
+  final Value<String?> tocUrl;
   final Value<String> name;
   final Value<String?> author;
   final Value<String?> kind;
@@ -1789,6 +1832,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     this.id = const Value.absent(),
     this.sourceUrl = const Value.absent(),
     this.bookUrl = const Value.absent(),
+    this.tocUrl = const Value.absent(),
     this.name = const Value.absent(),
     this.author = const Value.absent(),
     this.kind = const Value.absent(),
@@ -1804,6 +1848,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     this.id = const Value.absent(),
     required String sourceUrl,
     required String bookUrl,
+    this.tocUrl = const Value.absent(),
     required String name,
     this.author = const Value.absent(),
     this.kind = const Value.absent(),
@@ -1823,6 +1868,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     Expression<int>? id,
     Expression<String>? sourceUrl,
     Expression<String>? bookUrl,
+    Expression<String>? tocUrl,
     Expression<String>? name,
     Expression<String>? author,
     Expression<String>? kind,
@@ -1838,6 +1884,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
       if (id != null) 'id': id,
       if (sourceUrl != null) 'source_url': sourceUrl,
       if (bookUrl != null) 'book_url': bookUrl,
+      if (tocUrl != null) 'toc_url': tocUrl,
       if (name != null) 'name': name,
       if (author != null) 'author': author,
       if (kind != null) 'kind': kind,
@@ -1855,6 +1902,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     Value<int>? id,
     Value<String>? sourceUrl,
     Value<String>? bookUrl,
+    Value<String?>? tocUrl,
     Value<String>? name,
     Value<String?>? author,
     Value<String?>? kind,
@@ -1870,6 +1918,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
       id: id ?? this.id,
       sourceUrl: sourceUrl ?? this.sourceUrl,
       bookUrl: bookUrl ?? this.bookUrl,
+      tocUrl: tocUrl ?? this.tocUrl,
       name: name ?? this.name,
       author: author ?? this.author,
       kind: kind ?? this.kind,
@@ -1894,6 +1943,9 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     }
     if (bookUrl.present) {
       map['book_url'] = Variable<String>(bookUrl.value);
+    }
+    if (tocUrl.present) {
+      map['toc_url'] = Variable<String>(tocUrl.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -1934,6 +1986,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
           ..write('id: $id, ')
           ..write('sourceUrl: $sourceUrl, ')
           ..write('bookUrl: $bookUrl, ')
+          ..write('tocUrl: $tocUrl, ')
           ..write('name: $name, ')
           ..write('author: $author, ')
           ..write('kind: $kind, ')
@@ -2991,6 +3044,7 @@ typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
   Value<int> id,
   required String sourceUrl,
   required String bookUrl,
+  Value<String?> tocUrl,
   required String name,
   Value<String?> author,
   Value<String?> kind,
@@ -3006,6 +3060,7 @@ typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
   Value<int> id,
   Value<String> sourceUrl,
   Value<String> bookUrl,
+  Value<String?> tocUrl,
   Value<String> name,
   Value<String?> author,
   Value<String?> kind,
@@ -3039,6 +3094,11 @@ class $$BooksTableFilterComposer
 
   ColumnFilters<String> get bookUrl => $composableBuilder(
     column: $table.bookUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tocUrl => $composableBuilder(
+    column: $table.tocUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3117,6 +3177,11 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get tocUrl => $composableBuilder(
+    column: $table.tocUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -3186,6 +3251,9 @@ class $$BooksTableAnnotationComposer
   GeneratedColumn<String> get bookUrl =>
       $composableBuilder(column: $table.bookUrl, builder: (column) => column);
 
+  GeneratedColumn<String> get tocUrl =>
+      $composableBuilder(column: $table.tocUrl, builder: (column) => column);
+
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
 
@@ -3250,6 +3318,7 @@ class $$BooksTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> sourceUrl = const Value.absent(),
                 Value<String> bookUrl = const Value.absent(),
+                Value<String?> tocUrl = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> author = const Value.absent(),
                 Value<String?> kind = const Value.absent(),
@@ -3264,6 +3333,7 @@ class $$BooksTableTableManager
                 id: id,
                 sourceUrl: sourceUrl,
                 bookUrl: bookUrl,
+                tocUrl: tocUrl,
                 name: name,
                 author: author,
                 kind: kind,
@@ -3280,6 +3350,7 @@ class $$BooksTableTableManager
                 Value<int> id = const Value.absent(),
                 required String sourceUrl,
                 required String bookUrl,
+                Value<String?> tocUrl = const Value.absent(),
                 required String name,
                 Value<String?> author = const Value.absent(),
                 Value<String?> kind = const Value.absent(),
@@ -3294,6 +3365,7 @@ class $$BooksTableTableManager
                 id: id,
                 sourceUrl: sourceUrl,
                 bookUrl: bookUrl,
+                tocUrl: tocUrl,
                 name: name,
                 author: author,
                 kind: kind,

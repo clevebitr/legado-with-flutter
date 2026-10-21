@@ -606,5 +606,82 @@
   "bookSourceDebugStatusIdle": "Not run yet",
   "@bookSourceDebugStatusIdle": {
     "description": "Run status before anything has been started."
+  },
+  "readerTocAction": "Chapters",
+  "@readerTocAction": {
+    "description": "Action that opens the chapter list of the reader."
+  },
+  "readerSettingsAction": "Reading settings",
+  "@readerSettingsAction": {
+    "description": "Action that opens the reader settings sheet."
+  },
+  "readerFontSize": "Text size",
+  "@readerFontSize": {
+    "description": "Label of the reader font size slider."
+  },
+  "readerLineHeight": "Line spacing",
+  "@readerLineHeight": {
+    "description": "Label of the reader line height slider."
+  },
+  "readerBackground": "Background",
+  "@readerBackground": {
+    "description": "Label of the reader background choices."
+  },
+  "readerBackgroundSystem": "Theme",
+  "@readerBackgroundSystem": {
+    "description": "Reader background that follows the theme."
+  },
+  "readerBackgroundPaper": "Paper",
+  "@readerBackgroundPaper": {
+    "description": "Reader background with a warm paper tone."
+  },
+  "readerBackgroundSepia": "Sepia",
+  "@readerBackgroundSepia": {
+    "description": "Reader background with a sepia tone."
+  },
+  "readerBackgroundDark": "Dark",
+  "@readerBackgroundDark": {
+    "description": "Reader background for night reading."
+  },
+  "readerPageMode": "Turn pages",
+  "@readerPageMode": {
+    "description": "Label of the page mode switch."
+  },
+  "readerPageModeScroll": "Scroll",
+  "@readerPageModeScroll": {
+    "description": "Reader page mode that scrolls the body."
+  },
+  "readerPageModePaged": "Pages",
+  "@readerPageModePaged": {
+    "description": "Reader page mode that splits the body into pages."
+  },
+  "readerPreviousChapter": "Previous chapter",
+  "@readerPreviousChapter": {
+    "description": "Action that opens the previous chapter."
+  },
+  "readerNextChapter": "Next chapter",
+  "@readerNextChapter": {
+    "description": "Action that opens the next chapter."
+  },
+  "readerChapterEnd": "End of this chapter",
+  "@readerChapterEnd": {
+    "description": "Shown on the last page of a chapter in paged mode."
+  },
+  "readerLastChapter": "This is the last chapter",
+  "@readerLastChapter": {
+    "description": "Shown when the open chapter is the last one."
+  },
+  "readerNoChapter": "This book has no readable chapter.",
+  "@readerNoChapter": {
+    "description": "Shown when the chapter list came back empty."
+  },
+  "bookSourceUpdateTimeLine": "Updated: {value}",
+  "@bookSourceUpdateTimeLine": {
+    "description": "Foot line showing the update time a rule returned.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
   }
 }

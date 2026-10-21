@@ -446,4 +446,60 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookSourceDebugStatusIdle => '尚未运行';
+
+  @override
+  String get readerTocAction => '目录';
+
+  @override
+  String get readerSettingsAction => '阅读设置';
+
+  @override
+  String get readerFontSize => '字号';
+
+  @override
+  String get readerLineHeight => '行距';
+
+  @override
+  String get readerBackground => '背景';
+
+  @override
+  String get readerBackgroundSystem => '跟随主题';
+
+  @override
+  String get readerBackgroundPaper => '纸张';
+
+  @override
+  String get readerBackgroundSepia => '护眼';
+
+  @override
+  String get readerBackgroundDark => '夜间';
+
+  @override
+  String get readerPageMode => '翻页方式';
+
+  @override
+  String get readerPageModeScroll => '滚动';
+
+  @override
+  String get readerPageModePaged => '分页';
+
+  @override
+  String get readerPreviousChapter => '上一章';
+
+  @override
+  String get readerNextChapter => '下一章';
+
+  @override
+  String get readerChapterEnd => '本章读完';
+
+  @override
+  String get readerLastChapter => '已是最后一章';
+
+  @override
+  String get readerNoChapter => '这本书没有可读的章节。';
+
+  @override
+  String bookSourceUpdateTimeLine(String value) {
+    return '更新于：$value';
+  }
 }

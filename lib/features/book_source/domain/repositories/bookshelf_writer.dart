@@ -15,6 +15,8 @@ final class ShelfBookDraft {
     required this.sourceUrl,
     required this.bookUrl,
     required this.name,
+    this.tocUrl,
+    this.canReName = false,
     this.author,
     this.kind,
     this.coverUrl,
@@ -34,6 +36,14 @@ final class ShelfBookDraft {
 
   /// The book's detail page URL.
   final String bookUrl;
+
+  /// The table-of-contents URL the detail stage resolved, so the shelf can open the reader
+  /// without guessing the address (`docs/dev/roadmap.md` 5.3, ADR-0044 §决策 3).
+  final String? tocUrl;
+
+  /// Whether the source declares `ruleBookInfo.canReName`, i.e. whether an existing shelf entry's
+  /// title and author may be overwritten (`book-source.md` §2, ADR-0044 §决策 5).
+  final bool canReName;
 
   /// The title to show on the shelf.
   final String name;

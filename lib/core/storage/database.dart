@@ -23,7 +23,7 @@ class ReaderDatabase extends _$ReaderDatabase {
   ReaderDatabase(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -43,6 +43,11 @@ class ReaderDatabase extends _$ReaderDatabase {
       if (from < 3) {
         await m.createTable(books);
         await m.createTable(readingProgress);
+      } else if (from < 5) {
+        // v5 给书架加目录地址（ADR-0044 §决策 3）。同一条注意事项：从 v1/v2 上来的库走的是
+        // 上面的 `createTable(books)`，那已经是**当前**形状（含 `tocUrl`），所以这里的
+        // `addColumn` 只对「书架表已存在」的升级路径执行。
+        await m.addColumn(books, books.tocUrl);
       }
     },
   );

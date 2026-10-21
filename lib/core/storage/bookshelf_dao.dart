@@ -83,6 +83,7 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
   Future<int> insertNew({
     required String sourceUrl,
     required String bookUrl,
+    required String? tocUrl,
     required String name,
     required String? author,
     required String? kind,
@@ -96,6 +97,7 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
       BooksCompanion.insert(
         sourceUrl: sourceUrl,
         bookUrl: bookUrl,
+        tocUrl: Value<String?>(tocUrl),
         name: name,
         author: Value<String?>(author),
         kind: Value<String?>(kind),
@@ -114,20 +116,27 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
   /// and the same rule as ADR-0040 §决策 3 applies (an import must never undo user state).
   Future<void> refreshDetails({
     required int id,
+    required String? tocUrl,
     required String name,
     required String? author,
     required String? kind,
     required String? coverUrl,
     required String? intro,
     required String? lastChapter,
+    required bool rewritesTitle,
   }) => (update(books)..where((Books table) => table.id.equals(id))).write(
     BooksCompanion(
-      name: Value<String>(name),
-      author: Value<String?>(author),
+      tocUrl: Value<String?>(tocUrl),
       kind: Value<String?>(kind),
       coverUrl: Value<String?>(coverUrl),
       intro: Value<String?>(intro),
       lastChapter: Value<String?>(lastChapter),
+      // 书名 / 作者只在书源声明了 `canReName` 时覆盖（ADR-0044 §决策 5）：
+      // `null` 表示「保留已存的值」，不是「写成 null」。
+      name: rewritesTitle ? Value<String>(name) : const Value<String>.absent(),
+      author: rewritesTitle
+          ? Value<String?>(author)
+          : const Value<String?>.absent(),
       updatedAt: Value<DateTime>(_clock.now()),
     ),
   );

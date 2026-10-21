@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
-import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_queries.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_add_notifier.dart';
@@ -129,10 +129,26 @@ class BookDetailPage extends ConsumerWidget {
 
                     return ListTile(
                       title: Text(chapter.name),
-                      onTap: () => pushBookSourceRoute(
-                        context,
-                        BookSourceRoute.reader(chapter: chapter),
-                      ),
+                      // 目录项的更新时间是展示用字符串（`book-source.md` §2），
+                      // 规则没给就不显示，而不是写「未知」（roadmap §3.7 的展示项）。
+                      subtitle: switch (chapter.updateTime) {
+                        final String value when value.isNotEmpty => Text(
+                          l10n.bookSourceUpdateTimeLine(value),
+                        ),
+                        _ => null,
+                      },
+                      // 打开阅读器走 presentation 端口（ADR-0042 §决策 2）：
+                      // `book_source` 不 import `features/reader`（C-ARCH-2）。
+                      onTap: () => ref
+                          .read(appNavigationProvider)
+                          .openReader(
+                            context,
+                            sourceUrl: source.url,
+                            bookUrl: info.url,
+                            bookName: info.name,
+                            tocUrl: info.tocUrl,
+                            chapterUrl: chapter.url,
+                          ),
                     );
                   },
                 ),
@@ -203,6 +219,11 @@ class BookDetailPage extends ConsumerWidget {
             l10n.bookSourceLastChapterLine(chapter),
             style: tokens.typography.base.bodyMedium,
           ),
+        if (info.updateTime case final String updated when updated.isNotEmpty)
+          Text(
+            l10n.bookSourceUpdateTimeLine(updated),
+            style: tokens.typography.base.bodyMedium,
+          ),
         SizedBox(height: tokens.spacing.md),
         _shelfButton(context, ref, source, info, l10n),
       ],
@@ -247,6 +268,11 @@ class BookDetailPage extends ConsumerWidget {
           ShelfBookDraft(
             sourceUrl: source.url,
             bookUrl: info.url,
+            tocUrl: info.tocUrl,
+            // 上游语义：只有源声明了 `canReName` 才允许书架覆盖已有书名 / 作者
+            // （`book-source.md` §2，ADR-0044 §决策 5）。`BookInfo.canReName` 报的正是
+            // 「源有没有声明」，规则本身不求值。
+            canReName: info.canReName,
             name: info.name,
             author: info.author,
             kind: info.kind,

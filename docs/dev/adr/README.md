@@ -65,3 +65,4 @@
 | [0041](0041-phase5-feature-boundaries.md) | Phase 5 的 feature 边界：`reader` / `bookshelf` / `settings`，跨 feature 一律走「消费方端口 + 装配根绑定」，进度归 `bookshelf` | Accepted（2026-10-14 架构师裁决） | 本次新增 |
 | [0042](0042-cross-feature-navigation-and-shared-widgets.md) | 跨 feature 导航走 presentation 端口（`AppNavigation` 由装配根绑定）；共用的 `StateMessage` / `FailureMessage` 上移 `core/widgets/` | Accepted（2026-10-21，5.4 / 5.6 落地时确立） | 本次新增 |
 | [0043](0043-source-check-mechanism.md) | 书源测试机制：结果写回 `book_sources`（+ `comment` 列）、`checkKeyWord` 建模与「像规则」判据、`LongRunningTask` 平台端口、失败语义不动 `ParseFailureKind` | Accepted（2026-10-21，M10 规格前置，用户裁决四项） | 本次新增 |
+| [0044](0044-reader-session-and-progress.md) | 阅读器会话：自有字号/行距/背景（与全局 textScale 叠乘）、进度端口读写、`books.tocUrl` 列（v5）、两种翻页模式与偏移估算、`canReName` 在加入书架时消费 | Accepted（2026-10-21，M4 规格前置，用户裁决四项） | 本次新增 |

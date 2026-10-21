@@ -201,6 +201,8 @@ Windows 与 Android 两侧都已实测通过。
 
 | **M10 书源测试机制（2026-10-21）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1003** 用例全过；覆盖率退出码 0（`core` 1219/1219、`domain` 2168/2168、`data` 142/142，均 100%）；设备级 **Windows 93 s / Android 188 s**（含模拟器冷启动），各 3 文件全过（`js_bridge` 24/24、`on_disk_database` 3/3 —— 其中 `bookSourceDao_…persistsTheImportedSource` 新增了 v4 的 `comment` / `groupName` / `respondTime` 真实写入），退出码 0。**`lib/core/platform/` 与 `MainActivity.kt` 都改了**（`LongRunningTask` + `WAKE_LOCK`），所以这一轮的双端实跑同时是它的构建验证 |
 
+| **M4 阅读器（5.3，2026-10-21）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1051** 用例全过；覆盖率退出码 0（`core` 1225/1225、`domain` 2198/2198 均 100%，`data` 98.2% ≥ 80%）；设备级 **Windows 92 s / Android 185 s**（含模拟器冷启动），各 3 文件全过（`js_bridge` 24/24、`on_disk_database` 3/3 —— 其中 `bookshelfDao_…persistsBooksAndProgress` 覆盖了 v5 的 `books.tocUrl` 真实写入），退出码 0 |
+
 > Android 补跑命令：`pwsh -File tool/test/run_android.ps1`（`Medium_Phone` 自动启停；需要网络，因 `flutter build apk` 的 native assets 要下载 `libsqlite3.arm.android.so`，见 §6 与本表旧记录）。
 >
 > `flutter doctor` 的网络项在本机报 `A cryptographic error ... checking https://pub.dev/`

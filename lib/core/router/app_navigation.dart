@@ -17,6 +17,21 @@ abstract interface class AppNavigation {
 
   /// Opens the settings page.
   void openSettings(BuildContext context);
+
+  /// Opens the reader on one book, optionally at a specific chapter (ADR-0042 §决策 2).
+  ///
+  /// The parameters are **primitives only**: the reader's own route object and its `ReaderBook`
+  /// belong to another feature, and passing them here would make this port a second cross-feature
+  /// interface (C-ARCH-2). A `null` [chapterUrl] means "resume where the reader stopped"; a
+  /// concrete one means "open this chapter", which is what a chapter row in the detail page means.
+  void openReader(
+    BuildContext context, {
+    required String sourceUrl,
+    required String bookUrl,
+    required String bookName,
+    required String tocUrl,
+    String? chapterUrl,
+  });
 }
 
 /// The answer when nothing bound [AppNavigation]: log and do nothing.
@@ -33,4 +48,14 @@ final class UnboundAppNavigation implements AppNavigation {
   @override
   void openSettings(BuildContext context) =>
       _warn('No AppNavigation is bound: the settings entry does nothing.');
+
+  @override
+  void openReader(
+    BuildContext context, {
+    required String sourceUrl,
+    required String bookUrl,
+    required String bookName,
+    required String tocUrl,
+    String? chapterUrl,
+  }) => _warn('No AppNavigation is bound: the reader entry does nothing.');
 }

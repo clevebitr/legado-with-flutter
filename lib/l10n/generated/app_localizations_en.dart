@@ -471,4 +471,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookSourceDebugStatusIdle => 'Not run yet';
+
+  @override
+  String get readerTocAction => 'Chapters';
+
+  @override
+  String get readerSettingsAction => 'Reading settings';
+
+  @override
+  String get readerFontSize => 'Text size';
+
+  @override
+  String get readerLineHeight => 'Line spacing';
+
+  @override
+  String get readerBackground => 'Background';
+
+  @override
+  String get readerBackgroundSystem => 'Theme';
+
+  @override
+  String get readerBackgroundPaper => 'Paper';
+
+  @override
+  String get readerBackgroundSepia => 'Sepia';
+
+  @override
+  String get readerBackgroundDark => 'Dark';
+
+  @override
+  String get readerPageMode => 'Turn pages';
+
+  @override
+  String get readerPageModeScroll => 'Scroll';
+
+  @override
+  String get readerPageModePaged => 'Pages';
+
+  @override
+  String get readerPreviousChapter => 'Previous chapter';
+
+  @override
+  String get readerNextChapter => 'Next chapter';
+
+  @override
+  String get readerChapterEnd => 'End of this chapter';
+
+  @override
+  String get readerLastChapter => 'This is the last chapter';
+
+  @override
+  String get readerNoChapter => 'This book has no readable chapter.';
+
+  @override
+  String bookSourceUpdateTimeLine(String value) {
+    return 'Updated: $value';
+  }
 }

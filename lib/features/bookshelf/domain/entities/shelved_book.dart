@@ -21,6 +21,11 @@ abstract class ShelvedBook with _$ShelvedBook {
     required int id,
     required String sourceUrl,
     required String bookUrl,
+
+    /// The table-of-contents URL the detail page resolved; `null` for rows stored before 5.3.
+    String? tocUrl,
+
+    /// The title shown on the shelf.
     required String name,
     String? author,
     String? kind,

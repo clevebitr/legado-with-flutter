@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_status.dart';
@@ -13,9 +14,9 @@ import 'package:m3e_design/m3e_design.dart';
 /// The books the user put on the shelf (`docs/dev/roadmap.md` 5.4).
 ///
 /// The rows are managed here and nowhere else: pinning, the tracking / finished switch and
-/// deletion are the user state the shelf owns. Opening a book happens in the reader, which is
-/// 5.3's move, so a row is deliberately **not** tappable yet — a button that does nothing would
-/// be a dead end (C-BAN-2).
+/// deletion are the user state the shelf owns. Opening a book goes through the presentation port
+/// (ADR-0042 §决策 2), so the shelf never imports the reader feature (C-ARCH-2); the row resumes at
+/// the stored chapter, which is the whole reason the shelf owns the progress table.
 ///
 /// Accessibility (C-UI-7): each row is a [ListTile] (label from its own text) and the menu
 /// button carries the row title in its tooltip.
@@ -63,6 +64,8 @@ class BookshelfPage extends ConsumerWidget {
       final ShelvedBook book = books[index];
 
       return ListTile(
+        // 从书架打开阅读器：`tocUrl` 在 5.3 之后入库，老行回落到书籍页（ADR-0044 §决策 3）。
+        onTap: () => _open(context, ref, book),
         leading: Icon(
           book.status == ShelfStatus.read
               ? Icons.check_circle_outline
@@ -104,6 +107,22 @@ class BookshelfPage extends ConsumerWidget {
       );
     },
   );
+
+  /// Opens [book] in the reader (ADR-0042 §决策 2).
+  ///
+  /// Refresh is not this page's job: the progress write goes through the composition root, which
+  /// invalidates the shelf after storing a position — so 「阅读到」 is fresh whenever it is shown,
+  /// including after a chapter switch inside the reader.
+  void _open(BuildContext context, WidgetRef ref, ShelvedBook book) => ref
+      .read(appNavigationProvider)
+      .openReader(
+        context,
+        sourceUrl: book.sourceUrl,
+        bookUrl: book.bookUrl,
+        bookName: book.name,
+        // `tocUrl` 是 5.3 起入库的目录地址；老行没有它时回落到书籍页（ADR-0044 §决策 3）。
+        tocUrl: book.tocUrl ?? book.bookUrl,
+      );
 
   /// The second line of a row: author, then where the reader stopped (or the last chapter).
   ///

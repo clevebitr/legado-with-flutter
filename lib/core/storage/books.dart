@@ -26,6 +26,13 @@ class Books extends Table {
   /// The detail page URL — the book's identity inside one source.
   TextColumn get bookUrl => text()();
 
+  /// The table-of-contents URL the detail page resolved (`ruleBookInfo.tocUrl`, 5.3).
+  ///
+  /// It is a **nullable** column rather than something the reader can derive: a source may keep its
+  /// chapters on a page of their own, and the book page is then the wrong address. Opening the
+  /// reader from the shelf falls back to [bookUrl] when the row predates this column (ADR-0044 §决策 3).
+  TextColumn get tocUrl => text().nullable()();
+
   /// The title shown on the shelf.
   TextColumn get name => text()();
 

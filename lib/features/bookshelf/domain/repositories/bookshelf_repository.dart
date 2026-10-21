@@ -37,6 +37,16 @@ abstract interface class BookshelfRepository {
   /// Deletes entry [id] together with its reading progress.
   Future<void> remove(int id);
 
+  /// The stored position of `(sourceUrl, bookUrl)`, or `null` when the book was never opened.
+  ///
+  /// The reader needs it to **restore** a session (ADR-0044 §决策 2): without a read side, the
+  /// position would have to be passed in through the route, pushing the progress semantics into
+  /// every caller.
+  Future<ReadingProgressPosition?> findProgress({
+    required String sourceUrl,
+    required String bookUrl,
+  });
+
   /// Remembers where the reader stopped in `(sourceUrl, bookUrl)`.
   Future<void> saveProgress({
     required String sourceUrl,

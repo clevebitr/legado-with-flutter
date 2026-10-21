@@ -925,6 +925,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not run yet'**
   String get bookSourceDebugStatusIdle;
+
+  /// Action that opens the chapter list of the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get readerTocAction;
+
+  /// Action that opens the reader settings sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading settings'**
+  String get readerSettingsAction;
+
+  /// Label of the reader font size slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get readerFontSize;
+
+  /// Label of the reader line height slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Line spacing'**
+  String get readerLineHeight;
+
+  /// Label of the reader background choices.
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get readerBackground;
+
+  /// Reader background that follows the theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get readerBackgroundSystem;
+
+  /// Reader background with a warm paper tone.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper'**
+  String get readerBackgroundPaper;
+
+  /// Reader background with a sepia tone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sepia'**
+  String get readerBackgroundSepia;
+
+  /// Reader background for night reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get readerBackgroundDark;
+
+  /// Label of the page mode switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn pages'**
+  String get readerPageMode;
+
+  /// Reader page mode that scrolls the body.
+  ///
+  /// In en, this message translates to:
+  /// **'Scroll'**
+  String get readerPageModeScroll;
+
+  /// Reader page mode that splits the body into pages.
+  ///
+  /// In en, this message translates to:
+  /// **'Pages'**
+  String get readerPageModePaged;
+
+  /// Action that opens the previous chapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous chapter'**
+  String get readerPreviousChapter;
+
+  /// Action that opens the next chapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Next chapter'**
+  String get readerNextChapter;
+
+  /// Shown on the last page of a chapter in paged mode.
+  ///
+  /// In en, this message translates to:
+  /// **'End of this chapter'**
+  String get readerChapterEnd;
+
+  /// Shown when the open chapter is the last one.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the last chapter'**
+  String get readerLastChapter;
+
+  /// Shown when the chapter list came back empty.
+  ///
+  /// In en, this message translates to:
+  /// **'This book has no readable chapter.'**
+  String get readerNoChapter;
+
+  /// Foot line showing the update time a rule returned.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated: {value}'**
+  String bookSourceUpdateTimeLine(String value);
 }
 
 class _AppLocalizationsDelegate

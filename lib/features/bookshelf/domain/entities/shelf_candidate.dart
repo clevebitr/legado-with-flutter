@@ -14,6 +14,8 @@ final class ShelfCandidate {
     required this.sourceUrl,
     required this.bookUrl,
     required this.name,
+    this.tocUrl,
+    this.canReName = false,
     this.author,
     this.kind,
     this.coverUrl,
@@ -33,6 +35,16 @@ final class ShelfCandidate {
 
   /// The book's detail page URL — its identity inside one source.
   final String bookUrl;
+
+  /// The table-of-contents URL the detail page resolved (`ruleBookInfo.tocUrl`, 5.3).
+  final String? tocUrl;
+
+  /// Whether the source lets an existing book's title and author be overwritten
+  /// (`ruleBookInfo.canReName`, ADR-0044 §决策 5).
+  ///
+  /// It defaults to `false`: a caller that cannot tell must not silently rename what the user
+  /// already sees on the shelf.
+  final bool canReName;
 
   /// The title to show on the shelf.
   final String name;

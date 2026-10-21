@@ -27,10 +27,6 @@ sealed class BookSourceRoute with _$BookSourceRoute {
   /// The route that imports sources from pasted text or a URL (`docs/dev/roadmap.md` 5.1).
   const factory BookSourceRoute.importSources() = BookSourceImportRoute;
 
-  /// The route that shows the text of one chapter.
-  const factory BookSourceRoute.reader({required Chapter chapter}) =
-      ReaderRoute;
-
   /// The route that runs the batch check over the imported sources (`docs/dev/roadmap.md` 5.10).
   const factory BookSourceRoute.checkSources() = BookSourceCheckRoute;
 
@@ -43,7 +39,6 @@ sealed class BookSourceRoute with _$BookSourceRoute {
   String get path => switch (this) {
     ExploreRoute() => _explorePath,
     BookDetailRoute() => _bookDetailPath,
-    ReaderRoute() => _readerPath,
     BookSourceListRoute() => _sourceListPath,
     BookSourceImportRoute() => _sourceImportPath,
     BookSourceCheckRoute() => _sourceCheckPath,
@@ -56,9 +51,6 @@ const String _explorePath = '/explore';
 
 /// Path of [BookDetailRoute].
 const String _bookDetailPath = '/book';
-
-/// Path of [ReaderRoute].
-const String _readerPath = '/reader';
 
 /// Path of [BookSourceListRoute].
 const String _sourceListPath = '/sources';

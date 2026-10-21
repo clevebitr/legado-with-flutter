@@ -234,6 +234,8 @@ void main() {
           .insertNew(
             sourceUrl: sourceUrl,
             bookUrl: bookUrl,
+            // v5 的 `tocUrl` 列（ADR-0044 §决策 3）也要真写进文件一次。
+            tocUrl: '$bookUrl/toc',
             name: '集成用例书',
             author: '集成用例作者',
             kind: null,

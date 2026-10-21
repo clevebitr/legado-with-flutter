@@ -59,6 +59,63 @@ void main() {
       expect(http.requestedUrls, contains(corpusBookUrl));
     });
 
+    testWidgets('build_givenUpdateTimeRules_showsThemOnThePageAndTheChapters', (
+      WidgetTester tester,
+    ) async {
+      // §3.7 的两条展示项之一：详情与目录的 updateTime 都是「规则给就显示」的字符串
+      // （`book-source.md` §2，不做日期解析）。这里用一份最小派生源，让两条规则分别命中
+      // 详情页与目录页上的日期。
+      final BookSource source = loadCorpusBookSource().copyWith(
+        bookInfoRule: const BookInfoRule(
+          name: 'class.name@text',
+          author: 'class.author@text',
+          updateTime: 'class.date@text',
+          tocUrl: 'class.toc@href',
+        ),
+        tocRule: const TocRule(
+          chapterList: 'class.chapter',
+          chapterName: 'tag.a@text',
+          chapterUrl: 'tag.a.0@href',
+          updateTime: 'class.date@text',
+        ),
+      );
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          corpusBookUrl,
+          '<h1 class="name">书名一</h1>'
+          '<span class="author">作者甲</span>'
+          '<span class="date">2026-10-21</span>'
+          '<a class="toc" href="/book/1/toc.html">目录</a>',
+        )
+        ..serve(
+          'https://example-novel.test/book/1/toc.html',
+          '<div class="chapter"><a href="/book/1/1.html">第1章 开端</a>'
+              '<span class="date">2026-10-20</span></div>',
+        );
+
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: source,
+        http: http,
+      );
+
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      // 详情页自己的一行 + 目录项的一行，两处都来自 ARB 的同一句话。
+      expect(
+        find.text(l10n.bookSourceUpdateTimeLine('2026-10-21')),
+        findsOneWidget,
+      );
+      expect(
+        find.text(l10n.bookSourceUpdateTimeLine('2026-10-20')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('build_givenAFailingChapterList_keepsTheInformationVisible', (
       WidgetTester tester,
     ) async {

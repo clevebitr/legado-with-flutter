@@ -28,6 +28,8 @@ final class FakeBookshelfRepository implements BookshelfRepository {
     required String name,
     String sourceUrl = 'https://source.test',
     String? bookUrl,
+    String? tocUrl,
+    bool canReName = false,
     ShelfStatus status = ShelfStatus.tracking,
     bool isPinned = false,
     ReadingProgressPosition? progress,
@@ -36,6 +38,7 @@ final class FakeBookshelfRepository implements BookshelfRepository {
       id: _nextId++,
       sourceUrl: sourceUrl,
       bookUrl: bookUrl ?? 'https://source.test/book/$_nextId',
+      tocUrl: tocUrl,
       name: name,
       status: status,
       isPinned: isPinned,
@@ -66,6 +69,7 @@ final class FakeBookshelfRepository implements BookshelfRepository {
           id: _nextId++,
           sourceUrl: candidate.sourceUrl,
           bookUrl: candidate.bookUrl,
+          tocUrl: candidate.tocUrl,
           name: candidate.name,
           author: candidate.author,
           kind: candidate.kind,
@@ -80,9 +84,11 @@ final class FakeBookshelfRepository implements BookshelfRepository {
     }
 
     final ShelvedBook existing = _books[index];
+    // 与真实实现同一条规则：书名 / 作者只在源声明 canReName 时覆盖（ADR-0044 §决策 5）。
     _books[index] = existing.copyWith(
-      name: candidate.name,
-      author: candidate.author,
+      tocUrl: candidate.tocUrl,
+      name: candidate.canReName ? candidate.name : existing.name,
+      author: candidate.canReName ? candidate.author : existing.author,
       kind: candidate.kind,
       coverUrl: candidate.coverUrl,
       intro: candidate.intro,
@@ -108,6 +114,19 @@ final class FakeBookshelfRepository implements BookshelfRepository {
   Future<void> remove(int id) async {
     _guard();
     _books.removeWhere((ShelvedBook book) => book.id == id);
+  }
+
+  @override
+  Future<ReadingProgressPosition?> findProgress({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async {
+    if (failReads) {
+      throw Exception('the shelf is unavailable');
+    }
+    final int index = _indexOf(sourceUrl, bookUrl);
+
+    return index < 0 ? null : _books[index].progress;
   }
 
   @override

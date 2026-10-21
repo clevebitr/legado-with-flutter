@@ -8,6 +8,9 @@ import 'package:flutter_reader/core/router/app_navigation.dart';
 import 'package:flutter_reader/core/router/app_router.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
@@ -16,12 +19,21 @@ import 'package:flutter_reader/features/book_source/presentation/pages/book_sour
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_list_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
-import 'package:flutter_reader/features/book_source/presentation/pages/reader_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/search_books_page.dart';
+import 'package:flutter_reader/features/bookshelf/di.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_candidate.dart';
+import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/bookshelf_route.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/notifiers/bookshelf_notifier.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/pages/bookshelf_page.dart';
+import 'package:flutter_reader/features/reader/di.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
+import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
+import 'package:flutter_reader/features/reader/presentation/reader_route.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_theme_mode.dart';
 import 'package:flutter_reader/features/settings/presentation/notifiers/settings_notifier.dart';
@@ -52,6 +64,11 @@ List<Override> appProviderOverrides() => <Override>[
       ),
     ),
   ),
+  // 阅读器的三个端口（ADR-0041 §决策 2、ADR-0044 §决策 2）：`reader` 声明、这里绑定到
+  // `book_source` 的规则链路与 `bookshelf` 的进度表，两个 feature 之间零 import。
+  readerChapterListProvider.overrideWith(_ChapterListSource.new),
+  readerChapterContentProvider.overrideWith(_ChapterContentSource.new),
+  readerProgressStoreProvider.overrideWith(_ProgressStore.new),
 ];
 
 /// Root widget: wires theming, localization and the route table.
@@ -97,7 +114,10 @@ class ReaderApp extends ConsumerWidget {
     ShelfRoute() => const BookshelfPage(),
     SettingsPageRoute() => const SettingsPage(),
     final BookDetailRoute route => BookDetailPage(book: route.book),
-    final ReaderRoute route => ReaderPage(chapter: route.chapter),
+    final ReaderRoute route => ReaderPage(
+      book: route.book,
+      chapterUrl: route.chapterUrl,
+    ),
     _ => const SearchBooksPage(),
   };
 
@@ -151,6 +171,31 @@ final class _RootNavigation implements AppNavigation {
   @override
   void openSettings(BuildContext context) =>
       pushSettingsRoute(context, const SettingsRoute.settings());
+
+  /// Opens the reader on one book (ADR-0042 §决策 2, ADR-0044 §决策 2).
+  ///
+  /// The port carries primitives, so this is where they become the reader's own `ReaderBook` —
+  /// the one place allowed to know two features' types (ADR-0041 §决策 3).
+  @override
+  void openReader(
+    BuildContext context, {
+    required String sourceUrl,
+    required String bookUrl,
+    required String bookName,
+    required String tocUrl,
+    String? chapterUrl,
+  }) => pushReaderRoute(
+    context,
+    ReaderRoute(
+      book: ReaderBook(
+        sourceUrl: sourceUrl,
+        bookUrl: bookUrl,
+        name: bookName,
+        tocUrl: tocUrl,
+      ),
+      chapterUrl: chapterUrl,
+    ),
+  );
 }
 
 /// `BookshelfWriter` bound to the shelf feature (ADR-0041 §决策 2).
@@ -169,6 +214,8 @@ final class _ShelfWriter implements BookshelfWriter {
         ShelfCandidate(
           sourceUrl: draft.sourceUrl,
           bookUrl: draft.bookUrl,
+          tocUrl: draft.tocUrl,
+          canReName: draft.canReName,
           name: draft.name,
           author: draft.author,
           kind: draft.kind,
@@ -177,4 +224,130 @@ final class _ShelfWriter implements BookshelfWriter {
           lastChapter: draft.lastChapter,
         ),
       );
+}
+
+/// Resolves a stored book source by its URL, or `null` when it is gone.
+///
+/// The reader knows a source only by URL (it may not import `book_source`), so the adapter looks
+/// the row up. A deleted source answers `null`, and the caller reports it as an invalid source
+/// rather than reading with a rule set nobody has.
+Future<BookSource?> _sourceByUrl(Ref ref, String sourceUrl) async {
+  for (final StoredBookSource stored
+      in await ref.read(bookSourceRepositoryProvider).getAll()) {
+    if (stored.source.url == sourceUrl) {
+      return stored.source;
+    }
+  }
+
+  return null;
+}
+
+/// `ChapterListProvider` bound to `book_source`'s `FetchToc` (ADR-0041 §决策 2).
+final class _ChapterListSource implements ChapterListProvider {
+  const _ChapterListSource(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<ParseResult<List<ReadingChapter>>> fetch({
+    required String sourceUrl,
+    required String tocUrl,
+  }) async {
+    final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
+    if (source == null) {
+      return failureAt<List<ReadingChapter>>(
+        kind: ParseFailureKind.invalidBookSource,
+        rulePath: 'reader.chapterList',
+      );
+    }
+
+    final ParseResult<List<Chapter>> result = await _ref
+        .read(fetchTocProvider)
+        .execute(source, tocUrl);
+
+    return switch (result) {
+      ParseSuccess<List<Chapter>>(:final List<Chapter> data) =>
+        ParseSuccess<List<ReadingChapter>>(<ReadingChapter>[
+          for (final Chapter chapter in data)
+            ReadingChapter(title: chapter.name, url: chapter.url),
+        ]),
+      ParseFailure<List<Chapter>>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        failureAt<List<ReadingChapter>>(kind: kind, rulePath: rulePath),
+    };
+  }
+}
+
+/// `ChapterContentProvider` bound to `book_source`'s `FetchContent` (ADR-0041 §决策 2).
+///
+/// Going through the use case (and not a bare HTTP call) is what keeps the 5.2 body cache and the
+/// `concurrentRate` budget in force for everything the reader reads.
+final class _ChapterContentSource implements ChapterContentProvider {
+  const _ChapterContentSource(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<ParseResult<String>> fetch({
+    required String sourceUrl,
+    required String chapterUrl,
+  }) async {
+    final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
+    if (source == null) {
+      return failureAt<String>(
+        kind: ParseFailureKind.invalidBookSource,
+        rulePath: 'reader.chapterContent',
+      );
+    }
+
+    return _ref.read(fetchContentProvider).execute(source, chapterUrl);
+  }
+}
+
+/// `ReadingProgressStore` bound to the shelf, which owns the table (ADR-0041 §决策 4).
+final class _ProgressStore implements ReadingProgressStore {
+  const _ProgressStore(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<ReadingPosition?> read({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async {
+    final ReadingProgressPosition? stored = await _ref
+        .read(bookshelfRepositoryProvider)
+        .findProgress(sourceUrl: sourceUrl, bookUrl: bookUrl);
+    if (stored == null) {
+      return null;
+    }
+
+    return ReadingPosition(
+      chapterUrl: stored.chapterUrl,
+      chapterName: stored.chapterName,
+      charOffset: stored.charOffset,
+    );
+  }
+
+  @override
+  Future<void> write({
+    required String sourceUrl,
+    required String bookUrl,
+    required ReadingPosition position,
+  }) async {
+    await _ref
+        .read(bookshelfRepositoryProvider)
+        .saveProgress(
+          sourceUrl: sourceUrl,
+          bookUrl: bookUrl,
+          chapterUrl: position.chapterUrl,
+          chapterName: position.chapterName,
+          charOffset: position.charOffset,
+        );
+    // 进度写进的是书架的「阅读到」那一行，所以由这里（唯一同时认识两侧的地方）让书架重新读一次：
+    // 阅读器不必知道还有个书架页，`keepAlive` 的书架也不会一直显示旧位置。
+    _ref.invalidate(bookshelfProvider);
+  }
 }
