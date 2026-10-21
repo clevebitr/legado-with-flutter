@@ -1093,6 +1093,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No source matches this group.'**
   String get bookSourceListNoMatch;
+
+  /// Tooltip of the search scope button.
+  ///
+  /// In en, this message translates to:
+  /// **'Search in'**
+  String get searchScopeLabel;
+
+  /// Scope option: every enabled source.
+  ///
+  /// In en, this message translates to:
+  /// **'All enabled sources'**
+  String get searchScopeAll;
+
+  /// Scope chip label when specific sources are chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen sources'**
+  String get searchScopeNamed;
+
+  /// Tooltip of the search filter button.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get searchFilterLabel;
+
+  /// Label above the source-type check boxes.
+  ///
+  /// In en, this message translates to:
+  /// **'Source types'**
+  String get searchTypeLabel;
+
+  /// Source type: text.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get searchTypeText;
+
+  /// Source type: audio.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio'**
+  String get searchTypeAudio;
+
+  /// Source type: image.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get searchTypeImage;
+
+  /// Source type: file.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get searchTypeFile;
+
+  /// Label above the match mode choices.
+  ///
+  /// In en, this message translates to:
+  /// **'Match'**
+  String get searchMatchLabel;
+
+  /// Match mode: keep everything, exact first.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuzzy'**
+  String get searchMatchDefault;
+
+  /// Match mode: only hits whose name or author equals the keyword.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact name or author'**
+  String get searchMatchExact;
+
+  /// Search progress line.
+  ///
+  /// In en, this message translates to:
+  /// **'{done}/{total} sources'**
+  String searchProgress(int done, int total);
+
+  /// Line shown when some sources failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failed} sources failed'**
+  String searchPartialFailed(int failed);
+
+  /// Action that pauses the running search.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get searchPause;
+
+  /// Action that resumes a paused search.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get searchResume;
+
+  /// Action that stops the running search.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get searchStop;
+
+  /// Action that asks every page-capable source for the next page.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get searchLoadMore;
+
+  /// How many sources found one book.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} sources'**
+  String searchOriginsLine(int count);
+
+  /// Shown when the scope resolves to no searchable source.
+  ///
+  /// In en, this message translates to:
+  /// **'No source can be searched in this scope.'**
+  String get searchNoSources;
+
+  /// Source type: video.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get searchTypeVideo;
 }
 
 class _AppLocalizationsDelegate

@@ -58,6 +58,7 @@ final class AggregateSearchResult {
     required this.totalSources,
     required this.failedSources,
     required this.hasMore,
+    required this.merger,
   });
 
   /// The merged, de-duplicated rows, best bucket first.
@@ -74,6 +75,10 @@ final class AggregateSearchResult {
 
   /// Whether another page is worth asking for (`supportsSearchPage` + non-empty + under the cap).
   final bool hasMore;
+
+  /// The merger this page ran against, so the caller can continue it for the next page instead of
+  /// starting a fresh one (which would drop the previous page's rows).
+  final SearchResultMerger merger;
 }
 
 /// A pause latch for one aggregate search (`docs/dev/roadmap.md` 3.8, ADR-0046 §决策 6).
@@ -148,6 +153,7 @@ final class AggregateSearchBooks {
     void Function(AggregateSearchResult progress)? onProgress,
     SearchPause? pause,
     TaskCancellation? cancellation,
+    SearchResultMerger? merger,
   }) async {
     if (request.keyword.trim().isEmpty) {
       return failureAt<AggregateSearchResult>(
@@ -162,21 +168,27 @@ final class AggregateSearchBooks {
       );
     }
 
-    final SearchResultMerger merger = SearchResultMerger(
-      keyword: request.keyword.trim(),
-      mode: request.matchMode,
-    );
+    // 第 2 页起沿用调用方给的 merger：换一个新的会把第 1 页的行全部丢掉。
+    final SearchResultMerger activeMerger =
+        merger ??
+        SearchResultMerger(
+          keyword: request.keyword.trim(),
+          mode: request.matchMode,
+        );
     var processed = 0;
     var failed = 0;
     var hasMore = false;
+    ParseFailureKind? firstFailureKind;
+    var firstFailurePath = 'search.aggregate';
 
     void publish() => onProgress?.call(
       AggregateSearchResult(
-        books: merger.books,
+        books: activeMerger.books,
         processedSources: processed,
         totalSources: request.sources.length,
         failedSources: failed,
         hasMore: hasMore,
+        merger: activeMerger,
       ),
     );
 
@@ -223,7 +235,7 @@ final class AggregateSearchBooks {
         switch (result) {
           case ParseSuccess<List<Book>>(:final List<Book> data):
             if (data.isNotEmpty) {
-              merger.add(data, sourceUrl: source.url);
+              activeMerger.add(data, sourceUrl: source.url);
               hasMore = hasMore || supportsSearchPage(source.searchUrl);
             }
           case ParseFailure<List<Book>>(
@@ -238,6 +250,13 @@ final class AggregateSearchBooks {
             );
           case ParseFailure<List<Book>>(:final ParseFailureKind kind):
             failed++;
+            // 记住第一个失败的类型：整批都失败时它就是这一批的失败原因，比一律报
+            // "networkFailed" 更接近用户看到的东西（ADR-0046 §决策 5）。
+            firstFailureKind ??= kind;
+            if (firstFailureKind == kind &&
+                firstFailurePath == 'search.aggregate') {
+              firstFailurePath = 'search.aggregate';
+            }
             // 单源失败只记日志：它不该把整批结果清空（C-ERR-8：不写关键词、不写正文）。
             _logger.warning(
               'Aggregate search failed on one source: source=${source.url} '
@@ -255,26 +274,27 @@ final class AggregateSearchBooks {
     ]);
 
     if (committedNothing(
-      merger: merger,
+      merger: activeMerger,
       failed: failed,
       total: request.sources.length,
     )) {
       return failureAt<AggregateSearchResult>(
-        kind: ParseFailureKind.networkFailed,
-        rulePath: 'search.aggregate',
+        kind: firstFailureKind ?? ParseFailureKind.networkFailed,
+        rulePath: firstFailurePath,
       );
     }
 
     return ParseSuccess<AggregateSearchResult>(
       AggregateSearchResult(
-        books: merger.books,
+        books: activeMerger.books,
         processedSources: processed,
         totalSources: request.sources.length,
         failedSources: failed,
         hasMore:
             hasMore &&
-            !merger.resultLimitReached &&
+            !activeMerger.resultLimitReached &&
             !(cancellation?.isCancelled ?? false),
+        merger: activeMerger,
       ),
     );
   }

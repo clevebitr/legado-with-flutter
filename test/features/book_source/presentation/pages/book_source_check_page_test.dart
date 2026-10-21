@@ -77,6 +77,40 @@ void main() {
       );
     });
 
+    testWidgets('filters_whenAGroupIsPicked_listsOnlyThatGroup', (
+      WidgetTester tester,
+    ) async {
+      // 5.10 的「书源测试分类」：按分组 / 类型筛掉不参与校验的源（与搜索范围共用同一套概念）。
+      final FakeBookSourceRepository repository = FakeBookSourceRepository();
+      repository.add(
+        source: loadCorpusBookSource().copyWith(name: 'picked'),
+        groupName: '精选',
+      );
+      repository.add(
+        source: loadCorpusBookSource().copyWith(
+          name: 'other',
+          url: 'https://other.test',
+        ),
+        groupName: '玄幻',
+      );
+
+      await pumpSourceConsolePage(
+        tester,
+        page: const BookSourceCheckPage(),
+        repository: repository,
+        http: FakeHttpClient(),
+      );
+
+      expect(find.text('picked'), findsOneWidget);
+      expect(find.text('other'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilterChip, '精选'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('picked'), findsOneWidget);
+      expect(find.text('other'), findsNothing);
+    });
+
     testWidgets('start_givenAHealthyChain_showsPassedAndWritesTheVerdict', (
       WidgetTester tester,
     ) async {

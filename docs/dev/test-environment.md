@@ -205,6 +205,8 @@ Windows 与 Android 两侧都已实测通过。
 
 | **M6 书源列表排序/筛选（5.5，2026-10-21）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1083** 用例全过；覆盖率退出码 0（`core` 1245/1245、`domain` 2211/2211 均 100%，`data` 98.41% ≥ 80%）；设备级 Windows / Android 各 3 文件全过（`js_bridge` 24/24、`on_disk_database` 3/3），退出码 0 |
 
+| **M11 聚合搜索（3.8，2026-10-21）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1155** 用例全过；覆盖率退出码 0（`core` 1245/1245、`domain` 2458/2458 均 100%，`data` 98.47% ≥ 80%）；设备级 Windows / Android 各 3 文件全过（`js_bridge` 24/24、`on_disk_database` 3/3），退出码 0 |
+
 > Android 补跑命令：`pwsh -File tool/test/run_android.ps1`（`Medium_Phone` 自动启停；需要网络，因 `flutter build apk` 的 native assets 要下载 `libsqlite3.arm.android.so`，见 §6 与本表旧记录）。
 >
 > `flutter doctor` 的网络项在本机报 `A cryptographic error ... checking https://pub.dev/`

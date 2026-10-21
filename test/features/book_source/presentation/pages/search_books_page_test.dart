@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_search_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
@@ -7,7 +11,9 @@ import 'package:flutter_reader/features/book_source/presentation/pages/search_bo
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../../support/fake_book_source_repository.dart';
 import '../../../../support/fake_http_client.dart';
+import '../../../../support/fake_search_scope_store.dart';
 import '../../../../support/offline_corpus.dart';
 
 void main() {
@@ -69,10 +75,10 @@ void main() {
     ) async {
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 
-      await pumpBookSourcePage(
+      await pumpSearchPage(
         tester,
-        page: const SearchBooksPage(),
-        source: loadCorpusBookSource(),
+        repository: FakeBookSourceRepository()
+          ..add(source: loadCorpusBookSource()),
         http: http,
       );
 
@@ -94,21 +100,26 @@ void main() {
     ) async {
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 
-      await pumpBookSourcePage(
+      await pumpSearchPage(
         tester,
-        page: const SearchBooksPage(),
-        source: loadCorpusBookSource(),
+        repository: FakeBookSourceRepository()
+          ..add(source: loadCorpusBookSource()),
         http: http,
       );
       await _search(tester, corpusKeyword);
 
       final AppLocalizations l10n = _l10n(tester);
-      // 命中的是生产链路：模板渲染 + 关键词编码 + 规则引擎都由真实实现完成。
+      // 命中的是生产链路：模板渲染 + 关键词编码 + 规则引擎 + 合并去重。
       expect(http.requestedUrls, <String>[corpusSearchUrl]);
       expect(find.text('书名一'), findsOneWidget);
-      // 作者行现在走 ARB（与详情页同一句话），不再是裸的作者名。
-      expect(find.text(l10n.bookSourceAuthorLine('作者甲')), findsOneWidget);
+      // 作者行现在走 ARB（与详情页同一句话），并且与「N 个来源」同在一个副标题里。
+      expect(
+        find.textContaining(l10n.bookSourceAuthorLine('作者甲')),
+        findsOneWidget,
+      );
       expect(find.text('书名二'), findsOneWidget);
+      // 只有一个来源命中：行内标出来源数（ADR-0046 §决策 4）。
+      expect(find.textContaining(l10n.searchOriginsLine(1)), findsWidgets);
     });
 
     testWidgets('search_givenAnUpdateTimeRule_showsTheUpdateLine', (
@@ -121,14 +132,14 @@ void main() {
         ),
       );
 
-      await pumpBookSourcePage(
+      await pumpSearchPage(
         tester,
-        page: const SearchBooksPage(),
-        source: source,
+        repository: FakeBookSourceRepository()..add(source: source),
         http: serveCorpusPages(FakeHttpClient()),
       );
       await _search(tester, corpusKeyword);
 
+      // ignore: avoid_print
       expect(
         find.textContaining(_l10n(tester).bookSourceUpdateTimeLine('')),
         findsWidgets,
@@ -146,10 +157,10 @@ void main() {
           '</div>',
         );
 
-      await pumpBookSourcePage(
+      await pumpSearchPage(
         tester,
-        page: const SearchBooksPage(),
-        source: loadCorpusBookSource(),
+        repository: FakeBookSourceRepository()
+          ..add(source: loadCorpusBookSource()),
         http: http,
       );
       await _search(tester, corpusKeyword);
@@ -173,10 +184,9 @@ void main() {
       );
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 
-      await pumpBookSourcePage(
+      await pumpSearchPage(
         tester,
-        page: const SearchBooksPage(),
-        source: unsupported,
+        repository: FakeBookSourceRepository()..add(source: unsupported),
         http: http,
       );
       await _search(tester, corpusKeyword);
@@ -190,12 +200,138 @@ void main() {
       expect(find.text(l10n.actionRetry), findsNothing);
     });
 
+    testWidgets('scope_whenAGroupIsPicked_searchesOnlyThatGroup', (
+      WidgetTester tester,
+    ) async {
+      // 范围是「哪些源参与」的唯一决定者（ADR-0046 §决策 1）。
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(
+          source: loadCorpusBookSource().copyWith(name: '精选源'),
+          groupName: '精选',
+        )
+        ..add(
+          source: loadCorpusBookSource().copyWith(
+            name: '玄幻源',
+            url: 'https://other.test',
+          ),
+          groupName: '玄幻',
+        );
+      final FakeSearchScopeStore store = FakeSearchScopeStore();
+
+      await pumpSearchPage(
+        tester,
+        repository: repository,
+        http: http,
+        scopeStore: store,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.text(l10n.searchScopeAll));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(RadioListTile<String>, '精选'));
+      await tester.pumpAndSettle();
+
+      expect(store.scope, const BookSearchScope.groups(<String>{'精选'}));
+      expect(find.text('精选'), findsWidgets);
+    });
+
+    testWidgets('filters_whenAnExactMatchIsPicked_keepsOnlyExactHits', (
+      WidgetTester tester,
+    ) async {
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+
+      await pumpSearchPage(
+        tester,
+        repository: FakeBookSourceRepository()
+          ..add(source: loadCorpusBookSource()),
+        http: http,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.searchFilterLabel));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.searchMatchExact));
+      await tester.pumpAndSettle();
+      // 关掉 sheet 再搜索。
+      await tester.tapAt(const Offset(20, 20));
+      await tester.pumpAndSettle();
+      await _search(tester, corpusKeyword);
+
+      // 语料里的命中书名是「书名一/二」，作者不等于关键词 —— 精确模式下一条都不留。
+      expect(find.text(l10n.bookSourceSearchEmpty), findsOneWidget);
+    });
+
+    testWidgets('search_givenASourceThatFails_stillShowsTheOtherHits', (
+      WidgetTester tester,
+    ) async {
+      // 部分失败：命中的照常显示，进度行给出失败数（ADR-0046 §决策 5）。
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient())
+        ..failWith(
+          'https://broken.test/s?q=%E5%89%91%E6%9D%A5&p=1',
+          ParseFailureKind.networkFailed,
+        );
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(source: loadCorpusBookSource())
+        ..add(
+          source: loadCorpusBookSource().copyWith(
+            name: '坏源',
+            url: 'https://broken.test',
+            searchUrl: 'https://broken.test/s?q={{key}}&p={{page}}',
+          ),
+        );
+
+      await pumpSearchPage(tester, repository: repository, http: http);
+      await _search(tester, corpusKeyword);
+      final AppLocalizations l10n = _l10n(tester);
+
+      expect(find.text('书名一'), findsOneWidget);
+      expect(find.textContaining(l10n.searchPartialFailed(1)), findsWidgets);
+    });
+
+    testWidgets('search_whenWhileRunning_offersPauseAndStop', (
+      WidgetTester tester,
+    ) async {
+      final Completer<void> gate = Completer<void>();
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient())
+        ..onRequest = () => gate.future;
+
+      await pumpSearchPage(
+        tester,
+        repository: FakeBookSourceRepository()
+          ..add(source: loadCorpusBookSource()),
+        http: http,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.enterText(find.byType(TextField), corpusKeyword);
+      await tester.tap(find.byTooltip(l10n.bookSourceSearchAction));
+      await tester.pump();
+
+      expect(find.text(l10n.searchPause), findsOneWidget);
+      expect(find.text(l10n.searchStop), findsOneWidget);
+
+      await tester.tap(find.text(l10n.searchPause));
+      await tester.pump();
+      expect(find.text(l10n.searchResume), findsOneWidget);
+
+      await tester.tap(find.text(l10n.searchStop));
+      gate.complete();
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('search_givenAHit_opensTheDetailPageOfTheHit', (
       WidgetTester tester,
     ) async {
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 
-      await pumpReaderApp(tester, source: loadCorpusBookSource(), http: http);
+      await pumpReaderApp(
+        tester,
+        source: loadCorpusBookSource(),
+        http: http,
+        repository: FakeBookSourceRepository()
+          ..add(source: loadCorpusBookSource()),
+      );
       await _search(tester, corpusKeyword);
 
       await tester.tap(find.text('书名一'));

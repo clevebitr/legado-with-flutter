@@ -534,4 +534,73 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookSourceListNoMatch => '这个分组下没有书源。';
+
+  @override
+  String get searchScopeLabel => '搜索范围';
+
+  @override
+  String get searchScopeAll => '全部启用源';
+
+  @override
+  String get searchScopeNamed => '指定书源';
+
+  @override
+  String get searchFilterLabel => '筛选';
+
+  @override
+  String get searchTypeLabel => '书源类型';
+
+  @override
+  String get searchTypeText => '文本';
+
+  @override
+  String get searchTypeAudio => '音频';
+
+  @override
+  String get searchTypeImage => '图片';
+
+  @override
+  String get searchTypeFile => '文件';
+
+  @override
+  String get searchMatchLabel => '匹配';
+
+  @override
+  String get searchMatchDefault => '模糊';
+
+  @override
+  String get searchMatchExact => '精确（书名或作者）';
+
+  @override
+  String searchProgress(int done, int total) {
+    return '$done/$total 个源';
+  }
+
+  @override
+  String searchPartialFailed(int failed) {
+    return '$failed 个源失败';
+  }
+
+  @override
+  String get searchPause => '暂停';
+
+  @override
+  String get searchResume => '继续';
+
+  @override
+  String get searchStop => '停止';
+
+  @override
+  String get searchLoadMore => '加载更多';
+
+  @override
+  String searchOriginsLine(int count) {
+    return '$count 个来源';
+  }
+
+  @override
+  String get searchNoSources => '当前范围内没有可搜索的书源。';
+
+  @override
+  String get searchTypeVideo => '视频';
 }

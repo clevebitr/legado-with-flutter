@@ -559,4 +559,73 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookSourceListNoMatch => 'No source matches this group.';
+
+  @override
+  String get searchScopeLabel => 'Search in';
+
+  @override
+  String get searchScopeAll => 'All enabled sources';
+
+  @override
+  String get searchScopeNamed => 'Chosen sources';
+
+  @override
+  String get searchFilterLabel => 'Filters';
+
+  @override
+  String get searchTypeLabel => 'Source types';
+
+  @override
+  String get searchTypeText => 'Text';
+
+  @override
+  String get searchTypeAudio => 'Audio';
+
+  @override
+  String get searchTypeImage => 'Image';
+
+  @override
+  String get searchTypeFile => 'File';
+
+  @override
+  String get searchMatchLabel => 'Match';
+
+  @override
+  String get searchMatchDefault => 'Fuzzy';
+
+  @override
+  String get searchMatchExact => 'Exact name or author';
+
+  @override
+  String searchProgress(int done, int total) {
+    return '$done/$total sources';
+  }
+
+  @override
+  String searchPartialFailed(int failed) {
+    return '$failed sources failed';
+  }
+
+  @override
+  String get searchPause => 'Pause';
+
+  @override
+  String get searchResume => 'Resume';
+
+  @override
+  String get searchStop => 'Stop';
+
+  @override
+  String get searchLoadMore => 'Load more';
+
+  @override
+  String searchOriginsLine(int count) {
+    return '$count sources';
+  }
+
+  @override
+  String get searchNoSources => 'No source can be searched in this scope.';
+
+  @override
+  String get searchTypeVideo => 'Video';
 }

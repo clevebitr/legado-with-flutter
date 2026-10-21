@@ -13,6 +13,7 @@ import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/search_books_page.dart';
 import 'package:flutter_reader/features/bookshelf/di.dart';
 import 'package:flutter_reader/features/settings/di.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -26,6 +27,7 @@ import 'fake_bookshelf_repository.dart';
 import 'fake_content_cache.dart';
 import 'fake_http_client.dart';
 import 'fake_log_printer.dart';
+import 'fake_search_scope_store.dart';
 import 'fake_settings_repository.dart';
 
 /// The offline corpus of `docs/dev/book-source.md` §10, wired for widget tests.
@@ -215,6 +217,48 @@ Future<ProviderContainer> pumpSourceConsolePage(
         supportedLocales: AppLocalizations.supportedLocales,
         theme: buildReaderTheme(fallbackLightColorScheme()),
         home: page,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  return container;
+}
+
+/// Pumps the search page and hands back its container (`docs/dev/roadmap.md` 3.8).
+///
+/// The page resolves its scope into sources and runs the aggregate search, so the overrides are the
+/// repository (the source list), the client, the body cache and the scope store — all ports, never a
+/// plugin (`docs/dev/testing.md` §4).
+Future<ProviderContainer> pumpSearchPage(
+  WidgetTester tester, {
+  required FakeBookSourceRepository repository,
+  required FakeHttpClient http,
+  FakeSearchScopeStore? scopeStore,
+}) async {
+  _fixViewSize(tester);
+  final ProviderContainer container = ProviderContainer(
+    overrides: <Override>[
+      bookSourceRepositoryProvider.overrideWithValue(repository),
+      httpClientProvider.overrideWithValue(http),
+      contentCacheProvider.overrideWithValue(FakeContentCache()),
+      searchScopeStoreProvider.overrideWith(
+        (Ref ref) async => scopeStore ?? FakeSearchScopeStore(),
+      ),
+      appLoggerProvider.overrideWithValue(_logger()),
+    ],
+  );
+  addTearDown(container.dispose);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: buildReaderTheme(fallbackLightColorScheme()),
+        home: const SearchBooksPage(),
       ),
     ),
   );

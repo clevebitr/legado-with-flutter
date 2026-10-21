@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Aggregate search reaches the screen: scopes, filters, progress and one merged list (M11, second half)
+
+- **The search page searches a scope, not "the selected source"** — a behaviour change worth naming: the default
+  scope is every enabled text source, so pressing search on a fresh install queries all of them. The scope chip opens
+  one sheet with the radio part (all / a group) and the check-box part (specific sources), and the choice is stored
+  (ADR-0046 §decision 1).
+- **Filters sheet**: source types (default text only) and the match mode, both applied to the next run
+  (ADR-0046 §decision 2/3).
+- **One merged list**: a hit shows its author, its update time and how many sources found it; tapping it selects the
+  first origin and opens the detail page **through that source**, which is what makes "the same book in six sources"
+  behave like one row (ADR-0046 §decision 4).
+- **Progress, pause, resume, stop, load more**: the progress line stays visible after a run that had failures ("n
+  sources failed"), because results that silently shrink are worse than a visible count (ADR-0046 §decision 5/6).
+  When every source fails, the failure keeps the first source's kind instead of a blanket network error.
+- **The check page gained the same two axes**: group and type chips narrow which sources are listed; the tick boxes
+  still decide what runs, so narrowing never silently changes a selection. That is the 「书源测试分类」the milestone
+  asked for, and it shares one meaning of "these sources" with the search page.
+- **ADR-0046** records the seven decisions; roadmap §3.8 closes M11 and registers the two deliberate gaps (results are
+  not persisted, non-text sources have no reader).
+- Gates: format 0 changed, analyze clean, **1155** tests, `core` 1245/1245, `domain` 2458/2458, `data` 98.47%.
+
 ### Aggregate search engine: scopes, type filters, match buckets and merging (M11, first half)
 
 - **Search scope** (`BookSearchScope`: all / groups / named sources) with upstream's JSON payload, and the fallback

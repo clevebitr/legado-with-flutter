@@ -728,5 +728,107 @@
   "bookSourceListNoMatch": "No source matches this group.",
   "@bookSourceListNoMatch": {
     "description": "Empty state when the group filter hides every source."
+  },
+  "searchScopeLabel": "Search in",
+  "@searchScopeLabel": {
+    "description": "Tooltip of the search scope button."
+  },
+  "searchScopeAll": "All enabled sources",
+  "@searchScopeAll": {
+    "description": "Scope option: every enabled source."
+  },
+  "searchScopeNamed": "Chosen sources",
+  "@searchScopeNamed": {
+    "description": "Scope chip label when specific sources are chosen."
+  },
+  "searchFilterLabel": "Filters",
+  "@searchFilterLabel": {
+    "description": "Tooltip of the search filter button."
+  },
+  "searchTypeLabel": "Source types",
+  "@searchTypeLabel": {
+    "description": "Label above the source-type check boxes."
+  },
+  "searchTypeText": "Text",
+  "@searchTypeText": {
+    "description": "Source type: text."
+  },
+  "searchTypeAudio": "Audio",
+  "@searchTypeAudio": {
+    "description": "Source type: audio."
+  },
+  "searchTypeImage": "Image",
+  "@searchTypeImage": {
+    "description": "Source type: image."
+  },
+  "searchTypeFile": "File",
+  "@searchTypeFile": {
+    "description": "Source type: file."
+  },
+  "searchMatchLabel": "Match",
+  "@searchMatchLabel": {
+    "description": "Label above the match mode choices."
+  },
+  "searchMatchDefault": "Fuzzy",
+  "@searchMatchDefault": {
+    "description": "Match mode: keep everything, exact first."
+  },
+  "searchMatchExact": "Exact name or author",
+  "@searchMatchExact": {
+    "description": "Match mode: only hits whose name or author equals the keyword."
+  },
+  "searchProgress": "{done}/{total} sources",
+  "@searchProgress": {
+    "description": "Search progress line.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "searchPartialFailed": "{failed} sources failed",
+  "@searchPartialFailed": {
+    "description": "Line shown when some sources failed.",
+    "placeholders": {
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "searchPause": "Pause",
+  "@searchPause": {
+    "description": "Action that pauses the running search."
+  },
+  "searchResume": "Resume",
+  "@searchResume": {
+    "description": "Action that resumes a paused search."
+  },
+  "searchStop": "Stop",
+  "@searchStop": {
+    "description": "Action that stops the running search."
+  },
+  "searchLoadMore": "Load more",
+  "@searchLoadMore": {
+    "description": "Action that asks every page-capable source for the next page."
+  },
+  "searchOriginsLine": "{count} sources",
+  "@searchOriginsLine": {
+    "description": "How many sources found one book.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchNoSources": "No source can be searched in this scope.",
+  "@searchNoSources": {
+    "description": "Shown when the scope resolves to no searchable source."
+  },
+  "searchTypeVideo": "Video",
+  "@searchTypeVideo": {
+    "description": "Source type: video."
   }
 }

@@ -24,5 +24,5 @@ auto-breakpoint: false
 
 ## Current: M8 — 5.7 缓存清理 + 5.8 导出保真
 
-goal: M6 已交付；下一步 M11（聚合搜索）
-breakpoint: M6 闭环（ADR-0045）；未开工：M8/M9/M11/M12
+goal: M11 聚合搜索：引擎已交付，待做展示层
+breakpoint: M11 引擎半程已交付（ADR-0046）；剩搜索页/选源 UI

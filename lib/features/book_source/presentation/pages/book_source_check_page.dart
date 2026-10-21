@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check_settings.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/source_check_notifier.dart';
@@ -39,6 +41,13 @@ class _BookSourceCheckPageState extends ConsumerState<BookSourceCheckPage> {
 
   /// The keyword the user typed; `null` keeps the notifier's default.
   late final TextEditingController _keyword = TextEditingController();
+
+  /// The group the list is narrowed to, or `null` for every group (5.10 的「书源测试分类」).
+  String? _group;
+
+  /// The source types the list is narrowed to; the default is text, like an aggregate search
+  /// (ADR-0046 §决策 2), because the stages only make sense for a text source.
+  Set<BookSourceType> _types = <BookSourceType>{BookSourceType.text};
 
   @override
   void dispose() {
@@ -98,18 +107,103 @@ class _BookSourceCheckPageState extends ConsumerState<BookSourceCheckPage> {
     List<StoredBookSource> sources,
     SourceCheckState state,
   ) {
-    final Set<int> selected = _effectiveSelection(sources, state);
+    final List<StoredBookSource> visible = _visible(sources);
+    final Set<int> selected = _effectiveSelection(visible, state);
 
     return ListView(
       children: <Widget>[
         _controls(l10n, state),
         const Divider(),
-        _selectionHeader(l10n, sources, state),
-        for (final StoredBookSource source in sources)
+        _selectionFilters(l10n, sources),
+        _selectionHeader(l10n, visible, state),
+        for (final StoredBookSource source in visible)
           _row(l10n, source, state, selected),
       ],
     );
   }
+
+  /// The group / type chips that decide which sources are listed (5.10 的「书源测试分类」).
+  ///
+  /// It is a **listing** filter, not a selection rule: the tick boxes still decide what runs, and
+  /// narrowing the list keeps a previous selection untouched. The two axes mirror an aggregate
+  /// search's inputs so the two screens agree on what "these sources" means (ADR-0046 §决策 1/2).
+  Widget _selectionFilters(
+    AppLocalizations l10n,
+    List<StoredBookSource> sources,
+  ) {
+    final M3ETheme tokens = context.m3e;
+    final List<String> groups = <String>{
+      for (final StoredBookSource source in sources)
+        ...splitGroups(source.groupName ?? source.source.group),
+    }.toList()..sort();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(
+        horizontal: tokens.spacing.lg,
+        vertical: tokens.spacing.sm,
+      ),
+      child: Row(
+        children: <Widget>[
+          FilterChip(
+            label: Text(l10n.bookSourceListGroupAll),
+            selected: _group == null,
+            onSelected: (_) => setState(() => _group = null),
+          ),
+          for (final String group in groups) ...<Widget>[
+            SizedBox(width: tokens.spacing.sm),
+            FilterChip(
+              label: Text(group),
+              selected: _group == group,
+              onSelected: (bool isSelected) =>
+                  setState(() => _group = isSelected ? group : null),
+            ),
+          ],
+          SizedBox(width: tokens.spacing.lg),
+          for (final BookSourceType type in BookSourceType.values) ...<Widget>[
+            SizedBox(width: tokens.spacing.sm),
+            FilterChip(
+              label: Text(_typeLabel(l10n, type)),
+              selected: _types.contains(type),
+              onSelected: (bool isSelected) => setState(() {
+                final Set<BookSourceType> next = <BookSourceType>{..._types};
+                if (isSelected) {
+                  next.add(type);
+                } else {
+                  next.remove(type);
+                }
+                // 一个类型都不选等于没有可校验的源：保持至少一个。
+                if (next.isNotEmpty) {
+                  _types = next;
+                }
+              }),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// The sources the list shows after the group / type filters.
+  List<StoredBookSource> _visible(List<StoredBookSource> sources) =>
+      <StoredBookSource>[
+        for (final StoredBookSource source in sources)
+          if ((_group == null ||
+                  splitGroups(source.groupName ?? source.source.group)
+                      .contains(_group)) &&
+              _types.contains(source.source.sourceType))
+            source,
+      ];
+
+  /// The ARB label of [type].
+  String _typeLabel(AppLocalizations l10n, BookSourceType type) =>
+      switch (type) {
+        BookSourceType.text => l10n.searchTypeText,
+        BookSourceType.audio => l10n.searchTypeAudio,
+        BookSourceType.image => l10n.searchTypeImage,
+        BookSourceType.file => l10n.searchTypeFile,
+        BookSourceType.video => l10n.searchTypeVideo,
+      };
 
   /// The stage switches, the keyword and the timeout.
   Widget _controls(AppLocalizations l10n, SourceCheckState state) {
