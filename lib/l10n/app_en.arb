@@ -683,5 +683,50 @@
         "type": "String"
       }
     }
+  },
+  "bookSourceListSortLabel": "Sort by",
+  "@bookSourceListSortLabel": {
+    "description": "Tooltip of the sort menu on the source list."
+  },
+  "bookSourceListSortDefault": "Manual order",
+  "@bookSourceListSortDefault": {
+    "description": "Sort key: the manual order a drag writes."
+  },
+  "bookSourceListSortWeight": "Weight",
+  "@bookSourceListSortWeight": {
+    "description": "Sort key: the weight the source declares."
+  },
+  "bookSourceListSortRespondTime": "Response time",
+  "@bookSourceListSortRespondTime": {
+    "description": "Sort key: the duration of the last check."
+  },
+  "bookSourceListSortName": "Name",
+  "@bookSourceListSortName": {
+    "description": "Sort key: the source name."
+  },
+  "bookSourceListGroupAll": "All groups",
+  "@bookSourceListGroupAll": {
+    "description": "Filter chip that shows every group."
+  },
+  "bookSourceListRespondTimeLine": "{millis} ms",
+  "@bookSourceListRespondTimeLine": {
+    "description": "Response time of a source, in milliseconds.",
+    "placeholders": {
+      "millis": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListCommentTitle": "Check note",
+  "@bookSourceListCommentTitle": {
+    "description": "Title of the dialog that shows a source note."
+  },
+  "bookSourceListCommentAction": "View note",
+  "@bookSourceListCommentAction": {
+    "description": "Menu action that opens the source note."
+  },
+  "bookSourceListNoMatch": "No source matches this group.",
+  "@bookSourceListNoMatch": {
+    "description": "Empty state when the group filter hides every source."
   }
 }

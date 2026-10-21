@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_reader/core/storage/book_source_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Clock a test can move by hand; timestamps must never depend on wall time
@@ -34,24 +35,27 @@ void main() {
     /// Inserts one row with [url] / [fingerprint], defaulting everything else.
     Future<int> insert({
       String url = 'https://example.test',
-      String fingerprint = 'fp-1',
+      String? fingerprint,
       String name = '示例书源',
       String? groupName = '精选',
       int sourceType = 0,
       bool isEnabled = true,
       int customOrder = 0,
+      int weight = 7,
+      int? respondTime,
     }) => dao.insertNew(
       url: url,
-      fingerprint: fingerprint,
+      // 每行一个指纹：`(url, fingerprint)` 是唯一键，测试里要能插多行。
+      fingerprint: fingerprint ?? 'fp-$name',
       payload: '{"bookSourceName":"$name"}',
       name: name,
       groupName: groupName,
       sourceType: sourceType,
       isEnabled: isEnabled,
       customOrder: customOrder,
-      weight: 7,
+      weight: weight,
       lastUpdateTime: 1612777312843,
-      respondTime: null,
+      respondTime: respondTime,
     );
 
     test('writeCheckState_whenCalled_writesTheCheckColumns', () async {
@@ -85,7 +89,7 @@ void main() {
       final BookSourceRow row = (await dao.findById(id))!;
 
       expect(row.url, 'https://example.test');
-      expect(row.fingerprint, 'fp-1');
+      expect(row.fingerprint, 'fp-示例书源');
       expect(row.payload, '{"bookSourceName":"示例书源"}');
       expect(row.name, '示例书源');
       expect(row.groupName, '精选');
@@ -129,6 +133,91 @@ void main() {
         ]);
       },
     );
+
+    test('findAll_givenTheWeightOrder_putsTheHeaviestFirst', () async {
+      await insert(name: '轻', weight: 1, customOrder: 0);
+      await insert(name: '重', weight: 9, customOrder: 1);
+
+      final List<BookSourceRow> rows = await dao.findAll(
+        order: BookSourceSortOrder.weight,
+      );
+
+      expect(rows.map((BookSourceRow row) => row.name), <String>['重', '轻']);
+    });
+
+    test('findAll_givenTheRespondTimeOrder_putsNeverCheckedLast', () async {
+      // 未校验 = NULL，不是 0 ms：升序时它必须排在所有有值的后面（ADR-0045 §决策 2）。
+      await insert(name: '未校验', respondTime: null, customOrder: 0);
+      await insert(name: '慢', respondTime: 900, customOrder: 1);
+      await insert(name: '快', respondTime: 120, customOrder: 2);
+
+      final List<BookSourceRow> rows = await dao.findAll(
+        order: BookSourceSortOrder.respondTime,
+      );
+
+      expect(rows.map((BookSourceRow row) => row.name), <String>[
+        '快',
+        '慢',
+        '未校验',
+      ]);
+    });
+
+    test(
+      'findAll_givenTheNameOrder_keepsEnabledFirstAsTheTieBreaker',
+      () async {
+        // 「启用优先」对所有排序键都成立：禁用源不该插在启用源中间。
+        await insert(name: 'b', isEnabled: false, customOrder: 0);
+        await insert(name: 'a', isEnabled: true, customOrder: 1);
+
+        final List<BookSourceRow> rows = await dao.findAll(
+          order: BookSourceSortOrder.name,
+        );
+
+        expect(rows.map((BookSourceRow row) => row.name), <String>['a', 'b']);
+      },
+    );
+
+    test('findAll_givenTheWeightOrder_breaksTiesByTheManualOrder', () async {
+      // 同权重时回落到 (启用 → 手动序 → id)：同一份数据任何一次查询都是同一顺序。
+      await insert(name: 'second', weight: 5, customOrder: 1);
+      await insert(name: 'first', weight: 5, customOrder: 0);
+
+      final List<BookSourceRow> rows = await dao.findAll(
+        order: BookSourceSortOrder.weight,
+      );
+
+      expect(rows.map((BookSourceRow row) => row.name), <String>[
+        'first',
+        'second',
+      ]);
+    });
+
+    test('reorder_whenCalled_renumbersTheManualOrderInOneGo', () async {
+      final int a = await insert(name: 'a', customOrder: 0);
+      final int b = await insert(name: 'b', customOrder: 1);
+      final int c = await insert(name: 'c', customOrder: 2);
+
+      // 拖成 c → a → b：整体编号 0..2，而不是交换相邻两行（ADR-0045 §决策 3）。
+      await dao.reorder(<int>[c, a, b]);
+
+      final List<BookSourceRow> rows = await dao.findAll();
+      expect(rows.map((BookSourceRow row) => row.name), <String>[
+        'c',
+        'a',
+        'b',
+      ]);
+      expect(rows.map((BookSourceRow row) => row.customOrder), <int>[0, 1, 2]);
+    });
+
+    test('reorder_givenAnIdThatIsGone_skipsIt', () async {
+      final int a = await insert(name: 'a', customOrder: 0);
+      final int b = await insert(name: 'b', customOrder: 1);
+
+      await dao.reorder(<int>[b, 404, a]);
+
+      final List<BookSourceRow> rows = await dao.findAll();
+      expect(rows.map((BookSourceRow row) => row.name), <String>['b', 'a']);
+    });
 
     test('findById_givenAnUnknownId_returnsNull', () async {
       expect(await dao.findById(404), isNull);

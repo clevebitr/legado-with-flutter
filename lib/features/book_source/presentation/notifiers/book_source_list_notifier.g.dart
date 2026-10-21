@@ -113,7 +113,7 @@ final class SelectedBookSourceProvider
 }
 
 String _$selectedBookSourceHash() =>
-    r'97e165f20780e28a97b9b0e73192a358de77400d';
+    r'3134ff5f6b506479f89081a6cca21588eb23766f';
 
 /// Which stored source the pages work with, and the only place that changes it.
 ///
@@ -201,3 +201,132 @@ final class CurrentBookSourceProvider
 }
 
 String _$currentBookSourceHash() => r'4b345d64ed2c08b87fe3b3c03b8262e517edcc49';
+
+/// The list's own view state — sort key and group filter — and the only place that changes it
+/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+///
+/// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
+/// back, and the store write happens once per change rather than once per visit.
+
+@ProviderFor(BookSourceView)
+final bookSourceViewProvider = BookSourceViewProvider._();
+
+/// The list's own view state — sort key and group filter — and the only place that changes it
+/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+///
+/// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
+/// back, and the store write happens once per change rather than once per visit.
+final class BookSourceViewProvider
+    extends $AsyncNotifierProvider<BookSourceView, BookSourceListView> {
+  /// The list's own view state — sort key and group filter — and the only place that changes it
+  /// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+  ///
+  /// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
+  /// back, and the store write happens once per change rather than once per visit.
+  BookSourceViewProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceViewProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceViewHash();
+
+  @$internal
+  @override
+  BookSourceView create() => BookSourceView();
+}
+
+String _$bookSourceViewHash() => r'8ea5619254456de6355b58b843c4223bc2f27b12';
+
+/// The list's own view state — sort key and group filter — and the only place that changes it
+/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+///
+/// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
+/// back, and the store write happens once per change rather than once per visit.
+
+abstract class _$BookSourceView extends $AsyncNotifier<BookSourceListView> {
+  FutureOr<BookSourceListView> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<BookSourceListView>, BookSourceListView>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<BookSourceListView>, BookSourceListView>,
+              AsyncValue<BookSourceListView>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// What the list page renders: the rows after the filter, the groups they carry, and the view.
+///
+/// The group fallback lives **here** rather than in the store: whether a group still exists depends
+/// on the rows, which the store cannot see. A stored filter that names a group nobody carries is
+/// therefore dropped while rendering instead of being written back from a `build`
+/// (ADR-0045 §决策 4).
+
+@ProviderFor(bookSourceListData)
+final bookSourceListDataProvider = BookSourceListDataProvider._();
+
+/// What the list page renders: the rows after the filter, the groups they carry, and the view.
+///
+/// The group fallback lives **here** rather than in the store: whether a group still exists depends
+/// on the rows, which the store cannot see. A stored filter that names a group nobody carries is
+/// therefore dropped while rendering instead of being written back from a `build`
+/// (ADR-0045 §决策 4).
+
+final class BookSourceListDataProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<BookSourceListData>,
+          BookSourceListData,
+          FutureOr<BookSourceListData>
+        >
+    with
+        $FutureModifier<BookSourceListData>,
+        $FutureProvider<BookSourceListData> {
+  /// What the list page renders: the rows after the filter, the groups they carry, and the view.
+  ///
+  /// The group fallback lives **here** rather than in the store: whether a group still exists depends
+  /// on the rows, which the store cannot see. A stored filter that names a group nobody carries is
+  /// therefore dropped while rendering instead of being written back from a `build`
+  /// (ADR-0045 §决策 4).
+  BookSourceListDataProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceListDataProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceListDataHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<BookSourceListData> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<BookSourceListData> create(Ref ref) {
+    return bookSourceListData(ref);
+  }
+}
+
+String _$bookSourceListDataHash() =>
+    r'fe1c7a0c6211b14313a25893320fbada6ef261d0';

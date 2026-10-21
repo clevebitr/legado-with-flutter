@@ -527,4 +527,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String bookSourceUpdateTimeLine(String value) {
     return 'Updated: $value';
   }
+
+  @override
+  String get bookSourceListSortLabel => 'Sort by';
+
+  @override
+  String get bookSourceListSortDefault => 'Manual order';
+
+  @override
+  String get bookSourceListSortWeight => 'Weight';
+
+  @override
+  String get bookSourceListSortRespondTime => 'Response time';
+
+  @override
+  String get bookSourceListSortName => 'Name';
+
+  @override
+  String get bookSourceListGroupAll => 'All groups';
+
+  @override
+  String bookSourceListRespondTimeLine(int millis) {
+    return '$millis ms';
+  }
+
+  @override
+  String get bookSourceListCommentTitle => 'Check note';
+
+  @override
+  String get bookSourceListCommentAction => 'View note';
+
+  @override
+  String get bookSourceListNoMatch => 'No source matches this group.';
 }

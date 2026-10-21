@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import 'fake_book_source_repository.dart';
+import 'fake_book_source_view_store.dart';
 import 'fake_bookshelf_repository.dart';
 import 'fake_content_cache.dart';
 import 'fake_http_client.dart';
@@ -94,6 +95,9 @@ Future<void> pumpReaderApp(
         bookSourceRepositoryProvider.overrideWithValue(
           repository ?? FakeBookSourceRepository(),
         ),
+        bookSourceViewStoreProvider.overrideWith(
+          (Ref ref) async => FakeBookSourceViewStore(),
+        ),
       ],
       child: const ReaderApp(),
     ),
@@ -147,6 +151,7 @@ Future<void> pumpSourceManagementPage(
   required FakeBookSourceRepository repository,
   FakeHttpClient? http,
   BookSourceFilePicker? picker,
+  FakeBookSourceViewStore? viewStore,
 }) async {
   _fixViewSize(tester);
 
@@ -159,6 +164,11 @@ Future<void> pumpSourceManagementPage(
         // 文件选择器的默认实现要走平台通道；测试永远覆盖端口（testing.md §4）。
         bookSourceFilePickerProvider.overrideWithValue(
           picker ?? const UnsupportedBookSourceFilePicker(),
+        ),
+        // 5.5 起列表页还读「排序 + 分组筛选」这条视图偏好；宿主 VM 里没有平台存储，
+        // 所以端口给内存替身（testing.md §4）。
+        bookSourceViewStoreProvider.overrideWith(
+          (Ref ref) async => viewStore ?? FakeBookSourceViewStore(),
         ),
       ],
       child: MaterialApp(

@@ -2,12 +2,15 @@ import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/js_bridge_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/di/preference_store_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
+import 'package:flutter_reader/features/book_source/data/book_source_view_store_impl.dart';
 import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/book_source_view_store.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/check_book_source.dart';
@@ -139,3 +142,10 @@ RunSourceDebug runSourceDebug(Ref ref) => RunSourceDebug(
   content: ref.watch(fetchContentProvider),
   clock: ref.watch(clockProvider),
 );
+
+/// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+@riverpod
+Future<BookSourceViewStore> bookSourceViewStore(Ref ref) async =>
+    BookSourceViewStoreImpl(
+      store: await ref.watch(preferenceStoreProvider.future),
+    );

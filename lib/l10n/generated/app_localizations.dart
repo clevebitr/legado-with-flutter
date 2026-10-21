@@ -1033,6 +1033,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Updated: {value}'**
   String bookSourceUpdateTimeLine(String value);
+
+  /// Tooltip of the sort menu on the source list.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get bookSourceListSortLabel;
+
+  /// Sort key: the manual order a drag writes.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual order'**
+  String get bookSourceListSortDefault;
+
+  /// Sort key: the weight the source declares.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight'**
+  String get bookSourceListSortWeight;
+
+  /// Sort key: the duration of the last check.
+  ///
+  /// In en, this message translates to:
+  /// **'Response time'**
+  String get bookSourceListSortRespondTime;
+
+  /// Sort key: the source name.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get bookSourceListSortName;
+
+  /// Filter chip that shows every group.
+  ///
+  /// In en, this message translates to:
+  /// **'All groups'**
+  String get bookSourceListGroupAll;
+
+  /// Response time of a source, in milliseconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{millis} ms'**
+  String bookSourceListRespondTimeLine(int millis);
+
+  /// Title of the dialog that shows a source note.
+  ///
+  /// In en, this message translates to:
+  /// **'Check note'**
+  String get bookSourceListCommentTitle;
+
+  /// Menu action that opens the source note.
+  ///
+  /// In en, this message translates to:
+  /// **'View note'**
+  String get bookSourceListCommentAction;
+
+  /// Empty state when the group filter hides every source.
+  ///
+  /// In en, this message translates to:
+  /// **'No source matches this group.'**
+  String get bookSourceListNoMatch;
 }
 
 class _AppLocalizationsDelegate

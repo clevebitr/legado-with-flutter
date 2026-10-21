@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The source list can be sorted, filtered and dragged (5.5)
+
+- **Four sort keys with a fixed tie-breaker.** Manual order (the default), weight descending, response time
+  ascending and name ascending; every key is followed by enabled-first, then the manual order, then the row id — so
+  the same data always comes back in the same order (ADR-0045 §decision 2). A source that was never checked has no
+  response time, so it sorts **after** the measured ones instead of looking like `0 ms`.
+- **Group filter and drag-to-reorder.** The list filters by the group tokens the rows carry (including the
+  `搜索失效` ones the batch check writes), and in the manual order the rows are draggable: dropping renumbers
+  `customOrder` as `0..n-1` in one transaction, because swapping neighbours has no defined result when two rows share
+  a value (ADR-0045 §decision 3). Other keys disable dragging instead of letting a drop jump back.
+- **The list reads the columns, not the payload.** `StoredBookSource` now carries the five column projections
+  (`groupName`, `lastUpdateTime`, `respondTime`, `weight`, `comment`); 5.10's check writes those columns while the
+  payload stays byte-for-byte, so without this the list would keep showing the state from before the check
+  (ADR-0045 §decision 1).
+- **Sort key and group filter are remembered** in `book_source/data/` (keys private to that file). A stored group
+  that no longer exists falls back to "all groups" while rendering rather than writing a correction from a build.
+- Row actions moved into a menu (debug / view note / delete) instead of four trailing icons; the note itself shows
+  its first line inline and the whole `// Error:` block in a dialog.
+- **ADR-0045** records the four decisions; roadmap §5.5 is closed.
+- Gates: format 0 changed, analyze clean, **1083** tests, `core`/`domain` 100%, `data` >= 80%, generated files in
+  sync; Windows and Android device-level tests re-run.
+
 ### The reader lands: its own typography, both page modes and remembered positions (2026-10-21)
 
 - **New `reader` feature (5.3).** `ReaderPage` / `ReaderRoute` moved out of `book_source`; the page shows one chapter

@@ -1,5 +1,6 @@
 import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
@@ -22,11 +23,6 @@ final class FakeBookSourceRepository implements BookSourceRepository {
   /// Identity (`url|fingerprint`) to row id, the in-memory stand-in for the unique key.
   final Map<String, int> _identities = <String, int>{};
 
-  /// The check columns (`groupName` / `comment` / `respondTime`) the real table keeps.
-  final Map<int, String?> _checkGroups = <int, String?>{};
-  final Map<int, String?> _checkComments = <int, String?>{};
-  final Map<int, int> _respondTimes = <int, int>{};
-
   int _nextId = 1;
 
   /// The timestamps new rows get; a test can pin them for an assertion.
@@ -41,6 +37,11 @@ final class FakeBookSourceRepository implements BookSourceRepository {
     required BookSource source,
     bool isEnabled = true,
     int customOrder = 0,
+    String? groupName,
+    int? lastUpdateTime,
+    int? respondTime,
+    int? weight,
+    String? comment,
   }) {
     final StoredBookSource stored = StoredBookSource(
       id: _nextId++,
@@ -48,6 +49,11 @@ final class FakeBookSourceRepository implements BookSourceRepository {
       isEnabled: isEnabled,
       customOrder: customOrder,
       importedAt: importedAt,
+      groupName: groupName,
+      lastUpdateTime: lastUpdateTime,
+      respondTime: respondTime,
+      weight: weight,
+      comment: comment,
     );
     _rows[stored.id] = stored;
 
@@ -56,12 +62,34 @@ final class FakeBookSourceRepository implements BookSourceRepository {
 
   /// Every row, in the order the port promises.
   @override
-  Future<List<StoredBookSource>> getAll() async {
+  Future<List<StoredBookSource>> getAll({
+    BookSourceSortOrder order = BookSourceSortOrder.defaultOrder,
+  }) async {
     if (failReads) {
       throw Exception('stored book sources could not be read');
     }
+    int byPrimary(StoredBookSource a, StoredBookSource b) => switch (order) {
+      BookSourceSortOrder.defaultOrder => 0,
+      BookSourceSortOrder.weight => (b.weight ?? 0).compareTo(a.weight ?? 0),
+      // 「从未校验」排最后，而不是当 0 ms（ADR-0045 §决策 2）。
+      BookSourceSortOrder.respondTime => switch ((
+        a.respondTime,
+        b.respondTime,
+      )) {
+        (final int left, final int right) => left.compareTo(right),
+        (final int _, null) => -1,
+        (null, final int _) => 1,
+        (null, null) => 0,
+      },
+      BookSourceSortOrder.name => a.source.name.compareTo(b.source.name),
+    };
+
     final List<StoredBookSource> rows = _rows.values.toList()
       ..sort((StoredBookSource a, StoredBookSource b) {
+        final int primary = byPrimary(a, b);
+        if (primary != 0) {
+          return primary;
+        }
         if (a.isEnabled != b.isEnabled) {
           return a.isEnabled ? -1 : 1;
         }
@@ -133,42 +161,71 @@ final class FakeBookSourceRepository implements BookSourceRepository {
   }
 
   @override
+  Future<void> reorder(List<int> orderedIds) async {
+    for (var index = 0; index < orderedIds.length; index++) {
+      final StoredBookSource? row = _rows[orderedIds[index]];
+      if (row == null) {
+        continue;
+      }
+      _rows[row.id] = StoredBookSource(
+        id: row.id,
+        source: row.source,
+        isEnabled: row.isEnabled,
+        customOrder: index,
+        importedAt: row.importedAt,
+        groupName: row.groupName,
+        lastUpdateTime: row.lastUpdateTime,
+        respondTime: row.respondTime,
+        weight: row.weight,
+        comment: row.comment,
+      );
+    }
+  }
+
+  @override
   Future<bool> applyCheckReport({
     required int id,
     required SourceCheckReport report,
   }) async {
-    if (!_rows.containsKey(id)) {
+    final StoredBookSource? row = _rows[id];
+    if (row == null) {
       return false;
     }
-    final String? groups = withoutInvalidGroups(_checkGroups[id]);
-    _checkGroups[id] = report.invalidGroups.isEmpty
-        ? groups
-        : withGroups(groups, report.invalidGroups);
-    final String? comment = withoutErrorComment(_checkComments[id]);
+    // 真实适配器写的是**列**（ADR-0043 §决策 1）：替身也把结果落到行投影上，
+    // 这样页面测试读到的就是同一份数据（ADR-0045 §决策 1）。
+    final String? groups = withoutInvalidGroups(row.groupName);
+    final String? comment = withoutErrorComment(row.comment);
     final String? note = report.errorComment;
-    _checkComments[id] = note == null
-        ? comment
-        : withErrorComment(comment, note);
-    _respondTimes[id] = report.elapsedMillis;
+    _rows[id] = StoredBookSource(
+      id: row.id,
+      source: row.source,
+      isEnabled: row.isEnabled,
+      customOrder: row.customOrder,
+      importedAt: row.importedAt,
+      groupName: report.invalidGroups.isEmpty
+          ? groups
+          : withGroups(groups, report.invalidGroups),
+      lastUpdateTime: row.lastUpdateTime,
+      respondTime: report.elapsedMillis,
+      weight: row.weight,
+      comment: note == null ? comment : withErrorComment(comment, note),
+    );
 
     return true;
   }
 
   /// The group names row [id] currently carries — the `groupName` column.
-  List<String> groupsOf(int id) => splitGroups(_checkGroups[id]);
+  List<String> groupsOf(int id) => splitGroups(_rows[id]?.groupName);
 
   /// The error note row [id] currently carries — the `comment` column.
-  String? commentOf(int id) => _checkComments[id];
+  String? commentOf(int id) => _rows[id]?.comment;
 
   /// The last `respondTime` written for row [id].
-  int? respondTimeOf(int id) => _respondTimes[id];
+  int? respondTimeOf(int id) => _rows[id]?.respondTime;
 
   @override
   Future<void> delete(int id) async {
     _rows.remove(id);
     _identities.removeWhere((String _, int rowId) => rowId == id);
-    _checkGroups.remove(id);
-    _checkComments.remove(id);
-    _respondTimes.remove(id);
   }
 }

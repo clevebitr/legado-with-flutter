@@ -5,6 +5,7 @@ import 'package:flutter_reader/core/storage/book_source_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
@@ -31,6 +32,7 @@ Map<String, Object?> _entry({
   String content = 'class.body',
   bool? enabled,
   Object? customOrder,
+  Object? weight,
 }) {
   // 两个可选项用赋值而不是集合字面量里的 `if`：analyzer 的 `use_null_aware_elements` 拒绝后者。
   final Map<String, Object?> entry = <String, Object?>{
@@ -48,6 +50,9 @@ Map<String, Object?> _entry({
   }
   if (customOrder != null) {
     entry['customOrder'] = customOrder;
+  }
+  if (weight != null) {
+    entry['weight'] = weight;
   }
 
   return entry;
@@ -346,6 +351,66 @@ void main() {
         printer.events.last.message.toString(),
         contains('no row to land on'),
       );
+    });
+
+    test('getAll_givenACheckVerdict_answersTheColumnProjections', () async {
+      // 校验写的是列（ADR-0043 §决策 1）：仓储必须把它们交给界面，否则列表显示的还是
+      // 校验之前的分组与注释（ADR-0045 §决策 1）。
+      await repository.saveAll(<Map<String, Object?>>[_entry()]);
+      final int id = (await repository.getAll()).single.id;
+      const SourceCheckReport report = SourceCheckReport(
+        status: SourceCheckStatus.failed,
+        invalidGroups: <String>[searchInvalidGroup],
+        errorComment: searchInvalidGroup,
+        elapsedMillis: 777,
+      );
+
+      await repository.applyCheckReport(id: id, report: report);
+
+      final StoredBookSource stored = (await repository.getAll()).single;
+      expect(stored.groupName, searchInvalidGroup);
+      expect(stored.comment, '// Error: $searchInvalidGroup');
+      expect(stored.respondTime, 777);
+      // 负载里的分组仍是导入时那一份，没被校验改写。
+      expect(stored.source.group, isNull);
+    });
+
+    test('getAll_givenTheWeightOrder_answersTheHeaviestFirst', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(name: '轻', url: 'https://light.test', weight: 1),
+        _entry(name: '重', url: 'https://heavy.test', weight: 9),
+      ]);
+
+      final List<StoredBookSource> rows = await repository.getAll(
+        order: BookSourceSortOrder.weight,
+      );
+
+      expect(
+        rows.map((StoredBookSource source) => source.source.name),
+        <String>['重', '轻'],
+      );
+    });
+
+    test('reorder_whenCalled_renumbersTheManualOrder', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(name: 'a', url: 'https://a.test'),
+        _entry(name: 'b', url: 'https://b.test'),
+      ]);
+      final List<StoredBookSource> before = await repository.getAll();
+      final List<int> reversed = before
+          .map((StoredBookSource source) => source.id)
+          .toList()
+          .reversed
+          .toList();
+
+      await repository.reorder(reversed);
+
+      final List<StoredBookSource> after = await repository.getAll();
+      expect(after.map((StoredBookSource source) => source.id), reversed);
+      expect(after.map((StoredBookSource source) => source.customOrder), <int>[
+        0,
+        1,
+      ]);
     });
 
     test('delete_givenAnExistingSource_removesIt', () async {

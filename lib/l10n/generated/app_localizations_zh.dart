@@ -502,4 +502,36 @@ class AppLocalizationsZh extends AppLocalizations {
   String bookSourceUpdateTimeLine(String value) {
     return '更新于：$value';
   }
+
+  @override
+  String get bookSourceListSortLabel => '排序';
+
+  @override
+  String get bookSourceListSortDefault => '手动排序';
+
+  @override
+  String get bookSourceListSortWeight => '权重';
+
+  @override
+  String get bookSourceListSortRespondTime => '响应耗时';
+
+  @override
+  String get bookSourceListSortName => '名称';
+
+  @override
+  String get bookSourceListGroupAll => '全部分组';
+
+  @override
+  String bookSourceListRespondTimeLine(int millis) {
+    return '$millis 毫秒';
+  }
+
+  @override
+  String get bookSourceListCommentTitle => '校验注释';
+
+  @override
+  String get bookSourceListCommentAction => '查看注释';
+
+  @override
+  String get bookSourceListNoMatch => '这个分组下没有书源。';
 }

@@ -1,3 +1,4 @@
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 
@@ -16,7 +17,18 @@ import 'package:flutter_reader/features/book_source/domain/entities/stored_book_
 abstract interface class BookSourceRepository {
   /// Every stored source, in the order the list and the default pick use
   /// (`BookSourceDao.findAll`).
-  Future<List<StoredBookSource>> getAll();
+  ///
+  /// [order] is the key the user picked on the list (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 2);
+  /// the fixed tie-breakers behind it are the DAO's business, not the caller's.
+  Future<List<StoredBookSource>> getAll({
+    BookSourceSortOrder order = BookSourceSortOrder.defaultOrder,
+  });
+
+  /// Rewrites the manual order following [orderedIds] (ADR-0045 §决策 3).
+  ///
+  /// The whole list is renumbered `0..n-1` in one transaction, so dragging is idempotent and a
+  /// row that vanished meanwhile cannot fail the write.
+  Future<void> reorder(List<int> orderedIds);
 
   /// The stored source with [id], or `null` when it was deleted meanwhile.
   Future<StoredBookSource?> findById(int id);

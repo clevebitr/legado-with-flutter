@@ -155,5 +155,15 @@
   "readerChapterEnd": "本章读完",
   "readerLastChapter": "已是最后一章",
   "readerNoChapter": "这本书没有可读的章节。",
-  "bookSourceUpdateTimeLine": "更新于：{value}"
+  "bookSourceUpdateTimeLine": "更新于：{value}",
+  "bookSourceListSortLabel": "排序",
+  "bookSourceListSortDefault": "手动排序",
+  "bookSourceListSortWeight": "权重",
+  "bookSourceListSortRespondTime": "响应耗时",
+  "bookSourceListSortName": "名称",
+  "bookSourceListGroupAll": "全部分组",
+  "bookSourceListRespondTimeLine": "{millis} 毫秒",
+  "bookSourceListCommentTitle": "校验注释",
+  "bookSourceListCommentAction": "查看注释",
+  "bookSourceListNoMatch": "这个分组下没有书源。"
 }

@@ -720,3 +720,50 @@ final class RunSourceDebugProvider
 }
 
 String _$runSourceDebugHash() => r'62fea9b5a61629868734e88f23febc301eb3df3d';
+
+/// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+
+@ProviderFor(bookSourceViewStore)
+final bookSourceViewStoreProvider = BookSourceViewStoreProvider._();
+
+/// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+
+final class BookSourceViewStoreProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<BookSourceViewStore>,
+          BookSourceViewStore,
+          FutureOr<BookSourceViewStore>
+        >
+    with
+        $FutureModifier<BookSourceViewStore>,
+        $FutureProvider<BookSourceViewStore> {
+  /// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+  BookSourceViewStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceViewStoreProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceViewStoreHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<BookSourceViewStore> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<BookSourceViewStore> create(Ref ref) {
+    return bookSourceViewStore(ref);
+  }
+}
+
+String _$bookSourceViewStoreHash() =>
+    r'ed684284448cfde53d9ac00ecd256368f3fd307d';

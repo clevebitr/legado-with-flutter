@@ -1,6 +1,9 @@
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_list_view.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'book_source_list_notifier.g.dart';
@@ -52,12 +55,15 @@ class SelectedBookSource extends _$SelectedBookSource {
     await ref
         .read(bookSourceRepositoryProvider)
         .setEnabled(id: id, isEnabled: isEnabled);
+    // 列表页读的是 `bookSourceListDataProvider`（排序 + 筛选后的行），开关会改变它的行内容。
+    ref.invalidate(bookSourceListDataProvider);
     state = AsyncData<StoredBookSource?>(_resolve(await _reload()));
   }
 
   /// Deletes the source with [id] and re-resolves the selection.
   Future<void> remove(int id) async {
     await ref.read(bookSourceRepositoryProvider).delete(id);
+    ref.invalidate(bookSourceListDataProvider);
     state = AsyncData<StoredBookSource?>(_resolve(await _reload()));
   }
 
@@ -120,3 +126,102 @@ class SelectedBookSource extends _$SelectedBookSource {
 @riverpod
 BookSource? currentBookSource(Ref ref) =>
     ref.watch(selectedBookSourceProvider).value?.source;
+
+/// The list's own view state — sort key and group filter — and the only place that changes it
+/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+///
+/// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
+/// back, and the store write happens once per change rather than once per visit.
+@Riverpod(keepAlive: true)
+class BookSourceView extends _$BookSourceView {
+  @override
+  Future<BookSourceListView> build() async =>
+      (await ref.watch(bookSourceViewStoreProvider.future)).load();
+
+  /// Sorts by [order] and stores the choice.
+  Future<void> setOrder(BookSourceSortOrder order) =>
+      _apply((BookSourceListView view) => view.copyWith(order: order));
+
+  /// Filters to [group]; `null` means «all groups».
+  Future<void> setGroup(String? group) => _apply(
+    (BookSourceListView view) => group == null
+        ? view.copyWith(clearGroup: true)
+        : view.copyWith(group: group),
+  );
+
+  /// Writes the manual order following [orderedIds] and refreshes the list (ADR-0045 §决策 3).
+  Future<void> reorder(List<int> orderedIds) async {
+    await ref.read(bookSourceRepositoryProvider).reorder(orderedIds);
+    // 手动序同时是默认排序键与「第一条源」的依据，所以两个列表都要重新读。
+    ref.invalidate(bookSourceListProvider);
+    ref.invalidate(bookSourceListDataProvider);
+  }
+
+  /// Applies [change], stores it and publishes it.
+  Future<void> _apply(
+    BookSourceListView Function(BookSourceListView view) change,
+  ) async {
+    final BookSourceListView next = change(
+      state.value ?? BookSourceListView.defaults,
+    );
+    await (await ref.read(bookSourceViewStoreProvider.future)).save(next);
+    state = AsyncData<BookSourceListView>(next);
+  }
+}
+
+/// What the list page renders: the rows after the filter, the groups they carry, and the view.
+///
+/// The group fallback lives **here** rather than in the store: whether a group still exists depends
+/// on the rows, which the store cannot see. A stored filter that names a group nobody carries is
+/// therefore dropped while rendering instead of being written back from a `build`
+/// (ADR-0045 §决策 4).
+@riverpod
+Future<BookSourceListData> bookSourceListData(Ref ref) async {
+  final BookSourceListView view = await ref.watch(
+    bookSourceViewProvider.future,
+  );
+  final List<StoredBookSource> all = await ref
+      .watch(bookSourceRepositoryProvider)
+      .getAll(order: view.order);
+  final List<String> groups = _groupsOf(all);
+  final String? stored = view.group;
+  final String? group = stored != null && groups.contains(stored)
+      ? stored
+      : null;
+  final List<StoredBookSource> rows = group == null
+      ? all
+      : all
+            .where(
+              (StoredBookSource source) =>
+                  splitGroups(_groupOf(source)).contains(group),
+            )
+            .toList(growable: false);
+
+  return (
+    rows: rows,
+    groups: groups,
+    view: group == null ? view.copyWith(clearGroup: true) : view,
+  );
+}
+
+/// The rows the list shows, the groups they carry and the view that produced them.
+typedef BookSourceListData = ({
+  List<StoredBookSource> rows,
+  List<String> groups,
+  BookSourceListView view,
+});
+
+/// Every group token the loaded rows carry, sorted, de-duplicated.
+List<String> _groupsOf(List<StoredBookSource> sources) {
+  final Set<String> groups = <String>{
+    for (final StoredBookSource source in sources)
+      ...splitGroups(_groupOf(source)),
+  };
+  final List<String> sorted = groups.toList()..sort();
+
+  return sorted;
+}
+
+/// The group column of [source], falling back to the payload for rows stored before 5.5.
+String? _groupOf(StoredBookSource source) =>
+    source.groupName ?? source.source.group;

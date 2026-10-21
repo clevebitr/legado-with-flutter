@@ -12,6 +12,11 @@ part 'stored_book_source.freezed.dart';
 /// `@freezed` rather than a hand-written class: C-ARCH-5 asks for "`freezed`, or `final` fields
 /// plus `copyWith`", and the UI will copy this value around when it flips a source on or off
 /// (`docs/dev/roadmap.md` 5.1), so the generated `copyWith` is part of the contract rather than surplus.
+///
+/// The five nullable fields are **column projections**, not a copy of the payload
+/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 1): the batch check writes groups, a note and a
+/// respond time into columns while the payload stays byte-for-byte as imported (ADR-0040 §决策 4),
+/// so the list has to read the columns or it would keep showing the state from before the check.
 @freezed
 abstract class StoredBookSource with _$StoredBookSource {
   /// Creates a stored source.
@@ -32,6 +37,21 @@ abstract class StoredBookSource with _$StoredBookSource {
 
     /// When the row was first imported.
     required DateTime importedAt,
+
+    /// `bookSourceGroup` as stored, including the tokens the batch check writes (`搜索失效` …).
+    String? groupName,
+
+    /// `lastUpdateTime` as stored, in milliseconds since the epoch.
+    int? lastUpdateTime,
+
+    /// `respondTime` as stored — the last check's duration, or `null` when it was never checked.
+    int? respondTime,
+
+    /// `weight` as stored; the list can sort by it (ADR-0045 §决策 2).
+    int? weight,
+
+    /// `bookSourceComment` as stored, i.e. the user's note plus the check's `// Error: ` block.
+    String? comment,
   }) = _StoredBookSource;
 }
 

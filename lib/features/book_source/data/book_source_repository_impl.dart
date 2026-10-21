@@ -5,6 +5,7 @@ import 'package:flutter_reader/core/storage/book_source_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
 import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
@@ -24,9 +25,11 @@ final class BookSourceRepositoryImpl implements BookSourceRepository {
   final AppLogger _logger;
 
   @override
-  Future<List<StoredBookSource>> getAll() async {
+  Future<List<StoredBookSource>> getAll({
+    BookSourceSortOrder order = BookSourceSortOrder.defaultOrder,
+  }) async {
     final List<StoredBookSource> sources = <StoredBookSource>[];
-    for (final BookSourceRow row in await _dao.findAll()) {
+    for (final BookSourceRow row in await _dao.findAll(order: order)) {
       final StoredBookSource? stored = _toStored(row);
       if (stored != null) {
         sources.add(stored);
@@ -87,6 +90,9 @@ final class BookSourceRepositoryImpl implements BookSourceRepository {
   @override
   Future<void> setEnabled({required int id, required bool isEnabled}) =>
       _dao.setEnabled(id: id, isEnabled: isEnabled);
+
+  @override
+  Future<void> reorder(List<int> orderedIds) => _dao.reorder(orderedIds);
 
   @override
   Future<bool> applyCheckReport({
@@ -159,6 +165,13 @@ final class BookSourceRepositoryImpl implements BookSourceRepository {
       isEnabled: row.isEnabled,
       customOrder: row.customOrder,
       importedAt: row.importedAt,
+      // 校验结果写的是列（ADR-0043 §决策 1），所以列投影必须一起交给界面，
+      // 否则列表永远显示校验之前的分组 / 注释（ADR-0045 §决策 1）。
+      groupName: row.groupName,
+      lastUpdateTime: row.lastUpdateTime,
+      respondTime: row.respondTime,
+      weight: row.weight,
+      comment: row.comment,
     );
   }
 

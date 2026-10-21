@@ -4,6 +4,7 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
@@ -35,7 +36,12 @@ final class _FakeRepository implements BookSourceRepository {
   }
 
   @override
-  Future<List<StoredBookSource>> getAll() async => <StoredBookSource>[];
+  Future<List<StoredBookSource>> getAll({
+    BookSourceSortOrder order = BookSourceSortOrder.defaultOrder,
+  }) async => <StoredBookSource>[];
+
+  @override
+  Future<void> reorder(List<int> orderedIds) async {}
 
   @override
   Future<StoredBookSource?> findById(int id) async => null;
