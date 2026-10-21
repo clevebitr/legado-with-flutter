@@ -409,6 +409,522 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose a JSON file'**
   String get bookSourceImportFileAction;
+
+  /// Title of the bookshelf page, also used as the tooltip of its entry button.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookshelf'**
+  String get shelfTitle;
+
+  /// Empty state of the bookshelf page.
+  ///
+  /// In en, this message translates to:
+  /// **'Your shelf is empty. Open a book\'s details and choose “Add to shelf”.'**
+  String get shelfEmpty;
+
+  /// Shown when reading the shelf from storage failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The shelf could not be loaded.'**
+  String get shelfLoadFailed;
+
+  /// Shelf label for a book the user is still following.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading'**
+  String get shelfStatusTracking;
+
+  /// Shelf label for a book the user has finished.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get shelfStatusRead;
+
+  /// Menu action that pins a shelf entry above the others.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to top'**
+  String get shelfActionPin;
+
+  /// Menu action that removes the pin of a shelf entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin'**
+  String get shelfActionUnpin;
+
+  /// Menu action that moves a shelf entry to the finished group.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as finished'**
+  String get shelfActionMarkRead;
+
+  /// Menu action that moves a shelf entry back to the reading group.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as reading'**
+  String get shelfActionMarkTracking;
+
+  /// Menu action that deletes a shelf entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from shelf'**
+  String get shelfActionRemove;
+
+  /// Title of the confirmation dialog before a shelf entry is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this book?'**
+  String get shelfRemoveTitle;
+
+  /// Body of the confirmation dialog before a shelf entry is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Its reading progress is removed too.'**
+  String get shelfRemoveBody;
+
+  /// Subtitle of a shelf entry that was opened before.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading: {chapter}'**
+  String shelfProgressLine(String chapter);
+
+  /// Label of the button on the book detail page that puts the book on the shelf.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to shelf'**
+  String get shelfAddAction;
+
+  /// Snackbar shown after a book was added to the shelf.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to the shelf.'**
+  String get shelfAddSucceeded;
+
+  /// Shown when writing a book to the shelf failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The book could not be added to the shelf.'**
+  String get shelfAddFailed;
+
+  /// Shown when pinning, re-grouping or removing a shelf entry failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The shelf could not be updated.'**
+  String get shelfWriteFailed;
+
+  /// Tooltip of a stepper button that lowers a numeric setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Decrease'**
+  String get actionDecrease;
+
+  /// Tooltip of a stepper button that raises a numeric setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Increase'**
+  String get actionIncrease;
+
+  /// Title of the settings page, also used as the tooltip of its entry button.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// Shown when reading the stored settings failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The settings could not be loaded.'**
+  String get settingsLoadFailed;
+
+  /// Label of the theme mode setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get settingsThemeMode;
+
+  /// Theme mode that follows the platform.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow system'**
+  String get settingsThemeSystem;
+
+  /// Theme mode that always uses the light scheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get settingsThemeLight;
+
+  /// Theme mode that always uses the dark scheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get settingsThemeDark;
+
+  /// Label of the default text scale setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get settingsFontScale;
+
+  /// Current text scale shown next to its slider.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String settingsFontScaleValue(int percent);
+
+  /// Label of the per-source concurrency budget setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Concurrent requests per source'**
+  String get settingsConcurrency;
+
+  /// Explanation under the concurrency setting, including its allowed range.
+  ///
+  /// In en, this message translates to:
+  /// **'1 to 8. Higher values are faster and less polite to the site.'**
+  String get settingsConcurrencyHint;
+
+  /// Section title of the cache actions.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache'**
+  String get settingsCache;
+
+  /// Action that removes every cached entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear cache'**
+  String get settingsClearCache;
+
+  /// Title of the confirmation dialog before clearing the cache.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the whole cache?'**
+  String get settingsClearCacheTitle;
+
+  /// Body of the confirmation dialog before clearing the cache.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached pages and chapter bodies are downloaded again when needed.'**
+  String get settingsClearCacheBody;
+
+  /// Snackbar shown after the cache was cleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed {count} cached entries.'**
+  String settingsCacheCleared(int count);
+
+  /// Title of the batch book source check page.
+  ///
+  /// In en, this message translates to:
+  /// **'Check book sources'**
+  String get bookSourceCheckTitle;
+
+  /// Description of what the batch check does.
+  ///
+  /// In en, this message translates to:
+  /// **'Each source runs through search, discover, details, chapters and body.'**
+  String get bookSourceCheckIntro;
+
+  /// Label above the stage switches.
+  ///
+  /// In en, this message translates to:
+  /// **'Stages'**
+  String get bookSourceCheckStages;
+
+  /// Label of the search stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get bookSourceCheckStageSearch;
+
+  /// Label of the discover stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get bookSourceCheckStageExplore;
+
+  /// Label of the book detail stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get bookSourceCheckStageInfo;
+
+  /// Label of the chapter list stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get bookSourceCheckStageToc;
+
+  /// Label of the chapter body stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Body'**
+  String get bookSourceCheckStageContent;
+
+  /// Label of the keyword field used by the search stage.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyword'**
+  String get bookSourceCheckKeyword;
+
+  /// Hint of the keyword field.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyword sent to every checked source'**
+  String get bookSourceCheckKeywordHint;
+
+  /// Label of the per-source timeout row.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeout per source'**
+  String get bookSourceCheckTimeout;
+
+  /// Label of the button that starts the batch.
+  ///
+  /// In en, this message translates to:
+  /// **'Start check'**
+  String get bookSourceCheckStart;
+
+  /// Label of the button that cancels the batch.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get bookSourceCheckStop;
+
+  /// Empty state of the check page.
+  ///
+  /// In en, this message translates to:
+  /// **'No book source is stored yet. Import one to check it.'**
+  String get bookSourceCheckEmpty;
+
+  /// Shown when the batch starts with nothing selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one book source.'**
+  String get bookSourceCheckSelectionEmpty;
+
+  /// Per-source status while the batch has not reached it.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get bookSourceCheckStatusPending;
+
+  /// Per-source status while its check runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking'**
+  String get bookSourceCheckStatusRunning;
+
+  /// Per-source status after a healthy check.
+  ///
+  /// In en, this message translates to:
+  /// **'Passed'**
+  String get bookSourceCheckStatusSucceeded;
+
+  /// Per-source status after a check that found problems.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get bookSourceCheckStatusFailed;
+
+  /// Per-source status after the user stopped the batch.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get bookSourceCheckStatusCancelled;
+
+  /// Reason shown when the check failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The check found problems.'**
+  String get bookSourceCheckFailureCheckFailed;
+
+  /// Reason shown when the row is gone.
+  ///
+  /// In en, this message translates to:
+  /// **'The source was deleted meanwhile.'**
+  String get bookSourceCheckFailureSourceMissing;
+
+  /// Reason shown when the write-back failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The result could not be saved.'**
+  String get bookSourceCheckFailureSaveFailed;
+
+  /// Line naming the failing rule of a stage.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed at {rulePath}'**
+  String bookSourceCheckFailedAt(String rulePath);
+
+  /// Line showing how long a source's check took.
+  ///
+  /// In en, this message translates to:
+  /// **'Took {millis} ms'**
+  String bookSourceCheckElapsed(int millis);
+
+  /// Tooltip of the action that opens the debug console.
+  ///
+  /// In en, this message translates to:
+  /// **'Debug this source'**
+  String get bookSourceCheckOpenDebug;
+
+  /// Label of the action that selects every listed source.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get bookSourceCheckSelectAll;
+
+  /// Label of the action that clears the selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Select none'**
+  String get bookSourceCheckSelectNone;
+
+  /// Title of the single-source debug console.
+  ///
+  /// In en, this message translates to:
+  /// **'Debug a book source'**
+  String get bookSourceDebugTitle;
+
+  /// Label above the target selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get bookSourceDebugTarget;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get bookSourceDebugTargetSearch;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get bookSourceDebugTargetExplore;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get bookSourceDebugTargetInfo;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get bookSourceDebugTargetToc;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Body'**
+  String get bookSourceDebugTargetContent;
+
+  /// Label of the debug query field.
+  ///
+  /// In en, this message translates to:
+  /// **'Query'**
+  String get bookSourceDebugQuery;
+
+  /// Hint of the query field for the search target.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyword to search for'**
+  String get bookSourceDebugQueryKeywordHint;
+
+  /// Hint of the query field for the URL targets.
+  ///
+  /// In en, this message translates to:
+  /// **'Page URL'**
+  String get bookSourceDebugQueryUrlHint;
+
+  /// Label above the example chips.
+  ///
+  /// In en, this message translates to:
+  /// **'Examples'**
+  String get bookSourceDebugExamples;
+
+  /// Label of the button that runs the target.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get bookSourceDebugStart;
+
+  /// Label of the button that cancels the run.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get bookSourceDebugStop;
+
+  /// Label of the button that empties the event list.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get bookSourceDebugClear;
+
+  /// Empty state of the event list.
+  ///
+  /// In en, this message translates to:
+  /// **'No event yet. Run a target to see the chain.'**
+  String get bookSourceDebugEmpty;
+
+  /// Run status while the target is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get bookSourceDebugStatusRunning;
+
+  /// Run status after the target read something.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get bookSourceDebugStatusSucceeded;
+
+  /// Run status after the target failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get bookSourceDebugStatusFailed;
+
+  /// Run status after the user stopped the run.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get bookSourceDebugStatusCancelled;
+
+  /// Label of a message line.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get bookSourceDebugEventMessage;
+
+  /// Label of a source line.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get bookSourceDebugEventSource;
+
+  /// Label of an error line.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get bookSourceDebugEventError;
+
+  /// Shown when the debug route names a source that no longer exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a book source on the source list first.'**
+  String get bookSourceDebugMissingSource;
+
+  /// Run status before anything has been started.
+  ///
+  /// In en, this message translates to:
+  /// **'Not run yet'**
+  String get bookSourceDebugStatusIdle;
 }
 
 class _AppLocalizationsDelegate

@@ -237,5 +237,374 @@
   "bookSourceImportFileAction": "Choose a JSON file",
   "@bookSourceImportFileAction": {
     "description": "Label of the button that opens the platform file dialog on the import screen."
+  },
+  "shelfTitle": "Bookshelf",
+  "@shelfTitle": {
+    "description": "Title of the bookshelf page, also used as the tooltip of its entry button."
+  },
+  "shelfEmpty": "Your shelf is empty. Open a book's details and choose “Add to shelf”.",
+  "@shelfEmpty": {
+    "description": "Empty state of the bookshelf page."
+  },
+  "shelfLoadFailed": "The shelf could not be loaded.",
+  "@shelfLoadFailed": {
+    "description": "Shown when reading the shelf from storage failed."
+  },
+  "shelfStatusTracking": "Reading",
+  "@shelfStatusTracking": {
+    "description": "Shelf label for a book the user is still following."
+  },
+  "shelfStatusRead": "Finished",
+  "@shelfStatusRead": {
+    "description": "Shelf label for a book the user has finished."
+  },
+  "shelfActionPin": "Pin to top",
+  "@shelfActionPin": {
+    "description": "Menu action that pins a shelf entry above the others."
+  },
+  "shelfActionUnpin": "Unpin",
+  "@shelfActionUnpin": {
+    "description": "Menu action that removes the pin of a shelf entry."
+  },
+  "shelfActionMarkRead": "Mark as finished",
+  "@shelfActionMarkRead": {
+    "description": "Menu action that moves a shelf entry to the finished group."
+  },
+  "shelfActionMarkTracking": "Mark as reading",
+  "@shelfActionMarkTracking": {
+    "description": "Menu action that moves a shelf entry back to the reading group."
+  },
+  "shelfActionRemove": "Remove from shelf",
+  "@shelfActionRemove": {
+    "description": "Menu action that deletes a shelf entry."
+  },
+  "shelfRemoveTitle": "Remove this book?",
+  "@shelfRemoveTitle": {
+    "description": "Title of the confirmation dialog before a shelf entry is deleted."
+  },
+  "shelfRemoveBody": "Its reading progress is removed too.",
+  "@shelfRemoveBody": {
+    "description": "Body of the confirmation dialog before a shelf entry is deleted."
+  },
+  "shelfProgressLine": "Reading: {chapter}",
+  "@shelfProgressLine": {
+    "description": "Subtitle of a shelf entry that was opened before.",
+    "placeholders": {
+      "chapter": {
+        "type": "String"
+      }
+    }
+  },
+  "shelfAddAction": "Add to shelf",
+  "@shelfAddAction": {
+    "description": "Label of the button on the book detail page that puts the book on the shelf."
+  },
+  "shelfAddSucceeded": "Added to the shelf.",
+  "@shelfAddSucceeded": {
+    "description": "Snackbar shown after a book was added to the shelf."
+  },
+  "shelfAddFailed": "The book could not be added to the shelf.",
+  "@shelfAddFailed": {
+    "description": "Shown when writing a book to the shelf failed."
+  },
+  "shelfWriteFailed": "The shelf could not be updated.",
+  "@shelfWriteFailed": {
+    "description": "Shown when pinning, re-grouping or removing a shelf entry failed."
+  },
+  "actionDecrease": "Decrease",
+  "@actionDecrease": {
+    "description": "Tooltip of a stepper button that lowers a numeric setting."
+  },
+  "actionIncrease": "Increase",
+  "@actionIncrease": {
+    "description": "Tooltip of a stepper button that raises a numeric setting."
+  },
+  "settingsTitle": "Settings",
+  "@settingsTitle": {
+    "description": "Title of the settings page, also used as the tooltip of its entry button."
+  },
+  "settingsLoadFailed": "The settings could not be loaded.",
+  "@settingsLoadFailed": {
+    "description": "Shown when reading the stored settings failed."
+  },
+  "settingsThemeMode": "Theme",
+  "@settingsThemeMode": {
+    "description": "Label of the theme mode setting."
+  },
+  "settingsThemeSystem": "Follow system",
+  "@settingsThemeSystem": {
+    "description": "Theme mode that follows the platform."
+  },
+  "settingsThemeLight": "Light",
+  "@settingsThemeLight": {
+    "description": "Theme mode that always uses the light scheme."
+  },
+  "settingsThemeDark": "Dark",
+  "@settingsThemeDark": {
+    "description": "Theme mode that always uses the dark scheme."
+  },
+  "settingsFontScale": "Text size",
+  "@settingsFontScale": {
+    "description": "Label of the default text scale setting."
+  },
+  "settingsFontScaleValue": "{percent}%",
+  "@settingsFontScaleValue": {
+    "description": "Current text scale shown next to its slider.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsConcurrency": "Concurrent requests per source",
+  "@settingsConcurrency": {
+    "description": "Label of the per-source concurrency budget setting."
+  },
+  "settingsConcurrencyHint": "1 to 8. Higher values are faster and less polite to the site.",
+  "@settingsConcurrencyHint": {
+    "description": "Explanation under the concurrency setting, including its allowed range."
+  },
+  "settingsCache": "Cache",
+  "@settingsCache": {
+    "description": "Section title of the cache actions."
+  },
+  "settingsClearCache": "Clear cache",
+  "@settingsClearCache": {
+    "description": "Action that removes every cached entry."
+  },
+  "settingsClearCacheTitle": "Clear the whole cache?",
+  "@settingsClearCacheTitle": {
+    "description": "Title of the confirmation dialog before clearing the cache."
+  },
+  "settingsClearCacheBody": "Cached pages and chapter bodies are downloaded again when needed.",
+  "@settingsClearCacheBody": {
+    "description": "Body of the confirmation dialog before clearing the cache."
+  },
+  "settingsCacheCleared": "Removed {count} cached entries.",
+  "@settingsCacheCleared": {
+    "description": "Snackbar shown after the cache was cleared.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceCheckTitle": "Check book sources",
+  "@bookSourceCheckTitle": {
+    "description": "Title of the batch book source check page."
+  },
+  "bookSourceCheckIntro": "Each source runs through search, discover, details, chapters and body.",
+  "@bookSourceCheckIntro": {
+    "description": "Description of what the batch check does."
+  },
+  "bookSourceCheckStages": "Stages",
+  "@bookSourceCheckStages": {
+    "description": "Label above the stage switches."
+  },
+  "bookSourceCheckStageSearch": "Search",
+  "@bookSourceCheckStageSearch": {
+    "description": "Label of the search stage switch."
+  },
+  "bookSourceCheckStageExplore": "Discover",
+  "@bookSourceCheckStageExplore": {
+    "description": "Label of the discover stage switch."
+  },
+  "bookSourceCheckStageInfo": "Details",
+  "@bookSourceCheckStageInfo": {
+    "description": "Label of the book detail stage switch."
+  },
+  "bookSourceCheckStageToc": "Chapters",
+  "@bookSourceCheckStageToc": {
+    "description": "Label of the chapter list stage switch."
+  },
+  "bookSourceCheckStageContent": "Body",
+  "@bookSourceCheckStageContent": {
+    "description": "Label of the chapter body stage switch."
+  },
+  "bookSourceCheckKeyword": "Keyword",
+  "@bookSourceCheckKeyword": {
+    "description": "Label of the keyword field used by the search stage."
+  },
+  "bookSourceCheckKeywordHint": "Keyword sent to every checked source",
+  "@bookSourceCheckKeywordHint": {
+    "description": "Hint of the keyword field."
+  },
+  "bookSourceCheckTimeout": "Timeout per source",
+  "@bookSourceCheckTimeout": {
+    "description": "Label of the per-source timeout row."
+  },
+  "bookSourceCheckStart": "Start check",
+  "@bookSourceCheckStart": {
+    "description": "Label of the button that starts the batch."
+  },
+  "bookSourceCheckStop": "Stop",
+  "@bookSourceCheckStop": {
+    "description": "Label of the button that cancels the batch."
+  },
+  "bookSourceCheckEmpty": "No book source is stored yet. Import one to check it.",
+  "@bookSourceCheckEmpty": {
+    "description": "Empty state of the check page."
+  },
+  "bookSourceCheckSelectionEmpty": "Select at least one book source.",
+  "@bookSourceCheckSelectionEmpty": {
+    "description": "Shown when the batch starts with nothing selected."
+  },
+  "bookSourceCheckStatusPending": "Waiting",
+  "@bookSourceCheckStatusPending": {
+    "description": "Per-source status while the batch has not reached it."
+  },
+  "bookSourceCheckStatusRunning": "Checking",
+  "@bookSourceCheckStatusRunning": {
+    "description": "Per-source status while its check runs."
+  },
+  "bookSourceCheckStatusSucceeded": "Passed",
+  "@bookSourceCheckStatusSucceeded": {
+    "description": "Per-source status after a healthy check."
+  },
+  "bookSourceCheckStatusFailed": "Failed",
+  "@bookSourceCheckStatusFailed": {
+    "description": "Per-source status after a check that found problems."
+  },
+  "bookSourceCheckStatusCancelled": "Cancelled",
+  "@bookSourceCheckStatusCancelled": {
+    "description": "Per-source status after the user stopped the batch."
+  },
+  "bookSourceCheckFailureCheckFailed": "The check found problems.",
+  "@bookSourceCheckFailureCheckFailed": {
+    "description": "Reason shown when the check failed."
+  },
+  "bookSourceCheckFailureSourceMissing": "The source was deleted meanwhile.",
+  "@bookSourceCheckFailureSourceMissing": {
+    "description": "Reason shown when the row is gone."
+  },
+  "bookSourceCheckFailureSaveFailed": "The result could not be saved.",
+  "@bookSourceCheckFailureSaveFailed": {
+    "description": "Reason shown when the write-back failed."
+  },
+  "bookSourceCheckFailedAt": "Failed at {rulePath}",
+  "@bookSourceCheckFailedAt": {
+    "description": "Line naming the failing rule of a stage.",
+    "placeholders": {
+      "rulePath": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceCheckElapsed": "Took {millis} ms",
+  "@bookSourceCheckElapsed": {
+    "description": "Line showing how long a source's check took.",
+    "placeholders": {
+      "millis": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceCheckOpenDebug": "Debug this source",
+  "@bookSourceCheckOpenDebug": {
+    "description": "Tooltip of the action that opens the debug console."
+  },
+  "bookSourceCheckSelectAll": "Select all",
+  "@bookSourceCheckSelectAll": {
+    "description": "Label of the action that selects every listed source."
+  },
+  "bookSourceCheckSelectNone": "Select none",
+  "@bookSourceCheckSelectNone": {
+    "description": "Label of the action that clears the selection."
+  },
+  "bookSourceDebugTitle": "Debug a book source",
+  "@bookSourceDebugTitle": {
+    "description": "Title of the single-source debug console."
+  },
+  "bookSourceDebugTarget": "Target",
+  "@bookSourceDebugTarget": {
+    "description": "Label above the target selector."
+  },
+  "bookSourceDebugTargetSearch": "Search",
+  "@bookSourceDebugTargetSearch": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugTargetExplore": "Discover",
+  "@bookSourceDebugTargetExplore": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugTargetInfo": "Details",
+  "@bookSourceDebugTargetInfo": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugTargetToc": "Chapters",
+  "@bookSourceDebugTargetToc": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugTargetContent": "Body",
+  "@bookSourceDebugTargetContent": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugQuery": "Query",
+  "@bookSourceDebugQuery": {
+    "description": "Label of the debug query field."
+  },
+  "bookSourceDebugQueryKeywordHint": "Keyword to search for",
+  "@bookSourceDebugQueryKeywordHint": {
+    "description": "Hint of the query field for the search target."
+  },
+  "bookSourceDebugQueryUrlHint": "Page URL",
+  "@bookSourceDebugQueryUrlHint": {
+    "description": "Hint of the query field for the URL targets."
+  },
+  "bookSourceDebugExamples": "Examples",
+  "@bookSourceDebugExamples": {
+    "description": "Label above the example chips."
+  },
+  "bookSourceDebugStart": "Run",
+  "@bookSourceDebugStart": {
+    "description": "Label of the button that runs the target."
+  },
+  "bookSourceDebugStop": "Stop",
+  "@bookSourceDebugStop": {
+    "description": "Label of the button that cancels the run."
+  },
+  "bookSourceDebugClear": "Clear",
+  "@bookSourceDebugClear": {
+    "description": "Label of the button that empties the event list."
+  },
+  "bookSourceDebugEmpty": "No event yet. Run a target to see the chain.",
+  "@bookSourceDebugEmpty": {
+    "description": "Empty state of the event list."
+  },
+  "bookSourceDebugStatusRunning": "Running",
+  "@bookSourceDebugStatusRunning": {
+    "description": "Run status while the target is running."
+  },
+  "bookSourceDebugStatusSucceeded": "Done",
+  "@bookSourceDebugStatusSucceeded": {
+    "description": "Run status after the target read something."
+  },
+  "bookSourceDebugStatusFailed": "Failed",
+  "@bookSourceDebugStatusFailed": {
+    "description": "Run status after the target failed."
+  },
+  "bookSourceDebugStatusCancelled": "Cancelled",
+  "@bookSourceDebugStatusCancelled": {
+    "description": "Run status after the user stopped the run."
+  },
+  "bookSourceDebugEventMessage": "Message",
+  "@bookSourceDebugEventMessage": {
+    "description": "Label of a message line."
+  },
+  "bookSourceDebugEventSource": "Source",
+  "@bookSourceDebugEventSource": {
+    "description": "Label of a source line."
+  },
+  "bookSourceDebugEventError": "Error",
+  "@bookSourceDebugEventError": {
+    "description": "Label of an error line."
+  },
+  "bookSourceDebugMissingSource": "Choose a book source on the source list first.",
+  "@bookSourceDebugMissingSource": {
+    "description": "Shown when the debug route names a source that no longer exists."
+  },
+  "bookSourceDebugStatusIdle": "Not run yet",
+  "@bookSourceDebugStatusIdle": {
+    "description": "Run status before anything has been started."
   }
 }

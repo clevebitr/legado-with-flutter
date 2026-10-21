@@ -2,7 +2,7 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
 
-/// The one place that talks to the `file_selector` plugin (`PLAN.md` 5.8's file import).
+/// The one place that talks to the `file_selector` plugin (`docs/dev/roadmap.md` 5.8's file import).
 ///
 /// 本文件按 ADR-0019 登记在 `tool/coverage_allowlist.txt` 中豁免：它只在真实平台上可达
 /// （Windows / Android / iOS 的原生对话框），宿主 VM 里没有可用的平台通道，交互本身也无法自动化。

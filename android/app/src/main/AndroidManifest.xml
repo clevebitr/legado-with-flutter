@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 批量书源校验期间持有 PARTIAL_WAKE_LOCK（ADR-0043 §决策 3）：
+         lib/core/platform/long_running_task.dart 的 Android 实现需要它。 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <application
         android:label="flutter_reader"
         android:name="${applicationName}"

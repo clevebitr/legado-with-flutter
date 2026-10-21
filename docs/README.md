@@ -11,11 +11,16 @@
 | 路径 | 职责 | 谁需要读 |
 |---|---|---|
 | `AGENTS.md` | AI 代理入口：工作流 + 门禁 + **何时读哪份文档**（≤120 行，零规范正文） | 所有 AI 代理、贡献者 |
-| `PLAN.md` | **实现顺序、验收标准与检查点 + 阶段状态表**（只讲先做什么、怎么验收，不复述规则） | 开始任何功能开发前 |
+| `docs/dev/roadmap.md` | **实现顺序、验收标准与检查点（Gate）+ 阶段状态表 + 返工陷阱**（只讲先做什么、怎么验收，不复述规则） | 开始任何功能开发前 |
+| `PLAN.md` | **里程碑级状态**（当前里程碑 / goal / 断点），由 `plan` 插件维护，**不得手改**；步骤级进度以 `todo` 为准 | 看「当前做到哪」 |
+| `DECISIONS.md` | 执行期决策与踩坑日志（`plan` 插件追加，`#N` 可检索）；**正式决策仍归 ADR** | 查历史教训时 |
 | `CONTRIBUTING.md` | 贡献流程：分支、Commit、PR、Review、语言约定入口 | 所有贡献者 |
 | `README.md` | 项目简介、快速开始、构建与运行 | 使用者、贡献者 |
 | `CHANGELOG.md` | 变更历史与破坏性变更（过程记录的唯一归档处） | 贡献者、发布负责人 |
 | `NOTICE.md` | 版权、与上游 Legado 的关系、免责声明、GPL 合规义务、第三方依赖许可清单 | 贡献者、发布负责人 |
+
+> **历史引用：** `docs/dev/roadmap.md` 原名 `PLAN.md`，小节号未变 —— `CHANGELOG.md` 与 `docs/dev/adr/` 里
+> 对 `PLAN.md` §X 的引用等同于 `docs/dev/roadmap.md` §X（ADR 与 CHANGELOG 是历史记录，不追改）。
 
 ## 2. 规范类文档（`docs/dev/`，每份都是该主题的唯一来源）
 
@@ -53,9 +58,11 @@ ADR-0027 确立：**一个事实只允许在一处定义**，其他位置一律�
 | 命名规则（含 ARB 键名规则） | `docs/dev/naming.md` | — |
 | 约束条目 ID 与可判定规则 | `docs/dev/constraints.md` | ADR 回链 |
 | 目录结构、分层边界、DI、路由 | `docs/dev/architecture.md` §1–§4、§6 | — |
+| 书源校验的分组词表、失败归类、写回落点 | ADR-0043 §决策 1/4（代码常量在 `lib/features/book_source/domain/source_check_group.dart`） | `docs/dev/roadmap.md` §5.10 只做摘要；复现记录见 `tool/spot_check/source_check_records.md` |
+| 长任务平台端口（`LongRunningTask`）与三端降级 | `docs/dev/platform.md` §2（ADR-0043 §决策 3） | `constraints.md` §7 回链 |
 | `ParseResult` 类型契约与 `ParseFailureKind` 枚举 | `docs/dev/architecture.md` §5 | — |
 | `ParseFailureKind` 触发条件与 ARB 键值 | `docs/dev/book-source.md` §7 | `architecture.md` §5 只定义枚举 |
-| `RuleEngine` 求值 API 的异步形态、JS 绑定的同步 / Promise 形态与 `parse.*` scope 边界 | `docs/dev/adr/0029-*.md`；操作面形态表归 `docs/dev/book-source.md` §6 | `PLAN.md` §3.3/§3.4 回链 |
+| `RuleEngine` 求值 API 的异步形态、JS 绑定的同步 / Promise 形态与 `parse.*` scope 边界 | `docs/dev/adr/0029-*.md`；操作面形态表归 `docs/dev/book-source.md` §6 | `docs/dev/roadmap.md` §3.3/§3.4 回链 |
 | JS 引擎容量、排队、超时后恢复与跨源隔离边界 | `docs/dev/adr/0030-*.md` | `book-source.md` §6 回链；数值仍归 §6 |
 | 规则变量（`@put:` / `@get:` / `java.put` / `java.get`）的存储位置、快照与生命周期，以及只存在于 URL 规则的 `key` 绑定 | `docs/dev/adr/0034-*.md` | `book-source.md` §4 / §6 回链（行为面） |
 | 发现页：`exploreUrl` 的两种形态、分类条目语义、`ruleExplore` → `ruleSearch` 的**整条**回落 | `docs/dev/book-source.md` §4.2 | ADR-0035 回链；模型字段归 §2 |
@@ -65,7 +72,9 @@ ADR-0027 确立：**一个事实只允许在一处定义**，其他位置一律�
 | 缓存失败吸收的唯一豁免点（`on Exception`） | `docs/dev/adr/0033-*.md` | C-ERR-2 回链；行为归 `book-source.md` §5 |
 | 默认规则的未知类型退化语义（矩阵 #1/#2） | `docs/dev/book-source.md` §3 的 #1/#2 注记 | C-SRC-4 回链；决策理由归 `docs/dev/adr/0032-*.md` |
 | 书源字段模型、语法矩阵、分期、JS 白名单与配额 | `docs/dev/book-source.md` | C-SRC-* 回链 |
-| 实现顺序、验收、门禁 | `PLAN.md` | — |
+| 实现顺序、验收、检查点（Gate）、返工陷阱、快速索引 | `docs/dev/roadmap.md` | — |
+| 里程碑级状态（当前里程碑 / goal / 断点） | `PLAN.md`（`plan` 插件写入，不得手改） | `docs/dev/roadmap.md` §3.1 回链 |
+| 执行期决策与踩坑日志（`#N`） | `DECISIONS.md` | 正式决策仍归 `docs/dev/adr/` |
 | 变更历史与过程记录 | `CHANGELOG.md` | — |
 | 贡献流程（分支 / Commit / PR / Review） | `CONTRIBUTING.md` | — |
 | 文档语言约定 | 本文档 §7 | `CONTRIBUTING.md` 回链 |
@@ -96,7 +105,7 @@ ADR-0027 确立：**一个事实只允许在一处定义**，其他位置一律�
 | `tool/scan_licenses.dart` | 依赖许可证扫描脚本（重扫流程见 `NOTICE.md` §6） |
 | `tool/spike/` | JS 引擎架构可行性探针与已知坑（ADR-0015；**不进入** `flutter test` 默认发现路径） |
 | `tool/test/` | 本机测试脚本：`run_all` / `run_unit` / `run_windows` / `run_android` 与共享 `common.ps1`（见 `docs/dev/test-environment.md`） |
-| `tool/spot_check/` | G2b 真实站点链路验证入口与实测记录（`PLAN.md` §3.4 步骤 3 / §3.7；可复现，**不进 CI**） |
+| `tool/spot_check/` | G2b 真实站点链路验证入口与实测记录（`docs/dev/roadmap.md` §3.4 步骤 3 / §3.7；可复现，**不进 CI**） |
 | `integration_test/` | 设备级用例（Windows 桌面 / Android 模拟器）；不参与覆盖率统计（见 `docs/dev/test-environment.md` §4） |
 | `l10n.yaml` | 国际化生成配置 |
 | `lib/l10n/app_en.arb` | 英文文案模板（新增字符串的入口） |

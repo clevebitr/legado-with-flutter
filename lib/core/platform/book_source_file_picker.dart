@@ -1,6 +1,6 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 
-/// Asks the platform for one book source file and hands back its text (`PLAN.md` 5.8, ADR-0040
+/// Asks the platform for one book source file and hands back its text (`docs/dev/roadmap.md` 5.8, ADR-0040
 /// §决策 9's revision note).
 ///
 /// **Why an interface:** a file dialog is a platform capability, so by C-PLT-1 it lives in

@@ -54,6 +54,28 @@ void main() {
       respondTime: null,
     );
 
+    test('writeCheckState_whenCalled_writesTheCheckColumns', () async {
+      final int id = await insert();
+      clock.advance(const Duration(days: 2));
+
+      await dao.writeCheckState(
+        id: id,
+        groupName: '搜索失效, 校验超时',
+        comment: '// Error: 搜索失效',
+        respondTime: 4321,
+      );
+
+      final BookSourceRow row = (await dao.findById(id))!;
+      expect(row.groupName, '搜索失效, 校验超时');
+      expect(row.comment, '// Error: 搜索失效');
+      expect(row.respondTime, 4321);
+      expect(row.updatedAt, clock.now());
+      // 校验只写这三列（外加 updatedAt），负载与用户态一概不动（ADR-0043 §决策 1）。
+      expect(row.payload, '{"bookSourceName":"示例书源"}');
+      expect(row.isEnabled, isTrue);
+      expect(row.importedAt, DateTime(2026, 10, 14));
+    });
+
     test('findAll_whenNothingWasImported_returnsNothing', () async {
       expect(await dao.findAll(), isEmpty);
     });

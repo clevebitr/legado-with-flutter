@@ -208,5 +208,36 @@ void main() {
 
       expect(await dao.deleteExpired(), 0);
     });
+
+    test('deleteAll_whenEntriesExist_removesThemAll', () async {
+      // roadmap 5.7 ①：全量清空零 schema 变更，设置页的就是这样清缓存的。
+      await dao.put(
+        sourceId: sourceId,
+        ruleField: ruleField,
+        url: url,
+        page: page,
+        payload: 'one',
+        ttl: const Duration(hours: 1),
+      );
+      await dao.put(
+        sourceId: sourceId,
+        ruleField: 'content',
+        url: url,
+        page: 1,
+        payload: 'two',
+        ttl: const Duration(hours: 1),
+      );
+
+      expect(await dao.deleteAll(), 2);
+      expect(
+        await dao.get(
+          sourceId: sourceId,
+          ruleField: ruleField,
+          url: url,
+          page: page,
+        ),
+        isNull,
+      );
+    });
   });
 }

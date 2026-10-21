@@ -6,7 +6,7 @@ import 'package:flutter_reader/features/book_source/domain/page_fetch_service.da
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
-/// Searches one book source for a keyword (`PLAN.md` 2.4, `searchUrl`).
+/// Searches one book source for a keyword (`docs/dev/roadmap.md` 2.4, `searchUrl`).
 final class SearchBooks {
   /// Creates the use case.
   const SearchBooks({required this._pages});

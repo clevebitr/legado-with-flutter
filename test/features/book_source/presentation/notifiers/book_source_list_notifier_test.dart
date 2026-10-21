@@ -83,7 +83,7 @@ void main() {
           .read(selectedBookSourceProvider.notifier)
           .remove(second.id);
 
-      // 悬空选择是禁止的：选中的行没了就必须回落到默认源（PLAN.md 5.1）。
+      // 悬空选择是禁止的：选中的行没了就必须回落到默认源（docs/dev/roadmap.md 5.1）。
       expect(container.read(currentBookSourceProvider)?.name, 'a');
       expect(first.id, isNot(second.id));
     });

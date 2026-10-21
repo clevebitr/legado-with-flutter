@@ -146,7 +146,7 @@ final class PlatformDynamicColorProvider
 String _$platformDynamicColorHash() =>
     r'2e2a1cce18f3fde23676be4d723a6b63a58fe1a2';
 
-/// Provides the platform file picker for book source imports (`PLAN.md` 5.8, C-PLT-1).
+/// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
 ///
 /// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
 /// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
@@ -156,7 +156,7 @@ String _$platformDynamicColorHash() =>
 @ProviderFor(bookSourceFilePicker)
 final bookSourceFilePickerProvider = BookSourceFilePickerProvider._();
 
-/// Provides the platform file picker for book source imports (`PLAN.md` 5.8, C-PLT-1).
+/// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
 ///
 /// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
 /// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
@@ -171,7 +171,7 @@ final class BookSourceFilePickerProvider
           BookSourceFilePicker
         >
     with $Provider<BookSourceFilePicker> {
-  /// Provides the platform file picker for book source imports (`PLAN.md` 5.8, C-PLT-1).
+  /// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
   ///
   /// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
   /// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
@@ -213,3 +213,62 @@ final class BookSourceFilePickerProvider
 
 String _$bookSourceFilePickerHash() =>
     r'03ffd09c149b1f20aaab463e862cc267bead4c59';
+
+/// Provides the long-task marker a batch check holds while it runs
+/// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+///
+/// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
+/// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+
+@ProviderFor(longRunningTask)
+final longRunningTaskProvider = LongRunningTaskProvider._();
+
+/// Provides the long-task marker a batch check holds while it runs
+/// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+///
+/// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
+/// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+
+final class LongRunningTaskProvider
+    extends
+        $FunctionalProvider<LongRunningTask, LongRunningTask, LongRunningTask>
+    with $Provider<LongRunningTask> {
+  /// Provides the long-task marker a batch check holds while it runs
+  /// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+  ///
+  /// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
+  /// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+  LongRunningTaskProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'longRunningTaskProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$longRunningTaskHash();
+
+  @$internal
+  @override
+  $ProviderElement<LongRunningTask> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  LongRunningTask create(Ref ref) {
+    return longRunningTask(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(LongRunningTask value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<LongRunningTask>(value),
+    );
+  }
+}
+
+String _$longRunningTaskHash() => r'b76545ddef9a827071a42e0b9a199aee0e37fedd';

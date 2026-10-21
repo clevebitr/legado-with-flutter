@@ -4,6 +4,7 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
@@ -41,6 +42,12 @@ final class _FakeRepository implements BookSourceRepository {
 
   @override
   Future<void> setEnabled({required int id, required bool isEnabled}) async {}
+
+  @override
+  Future<bool> applyCheckReport({
+    required int id,
+    required SourceCheckReport report,
+  }) async => false;
 
   @override
   Future<void> delete(int id) async {}

@@ -22,7 +22,7 @@ part of 'js_bridge_provider.dart';
 /// §8) as the page that carried the rule.
 ///
 /// The provider is autoDispose: the budget dies with the scope, so one operation's
-/// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
+/// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
 
 @ProviderFor(jsBridge)
 final jsBridgeProvider = JsBridgeProvider._();
@@ -41,7 +41,7 @@ final jsBridgeProvider = JsBridgeProvider._();
 /// §8) as the page that carried the rule.
 ///
 /// The provider is autoDispose: the budget dies with the scope, so one operation's
-/// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
+/// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
 
 final class JsBridgeProvider
     extends $FunctionalProvider<JsBridge, JsBridge, JsBridge>
@@ -60,7 +60,7 @@ final class JsBridgeProvider
   /// §8) as the page that carried the rule.
   ///
   /// The provider is autoDispose: the budget dies with the scope, so one operation's
-  /// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
+  /// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
   JsBridgeProvider._()
     : super(
         from: null,

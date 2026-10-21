@@ -35,7 +35,7 @@ abstract interface class HttpClient {
   /// source can name it without the client having to know the source model
   /// (C-ERR-8): the tolerant-decode warning of ADR-0031 §决策 2 needs it.
   ///
-  /// Pass [maxBytes] to bound the response **while it is read** (`PLAN.md` 5.1,
+  /// Pass [maxBytes] to bound the response **while it is read** (`docs/dev/roadmap.md` 5.1,
   /// ADR-0040 §决策 5): the import path must abandon an oversized download instead of
   /// buffering it (C-PERF-5). A body over the cap is a [ParseFailure] of kind
   /// [ParseFailureKind.invalidBookSource] whose `cause` is a [BodyTooLargeException] — the

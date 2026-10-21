@@ -20,7 +20,7 @@ Future<List<StoredBookSource>> bookSourceList(Ref ref) =>
 /// The selection is a plain id in a private field, so a reload of the list (after an import, a
 /// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
 /// gone the notifier falls back to the default source, because a dangling selection would leave
-/// every page pointing at a source that no longer exists (`PLAN.md` 5.1).
+/// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
 @Riverpod(keepAlive: true)
 class SelectedBookSource extends _$SelectedBookSource {
   int? _selectedId;
@@ -111,7 +111,7 @@ class SelectedBookSource extends _$SelectedBookSource {
   }
 }
 
-/// The book source the parsing pages work with (`PLAN.md` 2.5's seam, now filled by 5.1).
+/// The book source the parsing pages work with (`docs/dev/roadmap.md` 2.5's seam, now filled by 5.1).
 ///
 /// It stays a **synchronous** projection of [SelectedBookSource] so the four parsing pages keep
 /// reading a `BookSource?`; only the pages that manage sources look at the load state.

@@ -1,3 +1,4 @@
+import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/js_bridge_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
@@ -7,19 +8,22 @@ import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/check_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/explore_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_explore_categories.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/run_source_debug.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'di.g.dart';
 
-/// Provides the persistence of the imported book sources (`PLAN.md` 5.1, ADR-0040).
+/// Provides the persistence of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
 ///
 /// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
 /// consumes the `domain/` model directly instead of a DTO.
@@ -29,13 +33,22 @@ BookSourceRepository bookSourceRepository(Ref ref) => BookSourceRepositoryImpl(
   logger: ref.watch(appLoggerProvider),
 );
 
-/// Provides the import use case (pasted text or a URL, `PLAN.md` 5.1, ADR-0040 §决策 9).
+/// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
 @riverpod
 ImportBookSources importBookSources(Ref ref) => ImportBookSources(
   repository: ref.watch(bookSourceRepositoryProvider),
   http: ref.watch(httpClientProvider),
   logger: ref.watch(appLoggerProvider),
 );
+
+/// Provides the shelf writer the detail page uses (`docs/dev/roadmap.md` 5.4)。
+///
+/// The default is the **unbound** port: the composition root overrides it with the shelf's real
+/// writer (ADR-0041 §决策 2), which is why this feature names no shelf type at all — 「加入书架」
+/// 是一个端口，而不是一次 `features/bookshelf` 的 import（C-ARCH-2）。
+@riverpod
+BookshelfWriter bookshelfWriter(Ref ref) =>
+    UnboundBookshelfWriter(logger: ref.watch(appLoggerProvider));
 
 /// Provides the rule engine every book source use case shares.
 @riverpod
@@ -68,7 +81,7 @@ FetchBookInfo fetchBookInfo(Ref ref) =>
 FetchToc fetchToc(Ref ref) =>
     FetchToc(pages: ref.watch(pageFetchServiceProvider));
 
-/// Provides the chapter body cache (`PLAN.md` 5.2, C-NET-6).
+/// Provides the chapter body cache (`docs/dev/roadmap.md` 5.2, C-NET-6).
 ///
 /// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
 /// the expiry column were already there, so 5.2 adds no column and no table.
@@ -97,3 +110,32 @@ FetchExploreCategories fetchExploreCategories(Ref ref) =>
 @riverpod
 ExploreBooks exploreBooks(Ref ref) =>
     ExploreBooks(pages: ref.watch(pageFetchServiceProvider));
+
+/// Provides the batch check of `docs/dev/roadmap.md` §5.10.
+///
+/// It composes the same five use cases the pages use, so a check can never disagree with what
+/// "search" or "read the body" means — the only new thing here is the order and the group
+/// vocabulary (ADR-0043).
+@riverpod
+CheckBookSource checkBookSource(Ref ref) => CheckBookSource(
+  searchBooks: ref.watch(searchBooksProvider),
+  exploreCategories: ref.watch(fetchExploreCategoriesProvider),
+  exploreBooks: ref.watch(exploreBooksProvider),
+  bookInfo: ref.watch(fetchBookInfoProvider),
+  toc: ref.watch(fetchTocProvider),
+  content: ref.watch(fetchContentProvider),
+  clock: ref.watch(clockProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
+/// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
+@riverpod
+RunSourceDebug runSourceDebug(Ref ref) => RunSourceDebug(
+  pages: ref.watch(pageFetchServiceProvider),
+  searchBooks: ref.watch(searchBooksProvider),
+  exploreBooks: ref.watch(exploreBooksProvider),
+  bookInfo: ref.watch(fetchBookInfoProvider),
+  toc: ref.watch(fetchTocProvider),
+  content: ref.watch(fetchContentProvider),
+  clock: ref.watch(clockProvider),
+);

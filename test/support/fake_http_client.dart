@@ -31,7 +31,7 @@ final class FakeHttpClient implements HttpClient {
   /// The caller's `maxBytes` cap of every request, in order (`null` when the caller set none).
   ///
   /// It exists so a test can assert that the import path really asks for a bounded download
-  /// (`PLAN.md` 5.1, ADR-0040 §决策 5) instead of trusting the client.
+  /// (`docs/dev/roadmap.md` 5.1, ADR-0040 §决策 5) instead of trusting the client.
   final List<int?> requestedMaxBytes = <int?>[];
 
   /// The HTTP method of every request, in order (`GET` / `POST`).

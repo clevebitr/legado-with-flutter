@@ -5,7 +5,7 @@ import 'package:flutter_reader/features/book_source/domain/page_fetch_service.da
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
-/// Reads the detail page of one book (`PLAN.md` 2.4, `ruleBookInfo`).
+/// Reads the detail page of one book (`docs/dev/roadmap.md` 2.4, `ruleBookInfo`).
 final class FetchBookInfo {
   /// Creates the use case.
   const FetchBookInfo({required this._pages});

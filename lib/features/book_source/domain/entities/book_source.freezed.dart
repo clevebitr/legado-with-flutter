@@ -447,7 +447,7 @@ $ContentRuleCopyWith<$Res> get contentRule {
 /// @nodoc
 mixin _$SearchRule {
 
- String? get bookList; String? get name; String? get author; String? get kind; String? get wordCount; String? get lastChapter; String? get intro; String? get coverUrl; String? get bookUrl; String? get updateTime;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
+ String? get bookList; String? get name; String? get author; String? get kind; String? get wordCount; String? get lastChapter; String? get intro; String? get coverUrl; String? get bookUrl; String? get updateTime; String? get checkKeyWord;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
 /// Create a copy of SearchRule
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -461,20 +461,20 @@ $SearchRuleCopyWith<SearchRule> get copyWith => _$SearchRuleCopyWithImpl<SearchR
 @override
 bool operator ==(Object other) {
   final _this = this as SearchRule;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SearchRule&&(identical(other.bookList, _this.bookList) || other.bookList == _this.bookList)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.wordCount, _this.wordCount) || other.wordCount == _this.wordCount)&&(identical(other.lastChapter, _this.lastChapter) || other.lastChapter == _this.lastChapter)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.coverUrl, _this.coverUrl) || other.coverUrl == _this.coverUrl)&&(identical(other.bookUrl, _this.bookUrl) || other.bookUrl == _this.bookUrl)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SearchRule&&(identical(other.bookList, _this.bookList) || other.bookList == _this.bookList)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.wordCount, _this.wordCount) || other.wordCount == _this.wordCount)&&(identical(other.lastChapter, _this.lastChapter) || other.lastChapter == _this.lastChapter)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.coverUrl, _this.coverUrl) || other.coverUrl == _this.coverUrl)&&(identical(other.bookUrl, _this.bookUrl) || other.bookUrl == _this.bookUrl)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime)&&(identical(other.checkKeyWord, _this.checkKeyWord) || other.checkKeyWord == _this.checkKeyWord)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as SearchRule;
-  return Object.hash(runtimeType,_this.bookList,_this.name,_this.author,_this.kind,_this.wordCount,_this.lastChapter,_this.intro,_this.coverUrl,_this.bookUrl,_this.updateTime,const DeepCollectionEquality().hash(_this.extra));
+  return Object.hash(runtimeType,_this.bookList,_this.name,_this.author,_this.kind,_this.wordCount,_this.lastChapter,_this.intro,_this.coverUrl,_this.bookUrl,_this.updateTime,_this.checkKeyWord,const DeepCollectionEquality().hash(_this.extra));
 }
 
 @override
 String toString() {
   final _this = this as SearchRule;
-  return 'SearchRule(bookList: ${_this.bookList}, name: ${_this.name}, author: ${_this.author}, kind: ${_this.kind}, wordCount: ${_this.wordCount}, lastChapter: ${_this.lastChapter}, intro: ${_this.intro}, coverUrl: ${_this.coverUrl}, bookUrl: ${_this.bookUrl}, updateTime: ${_this.updateTime}, extra: ${_this.extra})';
+  return 'SearchRule(bookList: ${_this.bookList}, name: ${_this.name}, author: ${_this.author}, kind: ${_this.kind}, wordCount: ${_this.wordCount}, lastChapter: ${_this.lastChapter}, intro: ${_this.intro}, coverUrl: ${_this.coverUrl}, bookUrl: ${_this.bookUrl}, updateTime: ${_this.updateTime}, checkKeyWord: ${_this.checkKeyWord}, extra: ${_this.extra})';
 }
 
 
@@ -485,7 +485,7 @@ abstract mixin class $SearchRuleCopyWith<$Res>  {
   factory $SearchRuleCopyWith(SearchRule value, $Res Function(SearchRule) _then) = _$SearchRuleCopyWithImpl;
 @useResult
 $Res call({
- String? bookList, String? name, String? author, String? kind, String? wordCount, String? lastChapter, String? intro, String? coverUrl, String? bookUrl, String? updateTime,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? bookList, String? name, String? author, String? kind, String? wordCount, String? lastChapter, String? intro, String? coverUrl, String? bookUrl, String? updateTime, String? checkKeyWord,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -502,7 +502,7 @@ class _$SearchRuleCopyWithImpl<$Res>
 
 /// Create a copy of SearchRule
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? bookList = freezed,Object? name = freezed,Object? author = freezed,Object? kind = freezed,Object? wordCount = freezed,Object? lastChapter = freezed,Object? intro = freezed,Object? coverUrl = freezed,Object? bookUrl = freezed,Object? updateTime = freezed,Object? extra = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? bookList = freezed,Object? name = freezed,Object? author = freezed,Object? kind = freezed,Object? wordCount = freezed,Object? lastChapter = freezed,Object? intro = freezed,Object? coverUrl = freezed,Object? bookUrl = freezed,Object? updateTime = freezed,Object? checkKeyWord = freezed,Object? extra = null,}) {
   return _then(SearchRule(
 bookList: freezed == bookList ? _self.bookList : bookList // ignore: cast_nullable_to_non_nullable
 as String?,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -514,6 +514,7 @@ as String?,intro: freezed == intro ? _self.intro : intro // ignore: cast_nullabl
 as String?,coverUrl: freezed == coverUrl ? _self.coverUrl : coverUrl // ignore: cast_nullable_to_non_nullable
 as String?,bookUrl: freezed == bookUrl ? _self.bookUrl : bookUrl // ignore: cast_nullable_to_non_nullable
 as String?,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
+as String?,checkKeyWord: freezed == checkKeyWord ? _self.checkKeyWord : checkKeyWord // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self.extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));
@@ -600,10 +601,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime,  String? checkKeyWord, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SearchRule() when $default != null:
-return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.extra);case _:
+return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.checkKeyWord,_that.extra);case _:
   return orElse();
 
 }
@@ -621,10 +622,10 @@ return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCoun
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime,  String? checkKeyWord, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
 switch (_that) {
 case _SearchRule():
-return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.extra);case _:
+return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.checkKeyWord,_that.extra);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -641,10 +642,10 @@ return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCoun
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime,  String? checkKeyWord, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
 switch (_that) {
 case _SearchRule() when $default != null:
-return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.extra);case _:
+return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.checkKeyWord,_that.extra);case _:
   return null;
 
 }
@@ -656,7 +657,7 @@ return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCoun
 @JsonSerializable()
 
 class _SearchRule implements SearchRule {
-  const _SearchRule({this.bookList, this.name, this.author, this.kind, this.wordCount, this.lastChapter, this.intro, this.coverUrl, this.bookUrl, this.updateTime, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
+  const _SearchRule({this.bookList, this.name, this.author, this.kind, this.wordCount, this.lastChapter, this.intro, this.coverUrl, this.bookUrl, this.updateTime, this.checkKeyWord, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
   factory _SearchRule.fromJson(Map<String, dynamic> json) => _$SearchRuleFromJson(json);
 
 @override final  String? bookList;
@@ -669,6 +670,7 @@ class _SearchRule implements SearchRule {
 @override final  String? coverUrl;
 @override final  String? bookUrl;
 @override final  String? updateTime;
+@override final  String? checkKeyWord;
  final  Map<String, Object?> _extra;
 @override@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra {
   if (_extra is EqualUnmodifiableMapView) return _extra;
@@ -690,18 +692,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SearchRule&&(identical(other.bookList, bookList) || other.bookList == bookList)&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.wordCount, wordCount) || other.wordCount == wordCount)&&(identical(other.lastChapter, lastChapter) || other.lastChapter == lastChapter)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.coverUrl, coverUrl) || other.coverUrl == coverUrl)&&(identical(other.bookUrl, bookUrl) || other.bookUrl == bookUrl)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime)&&const DeepCollectionEquality().equals(other.extra, _extra));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SearchRule&&(identical(other.bookList, bookList) || other.bookList == bookList)&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.wordCount, wordCount) || other.wordCount == wordCount)&&(identical(other.lastChapter, lastChapter) || other.lastChapter == lastChapter)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.coverUrl, coverUrl) || other.coverUrl == coverUrl)&&(identical(other.bookUrl, bookUrl) || other.bookUrl == bookUrl)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime)&&(identical(other.checkKeyWord, checkKeyWord) || other.checkKeyWord == checkKeyWord)&&const DeepCollectionEquality().equals(other.extra, _extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,bookList,name,author,kind,wordCount,lastChapter,intro,coverUrl,bookUrl,updateTime,const DeepCollectionEquality().hash(_extra));
+    return Object.hash(runtimeType,bookList,name,author,kind,wordCount,lastChapter,intro,coverUrl,bookUrl,updateTime,checkKeyWord,const DeepCollectionEquality().hash(_extra));
 }
 
 @override
 String toString() {
-    return 'SearchRule(bookList: $bookList, name: $name, author: $author, kind: $kind, wordCount: $wordCount, lastChapter: $lastChapter, intro: $intro, coverUrl: $coverUrl, bookUrl: $bookUrl, updateTime: $updateTime, extra: $extra)';
+    return 'SearchRule(bookList: $bookList, name: $name, author: $author, kind: $kind, wordCount: $wordCount, lastChapter: $lastChapter, intro: $intro, coverUrl: $coverUrl, bookUrl: $bookUrl, updateTime: $updateTime, checkKeyWord: $checkKeyWord, extra: $extra)';
 }
 
 
@@ -712,7 +714,7 @@ abstract mixin class _$SearchRuleCopyWith<$Res> implements $SearchRuleCopyWith<$
   factory _$SearchRuleCopyWith(_SearchRule value, $Res Function(_SearchRule) _then) = __$SearchRuleCopyWithImpl;
 @override @useResult
 $Res call({
- String? bookList, String? name, String? author, String? kind, String? wordCount, String? lastChapter, String? intro, String? coverUrl, String? bookUrl, String? updateTime,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? bookList, String? name, String? author, String? kind, String? wordCount, String? lastChapter, String? intro, String? coverUrl, String? bookUrl, String? updateTime, String? checkKeyWord,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -729,7 +731,7 @@ class __$SearchRuleCopyWithImpl<$Res>
 
 /// Create a copy of SearchRule
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? bookList = freezed,Object? name = freezed,Object? author = freezed,Object? kind = freezed,Object? wordCount = freezed,Object? lastChapter = freezed,Object? intro = freezed,Object? coverUrl = freezed,Object? bookUrl = freezed,Object? updateTime = freezed,Object? extra = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? bookList = freezed,Object? name = freezed,Object? author = freezed,Object? kind = freezed,Object? wordCount = freezed,Object? lastChapter = freezed,Object? intro = freezed,Object? coverUrl = freezed,Object? bookUrl = freezed,Object? updateTime = freezed,Object? checkKeyWord = freezed,Object? extra = null,}) {
   return _then(_SearchRule(
 bookList: freezed == bookList ? _self.bookList : bookList // ignore: cast_nullable_to_non_nullable
 as String?,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -741,6 +743,7 @@ as String?,intro: freezed == intro ? _self.intro : intro // ignore: cast_nullabl
 as String?,coverUrl: freezed == coverUrl ? _self.coverUrl : coverUrl // ignore: cast_nullable_to_non_nullable
 as String?,bookUrl: freezed == bookUrl ? _self.bookUrl : bookUrl // ignore: cast_nullable_to_non_nullable
 as String?,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
+as String?,checkKeyWord: freezed == checkKeyWord ? _self.checkKeyWord : checkKeyWord // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self._extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));

@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_import_notifier.dart';
-import 'package:flutter_reader/features/book_source/presentation/widgets/failure_message.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
 
-/// Imports book sources by pasting JSON or downloading a URL (`PLAN.md` 5.1, ADR-0040 §决策 9).
+/// Imports book sources by pasting JSON or downloading a URL (`docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
 ///
 /// Accessibility (C-UI-7): both fields are labelled by their hints, the submit button by its
 /// icon's tooltip, and the outcome is text, never colour alone.

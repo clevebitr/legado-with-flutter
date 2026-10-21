@@ -39,7 +39,7 @@ enum BookSourceType {
 ///
 /// Only the fields the implemented stages consume are modelled; the display-only
 /// counters (`lastUpdateTime` / `respondTime` / `weight` / `customOrder`) arrive
-/// with Phase 5 (`PLAN.md` 5.4). Everything unmodelled survives in [extra].
+/// with Phase 5 (`docs/dev/roadmap.md` 5.4). Everything unmodelled survives in [extra].
 ///
 /// [exploreUrl] is the discover page's declaration (`book-source.md` §4.2): either a separated
 /// `标题::URL` string or one whole-field script. It stays raw text here — the two forms and every
@@ -132,6 +132,11 @@ abstract class BookSource with _$BookSource {
 /// [updateTime] is a **display** string: the rule's result is kept as it was read and never
 /// parsed as a date (`docs/dev/book-source.md` §2); a chapter rule may produce it through
 /// `java.timeFormat` (§6).
+///
+/// [checkKeyWord] is **not a rule**: it is the keyword the check / debug console searches this
+/// source for (`docs/dev/book-source.md` §2, ADR-0043 §决策 2). A value that looks like a rule is
+/// ignored in favour of the caller's default — `resolveCheckKeyword` owns that judgement in one
+/// place — so the raw text is kept here and never evaluated.
 @freezed
 abstract class SearchRule with _$SearchRule {
   /// Creates a search rule set.
@@ -146,6 +151,7 @@ abstract class SearchRule with _$SearchRule {
     String? coverUrl,
     String? bookUrl,
     String? updateTime,
+    String? checkKeyWord,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})
     Map<String, Object?> extra,
@@ -350,7 +356,7 @@ final class _HeaderJsonConverter
 ///
 /// Everything else — a rule-based header (`@js:` / `<js>`), a truncated object, a bare user agent —
 /// stays a rejection here and is handled by the importer, which drops the field with a warning
-/// (`PLAN.md` §3.7 registers the rule-based header as an unimplemented feature).
+/// (`docs/dev/roadmap.md` §3.7 registers the rule-based header as an unimplemented feature).
 Object? _decodeHeaderObject(String raw) {
   try {
     return jsonDecode(raw);

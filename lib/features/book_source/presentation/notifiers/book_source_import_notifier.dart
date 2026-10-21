@@ -10,7 +10,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'book_source_import_notifier.freezed.dart';
 part 'book_source_import_notifier.g.dart';
 
-/// What the import form currently shows (`PLAN.md` 5.1).
+/// What the import form currently shows (`docs/dev/roadmap.md` 5.1).
 ///
 /// A state machine instead of an `AsyncValue`: "nothing submitted yet" and "submitted, nothing
 /// usable inside" are both non-errors the form has to tell apart, and the report of a successful

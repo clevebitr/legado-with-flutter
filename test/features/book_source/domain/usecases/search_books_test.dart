@@ -74,7 +74,7 @@ BookSource _jsonSource() => BookSource.fromLegadoJson(
       as Map<String, Object?>,
 );
 
-/// The corpus source of the `@js:` value-rule evidence (`PLAN.md` 3.7).
+/// The corpus source of the `@js:` value-rule evidence (`docs/dev/roadmap.md` 3.7).
 const String _jsSourceFixture =
     'test/fixtures/book_sources/legado_js_rules_source.json';
 

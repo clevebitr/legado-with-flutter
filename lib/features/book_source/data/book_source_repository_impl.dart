@@ -5,8 +5,10 @@ import 'package:flutter_reader/core/storage/book_source_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
 import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:json_annotation/json_annotation.dart';
 
 /// Drift-backed [BookSourceRepository] — the first real consumer of `data/` (ADR-0021 复审注记).
@@ -85,6 +87,41 @@ final class BookSourceRepositoryImpl implements BookSourceRepository {
   @override
   Future<void> setEnabled({required int id, required bool isEnabled}) =>
       _dao.setEnabled(id: id, isEnabled: isEnabled);
+
+  @override
+  Future<bool> applyCheckReport({
+    required int id,
+    required SourceCheckReport report,
+  }) async {
+    final BookSourceRow? row = await _dao.findById(id);
+    if (row == null) {
+      _logger.warning(
+        'Book source check result has no row to land on: id=$id.',
+      );
+
+      return false;
+    }
+
+    // 合并针对**列**而不是负载：负载是导入原文（ADR-0040 §决策 4），本轮该被清掉的分组
+    // 只能从列里看出来。顺序也是有意的 —— 先清掉上次的失效分组与错误注释，再加本轮的，
+    // 这样重复校验不会累积分组（ADR-0043 §后果）。
+    final String? groups = withoutInvalidGroups(row.groupName);
+    final String? comment = withoutErrorComment(row.comment);
+    final String? errorComment = report.errorComment;
+
+    await _dao.writeCheckState(
+      id: id,
+      groupName: report.invalidGroups.isEmpty
+          ? groups
+          : withGroups(groups, report.invalidGroups),
+      comment: errorComment == null
+          ? comment
+          : withErrorComment(comment, errorComment),
+      respondTime: report.elapsedMillis,
+    );
+
+    return true;
+  }
 
   @override
   Future<void> delete(int id) async {

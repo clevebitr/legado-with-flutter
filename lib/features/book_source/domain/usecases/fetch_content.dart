@@ -4,11 +4,11 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 
-/// Reads the body of one chapter (`PLAN.md` 2.4, `ruleContent`).
+/// Reads the body of one chapter (`docs/dev/roadmap.md` 2.4, `ruleContent`).
 ///
 /// Paging follows `nextContentUrl` and the assembled body is purified by
-/// `replaceRegex` (`PLAN.md` 3.5, `book-source.md` §4.1). A finished body is remembered in
-/// [ContentCache], so re-entering the same chapter costs no request (`PLAN.md` 5.2).
+/// `replaceRegex` (`docs/dev/roadmap.md` 3.5, `book-source.md` §4.1). A finished body is remembered in
+/// [ContentCache], so re-entering the same chapter costs no request (`docs/dev/roadmap.md` 5.2).
 final class FetchContent {
   /// Creates the use case.
   const FetchContent({required this._pages, required this._cache});

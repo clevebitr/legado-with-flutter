@@ -22,7 +22,8 @@
 
 | 文档 | 何时必须读 |
 |---|---|
-| `PLAN.md` | 开始任何功能开发前：先做什么、怎么验收、何时可进下一步 |
+| `docs/dev/roadmap.md` | 开始任何功能开发前：先做什么、怎么验收、何时可进下一步 |
+| `PLAN.md` | 里程碑级状态（`plan` 插件维护，**不要手改**）；步骤级进度只看 `todo` |
 | `docs/dev/naming.md` | 任何命名：文件、类、方法、变量、API、注释 |
 | `docs/dev/constraints.md` | 生成任何代码之前，逐条对照条目 ID |
 | `docs/dev/tech-stack.md` | 新增依赖、改 lint、改国际化配置时 |

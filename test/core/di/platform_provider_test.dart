@@ -2,6 +2,7 @@ import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/file_selector_book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -84,6 +85,38 @@ void main() {
         container.read(bookSourceFilePickerProvider),
         isA<UnsupportedBookSourceFilePicker>(),
       );
+    });
+  });
+  group('longRunningTask', () {
+    test('longRunningTask_whenPlatformIsAndroid_holdsAWakeLock', () {
+      final ProviderContainer container = ProviderContainer.test(
+        overrides: <Override>[
+          platformInfoProvider.overrideWithValue(
+            const FakePlatformInfo.android(),
+          ),
+        ],
+      );
+
+      expect(
+        container.read(longRunningTaskProvider),
+        isA<MethodChannelLongRunningTask>(),
+      );
+    });
+
+    test('longRunningTask_whenPlatformIsDesktop_isTheNoOpPort', () {
+      // platform.md §2 / §7：没有该能力的平台给 no-op，调用方不必判断平台。
+      final ProviderContainer container = ProviderContainer.test(
+        overrides: <Override>[
+          platformInfoProvider.overrideWithValue(
+            const FakePlatformInfo.desktop(),
+          ),
+        ],
+      );
+
+      final LongRunningTask task = container.read(longRunningTaskProvider);
+
+      expect(task, isA<UnsupportedLongRunningTask>());
+      expect(task.isSupported, isFalse);
     });
   });
 }

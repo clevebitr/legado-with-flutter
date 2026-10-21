@@ -12,7 +12,7 @@ void main() {
       'read_givenNoStoredSource_returnsNullSoThePagesShowAnEmptyState',
       () async {
         // 接缝在 5.1 之后由仓储填充（ADR-0021 复审注记）；库是空的时它必须仍然是 null，
-        // 页面因此走空态，而不是拿一个空规则集去请求（PLAN.md 2.5）。
+        // 页面因此走空态，而不是拿一个空规则集去请求（docs/dev/roadmap.md 2.5）。
         final ProviderContainer container = ProviderContainer(
           overrides: [
             bookSourceRepositoryProvider.overrideWithValue(

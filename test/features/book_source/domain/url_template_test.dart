@@ -138,7 +138,7 @@ void main() {
       'renderUrlTemplate_givenNestedRulePlaceholder_treatsItAsUndefined',
       () {
         // 矩阵 #18（`{{}}` 内嵌规则 / JS）是 M1：本阶段按「未定义变量」处理，
-        // 即空串 + warning，而不是把 `{{...}}` 原样写进请求。PLAN.md 已登记该边界。
+        // 即空串 + warning，而不是把 `{{...}}` 原样写进请求。docs/dev/roadmap.md 已登记该边界。
         final ({String url, List<String> warnings}) result = _render(
           '/search?q={{java.encodeURI(key)}}',
           <String, String>{'key': 'abc'},

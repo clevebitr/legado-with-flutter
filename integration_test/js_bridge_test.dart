@@ -22,7 +22,7 @@ import 'package:logger/logger.dart';
 /// `lib/core/js/quickjs_worker.dart` 依赖 `flutter_qjs_next` 的原生库，`flutter test`
 /// 的宿主 VM 里根本加载不了它（只能由设备构建提供），因此按 ADR-0019 第二类登记在
 /// `tool/coverage_allowlist.txt` 中豁免覆盖率。**本文件是它唯一的自动化验证入口**，
-/// 也是 ADR-0029 §后果 要求的集成探针（`PLAN.md` §6 陷阱 #1：「构建成功」对 JS 路径
+/// 也是 ADR-0029 §后果 要求的集成探针（`docs/dev/roadmap.md` §6 陷阱 #1：「构建成功」对 JS 路径
 /// 毫无证明力）。运行方式见 `docs/dev/test-environment.md` §4。
 ///
 /// 与 `tool/spike/` 的分工：那里验证**引擎架构可行性**（9 项探针），这里验证**产品代码**

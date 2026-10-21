@@ -1,13 +1,13 @@
-/// How long one chapter body stays usable (`docs/dev/book-source.md` §5, `PLAN.md` 5.2).
+/// How long one chapter body stays usable (`docs/dev/book-source.md` §5, `docs/dev/roadmap.md` 5.2).
 ///
 /// A body changes only when the site rewrites the page, so the bound is about **staleness**, not
 /// about size: half a day covers a reading session and coming back to the same chapter the same
 /// day, while a corrected chapter reappears within a day. The number is defined once, here;
-/// `CacheDao` owns the expiry column, and `PLAN.md` 5.7 is what will call `deleteExpired` for the
+/// `CacheDao` owns the expiry column, and `docs/dev/roadmap.md` 5.7 is what will call `deleteExpired` for the
 /// physical cleanup (until then an expired entry is simply a miss).
 const Duration chapterCacheTtl = Duration(hours: 12);
 
-/// Remembers one chapter **body** so a second visit costs no request (`PLAN.md` 5.2, C-NET-6).
+/// Remembers one chapter **body** so a second visit costs no request (`docs/dev/roadmap.md` 5.2, C-NET-6).
 ///
 /// The key is the book source id plus the chapter URL, so two sources that publish the same URL
 /// never share a body, and what is stored is the **finished** text: paging is already joined and

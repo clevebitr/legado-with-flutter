@@ -2121,7 +2121,7 @@ void main() {
       () async {
         // 上游把命中的列表本身当作元素列表（`AnalyzeByJSonPath.kt:137` 的
         // `read<ArrayList<Any>>`），所以 `$.data.list`（无 `[*]`）也必须给两个条目——
-        // 真实 JSON API 源就是这么写的（PLAN.md 3.7 在 猫耳FM 的 `searchRule.bookList` 上核对）。
+        // 真实 JSON API 源就是这么写的（docs/dev/roadmap.md 3.7 在 猫耳FM 的 `searchRule.bookList` 上核对）。
         final List<RuleScope> items = await _matches(
           _engine().selectAll(
             r'$.data.list',

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
-import 'package:flutter_reader/features/book_source/presentation/widgets/failure_message.dart';
+import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 

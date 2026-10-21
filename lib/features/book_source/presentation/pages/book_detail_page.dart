@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/widgets/failure_message.dart';
+import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_queries.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
-import 'package:flutter_reader/features/book_source/presentation/widgets/failure_message.dart';
-import 'package:flutter_reader/features/book_source/presentation/widgets/state_message.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_add_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -95,7 +99,9 @@ class BookDetailPage extends ConsumerWidget {
 
     return CustomScrollView(
       slivers: <Widget>[
-        SliverToBoxAdapter(child: _infoBlock(info, tokens, l10n)),
+        SliverToBoxAdapter(
+          child: _infoBlock(context, ref, source, info, tokens, l10n),
+        ),
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.fromLTRB(
@@ -168,30 +174,96 @@ class BookDetailPage extends ConsumerWidget {
   );
 
   /// Builds the information block; an absent field is simply not shown.
-  Widget _infoBlock(BookInfo info, M3ETheme tokens, AppLocalizations l10n) =>
-      Padding(
-        padding: EdgeInsets.all(tokens.spacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(info.name, style: tokens.typography.base.headlineSmall),
-            SizedBox(height: tokens.spacing.sm),
-            if (info.author case final String author)
-              Text(
-                l10n.bookSourceAuthorLine(author),
-                style: tokens.typography.base.bodyMedium,
-              ),
-            if (info.kind case final String kind)
-              Text(
-                l10n.bookSourceKindLine(kind),
-                style: tokens.typography.base.bodyMedium,
-              ),
-            if (info.lastChapter case final String chapter)
-              Text(
-                l10n.bookSourceLastChapterLine(chapter),
-                style: tokens.typography.base.bodyMedium,
-              ),
-          ],
-        ),
-      );
+  Widget _infoBlock(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    M3ETheme tokens,
+    AppLocalizations l10n,
+  ) => Padding(
+    padding: EdgeInsets.all(tokens.spacing.lg),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(info.name, style: tokens.typography.base.headlineSmall),
+        SizedBox(height: tokens.spacing.sm),
+        if (info.author case final String author)
+          Text(
+            l10n.bookSourceAuthorLine(author),
+            style: tokens.typography.base.bodyMedium,
+          ),
+        if (info.kind case final String kind)
+          Text(
+            l10n.bookSourceKindLine(kind),
+            style: tokens.typography.base.bodyMedium,
+          ),
+        if (info.lastChapter case final String chapter)
+          Text(
+            l10n.bookSourceLastChapterLine(chapter),
+            style: tokens.typography.base.bodyMedium,
+          ),
+        SizedBox(height: tokens.spacing.md),
+        _shelfButton(context, ref, source, info, l10n),
+      ],
+    ),
+  );
+
+  /// Builds the 「加入书架」 action (`docs/dev/roadmap.md` 5.4)。
+  ///
+  /// It talks to a **port** (`BookshelfWriter`), not to the shelf feature: the composition root
+  /// binds the real writer, so this page cannot import `features/bookshelf` (C-ARCH-2、ADR-0041).
+  /// The button is disabled while a write is in flight, which is what the notifier's loading
+  /// state is for.
+  Widget _shelfButton(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    AppLocalizations l10n,
+  ) {
+    final AsyncValue<void> action = ref.watch(shelfAddProvider);
+
+    return FilledButton.icon(
+      onPressed: action.isLoading
+          ? null
+          : () => unawaited(_addToShelf(context, ref, source, info, l10n)),
+      icon: const Icon(Icons.bookmark_add_outlined),
+      label: Text(l10n.shelfAddAction),
+    );
+  }
+
+  /// Sends the detail page's snapshot to the shelf and reports the outcome.
+  Future<void> _addToShelf(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    AppLocalizations l10n,
+  ) async {
+    final ParseResult<void> result = await ref
+        .read(shelfAddProvider.notifier)
+        .add(
+          ShelfBookDraft(
+            sourceUrl: source.url,
+            bookUrl: info.url,
+            name: info.name,
+            author: info.author,
+            kind: info.kind,
+            coverUrl: info.coverUrl,
+            intro: info.intro,
+            lastChapter: info.lastChapter,
+          ),
+        );
+    if (!context.mounted) {
+      return;
+    }
+
+    final String message = switch (result) {
+      ParseSuccess<void>() => l10n.shelfAddSucceeded,
+      ParseFailure<void>() => l10n.shelfAddFailed,
+    };
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
 }

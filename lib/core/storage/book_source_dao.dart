@@ -5,7 +5,7 @@ import 'package:flutter_reader/core/utils/clock.dart';
 
 part 'book_source_dao.g.dart';
 
-/// Row-level access to the imported book sources (`PLAN.md` 5.1, ADR-0040).
+/// Row-level access to the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
 ///
 /// The DAO owns the **storage shape** and the two decisions that belong to SQL: the row order
 /// the list uses and which columns an idempotent re-import refreshes. The *business* decision of
@@ -95,13 +95,36 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
   /// Only `payload` and `updatedAt` change: the identity already proves that every behaviour
   /// field is equal, and `isEnabled` / `customOrder` are **user state** that an import must
   /// never reset (ADR-0040 §决策 3). The display metadata columns (`groupName`, `weight`, …)
-  /// keep their first-import values until `PLAN.md` 5.5 owns them.
+  /// keep their first-import values until `docs/dev/roadmap.md` 5.5 owns them.
   Future<void> refreshPayload({required int id, required String payload}) =>
       (update(
         bookSources,
       )..where(($BookSourcesTable table) => table.id.equals(id))).write(
         BookSourcesCompanion(
           payload: Value<String>(payload),
+          updatedAt: Value<DateTime>(_clock.now()),
+        ),
+      );
+
+  /// Writes what a batch check found back onto row [id] (`docs/dev/roadmap.md` §5.10).
+  ///
+  /// The three columns are written together because they describe one run: a group list that was
+  /// cleared without its matching note (or the other way round) would show a source as healthy
+  /// while its comment still says what broke. The **merge** itself is not decided here — the caller
+  /// passes the values it computed from the domain's group / comment rules (ADR-0043 §决策 1).
+  Future<void> writeCheckState({
+    required int id,
+    required String? groupName,
+    required String? comment,
+    required int? respondTime,
+  }) =>
+      (update(
+        bookSources,
+      )..where(($BookSourcesTable table) => table.id.equals(id))).write(
+        BookSourcesCompanion(
+          groupName: Value<String?>(groupName),
+          comment: Value<String?>(comment),
+          respondTime: Value<int?>(respondTime),
           updatedAt: Value<DateTime>(_clock.now()),
         ),
       );

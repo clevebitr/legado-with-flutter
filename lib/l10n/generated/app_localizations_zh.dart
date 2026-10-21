@@ -178,4 +178,272 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookSourceImportFileAction => '选择 JSON 文件';
+
+  @override
+  String get shelfTitle => '书架';
+
+  @override
+  String get shelfEmpty => '书架是空的。打开书籍详情，点「加入书架」把书放进来。';
+
+  @override
+  String get shelfLoadFailed => '读取书架失败。';
+
+  @override
+  String get shelfStatusTracking => '在追';
+
+  @override
+  String get shelfStatusRead => '已读';
+
+  @override
+  String get shelfActionPin => '置顶';
+
+  @override
+  String get shelfActionUnpin => '取消置顶';
+
+  @override
+  String get shelfActionMarkRead => '标记为已读';
+
+  @override
+  String get shelfActionMarkTracking => '标记为在追';
+
+  @override
+  String get shelfActionRemove => '从书架删除';
+
+  @override
+  String get shelfRemoveTitle => '从书架删除这本书？';
+
+  @override
+  String get shelfRemoveBody => '阅读进度会一起删除。';
+
+  @override
+  String shelfProgressLine(String chapter) {
+    return '读至：$chapter';
+  }
+
+  @override
+  String get shelfAddAction => '加入书架';
+
+  @override
+  String get shelfAddSucceeded => '已加入书架。';
+
+  @override
+  String get shelfAddFailed => '加入书架失败。';
+
+  @override
+  String get shelfWriteFailed => '书架更新失败。';
+
+  @override
+  String get actionDecrease => '减少';
+
+  @override
+  String get actionIncrease => '增加';
+
+  @override
+  String get settingsTitle => '设置';
+
+  @override
+  String get settingsLoadFailed => '读取设置失败。';
+
+  @override
+  String get settingsThemeMode => '主题';
+
+  @override
+  String get settingsThemeSystem => '跟随系统';
+
+  @override
+  String get settingsThemeLight => '浅色';
+
+  @override
+  String get settingsThemeDark => '深色';
+
+  @override
+  String get settingsFontScale => '字号';
+
+  @override
+  String settingsFontScaleValue(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get settingsConcurrency => '同一书源并发上限';
+
+  @override
+  String get settingsConcurrencyHint => '1–8。越大越快，对站点也越不客气。';
+
+  @override
+  String get settingsCache => '缓存';
+
+  @override
+  String get settingsClearCache => '清空缓存';
+
+  @override
+  String get settingsClearCacheTitle => '清空全部缓存？';
+
+  @override
+  String get settingsClearCacheBody => '缓存的页面与正文会在需要时重新下载。';
+
+  @override
+  String settingsCacheCleared(int count) {
+    return '已清空 $count 条缓存。';
+  }
+
+  @override
+  String get bookSourceCheckTitle => '书源校验';
+
+  @override
+  String get bookSourceCheckIntro => '逐条跑搜索、发现、详情、目录与正文。';
+
+  @override
+  String get bookSourceCheckStages => '校验阶段';
+
+  @override
+  String get bookSourceCheckStageSearch => '搜索';
+
+  @override
+  String get bookSourceCheckStageExplore => '发现';
+
+  @override
+  String get bookSourceCheckStageInfo => '详情';
+
+  @override
+  String get bookSourceCheckStageToc => '目录';
+
+  @override
+  String get bookSourceCheckStageContent => '正文';
+
+  @override
+  String get bookSourceCheckKeyword => '关键词';
+
+  @override
+  String get bookSourceCheckKeywordHint => '发给每个被校验书源的搜索词';
+
+  @override
+  String get bookSourceCheckTimeout => '单源超时';
+
+  @override
+  String get bookSourceCheckStart => '开始校验';
+
+  @override
+  String get bookSourceCheckStop => '取消';
+
+  @override
+  String get bookSourceCheckEmpty => '还没有导入任何书源。导入后再校验。';
+
+  @override
+  String get bookSourceCheckSelectionEmpty => '至少选择一条书源。';
+
+  @override
+  String get bookSourceCheckStatusPending => '等待';
+
+  @override
+  String get bookSourceCheckStatusRunning => '校验中';
+
+  @override
+  String get bookSourceCheckStatusSucceeded => '通过';
+
+  @override
+  String get bookSourceCheckStatusFailed => '失败';
+
+  @override
+  String get bookSourceCheckStatusCancelled => '已取消';
+
+  @override
+  String get bookSourceCheckFailureCheckFailed => '校验发现了问题。';
+
+  @override
+  String get bookSourceCheckFailureSourceMissing => '该书源在此期间被删除了。';
+
+  @override
+  String get bookSourceCheckFailureSaveFailed => '结果没能写回书源。';
+
+  @override
+  String bookSourceCheckFailedAt(String rulePath) {
+    return '失败于 $rulePath';
+  }
+
+  @override
+  String bookSourceCheckElapsed(int millis) {
+    return '耗时 $millis 毫秒';
+  }
+
+  @override
+  String get bookSourceCheckOpenDebug => '调试该书源';
+
+  @override
+  String get bookSourceCheckSelectAll => '全选';
+
+  @override
+  String get bookSourceCheckSelectNone => '全不选';
+
+  @override
+  String get bookSourceDebugTitle => '书源调试';
+
+  @override
+  String get bookSourceDebugTarget => '目标';
+
+  @override
+  String get bookSourceDebugTargetSearch => '搜索';
+
+  @override
+  String get bookSourceDebugTargetExplore => '发现';
+
+  @override
+  String get bookSourceDebugTargetInfo => '详情';
+
+  @override
+  String get bookSourceDebugTargetToc => '目录';
+
+  @override
+  String get bookSourceDebugTargetContent => '正文';
+
+  @override
+  String get bookSourceDebugQuery => '调试内容';
+
+  @override
+  String get bookSourceDebugQueryKeywordHint => '要搜索的关键词';
+
+  @override
+  String get bookSourceDebugQueryUrlHint => '页面地址';
+
+  @override
+  String get bookSourceDebugExamples => '示例';
+
+  @override
+  String get bookSourceDebugStart => '运行';
+
+  @override
+  String get bookSourceDebugStop => '停止';
+
+  @override
+  String get bookSourceDebugClear => '清空';
+
+  @override
+  String get bookSourceDebugEmpty => '还没有事件。运行一个目标就能看到链路。';
+
+  @override
+  String get bookSourceDebugStatusRunning => '运行中';
+
+  @override
+  String get bookSourceDebugStatusSucceeded => '完成';
+
+  @override
+  String get bookSourceDebugStatusFailed => '失败';
+
+  @override
+  String get bookSourceDebugStatusCancelled => '已取消';
+
+  @override
+  String get bookSourceDebugEventMessage => '消息';
+
+  @override
+  String get bookSourceDebugEventSource => '来源';
+
+  @override
+  String get bookSourceDebugEventError => '错误';
+
+  @override
+  String get bookSourceDebugMissingSource => '请先在书源列表里选择一个书源。';
+
+  @override
+  String get bookSourceDebugStatusIdle => '尚未运行';
 }

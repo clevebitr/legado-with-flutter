@@ -1,7 +1,9 @@
 import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 
 /// In-memory [BookSourceRepository] double for the notifier and widget tests
 /// (`docs/dev/testing.md` §4).
@@ -19,6 +21,11 @@ final class FakeBookSourceRepository implements BookSourceRepository {
 
   /// Identity (`url|fingerprint`) to row id, the in-memory stand-in for the unique key.
   final Map<String, int> _identities = <String, int>{};
+
+  /// The check columns (`groupName` / `comment` / `respondTime`) the real table keeps.
+  final Map<int, String?> _checkGroups = <int, String?>{};
+  final Map<int, String?> _checkComments = <int, String?>{};
+  final Map<int, int> _respondTimes = <int, int>{};
 
   int _nextId = 1;
 
@@ -126,8 +133,42 @@ final class FakeBookSourceRepository implements BookSourceRepository {
   }
 
   @override
+  Future<bool> applyCheckReport({
+    required int id,
+    required SourceCheckReport report,
+  }) async {
+    if (!_rows.containsKey(id)) {
+      return false;
+    }
+    final String? groups = withoutInvalidGroups(_checkGroups[id]);
+    _checkGroups[id] = report.invalidGroups.isEmpty
+        ? groups
+        : withGroups(groups, report.invalidGroups);
+    final String? comment = withoutErrorComment(_checkComments[id]);
+    final String? note = report.errorComment;
+    _checkComments[id] = note == null
+        ? comment
+        : withErrorComment(comment, note);
+    _respondTimes[id] = report.elapsedMillis;
+
+    return true;
+  }
+
+  /// The group names row [id] currently carries — the `groupName` column.
+  List<String> groupsOf(int id) => splitGroups(_checkGroups[id]);
+
+  /// The error note row [id] currently carries — the `comment` column.
+  String? commentOf(int id) => _checkComments[id];
+
+  /// The last `respondTime` written for row [id].
+  int? respondTimeOf(int id) => _respondTimes[id];
+
+  @override
   Future<void> delete(int id) async {
     _rows.remove(id);
     _identities.removeWhere((String _, int rowId) => rowId == id);
+    _checkGroups.remove(id);
+    _checkComments.remove(id);
+    _respondTimes.remove(id);
   }
 }

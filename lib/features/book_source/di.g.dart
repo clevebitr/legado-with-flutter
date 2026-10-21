@@ -8,7 +8,7 @@ part of 'di.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the persistence of the imported book sources (`PLAN.md` 5.1, ADR-0040).
+/// Provides the persistence of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
 ///
 /// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
 /// consumes the `domain/` model directly instead of a DTO.
@@ -16,7 +16,7 @@ part of 'di.dart';
 @ProviderFor(bookSourceRepository)
 final bookSourceRepositoryProvider = BookSourceRepositoryProvider._();
 
-/// Provides the persistence of the imported book sources (`PLAN.md` 5.1, ADR-0040).
+/// Provides the persistence of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
 ///
 /// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
 /// consumes the `domain/` model directly instead of a DTO.
@@ -29,7 +29,7 @@ final class BookSourceRepositoryProvider
           BookSourceRepository
         >
     with $Provider<BookSourceRepository> {
-  /// Provides the persistence of the imported book sources (`PLAN.md` 5.1, ADR-0040).
+  /// Provides the persistence of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
   ///
   /// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
   /// consumes the `domain/` model directly instead of a DTO.
@@ -70,12 +70,12 @@ final class BookSourceRepositoryProvider
 String _$bookSourceRepositoryHash() =>
     r'52294acdca35c53c8abc4c34afc3628eecbe7554';
 
-/// Provides the import use case (pasted text or a URL, `PLAN.md` 5.1, ADR-0040 §决策 9).
+/// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
 
 @ProviderFor(importBookSources)
 final importBookSourcesProvider = ImportBookSourcesProvider._();
 
-/// Provides the import use case (pasted text or a URL, `PLAN.md` 5.1, ADR-0040 §决策 9).
+/// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
 
 final class ImportBookSourcesProvider
     extends
@@ -85,7 +85,7 @@ final class ImportBookSourcesProvider
           ImportBookSources
         >
     with $Provider<ImportBookSources> {
-  /// Provides the import use case (pasted text or a URL, `PLAN.md` 5.1, ADR-0040 §决策 9).
+  /// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
   ImportBookSourcesProvider._()
     : super(
         from: null,
@@ -121,6 +121,65 @@ final class ImportBookSourcesProvider
 }
 
 String _$importBookSourcesHash() => r'e7e4eeefd10c4f2e40171a1809a46e56d3a6eb32';
+
+/// Provides the shelf writer the detail page uses (`docs/dev/roadmap.md` 5.4)。
+///
+/// The default is the **unbound** port: the composition root overrides it with the shelf's real
+/// writer (ADR-0041 §决策 2), which is why this feature names no shelf type at all — 「加入书架」
+/// 是一个端口，而不是一次 `features/bookshelf` 的 import（C-ARCH-2）。
+
+@ProviderFor(bookshelfWriter)
+final bookshelfWriterProvider = BookshelfWriterProvider._();
+
+/// Provides the shelf writer the detail page uses (`docs/dev/roadmap.md` 5.4)。
+///
+/// The default is the **unbound** port: the composition root overrides it with the shelf's real
+/// writer (ADR-0041 §决策 2), which is why this feature names no shelf type at all — 「加入书架」
+/// 是一个端口，而不是一次 `features/bookshelf` 的 import（C-ARCH-2）。
+
+final class BookshelfWriterProvider
+    extends
+        $FunctionalProvider<BookshelfWriter, BookshelfWriter, BookshelfWriter>
+    with $Provider<BookshelfWriter> {
+  /// Provides the shelf writer the detail page uses (`docs/dev/roadmap.md` 5.4)。
+  ///
+  /// The default is the **unbound** port: the composition root overrides it with the shelf's real
+  /// writer (ADR-0041 §决策 2), which is why this feature names no shelf type at all — 「加入书架」
+  /// 是一个端口，而不是一次 `features/bookshelf` 的 import（C-ARCH-2）。
+  BookshelfWriterProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookshelfWriterProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookshelfWriterHash();
+
+  @$internal
+  @override
+  $ProviderElement<BookshelfWriter> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  BookshelfWriter create(Ref ref) {
+    return bookshelfWriter(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookshelfWriter value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookshelfWriter>(value),
+    );
+  }
+}
+
+String _$bookshelfWriterHash() => r'3b48eee793c6708d8afb0bdcbeb73bbac8e71083';
 
 /// Provides the rule engine every book source use case shares.
 
@@ -357,7 +416,7 @@ final class FetchTocProvider
 
 String _$fetchTocHash() => r'8335386d48a19a74d44d8ce23c0940adc791c7e1';
 
-/// Provides the chapter body cache (`PLAN.md` 5.2, C-NET-6).
+/// Provides the chapter body cache (`docs/dev/roadmap.md` 5.2, C-NET-6).
 ///
 /// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
 /// the expiry column were already there, so 5.2 adds no column and no table.
@@ -365,7 +424,7 @@ String _$fetchTocHash() => r'8335386d48a19a74d44d8ce23c0940adc791c7e1';
 @ProviderFor(contentCache)
 final contentCacheProvider = ContentCacheProvider._();
 
-/// Provides the chapter body cache (`PLAN.md` 5.2, C-NET-6).
+/// Provides the chapter body cache (`docs/dev/roadmap.md` 5.2, C-NET-6).
 ///
 /// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
 /// the expiry column were already there, so 5.2 adds no column and no table.
@@ -373,7 +432,7 @@ final contentCacheProvider = ContentCacheProvider._();
 final class ContentCacheProvider
     extends $FunctionalProvider<ContentCache, ContentCache, ContentCache>
     with $Provider<ContentCache> {
-  /// Provides the chapter body cache (`PLAN.md` 5.2, C-NET-6).
+  /// Provides the chapter body cache (`docs/dev/roadmap.md` 5.2, C-NET-6).
   ///
   /// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
   /// the expiry column were already there, so 5.2 adds no column and no table.
@@ -556,3 +615,108 @@ final class ExploreBooksProvider
 }
 
 String _$exploreBooksHash() => r'85b8bacec5fa339e01b4afc0d3e18c4fc42c9989';
+
+/// Provides the batch check of `docs/dev/roadmap.md` §5.10.
+///
+/// It composes the same five use cases the pages use, so a check can never disagree with what
+/// "search" or "read the body" means — the only new thing here is the order and the group
+/// vocabulary (ADR-0043).
+
+@ProviderFor(checkBookSource)
+final checkBookSourceProvider = CheckBookSourceProvider._();
+
+/// Provides the batch check of `docs/dev/roadmap.md` §5.10.
+///
+/// It composes the same five use cases the pages use, so a check can never disagree with what
+/// "search" or "read the body" means — the only new thing here is the order and the group
+/// vocabulary (ADR-0043).
+
+final class CheckBookSourceProvider
+    extends
+        $FunctionalProvider<CheckBookSource, CheckBookSource, CheckBookSource>
+    with $Provider<CheckBookSource> {
+  /// Provides the batch check of `docs/dev/roadmap.md` §5.10.
+  ///
+  /// It composes the same five use cases the pages use, so a check can never disagree with what
+  /// "search" or "read the body" means — the only new thing here is the order and the group
+  /// vocabulary (ADR-0043).
+  CheckBookSourceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'checkBookSourceProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$checkBookSourceHash();
+
+  @$internal
+  @override
+  $ProviderElement<CheckBookSource> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  CheckBookSource create(Ref ref) {
+    return checkBookSource(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(CheckBookSource value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<CheckBookSource>(value),
+    );
+  }
+}
+
+String _$checkBookSourceHash() => r'45cc1c9c289f7763c15ce9cecdff95ff88bc8d18';
+
+/// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
+
+@ProviderFor(runSourceDebug)
+final runSourceDebugProvider = RunSourceDebugProvider._();
+
+/// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
+
+final class RunSourceDebugProvider
+    extends $FunctionalProvider<RunSourceDebug, RunSourceDebug, RunSourceDebug>
+    with $Provider<RunSourceDebug> {
+  /// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
+  RunSourceDebugProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'runSourceDebugProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$runSourceDebugHash();
+
+  @$internal
+  @override
+  $ProviderElement<RunSourceDebug> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  RunSourceDebug create(Ref ref) {
+    return runSourceDebug(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(RunSourceDebug value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<RunSourceDebug>(value),
+    );
+  }
+}
+
+String _$runSourceDebugHash() => r'62fea9b5a61629868734e88f23febc301eb3df3d';

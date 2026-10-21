@@ -1,14 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/router/app_navigation.dart';
+import 'package:flutter_reader/core/widgets/failure_message.dart';
+import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/search_results_notifier.dart';
-import 'package:flutter_reader/features/book_source/presentation/widgets/failure_message.dart';
-import 'package:flutter_reader/features/book_source/presentation/widgets/state_message.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -53,6 +55,7 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final M3ETheme tokens = context.m3e;
     final BookSource? source = ref.watch(currentBookSourceProvider);
+    final AppNavigation navigation = ref.watch(appNavigationProvider);
 
     return Scaffold(
       backgroundColor: tokens.colors.surface,
@@ -60,6 +63,18 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
         title: Text(l10n.bookSourceSearchTitle),
         backgroundColor: tokens.colors.surface,
         actions: <Widget>[
+          // 书架与设置都是**其他 feature** 的页面：经 AppNavigation 端口打开，而不是
+          // import 对方的 route（C-ARCH-2、ADR-0042）。
+          IconButton(
+            icon: const Icon(Icons.collections_bookmark_outlined),
+            tooltip: l10n.shelfTitle,
+            onPressed: () => navigation.openBookshelf(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: l10n.settingsTitle,
+            onPressed: () => navigation.openSettings(context),
+          ),
           IconButton(
             icon: const Icon(Icons.library_books_outlined),
             tooltip: l10n.bookSourceListTitle,

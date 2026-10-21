@@ -3,7 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'stored_book_source.freezed.dart';
 
-/// One imported book source as it is stored (`PLAN.md` 5.1, ADR-0040).
+/// One imported book source as it is stored (`docs/dev/roadmap.md` 5.1, ADR-0040).
 ///
 /// It pairs the parsed [source] — what the engine consumes — with the columns the user can
 /// change, so a caller never has to read the user state back out of the payload: `enabled` and
@@ -11,7 +11,7 @@ part 'stored_book_source.freezed.dart';
 ///
 /// `@freezed` rather than a hand-written class: C-ARCH-5 asks for "`freezed`, or `final` fields
 /// plus `copyWith`", and the UI will copy this value around when it flips a source on or off
-/// (`PLAN.md` 5.1), so the generated `copyWith` is part of the contract rather than surplus.
+/// (`docs/dev/roadmap.md` 5.1), so the generated `copyWith` is part of the contract rather than surplus.
 @freezed
 abstract class StoredBookSource with _$StoredBookSource {
   /// Creates a stored source.
@@ -21,7 +21,7 @@ abstract class StoredBookSource with _$StoredBookSource {
     required int id,
 
     /// The parsed book source, with [BookSource.isEnabled] already copied onto it and the row's
-    /// own `customOrder` alongside (the model has no such field; `PLAN.md` 5.5 owns its display).
+    /// own `customOrder` alongside (the model has no such field; `docs/dev/roadmap.md` 5.5 owns its display).
     required BookSource source,
 
     /// Whether the source takes part in search and explore.

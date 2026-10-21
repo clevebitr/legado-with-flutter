@@ -34,7 +34,7 @@ const String _keywordVariable = 'key';
 /// define renders as an **empty string** and is reported through [logger] as a
 /// warning, so `{{...}}` never leaks into a request. Nested rules inside `{{}}`
 /// (matrix #18) are M1 and are therefore treated as undefined variables for now;
-/// `PLAN.md` records that boundary.
+/// `docs/dev/roadmap.md` records that boundary.
 ///
 /// The warning deliberately names only the variables, never the template: the
 /// template may already carry the keyword, and a search keyword must not reach the

@@ -109,7 +109,7 @@ void main() {
     });
 
     test('execute_givenACachedChapter_returnsItWithoutAnyRequest', () async {
-      // PLAN.md 5.2 的验收：命中缓存时**一个请求都不发**（缓存存的是成品正文，
+      // docs/dev/roadmap.md 5.2 的验收：命中缓存时**一个请求都不发**（缓存存的是成品正文，
       // 所以命中可以直接跳过整个引擎，连源自己的限速都不必进预算）。
       final FakeHttpClient http = FakeHttpClient();
       final FakeContentCache cache = FakeContentCache();

@@ -74,7 +74,7 @@ String _$bookSourceListHash() => r'463f718c9157a957ec27e02ee168172cd0d53ac6';
 /// The selection is a plain id in a private field, so a reload of the list (after an import, a
 /// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
 /// gone the notifier falls back to the default source, because a dangling selection would leave
-/// every page pointing at a source that no longer exists (`PLAN.md` 5.1).
+/// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
 
 @ProviderFor(SelectedBookSource)
 final selectedBookSourceProvider = SelectedBookSourceProvider._();
@@ -84,7 +84,7 @@ final selectedBookSourceProvider = SelectedBookSourceProvider._();
 /// The selection is a plain id in a private field, so a reload of the list (after an import, a
 /// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
 /// gone the notifier falls back to the default source, because a dangling selection would leave
-/// every page pointing at a source that no longer exists (`PLAN.md` 5.1).
+/// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
 final class SelectedBookSourceProvider
     extends $AsyncNotifierProvider<SelectedBookSource, StoredBookSource?> {
   /// Which stored source the pages work with, and the only place that changes it.
@@ -92,7 +92,7 @@ final class SelectedBookSourceProvider
   /// The selection is a plain id in a private field, so a reload of the list (after an import, a
   /// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
   /// gone the notifier falls back to the default source, because a dangling selection would leave
-  /// every page pointing at a source that no longer exists (`PLAN.md` 5.1).
+  /// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
   SelectedBookSourceProvider._()
     : super(
         from: null,
@@ -120,7 +120,7 @@ String _$selectedBookSourceHash() =>
 /// The selection is a plain id in a private field, so a reload of the list (after an import, a
 /// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
 /// gone the notifier falls back to the default source, because a dangling selection would leave
-/// every page pointing at a source that no longer exists (`PLAN.md` 5.1).
+/// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
 
 abstract class _$SelectedBookSource extends $AsyncNotifier<StoredBookSource?> {
   FutureOr<StoredBookSource?> build();
@@ -141,7 +141,7 @@ abstract class _$SelectedBookSource extends $AsyncNotifier<StoredBookSource?> {
   }
 }
 
-/// The book source the parsing pages work with (`PLAN.md` 2.5's seam, now filled by 5.1).
+/// The book source the parsing pages work with (`docs/dev/roadmap.md` 2.5's seam, now filled by 5.1).
 ///
 /// It stays a **synchronous** projection of [SelectedBookSource] so the four parsing pages keep
 /// reading a `BookSource?`; only the pages that manage sources look at the load state.
@@ -151,7 +151,7 @@ abstract class _$SelectedBookSource extends $AsyncNotifier<StoredBookSource?> {
 @ProviderFor(currentBookSource)
 final currentBookSourceProvider = CurrentBookSourceProvider._();
 
-/// The book source the parsing pages work with (`PLAN.md` 2.5's seam, now filled by 5.1).
+/// The book source the parsing pages work with (`docs/dev/roadmap.md` 2.5's seam, now filled by 5.1).
 ///
 /// It stays a **synchronous** projection of [SelectedBookSource] so the four parsing pages keep
 /// reading a `BookSource?`; only the pages that manage sources look at the load state.
@@ -161,7 +161,7 @@ final currentBookSourceProvider = CurrentBookSourceProvider._();
 final class CurrentBookSourceProvider
     extends $FunctionalProvider<BookSource?, BookSource?, BookSource?>
     with $Provider<BookSource?> {
-  /// The book source the parsing pages work with (`PLAN.md` 2.5's seam, now filled by 5.1).
+  /// The book source the parsing pages work with (`docs/dev/roadmap.md` 2.5's seam, now filled by 5.1).
   ///
   /// It stays a **synchronous** projection of [SelectedBookSource] so the four parsing pages keep
   /// reading a `BookSource?`; only the pages that manage sources look at the load state.

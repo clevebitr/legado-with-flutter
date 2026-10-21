@@ -157,7 +157,7 @@ String _decodeWith(String label, List<int> bytes) =>
 /// * `shift-jis` and `euc-jp` raise a `RangeError` on a stray lead byte instead of a
 ///   `FormatException` (`shift_jis.dart:26`), so this path is unreachable for them and
 ///   catching the `Error` is forbidden (ADR-0022). The escape is registered in
-///   `PLAN.md` §3.7;
+///   `docs/dev/roadmap.md` §3.7;
 /// * `us-ascii` / `utf-16` / `utf-32` are left out on purpose: a page that declares them
 ///   and then fails to decode has a wrong declaration, not a stray byte, and per
 ///   ADR-0031 §决策 3 those keep failing loudly.

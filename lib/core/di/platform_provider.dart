@@ -1,6 +1,8 @@
+import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/file_selector_book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -28,7 +30,7 @@ PlatformInfo platformInfo(Ref ref) => const SystemPlatformInfo();
 DynamicColorProvider? platformDynamicColor(Ref ref) =>
     resolveDynamicColorProvider(ref.watch(platformInfoProvider));
 
-/// Provides the platform file picker for book source imports (`PLAN.md` 5.8, C-PLT-1).
+/// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
 ///
 /// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
 /// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
@@ -42,3 +44,14 @@ BookSourceFilePicker bookSourceFilePicker(Ref ref) {
       ? const FileSelectorBookSourceFilePicker()
       : const UnsupportedBookSourceFilePicker();
 }
+
+/// Provides the long-task marker a batch check holds while it runs
+/// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+///
+/// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
+/// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+@riverpod
+LongRunningTask longRunningTask(Ref ref) =>
+    ref.watch(platformInfoProvider).isAndroid
+    ? MethodChannelLongRunningTask(logger: ref.watch(appLoggerProvider))
+    : const UnsupportedLongRunningTask();

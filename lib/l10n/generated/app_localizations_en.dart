@@ -192,4 +192,283 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookSourceImportFileAction => 'Choose a JSON file';
+
+  @override
+  String get shelfTitle => 'Bookshelf';
+
+  @override
+  String get shelfEmpty =>
+      'Your shelf is empty. Open a book\'s details and choose “Add to shelf”.';
+
+  @override
+  String get shelfLoadFailed => 'The shelf could not be loaded.';
+
+  @override
+  String get shelfStatusTracking => 'Reading';
+
+  @override
+  String get shelfStatusRead => 'Finished';
+
+  @override
+  String get shelfActionPin => 'Pin to top';
+
+  @override
+  String get shelfActionUnpin => 'Unpin';
+
+  @override
+  String get shelfActionMarkRead => 'Mark as finished';
+
+  @override
+  String get shelfActionMarkTracking => 'Mark as reading';
+
+  @override
+  String get shelfActionRemove => 'Remove from shelf';
+
+  @override
+  String get shelfRemoveTitle => 'Remove this book?';
+
+  @override
+  String get shelfRemoveBody => 'Its reading progress is removed too.';
+
+  @override
+  String shelfProgressLine(String chapter) {
+    return 'Reading: $chapter';
+  }
+
+  @override
+  String get shelfAddAction => 'Add to shelf';
+
+  @override
+  String get shelfAddSucceeded => 'Added to the shelf.';
+
+  @override
+  String get shelfAddFailed => 'The book could not be added to the shelf.';
+
+  @override
+  String get shelfWriteFailed => 'The shelf could not be updated.';
+
+  @override
+  String get actionDecrease => 'Decrease';
+
+  @override
+  String get actionIncrease => 'Increase';
+
+  @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get settingsLoadFailed => 'The settings could not be loaded.';
+
+  @override
+  String get settingsThemeMode => 'Theme';
+
+  @override
+  String get settingsThemeSystem => 'Follow system';
+
+  @override
+  String get settingsThemeLight => 'Light';
+
+  @override
+  String get settingsThemeDark => 'Dark';
+
+  @override
+  String get settingsFontScale => 'Text size';
+
+  @override
+  String settingsFontScaleValue(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get settingsConcurrency => 'Concurrent requests per source';
+
+  @override
+  String get settingsConcurrencyHint =>
+      '1 to 8. Higher values are faster and less polite to the site.';
+
+  @override
+  String get settingsCache => 'Cache';
+
+  @override
+  String get settingsClearCache => 'Clear cache';
+
+  @override
+  String get settingsClearCacheTitle => 'Clear the whole cache?';
+
+  @override
+  String get settingsClearCacheBody =>
+      'Cached pages and chapter bodies are downloaded again when needed.';
+
+  @override
+  String settingsCacheCleared(int count) {
+    return 'Removed $count cached entries.';
+  }
+
+  @override
+  String get bookSourceCheckTitle => 'Check book sources';
+
+  @override
+  String get bookSourceCheckIntro =>
+      'Each source runs through search, discover, details, chapters and body.';
+
+  @override
+  String get bookSourceCheckStages => 'Stages';
+
+  @override
+  String get bookSourceCheckStageSearch => 'Search';
+
+  @override
+  String get bookSourceCheckStageExplore => 'Discover';
+
+  @override
+  String get bookSourceCheckStageInfo => 'Details';
+
+  @override
+  String get bookSourceCheckStageToc => 'Chapters';
+
+  @override
+  String get bookSourceCheckStageContent => 'Body';
+
+  @override
+  String get bookSourceCheckKeyword => 'Keyword';
+
+  @override
+  String get bookSourceCheckKeywordHint =>
+      'Keyword sent to every checked source';
+
+  @override
+  String get bookSourceCheckTimeout => 'Timeout per source';
+
+  @override
+  String get bookSourceCheckStart => 'Start check';
+
+  @override
+  String get bookSourceCheckStop => 'Stop';
+
+  @override
+  String get bookSourceCheckEmpty =>
+      'No book source is stored yet. Import one to check it.';
+
+  @override
+  String get bookSourceCheckSelectionEmpty =>
+      'Select at least one book source.';
+
+  @override
+  String get bookSourceCheckStatusPending => 'Waiting';
+
+  @override
+  String get bookSourceCheckStatusRunning => 'Checking';
+
+  @override
+  String get bookSourceCheckStatusSucceeded => 'Passed';
+
+  @override
+  String get bookSourceCheckStatusFailed => 'Failed';
+
+  @override
+  String get bookSourceCheckStatusCancelled => 'Cancelled';
+
+  @override
+  String get bookSourceCheckFailureCheckFailed => 'The check found problems.';
+
+  @override
+  String get bookSourceCheckFailureSourceMissing =>
+      'The source was deleted meanwhile.';
+
+  @override
+  String get bookSourceCheckFailureSaveFailed =>
+      'The result could not be saved.';
+
+  @override
+  String bookSourceCheckFailedAt(String rulePath) {
+    return 'Failed at $rulePath';
+  }
+
+  @override
+  String bookSourceCheckElapsed(int millis) {
+    return 'Took $millis ms';
+  }
+
+  @override
+  String get bookSourceCheckOpenDebug => 'Debug this source';
+
+  @override
+  String get bookSourceCheckSelectAll => 'Select all';
+
+  @override
+  String get bookSourceCheckSelectNone => 'Select none';
+
+  @override
+  String get bookSourceDebugTitle => 'Debug a book source';
+
+  @override
+  String get bookSourceDebugTarget => 'Target';
+
+  @override
+  String get bookSourceDebugTargetSearch => 'Search';
+
+  @override
+  String get bookSourceDebugTargetExplore => 'Discover';
+
+  @override
+  String get bookSourceDebugTargetInfo => 'Details';
+
+  @override
+  String get bookSourceDebugTargetToc => 'Chapters';
+
+  @override
+  String get bookSourceDebugTargetContent => 'Body';
+
+  @override
+  String get bookSourceDebugQuery => 'Query';
+
+  @override
+  String get bookSourceDebugQueryKeywordHint => 'Keyword to search for';
+
+  @override
+  String get bookSourceDebugQueryUrlHint => 'Page URL';
+
+  @override
+  String get bookSourceDebugExamples => 'Examples';
+
+  @override
+  String get bookSourceDebugStart => 'Run';
+
+  @override
+  String get bookSourceDebugStop => 'Stop';
+
+  @override
+  String get bookSourceDebugClear => 'Clear';
+
+  @override
+  String get bookSourceDebugEmpty =>
+      'No event yet. Run a target to see the chain.';
+
+  @override
+  String get bookSourceDebugStatusRunning => 'Running';
+
+  @override
+  String get bookSourceDebugStatusSucceeded => 'Done';
+
+  @override
+  String get bookSourceDebugStatusFailed => 'Failed';
+
+  @override
+  String get bookSourceDebugStatusCancelled => 'Cancelled';
+
+  @override
+  String get bookSourceDebugEventMessage => 'Message';
+
+  @override
+  String get bookSourceDebugEventSource => 'Source';
+
+  @override
+  String get bookSourceDebugEventError => 'Error';
+
+  @override
+  String get bookSourceDebugMissingSource =>
+      'Choose a book source on the source list first.';
+
+  @override
+  String get bookSourceDebugStatusIdle => 'Not run yet';
 }

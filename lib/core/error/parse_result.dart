@@ -97,7 +97,7 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 ///
 /// [rulePath] is what makes a failure locatable, so an empty one is a programming
 /// error rather than a runtime condition: it trips an assertion in debug builds
-/// instead of shipping a failure nobody can act on. `PLAN.md` 2.7 introduced this
+/// instead of shipping a failure nobody can act on. `docs/dev/roadmap.md` 2.7 introduced this
 /// entry point so that every failure path of the rule engine and of the book source
 /// use cases goes through it.
 ParseFailure<T> failureAt<T>({

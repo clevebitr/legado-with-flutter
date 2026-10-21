@@ -137,7 +137,7 @@ void main() {
     test(
       'get_givenABodyLargerThanTheCallersCap_abandonsItWithATypedCause',
       () async {
-        // PLAN.md 5.1 / ADR-0040 §决策 5：上限在**读**的时候生效（C-PERF-5），
+        // docs/dev/roadmap.md 5.1 / ADR-0040 §决策 5：上限在**读**的时候生效（C-PERF-5），
         // 并带一个可识别的 cause，让导入层把它改写成自己的 rulePath。
         final _Fixture fixture = _buildClient();
         fixture.adapter.enqueueResponse(bytes: utf8.encode('0123456789'));

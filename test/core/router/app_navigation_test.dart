@@ -1,0 +1,66 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/di/app_navigation_provider.dart';
+import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/router/app_navigation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/fake_log_printer.dart';
+
+void main() {
+  group('UnboundAppNavigation', () {
+    test('openBookshelf_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      // 没有 context 也要能调用「无操作」这一半：它不碰 Navigator，只写一行日志。
+      navigation.openBookshelf(_FakeContext());
+
+      expect(printer.events, hasLength(1));
+      expect(printer.events.single.message, contains('bookshelf'));
+    });
+
+    test('openSettings_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openSettings(_FakeContext());
+
+      expect(printer.events.single.message, contains('settings'));
+    });
+  });
+
+  group('appNavigation', () {
+    test('build_whenNothingIsBound_answersTheUnboundPort', () {
+      final ProviderContainer container = ProviderContainer(
+        overrides: [
+          appLoggerProvider.overrideWithValue(
+            AppLogger(level: LogLevel.debug, printer: FakeLogPrinter()),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(
+        container.read(appNavigationProvider),
+        isA<UnboundAppNavigation>(),
+      );
+    });
+  });
+}
+
+/// A build context that no navigation may touch.
+///
+/// The unbound port must not read from it; passing a real one would drag in a
+/// `MaterialApp` for no reason.
+final class _FakeContext implements BuildContext {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('the unbound port must not use its context');
+}

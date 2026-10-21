@@ -15,7 +15,7 @@ void main() {
     testWidgets('sources_givenTheManageAction_opensTheListAndTheImportScreen', (
       WidgetTester tester,
     ) async {
-      // 5.1 的验收包含「入口可达」：搜索页 → 书源列表 → 导入页（PLAN.md 5.1）。
+      // 5.1 的验收包含「入口可达」：搜索页 → 书源列表 → 导入页（docs/dev/roadmap.md 5.1）。
       await pumpReaderApp(
         tester,
         source: loadCorpusBookSource(),

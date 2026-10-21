@@ -7,6 +7,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The book-source check mechanism lands: batch verdicts and a single-source console (2026-10-21)
+
+- **Batch check (5.10).** `CheckBookSource` walks search -> detail -> chapters -> body (explore the same way) on one
+  source and answers with a pure `SourceCheckReport`; `SourceCheck` (the notifier) runs a batch with the user's
+  per-source concurrency, holds the long-task marker, and writes each verdict back through `BookSourceRepository`.
+- **The verdict lands in columns, not in the payload.** `book_sources` gains a `comment` column (schemaVersion 3 -> 4,
+  dumped schema + migration tests + a real write in `on_disk_database_test`); `groupName` takes the upstream tokens
+  (`搜索失效` / `搜索目录失效` / ... / `校验超时` / `js失效` / `网站失效`), `respondTime` takes the elapsed time, and the
+  previous run's invalid groups and `// Error: ` note are cleared first, so a fixed source becomes healthy again.
+  `payload` is untouched: it stays the export source of 5.8 (ADR-0040 §decisions 4).
+- **`checkKeyWord` is modelled** (`SearchRule.checkKeyWord`) and its "looks like a rule" predicate is spelled out
+  (`resolveCheckKeyword`: `http` / `://` / `::` / `++` / `--` / `##` / `{{`, or a leading `@` / `$`), closing the
+  `docs/dev/roadmap.md` §3.7 registration. The fallback keyword is data, not UI copy, so it stays out of ARB.
+- **Single-source console (5.10).** `RunSourceDebug` runs one target (search / explore / detail / chapters / body) and
+  streams typed events (message / source / error, each with an elapsed time); the page shows them with one-tap examples
+  taken from the source itself. A body's text never reaches the console - only `chars=<n>`.
+- **Cancellation is `Cancelled`, never `Failed`.** Both runs share a cooperative `TaskCancellation` checked between
+  stages; a stopped batch writes nothing back. Upstream's `Incomplete` has no counterpart here (ADR-0043 §consequences).
+- **`ParseFailureKind` is unchanged.** Stage failures live in `SourceCheckStageOutcome`; "a script broke" is read from
+  the existing `:js:error` / `:js:timeout` rule-path markers, in exactly one place (`checkGroupForFailure`).
+- **New platform port `LongRunningTask`** (`core/platform/`): Android holds a `PARTIAL_WAKE_LOCK` (channel + permission,
+  no new dependency), Windows / iOS get the no-op. A **foreground service** is registered as open with its trigger.
+- **ADR-0043** records the four decisions M10 had to make before any code was written.
+- Reproductions of the five judgeable failures (empty search / empty chapters / empty body / timeout / broken script)
+  are recorded in `tool/spot_check/source_check_records.md`.
+- Gates: format 0 changed, analyze clean, **1003** tests, `core` 1219/1219, `domain` 2168/2168, `data` 142/142,
+  generated files in sync; Windows and Android device-level tests re-run for the `core/platform/` change.
+
+### The shelf and the settings page land; the book-source check mechanism is planned (2026-10-21)
+
+- **Shelf (5.4).** `books` + `reading_progress` (schemaVersion 2 -> 3, dumped schema + migration tests + a real
+  write in `on_disk_database_test`), `BookshelfDao` / `BookshelfRepository` / `Bookshelf` notifier / `BookshelfPage`.
+  The identity is `(sourceUrl, bookUrl)` - the source is referenced by URL, not by `book_sources.id`, because that id
+  belongs to one imported row. Re-adding is a snapshot refresh that keeps the user state (`status` / `isPinned`).
+  The detail page's "add to shelf" goes through a `BookshelfWriter` port bound at the composition root (ADR-0041).
+- **Settings (5.6).** `AppSettings` (clamped in the factory, **not** asserted), `SettingsRepository` over
+  `shared_preferences` with keys private to `settings/data/`, and the page (theme, text scale, concurrency, cache).
+  Theme and text scale are wired in `app.dart` - the stored scale stacks on top of the platform accessibility scale -
+  and the concurrency budget reaches `HttpPolicy` through `concurrencySettingProvider`, which the root binds.
+  Cache clearing (5.7 (1)) landed with it: `CacheDao.deleteAll` + a `CachePurger` port.
+- **Two registered items are closed:** the `assert`-only concurrency guard (now `budgetOrDefault`, which also runs in
+  release: a value `<= 0` falls back to the default and logs) and the auto-disposed HTTP budget
+  (`httpClientProvider` is `keepAlive`, so a batch shares one budget instead of getting a fresh one per batch).
+- **Four deferred, written down instead of silently skipped:** `java.get('bookName')` (needs Book/Chapter bound into
+  the JS variable table), `downloadUrls` / `relatedBooks` (rule-face, no corpus evidence), the "About" entry (it
+  belongs to 5.9's legal page - a menu row opening nothing is a dead end) and per-source cache purge (5.7 (2)).
+  All four in `docs/dev/roadmap.md` §3.7 with their triggers.
+- **ADR-0042:** cross-feature navigation goes through a presentation port (`AppNavigation`, bound by
+  `appProviderOverrides()`) because a `domain/` port cannot carry a `BuildContext`; `StateMessage` /
+  `FailureMessage` moved to `core/widgets/` since three features now share them.
+- **M10 is planned, not built.** `docs/dev/roadmap.md` §5.10 writes down both mechanisms of the upstream repository
+  (`BookSourceCheckRepository` batch check + `ui/book/source/debug` single-source console) and the four decisions that
+  must be made before implementation starts.
+- Gates: format 0 changed, analyze clean, **897** tests, `core` 1184/1184, `domain` 1892/1892, `data` 130/130,
+  generated files in sync.
+
+### PLAN.md is the plan plugin's state file now; the roadmap moved to `docs/dev/roadmap.md` (2026-10-21)
+
+- **Why the split.** The `plan` extension only knows its own format (`<!-- plan-bridge:state -->` + `## Milestones`
+  + `## Current`) and refuses to overwrite a foreign PLAN.md, while the roadmap's `5.x` acceptance, `G1`-`G7`
+  and 17 traps are referenced from ~90 places. So the root `PLAN.md` now holds **only milestone-level state**
+  (current milestone / goal / breakpoint, written through the `plan` tool) and everything a human reads moved to
+  `docs/dev/roadmap.md` **with the section numbers unchanged**, so existing references keep resolving.
+- **Milestones map 1:1 onto the roadmap's steps:** M1-M3 done (5.0 specs, 5.1 book source entry, 5.2 body cache),
+  M4-M9 open (5.3 reader … 5.9 platform + legal notice); M4 is current, one-line goal and breakpoint set.
+- **~90 references repointed** - `docs/README.md` (entry table, ownership matrix), `AGENTS.md` section 2,
+  `README.md`, `book-source.md`, `test-environment.md`, `tool/spot_check/`, and the doc comments in `lib/`,
+  `test/`, `integration_test/` (generated files came back through `build_runner`, never hand-edited).
+  **ADRs and CHANGELOG keep their historical `PLAN.md` section references**: they are immutable records, and
+  `roadmap.md`'s header states that `PLAN.md` §X means `docs/dev/roadmap.md` §X.
+- **`DECISIONS.md` is new** - the plugin's append-only `#N` log, for execution-time findings; formal decisions
+  still belong in `docs/dev/adr/`. Entry #1 records this split plus the migration trap: `git mv` left the
+  extension's own 16-line skeleton at the destination, so copy to `build/` first next time.
+- Gates: format 0 changed, analyze clean, **788** tests, `core` 1032/1032, `domain` 1857/1857, `data` 64/64,
+  generated files in sync.
+
+### PLAN.md keeps only what is still open (2026-10-14)
+
+- **The finished phases are one line each.** Phase 0-4 (section 3.2-3.5) collapsed from step tables plus dated
+  status prose into one line per phase that names its steps and its evidence. The section anchors were kept
+  deliberately: ~40 cross-references in `README.md`, `docs/`, the ADRs and code comments name 3.2-3.6, so they
+  still resolve. The status table in 3.1 is three rows and delegates the detail here.
+- **Section 3.7 shrank from 59 rows to 17.** Everything closed or withdrawn (the concurrency budget, M1 #15-#19,
+  rule variables not persisted, `ruleBookInfo.init`, b1b's rework and its real-source run, `{{…}}` + `##`,
+  JSONPath `]name`, the charset cache, `bookSourceType` 4, the `java.*` compat surface) is now only in this
+  file's history. The deliberately-left-alone differences stay as **one** row pointing at the notes in
+  `book-source.md` 3/4.2/6/11 and ADR-0029/0035, and every open row keeps one line: where it goes (5.3-5.8, b7)
+  or what would reopen it.
+- **The gate table folds G2b/G3/G4 into one achieved row** and the "which gate belongs to which phase" note is
+  two lines instead of a paragraph. No acceptance criterion was dropped; PLAN.md is 511 -> 283 lines.
+
 ### File import for book sources, and the two gaps a real export exposed (2026-10-14)
 
 - **A file can be picked directly.** The user asked for it, so ADR-0040 decision 9's file half moved

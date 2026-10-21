@@ -439,7 +439,7 @@ final class RuleEngine {
   /// A match that is a **list** contributes its elements: upstream reads the path as an
   /// `ArrayList<Any>` (`AnalyzeByJSonPath.kt:137`, `getList`), so a `bookList` of
   /// `$.info.Datas` yields one item per book rather than one item for the whole array. Real
-  /// JSON API sources are written that way — the `PLAN.md` 3.7 regression found it on 猫耳FM,
+  /// JSON API sources are written that way — the `docs/dev/roadmap.md` 3.7 regression found it on 猫耳FM,
   /// where `$.info.Datas` plus per-item `$.name` rules produced an empty book list before.
   Iterable<RuleScope> _jsonScopesOf(
     Object? value, {
@@ -1804,7 +1804,7 @@ final class RuleEngine {
   /// the same “no value” an unmatched selector gives (matrix #8). A **list** is expanded
   /// into its elements, which is what upstream does (`AnalyzeByJSonPath.kt:83-87`: `for
   /// (o in obj) result.add(o.toString())`), so `$.data.tags` hands over `a` and `b`
-  /// rather than one JSON text — confirmed against a real source by the `PLAN.md` 3.7
+  /// rather than one JSON text — confirmed against a real source by the `docs/dev/roadmap.md` 3.7
   /// regression. A **map** stays JSON text: upstream's Java `toString` of a map (`{a=1}`)
   /// is not reproducible and no rule can rely on it, so the lossless form is used and the
   /// difference stays registered (`book-source.md` §3, matrix #13).

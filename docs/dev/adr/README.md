@@ -63,3 +63,5 @@
 | [0039](0039-device-probe-per-slice-again.md) | 设备级探针回到**切片级双端**（代价前提已消失；环境阻塞走「写明 + 架构师补跑」） | Accepted（2026-10-13 架构师裁决；取代 0038） | 取代 0038 |
 | [0040](0040-book-source-import-contract.md) | Phase 5 的书源导入契约：合成 `id` 主键 + `(url, 指纹)` 唯一索引、重复导入幂等、32 MiB 体积上限、不扩 `ParseFailureKind`、5.1 不引入新依赖 | Accepted（2026-10-14 架构师裁决） | 本次新增 |
 | [0041](0041-phase5-feature-boundaries.md) | Phase 5 的 feature 边界：`reader` / `bookshelf` / `settings`，跨 feature 一律走「消费方端口 + 装配根绑定」，进度归 `bookshelf` | Accepted（2026-10-14 架构师裁决） | 本次新增 |
+| [0042](0042-cross-feature-navigation-and-shared-widgets.md) | 跨 feature 导航走 presentation 端口（`AppNavigation` 由装配根绑定）；共用的 `StateMessage` / `FailureMessage` 上移 `core/widgets/` | Accepted（2026-10-21，5.4 / 5.6 落地时确立） | 本次新增 |
+| [0043](0043-source-check-mechanism.md) | 书源测试机制：结果写回 `book_sources`（+ `comment` 列）、`checkKeyWord` 建模与「像规则」判据、`LongRunningTask` 平台端口、失败语义不动 `ParseFailureKind` | Accepted（2026-10-21，M10 规格前置，用户裁决四项） | 本次新增 |

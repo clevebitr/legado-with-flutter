@@ -38,7 +38,7 @@
 | `bookSourceGroup` | `group` | `String?` | M0 | — |
 | `bookSourceType` | `sourceType` | `BookSourceType` | M0 | 0 文本 / 1 音频 / 2 图片 / 3 文件 |
 | `enabled` | `isEnabled` | `bool` | M0 | 默认 `true` |
-| `header` | `headers` | `Map<String, String>?` | M0 | 原为 JSON 字符串，导入时解析；单个引号的宽松写法（GSON 接受）也解析；**写成规则**（`@js:` / `<js>`）尚未求值，导入时降级为无 header + warning（ADR-0040 §决策 6 的修订注记、`PLAN.md` §3.7） |
+| `header` | `headers` | `Map<String, String>?` | M0 | 原为 JSON 字符串，导入时解析；单个引号的宽松写法（GSON 接受）也解析；**写成规则**（`@js:` / `<js>`）尚未求值，导入时降级为无 header + warning（ADR-0040 §决策 6 的修订注记、`docs/dev/roadmap.md` §3.7） |
 | `searchUrl` | `searchUrl` | `String?` | M0 | 支持 `{{key}}` / `{{page}}` |
 | `exploreUrl` | `exploreUrl` | `String?` | **M1** | 发现页；两种形态（分类串 / 整字段 JS）、条目语义与回落规则**全部**见 §4.2（ADR-0035） |
 | `ruleSearch` | `searchRule` | `SearchRule` | M0 | 必填 |
@@ -55,7 +55,7 @@
 
 | 规则对象 | 字段 | 分期 |
 |---|---|---|
-| `SearchRule` | `bookList`、`name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl`、`updateTime` | M0（`updateTime` 为 M1） |
+| `SearchRule` | `bookList`、`name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl`、`updateTime`；`checkKeyWord` | M0（`updateTime` 为 M1；`checkKeyWord` 为 **5.10**） |
 | `ExploreRule` | 与 `SearchRule` 的九个列表字段**同形** + `updateTime`（上游 `BookListRule` 接口，`BookListRule.kt:6-18`；无 `checkKeyWord`） | M1 |
 | `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName`、`updateTime` | M0（`canReName`、`updateTime` 为 M1） |
 | `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
@@ -67,15 +67,17 @@
 
 > **列表类规则的「同形」约束（M1-b0 裁决，ADR-0035 §决策 1）：** `SearchRule` 与 `ExploreRule` 的九个
 > 列表字段由上游 `BookListRule` 接口固定，两者**必须同批**增减字段，不得只改一处；
-> 上游确实存在而本仓尚未建模的字段（`SearchRule.checkKeyWord`、`BookInfoRule.downloadUrls` /
+> 上游确实存在而本仓尚未建模的字段（`BookInfoRule.downloadUrls` /
 > `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay`）按「保留在 `extra` +
-> 去向登记」处理，清单与去向见 `PLAN.md` §3.7，不得在此处另开一份。
+> 去向登记」处理，清单与去向见 `docs/dev/roadmap.md` §3.7，不得在此处另开一份。
+> `SearchRule.checkKeyWord` **不在此列**：它属「校验 / 调试的默认关键词」，已随 5.10 建模
+> （判据与默认值见 ADR-0043 §决策 2）。
 >
 > **`updateTime` 出现在四处（上游事实）：** `SearchRule` / `ExploreRule`（列表项）、`BookInfoRule`（详情）、
 > `TocRule`（章节）。本仓四处**同批建模（M1-b1）**，值都是**展示用字符串**（规则结果原文，不做日期解析；
 > 章节侧可调用 `java.timeFormat`，见 §6）。**状态（M1-b1 已落地）：** 四处字段 + 承载实体
 > （`Book` / `BookInfo` / `Chapter`）已入库；展示方（列表 / 详情 / 目录 UI）归 Phase 5
-> （`PLAN.md` §3.7）。
+> （`docs/dev/roadmap.md` §3.7）。
 >
 > **`canReName` 的上游语义（2026-10-13 取证，照抄为有意行为）：** 上游只在
 > `BookInfo.kt:65` 判「`canReName` 规则字段非空白」+ 调用方开关（入口自己传 `canReName`，`WebBook.kt:235-238`），
@@ -167,7 +169,7 @@
 > 活源普查（319/25）保留为背景证据。
 
 > **#25–#27 为 2026-10-11 补录（回执 B3）：** 这三条语法此前只存在于上游实现里，本仓矩阵没有行，
-> 于是出现「引擎拒绝得对、账本却没记」的缺口。补录时**追加在表尾而不是插在中间**：`PLAN.md`
+> 于是出现「引擎拒绝得对、账本却没记」的缺口。补录时**追加在表尾而不是插在中间**：`docs/dev/roadmap.md`
 > 与 ADR-0014 都按 `#1–#14` / `#15–#19` / `#20–#24` 引用矩阵，插入会打乱既有编号
 > （与 `docs/README.md` §5 的 ID 稳定性同一原则）。上游证据：`AnalyzeRule.kt:497`（`###`）、
 > `AnalyzeByJSoup.kt` 的 `ElementsSingle` 注释（`[]`）、`AnalyzeByJSoup.kt:88` 的
@@ -273,7 +275,7 @@
 >   `java.timeFormat` 属 `updateTime`，仍按 §6 表的分期。
 >   **登记的实现差异：** 上游 `java.get` 还有 `bookName` / `title` 两个特例
 >   （`AnalyzeRule.kt:812-821`，取 Book / Chapter 的名字），Phase 5 之前本仓没有这两个实体，
->   它们按普通变量读（登记在 `PLAN.md` §3.7）。
+>   它们按普通变量读（登记在 `docs/dev/roadmap.md` §3.7）。
 > - **#18 `{{…}}`**：内层文本按上游 `isRule` 分流（`AnalyzeRule.kt:736-752`）：以
 >   `@` / `$.` / `$[` / `//` 开头就当**规则**求值（取首个值），否则**当 JS**求值（取单个标量，
 >   `null` / 无值都变空串）。在**搜索 / 发现 URL** 里只允许 JS，规则头按名报
@@ -302,7 +304,7 @@
 > 结果做 `StringEscapeUtils.unescapeHtml4`（`AnalyzeRule.kt:297-308`、`:362-366`），
 > `java.getString(rule, false)` 可关掉。本仓**不做**实体反转义。实际差异比看起来小：DOM 的文本 /
 > 属性提取本来就被 HTML 解析器解码过，真正不同的是 `html` / `all` 一类**原样**提取
-> （上游会把 `&lt;b&gt;` 还原成 `<b>`）。去向与触发条件登记在 `PLAN.md` §3.7；
+> （上游会把 `&lt;b&gt;` 还原成 `<b>`）。去向与触发条件登记在 `docs/dev/roadmap.md` §3.7；
 > `java.getString(rule, true)` 因此具名拒绝（ADR-0037 §决策 6）。
 
 > **状态列的 3.7 证据（2026-10-12）：** 全部 19 条 M0 行的状态列已由真实回归改为「已确认」，
@@ -415,7 +417,7 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 | `replaceRegex` | 正文的批量替换规则 | M0 |
 | `canReName` | 允许重命名书籍 | M1 |
 
-> **§4.1 的分页与净化语义（2026-10-12，随 `PLAN.md` 3.5 落地）：** 上表是原版语义；
+> **§4.1 的分页与净化语义（2026-10-12，随 `docs/dev/roadmap.md` 3.5 落地）：** 上表是原版语义；
 > 本仓实现到哪一步、以及与原版有意不同的地方，逐条记在这里（原来的「返回空即停止」太粗，
 > 分页要落到可测的行为）：
 >
@@ -456,14 +458,14 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 >   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
 >   （ADR-0026 §决策 2）。
 
-> **正文缓存（2026-10-14，`PLAN.md` 5.2）：** 一章的**成品正文**（分页已拼好、`replaceRegex` 已跑过）
+> **正文缓存（2026-10-14，`docs/dev/roadmap.md` 5.2）：** 一章的**成品正文**（分页已拼好、`replaceRegex` 已跑过）
 > 存进与 charset 缓存同一张 `cache_entries`，键复用 `CacheDao` 的稳定键（`ruleField` 固定为
 > `content`、`page` 固定为 1，键含**书源 ID**，所以两个书源发布同一章节 URL 也不会串味）；
 > TTL 的唯一出处是 `lib/features/book_source/domain/content_cache.dart` 的 `chapterCacheTtl`
 > （半天：覆盖一次阅读会话与当天回访，同时让被站点改过的章节一天内回来）。
 > **只缓存成功**：失败路径在写入之前就返回，一章的失败不会被永久粘住；
 > **失败面在适配器（`CacheDaoContentCache`）里被吸收**，端口因此是 total——丢一条缓存只值一次请求，
-> 绝不把章节变成失败（C-ERR-1、ADR-0033）。过期条目在**读**时即未命中，物理清理归 `PLAN.md` 5.7。
+> 绝不把章节变成失败（C-ERR-1、ADR-0033）。过期条目在**读**时即未命中，物理清理归 `docs/dev/roadmap.md` 5.7。
 > 命中时 `FetchContent` 连书源限速都不进预算，因为这次操作一个请求都不发。
 
 ### 4.2 发现页（`exploreUrl` 与 `ruleExplore`）
@@ -494,7 +496,7 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 >
 > - **没有 `exploreUrl`（或全空白）的书源答空列表、不是失败**：那不是错误书源，而是没有发现页；
 >   分类 UI 的空态就是它。只有**声明了却读不出来**的 `exploreUrl` 才是 `parseFailed`。
->   （本节此前未规定这一条，属规格缺口，已在 `PLAN.md` §3.7 登记待确认。）
+>   （本节此前未规定这一条，属规格缺口，已在 `docs/dev/roadmap.md` §3.7 登记待确认。）
 > - **分类条目 URL 按 §4 解析成绝对地址**（基准 = 书源 URL，ADR-0035 §决策 4 的 `baseUrl`）：
 >   条目写 `/list/{{page}}.html` 是常态；相对 `searchUrl` 走同一条规则（此前的隐性缺口）。
 > - **`<js>` 未以 `</js>` 收尾** → 该字段 `parseFailed`，`rulePath` 标 `exploreUrl:js-not-closed`，
@@ -563,7 +565,7 @@ shift-jis / euc-jp / euc-kr / gbk；`charset 2.0.1` 未注册任何 Big5 编解�
 > - **不可达（依赖行为所致）**：`shift-jis` / `euc-jp` 的**严格**解码在字节不完整时抛的是
 >   `RangeError`（`Error`）而不是 `FormatException`（`charset 2.0.1`，`shift_jis.dart:26`），
 >   宽容分支根本到不了，而且该异常会越过 `ParseResult` 契约逃到调用方 —— 按 ADR-0022 不得捕获
->   `Error`，故登记为待排期缺口（`PLAN.md` §3.7）；`euc-kr` 的解码器丢弃非法字节而不是失败，
+>   `Error`，故登记为待排期缺口（`docs/dev/roadmap.md` §3.7）；`euc-kr` 的解码器丢弃非法字节而不是失败，
 >   没有可宽容的失败点。
 > - **刻意排除（本仓策略）**：`us-ascii` / `utf-16` / `utf-32` 有宽容入口但**不用**——
 >   声明了它们却解不开，说明**声明本身错了**，宽容只会把整页变成垃圾（ADR-0031 §决策 1 的
@@ -711,7 +713,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   `FastDateFormat` 默认取 JVM 默认时区）。同为 worker 内同步、**不计**本表的调用额度。
 >   **状态（M1-b1 已落地）：** 实现是 `core/js/js_bindings.dart` 的 `formatJsTimestamp` +
 >   纯格式化 `formatTimestamp`；设备侧由 `integration_test/js_bridge_test.dart` 的两条探针盯住
->   （Windows 已实测，Android 那次跑受构建环境网络阻塞，登记在 `PLAN.md` §3.7）。
+>   （Windows 已实测，Android 那次跑受构建环境网络阻塞，登记在 `docs/dev/roadmap.md` §3.7）。
 >   **两个入参边界（实现可见，归本表）：** ① 小数按**向零截断**（等价于上一次 Java `(long)`
 >   对 JS 数字的转换；毫秒时间戳本不该带小数，所以这个选择不会遮蔽错误值）；
 >   ② 超出 Dart `DateTime` 精度范围的入参（`|ms| > 8.64e15`，即 ±1 亿天）**在转换前就判失败**
@@ -719,12 +721,12 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   ADR-0022 / C-ERR-2 不允许本层捕获），所以只能提前挡；结果是该次调用失败（`ok:false` →
 >   `js:error`），不是崩溃也不是钳位。
 >   `timeFormatUTC(time, format, sh)`（同族，带时区偏移与自定义 pattern）**不在 M1**，
->   登记去向见 `PLAN.md` §3.7。
+>   登记去向见 `docs/dev/roadmap.md` §3.7。
 > - **致命与可吞的区别：** `http.*` 的传输失败只拒绝那次调用；`parse.*` 的边界与额度是**判决**
 >   ——判决先记下、等脚本停下来的那条结果回来时才交给调用方（脚本还在跑时不能把 worker 交给下一个
 >   job：同一运行时上跑两份求值会共享 `globalThis` 与作业队列），硬预算仍是「脚本永远不停」的兜底。
 >
-> **3.3 落地状态与两处边界（2026-10-12，随 `PLAN.md` 3.3 落地）：**
+> **3.3 落地状态与两处边界（2026-10-12，随 `docs/dev/roadmap.md` 3.3 落地）：**
 >
 > - **本阶段落了什么：** 常驻 worker isolate + 单复用运行时的桥（`core/js/`）：引擎级 5 秒中断与
 >   32MB 堆上限由构造参数传入；同步绑定 `log.*`（转发到 `core/logging`，自动附字段路径）与
@@ -804,7 +806,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | 章节正文批量下载 | 必须串行或有限并发，禁止对单一域名无限并发 | M0 |
 | 缓存键 | `书源 ID + 规则字段 + URL + 页码` 的稳定哈希，必须带 TTL（C-NET-6） | M0 |
 
-> **实现点与排队语义（2026-10-12，随 `PLAN.md` 3.8 落地）：** 预算在**请求层唯一实现**——
+> **实现点与排队语义（2026-10-12，随 `docs/dev/roadmap.md` 3.8 落地）：** 预算在**请求层唯一实现**——
 > `DioHttpClient` 每次真正上线的请求都经 `RequestLimiter`，键 = `sourceId`（书源 URL），无书源
 > 上下文时回退到 URL 主机，因此「章节正文批量下载」（Phase 5）只要走 `HttpClient` 就自动受限；
 > 章节正文的分页本身是**串行**的（`FetchContent` 逐页取）。超限的调用**排队等待**而不失败
@@ -885,7 +887,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | 语法单测 | §3 矩阵中每个 **M0** 语法至少 1 条单测；M1 语法在实现时同步补 |
 | 前缀大小写 | `@css:`/`@CSS:`、`@json:`/`@Json:`、`@js:`/`@JS:` 各 1 条 |
 | 失败单测 | §7 表中每个 `ParseFailureKind` 至少 1 条单测 |
-| 链路测试 | 至少 2 个书源完成「搜索 → 详情 → 目录 → 正文」离线回放（已达成 **G2a 离线回放**：1 个 HTML 默认规则源 + 1 个 JSON 接口源；其中 JSON 源的 2 条 URL 规则按 `test/fixtures/json/README.md` 改写，因此**不**等于真实站点回放——只有真实抓取页面 / 真实链路才能把 §3 矩阵的状态列改为「已确认」，归 `PLAN.md` §3.4 的 3.7） |
+| 链路测试 | 至少 2 个书源完成「搜索 → 详情 → 目录 → 正文」离线回放（已达成 **G2a 离线回放**：1 个 HTML 默认规则源 + 1 个 JSON 接口源；其中 JSON 源的 2 条 URL 规则按 `test/fixtures/json/README.md` 改写，因此**不**等于真实站点回放——只有真实抓取页面 / 真实链路才能把 §3 矩阵的状态列改为「已确认」，归 `docs/dev/roadmap.md` §3.4 的 3.7） |
 | M2 拒绝测试 | `@xpath:` 与 `:` 正则规则各 1 条，断言返回 `unsupportedRule` |
 | 真实书源验证 | 每个 M0/M1 语法行需在 PR 中附验证记录，并把状态列改为「已确认」 |
 | 网络隔离 | 单元测试禁止真实联网；`HttpClient` 必须可注入替身（C-NET-8） |

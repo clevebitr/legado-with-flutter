@@ -1,0 +1,36 @@
+import 'package:flutter/material.dart';
+
+/// The app-level destinations any page may open (ADR-0042).
+///
+/// Cross-feature navigation cannot be a direct import: `features/A` must not import
+/// `features/B` (C-ARCH-2), and ADR-0041 的端口方案只覆盖 `domain/`（端口收发原语与实体），
+/// while opening a page needs a [BuildContext]. This is therefore the presentation-side twin of
+/// that mechanism: the **consumer** declares the port, the composition root binds it, and the
+/// port carries nothing but a context — never a route object of another feature.
+///
+/// The default implementation is an unbound no-op that logs a warning (never throws), so a
+/// forgotten binding shows up as an unresponsive button plus a log line instead of a crash
+/// (ADR-0041 §决策 2 的同一条理由).
+abstract interface class AppNavigation {
+  /// Opens the shelf page.
+  void openBookshelf(BuildContext context);
+
+  /// Opens the settings page.
+  void openSettings(BuildContext context);
+}
+
+/// The answer when nothing bound [AppNavigation]: log and do nothing.
+final class UnboundAppNavigation implements AppNavigation {
+  /// Creates the unbound port; `_warn` receives one line per missed navigation.
+  const UnboundAppNavigation({required this._warn});
+
+  final void Function(String message) _warn;
+
+  @override
+  void openBookshelf(BuildContext context) =>
+      _warn('No AppNavigation is bound: the bookshelf entry does nothing.');
+
+  @override
+  void openSettings(BuildContext context) =>
+      _warn('No AppNavigation is bound: the settings entry does nothing.');
+}

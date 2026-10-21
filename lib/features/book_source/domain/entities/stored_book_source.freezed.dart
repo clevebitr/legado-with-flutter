@@ -18,7 +18,7 @@ mixin _$StoredBookSource {
 /// The synthetic primary key; stable across re-imports, which is what lets the UI hold on
 /// to "the current source" (ADR-0040 §决策 1).
  int get id;/// The parsed book source, with [BookSource.isEnabled] already copied onto it and the row's
-/// own `customOrder` alongside (the model has no such field; `PLAN.md` 5.5 owns its display).
+/// own `customOrder` alongside (the model has no such field; `docs/dev/roadmap.md` 5.5 owns its display).
  BookSource get source;/// Whether the source takes part in search and explore.
  bool get isEnabled;/// The manual sort order the user gave it.
  int get customOrder;/// When the row was first imported.
@@ -239,7 +239,7 @@ class _StoredBookSource implements StoredBookSource {
 /// to "the current source" (ADR-0040 §决策 1).
 @override final  int id;
 /// The parsed book source, with [BookSource.isEnabled] already copied onto it and the row's
-/// own `customOrder` alongside (the model has no such field; `PLAN.md` 5.5 owns its display).
+/// own `customOrder` alongside (the model has no such field; `docs/dev/roadmap.md` 5.5 owns its display).
 @override final  BookSource source;
 /// Whether the source takes part in search and explore.
 @override final  bool isEnabled;

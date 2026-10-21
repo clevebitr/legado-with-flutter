@@ -8,7 +8,7 @@ import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
 
-/// Lists the imported book sources and manages the selected one (`PLAN.md` 5.1).
+/// Lists the imported book sources and manages the selected one (`docs/dev/roadmap.md` 5.1).
 ///
 /// Accessibility (C-UI-7): the import action is an [IconButton] with a tooltip, the "current"
 /// marker and the per-row actions carry their own labels, and every row is a [ListTile], whose
@@ -32,6 +32,14 @@ class BookSourceListPage extends ConsumerWidget {
         title: Text(l10n.bookSourceListTitle),
         backgroundColor: tokens.colors.surface,
         actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.fact_check_outlined),
+            tooltip: l10n.bookSourceCheckTitle,
+            onPressed: () => pushBookSourceRoute(
+              context,
+              const BookSourceRoute.checkSources(),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             tooltip: l10n.actionImport,

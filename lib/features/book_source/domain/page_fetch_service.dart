@@ -68,7 +68,7 @@ final class FetchedPage {
 /// [stoppedBy] is `null` when the walk ended on its own — the paging rule stopped
 /// naming pages, or every further page had already been read. Otherwise a **later**
 /// page could not be fetched and [pages] holds the prefix that was read; the two
-/// stages of `PLAN.md` 3.5 interpret that differently, because
+/// stages of `docs/dev/roadmap.md` 3.5 interpret that differently, because
 /// `docs/dev/book-source.md` §9 tolerates a missing table-of-contents page but not a
 /// truncated chapter body.
 final class PageWalk {
@@ -84,7 +84,7 @@ final class PageWalk {
 
 /// Fetches one page of a book source and reads rules from it.
 ///
-/// The four use cases of `PLAN.md` 2.4 share this collaborator so that the failure
+/// The four use cases of `docs/dev/roadmap.md` 2.4 share this collaborator so that the failure
 /// rules of `docs/dev/book-source.md` §7 live in exactly one place:
 ///
 /// * a failure is always a [ParseResult], never an exception thrown at the UI

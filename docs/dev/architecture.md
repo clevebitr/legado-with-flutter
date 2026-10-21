@@ -23,9 +23,10 @@ lib/
 │   ├── router/                   # 路由机制（RouteSettings → 页面）与唯一 push 入口；页面表见 §6
 │   ├── storage/                  # Drift 数据库、DAO、键值存储封装
 │   ├── theme/                    # M3ETheme 安装、动态取色接线
-│   └── utils/                    # 纯函数工具（禁止 IO，禁止依赖 Flutter）
+│   ├── utils/                    # 纯函数工具（禁止 IO，禁止依赖 Flutter）
+│   └── widgets/                  # 多个 feature 共用的无业务语义 Widget（ADR-0042）
 ├── features/
-│   └── <feature>/                # book_source（书源 / 搜索 / 发现 / 详情）；Phase 5 新增
+│   └── <feature>/                # book_source（书源 / 搜索 / 发现 / 详情 / 校验 / 调试）；Phase 5 新增
 │                                 #   reader / bookshelf / settings（边界见 ADR-0041）
 │       ├── data/                 # DTO(freezed) + DataSource + RepositoryImpl
 │       ├── domain/               # Entity + Repository 接口 + UseCase
@@ -63,6 +64,10 @@ features/<f>/presentation ──► features/<f>/domain ──► features/<f>/d
   （返回 `ParseFailure(unsupportedRule)` + warning，不抛）。端口只收发原语与**消费方自己的**实体；
   跨 feature 的实体映射同样只发生在装配根的适配器里（§3 的「Mapper 在 `data/`」针对的是
   feature 内的 DTO ↔ Entity）。
+- **跨 feature 导航是这条规则的第二种形态（ADR-0042）：** `domain/` 端口不能携带 `BuildContext`
+  （C-ARCH-7），所以页面间的跳转声明在 `core/router/app_navigation.dart` 的 `AppNavigation` 上，
+  由装配根 `appProviderOverrides()` 绑定到各 feature 的 `push…Route`；端口只收 `BuildContext` 与原语，
+  默认实现是记一条 warning 的 no-op。多个 feature 共用的无业务语义 Widget 放 `core/widgets/`。
 
 ---
 
@@ -162,6 +167,10 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | 路径必填 | `rulePath` 使用「书源字段 + 规则片段」描述，如 `searchRule.list`、`contentRule.content`（C-SRC-8） |
 | 穷尽匹配 | 消费方必须 `switch` 穷尽两个分支，禁止 `is` 判断后回退到 `null` |
 
+> **不新增 kind 的既有裁决：** 书源校验的阶段失败（搜索失败 / 目录为空 / 正文为空 / 超时 / JS 失效）
+> 属于**归类**而不是新的失败类型，因此仍在 `ParseResult<SourceCheckReport>` 的报告内部表达，
+> `ParseFailureKind` 保持这 9 个值（ADR-0043 §决策 4）。需要新 kind 时先改本节并写 ADR。
+
 `ParseResult` 的扩展方法（`whenSuccess`、`dataOrNull`）放在同文件，保持 `core/error/` 自洽。
 
 ---
@@ -187,8 +196,10 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | `BookDetailRoute`、`ExploreRoute` | `BookDetailPage`、`ExplorePage` | `book_source` | 已落地 |
 | `BookSourceListRoute`、`BookSourceImportRoute` | 书源列表页、导入页 | `book_source` | 5.1 |
 | `ReaderRoute` | `ReaderPage` | `reader` | 5.3（从 `book_source` **迁入**） |
-| `BookshelfRoute` | 书架页 | `bookshelf` | 5.4 |
-| `SettingsRoute` | 设置页 | `settings` | 5.6 |
+| `BookshelfRoute` | `BookshelfPage` | `bookshelf` | ✅ 5.4（2026-10-21） |
+| `SettingsRoute` | `SettingsPage` | `settings` | ✅ 5.6（2026-10-21） |
+| `BookSourceCheckRoute` | `BookSourceCheckPage` | `book_source` | ✅ 5.10（2026-10-21） |
+| `BookSourceDebugRoute` | `BookSourceDebugPage` | `book_source` | ✅ 5.10（2026-10-21） |
 
 > 页面与路由的**归属**由 **ADR-0041** 裁决（2026-10-14 已接受）：`ReaderRoute` / `ReaderPage` 从
 > `book_source/presentation/` 迁入 `reader/`（5.3），三个新 feature 的路由类型各自落在自己的

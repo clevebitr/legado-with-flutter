@@ -1,7 +1,7 @@
 // coverage:ignore-file
 import 'package:drift/drift.dart';
 
-/// The book sources the user imported (`PLAN.md` 5.1, ADR-0040).
+/// The book sources the user imported (`docs/dev/roadmap.md` 5.1, ADR-0040).
 ///
 /// 本文件是 **drift 代码生成器的输入**：列 getter 与 `uniqueKeys` 只在生成期被分析，
 /// 运行时不可达（drift 源码 `lib/src/dsl/columns.dart` 明确写着这些方法
@@ -31,7 +31,7 @@ class BookSources extends Table {
 
   /// The entry exactly as imported, re-encoded from the raw JSON map (ADR-0040 §决策 4).
   ///
-  /// It is the export source of `PLAN.md` 5.8 and the only place unknown keys survive
+  /// It is the export source of `docs/dev/roadmap.md` 5.8 and the only place unknown keys survive
   /// byte-for-byte; the projection columns below exist for listing and sorting only.
   TextColumn get payload => text()();
 
@@ -41,25 +41,32 @@ class BookSources extends Table {
   /// `bookSourceGroup`, projected for the list.
   TextColumn get groupName => text().nullable()();
 
+  /// `bookSourceComment`, the note the batch check writes back (`docs/dev/roadmap.md` §5.10).
+  ///
+  /// It is a **projection column like [groupName]**, not part of [payload]: the check rewrites it on
+  /// every run (the previous `// Error: ` block is cleared first), and ADR-0040 §决策 4 keeps
+  /// [payload] byte-for-byte so `docs/dev/roadmap.md` 5.8 can export what was imported (ADR-0043 §决策 1).
+  TextColumn get comment => text().nullable()();
+
   /// `bookSourceType`, projected for the list.
   IntColumn get sourceType => integer().withDefault(const Constant(0))();
 
-  /// User state: whether the source takes part in search / explore (`PLAN.md` 5.1).
+  /// User state: whether the source takes part in search / explore (`docs/dev/roadmap.md` 5.1).
   ///
   /// Import initialises it for a new row and **never** touches it afterwards
   /// (ADR-0040 §决策 3).
   BoolColumn get isEnabled => boolean().withDefault(const Constant(true))();
 
-  /// User state: the manual sort order (`PLAN.md` 5.5); import never touches it either.
+  /// User state: the manual sort order (`docs/dev/roadmap.md` 5.5); import never touches it either.
   IntColumn get customOrder => integer().withDefault(const Constant(0))();
 
-  /// `weight`, projected for sorting in `PLAN.md` 5.5.
+  /// `weight`, projected for sorting in `docs/dev/roadmap.md` 5.5.
   IntColumn get weight => integer().withDefault(const Constant(0))();
 
-  /// `lastUpdateTime`, projected for display in `PLAN.md` 5.5.
+  /// `lastUpdateTime`, projected for display in `docs/dev/roadmap.md` 5.5.
   IntColumn get lastUpdateTime => integer().nullable()();
 
-  /// `respondTime`, projected for display in `PLAN.md` 5.5.
+  /// `respondTime`, projected for display in `docs/dev/roadmap.md` 5.5.
   IntColumn get respondTime => integer().nullable()();
 
   /// When the row was created.

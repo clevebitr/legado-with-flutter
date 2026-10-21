@@ -5,7 +5,9 @@ import 'package:flutter_reader/core/storage/book_source_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../support/fake_log_printer.dart';
@@ -246,6 +248,103 @@ void main() {
       expect(
         printer.events.last.message.toString(),
         contains('no longer parses'),
+      );
+    });
+
+    test(
+      'applyCheckReport_givenInvalidGroups_writesGroupsNoteAndRespondTime',
+      () async {
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+
+        final bool applied = await repository.applyCheckReport(
+          id: id,
+          report: const SourceCheckReport(
+            status: SourceCheckStatus.failed,
+            invalidGroups: <String>[searchInvalidGroup, searchTocInvalidGroup],
+            errorComment: '搜索失效, 搜索目录失效',
+            elapsedMillis: 1234,
+          ),
+        );
+
+        expect(applied, isTrue);
+        final BookSourceRow row = (await dao.findById(id))!;
+        expect(row.groupName, '搜索失效, 搜索目录失效');
+        expect(row.comment, '// Error: 搜索失效, 搜索目录失效');
+        expect(row.respondTime, 1234);
+      },
+    );
+
+    test(
+      'applyCheckReport_givenASecondHealthyRun_clearsThePreviousVerdict',
+      () async {
+        // ADR-0043 §后果：重新校验必须先清掉上次的「失效」分组与错误注释，否则修好的源
+        // 会永远显示成坏的。
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+        await repository.applyCheckReport(
+          id: id,
+          report: const SourceCheckReport(
+            status: SourceCheckStatus.failed,
+            invalidGroups: <String>[searchInvalidGroup],
+            errorComment: '搜索失效',
+            elapsedMillis: 1234,
+          ),
+        );
+
+        await repository.applyCheckReport(
+          id: id,
+          report: const SourceCheckReport(
+            status: SourceCheckStatus.succeeded,
+            elapsedMillis: 900,
+          ),
+        );
+
+        final BookSourceRow row = (await dao.findById(id))!;
+        expect(row.groupName, isNull);
+        expect(row.comment, isNull);
+        expect(row.respondTime, 900);
+      },
+    );
+
+    test('applyCheckReport_givenTheUsersOwnGroup_keepsIt', () async {
+      await repository.saveAll(<Map<String, Object?>>[_entry()]);
+      final int id = (await repository.getAll()).single.id;
+      await dao.writeCheckState(
+        id: id,
+        groupName: '精选, 搜索失效',
+        comment: '我自己的说明\n\n// Error: 搜索失效',
+        respondTime: 5,
+      );
+
+      await repository.applyCheckReport(
+        id: id,
+        report: const SourceCheckReport(
+          status: SourceCheckStatus.succeeded,
+          elapsedMillis: 42,
+        ),
+      );
+
+      final BookSourceRow row = (await dao.findById(id))!;
+      expect(row.groupName, '精选');
+      expect(row.comment, '我自己的说明');
+      expect(row.respondTime, 42);
+    });
+
+    test('applyCheckReport_givenADeletedRow_answersFalse', () async {
+      expect(
+        await repository.applyCheckReport(
+          id: 404,
+          report: const SourceCheckReport(
+            status: SourceCheckStatus.succeeded,
+            elapsedMillis: 1,
+          ),
+        ),
+        isFalse,
+      );
+      expect(
+        printer.events.last.message.toString(),
+        contains('no row to land on'),
       );
     });
 

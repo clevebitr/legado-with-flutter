@@ -13,21 +13,25 @@ import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
+import 'package:flutter_reader/features/bookshelf/di.dart';
+import 'package:flutter_reader/features/settings/di.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import 'fake_book_source_repository.dart';
+import 'fake_bookshelf_repository.dart';
 import 'fake_content_cache.dart';
 import 'fake_http_client.dart';
 import 'fake_log_printer.dart';
+import 'fake_settings_repository.dart';
 
 /// The offline corpus of `docs/dev/book-source.md` §10, wired for widget tests.
 ///
 /// The pages are driven through the **production chain** (notifier → use case →
 /// `renderUrlTemplate` → `HttpClient` → `RuleEngine`) with a fake client, which is
-/// what `PLAN.md` §6 trap #1 asks for: a widget test that passes because the page
+/// what `docs/dev/roadmap.md` §6 trap #1 asks for: a widget test that passes because the page
 /// renders must still exercise the real pipeline.
 const String corpusSearchUrl =
     'https://example-novel.test/search.php?q=%E5%89%91%E6%9D%A5';
@@ -133,7 +137,7 @@ Future<void> pumpBookSourcePage(
 }
 
 /// Pumps a source-management [page] (the source list, the import screen) against an in-memory
-/// repository (`PLAN.md` 5.1).
+/// repository (`docs/dev/roadmap.md` 5.1).
 ///
 /// The database is what `testing.md` §4 replaces with a double: 5.1's screens talk to
 /// `BookSourceRepository`, so overriding the port is enough to drive them without Drift.
@@ -156,6 +160,104 @@ Future<void> pumpSourceManagementPage(
         bookSourceFilePickerProvider.overrideWithValue(
           picker ?? const UnsupportedBookSourceFilePicker(),
         ),
+      ],
+      child: MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: buildReaderTheme(fallbackLightColorScheme()),
+        home: page,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Pumps one of the two source consoles (batch check / single-source debug) and hands back its
+/// container, so a test can stop a run in the middle (`docs/dev/roadmap.md` 5.10).
+///
+/// Both pages run the **real** chain — notifier → use case → `HttpClient` → `RuleEngine` — so the
+/// overrides are the same ports every other page test replaces: the repository, the client, the
+/// body cache (the check reads a chapter) and the logger.
+Future<ProviderContainer> pumpSourceConsolePage(
+  WidgetTester tester, {
+  required Widget page,
+  required FakeBookSourceRepository repository,
+  required FakeHttpClient http,
+}) async {
+  _fixViewSize(tester);
+  final ProviderContainer container = ProviderContainer(
+    overrides: <Override>[
+      bookSourceRepositoryProvider.overrideWithValue(repository),
+      httpClientProvider.overrideWithValue(http),
+      contentCacheProvider.overrideWithValue(FakeContentCache()),
+      appLoggerProvider.overrideWithValue(_logger()),
+    ],
+  );
+  addTearDown(container.dispose);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: buildReaderTheme(fallbackLightColorScheme()),
+        home: page,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  return container;
+}
+
+/// Pumps the shelf page against an in-memory repository (`docs/dev/roadmap.md` 5.4).
+///
+/// The shelf talks to `BookshelfRepository`, so overriding the port is enough: no Drift, no
+/// platform channel (`docs/dev/testing.md` §4).
+Future<void> pumpShelfPage(
+  WidgetTester tester, {
+  required Widget page,
+  required FakeBookshelfRepository repository,
+}) async {
+  _fixViewSize(tester);
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: <Override>[
+        bookshelfRepositoryProvider.overrideWithValue(repository),
+        appLoggerProvider.overrideWithValue(_logger()),
+      ],
+      child: MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: buildReaderTheme(fallbackLightColorScheme()),
+        home: page,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Pumps the settings page against in-memory settings and cache doubles
+/// (`docs/dev/roadmap.md` 5.6).
+Future<void> pumpSettingsPage(
+  WidgetTester tester, {
+  required Widget page,
+  required FakeSettingsRepository repository,
+  required FakeCachePurger purger,
+}) async {
+  _fixViewSize(tester);
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: <Override>[
+        settingsRepositoryProvider.overrideWith((Ref ref) async => repository),
+        cachePurgerProvider.overrideWithValue(purger),
+        appLoggerProvider.overrideWithValue(_logger()),
       ],
       child: MaterialApp(
         locale: const Locale('en'),

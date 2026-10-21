@@ -5,9 +5,9 @@ import 'package:flutter_reader/features/book_source/domain/page_fetch_service.da
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
-/// Reads the table of contents of one book (`PLAN.md` 2.4, `ruleToc`).
+/// Reads the table of contents of one book (`docs/dev/roadmap.md` 2.4, `ruleToc`).
 ///
-/// Paging follows the source's `nextTocUrl` rule (`PLAN.md` 3.5): the requested page
+/// Paging follows the source's `nextTocUrl` rule (`docs/dev/roadmap.md` 3.5): the requested page
 /// and every page the rule names are read, in order, bounded by `book-source.md` §9.
 final class FetchToc {
   /// Creates the use case.

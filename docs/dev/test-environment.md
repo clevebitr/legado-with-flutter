@@ -12,7 +12,7 @@
 | 目标 | 状态 | 说明 |
 |---|---|---|
 | 主机侧单元 / Widget 测试 | ✅ 已跑通 | `flutter test --coverage` 全部用例通过，`tool/check_coverage.dart` 退出码 0。用例计数与分层覆盖率只在 §7 的实测证据表里出现一次（该计数随每个切片增长，以**最近一次运行**为准；阈值与判定归 `docs/dev/testing.md` §2） |
-| **执行时点** | — | **切片级：Windows 与 Android 各实跑一次**（2026-10-13 实测：Windows 108 s、Android 163 s，含模拟器冷启动）；**阶段出口：双端全量**（`PLAN.md` §4 的 G7）。Android 因**环境**失败时可以降级为「Windows 实跑 + 写明环境阻塞」，由架构师在下一个切片前补跑——**不得**写成通过。改了 `lib/core/platform/**`、原生工程或 `integration_test/` 的切片必须在改动的那个平台实跑。降级路径、重开条件与理由归 **ADR-0039**，本节不复述；命令见 §3，证据写 §7 |
+| **执行时点** | — | **切片级：Windows 与 Android 各实跑一次**（2026-10-13 实测：Windows 108 s、Android 163 s，含模拟器冷启动）；**阶段出口：双端全量**（`docs/dev/roadmap.md` §4 的 G7）。Android 因**环境**失败时可以降级为「Windows 实跑 + 写明环境阻塞」，由架构师在下一个切片前补跑——**不得**写成通过。改了 `lib/core/platform/**`、原生工程或 `integration_test/` 的切片必须在改动的那个平台实跑。降级路径、重开条件与理由归 **ADR-0039**，本节不复述；命令见 §3，证据写 §7 |
 | Windows 桌面设备级用例 | ✅ 已跑通 | `integration_test/` 两个用例文件在 `-d windows` 全部通过 |
 | Android 模拟器设备级用例 | ✅ 已跑通 | AVD `Medium_Phone`（API 37）上两个用例文件全部通过，含文件型 Drift 数据库 |
 | iOS | ❌ **未覆盖** | 本机无 macOS / Xcode，条件不具备；iOS 行为仍按 `docs/dev/platform.md` §6 人工确认 |
@@ -91,7 +91,7 @@ Windows 与 Android 两侧都已实测通过。
 **`js_bridge_test.dart` 同理：** `lib/core/js/quickjs_worker.dart` 需要
 `flutter_qjs_next` 的原生库，宿主 VM 加载不了，因此它也在 allowlist 里（第二类），
 而 `integration_test/js_bridge_test.dart` 是它唯一的自动化验证入口——ADR-0029 §后果 明确
-要求 3.3 落地时补上这个集成探针（`PLAN.md` §6 陷阱 #1：「构建成功」对 JS 路径毫无证明力）。
+要求 3.3 落地时补上这个集成探针（`docs/dev/roadmap.md` §6 陷阱 #1：「构建成功」对 JS 路径毫无证明力）。
 
 **规范依据：** 设备级集成测试是独立的一层，其分层、位置与是否进 CI 由
 `docs/dev/testing.md` §3 与 C-TEST-4 定义（ADR-0017 §决策 5）；本文档只负责“怎么跑”。
@@ -198,6 +198,8 @@ Windows 与 Android 两侧都已实测通过。
 | **P5-2 Android 设备级** | `pwsh -File tool/test/run_android.ps1` | 模拟器 `Medium_Phone`（含冷启动）3 个用例文件全过（`js_bridge` **24/24**）；退出码 0，**164 s**；跑完按 PR #34 的策略清理了本轮快照 |
 
 | **书源文件导入（2026-10-14）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **788** 用例全过；覆盖率退出码 0（`core` 1032/1032、`domain` 1857/1857、`data` 64/64，均 100%）；设备级 **Windows 93 s / Android 158 s**，各 3 文件全过、`js_bridge` 24/24、退出码 0。**新增原生插件 `file_selector`**（平台对话框），因此这一轮的双端实跑也是它的构建验证 |
+
+| **M10 书源测试机制（2026-10-21）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1003** 用例全过；覆盖率退出码 0（`core` 1219/1219、`domain` 2168/2168、`data` 142/142，均 100%）；设备级 **Windows 93 s / Android 188 s**（含模拟器冷启动），各 3 文件全过（`js_bridge` 24/24、`on_disk_database` 3/3 —— 其中 `bookSourceDao_…persistsTheImportedSource` 新增了 v4 的 `comment` / `groupName` / `respondTime` 真实写入），退出码 0。**`lib/core/platform/` 与 `MainActivity.kt` 都改了**（`LongRunningTask` + `WAKE_LOCK`），所以这一轮的双端实跑同时是它的构建验证 |
 
 > Android 补跑命令：`pwsh -File tool/test/run_android.ps1`（`Medium_Phone` 自动启停；需要网络，因 `flutter build apk` 的 native assets 要下载 `libsqlite3.arm.android.so`，见 §6 与本表旧记录）。
 >

@@ -24,7 +24,7 @@ part 'js_bridge_provider.g.dart';
 /// §8) as the page that carried the rule.
 ///
 /// The provider is autoDispose: the budget dies with the scope, so one operation's
-/// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
+/// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
 @riverpod
 JsBridge jsBridge(Ref ref) {
   final JsBridge bridge = QuickJsWorkerBridge(

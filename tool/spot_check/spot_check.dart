@@ -1,7 +1,7 @@
 // G2b spot-check: run one **real** book source through the production chain against
 // the live site it points at, and print what each stage produced.
 //
-// Why this exists: `PLAN.md` §3.4 step 3 asks for a manual live run **before** the JS
+// Why this exists: `docs/dev/roadmap.md` §3.4 step 3 asks for a manual live run **before** the JS
 // bridge is built, so the selectors this repository implements (`book-source.md` §3
 // matrix, in particular #12 `@css:`) are checked against real HTML rather than only
 // against the offline corpus. `docs/dev/testing.md` §1 forbids the network in tests,
@@ -62,12 +62,12 @@ const int _sampleLength = 60;
 /// Rule flags a later phase of `book-source.md` §3 owns; a source that uses one of
 /// them cannot be checked before that phase lands.
 ///
-/// `@js:` is **not** in the list any more: matrix #14 landed with `PLAN.md` 3.4, so a
+/// `@js:` is **not** in the list any more: matrix #14 landed with `docs/dev/roadmap.md` 3.4, so a
 /// value-rule script is evaluable today. It is handled separately below, because it is
 /// only supported outside **list rules** (`bookList` / `chapterList`, whose「JS 返回一列
 /// 元素」 contract does not exist yet).
 ///
-/// `@put:` / `@get:` left the list with the M1 grammar slice (matrix #16, `PLAN.md` 3.4 / b0),
+/// `@put:` / `@get:` left the list with the M1 grammar slice (matrix #16, `docs/dev/roadmap.md` 3.4 / b0),
 /// `{{…}}` is no longer rejected wholesale below either (matrix #18, same slice), and `@@`
 /// **left the list with G4**: matrix #15 has been implemented since that slice, so only a
 /// **misplaced** `@@` — the engine's `unsupported:@@` — is rejected now
@@ -226,7 +226,7 @@ BookSource _loadSource(File file, {String? name}) {
   return BookSource.fromLegadoJson(entry);
 }
 
-/// Runs the four stages of `PLAN.md` §4 against the live site of [source].
+/// Runs the four stages of `docs/dev/roadmap.md` §4 against the live site of [source].
 Future<_Report> _runChain(BookSource source, String keyword) async {
   final AppLogger logger = AppLogger(level: LogLevel.warning);
   // 请求层是唯一的上网入口（C-NET-1）：页面抓取与规则里的 `http.*` 共用同一个客户端，
@@ -438,7 +438,7 @@ Map<String, String> _ruleFieldsOf(Map<String, Object?> item) {
 
 /// Prints how many sources use each M1 row, and how many of those are selectable today.
 ///
-/// G4 (`PLAN.md` §4) has to name a real source per row, and the harness is the only place
+/// G4 (`docs/dev/roadmap.md` §4) has to name a real source per row, and the harness is the only place
 /// statistics may come from (`docs/dev/test-environment.md` §6, trap 13: a throwaway script
 /// once produced the unreproducible 58.1%). The patterns therefore live here and the command
 /// is the `--list` run itself.
@@ -518,7 +518,7 @@ void _printM1GrammarCensus(List<Object?> entries) {
 
 /// Prints how many sources have a rule field whose **entire** value is a literal URL.
 ///
-/// Registered in `PLAN.md` §3.7 as “gather evidence first, then schedule”: such a value has no
+/// Registered in `docs/dev/roadmap.md` §3.7 as “gather evidence first, then schedule”: such a value has no
 /// rule head, so it falls into the default type, ADR-0032 degrades it to a CSS selector and the
 /// field fails (b5 bumped into it through a derived `bookUrl`). Only a census over the real
 /// sources can say whether that is worth a fix, hence the count *and* the field distribution.
@@ -566,13 +566,13 @@ void _printLiteralUrlCensus(List<Object?> entries) {
 /// `book-source.md` §6 writes that a JSON scope hands a script the item's **JSON text**
 /// (`_contentOf(JsonScope) = jsonEncode(value)`), while upstream `AnalyzeRule.evalJS(rule, result)`
 /// binds the item **object** - so `result.comic_id` works upstream and is `undefined` here.
-/// `PLAN.md` §3.5 b7 asks for the count and the field distribution **before** the contract is
-/// touched, and this census is that evidence (`PLAN.md` §3.7); a throwaway script may not produce
+/// `docs/dev/roadmap.md` §3.5 b7 asks for the count and the field distribution **before** the contract is
+/// touched, and this census is that evidence (`docs/dev/roadmap.md` §3.7); a throwaway script may not produce
 /// the numbers (`docs/dev/test-environment.md` §6, trap 13).
 ///
 /// Two shapes put a script on a JSON item: a **JSON list rule** (`bookList` / `chapterList`, whose
 /// sibling fields are read once per item) and a **JSON `init`** (`ruleBookInfo.init` makes the later
-/// detail fields read a sub-object, `PLAN.md` §3.5 b6). A whole JSON page is deliberately **not**
+/// detail fields read a sub-object, `docs/dev/roadmap.md` §3.5 b6). A whole JSON page is deliberately **not**
 /// counted: there upstream's `result` is the response String, exactly as here (§6).
 ///
 /// A script that reads the text correctly - `JSON.parse(result)` - is counted separately, because
@@ -709,7 +709,7 @@ String _jsSegmentsOf(String rule) {
 
 /// Prints the duplicate shape of [entries] - evidence for the import-identity ruling (P5-0).
 ///
-/// `PLAN.md` §3.6 5.0 has to decide the `book_sources` primary key and what importing the same
+/// `docs/dev/roadmap.md` §3.6 5.0 has to decide the `book_sources` primary key and what importing the same
 /// source twice does. `bookSourceUrl` is upstream's natural id, but the real corpus also has
 /// “same URL, different rules” instances, so the ruling needs the **shape** rather than an
 /// assumption - and it comes from the harness (`docs/dev/test-environment.md` §6, trap 13).

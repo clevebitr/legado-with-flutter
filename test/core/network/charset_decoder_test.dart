@@ -148,7 +148,7 @@ void main() {
         // （2026-10-12，`betto_charset_detector 0.1.0`）它的候选表里**没有 utf-8**，而会招
         // `FormatException` 的 `gbk` 在嗅探下不可达——构造与真实样本一律被判成
         // iso-8859-1 / windows-1252 / euc-kr（宽容解码器）或 shift-jis / euc-jp，
-        // 后者在字节不完整时抛的是 `RangeError`（`Error`，已登记在 `PLAN.md` §3.7）。
+        // 后者在字节不完整时抛的是 `RangeError`（`Error`，已登记在 `docs/dev/roadmap.md` §3.7）。
         // 因此「不宽容」是这条车道唯一可观测且在仓内可钉的行为；依赖修好后，嗅探车道
         // 会抛异常的直接用例可再补。
         final List<({List<int> bytes, String label})> samples =

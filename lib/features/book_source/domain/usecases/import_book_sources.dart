@@ -19,7 +19,7 @@ part 'import_book_sources.freezed.dart';
 /// test can exercise the cap without allocating it (production never passes one).
 const int bookSourceImportSizeLimitBytes = 32 * 1024 * 1024;
 
-/// Where the JSON of one import comes from (`PLAN.md` 5.1, ADR-0040 §决策 9).
+/// Where the JSON of one import comes from (`docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
 ///
 /// The two shapes are the ones 5.1 supports without a native dependency; a picked file joins them
 /// in 5.8 together with export.
@@ -73,7 +73,7 @@ abstract class BookSourceImportReport with _$BookSourceImportReport {
   int get imported => inserted + refreshed;
 }
 
-/// Imports book sources from pasted text or a URL (`PLAN.md` 5.1, ADR-0040).
+/// Imports book sources from pasted text or a URL (`docs/dev/roadmap.md` 5.1, ADR-0040).
 ///
 /// The use case owns the **acceptance** decision: the byte cap (before any parsing), the
 /// file-level rejections and which single entries are skipped. Storing is delegated to
