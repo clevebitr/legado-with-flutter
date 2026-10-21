@@ -135,7 +135,7 @@ Phase 6    发布前                          清单见 §5
 > **三条登记项的落地**：① 规则变量**不落盘**（沿用 ADR-0034 修订注记）；② `downloadUrls` / `relatedBooks`
 > **未做**——它们是规则面字段，且没有真实语料证据，触发条件留在 §3.7；③ `isVolume` / `formatJs` /
 > `preUpdateJs` 本阶段不做（ADR-0041 §决策 6）。`java.get('bookName')` 也**未做**：它要把 Book / Chapter 绑进
-> JS 变量表，属规则面改动，触发条件是真实语料出现该写法（§3.7）。
+> JS 变量表，属规则面改动 —— 已排进 **M12**（§3.8、`DECISIONS.md` #7）。
 
 #### 5.5 书源展示与排序字段
 
@@ -226,6 +226,44 @@ Phase 6    发布前                          清单见 §5
 > 手改 `database.g.dart` 或忘记 dump（#8）；同一数值写在两处（#9）；把 `toJson` 当成无损导出（ADR-0021 §后果）；
 > 把「构建成功」当成「功能可用」（#1）。
 
+### 3.8 M11 / M12 — 引擎兼容、聚合搜索与健壮性（已立项，未开工）
+
+> **状态：** 两个里程碑由用户 2026-10-21 裁决立项；**逐条对照** `F:\Projetcs\legado-upstream` 移植，
+> 差异逐条写 ADR（与 M1 / M4 / M10 同一做法）。范围、规格前置与验收标准记在 `DECISIONS.md`
+> （M11 = #6，M12 = #7），本节只放「做什么 / 先后 / 出口」，不复制判据。
+
+**M11 — 聚合搜索 + 选源分类（#6）**
+
+| 交付物 | 上游落点 |
+|---|---|
+| 搜索范围（全部 / 分组 / 指定源 + 持久化与显示） | `ui/book/search/SearchScope.kt`、`domain/model/BookSearchScope` |
+| 书源类型筛选（0 文本 / 1 音频 / 2 图片 / 3 文件） | `BookSearchRequest.types` |
+| 匹配模式（模糊 / 精确书名 / 精确书名+作者） | `domain/model/MatchMode` |
+| 多源并发 + 逐源进度 + 单源超时不打断整批 | `domain/usecase/SearchBooksUseCase.kt` |
+| 暂停 / 恢复 / 取消（源与源之间生效） | `BookSearchControl` |
+| 结果合并去重排序 + 分页与 `hasMore` | `SearchResultMerger`、`supportsSearchPage()` |
+| 校验 / 调试按「分组 + 类型」筛选选源（与搜索范围共用一套选源逻辑） | 本仓 5.10 的两个页面 |
+
+**M12 — 引擎规则面五条 + 编码与单源预算（#7）**
+
+| 交付物 | 现状 / 触发 |
+|---|---|
+| JSON 条目上裸 `@js:` 的 `result` 绑定 | §3.7 已取证（85 源 / 98 字段），契约 ADR 先行 |
+| `header` 写成规则（`@js:` / `<js>`）求值 | 现在导入降级为无 header + warning（ADR-0040 §决策 6） |
+| 默认 / `@@` 规则打在 JSON scope 上 | 先核上游分析器选择，再定语义 |
+| 页面字段的 `page` 绑定与已取到的那一页一致 | 待语料裁定 |
+| `java.get('bookName' / 'title')` 特例 | Book / Chapter 绑进 JS 变量表 |
+| Big5 / Big5-HKSCS / `shift-jis` / `euc-jp` 的检测与解码 | `RangeError` 越出 `ParseResult` 契约（ADR-0022） |
+| 单源预算（超时 / 重试）与同源多阶段失败的容忍 | 现在只有全局 `HttpPolicy` 与 M10 的校验超时 |
+
+**顺序：** M11 先于 M12 —— 聚合搜索会先给「单源失败不拖垮整批」立出第一份真实用法，M12 的单源预算
+直接复用它；反过来做会让 M11 再造一遍。**两者的规格前置（ADR-0045 聚合搜索、M12 的三条契约 ADR）都必须
+在动代码前完成**（`AGENTS.md` §3 第 1 步）。
+
+**出口：** 严格档验收（用户裁决）：每条能力有单测 + 派生源/离线语料回归；收尾 Windows + Android
+`integration_test` 双端实跑；真源抽查一次（M12 的 `header` / `@js:` 两条**必须**有真实源证据，
+否则只能记「已实现未验证」）；`book-source.md` 的矩阵状态列按真实回归逐行改。
+
 ### 3.7 未闭环交接登记（不得静默丢弃）
 
 > 已闭环 / 已否决的登记项（并发上限 3、M1 #15–#19、规则变量不落盘、`ruleBookInfo.init` 未应用、b1b 首版
@@ -241,7 +279,7 @@ Phase 6    发布前                          清单见 §5
 | 分页模式的**断点**取 `TextPainter` 右下角文本位置，落点不是行首时整页会少排半行 | **同上**（同一触发条件） |
 | 分页模式**不跨章连续翻页**：章末给显式的「下一章」页 | **未做（5.3 登记，ADR-0044 §决策 4）**：跨章翻页要预取全部正文。触发 = 用户反馈「翻到章末还得点一下」 |
 | 阅读器 UI 的 **Golden 基线**（`testing.md` §5） | **单独 PR**（5.3 验收明写；本轮不做，避免把 Golden 资产塞进功能 PR） |
-| `java.get('bookName' / 'title')` 的上游特例（`AnalyzeRule.kt:812-821`） | **未做**（5.4 落地时未收）：要把 Book / Chapter 绑进 JS 变量表，属规则面改动；触发 = 真实语料出现该写法（普查命令见 `tool/spot_check/README.md` §3） |
+| `java.get('bookName' / 'title')` 的上游特例（`AnalyzeRule.kt:812-821`） | **M12**（`DECISIONS.md` #7）：把 Book / Chapter 绑进 JS 变量表（普查命令见 `tool/spot_check/README.md` §3） |
 | `downloadUrls` / `relatedBooks`；`isVolume` / `formatJs` / `preUpdateJs` | **均未做**：`isVolume` 一族已裁决本阶段不做（ADR-0041 §决策 6）；`downloadUrls` 属批量下载面、`relatedBooks` 无语料证据。触发 = 5.10 校验或入库工具普查出真实需求；未建模期间**不得**声称支持（清单归 `book-source.md` §2 注记） |
 | `checkKeyWord`（书源校验 / 调试的默认关键词） | ✅ **已闭环（5.10，2026-10-21）**：`SearchRule.checkKeyWord` 已建模，「像规则」判据 = `resolveCheckKeyword` / `looksLikeRule`（ADR-0043 §决策 2） |
 | 并发上限接入用户设置时必须**显式校验 / 钳制 `> 0`**（今天只有 `assert`，release 会剥掉；`0` = 永久排队） | ✅ **已闭环（5.6，2026-10-21）**：`budgetOrDefault` 在 release 也生效（`<= 0` 回落默认 + warning），设置页的下限也是 1 |
@@ -251,13 +289,13 @@ Phase 6    发布前                          清单见 §5
 | Android **前台服务**（通知 + `startForeground`）：批量校验现在只有 `PARTIAL_WAKE_LOCK` | **未做（5.10 登记，ADR-0043 §决策 3）**：需要通知渠道 + `POST_NOTIFICATIONS` 运行时权限 + 服务生命周期三件原生接线。触发 = 真机上息屏后批量校验被系统杀掉 |
 | 校验的**阶段开关与单源超时**目前是页面内状态（默认全开 + 180 s），不持久化 | **未排期（5.10 登记，ADR-0043 §后果）**：要落进 `AppSettings`（`shared_preferences`）就得跨 feature 取设置，触发 = 用户反馈每次都要重选 |
 | 文件型数据库（后台 isolate + 原生库）无自动化覆盖 | **持续约定**：5.1 起每个新表都由 `integration_test/on_disk_database_test.dart` 真实写入一次（`books` / `reading_progress` 已随 5.4 补上） |
-| **JSON 条目上裸 `@js:` 的 `result` 绑定**（本仓给 JSON 文本，上游给条目对象） | b7：① 取证 ✅（85 条源 / 98 个字段）；② 是否按新 ADR 改 `book-source.md` §6 契约**待裁决** |
-| `header` 写成规则（`@js:` / `<js>`，真实语料 21 条）尚未求值 | 未排期；当前导入降级为无 header + warning（ADR-0040 §决策 6）；触发 = 这批源在真机因缺 header 普遍失败 |
-| 默认 / `@@` 规则打在 JSON scope 上必然失败（上游按页面类型选分析器） | **先取证、不立单**：① 核上游在「JSON 内容 + `@@`」下的分析器选择；② 真实语料的可用实例。在此之前不改语义 |
-| 页面字段规则的 `page` 绑定与「已取到的那一页」不一致（搜得 / 发现阶段不传 `page`） | 待语料裁定（把 `page` 传下去 vs 像上游只在 URL 规则绑）；数值语义归 `book-source.md` §6 |
+| **JSON 条目上裸 `@js:` 的 `result` 绑定**（本仓给 JSON 文本，上游给条目对象） | b7：① 取证 ✅（85 条源 / 98 个字段）；② **M12**（#7）：契约 ADR 先行，再改 `book-source.md` §6 与引擎 |
+| `header` 写成规则（`@js:` / `<js>`，真实语料 21 条）尚未求值 | **M12**（#7）：求值时机与失败语义要有 ADR；当前导入降级为无 header + warning（ADR-0040 §决策 6） |
+| 默认 / `@@` 规则打在 JSON scope 上必然失败（上游按页面类型选分析器） | **M12**（#7）：先核上游在「JSON 内容 + `@@`」下的分析器选择与真实语料实例，再定语义 |
+| 页面字段规则的 `page` 绑定与「已取到的那一页」不一致（搜得 / 发现阶段不传 `page`） | **M12**（#7）：按语料裁定（把 `page` 传下去 vs 像上游只在 URL 规则绑）；数值语义归 `book-source.md` §6 |
 | `concurrentRate` 的真源只有 3 条且都跑不了原样链路 | 已登记（b2 用派生源 A/B 取证）；触发 = 其中任一条变得可跑 |
 | 「关于」页入口（设置页的菜单行） | **5.9**：与法律声明页一起落地；一个打开空页的菜单行是死链（C-BAN-2），所以 5.6 没有加它 |
-| Big5 / Big5-HKSCS 既不能检测也不能解码；`shift-jis` / `euc-jp` 严格解码抛 `RangeError`（`Error`，越出 `ParseResult` 契约） | 待排期：需换依赖或加隔离层（ADR-0022 不得捕获 `Error`）；证据归 `book-source.md` §5.1 |
+| Big5 / Big5-HKSCS 既不能检测也不能解码；`shift-jis` / `euc-jp` 严格解码抛 `RangeError`（`Error`，越出 `ParseResult` 契约） | **M12**（#7）：换依赖或加隔离层（ADR-0022 不得捕获 `Error`；换依赖走 C-DEP-1/C-DEP-7 + `NOTICE.md`）；证据归 `book-source.md` §5.1 |
 | 已登记为**有意差异 / 具名拒绝**的一族：`{{…}}` 在列表规则里的语义、模板 JS 返回列表取首值、发现页 `infoMap` 与排名模块、`java.timeFormatUTC`、HTML 实体反转义、同步 `http.*` 形态、列表规则上的 `@js:`、`parse.*` 嵌套与 `parse.getElements` 非 DOM、元素 scope 的 `result` 形态、矩阵 #7 多元素倒置 | **无待办**：行为与触发条件归 `book-source.md` §3 / §4.2 / §6 / §11 与 ADR-0029 / 0035 的注记，本表不再复述 |
 
 ---
