@@ -85,3 +85,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   generate: true
+  assets:
+    # GPL-3.0 全文：法律声明页的「查看许可全文」入口（C-UI-9，ADR-0055 §决策 4）。
+    # 来源是根目录 LICENSE，更新许可证时两者必须一起换。
+    - assets/legal/gpl-3.0.txt

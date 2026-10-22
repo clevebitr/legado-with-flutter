@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/app_shell.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_search_scope.dart';
@@ -28,6 +29,7 @@ void main() {
         source: loadCorpusBookSource(),
         http: serveCorpusPages(FakeHttpClient()),
       );
+      await _openSearchTab(tester);
       final AppLocalizations l10n = _l10n(tester);
 
       await tester.tap(find.byTooltip(l10n.bookSourceListTitle));
@@ -379,6 +381,7 @@ void main() {
         repository: FakeBookSourceRepository()
           ..add(source: loadCorpusBookSource()),
       );
+      await _openSearchTab(tester);
       await _search(tester, corpusKeyword);
 
       await tester.tap(find.text('书名一'));
@@ -395,11 +398,15 @@ void main() {
 Future<void> _search(WidgetTester tester, String keyword) async {
   await tester.enterText(find.byType(TextField), keyword);
   await tester.tap(
-    find.byTooltip(
-      localizationOf(
-        tester,
-        find.byType(SearchBooksPage),
-      ).bookSourceSearchAction,
+    // 只点搜索页里的那个按钮：底栏的「搜索」tab 也带同名 tooltip（ADR-0055）。
+    find.descendant(
+      of: find.byType(SearchBooksPage),
+      matching: find.byTooltip(
+        localizationOf(
+          tester,
+          find.byType(SearchBooksPage),
+        ).bookSourceSearchAction,
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -408,3 +415,17 @@ Future<void> _search(WidgetTester tester, String keyword) async {
 /// The strings the search page renders, taken from its own localization.
 AppLocalizations _l10n(WidgetTester tester) =>
     localizationOf(tester, find.byType(SearchBooksPage));
+
+/// Switches the shell to the search tab (the shell opens on the shelf, ADR-0055).
+Future<void> _openSearchTab(WidgetTester tester) async {
+  final AppLocalizations l10n = AppLocalizations.of(
+    tester.element(find.byType(AppShell)),
+  );
+  await tester.tap(
+    find.descendant(
+      of: find.byType(NavigationBar),
+      matching: find.text(l10n.shellTabSearch),
+    ),
+  );
+  await tester.pumpAndSettle();
+}

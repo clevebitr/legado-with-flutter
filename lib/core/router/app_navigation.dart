@@ -18,6 +18,12 @@ abstract interface class AppNavigation {
   /// Opens the settings page.
   void openSettings(BuildContext context);
 
+  /// Opens the book-source management page (M18's 「我的」entry).
+  void openBookSources(BuildContext context);
+
+  /// Opens the about page (M18).
+  void openAbout(BuildContext context);
+
   /// Opens the reader on one book, optionally at a specific chapter (ADR-0042 §决策 2).
   ///
   /// The parameters are **primitives only**: the reader's own route object and its `ReaderBook`
@@ -48,6 +54,14 @@ final class UnboundAppNavigation implements AppNavigation {
   @override
   void openSettings(BuildContext context) =>
       _warn('No AppNavigation is bound: the settings entry does nothing.');
+
+  @override
+  void openBookSources(BuildContext context) =>
+      _warn('No AppNavigation is bound: the book-source entry does nothing.');
+
+  @override
+  void openAbout(BuildContext context) =>
+      _warn('No AppNavigation is bound: the about entry does nothing.');
 
   @override
   void openReader(

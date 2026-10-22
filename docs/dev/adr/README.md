@@ -75,4 +75,5 @@
 | [0051](0051-reader-experience.md) | 阅读体验（M14）：三区点击 + 可隐藏工具条（进度/亮度）、目录居中/正倒序/搜索、换源（候选→重取目录→按名对齐→`migrateIdentity`）、排版四轴（字体族用平台通用名、不打包字体） | Accepted（2026-10-22，M14 规格前置；范围由 #11 裁决） | 本次新增 |
 | [0052](0052-book-source-management-v2.md) | 书源管理二期（M15）：`source_checks` 历史表 + 四态状态灯、探索开关列、置顶/置底与分组重命名/删除/移出、排序方向与域名分节、导入预览/提交两步 | Accepted（2026-10-22，M15 规格前置；范围由 #13 裁决） | 本次新增 |
 | [0053](0053-manga-engine.md) | 漫画引擎（M16）：漫画是 reader 的一个模式（`sourceType = image` 分派）、`ruleContent` 列表语义产出图片页、滚动/翻页两种观影模式 + `InteractiveViewer` 缩放、页号进度与预取 ≤3 页、零新依赖 | Accepted（2026-10-22，M16 规格前置） | 本次新增 |
+| [0055](0055-app-shell-and-about-pages.md) | 应用外壳与关于/法律声明（M18）：`AppShell` 在组合根、四 tab `IndexedStack` 保活、「我的」只做入口聚合、关于页版本常量 + 打包 GPL 全文 + 源码地址（不引 `url_launcher`） | Accepted（2026-10-22，用户裁决「开始补齐 UI」） | 本次新增 |
 | [0054](0054-audio-and-tts-engine.md) | 听书与音频（M17）：音频源播放与系统 TTS 两条独立链路共用章节上下文；依赖选型与三端降级（`just_audio` / `audio_service` / `flutter_tts`，Windows 无媒体通知）；HLS/云 TTS/句级高亮未闭环 | Accepted（2026-10-22，M17 规格前置） | 本次新增 |

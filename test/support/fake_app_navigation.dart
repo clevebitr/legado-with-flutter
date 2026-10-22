@@ -34,11 +34,23 @@ final class FakeAppNavigation implements AppNavigation {
   /// How many times the settings page was opened.
   int settingsCalls = 0;
 
+  /// How many times the book-source management page was opened.
+  int bookSourcesCalls = 0;
+
+  /// How many times the about page was opened.
+  int aboutCalls = 0;
+
   @override
   void openBookshelf(BuildContext context) => shelfCalls++;
 
   @override
   void openSettings(BuildContext context) => settingsCalls++;
+
+  @override
+  void openBookSources(BuildContext context) => bookSourcesCalls++;
+
+  @override
+  void openAbout(BuildContext context) => aboutCalls++;
 
   @override
   void openReader(

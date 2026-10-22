@@ -1,5 +1,5 @@
 import 'package:flutter_reader/app.dart';
-import 'package:flutter_reader/features/book_source/presentation/pages/search_books_page.dart';
+import 'package:flutter_reader/app_shell.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -13,13 +13,13 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('readerApp_whenLaunchedOnADevice_rendersTheSearchLandingPage', (
+  testWidgets('readerApp_whenLaunchedOnADevice_rendersTheAppShell', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const ProviderScope(child: ReaderApp()));
     await tester.pumpAndSettle();
 
-    expect(find.byType(SearchBooksPage), findsOneWidget);
+    expect(find.byType(AppShell), findsOneWidget);
     // 平台通道若在启动路径上抛错，会在这里浮现而不是被静默吞掉（C-ERR-1 精神）。
     expect(tester.takeException(), isNull);
   });

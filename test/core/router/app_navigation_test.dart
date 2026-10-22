@@ -35,6 +35,28 @@ void main() {
       expect(printer.events.single.message, contains('settings'));
     });
 
+    test('openBookSources_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openBookSources(_FakeContext());
+
+      expect(printer.events.single.message, contains('book-source'));
+    });
+
+    test('openAbout_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openAbout(_FakeContext());
+
+      expect(printer.events.single.message, contains('about'));
+    });
+
     test('openReader_whenCalled_logsAndDoesNothing', () {
       // ADR-0042 §决策 2：打开阅读器也是这个端口，未绑定时同样只是一条 warning。
       final FakeLogPrinter printer = FakeLogPrinter();

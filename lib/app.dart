@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/app_shell.dart';
 import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
@@ -22,7 +23,6 @@ import 'package:flutter_reader/features/book_source/presentation/pages/book_sour
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_list_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
-import 'package:flutter_reader/features/book_source/presentation/pages/search_books_page.dart';
 import 'package:flutter_reader/features/bookshelf/di.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_candidate.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
@@ -46,6 +46,9 @@ import 'package:flutter_reader/features/settings/domain/entities/app_theme_mode.
 import 'package:flutter_reader/features/settings/presentation/notifiers/settings_notifier.dart';
 import 'package:flutter_reader/features/settings/presentation/pages/settings_page.dart';
 import 'package:flutter_reader/features/settings/presentation/settings_route.dart';
+import 'package:flutter_reader/features/shell/presentation/pages/about_page.dart';
+import 'package:flutter_reader/features/shell/presentation/pages/legal_notices_page.dart';
+import 'package:flutter_reader/features/shell/presentation/shell_route.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -130,7 +133,10 @@ class ReaderApp extends ConsumerWidget {
       book: route.book,
       chapterUrl: route.chapterUrl,
     ),
-    _ => const SearchBooksPage(),
+    AboutRoute() => const AboutPage(),
+    LegalNoticesRoute() => const LegalNoticesPage(),
+    // 落地页就是外壳（ADR-0055 §决策 5）：未知参数回落到它，而不是搜索页。
+    _ => const AppShell(),
   };
 
   /// Builds the [MaterialApp] from the resolved platform schemes and the user's settings.
@@ -183,6 +189,14 @@ final class _RootNavigation implements AppNavigation {
   @override
   void openSettings(BuildContext context) =>
       pushSettingsRoute(context, const SettingsRoute.settings());
+
+  @override
+  void openBookSources(BuildContext context) =>
+      pushBookSourceRoute(context, const BookSourceListRoute());
+
+  @override
+  void openAbout(BuildContext context) =>
+      pushShellRoute(context, const ShellRoute.about());
 
   /// Opens the reader on one book (ADR-0042 §决策 2, ADR-0044 §决策 2).
   ///

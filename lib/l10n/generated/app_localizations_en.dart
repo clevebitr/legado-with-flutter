@@ -13,6 +13,53 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTitle => 'Reader';
 
   @override
+  String get shellTabBookshelf => 'Shelf';
+
+  @override
+  String get shellTabExplore => 'Discover';
+
+  @override
+  String get shellTabSearch => 'Search';
+
+  @override
+  String get shellTabMy => 'Me';
+
+  @override
+  String get myTitle => 'Me';
+
+  @override
+  String get mySectionContent => 'Content';
+
+  @override
+  String get mySectionApp => 'App';
+
+  @override
+  String get myBookSources => 'Book sources';
+
+  @override
+  String get myBookSourcesBody => 'Import, check and group';
+
+  @override
+  String get aboutTitle => 'About';
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get aboutLicenses => 'Licenses and legal notices';
+
+  @override
+  String get aboutSourceCode => 'Source code';
+
+  @override
+  String get aboutCopySource => 'Copy address';
+
+  @override
+  String get aboutCopied => 'Copied';
+
+  @override
   String get bookSourceListTitle => 'Book sources';
 
   @override
@@ -109,6 +156,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get legalNoticesCorrespondingSource => 'Corresponding source code';
+
+  @override
+  String get legalNoticesLicenseTitle => 'GNU GPL-3.0';
+
+  @override
+  String get legalNoticesLicenseFailed =>
+      'The license text could not be loaded. Reopen this page to try again.';
 
   @override
   String get legalNoticesProhibitedUse =>
@@ -410,7 +464,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookSourceCheckStatusSucceeded => 'Passed';
 
   @override
-  String get bookSourceCheckStatusFailed => 'Check failed';
+  String get bookSourceCheckStatusFailed => 'Failed';
 
   @override
   String get bookSourceCheckStatusCancelled => 'Cancelled';

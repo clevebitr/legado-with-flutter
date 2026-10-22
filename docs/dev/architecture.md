@@ -13,6 +13,7 @@
 lib/
 ├── main.dart                     # 仅 bootstrap：runApp + ProviderScope
 ├── app.dart                      # MaterialApp 装配：主题、路由、l10n
+├── app_shell.dart                # 应用外壳（底部导航 + 四个 tab）；组合根的一部分，唯一允许组合多个 feature 页面的文件
 ├── core/                         # 无业务语义的共享能力，可被任意层依赖
 │   ├── di/                       # 基础设施 Provider（数据库、HttpClient、Logger）
 │   ├── error/                    # ParseResult / ParseFailureKind / ARB 键名助手
@@ -205,7 +206,11 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | `SettingsRoute` | `SettingsPage` | `settings` | ✅ 5.6（2026-10-21） |
 | `BookSourceCheckRoute` | `BookSourceCheckPage` | `book_source` | ✅ 5.10（2026-10-21） |
 | `BookSourceDebugRoute` | `BookSourceDebugPage` | `book_source` | ✅ 5.10（2026-10-21） |
+| `ShellRoute.about` / `ShellRoute.legalNotices` | `AboutPage` / `LegalNoticesPage` | `shell` | ✅ M18（2026-10-22） |
 
+> 落地页是组合根里的 `AppShell`（ADR-0055）：它组合四个 feature 的页面，因此不进本表；
+> 表内只登记 feature 自己 push 的类型化路由。
+>
 > 页面与路由的**归属**由 **ADR-0041** 裁决（2026-10-14 已接受）：`ReaderRoute` / `ReaderPage` 从
 > `book_source/presentation/` 迁入 `reader/`（5.3，2026-10-21 已迁），三个新 feature 的路由类型各自落在自己的
 > `presentation/`，四者都只在 `app.dart` 的页面表里登记。**打开阅读器**这件事因此走 `AppNavigation`

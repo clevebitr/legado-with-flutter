@@ -104,6 +104,96 @@ abstract class AppLocalizations {
   /// **'Reader'**
   String get appTitle;
 
+  /// Bottom navigation: the bookshelf tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Shelf'**
+  String get shellTabBookshelf;
+
+  /// Bottom navigation: the discover tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get shellTabExplore;
+
+  /// Bottom navigation: the aggregated search tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get shellTabSearch;
+
+  /// Bottom navigation: the entry-aggregator tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Me'**
+  String get shellTabMy;
+
+  /// Title of the Me page.
+  ///
+  /// In en, this message translates to:
+  /// **'Me'**
+  String get myTitle;
+
+  /// Me page section label for content-related entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Content'**
+  String get mySectionContent;
+
+  /// Me page section label for app-level entries.
+  ///
+  /// In en, this message translates to:
+  /// **'App'**
+  String get mySectionApp;
+
+  /// Me page entry: opens book-source management.
+  ///
+  /// In en, this message translates to:
+  /// **'Book sources'**
+  String get myBookSources;
+
+  /// Me page entry subtitle for book sources.
+  ///
+  /// In en, this message translates to:
+  /// **'Import, check and group'**
+  String get myBookSourcesBody;
+
+  /// Title of the about page.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get aboutTitle;
+
+  /// About page: the app version.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String aboutVersion(String version);
+
+  /// About page entry: opens the legal notices page.
+  ///
+  /// In en, this message translates to:
+  /// **'Licenses and legal notices'**
+  String get aboutLicenses;
+
+  /// About page: where the Corresponding Source is published.
+  ///
+  /// In en, this message translates to:
+  /// **'Source code'**
+  String get aboutSourceCode;
+
+  /// Copies the source-code address.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy address'**
+  String get aboutCopySource;
+
+  /// Confirmation after copying the source-code address.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get aboutCopied;
+
   /// Title of the book source list page.
   ///
   /// In en, this message translates to:
@@ -265,6 +355,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Corresponding source code'**
   String get legalNoticesCorrespondingSource;
+
+  /// Title of the page that shows the bundled GPL-3.0 text.
+  ///
+  /// In en, this message translates to:
+  /// **'GNU GPL-3.0'**
+  String get legalNoticesLicenseTitle;
+
+  /// Shown when the bundled license asset cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'The license text could not be loaded. Reopen this page to try again.'**
+  String get legalNoticesLicenseFailed;
 
   /// Prohibited-use notice shown on the legal notices screen; records the stance of ADR-0023.
   ///
@@ -798,10 +900,10 @@ abstract class AppLocalizations {
   /// **'Passed'**
   String get bookSourceCheckStatusSucceeded;
 
-  /// Status light: the last check found a failure the source owns.
+  /// Per-source status after a check that found problems.
   ///
   /// In en, this message translates to:
-  /// **'Check failed'**
+  /// **'Failed'**
   String get bookSourceCheckStatusFailed;
 
   /// Per-source status after the user stopped the batch.

@@ -13,6 +13,53 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appTitle => '阅读';
 
   @override
+  String get shellTabBookshelf => '书架';
+
+  @override
+  String get shellTabExplore => '发现';
+
+  @override
+  String get shellTabSearch => '搜索';
+
+  @override
+  String get shellTabMy => '我的';
+
+  @override
+  String get myTitle => '我的';
+
+  @override
+  String get mySectionContent => '内容';
+
+  @override
+  String get mySectionApp => '应用';
+
+  @override
+  String get myBookSources => '书源管理';
+
+  @override
+  String get myBookSourcesBody => '导入、校验与分组';
+
+  @override
+  String get aboutTitle => '关于';
+
+  @override
+  String aboutVersion(String version) {
+    return '版本 $version';
+  }
+
+  @override
+  String get aboutLicenses => '开源许可与法律声明';
+
+  @override
+  String get aboutSourceCode => '源代码';
+
+  @override
+  String get aboutCopySource => '复制地址';
+
+  @override
+  String get aboutCopied => '已复制';
+
+  @override
   String get bookSourceListTitle => '书源列表';
 
   @override
@@ -99,6 +146,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get legalNoticesCorrespondingSource => '对应源代码';
+
+  @override
+  String get legalNoticesLicenseTitle => 'GNU GPL-3.0';
+
+  @override
+  String get legalNoticesLicenseFailed => '许可全文读取失败，请重新打开本页。';
 
   @override
   String get legalNoticesProhibitedUse =>
@@ -388,7 +441,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bookSourceCheckStatusSucceeded => '通过';
 
   @override
-  String get bookSourceCheckStatusFailed => '校验失败';
+  String get bookSourceCheckStatusFailed => '失败';
 
   @override
   String get bookSourceCheckStatusCancelled => '已取消';

@@ -111,6 +111,10 @@ Future<void> pumpReaderApp(
         bookSourceViewStoreProvider.overrideWith(
           (Ref ref) async => FakeBookSourceViewStore(),
         ),
+        // 外壳会同时构建书架 tab：宿主 VM 没有真实 Drift，给内存替身免于永久 spinner。
+        bookshelfRepositoryProvider.overrideWithValue(
+          FakeBookshelfRepository(),
+        ),
       ],
       child: const ReaderApp(),
     ),

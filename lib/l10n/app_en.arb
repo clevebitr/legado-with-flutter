@@ -1,6 +1,71 @@
 {
   "@@locale": "en",
   "appTitle": "Reader",
+  "shellTabBookshelf": "Shelf",
+  "@shellTabBookshelf": {
+    "description": "Bottom navigation: the bookshelf tab."
+  },
+  "shellTabExplore": "Discover",
+  "@shellTabExplore": {
+    "description": "Bottom navigation: the discover tab."
+  },
+  "shellTabSearch": "Search",
+  "@shellTabSearch": {
+    "description": "Bottom navigation: the aggregated search tab."
+  },
+  "shellTabMy": "Me",
+  "@shellTabMy": {
+    "description": "Bottom navigation: the entry-aggregator tab."
+  },
+  "myTitle": "Me",
+  "@myTitle": {
+    "description": "Title of the Me page."
+  },
+  "mySectionContent": "Content",
+  "@mySectionContent": {
+    "description": "Me page section label for content-related entries."
+  },
+  "mySectionApp": "App",
+  "@mySectionApp": {
+    "description": "Me page section label for app-level entries."
+  },
+  "myBookSources": "Book sources",
+  "@myBookSources": {
+    "description": "Me page entry: opens book-source management."
+  },
+  "myBookSourcesBody": "Import, check and group",
+  "@myBookSourcesBody": {
+    "description": "Me page entry subtitle for book sources."
+  },
+  "aboutTitle": "About",
+  "@aboutTitle": {
+    "description": "Title of the about page."
+  },
+  "aboutVersion": "Version {version}",
+  "@aboutVersion": {
+    "description": "About page: the app version.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutLicenses": "Licenses and legal notices",
+  "@aboutLicenses": {
+    "description": "About page entry: opens the legal notices page."
+  },
+  "aboutSourceCode": "Source code",
+  "@aboutSourceCode": {
+    "description": "About page: where the Corresponding Source is published."
+  },
+  "aboutCopySource": "Copy address",
+  "@aboutCopySource": {
+    "description": "Copies the source-code address."
+  },
+  "aboutCopied": "Copied",
+  "@aboutCopied": {
+    "description": "Confirmation after copying the source-code address."
+  },
   "@appTitle": {
     "description": "Application name shown in the task switcher and app bar."
   },
@@ -121,6 +186,14 @@
     "description": "Action that opens the bundled GPL-3.0 license text."
   },
   "legalNoticesCorrespondingSource": "Corresponding source code",
+  "legalNoticesLicenseTitle": "GNU GPL-3.0",
+  "@legalNoticesLicenseTitle": {
+    "description": "Title of the page that shows the bundled GPL-3.0 text."
+  },
+  "legalNoticesLicenseFailed": "The license text could not be loaded. Reopen this page to try again.",
+  "@legalNoticesLicenseFailed": {
+    "description": "Shown when the bundled license asset cannot be read."
+  },
   "@legalNoticesCorrespondingSource": {
     "description": "Action that opens the source code location required by GPL-3.0 section 6."
   },
@@ -1013,10 +1086,6 @@
   "bookSourceCheckStatusPassed": "Check passed",
   "@bookSourceCheckStatusPassed": {
     "description": "Status light: the last check found no failure."
-  },
-  "bookSourceCheckStatusFailed": "Check failed",
-  "@bookSourceCheckStatusFailed": {
-    "description": "Status light: the last check found a failure the source owns."
   },
   "bookSourceCheckStatusDegraded": "Timed out or JS failed",
   "@bookSourceCheckStatusDegraded": {
