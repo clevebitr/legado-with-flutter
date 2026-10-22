@@ -342,7 +342,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bookSourceCheckStatusSucceeded => '通过';
 
   @override
-  String get bookSourceCheckStatusFailed => '失败';
+  String get bookSourceCheckStatusFailed => '校验失败';
 
   @override
   String get bookSourceCheckStatusCancelled => '已取消';
@@ -670,6 +670,101 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookSourceCheckFilterFailing => '有失效';
+
+  @override
+  String get bookSourceCheckStatusPassed => '校验通过';
+
+  @override
+  String get bookSourceCheckStatusDegraded => '超时或 JS 失效';
+
+  @override
+  String get bookSourceCheckStatusUnchecked => '从未校验';
+
+  @override
+  String get bookSourceListLastCheckJustNow => '刚刚校验';
+
+  @override
+  String bookSourceListLastCheckMinutesAgo(int count) {
+    return '$count 分钟前校验';
+  }
+
+  @override
+  String bookSourceListLastCheckHoursAgo(int count) {
+    return '$count 小时前校验';
+  }
+
+  @override
+  String bookSourceListLastCheckDaysAgo(int count) {
+    return '$count 天前校验';
+  }
+
+  @override
+  String bookSourceListLastCheckOn(String date) {
+    return '$date 校验';
+  }
+
+  @override
+  String bookSourceListLastCheckLine(String when, int millis) {
+    return '$when · $millis 毫秒';
+  }
+
+  @override
+  String get bookSourceListBatchMoveTop => '置顶';
+
+  @override
+  String get bookSourceListBatchMoveBottom => '置底';
+
+  @override
+  String get bookSourceListBatchRemoveGroup => '移出分组';
+
+  @override
+  String get bookSourceListExploreOn => '已开发现';
+
+  @override
+  String get bookSourceListExploreOff => '未开发现';
+
+  @override
+  String get bookSourceExploreDisabled => '该源已关闭发现，可在书源列表里重新开启。';
+
+  @override
+  String get bookSourceRowExploreEnable => '开启发现';
+
+  @override
+  String get bookSourceRowExploreDisable => '关闭发现';
+
+  @override
+  String get bookSourceListSortAscending => '升序';
+
+  @override
+  String get bookSourceListSortDescending => '降序';
+
+  @override
+  String get bookSourceListGroupByDomain => '按域名分节';
+
+  @override
+  String get bookSourceListViewOptions => '视图';
+
+  @override
+  String get bookSourceListMoreActions => '更多操作';
+
+  @override
+  String get bookSourceListGroupManage => '管理分组';
+
+  @override
+  String get bookSourceListGroupRename => '重命名分组';
+
+  @override
+  String get bookSourceListGroupDelete => '删除分组';
+
+  @override
+  String bookSourceListGroupDeleteBody(String group) {
+    return '所有书源都会移出「$group」，书源本身保留。';
+  }
+
+  @override
+  String bookSourceListGroupRemoveFrom(String group) {
+    return '移出「$group」';
+  }
 
   @override
   String get bookSourceRowCheck => '校验该书源';

@@ -5,6 +5,7 @@ part of 'book_source_dao.dart';
 // ignore_for_file: type=lint
 mixin _$BookSourceDaoMixin on DatabaseAccessor<ReaderDatabase> {
   $BookSourcesTable get bookSources => attachedDatabase.bookSources;
+  $SourceChecksTable get sourceChecks => attachedDatabase.sourceChecks;
   BookSourceDaoManager get managers => BookSourceDaoManager(this);
 }
 
@@ -13,4 +14,6 @@ class BookSourceDaoManager {
   BookSourceDaoManager(this._db);
   $$BookSourcesTableTableManager get bookSources =>
       $$BookSourcesTableTableManager(_db.attachedDatabase, _db.bookSources);
+  $$SourceChecksTableTableManager get sourceChecks =>
+      $$SourceChecksTableTableManager(_db.attachedDatabase, _db.sourceChecks);
 }

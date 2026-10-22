@@ -11,6 +11,7 @@ void main() {
         'int': 7,
         'double': 1.5,
         'string': 'stored',
+        'bool': true,
       });
       store = PreferenceStore(await SharedPreferences.getInstance());
     });
@@ -36,6 +37,15 @@ void main() {
       expect(store.readString('string'), 'stored');
     });
 
+    test('readBool_whenStored_answersIt', () {
+      expect(store.readBool('bool'), isTrue);
+    });
+
+    test('readBool_givenAnotherType_answersNull', () {
+      // 同 readInt：类型不对按「没存过」处理，视图回落到默认值而不是崩溃。
+      expect(store.readBool('int'), isNull);
+    });
+
     test('writeInt_whenCalled_isVisibleToTheNextRead', () async {
       await store.writeInt('int', 9);
 
@@ -52,6 +62,12 @@ void main() {
       await store.writeString('string', 'next');
 
       expect(store.readString('string'), 'next');
+    });
+
+    test('writeBool_whenCalled_isVisibleToTheNextRead', () async {
+      await store.writeBool('bool', false);
+
+      expect(store.readBool('bool'), isFalse);
     });
 
     test('remove_whenCalled_dropsTheKey', () async {

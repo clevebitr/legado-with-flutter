@@ -4,6 +4,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source_
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_light.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'book_source_list_notifier.g.dart';
@@ -89,6 +90,57 @@ class SelectedBookSource extends _$SelectedBookSource {
     await ref
         .read(bookSourceRepositoryProvider)
         .deleteMany(ids.toList(growable: false));
+    await _refreshAfterBatch();
+  }
+
+  /// Enables or disables the discover page of every id in [ids] (ADR-0052 §决策 3).
+  Future<void> setExploreEnabledFor(
+    Set<int> ids, {
+    required bool isExploreEnabled,
+  }) async {
+    if (ids.isEmpty) {
+      return;
+    }
+    await ref
+        .read(bookSourceRepositoryProvider)
+        .setExploreEnabledFor(
+          ids.toList(growable: false),
+          isExploreEnabled: isExploreEnabled,
+        );
+    await _refreshAfterBatch();
+  }
+
+  /// Moves every id in [ids] to the top or bottom of the manual order (ADR-0052 §决策 4).
+  Future<void> moveToEdge(Set<int> ids, {required bool toTop}) async {
+    if (ids.isEmpty) {
+      return;
+    }
+    await ref
+        .read(bookSourceRepositoryProvider)
+        .moveToEdge(ids.toList(growable: false), toTop: toTop);
+    await _refreshAfterBatch();
+  }
+
+  /// Renames [from] to [to] everywhere (ADR-0052 §决策 4).
+  Future<void> renameGroup(String from, String to) async {
+    await ref.read(bookSourceRepositoryProvider).renameGroup(from, to);
+    await _refreshAfterBatch();
+  }
+
+  /// Drops [group] everywhere (ADR-0052 §决策 4).
+  Future<void> deleteGroup(String group) async {
+    await ref.read(bookSourceRepositoryProvider).deleteGroup(group);
+    await _refreshAfterBatch();
+  }
+
+  /// Removes [group] from the selected sources only (ADR-0052 §决策 4).
+  Future<void> removeFromGroup(Set<int> ids, String group) async {
+    if (ids.isEmpty) {
+      return;
+    }
+    await ref
+        .read(bookSourceRepositoryProvider)
+        .removeFromGroup(ids.toList(growable: false), group);
     await _refreshAfterBatch();
   }
 
@@ -183,9 +235,21 @@ class BookSourceView extends _$BookSourceView {
   Future<BookSourceListView> build() async =>
       (await ref.watch(bookSourceViewStoreProvider.future)).load();
 
-  /// Sorts by [order] and stores the choice.
-  Future<void> setOrder(BookSourceSortOrder order) =>
-      _apply((BookSourceListView view) => view.copyWith(order: order));
+  /// Sorts by [order], resets the direction to that key's natural one, and stores the choice.
+  Future<void> setOrder(BookSourceSortOrder order) => _apply(
+    (BookSourceListView view) =>
+        view.copyWith(order: order, ascending: order.defaultAscending),
+  );
+
+  /// Flips the sort direction and stores the choice (ADR-0052 §决策 4).
+  Future<void> toggleAscending() => _apply(
+    (BookSourceListView view) => view.copyWith(ascending: !view.ascending),
+  );
+
+  /// Turns the one-section-per-host rendering on or off (ADR-0052 §决策 4).
+  Future<void> setGroupByDomain(bool groupByDomain) => _apply(
+    (BookSourceListView view) => view.copyWith(groupByDomain: groupByDomain),
+  );
 
   /// Filters to [group]; `null` means «all groups».
   Future<void> setGroup(String? group) => _apply(
@@ -230,7 +294,7 @@ Future<BookSourceListData> bookSourceListData(Ref ref) async {
   );
   final List<StoredBookSource> all = await ref
       .watch(bookSourceRepositoryProvider)
-      .getAll(order: view.order);
+      .getAll(order: view.order, ascending: view.ascending);
   final List<String> groups = _groupsOf(all);
   final String? stored = view.group;
   final String? group = stored != null && groups.contains(stored)
@@ -271,20 +335,6 @@ enum BookSourceCheckFilter {
     BookSourceCheckFilter.healthy => !hasCheckFailure(source),
     BookSourceCheckFilter.failing => hasCheckFailure(source),
   };
-}
-
-/// Whether [source]'s last check found something wrong.
-///
-/// It reads the **columns** only (ADR-0043 §决策 1, ADR-0045 §决策 1): a note or a group token the
-/// check owns. The group tokens come from `source_check_group.dart`, which stays their only
-/// source of truth.
-bool hasCheckFailure(StoredBookSource source) {
-  if ((source.comment ?? '').isNotEmpty) {
-    return true;
-  }
-
-  return splitGroups(source.groupName)
-      .any((String name) => checkOwnedGroups.contains(name));
 }
 
 /// The check-status axis of the list filter (session state, ADR-0050 §决策 1).

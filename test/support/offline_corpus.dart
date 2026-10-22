@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/app.dart';
 import 'package:flutter_reader/core/di/app_navigation_provider.dart';
+import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
@@ -12,8 +13,10 @@ import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
 import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
+import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/search_books_page.dart';
 import 'package:flutter_reader/features/bookshelf/di.dart';
@@ -90,6 +93,11 @@ Future<void> pumpReaderApp(
         // testing.md §5：固定种子色并禁用动态取色。
         platformDynamicColorProvider.overrideWithValue(null),
         currentBookSourceProvider.overrideWithValue(source),
+        // 发现页读的是**存储投影**（探索开关是列，ADR-0052 §决策 3），所以替身也要给出它：
+        // 只覆盖 `currentBookSourceProvider` 会让页面误判「没有书源」。
+        selectedBookSourceProvider.overrideWith(
+          () => _FixedSelectedBookSource(source),
+        ),
         httpClientProvider.overrideWithValue(http),
         // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
         // （端口是 total，替身与适配器对页面是同一件事）。
@@ -127,6 +135,11 @@ Future<void> pumpBookSourcePage(
     ProviderScope(
       overrides: <Override>[
         currentBookSourceProvider.overrideWithValue(source),
+        // 发现页读的是**存储投影**（探索开关是列，ADR-0052 §决策 3），所以替身也要给出它：
+        // 只覆盖 `currentBookSourceProvider` 会让页面误判「没有书源」。
+        selectedBookSourceProvider.overrideWith(
+          () => _FixedSelectedBookSource(source),
+        ),
         httpClientProvider.overrideWithValue(http),
         // 跨 feature 的入口是端口（ADR-0042）：测试可以塞一个记录器，断言页面**请求了**
         // 什么（哪一章 / 哪本书），而不是去追一个路由。
@@ -163,6 +176,7 @@ Future<void> pumpSourceManagementPage(
   BookSourceFilePicker? picker,
   FakeBookSourceViewStore? viewStore,
   BookSourceFileSaver? saver,
+  Clock? clock,
 }) async {
   _fixViewSize(tester);
 
@@ -185,6 +199,8 @@ Future<void> pumpSourceManagementPage(
         bookSourceViewStoreProvider.overrideWith(
           (Ref ref) async => viewStore ?? FakeBookSourceViewStore(),
         ),
+        // 列表里的「上次校验 2 分钟前」由注入时钟换算（testing.md §4）。
+        if (clock != null) clockProvider.overrideWithValue(clock),
       ],
       child: MaterialApp(
         locale: const Locale('en'),
@@ -349,4 +365,31 @@ void _fixViewSize(WidgetTester tester) {
   tester.view.physicalSize = const Size(1080, 1920);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+}
+
+/// A [SelectedBookSource] that always answers [stored].
+///
+/// The discover page reads the stored projection (the explore flag is a column), so the shared
+/// harness has to provide it instead of only the sync `currentBookSourceProvider` shortcut.
+final class _FixedSelectedBookSource extends SelectedBookSource {
+  _FixedSelectedBookSource(this.stored);
+
+  final BookSource? stored;
+
+  @override
+  Future<StoredBookSource?> build() async {
+    final BookSource? source = stored;
+    if (source == null) {
+      return null;
+    }
+
+    return StoredBookSource(
+      id: 1,
+      source: source,
+      isEnabled: source.isEnabled,
+      customOrder: 0,
+      importedAt: DateTime.utc(2026, 10, 22),
+      groupName: source.group,
+    );
+  }
 }

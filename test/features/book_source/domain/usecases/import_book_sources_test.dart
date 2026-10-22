@@ -7,6 +7,7 @@ import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
@@ -39,7 +40,12 @@ final class _FakeRepository implements BookSourceRepository {
   @override
   Future<List<StoredBookSource>> getAll({
     BookSourceSortOrder order = BookSourceSortOrder.defaultOrder,
+    bool ascending = true,
   }) async => <StoredBookSource>[];
+
+  @override
+  Future<Map<int, SourceCheckRecord>> latestChecks() async =>
+      <int, SourceCheckRecord>{};
 
   @override
   Future<void> reorder(List<int> orderedIds) async {}
@@ -71,6 +77,24 @@ final class _FakeRepository implements BookSourceRepository {
 
   @override
   Future<void> setGroupFor(List<int> ids, String? group) async {}
+
+  @override
+  Future<void> setExploreEnabledFor(
+    List<int> ids, {
+    required bool isExploreEnabled,
+  }) async {}
+
+  @override
+  Future<void> moveToEdge(List<int> ids, {required bool toTop}) async {}
+
+  @override
+  Future<void> renameGroup(String from, String to) async {}
+
+  @override
+  Future<void> deleteGroup(String group) async {}
+
+  @override
+  Future<void> removeFromGroup(List<int> ids, String group) async {}
 
   @override
   Future<BookSourceEditOutcome> update({

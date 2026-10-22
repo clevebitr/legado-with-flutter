@@ -285,6 +285,8 @@ class SourceCheck extends _$SourceCheck {
       return;
     }
 
+    // 状态灯读的是列表里的投影（ADR-0052 §决策 1）：写完一条就让列表重读，而不是等用户重进。
+    ref.invalidate(bookSourceListDataProvider);
     if (!applied) {
       _patch(
         index,

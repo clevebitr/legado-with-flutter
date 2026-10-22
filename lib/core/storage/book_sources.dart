@@ -60,6 +60,14 @@ class BookSources extends Table {
   /// User state: the manual sort order (`docs/dev/roadmap.md` 5.5); import never touches it either.
   IntColumn get customOrder => integer().withDefault(const Constant(0))();
 
+  /// User state: whether the source's discover page is offered (`docs/dev/roadmap.md` §3.10 V2).
+  ///
+  /// Import initialises a **new** row from the payload's `enabledExplore`; like [isEnabled] it is
+  /// never reset by a re-import (ADR-0040 §决策 3). Search does not read it — upstream's flag only
+  /// governs the discover page (ADR-0052 §决策 3).
+  BoolColumn get isExploreEnabled =>
+      boolean().withDefault(const Constant(true))();
+
   /// `weight`, projected for sorting in `docs/dev/roadmap.md` 5.5.
   IntColumn get weight => integer().withDefault(const Constant(0))();
 

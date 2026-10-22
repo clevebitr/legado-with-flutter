@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_reader/core/storage/book_sources.dart';
 import 'package:flutter_reader/core/storage/books.dart';
 import 'package:flutter_reader/core/storage/cache_entries.dart';
+import 'package:flutter_reader/core/storage/source_checks.dart';
 
 part 'database.g.dart';
 
@@ -16,14 +17,20 @@ part 'database.g.dart';
 /// (`docs/dev/testing.md` §4). The `@DriftAccessor` mixin is generated either way.
 /// `BookSourceDao` has the same reason, plus its clock.
 @DriftDatabase(
-  tables: <Type>[CacheEntries, BookSources, Books, ReadingProgress],
+  tables: <Type>[
+    CacheEntries,
+    BookSources,
+    Books,
+    ReadingProgress,
+    SourceChecks,
+  ],
 )
 class ReaderDatabase extends _$ReaderDatabase {
   /// Creates the database on top of [e].
   ReaderDatabase(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -48,6 +55,18 @@ class ReaderDatabase extends _$ReaderDatabase {
         // 上面的 `createTable(books)`，那已经是**当前**形状（含 `tocUrl`），所以这里的
         // `addColumn` 只对「书架表已存在」的升级路径执行。
         await m.addColumn(books, books.tocUrl);
+      }
+      // v6 新增校验历史表与探索开关列（ADR-0052 §决策 1/3）。从 v1 上来的库走的是上面的
+      // `createTable(bookSources)`，那已经是**当前**形状（含 `isExploreEnabled`），
+      // 所以 `addColumn` 只对「书源表已存在」的升级路径执行。
+      if (from < 6) {
+        // `createTable` 不建索引：`@TableIndex` 声明的是独立的 schema 实体，
+        // 必须显式 `create` 一次，否则迁移后的库会缺索引（migration_test 会报 schema 不一致）。
+        await m.create(sourceChecks);
+        await m.create(sourceChecksSourceChecked);
+        if (from >= 2) {
+          await m.addColumn(bookSources, bookSources.isExploreEnabled);
+        }
       }
     },
   );

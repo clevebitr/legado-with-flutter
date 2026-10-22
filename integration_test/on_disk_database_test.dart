@@ -163,6 +163,7 @@ void main() {
             groupName: null,
             sourceType: 0,
             isEnabled: true,
+            isExploreEnabled: true,
             customOrder: 0,
             weight: 0,
             lastUpdateTime: null,

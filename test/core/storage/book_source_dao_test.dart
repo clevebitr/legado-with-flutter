@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_reader/core/storage/book_source_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
+import 'package:flutter_reader/core/storage/source_checks.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,6 +53,7 @@ void main() {
       groupName: groupName,
       sourceType: sourceType,
       isEnabled: isEnabled,
+      isExploreEnabled: true,
       customOrder: customOrder,
       weight: weight,
       lastUpdateTime: 1612777312843,
@@ -138,8 +140,11 @@ void main() {
       await insert(name: '轻', weight: 1, customOrder: 0);
       await insert(name: '重', weight: 9, customOrder: 1);
 
+      // 方向由调用方给：视图把「权重」的默认方向初始化成降序（ADR-0052 §决策 4），
+      // DAO 只负责按这个方向排。
       final List<BookSourceRow> rows = await dao.findAll(
         order: BookSourceSortOrder.weight,
+        ascending: false,
       );
 
       expect(rows.map((BookSourceRow row) => row.name), <String>['重', '轻']);
@@ -184,6 +189,7 @@ void main() {
 
       final List<BookSourceRow> rows = await dao.findAll(
         order: BookSourceSortOrder.weight,
+        ascending: false,
       );
 
       expect(rows.map((BookSourceRow row) => row.name), <String>[
@@ -304,6 +310,195 @@ void main() {
 
       expect(await dao.deleteAll(), 2);
       expect(await dao.findAll(), isEmpty);
+    });
+
+    test('applyCheck_whenCalled_writesTheColumnsAndOneHistoryRow', () async {
+      final int id = await insert();
+      clock.advance(const Duration(minutes: 3));
+
+      await dao.applyCheck(
+        id: id,
+        groupName: '搜索失效',
+        comment: '// Error: 搜索失效',
+        respondTime: 900,
+        status: 'failed',
+        invalidGroups: '搜索失效',
+        errorComment: '搜索失效',
+        elapsedMillis: 900,
+      );
+
+      final BookSourceRow row = (await dao.findById(id))!;
+      expect(row.groupName, '搜索失效');
+      expect(row.respondTime, 900);
+      final List<SourceCheckRow> history = await database
+          .select(database.sourceChecks)
+          .get();
+      expect(history, hasLength(1));
+      expect(history.single.sourceId, id);
+      expect(history.single.status, 'failed');
+      expect(history.single.invalidGroups, '搜索失效');
+      expect(history.single.errorComment, '搜索失效');
+      expect(history.single.elapsedMillis, 900);
+      expect(history.single.checkedAt, clock.now());
+    });
+
+    test('latestChecks_givenACancelledRun_answersTheLastVerdict', () async {
+      final int id = await insert();
+      await dao.applyCheck(
+        id: id,
+        groupName: null,
+        comment: null,
+        respondTime: 120,
+        status: 'succeeded',
+        invalidGroups: null,
+        errorComment: null,
+        elapsedMillis: 120,
+      );
+      clock.advance(const Duration(minutes: 1));
+      await dao.applyCheck(
+        id: id,
+        groupName: null,
+        comment: null,
+        respondTime: 50,
+        status: 'cancelled',
+        invalidGroups: null,
+        errorComment: null,
+        elapsedMillis: 50,
+      );
+
+      final Map<int, SourceCheckRow> latest = await dao.latestChecks(
+        excludedStatus: 'cancelled',
+      );
+
+      // 取消不构成结论（ADR-0043 §后果）：灯与「上次校验」都停在通过那一次。
+      expect(latest[id]!.status, 'succeeded');
+    });
+
+    test('applyCheck_givenMoreThanTheLimit_keepsTheNewestRows', () async {
+      final int id = await insert();
+      for (var index = 0; index < checkHistoryLimit + 5; index++) {
+        clock.advance(const Duration(minutes: 1));
+        await dao.applyCheck(
+          id: id,
+          groupName: null,
+          comment: null,
+          respondTime: index,
+          status: 'succeeded',
+          invalidGroups: null,
+          errorComment: null,
+          elapsedMillis: index,
+        );
+      }
+
+      final List<SourceCheckRow> history = await database
+          .select(database.sourceChecks)
+          .get();
+      final Set<int> elapsed = <int>{
+        for (final SourceCheckRow row in history) row.elapsedMillis,
+      };
+
+      // 只留最近 20 条：最老的 5 条（0-4）被裁掉（ADR-0052 §决策 1）。
+      expect(history, hasLength(checkHistoryLimit));
+      expect(elapsed.contains(0), isFalse);
+      expect(elapsed.contains(4), isFalse);
+      expect(elapsed.contains(5), isTrue);
+      expect(elapsed.contains(checkHistoryLimit + 4), isTrue);
+    });
+
+    test('setExploreEnabledFor_whenCalled_flipsEverySelectedRow', () async {
+      final int a = await insert(url: 'https://a.test', fingerprint: 'a');
+      final int b = await insert(url: 'https://b.test', fingerprint: 'b');
+
+      await dao.setExploreEnabledFor(<int>[a, b], isExploreEnabled: false);
+
+      expect((await dao.findById(a))!.isExploreEnabled, isFalse);
+      expect((await dao.findById(b))!.isExploreEnabled, isFalse);
+    });
+
+    test('moveToEdge_whenToTop_movesTheSelectionInFrontOfTheRest', () async {
+      final int a = await insert(
+        url: 'https://a.test',
+        fingerprint: 'a',
+        customOrder: 0,
+      );
+      final int b = await insert(
+        url: 'https://b.test',
+        fingerprint: 'b',
+        customOrder: 1,
+      );
+      final int c = await insert(
+        url: 'https://c.test',
+        fingerprint: 'c',
+        customOrder: 2,
+      );
+
+      await dao.moveToEdge(<int>[c], toTop: true);
+      expect((await dao.findAll()).map((BookSourceRow row) => row.id), <int>[
+        c,
+        a,
+        b,
+      ]);
+
+      await dao.moveToEdge(<int>[c], toTop: false);
+      expect((await dao.findAll()).map((BookSourceRow row) => row.id), <int>[
+        a,
+        b,
+        c,
+      ]);
+    });
+
+    test(
+      'findAll_givenDescendingName_answersTheReverseAlphabeticalOrder',
+      () async {
+        await insert(url: 'https://a.test', fingerprint: 'a', name: 'alpha');
+        await insert(url: 'https://b.test', fingerprint: 'b', name: 'beta');
+
+        final List<BookSourceRow> rows = await dao.findAll(
+          order: BookSourceSortOrder.name,
+          ascending: false,
+        );
+
+        expect(rows.map((BookSourceRow row) => row.name), <String>[
+          'beta',
+          'alpha',
+        ]);
+      },
+    );
+
+    test('deleteById_whenTheRowHasHistory_removesTheHistoryToo', () async {
+      final int id = await insert();
+      await dao.applyCheck(
+        id: id,
+        groupName: null,
+        comment: null,
+        respondTime: 10,
+        status: 'succeeded',
+        invalidGroups: null,
+        errorComment: null,
+        elapsedMillis: 10,
+      );
+
+      await dao.deleteById(id);
+
+      expect(await database.select(database.sourceChecks).get(), isEmpty);
+    });
+
+    test('deleteAll_whenRowsHaveHistory_clearsTheHistory', () async {
+      final int id = await insert();
+      await dao.applyCheck(
+        id: id,
+        groupName: null,
+        comment: null,
+        respondTime: 10,
+        status: 'succeeded',
+        invalidGroups: null,
+        errorComment: null,
+        elapsedMillis: 10,
+      );
+
+      await dao.deleteAll();
+
+      expect(await database.select(database.sourceChecks).get(), isEmpty);
     });
   });
 }

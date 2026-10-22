@@ -1,5 +1,6 @@
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 
 /// What one edit of a stored source did (ADR-0050 §决策 3).
@@ -34,7 +35,15 @@ abstract interface class BookSourceRepository {
   /// the fixed tie-breakers behind it are the DAO's business, not the caller's.
   Future<List<StoredBookSource>> getAll({
     BookSourceSortOrder order = BookSourceSortOrder.defaultOrder,
+    bool ascending = true,
   });
+
+  /// The newest recorded verdict per source, keyed by `book_sources.id` (`docs/dev/roadmap.md`
+  /// §3.10 V1).
+  ///
+  /// Cancelled runs are left out: they prove nothing about the source (ADR-0043 §后果), so a
+  /// source whose only runs were cancelled stays "never checked" (ADR-0052 §决策 1).
+  Future<Map<int, SourceCheckRecord>> latestChecks();
 
   /// Rewrites the manual order following [orderedIds] (ADR-0045 §决策 3).
   ///
@@ -97,6 +106,28 @@ abstract interface class BookSourceRepository {
   /// check columns alone; the fingerprint does not include the group, so the identity is unchanged.
   /// A row whose payload does not parse is skipped with a warning rather than failing the batch.
   Future<void> setGroupFor(List<int> ids, String? group);
+
+  /// Enables or disables the discover page of every id in [ids] in one transaction
+  /// (ADR-0052 §决策 3).
+  Future<void> setExploreEnabledFor(
+    List<int> ids, {
+    required bool isExploreEnabled,
+  });
+
+  /// Moves every id in [ids] to the top or the bottom of the manual order (ADR-0052 §决策 4).
+  Future<void> moveToEdge(List<int> ids, {required bool toTop});
+
+  /// Renames [from] to [to] in every source's `bookSourceGroup` (ADR-0052 §决策 4).
+  ///
+  /// Only the payload's user group changes; the identity is untouched because the fingerprint does
+  /// not include the group (ADR-0050 §决策 1/3).
+  Future<void> renameGroup(String from, String to);
+
+  /// Removes [group] from every source's `bookSourceGroup` (ADR-0052 §决策 4).
+  Future<void> deleteGroup(String group);
+
+  /// Removes [group] from the `bookSourceGroup` of every id in [ids] (ADR-0052 §决策 4).
+  Future<void> removeFromGroup(List<int> ids, String group);
 
   /// Replaces the stored source [id] with [entry], validated by the caller
   /// (ADR-0050 §决策 3).

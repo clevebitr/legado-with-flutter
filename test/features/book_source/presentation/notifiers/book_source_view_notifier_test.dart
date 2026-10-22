@@ -202,7 +202,11 @@ void main() {
     test('build_givenTheWeightOrder_ordersTheRows', () async {
       _seed(repository, 'light', weight: 1);
       _seed(repository, 'heavy', weight: 9);
-      store.view = const BookSourceListView(order: BookSourceSortOrder.weight);
+      // 视图把方向存成实际方向：权重的默认方向是降序（ADR-0052 §决策 4）。
+      store.view = const BookSourceListView(
+        order: BookSourceSortOrder.weight,
+        ascending: false,
+      );
 
       final BookSourceListData data = await container().read(
         bookSourceListDataProvider.future,

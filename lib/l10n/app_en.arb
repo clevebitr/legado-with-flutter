@@ -925,6 +925,156 @@
   "@bookSourceCheckFilterFailing": {
     "description": "Check-status filter: sources whose last check failed."
   },
+  "bookSourceCheckStatusPassed": "Check passed",
+  "@bookSourceCheckStatusPassed": {
+    "description": "Status light: the last check found no failure."
+  },
+  "bookSourceCheckStatusFailed": "Check failed",
+  "@bookSourceCheckStatusFailed": {
+    "description": "Status light: the last check found a failure the source owns."
+  },
+  "bookSourceCheckStatusDegraded": "Timed out or JS failed",
+  "@bookSourceCheckStatusDegraded": {
+    "description": "Status light: the last check failed only with a timeout or a broken script."
+  },
+  "bookSourceCheckStatusUnchecked": "Never checked",
+  "@bookSourceCheckStatusUnchecked": {
+    "description": "Status light: the source has no verdict yet."
+  },
+  "bookSourceListLastCheckJustNow": "Checked just now",
+  "@bookSourceListLastCheckJustNow": {
+    "description": "Last-check summary: the check finished less than a minute ago."
+  },
+  "bookSourceListLastCheckMinutesAgo": "Checked {count} min ago",
+  "@bookSourceListLastCheckMinutesAgo": {
+    "description": "Last-check summary: minutes since the last verdict.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListLastCheckHoursAgo": "Checked {count} h ago",
+  "@bookSourceListLastCheckHoursAgo": {
+    "description": "Last-check summary: hours since the last verdict.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListLastCheckDaysAgo": "Checked {count} d ago",
+  "@bookSourceListLastCheckDaysAgo": {
+    "description": "Last-check summary: days since the last verdict.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListLastCheckOn": "Checked {date}",
+  "@bookSourceListLastCheckOn": {
+    "description": "Last-check summary: absolute date for a verdict older than a week.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceListLastCheckLine": "{when} · {millis} ms",
+  "@bookSourceListLastCheckLine": {
+    "description": "Last-check summary: when it ran and how long it took.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      },
+      "millis": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListBatchMoveTop": "Move to top",
+  "@bookSourceListBatchMoveTop": {
+    "description": "Batch action: moves the selection to the top of the manual order."
+  },
+  "bookSourceListBatchMoveBottom": "Move to bottom",
+  "@bookSourceListBatchMoveBottom": {
+    "description": "Batch action: moves the selection to the bottom of the manual order."
+  },
+  "bookSourceListBatchRemoveGroup": "Remove from group",
+  "@bookSourceListBatchRemoveGroup": {
+    "description": "Batch action: removes the selection from the current group filter."
+  },
+  "bookSourceListExploreOn": "Discover on",
+  "@bookSourceListExploreOn": {
+    "description": "Row badge: the source offers its discover page."
+  },
+  "bookSourceListExploreOff": "Discover off",
+  "@bookSourceListExploreOff": {
+    "description": "Row badge: the user turned the discover page off."
+  },
+  "bookSourceExploreDisabled": "Discover is turned off for this source. Turn it back on in the source list.",
+  "@bookSourceExploreDisabled": {
+    "description": "Discover page empty state: the user disabled this source's discover page."
+  },
+  "bookSourceRowExploreEnable": "Turn discover on",
+  "@bookSourceRowExploreEnable": {
+    "description": "Row menu: offers the source's discover page again."
+  },
+  "bookSourceRowExploreDisable": "Turn discover off",
+  "@bookSourceRowExploreDisable": {
+    "description": "Row menu: hides the source's discover page without deleting its rules."
+  },
+  "bookSourceListSortAscending": "Ascending",
+  "@bookSourceListSortAscending": {
+    "description": "Sort direction toggle: current direction is ascending."
+  },
+  "bookSourceListSortDescending": "Descending",
+  "@bookSourceListSortDescending": {
+    "description": "Sort direction toggle: current direction is descending."
+  },
+  "bookSourceListGroupByDomain": "Group by domain",
+  "@bookSourceListGroupByDomain": {
+    "description": "List view toggle: one section per book source host."
+  },
+  "bookSourceListViewOptions": "View",
+  "@bookSourceListViewOptions": {
+    "description": "Tooltip of the list's view-options menu."
+  },
+  "bookSourceListMoreActions": "More actions",
+  "@bookSourceListMoreActions": {
+    "description": "Tooltip of the batch bar's overflow menu."
+  },
+  "bookSourceListGroupManage": "Manage groups",
+  "@bookSourceListGroupManage": {
+    "description": "Opens the group management dialog."
+  },
+  "bookSourceListGroupRename": "Rename group",
+  "@bookSourceListGroupRename": {
+    "description": "Group management action: rename a group everywhere."
+  },
+  "bookSourceListGroupDelete": "Delete group",
+  "@bookSourceListGroupDelete": {
+    "description": "Group management action: remove the group from every source."
+  },
+  "bookSourceListGroupDeleteBody": "Every source leaves “{group}”; the sources themselves stay.",
+  "@bookSourceListGroupDeleteBody": {
+    "description": "Confirms deleting a group everywhere.",
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceListGroupRemoveFrom": "Remove from “{group}”",
+  "@bookSourceListGroupRemoveFrom": {
+    "description": "Batch action: takes the selection out of one group.",
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
   "bookSourceRowCheck": "Check this source",
   "@bookSourceRowCheck": {
     "description": "Row menu: runs the check on this one source."

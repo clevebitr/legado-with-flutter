@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/explore_category.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/explore_notifier.dart';
@@ -28,30 +29,60 @@ class ExplorePage extends ConsumerStatefulWidget {
 }
 
 class _ExplorePageState extends ConsumerState<ExplorePage> {
+  /// Whether a category load was already requested for the current source.
+  bool _requested = false;
+
   @override
   void initState() {
     super.initState();
-    // 分类只拉一次（`currentBookSourceProvider` 是「选中哪个书源」的唯一接缝）。
-    final BookSource? source = ref.read(currentBookSourceProvider);
-    if (source != null) {
-      unawaited(
-        Future<void>.microtask(
-          () => ref.read(exploreProvider.notifier).loadCategories(source),
-        ),
-      );
+    // 选中的源是异步投影（先列表、再取行），第一次 build 时它可能还在 loading：
+    // 所以在 provider 上挂监听，等它真的给出源再拉分类，而不是在 initState 里赌一次 read。
+    // 发现被关掉的源一个请求都不发（ADR-0052 §决策 3）。
+    ref.listenManual<AsyncValue<StoredBookSource?>>(
+      selectedBookSourceProvider,
+      (
+        AsyncValue<StoredBookSource?>? previous,
+        AsyncValue<StoredBookSource?> next,
+      ) => _loadCategoriesIfNeeded(next.value),
+      fireImmediately: true,
+    );
+  }
+
+  /// Loads the categories once the selected source is known and its discover page is on.
+  ///
+  /// The work is deferred to the next frame: `exploreProvider` is auto-dispose, and reading its
+  /// notifier before the first `build` has watched it would create an element nobody keeps alive
+  /// (the first attempt at this did exactly that, and the notifier then ran on a disposed `Ref`).
+  void _loadCategoriesIfNeeded(StoredBookSource? stored) {
+    if (_requested || stored == null || !stored.isExploreEnabled) {
+      return;
     }
+    _requested = true;
+    final BookSource source = stored.source;
+    WidgetsBinding.instance.addPostFrameCallback((Duration _) {
+      if (!mounted || ref.read(exploreProvider) is! ExploreIdle) {
+        return;
+      }
+      unawaited(ref.read(exploreProvider.notifier).loadCategories(source));
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final BookSource? source = ref.watch(currentBookSourceProvider);
+    final StoredBookSource? stored = ref
+        .watch(selectedBookSourceProvider)
+        .value;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.bookSourceExploreTitle)),
-      body: source == null
-          ? StateMessage(message: l10n.bookSourceMissingSource)
-          : _body(l10n, source),
+      body: switch (stored) {
+        null => StateMessage(message: l10n.bookSourceMissingSource),
+        StoredBookSource(isExploreEnabled: false) => StateMessage(
+          message: l10n.bookSourceExploreDisabled,
+        ),
+        StoredBookSource(:final BookSource source) => _body(l10n, source),
+      },
     );
   }
 

@@ -10,13 +10,29 @@ final class BookSourceListView {
   const BookSourceListView({
     this.order = BookSourceSortOrder.defaultOrder,
     this.group,
+    this.ascending = true,
+    this.groupByDomain = false,
   });
 
-  /// What a list that has stored nothing yet shows: the manual order, every group.
+  /// What a list that has stored nothing yet shows: the manual order, every group, ascending,
+  /// one flat list.
   static const BookSourceListView defaults = BookSourceListView();
 
   /// The sort key the user picked.
   final BookSourceSortOrder order;
+
+  /// Whether [order] runs ascending; `false` reverses it (`docs/dev/roadmap.md` §3.10 V4).
+  ///
+  /// For [BookSourceSortOrder.defaultOrder] this means the manual order reversed, which is why the
+  /// drag handle is only offered while the direction is ascending (ADR-0052 §决策 4).
+  final bool ascending;
+
+  /// Whether the rows are rendered in one section per `bookSourceUrl` host
+  /// (`docs/dev/roadmap.md` §3.10 V4).
+  ///
+  /// It is a **rendering** flag: the query, the filter and the manual order are unaffected; the
+  /// sections are built from the rows already loaded (ADR-0052 §决策 4).
+  final bool groupByDomain;
 
   /// The group the list is filtered to, or `null` for «all groups».
   ///
@@ -30,20 +46,28 @@ final class BookSourceListView {
     BookSourceSortOrder? order,
     String? group,
     bool clearGroup = false,
+    bool? ascending,
+    bool? groupByDomain,
   }) => BookSourceListView(
     order: order ?? this.order,
     group: clearGroup ? null : (group ?? this.group),
+    ascending: ascending ?? this.ascending,
+    groupByDomain: groupByDomain ?? this.groupByDomain,
   );
 
   @override
   bool operator ==(Object other) =>
       other is BookSourceListView &&
       other.order == order &&
-      other.group == group;
+      other.group == group &&
+      other.ascending == ascending &&
+      other.groupByDomain == groupByDomain;
 
   @override
-  int get hashCode => Object.hash(order, group);
+  int get hashCode => Object.hash(order, group, ascending, groupByDomain);
 
   @override
-  String toString() => 'BookSourceListView(order: $order, group: $group)';
+  String toString() =>
+      'BookSourceListView(order: $order, group: $group, '
+      'ascending: $ascending, groupByDomain: $groupByDomain)';
 }

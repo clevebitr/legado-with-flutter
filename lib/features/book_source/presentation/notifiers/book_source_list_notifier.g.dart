@@ -113,7 +113,7 @@ final class SelectedBookSourceProvider
 }
 
 String _$selectedBookSourceHash() =>
-    r'28794878379138f6136bbd698534bf6e5b94be30';
+    r'c4d9215f2882ee3f2175194120dbbf71e5a84067';
 
 /// Which stored source the pages work with, and the only place that changes it.
 ///
@@ -242,7 +242,7 @@ final class BookSourceViewProvider
   BookSourceView create() => BookSourceView();
 }
 
-String _$bookSourceViewHash() => r'8ea5619254456de6355b58b843c4223bc2f27b12';
+String _$bookSourceViewHash() => r'1ff826e9dab2cddcfda4a3c521c9fd077de0eccf';
 
 /// The list's own view state — sort key and group filter — and the only place that changes it
 /// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
@@ -329,7 +329,7 @@ final class BookSourceListDataProvider
 }
 
 String _$bookSourceListDataHash() =>
-    r'af5a9aebe5154a933c57469bf1e644c0c6878c4b';
+    r'157a28db61cad6680c99df520971a7dad5378fea';
 
 /// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
 ///

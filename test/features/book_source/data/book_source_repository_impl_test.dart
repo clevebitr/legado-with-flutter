@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
@@ -34,6 +35,8 @@ Map<String, Object?> _entry({
   String url = 'https://a.test',
   String content = 'class.body',
   bool? enabled,
+  bool? exploreEnabled,
+  String? group,
   Object? customOrder,
   Object? weight,
 }) {
@@ -50,6 +53,12 @@ Map<String, Object?> _entry({
   };
   if (enabled != null) {
     entry['enabled'] = enabled;
+  }
+  if (exploreEnabled != null) {
+    entry['enabledExplore'] = exploreEnabled;
+  }
+  if (group != null) {
+    entry['bookSourceGroup'] = group;
   }
   if (customOrder != null) {
     entry['customOrder'] = customOrder;
@@ -197,6 +206,7 @@ void main() {
         groupName: null,
         sourceType: 0,
         isEnabled: true,
+        isExploreEnabled: true,
         customOrder: 0,
         weight: 0,
         lastUpdateTime: null,
@@ -221,6 +231,7 @@ void main() {
           groupName: null,
           sourceType: 0,
           isEnabled: true,
+          isExploreEnabled: true,
           customOrder: 0,
           weight: 0,
           lastUpdateTime: null,
@@ -246,6 +257,7 @@ void main() {
         groupName: null,
         sourceType: 0,
         isEnabled: true,
+        isExploreEnabled: true,
         customOrder: 0,
         weight: 0,
         lastUpdateTime: null,
@@ -384,8 +396,10 @@ void main() {
         _entry(name: '重', url: 'https://heavy.test', weight: 9),
       ]);
 
+      // 方向是独立轴：视图给「权重」的默认方向是降序（ADR-0052 §决策 4）。
       final List<StoredBookSource> rows = await repository.getAll(
         order: BookSourceSortOrder.weight,
+        ascending: false,
       );
 
       expect(
@@ -563,6 +577,140 @@ void main() {
       await repository.delete(id);
 
       expect(await repository.getAll(), isEmpty);
+    });
+
+    test(
+      'saveAll_givenExploreDisabled_initialisesTheFlagAndKeepsItOnReimport',
+      () async {
+        await repository.saveAll(<Map<String, Object?>>[
+          _entry(exploreEnabled: false),
+        ]);
+        // 用户重新打开发现后再次导入同一身份：用户态不许被覆盖（ADR-0040 §决策 3）。
+        final int id = (await repository.getAll()).single.id;
+        await repository.setExploreEnabledFor(<int>[
+          id,
+        ], isExploreEnabled: true);
+
+        await repository.saveAll(<Map<String, Object?>>[
+          _entry(exploreEnabled: false),
+        ]);
+
+        expect((await repository.findById(id))!.isExploreEnabled, isTrue);
+      },
+    );
+
+    test('applyCheckReport_givenAVerdict_recordsItInTheHistory', () async {
+      await repository.saveAll(<Map<String, Object?>>[_entry()]);
+      final int id = (await repository.getAll()).single.id;
+
+      await repository.applyCheckReport(
+        id: id,
+        report: const SourceCheckReport(
+          status: SourceCheckStatus.failed,
+          invalidGroups: <String>[searchInvalidGroup],
+          errorComment: '搜索失效',
+          elapsedMillis: 640,
+        ),
+      );
+
+      final Map<int, SourceCheckRecord> latest = await repository
+          .latestChecks();
+      expect(latest[id]!.status, SourceCheckStatus.failed);
+      expect(latest[id]!.invalidGroups, <String>[searchInvalidGroup]);
+      expect(latest[id]!.elapsedMillis, 640);
+      expect(latest[id]!.checkedAt, clock.now());
+      // 列投影与历史同一次写入，两处说的是同一件事（ADR-0052 §决策 1）。
+      expect(
+        (await repository.findById(id))!.groupName,
+        contains(searchInvalidGroup),
+      );
+    });
+
+    test('renameGroup_whenCalled_rewritesThePayloadGroupOnly', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(url: 'https://a.test', group: '精选'),
+        _entry(url: 'https://b.test', group: '精选, 备用'),
+        _entry(url: 'https://c.test', group: '别的'),
+      ]);
+
+      await repository.renameGroup('精选', '收藏');
+
+      final Map<String, String?> groups = <String, String?>{
+        for (final StoredBookSource source in await repository.getAll())
+          source.source.url: source.source.group,
+      };
+      expect(groups['https://a.test'], '收藏');
+      expect(groups['https://b.test'], '收藏, 备用');
+      expect(groups['https://c.test'], '别的');
+    });
+
+    test('deleteGroup_whenCalled_removesTheTokenFromEverySource', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(url: 'https://a.test', group: '精选, 备用'),
+        _entry(url: 'https://b.test', group: '精选'),
+      ]);
+
+      await repository.deleteGroup('精选');
+
+      final Map<String, String?> groups = <String, String?>{
+        for (final StoredBookSource source in await repository.getAll())
+          source.source.url: source.source.group,
+      };
+      expect(groups['https://a.test'], '备用');
+      expect(groups['https://b.test'], isNull);
+    });
+
+    test('removeFromGroup_givenSomeIds_leavesTheOtherSourcesAlone', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(url: 'https://a.test', group: '精选'),
+        _entry(url: 'https://b.test', group: '精选'),
+      ]);
+      final int first = (await repository.getAll()).first.id;
+
+      await repository.removeFromGroup(<int>[first], '精选');
+
+      final Map<String, String?> groups = <String, String?>{
+        for (final StoredBookSource source in await repository.getAll())
+          source.source.url: source.source.group,
+      };
+      expect(groups['https://a.test'], isNull);
+      expect(groups['https://b.test'], '精选');
+    });
+
+    test('moveToEdge_whenToTop_ordersTheSelectionFirst', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(name: 'a', url: 'https://a.test'),
+        _entry(name: 'b', url: 'https://b.test'),
+        _entry(name: 'c', url: 'https://c.test'),
+      ]);
+      final List<StoredBookSource> rows = await repository.getAll();
+      final int last = rows.last.id;
+
+      await repository.moveToEdge(<int>[last], toTop: true);
+
+      expect(
+        (await repository.getAll()).map(
+          (StoredBookSource source) => source.source.url,
+        ),
+        <String>['https://c.test', 'https://a.test', 'https://b.test'],
+      );
+    });
+
+    test('setExploreEnabledFor_whenCalled_flipsEverySelectedSource', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(url: 'https://a.test'),
+        _entry(url: 'https://b.test'),
+      ]);
+      final List<int> ids = <int>[
+        for (final StoredBookSource source in await repository.getAll())
+          source.id,
+      ];
+
+      await repository.setExploreEnabledFor(ids, isExploreEnabled: false);
+
+      for (final StoredBookSource source in await repository.getAll()) {
+        expect(source.isExploreEnabled, isFalse);
+      }
     });
   });
 }

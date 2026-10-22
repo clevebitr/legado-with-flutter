@@ -15,5 +15,12 @@ enum BookSourceSortOrder {
   respondTime,
 
   /// The source name ascending, by code unit (no collation, no pinyin).
-  name,
+  name;
+
+  /// The direction this key is first offered in (ADR-0045 §决策 2, ADR-0052 §决策 4).
+  ///
+  /// Weight is "the heavier the earlier", so its natural direction is descending; the other keys
+  /// read naturally ascending. The view stores the **actual** direction, so this getter is only
+  /// used when the user picks a key.
+  bool get defaultAscending => this != BookSourceSortOrder.weight;
 }

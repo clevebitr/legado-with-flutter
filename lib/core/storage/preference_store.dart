@@ -25,6 +25,12 @@ final class PreferenceStore {
   /// The stored `String` under [key], or `null` when absent or of another type.
   String? readString(String key) => _narrow<String>(key);
 
+  /// The stored `bool` under [key], or `null` when absent or of another type.
+  ///
+  /// Same narrowing rationale as the other readers: the typed getters cast and throw, and a view
+  /// flag must fall back to its default instead of crashing the list.
+  bool? readBool(String key) => _narrow<bool>(key);
+
   /// The stored value under [key] when it is a [T], else `null`.
   T? _narrow<T>(String key) {
     final Object? value = _preferences.get(key);
@@ -49,6 +55,11 @@ final class PreferenceStore {
   /// Stores [value] under [key].
   Future<void> writeString(String key, String value) async {
     await _preferences.setString(key, value);
+  }
+
+  /// Stores [value] under [key].
+  Future<void> writeBool(String key, bool value) async {
+    await _preferences.setBool(key, value);
   }
 
   /// Removes [key], if present.

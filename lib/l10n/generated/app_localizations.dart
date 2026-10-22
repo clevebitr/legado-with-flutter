@@ -722,10 +722,10 @@ abstract class AppLocalizations {
   /// **'Passed'**
   String get bookSourceCheckStatusSucceeded;
 
-  /// Per-source status after a check that found problems.
+  /// Status light: the last check found a failure the source owns.
   ///
   /// In en, this message translates to:
-  /// **'Failed'**
+  /// **'Check failed'**
   String get bookSourceCheckStatusFailed;
 
   /// Per-source status after the user stopped the batch.
@@ -1345,6 +1345,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Has failures'**
   String get bookSourceCheckFilterFailing;
+
+  /// Status light: the last check found no failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Check passed'**
+  String get bookSourceCheckStatusPassed;
+
+  /// Status light: the last check failed only with a timeout or a broken script.
+  ///
+  /// In en, this message translates to:
+  /// **'Timed out or JS failed'**
+  String get bookSourceCheckStatusDegraded;
+
+  /// Status light: the source has no verdict yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Never checked'**
+  String get bookSourceCheckStatusUnchecked;
+
+  /// Last-check summary: the check finished less than a minute ago.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked just now'**
+  String get bookSourceListLastCheckJustNow;
+
+  /// Last-check summary: minutes since the last verdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {count} min ago'**
+  String bookSourceListLastCheckMinutesAgo(int count);
+
+  /// Last-check summary: hours since the last verdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {count} h ago'**
+  String bookSourceListLastCheckHoursAgo(int count);
+
+  /// Last-check summary: days since the last verdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {count} d ago'**
+  String bookSourceListLastCheckDaysAgo(int count);
+
+  /// Last-check summary: absolute date for a verdict older than a week.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {date}'**
+  String bookSourceListLastCheckOn(String date);
+
+  /// Last-check summary: when it ran and how long it took.
+  ///
+  /// In en, this message translates to:
+  /// **'{when} · {millis} ms'**
+  String bookSourceListLastCheckLine(String when, int millis);
+
+  /// Batch action: moves the selection to the top of the manual order.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to top'**
+  String get bookSourceListBatchMoveTop;
+
+  /// Batch action: moves the selection to the bottom of the manual order.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to bottom'**
+  String get bookSourceListBatchMoveBottom;
+
+  /// Batch action: removes the selection from the current group filter.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from group'**
+  String get bookSourceListBatchRemoveGroup;
+
+  /// Row badge: the source offers its discover page.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover on'**
+  String get bookSourceListExploreOn;
+
+  /// Row badge: the user turned the discover page off.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover off'**
+  String get bookSourceListExploreOff;
+
+  /// Discover page empty state: the user disabled this source's discover page.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover is turned off for this source. Turn it back on in the source list.'**
+  String get bookSourceExploreDisabled;
+
+  /// Row menu: offers the source's discover page again.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn discover on'**
+  String get bookSourceRowExploreEnable;
+
+  /// Row menu: hides the source's discover page without deleting its rules.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn discover off'**
+  String get bookSourceRowExploreDisable;
+
+  /// Sort direction toggle: current direction is ascending.
+  ///
+  /// In en, this message translates to:
+  /// **'Ascending'**
+  String get bookSourceListSortAscending;
+
+  /// Sort direction toggle: current direction is descending.
+  ///
+  /// In en, this message translates to:
+  /// **'Descending'**
+  String get bookSourceListSortDescending;
+
+  /// List view toggle: one section per book source host.
+  ///
+  /// In en, this message translates to:
+  /// **'Group by domain'**
+  String get bookSourceListGroupByDomain;
+
+  /// Tooltip of the list's view-options menu.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get bookSourceListViewOptions;
+
+  /// Tooltip of the batch bar's overflow menu.
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get bookSourceListMoreActions;
+
+  /// Opens the group management dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage groups'**
+  String get bookSourceListGroupManage;
+
+  /// Group management action: rename a group everywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename group'**
+  String get bookSourceListGroupRename;
+
+  /// Group management action: remove the group from every source.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete group'**
+  String get bookSourceListGroupDelete;
+
+  /// Confirms deleting a group everywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Every source leaves “{group}”; the sources themselves stay.'**
+  String bookSourceListGroupDeleteBody(String group);
+
+  /// Batch action: takes the selection out of one group.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from “{group}”'**
+  String bookSourceListGroupRemoveFrom(String group);
 
   /// Row menu: runs the check on this one source.
   ///

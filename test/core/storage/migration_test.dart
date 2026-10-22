@@ -13,57 +13,69 @@ void main() {
       verifier = SchemaVerifier(GeneratedHelper());
     });
 
-    test('migration_whenSchemaIsCreated_matchesTheRecordedV5Schema', () async {
+    test('migration_whenSchemaIsCreated_matchesTheRecordedV6Schema', () async {
       // 走 onCreate（`m.createAll()`）建库，再与 `drift_schemas/` 里 dump 出的
-      // v4 逐列比对：有人改了表却忘了重新 dump 时，这条会失败。
-      final InitializedSchema schema = await verifier.schemaAt(4);
+      // v5 逐列比对：有人改了表却忘了重新 dump 时，这条会失败。
+      final InitializedSchema schema = await verifier.schemaAt(5);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 5);
+      await verifier.migrateAndValidate(database, 6);
       await database.close();
     });
 
-    test('migration_fromV1ToV5_createsEveryTable', () async {
+    test('migration_fromV1ToV6_createsEveryTable', () async {
       // 从 v1 建库再跑到最新版：v2 加 `book_sources`（ADR-0040），v3 加 `books` 与
       // `reading_progress`（ADR-0041 §决策 4），v4 给书源加 `comment` 列（ADR-0043），
-      // v5 给书架加 `tocUrl` 列（ADR-0044）。
+      // v5 给书架加 `tocUrl` 列（ADR-0044），v6 加校验历史表与 `isExploreEnabled` 列
+      // （ADR-0052 §决策 1/3）。
       final InitializedSchema schema = await verifier.schemaAt(1);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 5);
+      await verifier.migrateAndValidate(database, 6);
       await database.close();
     });
 
-    test('migration_fromV2ToV5_keepsTheImportedSources', () async {
+    test('migration_fromV2ToV6_keepsTheImportedSources', () async {
       // v3 只有新表、v4 只有一列可空值：从导入书源那一版升上来时，既有行必须原样保留，
       // 新列的初值就是 null。
       final InitializedSchema schema = await verifier.schemaAt(2);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 5);
+      await verifier.migrateAndValidate(database, 6);
       await database.close();
     });
 
-    test('migration_fromV3ToV5_addsTheCommentAndTocColumns', () async {
+    test('migration_fromV3ToV6_addsTheCommentAndTocColumns', () async {
       // 5.4 / 5.6 那一版的库升上来：书架与阅读进度表已存在，两列分别在这一步补上。
       final InitializedSchema schema = await verifier.schemaAt(3);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 5);
+      await verifier.migrateAndValidate(database, 6);
       await database.close();
     });
 
-    test('migration_fromV4ToV5_addsTheTocUrlColumn', () async {
-      // M10 那一版（v4）升上来：书源表不动，书架多一列可空的目录地址（ADR-0044 §决策 3）。
+    test('migration_fromV4ToV6_addsTheTocUrlColumn', () async {
+      // M10 那一版（v4）升上来：书源表多一列可空的目录地址（ADR-0044 §决策 3），
+      // 再到 v6 时补校验历史表与探索开关列。
       final InitializedSchema schema = await verifier.schemaAt(4);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 5);
+      await verifier.migrateAndValidate(database, 6);
       await database.close();
     });
 
-    test('schemaVersion_whenRead_isFive', () {
-      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 5);
+    test('migration_fromV5ToV6_addsTheCheckHistoryAndExploreFlag', () async {
+      // M13 那一版（v5）升上来：书源与书架列不动，新增 `source_checks` 表与
+      // `is_explore_enabled` 列，默认值让旧行保持「发现开着」（ADR-0052 §决策 1/3）。
+      final InitializedSchema schema = await verifier.schemaAt(5);
+      final ReaderDatabase database = ReaderDatabase(schema.newConnection());
+
+      await verifier.migrateAndValidate(database, 6);
+      await database.close();
+    });
+
+    test('schemaVersion_whenRead_isSix', () {
+      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 6);
     });
   });
 }

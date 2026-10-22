@@ -397,6 +397,21 @@ class $BookSourcesTable extends BookSources
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _isExploreEnabledMeta = const VerificationMeta(
+    'isExploreEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> isExploreEnabled = GeneratedColumn<bool>(
+    'is_explore_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_explore_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _weightMeta = const VerificationMeta('weight');
   @override
   late final GeneratedColumn<int> weight = GeneratedColumn<int>(
@@ -463,6 +478,7 @@ class $BookSourcesTable extends BookSources
     sourceType,
     isEnabled,
     customOrder,
+    isExploreEnabled,
     weight,
     lastUpdateTime,
     respondTime,
@@ -549,6 +565,15 @@ class $BookSourcesTable extends BookSources
         customOrder.isAcceptableOrUnknown(
           data['custom_order']!,
           _customOrderMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_explore_enabled')) {
+      context.handle(
+        _isExploreEnabledMeta,
+        isExploreEnabled.isAcceptableOrUnknown(
+          data['is_explore_enabled']!,
+          _isExploreEnabledMeta,
         ),
       );
     }
@@ -645,6 +670,10 @@ class $BookSourcesTable extends BookSources
         DriftSqlType.int,
         data['${effectivePrefix}custom_order'],
       )!,
+      isExploreEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_explore_enabled'],
+      )!,
       weight: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}weight'],
@@ -720,6 +749,13 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
   /// User state: the manual sort order (`docs/dev/roadmap.md` 5.5); import never touches it either.
   final int customOrder;
 
+  /// User state: whether the source's discover page is offered (`docs/dev/roadmap.md` §3.10 V2).
+  ///
+  /// Import initialises a **new** row from the payload's `enabledExplore`; like [isEnabled] it is
+  /// never reset by a re-import (ADR-0040 §决策 3). Search does not read it — upstream's flag only
+  /// governs the discover page (ADR-0052 §决策 3).
+  final bool isExploreEnabled;
+
   /// `weight`, projected for sorting in `docs/dev/roadmap.md` 5.5.
   final int weight;
 
@@ -745,6 +781,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     required this.sourceType,
     required this.isEnabled,
     required this.customOrder,
+    required this.isExploreEnabled,
     required this.weight,
     this.lastUpdateTime,
     this.respondTime,
@@ -768,6 +805,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     map['source_type'] = Variable<int>(sourceType);
     map['is_enabled'] = Variable<bool>(isEnabled);
     map['custom_order'] = Variable<int>(customOrder);
+    map['is_explore_enabled'] = Variable<bool>(isExploreEnabled);
     map['weight'] = Variable<int>(weight);
     if (!nullToAbsent || lastUpdateTime != null) {
       map['last_update_time'] = Variable<int>(lastUpdateTime);
@@ -796,6 +834,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       sourceType: Value(sourceType),
       isEnabled: Value(isEnabled),
       customOrder: Value(customOrder),
+      isExploreEnabled: Value(isExploreEnabled),
       weight: Value(weight),
       lastUpdateTime: lastUpdateTime == null && nullToAbsent
           ? const Value.absent()
@@ -824,6 +863,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       sourceType: serializer.fromJson<int>(json['sourceType']),
       isEnabled: serializer.fromJson<bool>(json['isEnabled']),
       customOrder: serializer.fromJson<int>(json['customOrder']),
+      isExploreEnabled: serializer.fromJson<bool>(json['isExploreEnabled']),
       weight: serializer.fromJson<int>(json['weight']),
       lastUpdateTime: serializer.fromJson<int?>(json['lastUpdateTime']),
       respondTime: serializer.fromJson<int?>(json['respondTime']),
@@ -845,6 +885,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       'sourceType': serializer.toJson<int>(sourceType),
       'isEnabled': serializer.toJson<bool>(isEnabled),
       'customOrder': serializer.toJson<int>(customOrder),
+      'isExploreEnabled': serializer.toJson<bool>(isExploreEnabled),
       'weight': serializer.toJson<int>(weight),
       'lastUpdateTime': serializer.toJson<int?>(lastUpdateTime),
       'respondTime': serializer.toJson<int?>(respondTime),
@@ -864,6 +905,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     int? sourceType,
     bool? isEnabled,
     int? customOrder,
+    bool? isExploreEnabled,
     int? weight,
     Value<int?> lastUpdateTime = const Value.absent(),
     Value<int?> respondTime = const Value.absent(),
@@ -880,6 +922,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     sourceType: sourceType ?? this.sourceType,
     isEnabled: isEnabled ?? this.isEnabled,
     customOrder: customOrder ?? this.customOrder,
+    isExploreEnabled: isExploreEnabled ?? this.isExploreEnabled,
     weight: weight ?? this.weight,
     lastUpdateTime: lastUpdateTime.present
         ? lastUpdateTime.value
@@ -906,6 +949,9 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       customOrder: data.customOrder.present
           ? data.customOrder.value
           : this.customOrder,
+      isExploreEnabled: data.isExploreEnabled.present
+          ? data.isExploreEnabled.value
+          : this.isExploreEnabled,
       weight: data.weight.present ? data.weight.value : this.weight,
       lastUpdateTime: data.lastUpdateTime.present
           ? data.lastUpdateTime.value
@@ -933,6 +979,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
           ..write('sourceType: $sourceType, ')
           ..write('isEnabled: $isEnabled, ')
           ..write('customOrder: $customOrder, ')
+          ..write('isExploreEnabled: $isExploreEnabled, ')
           ..write('weight: $weight, ')
           ..write('lastUpdateTime: $lastUpdateTime, ')
           ..write('respondTime: $respondTime, ')
@@ -954,6 +1001,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     sourceType,
     isEnabled,
     customOrder,
+    isExploreEnabled,
     weight,
     lastUpdateTime,
     respondTime,
@@ -974,6 +1022,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
           other.sourceType == this.sourceType &&
           other.isEnabled == this.isEnabled &&
           other.customOrder == this.customOrder &&
+          other.isExploreEnabled == this.isExploreEnabled &&
           other.weight == this.weight &&
           other.lastUpdateTime == this.lastUpdateTime &&
           other.respondTime == this.respondTime &&
@@ -992,6 +1041,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
   final Value<int> sourceType;
   final Value<bool> isEnabled;
   final Value<int> customOrder;
+  final Value<bool> isExploreEnabled;
   final Value<int> weight;
   final Value<int?> lastUpdateTime;
   final Value<int?> respondTime;
@@ -1008,6 +1058,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     this.sourceType = const Value.absent(),
     this.isEnabled = const Value.absent(),
     this.customOrder = const Value.absent(),
+    this.isExploreEnabled = const Value.absent(),
     this.weight = const Value.absent(),
     this.lastUpdateTime = const Value.absent(),
     this.respondTime = const Value.absent(),
@@ -1025,6 +1076,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     this.sourceType = const Value.absent(),
     this.isEnabled = const Value.absent(),
     this.customOrder = const Value.absent(),
+    this.isExploreEnabled = const Value.absent(),
     this.weight = const Value.absent(),
     this.lastUpdateTime = const Value.absent(),
     this.respondTime = const Value.absent(),
@@ -1047,6 +1099,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     Expression<int>? sourceType,
     Expression<bool>? isEnabled,
     Expression<int>? customOrder,
+    Expression<bool>? isExploreEnabled,
     Expression<int>? weight,
     Expression<int>? lastUpdateTime,
     Expression<int>? respondTime,
@@ -1064,6 +1117,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
       if (sourceType != null) 'source_type': sourceType,
       if (isEnabled != null) 'is_enabled': isEnabled,
       if (customOrder != null) 'custom_order': customOrder,
+      if (isExploreEnabled != null) 'is_explore_enabled': isExploreEnabled,
       if (weight != null) 'weight': weight,
       if (lastUpdateTime != null) 'last_update_time': lastUpdateTime,
       if (respondTime != null) 'respond_time': respondTime,
@@ -1083,6 +1137,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     Value<int>? sourceType,
     Value<bool>? isEnabled,
     Value<int>? customOrder,
+    Value<bool>? isExploreEnabled,
     Value<int>? weight,
     Value<int?>? lastUpdateTime,
     Value<int?>? respondTime,
@@ -1100,6 +1155,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
       sourceType: sourceType ?? this.sourceType,
       isEnabled: isEnabled ?? this.isEnabled,
       customOrder: customOrder ?? this.customOrder,
+      isExploreEnabled: isExploreEnabled ?? this.isExploreEnabled,
       weight: weight ?? this.weight,
       lastUpdateTime: lastUpdateTime ?? this.lastUpdateTime,
       respondTime: respondTime ?? this.respondTime,
@@ -1141,6 +1197,9 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     if (customOrder.present) {
       map['custom_order'] = Variable<int>(customOrder.value);
     }
+    if (isExploreEnabled.present) {
+      map['is_explore_enabled'] = Variable<bool>(isExploreEnabled.value);
+    }
     if (weight.present) {
       map['weight'] = Variable<int>(weight.value);
     }
@@ -1172,6 +1231,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
           ..write('sourceType: $sourceType, ')
           ..write('isEnabled: $isEnabled, ')
           ..write('customOrder: $customOrder, ')
+          ..write('isExploreEnabled: $isExploreEnabled, ')
           ..write('weight: $weight, ')
           ..write('lastUpdateTime: $lastUpdateTime, ')
           ..write('respondTime: $respondTime, ')
@@ -2443,6 +2503,495 @@ class ReadingProgressCompanion extends UpdateCompanion<ReadingProgressRow> {
   }
 }
 
+class $SourceChecksTable extends SourceChecks
+    with TableInfo<$SourceChecksTable, SourceCheckRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SourceChecksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<int> sourceId = GeneratedColumn<int>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _checkedAtMeta = const VerificationMeta(
+    'checkedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> checkedAt = GeneratedColumn<DateTime>(
+    'checked_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _invalidGroupsMeta = const VerificationMeta(
+    'invalidGroups',
+  );
+  @override
+  late final GeneratedColumn<String> invalidGroups = GeneratedColumn<String>(
+    'invalid_groups',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _errorCommentMeta = const VerificationMeta(
+    'errorComment',
+  );
+  @override
+  late final GeneratedColumn<String> errorComment = GeneratedColumn<String>(
+    'error_comment',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _elapsedMillisMeta = const VerificationMeta(
+    'elapsedMillis',
+  );
+  @override
+  late final GeneratedColumn<int> elapsedMillis = GeneratedColumn<int>(
+    'elapsed_millis',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sourceId,
+    checkedAt,
+    status,
+    invalidGroups,
+    errorComment,
+    elapsedMillis,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'source_checks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SourceCheckRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('checked_at')) {
+      context.handle(
+        _checkedAtMeta,
+        checkedAt.isAcceptableOrUnknown(data['checked_at']!, _checkedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_checkedAtMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('invalid_groups')) {
+      context.handle(
+        _invalidGroupsMeta,
+        invalidGroups.isAcceptableOrUnknown(
+          data['invalid_groups']!,
+          _invalidGroupsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('error_comment')) {
+      context.handle(
+        _errorCommentMeta,
+        errorComment.isAcceptableOrUnknown(
+          data['error_comment']!,
+          _errorCommentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('elapsed_millis')) {
+      context.handle(
+        _elapsedMillisMeta,
+        elapsedMillis.isAcceptableOrUnknown(
+          data['elapsed_millis']!,
+          _elapsedMillisMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_elapsedMillisMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SourceCheckRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SourceCheckRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_id'],
+      )!,
+      checkedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}checked_at'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      invalidGroups: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}invalid_groups'],
+      ),
+      errorComment: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_comment'],
+      ),
+      elapsedMillis: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}elapsed_millis'],
+      )!,
+    );
+  }
+
+  @override
+  $SourceChecksTable createAlias(String alias) {
+    return $SourceChecksTable(attachedDatabase, alias);
+  }
+}
+
+class SourceCheckRow extends DataClass implements Insertable<SourceCheckRow> {
+  /// Synthetic primary key; the history is append-only.
+  final int id;
+
+  /// The `book_sources.id` this run belongs to.
+  ///
+  /// Deliberately **no** foreign key: deleting a source and its history is one explicit
+  /// transaction in `BookSourceDao` (`deleteById` / `deleteByIds` / `deleteAll`), which keeps the
+  /// cascade visible in code instead of relying on `PRAGMA foreign_keys` being on.
+  final int sourceId;
+
+  /// When the run finished, from the injected `Clock` (never the database clock).
+  final DateTime checkedAt;
+
+  /// `succeeded` / `failed` / `cancelled` — the domain enum's name, so an unknown value in an old
+  /// database is a name lookup miss rather than a wrong index (same reason as the view store).
+  final String status;
+
+  /// The failure group tokens this run wrote, joined with `joinGroups`, or `null` when healthy.
+  final String? invalidGroups;
+
+  /// The note this run wrote into `bookSourceComment`, or `null` when healthy.
+  final String? errorComment;
+
+  /// How long the run took, which is also what `respondTime` stores.
+  final int elapsedMillis;
+  const SourceCheckRow({
+    required this.id,
+    required this.sourceId,
+    required this.checkedAt,
+    required this.status,
+    this.invalidGroups,
+    this.errorComment,
+    required this.elapsedMillis,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['source_id'] = Variable<int>(sourceId);
+    map['checked_at'] = Variable<DateTime>(checkedAt);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || invalidGroups != null) {
+      map['invalid_groups'] = Variable<String>(invalidGroups);
+    }
+    if (!nullToAbsent || errorComment != null) {
+      map['error_comment'] = Variable<String>(errorComment);
+    }
+    map['elapsed_millis'] = Variable<int>(elapsedMillis);
+    return map;
+  }
+
+  SourceChecksCompanion toCompanion(bool nullToAbsent) {
+    return SourceChecksCompanion(
+      id: Value(id),
+      sourceId: Value(sourceId),
+      checkedAt: Value(checkedAt),
+      status: Value(status),
+      invalidGroups: invalidGroups == null && nullToAbsent
+          ? const Value.absent()
+          : Value(invalidGroups),
+      errorComment: errorComment == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorComment),
+      elapsedMillis: Value(elapsedMillis),
+    );
+  }
+
+  factory SourceCheckRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SourceCheckRow(
+      id: serializer.fromJson<int>(json['id']),
+      sourceId: serializer.fromJson<int>(json['sourceId']),
+      checkedAt: serializer.fromJson<DateTime>(json['checkedAt']),
+      status: serializer.fromJson<String>(json['status']),
+      invalidGroups: serializer.fromJson<String?>(json['invalidGroups']),
+      errorComment: serializer.fromJson<String?>(json['errorComment']),
+      elapsedMillis: serializer.fromJson<int>(json['elapsedMillis']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'sourceId': serializer.toJson<int>(sourceId),
+      'checkedAt': serializer.toJson<DateTime>(checkedAt),
+      'status': serializer.toJson<String>(status),
+      'invalidGroups': serializer.toJson<String?>(invalidGroups),
+      'errorComment': serializer.toJson<String?>(errorComment),
+      'elapsedMillis': serializer.toJson<int>(elapsedMillis),
+    };
+  }
+
+  SourceCheckRow copyWith({
+    int? id,
+    int? sourceId,
+    DateTime? checkedAt,
+    String? status,
+    Value<String?> invalidGroups = const Value.absent(),
+    Value<String?> errorComment = const Value.absent(),
+    int? elapsedMillis,
+  }) => SourceCheckRow(
+    id: id ?? this.id,
+    sourceId: sourceId ?? this.sourceId,
+    checkedAt: checkedAt ?? this.checkedAt,
+    status: status ?? this.status,
+    invalidGroups: invalidGroups.present
+        ? invalidGroups.value
+        : this.invalidGroups,
+    errorComment: errorComment.present ? errorComment.value : this.errorComment,
+    elapsedMillis: elapsedMillis ?? this.elapsedMillis,
+  );
+  SourceCheckRow copyWithCompanion(SourceChecksCompanion data) {
+    return SourceCheckRow(
+      id: data.id.present ? data.id.value : this.id,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      checkedAt: data.checkedAt.present ? data.checkedAt.value : this.checkedAt,
+      status: data.status.present ? data.status.value : this.status,
+      invalidGroups: data.invalidGroups.present
+          ? data.invalidGroups.value
+          : this.invalidGroups,
+      errorComment: data.errorComment.present
+          ? data.errorComment.value
+          : this.errorComment,
+      elapsedMillis: data.elapsedMillis.present
+          ? data.elapsedMillis.value
+          : this.elapsedMillis,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceCheckRow(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('checkedAt: $checkedAt, ')
+          ..write('status: $status, ')
+          ..write('invalidGroups: $invalidGroups, ')
+          ..write('errorComment: $errorComment, ')
+          ..write('elapsedMillis: $elapsedMillis')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    sourceId,
+    checkedAt,
+    status,
+    invalidGroups,
+    errorComment,
+    elapsedMillis,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SourceCheckRow &&
+          other.id == this.id &&
+          other.sourceId == this.sourceId &&
+          other.checkedAt == this.checkedAt &&
+          other.status == this.status &&
+          other.invalidGroups == this.invalidGroups &&
+          other.errorComment == this.errorComment &&
+          other.elapsedMillis == this.elapsedMillis);
+}
+
+class SourceChecksCompanion extends UpdateCompanion<SourceCheckRow> {
+  final Value<int> id;
+  final Value<int> sourceId;
+  final Value<DateTime> checkedAt;
+  final Value<String> status;
+  final Value<String?> invalidGroups;
+  final Value<String?> errorComment;
+  final Value<int> elapsedMillis;
+  const SourceChecksCompanion({
+    this.id = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.checkedAt = const Value.absent(),
+    this.status = const Value.absent(),
+    this.invalidGroups = const Value.absent(),
+    this.errorComment = const Value.absent(),
+    this.elapsedMillis = const Value.absent(),
+  });
+  SourceChecksCompanion.insert({
+    this.id = const Value.absent(),
+    required int sourceId,
+    required DateTime checkedAt,
+    required String status,
+    this.invalidGroups = const Value.absent(),
+    this.errorComment = const Value.absent(),
+    required int elapsedMillis,
+  }) : sourceId = Value(sourceId),
+       checkedAt = Value(checkedAt),
+       status = Value(status),
+       elapsedMillis = Value(elapsedMillis);
+  static Insertable<SourceCheckRow> custom({
+    Expression<int>? id,
+    Expression<int>? sourceId,
+    Expression<DateTime>? checkedAt,
+    Expression<String>? status,
+    Expression<String>? invalidGroups,
+    Expression<String>? errorComment,
+    Expression<int>? elapsedMillis,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceId != null) 'source_id': sourceId,
+      if (checkedAt != null) 'checked_at': checkedAt,
+      if (status != null) 'status': status,
+      if (invalidGroups != null) 'invalid_groups': invalidGroups,
+      if (errorComment != null) 'error_comment': errorComment,
+      if (elapsedMillis != null) 'elapsed_millis': elapsedMillis,
+    });
+  }
+
+  SourceChecksCompanion copyWith({
+    Value<int>? id,
+    Value<int>? sourceId,
+    Value<DateTime>? checkedAt,
+    Value<String>? status,
+    Value<String?>? invalidGroups,
+    Value<String?>? errorComment,
+    Value<int>? elapsedMillis,
+  }) {
+    return SourceChecksCompanion(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      checkedAt: checkedAt ?? this.checkedAt,
+      status: status ?? this.status,
+      invalidGroups: invalidGroups ?? this.invalidGroups,
+      errorComment: errorComment ?? this.errorComment,
+      elapsedMillis: elapsedMillis ?? this.elapsedMillis,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<int>(sourceId.value);
+    }
+    if (checkedAt.present) {
+      map['checked_at'] = Variable<DateTime>(checkedAt.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (invalidGroups.present) {
+      map['invalid_groups'] = Variable<String>(invalidGroups.value);
+    }
+    if (errorComment.present) {
+      map['error_comment'] = Variable<String>(errorComment.value);
+    }
+    if (elapsedMillis.present) {
+      map['elapsed_millis'] = Variable<int>(elapsedMillis.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceChecksCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('checkedAt: $checkedAt, ')
+          ..write('status: $status, ')
+          ..write('invalidGroups: $invalidGroups, ')
+          ..write('errorComment: $errorComment, ')
+          ..write('elapsedMillis: $elapsedMillis')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ReaderDatabase extends GeneratedDatabase {
   _$ReaderDatabase(QueryExecutor e) : super(e);
   $ReaderDatabaseManager get managers => $ReaderDatabaseManager(this);
@@ -2451,6 +3000,11 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
   late final $BooksTable books = $BooksTable(this);
   late final $ReadingProgressTable readingProgress = $ReadingProgressTable(
     this,
+  );
+  late final $SourceChecksTable sourceChecks = $SourceChecksTable(this);
+  late final Index sourceChecksSourceChecked = Index(
+    'source_checks_source_checked',
+    'CREATE INDEX source_checks_source_checked ON source_checks (source_id, checked_at)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -2461,6 +3015,8 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
     bookSources,
     books,
     readingProgress,
+    sourceChecks,
+    sourceChecksSourceChecked,
   ];
 }
 
@@ -2647,6 +3203,7 @@ typedef $$BookSourcesTableCreateCompanionBuilder =
       Value<int> sourceType,
       Value<bool> isEnabled,
       Value<int> customOrder,
+      Value<bool> isExploreEnabled,
       Value<int> weight,
       Value<int?> lastUpdateTime,
       Value<int?> respondTime,
@@ -2665,6 +3222,7 @@ typedef $$BookSourcesTableUpdateCompanionBuilder =
       Value<int> sourceType,
       Value<bool> isEnabled,
       Value<int> customOrder,
+      Value<bool> isExploreEnabled,
       Value<int> weight,
       Value<int?> lastUpdateTime,
       Value<int?> respondTime,
@@ -2728,6 +3286,11 @@ class $$BookSourcesTableFilterComposer
 
   ColumnFilters<int> get customOrder => $composableBuilder(
     column: $table.customOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isExploreEnabled => $composableBuilder(
+    column: $table.isExploreEnabled,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2816,6 +3379,11 @@ class $$BookSourcesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isExploreEnabled => $composableBuilder(
+    column: $table.isExploreEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get weight => $composableBuilder(
     column: $table.weight,
     builder: (column) => ColumnOrderings(column),
@@ -2887,6 +3455,11 @@ class $$BookSourcesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get isExploreEnabled => $composableBuilder(
+    column: $table.isExploreEnabled,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get weight =>
       $composableBuilder(column: $table.weight, builder: (column) => column);
 
@@ -2950,6 +3523,7 @@ class $$BookSourcesTableTableManager
                 Value<int> sourceType = const Value.absent(),
                 Value<bool> isEnabled = const Value.absent(),
                 Value<int> customOrder = const Value.absent(),
+                Value<bool> isExploreEnabled = const Value.absent(),
                 Value<int> weight = const Value.absent(),
                 Value<int?> lastUpdateTime = const Value.absent(),
                 Value<int?> respondTime = const Value.absent(),
@@ -2966,6 +3540,7 @@ class $$BookSourcesTableTableManager
                 sourceType: sourceType,
                 isEnabled: isEnabled,
                 customOrder: customOrder,
+                isExploreEnabled: isExploreEnabled,
                 weight: weight,
                 lastUpdateTime: lastUpdateTime,
                 respondTime: respondTime,
@@ -2984,6 +3559,7 @@ class $$BookSourcesTableTableManager
                 Value<int> sourceType = const Value.absent(),
                 Value<bool> isEnabled = const Value.absent(),
                 Value<int> customOrder = const Value.absent(),
+                Value<bool> isExploreEnabled = const Value.absent(),
                 Value<int> weight = const Value.absent(),
                 Value<int?> lastUpdateTime = const Value.absent(),
                 Value<int?> respondTime = const Value.absent(),
@@ -3000,6 +3576,7 @@ class $$BookSourcesTableTableManager
                 sourceType: sourceType,
                 isEnabled: isEnabled,
                 customOrder: customOrder,
+                isExploreEnabled: isExploreEnabled,
                 weight: weight,
                 lastUpdateTime: lastUpdateTime,
                 respondTime: respondTime,
@@ -3652,6 +4229,257 @@ typedef $$ReadingProgressTableProcessedTableManager =
       ReadingProgressRow,
       PrefetchHooks Function()
     >;
+typedef $$SourceChecksTableCreateCompanionBuilder =
+    SourceChecksCompanion Function({
+      Value<int> id,
+      required int sourceId,
+      required DateTime checkedAt,
+      required String status,
+      Value<String?> invalidGroups,
+      Value<String?> errorComment,
+      required int elapsedMillis,
+    });
+typedef $$SourceChecksTableUpdateCompanionBuilder =
+    SourceChecksCompanion Function({
+      Value<int> id,
+      Value<int> sourceId,
+      Value<DateTime> checkedAt,
+      Value<String> status,
+      Value<String?> invalidGroups,
+      Value<String?> errorComment,
+      Value<int> elapsedMillis,
+    });
+
+class $$SourceChecksTableFilterComposer
+    extends Composer<_$ReaderDatabase, $SourceChecksTable> {
+  $$SourceChecksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get checkedAt => $composableBuilder(
+    column: $table.checkedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get invalidGroups => $composableBuilder(
+    column: $table.invalidGroups,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorComment => $composableBuilder(
+    column: $table.errorComment,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elapsedMillis => $composableBuilder(
+    column: $table.elapsedMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SourceChecksTableOrderingComposer
+    extends Composer<_$ReaderDatabase, $SourceChecksTable> {
+  $$SourceChecksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get checkedAt => $composableBuilder(
+    column: $table.checkedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get invalidGroups => $composableBuilder(
+    column: $table.invalidGroups,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorComment => $composableBuilder(
+    column: $table.errorComment,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elapsedMillis => $composableBuilder(
+    column: $table.elapsedMillis,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SourceChecksTableAnnotationComposer
+    extends Composer<_$ReaderDatabase, $SourceChecksTable> {
+  $$SourceChecksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get checkedAt =>
+      $composableBuilder(column: $table.checkedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get invalidGroups => $composableBuilder(
+    column: $table.invalidGroups,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get errorComment => $composableBuilder(
+    column: $table.errorComment,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get elapsedMillis => $composableBuilder(
+    column: $table.elapsedMillis,
+    builder: (column) => column,
+  );
+}
+
+class $$SourceChecksTableTableManager
+    extends
+        RootTableManager<
+          _$ReaderDatabase,
+          $SourceChecksTable,
+          SourceCheckRow,
+          $$SourceChecksTableFilterComposer,
+          $$SourceChecksTableOrderingComposer,
+          $$SourceChecksTableAnnotationComposer,
+          $$SourceChecksTableCreateCompanionBuilder,
+          $$SourceChecksTableUpdateCompanionBuilder,
+          (
+            SourceCheckRow,
+            BaseReferences<
+              _$ReaderDatabase,
+              $SourceChecksTable,
+              SourceCheckRow
+            >,
+          ),
+          SourceCheckRow,
+          PrefetchHooks Function()
+        > {
+  $$SourceChecksTableTableManager(_$ReaderDatabase db, $SourceChecksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SourceChecksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SourceChecksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SourceChecksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> sourceId = const Value.absent(),
+                Value<DateTime> checkedAt = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> invalidGroups = const Value.absent(),
+                Value<String?> errorComment = const Value.absent(),
+                Value<int> elapsedMillis = const Value.absent(),
+              }) => SourceChecksCompanion(
+                id: id,
+                sourceId: sourceId,
+                checkedAt: checkedAt,
+                status: status,
+                invalidGroups: invalidGroups,
+                errorComment: errorComment,
+                elapsedMillis: elapsedMillis,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int sourceId,
+                required DateTime checkedAt,
+                required String status,
+                Value<String?> invalidGroups = const Value.absent(),
+                Value<String?> errorComment = const Value.absent(),
+                required int elapsedMillis,
+              }) => SourceChecksCompanion.insert(
+                id: id,
+                sourceId: sourceId,
+                checkedAt: checkedAt,
+                status: status,
+                invalidGroups: invalidGroups,
+                errorComment: errorComment,
+                elapsedMillis: elapsedMillis,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SourceChecksTable, SourceCheckRow>(table),
+                  BaseReferences<
+                    _$ReaderDatabase,
+                    $SourceChecksTable,
+                    SourceCheckRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SourceChecksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ReaderDatabase,
+      $SourceChecksTable,
+      SourceCheckRow,
+      $$SourceChecksTableFilterComposer,
+      $$SourceChecksTableOrderingComposer,
+      $$SourceChecksTableAnnotationComposer,
+      $$SourceChecksTableCreateCompanionBuilder,
+      $$SourceChecksTableUpdateCompanionBuilder,
+      (
+        SourceCheckRow,
+        BaseReferences<_$ReaderDatabase, $SourceChecksTable, SourceCheckRow>,
+      ),
+      SourceCheckRow,
+      PrefetchHooks Function()
+    >;
 
 class $ReaderDatabaseManager {
   final _$ReaderDatabase _db;
@@ -3664,4 +4492,6 @@ class $ReaderDatabaseManager {
       $$BooksTableTableManager(_db, _db.books);
   $$ReadingProgressTableTableManager get readingProgress =>
       $$ReadingProgressTableTableManager(_db, _db.readingProgress);
+  $$SourceChecksTableTableManager get sourceChecks =>
+      $$SourceChecksTableTableManager(_db, _db.sourceChecks);
 }

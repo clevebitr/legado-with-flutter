@@ -26,7 +26,16 @@ mixin _$StoredBookSource {
  String? get groupName;/// `lastUpdateTime` as stored, in milliseconds since the epoch.
  int? get lastUpdateTime;/// `respondTime` as stored — the last check's duration, or `null` when it was never checked.
  int? get respondTime;/// `weight` as stored; the list can sort by it (ADR-0045 §决策 2).
- int? get weight;/// `bookSourceComment` as stored, i.e. the user's note plus the check's `// Error: ` block.
+ int? get weight;/// Whether the source's discover page is offered (`docs/dev/roadmap.md` §3.10 V2).
+///
+/// User state like [isEnabled]: an import initialises a new row from the payload and a
+/// re-import never resets it (ADR-0040 §决策 3, ADR-0052 §决策 3).
+ bool get isExploreEnabled;/// The newest recorded check of this source, or `null` when it has no verdict yet.
+///
+/// A **projection of `source_checks`**, not part of the payload (ADR-0052 §决策 1): the light,
+/// the "last checked" line and the healthy/failing filter read it, while the check's legacy
+/// columns stay available for the group axis (ADR-0050 §决策 1).
+ SourceCheckRecord? get lastCheck;/// `bookSourceComment` as stored, i.e. the user's note plus the check's `// Error: ` block.
  String? get comment;
 /// Create a copy of StoredBookSource
 /// with the given fields replaced by the non-null parameter values.
@@ -39,20 +48,20 @@ $StoredBookSourceCopyWith<StoredBookSource> get copyWith => _$StoredBookSourceCo
 @override
 bool operator ==(Object other) {
   final _this = this as StoredBookSource;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is StoredBookSource&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.source, _this.source) || other.source == _this.source)&&(identical(other.isEnabled, _this.isEnabled) || other.isEnabled == _this.isEnabled)&&(identical(other.customOrder, _this.customOrder) || other.customOrder == _this.customOrder)&&(identical(other.importedAt, _this.importedAt) || other.importedAt == _this.importedAt)&&(identical(other.groupName, _this.groupName) || other.groupName == _this.groupName)&&(identical(other.lastUpdateTime, _this.lastUpdateTime) || other.lastUpdateTime == _this.lastUpdateTime)&&(identical(other.respondTime, _this.respondTime) || other.respondTime == _this.respondTime)&&(identical(other.weight, _this.weight) || other.weight == _this.weight)&&(identical(other.comment, _this.comment) || other.comment == _this.comment));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is StoredBookSource&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.source, _this.source) || other.source == _this.source)&&(identical(other.isEnabled, _this.isEnabled) || other.isEnabled == _this.isEnabled)&&(identical(other.customOrder, _this.customOrder) || other.customOrder == _this.customOrder)&&(identical(other.importedAt, _this.importedAt) || other.importedAt == _this.importedAt)&&(identical(other.groupName, _this.groupName) || other.groupName == _this.groupName)&&(identical(other.lastUpdateTime, _this.lastUpdateTime) || other.lastUpdateTime == _this.lastUpdateTime)&&(identical(other.respondTime, _this.respondTime) || other.respondTime == _this.respondTime)&&(identical(other.weight, _this.weight) || other.weight == _this.weight)&&(identical(other.isExploreEnabled, _this.isExploreEnabled) || other.isExploreEnabled == _this.isExploreEnabled)&&(identical(other.lastCheck, _this.lastCheck) || other.lastCheck == _this.lastCheck)&&(identical(other.comment, _this.comment) || other.comment == _this.comment));
 }
 
 
 @override
 int get hashCode {
   final _this = this as StoredBookSource;
-  return Object.hash(runtimeType,_this.id,_this.source,_this.isEnabled,_this.customOrder,_this.importedAt,_this.groupName,_this.lastUpdateTime,_this.respondTime,_this.weight,_this.comment);
+  return Object.hash(runtimeType,_this.id,_this.source,_this.isEnabled,_this.customOrder,_this.importedAt,_this.groupName,_this.lastUpdateTime,_this.respondTime,_this.weight,_this.isExploreEnabled,_this.lastCheck,_this.comment);
 }
 
 @override
 String toString() {
   final _this = this as StoredBookSource;
-  return 'StoredBookSource(id: ${_this.id}, source: ${_this.source}, isEnabled: ${_this.isEnabled}, customOrder: ${_this.customOrder}, importedAt: ${_this.importedAt}, groupName: ${_this.groupName}, lastUpdateTime: ${_this.lastUpdateTime}, respondTime: ${_this.respondTime}, weight: ${_this.weight}, comment: ${_this.comment})';
+  return 'StoredBookSource(id: ${_this.id}, source: ${_this.source}, isEnabled: ${_this.isEnabled}, customOrder: ${_this.customOrder}, importedAt: ${_this.importedAt}, groupName: ${_this.groupName}, lastUpdateTime: ${_this.lastUpdateTime}, respondTime: ${_this.respondTime}, weight: ${_this.weight}, isExploreEnabled: ${_this.isExploreEnabled}, lastCheck: ${_this.lastCheck}, comment: ${_this.comment})';
 }
 
 
@@ -63,7 +72,7 @@ abstract mixin class $StoredBookSourceCopyWith<$Res>  {
   factory $StoredBookSourceCopyWith(StoredBookSource value, $Res Function(StoredBookSource) _then) = _$StoredBookSourceCopyWithImpl;
 @useResult
 $Res call({
- int id, BookSource source, bool isEnabled, int customOrder, DateTime importedAt, String? groupName, int? lastUpdateTime, int? respondTime, int? weight, String? comment
+ int id, BookSource source, bool isEnabled, int customOrder, DateTime importedAt, String? groupName, int? lastUpdateTime, int? respondTime, int? weight, bool isExploreEnabled, SourceCheckRecord? lastCheck, String? comment
 });
 
 
@@ -80,7 +89,7 @@ class _$StoredBookSourceCopyWithImpl<$Res>
 
 /// Create a copy of StoredBookSource
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? source = null,Object? isEnabled = null,Object? customOrder = null,Object? importedAt = null,Object? groupName = freezed,Object? lastUpdateTime = freezed,Object? respondTime = freezed,Object? weight = freezed,Object? comment = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? source = null,Object? isEnabled = null,Object? customOrder = null,Object? importedAt = null,Object? groupName = freezed,Object? lastUpdateTime = freezed,Object? respondTime = freezed,Object? weight = freezed,Object? isExploreEnabled = null,Object? lastCheck = freezed,Object? comment = freezed,}) {
   return _then(StoredBookSource(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
@@ -91,7 +100,9 @@ as DateTime,groupName: freezed == groupName ? _self.groupName : groupName // ign
 as String?,lastUpdateTime: freezed == lastUpdateTime ? _self.lastUpdateTime : lastUpdateTime // ignore: cast_nullable_to_non_nullable
 as int?,respondTime: freezed == respondTime ? _self.respondTime : respondTime // ignore: cast_nullable_to_non_nullable
 as int?,weight: freezed == weight ? _self.weight : weight // ignore: cast_nullable_to_non_nullable
-as int?,comment: freezed == comment ? _self.comment : comment // ignore: cast_nullable_to_non_nullable
+as int?,isExploreEnabled: null == isExploreEnabled ? _self.isExploreEnabled : isExploreEnabled // ignore: cast_nullable_to_non_nullable
+as bool,lastCheck: freezed == lastCheck ? _self.lastCheck : lastCheck // ignore: cast_nullable_to_non_nullable
+as SourceCheckRecord?,comment: freezed == comment ? _self.comment : comment // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -186,10 +197,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  BookSource source,  bool isEnabled,  int customOrder,  DateTime importedAt,  String? groupName,  int? lastUpdateTime,  int? respondTime,  int? weight,  String? comment)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  BookSource source,  bool isEnabled,  int customOrder,  DateTime importedAt,  String? groupName,  int? lastUpdateTime,  int? respondTime,  int? weight,  bool isExploreEnabled,  SourceCheckRecord? lastCheck,  String? comment)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _StoredBookSource() when $default != null:
-return $default(_that.id,_that.source,_that.isEnabled,_that.customOrder,_that.importedAt,_that.groupName,_that.lastUpdateTime,_that.respondTime,_that.weight,_that.comment);case _:
+return $default(_that.id,_that.source,_that.isEnabled,_that.customOrder,_that.importedAt,_that.groupName,_that.lastUpdateTime,_that.respondTime,_that.weight,_that.isExploreEnabled,_that.lastCheck,_that.comment);case _:
   return orElse();
 
 }
@@ -207,10 +218,10 @@ return $default(_that.id,_that.source,_that.isEnabled,_that.customOrder,_that.im
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  BookSource source,  bool isEnabled,  int customOrder,  DateTime importedAt,  String? groupName,  int? lastUpdateTime,  int? respondTime,  int? weight,  String? comment)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  BookSource source,  bool isEnabled,  int customOrder,  DateTime importedAt,  String? groupName,  int? lastUpdateTime,  int? respondTime,  int? weight,  bool isExploreEnabled,  SourceCheckRecord? lastCheck,  String? comment)  $default,) {final _that = this;
 switch (_that) {
 case _StoredBookSource():
-return $default(_that.id,_that.source,_that.isEnabled,_that.customOrder,_that.importedAt,_that.groupName,_that.lastUpdateTime,_that.respondTime,_that.weight,_that.comment);case _:
+return $default(_that.id,_that.source,_that.isEnabled,_that.customOrder,_that.importedAt,_that.groupName,_that.lastUpdateTime,_that.respondTime,_that.weight,_that.isExploreEnabled,_that.lastCheck,_that.comment);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -227,10 +238,10 @@ return $default(_that.id,_that.source,_that.isEnabled,_that.customOrder,_that.im
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  BookSource source,  bool isEnabled,  int customOrder,  DateTime importedAt,  String? groupName,  int? lastUpdateTime,  int? respondTime,  int? weight,  String? comment)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  BookSource source,  bool isEnabled,  int customOrder,  DateTime importedAt,  String? groupName,  int? lastUpdateTime,  int? respondTime,  int? weight,  bool isExploreEnabled,  SourceCheckRecord? lastCheck,  String? comment)?  $default,) {final _that = this;
 switch (_that) {
 case _StoredBookSource() when $default != null:
-return $default(_that.id,_that.source,_that.isEnabled,_that.customOrder,_that.importedAt,_that.groupName,_that.lastUpdateTime,_that.respondTime,_that.weight,_that.comment);case _:
+return $default(_that.id,_that.source,_that.isEnabled,_that.customOrder,_that.importedAt,_that.groupName,_that.lastUpdateTime,_that.respondTime,_that.weight,_that.isExploreEnabled,_that.lastCheck,_that.comment);case _:
   return null;
 
 }
@@ -242,7 +253,7 @@ return $default(_that.id,_that.source,_that.isEnabled,_that.customOrder,_that.im
 
 
 class _StoredBookSource implements StoredBookSource {
-  const _StoredBookSource({required this.id, required this.source, required this.isEnabled, required this.customOrder, required this.importedAt, this.groupName, this.lastUpdateTime, this.respondTime, this.weight, this.comment});
+  const _StoredBookSource({required this.id, required this.source, required this.isEnabled, required this.customOrder, required this.importedAt, this.groupName, this.lastUpdateTime, this.respondTime, this.weight, this.isExploreEnabled = true, this.lastCheck, this.comment});
   
 
 /// The synthetic primary key; stable across re-imports, which is what lets the UI hold on
@@ -265,6 +276,17 @@ class _StoredBookSource implements StoredBookSource {
 @override final  int? respondTime;
 /// `weight` as stored; the list can sort by it (ADR-0045 §决策 2).
 @override final  int? weight;
+/// Whether the source's discover page is offered (`docs/dev/roadmap.md` §3.10 V2).
+///
+/// User state like [isEnabled]: an import initialises a new row from the payload and a
+/// re-import never resets it (ADR-0040 §决策 3, ADR-0052 §决策 3).
+@override@JsonKey() final  bool isExploreEnabled;
+/// The newest recorded check of this source, or `null` when it has no verdict yet.
+///
+/// A **projection of `source_checks`**, not part of the payload (ADR-0052 §决策 1): the light,
+/// the "last checked" line and the healthy/failing filter read it, while the check's legacy
+/// columns stay available for the group axis (ADR-0050 §决策 1).
+@override final  SourceCheckRecord? lastCheck;
 /// `bookSourceComment` as stored, i.e. the user's note plus the check's `// Error: ` block.
 @override final  String? comment;
 
@@ -278,18 +300,18 @@ _$StoredBookSourceCopyWith<_StoredBookSource> get copyWith => __$StoredBookSourc
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _StoredBookSource&&(identical(other.id, id) || other.id == id)&&(identical(other.source, source) || other.source == source)&&(identical(other.isEnabled, isEnabled) || other.isEnabled == isEnabled)&&(identical(other.customOrder, customOrder) || other.customOrder == customOrder)&&(identical(other.importedAt, importedAt) || other.importedAt == importedAt)&&(identical(other.groupName, groupName) || other.groupName == groupName)&&(identical(other.lastUpdateTime, lastUpdateTime) || other.lastUpdateTime == lastUpdateTime)&&(identical(other.respondTime, respondTime) || other.respondTime == respondTime)&&(identical(other.weight, weight) || other.weight == weight)&&(identical(other.comment, comment) || other.comment == comment));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _StoredBookSource&&(identical(other.id, id) || other.id == id)&&(identical(other.source, source) || other.source == source)&&(identical(other.isEnabled, isEnabled) || other.isEnabled == isEnabled)&&(identical(other.customOrder, customOrder) || other.customOrder == customOrder)&&(identical(other.importedAt, importedAt) || other.importedAt == importedAt)&&(identical(other.groupName, groupName) || other.groupName == groupName)&&(identical(other.lastUpdateTime, lastUpdateTime) || other.lastUpdateTime == lastUpdateTime)&&(identical(other.respondTime, respondTime) || other.respondTime == respondTime)&&(identical(other.weight, weight) || other.weight == weight)&&(identical(other.isExploreEnabled, isExploreEnabled) || other.isExploreEnabled == isExploreEnabled)&&(identical(other.lastCheck, lastCheck) || other.lastCheck == lastCheck)&&(identical(other.comment, comment) || other.comment == comment));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,id,source,isEnabled,customOrder,importedAt,groupName,lastUpdateTime,respondTime,weight,comment);
+    return Object.hash(runtimeType,id,source,isEnabled,customOrder,importedAt,groupName,lastUpdateTime,respondTime,weight,isExploreEnabled,lastCheck,comment);
 }
 
 @override
 String toString() {
-    return 'StoredBookSource(id: $id, source: $source, isEnabled: $isEnabled, customOrder: $customOrder, importedAt: $importedAt, groupName: $groupName, lastUpdateTime: $lastUpdateTime, respondTime: $respondTime, weight: $weight, comment: $comment)';
+    return 'StoredBookSource(id: $id, source: $source, isEnabled: $isEnabled, customOrder: $customOrder, importedAt: $importedAt, groupName: $groupName, lastUpdateTime: $lastUpdateTime, respondTime: $respondTime, weight: $weight, isExploreEnabled: $isExploreEnabled, lastCheck: $lastCheck, comment: $comment)';
 }
 
 
@@ -300,7 +322,7 @@ abstract mixin class _$StoredBookSourceCopyWith<$Res> implements $StoredBookSour
   factory _$StoredBookSourceCopyWith(_StoredBookSource value, $Res Function(_StoredBookSource) _then) = __$StoredBookSourceCopyWithImpl;
 @override @useResult
 $Res call({
- int id, BookSource source, bool isEnabled, int customOrder, DateTime importedAt, String? groupName, int? lastUpdateTime, int? respondTime, int? weight, String? comment
+ int id, BookSource source, bool isEnabled, int customOrder, DateTime importedAt, String? groupName, int? lastUpdateTime, int? respondTime, int? weight, bool isExploreEnabled, SourceCheckRecord? lastCheck, String? comment
 });
 
 
@@ -317,7 +339,7 @@ class __$StoredBookSourceCopyWithImpl<$Res>
 
 /// Create a copy of StoredBookSource
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? source = null,Object? isEnabled = null,Object? customOrder = null,Object? importedAt = null,Object? groupName = freezed,Object? lastUpdateTime = freezed,Object? respondTime = freezed,Object? weight = freezed,Object? comment = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? source = null,Object? isEnabled = null,Object? customOrder = null,Object? importedAt = null,Object? groupName = freezed,Object? lastUpdateTime = freezed,Object? respondTime = freezed,Object? weight = freezed,Object? isExploreEnabled = null,Object? lastCheck = freezed,Object? comment = freezed,}) {
   return _then(_StoredBookSource(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
@@ -328,7 +350,9 @@ as DateTime,groupName: freezed == groupName ? _self.groupName : groupName // ign
 as String?,lastUpdateTime: freezed == lastUpdateTime ? _self.lastUpdateTime : lastUpdateTime // ignore: cast_nullable_to_non_nullable
 as int?,respondTime: freezed == respondTime ? _self.respondTime : respondTime // ignore: cast_nullable_to_non_nullable
 as int?,weight: freezed == weight ? _self.weight : weight // ignore: cast_nullable_to_non_nullable
-as int?,comment: freezed == comment ? _self.comment : comment // ignore: cast_nullable_to_non_nullable
+as int?,isExploreEnabled: null == isExploreEnabled ? _self.isExploreEnabled : isExploreEnabled // ignore: cast_nullable_to_non_nullable
+as bool,lastCheck: freezed == lastCheck ? _self.lastCheck : lastCheck // ignore: cast_nullable_to_non_nullable
+as SourceCheckRecord?,comment: freezed == comment ? _self.comment : comment // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }

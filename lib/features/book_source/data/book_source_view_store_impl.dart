@@ -12,6 +12,12 @@ const String _orderKey = 'bookSource.listOrder';
 /// `shared_preferences` key of the list's group filter.
 const String _groupKey = 'bookSource.listGroup';
 
+/// `shared_preferences` key of the list's sort direction.
+const String _ascendingKey = 'bookSource.listAscending';
+
+/// `shared_preferences` key of the list's domain grouping flag.
+const String _groupByDomainKey = 'bookSource.listGroupByDomain';
+
 /// [BookSourceViewStore] on top of [PreferenceStore] (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
 ///
 /// The sort key is stored by **name** rather than index: an index would silently point at another
@@ -26,11 +32,16 @@ final class BookSourceViewStoreImpl implements BookSourceViewStore {
   Future<BookSourceListView> load() async => BookSourceListView(
     order: _orderOf(_store.readString(_orderKey)),
     group: _store.readString(_groupKey),
+    // 缺省值就是默认值：没存过 = 升序、不按域名分节。
+    ascending: _store.readBool(_ascendingKey) ?? true,
+    groupByDomain: _store.readBool(_groupByDomainKey) ?? false,
   );
 
   @override
   Future<void> save(BookSourceListView view) async {
     await _store.writeString(_orderKey, view.order.name);
+    await _store.writeBool(_ascendingKey, view.ascending);
+    await _store.writeBool(_groupByDomainKey, view.groupByDomain);
     final String? group = view.group;
     if (group == null) {
       await _store.remove(_groupKey);

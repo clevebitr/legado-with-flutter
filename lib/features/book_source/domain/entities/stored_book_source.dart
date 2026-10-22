@@ -1,4 +1,5 @@
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'stored_book_source.freezed.dart';
@@ -49,6 +50,19 @@ abstract class StoredBookSource with _$StoredBookSource {
 
     /// `weight` as stored; the list can sort by it (ADR-0045 §决策 2).
     int? weight,
+
+    /// Whether the source's discover page is offered (`docs/dev/roadmap.md` §3.10 V2).
+    ///
+    /// User state like [isEnabled]: an import initialises a new row from the payload and a
+    /// re-import never resets it (ADR-0040 §决策 3, ADR-0052 §决策 3).
+    @Default(true) bool isExploreEnabled,
+
+    /// The newest recorded check of this source, or `null` when it has no verdict yet.
+    ///
+    /// A **projection of `source_checks`**, not part of the payload (ADR-0052 §决策 1): the light,
+    /// the "last checked" line and the healthy/failing filter read it, while the check's legacy
+    /// columns stay available for the group axis (ADR-0050 §决策 1).
+    SourceCheckRecord? lastCheck,
 
     /// `bookSourceComment` as stored, i.e. the user's note plus the check's `// Error: ` block.
     String? comment,

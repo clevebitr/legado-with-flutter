@@ -363,7 +363,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookSourceCheckStatusSucceeded => 'Passed';
 
   @override
-  String get bookSourceCheckStatusFailed => 'Failed';
+  String get bookSourceCheckStatusFailed => 'Check failed';
 
   @override
   String get bookSourceCheckStatusCancelled => 'Cancelled';
@@ -696,6 +696,102 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookSourceCheckFilterFailing => 'Has failures';
+
+  @override
+  String get bookSourceCheckStatusPassed => 'Check passed';
+
+  @override
+  String get bookSourceCheckStatusDegraded => 'Timed out or JS failed';
+
+  @override
+  String get bookSourceCheckStatusUnchecked => 'Never checked';
+
+  @override
+  String get bookSourceListLastCheckJustNow => 'Checked just now';
+
+  @override
+  String bookSourceListLastCheckMinutesAgo(int count) {
+    return 'Checked $count min ago';
+  }
+
+  @override
+  String bookSourceListLastCheckHoursAgo(int count) {
+    return 'Checked $count h ago';
+  }
+
+  @override
+  String bookSourceListLastCheckDaysAgo(int count) {
+    return 'Checked $count d ago';
+  }
+
+  @override
+  String bookSourceListLastCheckOn(String date) {
+    return 'Checked $date';
+  }
+
+  @override
+  String bookSourceListLastCheckLine(String when, int millis) {
+    return '$when · $millis ms';
+  }
+
+  @override
+  String get bookSourceListBatchMoveTop => 'Move to top';
+
+  @override
+  String get bookSourceListBatchMoveBottom => 'Move to bottom';
+
+  @override
+  String get bookSourceListBatchRemoveGroup => 'Remove from group';
+
+  @override
+  String get bookSourceListExploreOn => 'Discover on';
+
+  @override
+  String get bookSourceListExploreOff => 'Discover off';
+
+  @override
+  String get bookSourceExploreDisabled =>
+      'Discover is turned off for this source. Turn it back on in the source list.';
+
+  @override
+  String get bookSourceRowExploreEnable => 'Turn discover on';
+
+  @override
+  String get bookSourceRowExploreDisable => 'Turn discover off';
+
+  @override
+  String get bookSourceListSortAscending => 'Ascending';
+
+  @override
+  String get bookSourceListSortDescending => 'Descending';
+
+  @override
+  String get bookSourceListGroupByDomain => 'Group by domain';
+
+  @override
+  String get bookSourceListViewOptions => 'View';
+
+  @override
+  String get bookSourceListMoreActions => 'More actions';
+
+  @override
+  String get bookSourceListGroupManage => 'Manage groups';
+
+  @override
+  String get bookSourceListGroupRename => 'Rename group';
+
+  @override
+  String get bookSourceListGroupDelete => 'Delete group';
+
+  @override
+  String bookSourceListGroupDeleteBody(String group) {
+    return 'Every source leaves “$group”; the sources themselves stay.';
+  }
+
+  @override
+  String bookSourceListGroupRemoveFrom(String group) {
+    return 'Remove from “$group”';
+  }
 
   @override
   String get bookSourceRowCheck => 'Check this source';

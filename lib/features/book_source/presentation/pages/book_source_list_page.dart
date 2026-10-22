@@ -2,14 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check_settings.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_light.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -92,6 +95,8 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
               backgroundColor: tokens.colors.surface,
               actions: <Widget>[
                 _sortMenu(context, ref, l10n, loaded),
+                _directionToggle(context, ref, l10n, loaded),
+                _viewMenu(context, ref, l10n, loaded),
                 IconButton(
                   icon: const Icon(Icons.fact_check_outlined),
                   tooltip: l10n.bookSourceCheckTitle,
@@ -180,6 +185,11 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     Set<int> selected,
   ) {
     final M3ETheme tokens = context.m3e;
+    final String? currentGroup = ref
+        .watch(bookSourceListDataProvider)
+        .value
+        ?.view
+        .group;
     void run(Future<void> Function() action) =>
         unawaited(action().then((_) => setState(_selected.clear)));
 
@@ -220,14 +230,88 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
               Icons.delete_outline,
               () => unawaited(_confirmBatchDelete(l10n, selected)),
             ),
+            // 其余动作放进溢出菜单：一排按钮在窄屏上会把删除挤出可视区（M15 踩坑）。
+            PopupMenuButton<_BatchAction>(
+              tooltip: l10n.bookSourceListMoreActions,
+              icon: const Icon(Icons.more_horiz),
+              onSelected: (_BatchAction action) => _runBatchOverflow(
+                action: action,
+                currentGroup: currentGroup,
+                l10n: l10n,
+                selected: selected,
+                run: run,
+              ),
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<_BatchAction>>[
+                    PopupMenuItem<_BatchAction>(
+                      value: _BatchAction.moveTop,
+                      child: Text(l10n.bookSourceListBatchMoveTop),
+                    ),
+                    PopupMenuItem<_BatchAction>(
+                      value: _BatchAction.moveBottom,
+                      child: Text(l10n.bookSourceListBatchMoveBottom),
+                    ),
+                    PopupMenuItem<_BatchAction>(
+                      value: _BatchAction.removeGroup,
+                      enabled: currentGroup != null,
+                      child: Text(l10n.bookSourceListBatchRemoveGroup),
+                    ),
+                    PopupMenuItem<_BatchAction>(
+                      value: _BatchAction.exploreOn,
+                      child: Text(l10n.bookSourceRowExploreEnable),
+                    ),
+                    PopupMenuItem<_BatchAction>(
+                      value: _BatchAction.exploreOff,
+                      child: Text(l10n.bookSourceRowExploreDisable),
+                    ),
+                  ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  /// One labelled batch button.
-  Widget _batchAction(String label, IconData icon, VoidCallback onPressed) =>
+  /// Runs one overflow batch action.
+  void _runBatchOverflow({
+    required _BatchAction action,
+    required String? currentGroup,
+    required AppLocalizations l10n,
+    required Set<int> selected,
+    required void Function(Future<void> Function()) run,
+  }) {
+    switch (action) {
+      case _BatchAction.moveTop:
+        run(
+          () => ref
+              .read(selectedBookSourceProvider.notifier)
+              .moveToEdge(selected, toTop: true),
+        );
+      case _BatchAction.moveBottom:
+        run(
+          () => ref
+              .read(selectedBookSourceProvider.notifier)
+              .moveToEdge(selected, toTop: false),
+        );
+      case _BatchAction.removeGroup:
+        unawaited(_removeFromCurrentGroup(l10n, selected));
+      case _BatchAction.exploreOn:
+        run(
+          () => ref
+              .read(selectedBookSourceProvider.notifier)
+              .setExploreEnabledFor(selected, isExploreEnabled: true),
+        );
+      case _BatchAction.exploreOff:
+        run(
+          () => ref
+              .read(selectedBookSourceProvider.notifier)
+              .setExploreEnabledFor(selected, isExploreEnabled: false),
+        );
+    }
+  }
+
+  /// One labelled batch button; `null` [onPressed] greys it out.
+  Widget _batchAction(String label, IconData icon, VoidCallback? onPressed) =>
       TextButton.icon(
         onPressed: onPressed,
         icon: Icon(icon),
@@ -275,6 +359,181 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
               ),
           ],
     );
+  }
+
+  /// The direction toggle: the icon and tooltip name the direction in use
+  /// (`docs/dev/roadmap.md` §3.10 V4).
+  Widget _directionToggle(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    BookSourceListData? data,
+  ) {
+    final bool ascending = data?.view.ascending ?? true;
+
+    return IconButton(
+      icon: Icon(ascending ? Icons.arrow_upward : Icons.arrow_downward),
+      tooltip: ascending
+          ? l10n.bookSourceListSortAscending
+          : l10n.bookSourceListSortDescending,
+      onPressed: () => unawaited(
+        ref.read(bookSourceViewProvider.notifier).toggleAscending(),
+      ),
+    );
+  }
+
+  /// The view options: one section per host, and the group management dialog.
+  Widget _viewMenu(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    BookSourceListData? data,
+  ) {
+    final bool grouped = data?.view.groupByDomain ?? false;
+    final List<String> groups = data?.groups ?? const <String>[];
+
+    return PopupMenuButton<_ViewAction>(
+      tooltip: l10n.bookSourceListViewOptions,
+      icon: const Icon(Icons.visibility_outlined),
+      onSelected: (_ViewAction action) => unawaited(_viewAction(ref, action)),
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<_ViewAction>>[
+        CheckedPopupMenuItem<_ViewAction>(
+          value: _ViewAction.groupByDomain,
+          checked: grouped,
+          child: Text(l10n.bookSourceListGroupByDomain),
+        ),
+        PopupMenuItem<_ViewAction>(
+          value: _ViewAction.manageGroups,
+          // 没有分组时这一项只会打开一个空对话框（C-BAN-2 的死链接）：直接禁用。
+          enabled: groups.isNotEmpty,
+          child: Text(l10n.bookSourceListGroupManage),
+        ),
+      ],
+    );
+  }
+
+  /// Runs one view-menu action.
+  Future<void> _viewAction(WidgetRef ref, _ViewAction action) async {
+    switch (action) {
+      case _ViewAction.groupByDomain:
+        final bool grouped =
+            ref.read(bookSourceListDataProvider).value?.view.groupByDomain ??
+            false;
+        await ref
+            .read(bookSourceViewProvider.notifier)
+            .setGroupByDomain(!grouped);
+      case _ViewAction.manageGroups:
+        await _openGroupManagement();
+    }
+  }
+
+  /// Lists the groups with rename / delete actions (ADR-0052 §决策 4).
+  Future<void> _openGroupManagement() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final List<String> groups =
+        ref.read(bookSourceListDataProvider).value?.groups ?? const <String>[];
+    if (groups.isEmpty) {
+      return;
+    }
+
+    final String? chosen = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => SimpleDialog(
+        title: Text(l10n.bookSourceListGroupManage),
+        children: <Widget>[
+          for (final String group in groups)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(group),
+              child: Text(group),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || !mounted) {
+      return;
+    }
+
+    final _GroupAction? action = await showDialog<_GroupAction>(
+      context: context,
+      builder: (BuildContext context) => SimpleDialog(
+        title: Text(chosen),
+        children: <Widget>[
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(_GroupAction.rename),
+            child: Text(l10n.bookSourceListGroupRename),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(_GroupAction.delete),
+            child: Text(l10n.bookSourceListGroupDelete),
+          ),
+        ],
+      ),
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+
+    switch (action) {
+      case _GroupAction.rename:
+        final String? next = await _askGroupName(
+          l10n,
+          title: l10n.bookSourceListGroupRename,
+        );
+        if (next == null || !mounted) {
+          return;
+        }
+        await ref
+            .read(selectedBookSourceProvider.notifier)
+            .renameGroup(chosen, next);
+      case _GroupAction.delete:
+        final bool confirmed = await _confirmGroupDelete(chosen, l10n);
+        if (!confirmed || !mounted) {
+          return;
+        }
+        await ref.read(selectedBookSourceProvider.notifier).deleteGroup(chosen);
+    }
+  }
+
+  /// Asks before removing [group] from every source.
+  Future<bool> _confirmGroupDelete(String group, AppLocalizations l10n) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: Text(l10n.bookSourceListGroupDelete),
+          content: Text(l10n.bookSourceListGroupDeleteBody(group)),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(l10n.actionCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(l10n.actionDelete),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  /// Takes the selection out of the group currently filtered on.
+  Future<void> _removeFromCurrentGroup(
+    AppLocalizations l10n,
+    Set<int> selected,
+  ) async {
+    final String? group = ref
+        .read(bookSourceListDataProvider)
+        .value
+        ?.view
+        .group;
+    if (group == null) {
+      return;
+    }
+    await ref
+        .read(selectedBookSourceProvider.notifier)
+        .removeFromGroup(selected, group);
+    if (mounted) {
+      setState(_selected.clear);
+    }
   }
 
   /// The state shown when reading the stored sources failed.
@@ -347,7 +606,9 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     final M3ETheme tokens = context.m3e;
     final bool canDrag =
         data.view.order == BookSourceSortOrder.defaultOrder &&
+        data.view.ascending &&
         data.view.group == null &&
+        !data.view.groupByDomain &&
         !_isSelecting;
 
     return Column(
@@ -388,6 +649,8 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
                 )
               : canDrag
               ? _draggableList(context, ref, l10n, data, rows)
+              : data.view.groupByDomain
+              ? _sectionedList(context, ref, l10n, data, rows)
               : _plainList(context, ref, l10n, data, rows),
         ),
       ],
@@ -520,6 +783,59 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
         _row(context, ref, l10n, data, rows[index]),
   );
 
+  /// The rows in one section per host (`docs/dev/roadmap.md` §3.10 V4).
+  ///
+  /// The sections are built from the rows already loaded and keep [ListView.builder]'s laziness
+  /// (C-PERF-2): the headers are just extra entries in the same flat list.
+  Widget _sectionedList(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    BookSourceListData data,
+    List<StoredBookSource> rows,
+  ) {
+    final List<_ListEntry> entries = <_ListEntry>[];
+    String? previousHost;
+    for (final StoredBookSource source in rows) {
+      final String host = _hostOf(source.source.url);
+      if (host != previousHost) {
+        entries.add(_SectionEntry(host));
+        previousHost = host;
+      }
+      entries.add(_RowEntry(source));
+    }
+
+    return ListView.builder(
+      itemCount: entries.length,
+      itemBuilder: (BuildContext context, int index) =>
+          switch (entries[index]) {
+            _SectionEntry(:final String host) => _sectionHeader(context, host),
+            _RowEntry(:final StoredBookSource source) => _row(
+              context,
+              ref,
+              l10n,
+              data,
+              source,
+            ),
+          },
+    );
+  }
+
+  /// One host header inside the domain-grouped list.
+  Widget _sectionHeader(BuildContext context, String host) {
+    final M3ETheme tokens = context.m3e;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        tokens.spacing.lg,
+        tokens.spacing.md,
+        tokens.spacing.lg,
+        tokens.spacing.xs,
+      ),
+      child: Text(host, style: tokens.typography.base.titleSmall),
+    );
+  }
+
   /// One row: name, the four projected fields, and the row actions in a menu.
   Widget _row(
     BuildContext context,
@@ -529,15 +845,19 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     StoredBookSource source, {
     Key? key,
   }) {
-    final M3ETheme tokens = context.m3e;
     final bool isSelected =
         ref.watch(selectedBookSourceProvider).value?.id == source.id;
     final String? group = source.groupName ?? source.source.group;
     final String? comment = source.comment;
+    final DateTime now = ref.read(clockProvider).now();
+    final SourceCheckRecord? lastCheck = source.lastCheck;
     final List<String> lines = <String>[
       // 同 URL 的多条变体在列表里逐条呈现（ADR-0040 §决策 3），但用户得知道它们来自同一站点。
       if (_hasVariant(data.rows, source)) l10n.bookSourceVariantLabel,
       if (group != null && group.isNotEmpty) group,
+      // 状态行紧跟分组：「上次校验 2 分钟前 · 620 毫秒」（ADR-0052 §决策 2）。
+      if (lastCheck != null) _lastCheckLine(context, l10n, lastCheck, now),
+      if (!source.isExploreEnabled) l10n.bookSourceListExploreOff,
       if (source.lastUpdateTime case final int millis)
         l10n.bookSourceUpdateTimeLine(_formatDate(context, millis)),
       if (source.respondTime case final int millis)
@@ -570,13 +890,8 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
                 }
               }),
             )
-          : isSelected
-          ? Icon(
-              Icons.check_circle,
-              color: tokens.colors.primary,
-              semanticLabel: l10n.bookSourceCurrentLabel,
-            )
-          : const Icon(Icons.circle_outlined),
+          // 状态灯：颜色不单独承载信息，tooltip + Semantics 给出四态标签（C-UI-7）。
+          : _StatusLight(light: sourceCheckLightOf(source), l10n: l10n),
       title: Text(source.source.name),
       subtitle: Text(lines.join('\n')),
       isThreeLine: lines.length > 1,
@@ -596,6 +911,14 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
             onSelected: (_RowAction action) =>
                 _act(context, ref, l10n, data, source, action),
             itemBuilder: (BuildContext context) => <PopupMenuEntry<_RowAction>>[
+              PopupMenuItem<_RowAction>(
+                value: _RowAction.toggleExplore,
+                child: Text(
+                  source.isExploreEnabled
+                      ? l10n.bookSourceRowExploreDisable
+                      : l10n.bookSourceRowExploreEnable,
+                ),
+              ),
               PopupMenuItem<_RowAction>(
                 value: _RowAction.debug,
                 child: Text(l10n.bookSourceCheckOpenDebug),
@@ -638,6 +961,13 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     _RowAction action,
   ) {
     switch (action) {
+      case _RowAction.toggleExplore:
+        unawaited(
+          ref.read(selectedBookSourceProvider.notifier).setExploreEnabledFor(
+            <int>{source.id},
+            isExploreEnabled: !source.isExploreEnabled,
+          ),
+        );
       case _RowAction.debug:
         pushBookSourceRoute(
           context,
@@ -776,7 +1106,7 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
 
     String? group = choice;
     if (choice == _newGroupToken) {
-      group = await _askGroupName(l10n);
+      group = await _askGroupName(l10n, title: l10n.bookSourceListGroupNew);
       if (group == null || !mounted) {
         return;
       }
@@ -794,32 +1124,23 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
   }
 
   /// Asks for a group name; `null` when the user cancels or types nothing.
-  Future<String?> _askGroupName(AppLocalizations l10n) async {
-    final TextEditingController controller = TextEditingController();
+  ///
+  /// The dialog owns its [TextEditingController] (`_GroupNameDialog`): disposing it right after
+  /// `showDialog` returns would leave the closing route's animation rebuilding a disposed
+  /// controller (this is what the first version did, and the widget test caught it).
+  Future<String?> _askGroupName(
+    AppLocalizations l10n, {
+    required String title,
+  }) async {
     final String? name = await showDialog<String>(
       context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: Text(l10n.bookSourceListGroupNew),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: l10n.bookSourceListGroupNameHint,
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(l10n.actionCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: Text(l10n.actionSave),
-          ),
-        ],
+      builder: (BuildContext context) => _GroupNameDialog(
+        title: title,
+        hint: l10n.bookSourceListGroupNameHint,
+        cancelLabel: l10n.actionCancel,
+        saveLabel: l10n.actionSave,
       ),
     );
-    controller.dispose();
 
     return name == null || name.isEmpty ? null : name;
   }
@@ -932,7 +1253,176 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
 }
 
 /// The actions a row's menu offers.
-enum _RowAction { debug, check, edit, export, comment, delete }
+enum _RowAction { toggleExplore, debug, check, edit, export, comment, delete }
+
+/// The view-menu actions (`docs/dev/roadmap.md` §3.10 V4).
+enum _ViewAction { groupByDomain, manageGroups }
+
+/// The batch actions that live in the overflow menu (ADR-0052 §决策 4).
+enum _BatchAction { moveTop, moveBottom, removeGroup, exploreOn, exploreOff }
+
+/// What to do with a group in the management dialog (ADR-0052 §决策 4).
+enum _GroupAction { rename, delete }
+
+/// One entry of the domain-grouped list: either a host header or a source row.
+sealed class _ListEntry {
+  const _ListEntry();
+}
+
+/// A host header inside the domain-grouped list.
+final class _SectionEntry extends _ListEntry {
+  const _SectionEntry(this.host);
+
+  /// The host the following rows share.
+  final String host;
+}
+
+/// A source row inside the domain-grouped list.
+final class _RowEntry extends _ListEntry {
+  const _RowEntry(this.source);
+
+  /// The row to render.
+  final StoredBookSource source;
+}
+
+/// The host of [url], or the raw text when it does not parse as a URI.
+String _hostOf(String url) => Uri.tryParse(url)?.host ?? url;
+
+/// The ARB label of one status light (ADR-0052 §决策 2).
+String _lightLabel(AppLocalizations l10n, SourceCheckLight light) =>
+    switch (light) {
+      SourceCheckLight.passed => l10n.bookSourceCheckStatusPassed,
+      SourceCheckLight.failed => l10n.bookSourceCheckStatusFailed,
+      SourceCheckLight.degraded => l10n.bookSourceCheckStatusDegraded,
+      SourceCheckLight.unchecked => l10n.bookSourceCheckStatusUnchecked,
+    };
+
+/// A one-field dialog that owns its text controller (ADR-0052 §决策 4).
+class _GroupNameDialog extends StatefulWidget {
+  const _GroupNameDialog({
+    required this.title,
+    required this.hint,
+    required this.cancelLabel,
+    required this.saveLabel,
+  });
+
+  final String title;
+  final String hint;
+  final String cancelLabel;
+  final String saveLabel;
+
+  @override
+  State<_GroupNameDialog> createState() => _GroupNameDialogState();
+}
+
+class _GroupNameDialogState extends State<_GroupNameDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      decoration: InputDecoration(hintText: widget.hint),
+    ),
+    actions: <Widget>[
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: Text(widget.cancelLabel),
+      ),
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+        child: Text(widget.saveLabel),
+      ),
+    ],
+  );
+}
+
+/// The coloured dot that carries the four-state verdict (`docs/dev/roadmap.md` §3.10 V1).
+///
+/// It is decorative in the ARIA sense — the colour is one channel only — so the label travels in
+/// a [Tooltip] and a [Semantics] node (C-UI-7). Colours are tokens, never literals (C-UI-1).
+class _StatusLight extends StatelessWidget {
+  const _StatusLight({required this.light, required this.l10n});
+
+  final SourceCheckLight light;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final M3ETheme tokens = context.m3e;
+    final String label = _lightLabel(l10n, light);
+    final Color color = switch (light) {
+      SourceCheckLight.passed => tokens.colors.primary,
+      SourceCheckLight.failed => tokens.colors.error,
+      // 降级态（超时 / JS 失效）用 tertiary：不是源的错，但也不能当绿。
+      SourceCheckLight.degraded => tokens.colors.tertiary,
+      SourceCheckLight.unchecked => tokens.colors.outline,
+    };
+
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        label: label,
+        child: SizedBox(
+          width: tokens.spacing.lg,
+          height: tokens.spacing.lg,
+          child: Center(
+            child: Container(
+              width: tokens.spacing.sm,
+              height: tokens.spacing.sm,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "last checked" line of a row (`docs/dev/roadmap.md` §3.10 V1).
+String _lastCheckLine(
+  BuildContext context,
+  AppLocalizations l10n,
+  SourceCheckRecord record,
+  DateTime now,
+) => l10n.bookSourceListLastCheckLine(
+  _lastCheckWhen(context, l10n, record, now),
+  record.elapsedMillis,
+);
+
+/// How long ago [record] ran, expressed the way the row shows it.
+String _lastCheckWhen(
+  BuildContext context,
+  AppLocalizations l10n,
+  SourceCheckRecord record,
+  DateTime now,
+) {
+  final Duration age = now.difference(record.checkedAt);
+  if (age.isNegative || age.inMinutes < 1) {
+    return l10n.bookSourceListLastCheckJustNow;
+  }
+  if (age.inMinutes < 60) {
+    return l10n.bookSourceListLastCheckMinutesAgo(age.inMinutes);
+  }
+  if (age.inHours < 24) {
+    return l10n.bookSourceListLastCheckHoursAgo(age.inHours);
+  }
+  if (age.inDays < 7) {
+    return l10n.bookSourceListLastCheckDaysAgo(age.inDays);
+  }
+
+  return l10n.bookSourceListLastCheckOn(
+    MaterialLocalizations.of(context).formatShortDate(record.checkedAt),
+  );
+}
 
 /// The dialog answer that means “put the selection into no group”.
 const String _noGroupToken = ' none';

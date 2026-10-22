@@ -89,7 +89,7 @@ final class SourceCheckProvider
   }
 }
 
-String _$sourceCheckHash() => r'4380bb54242ae15a4662688ab98676d5bc3da156';
+String _$sourceCheckHash() => r'39821ecb534234831c7535eae1ad85fc86d81bfe';
 
 /// Runs the batch check (`docs/dev/roadmap.md` §5.10) and writes each verdict back.
 ///
