@@ -106,6 +106,36 @@ void main() {
       expect(pages.headers?['Referer'], 'https://example-novel.test/');
     });
 
+    test('execute_givenHtmlFromTheRule_extractsTheImageAddresses', () async {
+      // 真源常见形态：规则产出 HTML（整块 div 或逐个 <img>），而不是图片地址。
+      // 旧实现把整段 HTML 当「不可用地址」丢掉 → 整章 parseFailed；现在从标记里取图。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _chapterUrl,
+          '<div class="page">'
+          '<img class="lazy" data-original="/img/1.jpg">'
+          '<img class="lazy" data-original="https://cdn.test/2.jpg">'
+          '<img src="/img/placeholder.png">'
+          '</div>',
+        );
+      final ({FetchMangaPages useCase, FakeLogPrinter printer}) fixture =
+          _useCase(http);
+
+      final MangaPages pages = _data(
+        await fixture.useCase.execute(
+          _source(contentRule: 'class.page@html'),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      // data-original 优先于占位 src；相对地址按章节页解析。
+      expect(pages.urls, <String>[
+        'https://example-novel.test/img/1.jpg',
+        'https://cdn.test/2.jpg',
+        'https://example-novel.test/img/placeholder.png',
+      ]);
+    });
+
     test('execute_givenNoImage_answersParseFailedAtTheContentRule', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_chapterUrl, '<div class="page"></div>');

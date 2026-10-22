@@ -30,6 +30,12 @@
   `ParseFailureKind.parseFailed` 整章失败，**不**静默显示空白页（C-SRC-4）。
 - 单元内出现相对地址时按**章节页 URL** 解析为绝对地址（与封面同一条规则，`book-source.md` §2）；
   仍是相对地址（无 base）→ 该页失败并在日志点名页号。
+
+> **落地修订（2026-10-22，真源取证）：** 真源里 `ruleContent.content` 经常产出的是 **HTML 片段**
+> （整块 `<div>…<img …>` 或逐个 `<img …>`，如 `zymk` / `wxzhm`），而不是图片地址。只接受「一项 =
+> 一个 URL」会把整章判成失败。`FetchMangaPages` 现在对每个值做归一化：本身就是 URL 直接用；
+> 含标记时取其中 `<img>` 的 `data-original` / `data-src` / `src`（懒加载属性优先）；都不行才记一条
+> 截断到 80 字符的 warning（C-SEC-4：日志不得写入页面正文）。
 - `headers` 与文本正文共用 `PageFetchService` 的首个请求求值结果，不二次实现。
 
 ### 决策 3 阅读器是「竖滚动 + 左右翻页」两种模式，缩放用内置 `InteractiveViewer`

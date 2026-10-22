@@ -6,6 +6,8 @@ import 'package:flutter_reader/features/book_source/domain/entities/manga_pages.
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
+import 'package:html/dom.dart' as html_dom;
+import 'package:html/parser.dart' as html_parser;
 
 /// Reads one manga chapter's image list (`docs/dev/roadmap.md` §3.10 M16, ADR-0053 §决策 2).
 ///
@@ -102,22 +104,20 @@ final class FetchMangaPages {
           return failureAt<MangaPages>(kind: kind, rulePath: failedAt);
         case ParseSuccess<List<String>>(:final List<String> data):
           for (final String value in data) {
-            final String trimmed = value.trim();
-            if (trimmed.isEmpty) {
-              continue;
-            }
-            final String absolute = resolveAbsoluteUrl(trimmed, page.url);
-            if (!_isHttpUrl(absolute)) {
-              // 相对地址在无 base 时仍是相对；非 http(s)（data: / javascript:）也不是图片源。
-              _logger.warning(
-                'Manga page ${index + 1} of ${source.url} has an unusable image '
-                'address; the page is dropped: $trimmed',
-              );
+            for (final String address in _addressesOf(value)) {
+              final String absolute = resolveAbsoluteUrl(address, page.url);
+              if (!_isHttpUrl(absolute)) {
+                // 相对地址在无 base 时仍是相对；非 http(s)（data: / javascript:）也不是图片源。
+                _logger.warning(
+                  'Manga page ${index + 1} of ${source.url} has an unusable image '
+                  'address; the page is dropped: ${_previewOf(address)}',
+                );
 
-              continue;
-            }
-            if (seen.add(absolute)) {
-              urls.add(absolute);
+                continue;
+              }
+              if (seen.add(absolute)) {
+                urls.add(absolute);
+              }
             }
           }
       }
@@ -132,6 +132,54 @@ final class FetchMangaPages {
     }
 
     return ParseSuccess<MangaPages>(MangaPages(urls: urls, headers: headers));
+  }
+
+  /// A short, single-line preview of [value] for the log (C-SEC-4: never the page body).
+  String _previewOf(String value) {
+    final String oneLine = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return oneLine.length <= 80 ? oneLine : '${oneLine.substring(0, 80)}…';
+  }
+
+  /// The image addresses [value] carries.
+  ///
+  /// Real image sources come in two shapes and both are legal: a rule that already yields
+  /// addresses (`class.page@tag.img@src`), and a rule that yields **HTML** (`class.page@html`,
+  /// or one `<img>` tag per value). The second shape is what upstream's manga loader handles by
+  /// reading the images out of the returned markup; doing it here keeps the "one item = one page"
+  /// contract from throwing away a whole chapter (ADR-0053 §决策 2 revision).
+  ///
+  /// Lazy-loading attributes win over `src`: a site that ships `data-original` / `data-src`
+  /// usually has a placeholder in `src`.
+  Iterable<String> _addressesOf(String value) sync* {
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    if (!trimmed.contains('<')) {
+      yield trimmed;
+
+      return;
+    }
+
+    final List<String> found = <String>[];
+    for (final html_dom.Element image
+        in html_parser.parseFragment(trimmed).querySelectorAll('img')) {
+      final String? address =
+          image.attributes['data-original'] ??
+          image.attributes['data-src'] ??
+          image.attributes['src'];
+      if (address != null && address.trim().isNotEmpty) {
+        found.add(address.trim());
+      }
+    }
+    if (found.isEmpty) {
+      // 有 `<` 但不是图片标签：交给调用方按坏地址记一条 warning，而不是静默吞掉。
+      yield trimmed;
+
+      return;
+    }
+    yield* found;
   }
 
   /// Whether [value] is an absolute `http(s)` address, i.e. something a network image can load.
