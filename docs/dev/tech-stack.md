@@ -221,6 +221,14 @@ dart run drift_dev schema generate drift_schemas/ test/core/storage/generated_mi
 （C-DEP-5 精神）；后者在 `analysis_options.yaml` 中被排除（它自带的
 `ignore_for_file: type=lint` 挡不住 analyzer 的 `strict-raw-types` 警告）。
 
+**迁移步骤必须可重入（ADR-0056）：** `Migrator.createTable` 自带 `IF NOT EXISTS`，
+但 `addColumn` 与 `@TableIndex` 的 `create` 都是裸 SQL。库的 `user_version` 会落后于实际结构
+（迁移做到一半被杀，或用还没提交的表定义建过库），这类库上重跑升级会抛
+`duplicate column name` / `already exists`，并且**每次打开都失败** —— 前台只有
+「书源加载不出来」「导入失败（`DriftRemoteException`）」这种下游症状。因此升级步骤一律用
+`ReaderDatabase` 里的 `_hasSchemaObject` / `_addColumnIfMissing` 先问「对象在不在」，
+版本门只用于说明「这一步属于哪个 ADR」，不作为结构的事实来源。
+
 ## 9. 开发与测试
 
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |

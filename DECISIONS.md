@@ -209,3 +209,13 @@ M14 交付（阅读体验 R1–R4，ADR-0051）：
 ## 2026-10-22 — M17 落地：音频源播放 + 系统 TTS + 媒体通知；真源受阻于引擎方言缺口
 
 按 ADR-0054 交付 A-0…A-4（分支 feat/m17-audio，基于 feat/source-mgmt-manga-audio）：just_audio 0.10.6 + just_audio_windows 0.2.3 + audio_service 0.18.19 + flutter_tts 4.2.5（全 MIT；176 包 / Risky none）。阅读器按 sourceType 分派 AudioReaderView；TTS 从工具条进 ReaderTtsSheet；两者共用目录/会话/进度端口，音频进度写毫秒。通知端口 core/platform/PlaybackNotification：Android/iOS 用 audio_service（AudioServiceActivity + 前台服务 + POST_NOTIFICATIONS MethodChannel），Windows no-op。Windows 新增两个构建前提：nuget.exe 在 PATH、MSVC /utf-8（platform.md §1.2）。设备级 integration_test/audio_playback_test.dart 双端全过（本地 WAV 实播、TTS 读完一句、Android 通知 attach/update/detach）。真源抽查（用户提供的「🔊书音M」）未通过：chapterUrl 把 {{$.id}} 写进 @js: 字符串并引用上游 book 对象，本仓矩阵 #14 把脚本内 {{…}} 当脚本、沙箱只有 bookName/chapterTitle，目录地址留下字面量 movieId={{$.id}}，站点回「章节不存在」；记「已实现未验证」，两条缺口入 roadmap §3.7。顺带修真 bug：JSON 条目上的 @js: 字段丢失页面 baseUrl（_jsContextOf(JsonScope)），补单测。门禁：1384 用例全过、core 100% / domain 100% / data 98.53%、format 0、analyze 干净。
+
+## 2026-10-22 — 数据库迁移不可重入导致库永久打不开（已修）
+
+现象：书源列表加载不出来、导入报 DriftRemoteException（日志只有 230 chars 的脱敏摘要）。
+
+根因：用户机器上的 reader.db 是 user_version=5 但结构已经是 v6（source_checks 表、source_checks_source_checked 索引、book_sources.is_explore_enabled 列都在）。每次打开都重跑 v5→v6，drift 的 createIndex 是裸 CREATE INDEX，撞上已有索引抛 already exists → beforeOpen 失败 → 任何查询都失败。成因是「用没提交的表定义建过库」+ drift 不把 onUpgrade 包在事务里、版本号在迁移之后才写。
+
+修复：升级步骤前先查 sqlite_master / PRAGMA table_info（_hasSchemaObject / _addColumnIfMissing），版本门只做注释说明；回归测试 schemaAt(6) + PRAGMA user_version=5；ADR-0056 + C-NET-9 回链 + tech-stack §8 规则。实测：真实 reader.db 副本 503 行、版本升到 6。
+
+教训：日志脱敏把 sqlite 错误正文换成了哈希，先要拿到原始异常才能在库副本上用 drift 复现（flutter test + NativeDatabase 即可）。

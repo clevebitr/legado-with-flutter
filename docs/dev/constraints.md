@@ -106,7 +106,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-NET-6 | 缓存必须设置 TTL；缓存键必须为「书源 ID + 参数摘要」的稳定哈希；禁止无限缓存。 |
 | C-NET-7 | 持久化统一经 `core/storage/` 的仓储实现（Drift 或 `shared_preferences`）；禁止在业务层直接操作文件系统或拼 SQL。 |
 | C-NET-8 | 仓储必须定义在 `domain/`、实现在 `data/`，以便用 mock 单测。 |
-| C-NET-9 | 存储分工固定：结构化数据（书源、章节、阅读进度、缓存）用 Drift；轻量开关（主题模式、字号）用 `shared_preferences`（见 ADR-0003）。 |
+| C-NET-9 | 存储分工固定：结构化数据（书源、章节、阅读进度、缓存）用 Drift；轻量开关（主题模式、字号）用 `shared_preferences`（见 ADR-0003）。Drift 表结构的升级步骤必须**可重入**（重复执行是空操作），不得只看 `from` 版本号就用裸 `addColumn` / `CREATE INDEX`（见 **ADR-0056**）。 |
 
 ---
 

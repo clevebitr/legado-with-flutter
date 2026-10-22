@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show QueryRow;
 import 'package:drift/native.dart';
 import 'package:drift_dev/api/migrations_native.dart';
 import 'package:flutter_reader/core/storage/database.dart';
@@ -73,6 +74,29 @@ void main() {
       await verifier.migrateAndValidate(database, 6);
       await database.close();
     });
+
+    test(
+      'migration_whenTheVersionIsBehindTheActualSchema_repairsTheDatabase',
+      () async {
+        // 回归点（ADR-0056）：库的实际结构已经是 v6，`user_version` 却还停在 5。
+        // 真实成因是「用还没提交的表定义建过库」或迁移做到一半被杀 —— 用户机器上的
+        // reader.db 就是这样，表现为打开库就抛 DriftRemoteException，前台看到的是
+        // 「书源加载不出来」「导入失败」。
+        //
+        // 旧实现在这里重跑 v6 步骤，`create index` 撞上已存在的索引直接抛，于是每次启动
+        // 都失败；现在每个步骤先问「对象在不在」，重跑是空操作。
+        final InitializedSchema schema = await verifier.schemaAt(6);
+        schema.rawDatabase.execute('PRAGMA user_version = 5');
+        final ReaderDatabase database = ReaderDatabase(schema.newConnection());
+
+        await verifier.migrateAndValidate(database, 6);
+        final QueryRow version = await database
+            .customSelect('PRAGMA user_version')
+            .getSingle();
+        expect(version.data.values.single, 6);
+        await database.close();
+      },
+    );
 
     test('schemaVersion_whenRead_isSix', () {
       expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 6);

@@ -77,3 +77,4 @@
 | [0053](0053-manga-engine.md) | 漫画引擎（M16）：漫画是 reader 的一个模式（`sourceType = image` 分派）、`ruleContent` 列表语义产出图片页、滚动/翻页两种观影模式 + `InteractiveViewer` 缩放、页号进度与预取 ≤3 页、零新依赖 | Accepted（2026-10-22，M16 规格前置） | 本次新增 |
 | [0055](0055-app-shell-and-about-pages.md) | 应用外壳与关于/法律声明（M18）：`AppShell` 在组合根、四 tab `IndexedStack` 保活、「我的」只做入口聚合、关于页版本常量 + 打包 GPL 全文 + 源码地址（不引 `url_launcher`） | Accepted（2026-10-22，用户裁决「开始补齐 UI」） | 本次新增 |
 | [0054](0054-audio-and-tts-engine.md) | 听书与音频（M17）：音频源播放与系统 TTS 两条独立链路共用章节上下文；依赖选型与三端降级（`just_audio` / `audio_service` / `flutter_tts`，Windows 无媒体通知）；HLS/云 TTS/句级高亮未闭环 | Accepted（2026-10-22，M17 规格前置） | 本次新增 |
+| [0056](0056-idempotent-schema-migrations.md) | 数据库迁移步骤必须可重入：升级前先查 `sqlite_master` / `PRAGMA table_info`，版本号不再当作结构的事实来源；不做迁移事务（决策 2） | Accepted（2026-10-22，用户机器上 `reader.db` 打不开的事故修复） | 本次新增 |
