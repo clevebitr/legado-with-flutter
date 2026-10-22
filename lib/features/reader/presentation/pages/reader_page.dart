@@ -6,15 +6,19 @@ import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/reader/di.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reader_media_kind.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_settings.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_notifier.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_toc_sheet.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_tts_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -60,6 +64,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// Whether the chapter the route asked for was already opened.
   bool _appliedStartChapter = false;
+
+  /// The read-aloud notifier, captured when its sheet is opened.
+  ///
+  /// The sheet disposes when it closes, but speech may continue; keeping the notifier here lets
+  /// `dispose` apply the “stop when leaving the reader” rule (ADR-0054 §决策 5).
+  ReaderTts? _tts;
 
   /// The last position the page saw, used by the `dispose` write.
   int _lastIndex = 0;
@@ -116,6 +126,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ),
       );
     }
+    _tts?.onReaderClosed();
     _chromeTimer?.cancel();
     _scroll.dispose();
     super.dispose();
@@ -153,6 +164,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 按书源类型分派（ADR-0054 §决策 1）：音频书进播放器，文本书走原有正文。
+    final AsyncValue<ReaderMediaKind> media = ref.watch(
+      readerMediaKindProvider(widget.book.sourceUrl),
+    );
+    if (!media.hasValue) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (media.value == ReaderMediaKind.audio) {
+      return AudioReaderView(book: widget.book);
+    }
+
     final AppLocalizations l10n = AppLocalizations.of(context);
     final M3ETheme tokens = context.m3e;
     final ReaderSettings settings =
@@ -305,6 +327,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   icon: const Icon(Icons.brightness_6_outlined),
                   tooltip: l10n.readerBrightness,
                   onPressed: () => _keepAlive(() => _openBrightness(tokens)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.volume_up),
+                  tooltip: l10n.readerTtsAction,
+                  onPressed: _openTts,
                 ),
                 IconButton(
                   icon: const Icon(Icons.skip_next),
@@ -681,6 +708,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       readerPagePaddingOf(settings.pagePadding);
 
   /// Opens the chapter list and jumps to the chosen chapter (ADR-0051 §决策 2).
+  /// Opens the read-aloud sheet and remembers its notifier for the exit rule.
+  void _openTts() {
+    _tts = ref.read(readerTtsProvider(widget.book).notifier);
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (BuildContext context) => ReaderTtsSheet(book: widget.book),
+      ),
+    );
+  }
+
   void _openToc(List<ReadingChapter> chapters) {
     if (chapters.isEmpty) {
       return;

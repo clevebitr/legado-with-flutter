@@ -626,6 +626,35 @@ final class PageFetchService {
     };
   }
 
+  /// Returns every value a **top-level list** rule produces on [scope].
+  ///
+  /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7), the same
+  /// rule [content] follows: a top-level rule that no longer fits its page is the stage's
+  /// failure, not an empty result. Used by the image and audio stages, where one matched
+  /// value is one page / one track (ADR-0053 §决策 2, ADR-0054 §决策 2).
+  ///
+  /// A rejected rule stays [ParseFailureKind.unsupportedRule] (C-SRC-4); unlike [field]
+  /// it is not degraded, because the whole stage depends on this list.
+  Future<ParseResult<List<String>>> valueList(
+    String? rule,
+    RuleScope scope,
+    String rulePath,
+  ) async {
+    final ParseResult<List<String>> parsed = await _engine.extractAll(
+      rule ?? '',
+      scope,
+      rulePath: rulePath,
+    );
+
+    return switch (parsed) {
+      ParseSuccess<List<String>>(:final List<String> data)
+          when data.isNotEmpty =>
+        ParseSuccess<List<String>>(data),
+      ParseSuccess<List<String>>() => _noMatch<List<String>>(rulePath),
+      ParseFailure<List<String>>() => parsed,
+    };
+  }
+
   /// Fetches the page [rule] names and walks every page [nextRule] names
   /// (`book-source.md` §4.1).
   ///

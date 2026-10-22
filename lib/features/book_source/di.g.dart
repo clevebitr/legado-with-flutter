@@ -517,6 +517,57 @@ final class FetchContentProvider
 
 String _$fetchContentHash() => r'f778bcebf4143d26704370a08269f10212a1c2a0';
 
+/// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+
+@ProviderFor(fetchAudioTracks)
+final fetchAudioTracksProvider = FetchAudioTracksProvider._();
+
+/// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+
+final class FetchAudioTracksProvider
+    extends
+        $FunctionalProvider<
+          FetchAudioTracks,
+          FetchAudioTracks,
+          FetchAudioTracks
+        >
+    with $Provider<FetchAudioTracks> {
+  /// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+  FetchAudioTracksProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'fetchAudioTracksProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$fetchAudioTracksHash();
+
+  @$internal
+  @override
+  $ProviderElement<FetchAudioTracks> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  FetchAudioTracks create(Ref ref) {
+    return fetchAudioTracks(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(FetchAudioTracks value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<FetchAudioTracks>(value),
+    );
+  }
+}
+
+String _$fetchAudioTracksHash() => r'76f5df3129241d5ddc03e924e7ea6e437280f7be';
+
 /// Provides the use case that reads a source's discover-page categories.
 
 @ProviderFor(fetchExploreCategories)

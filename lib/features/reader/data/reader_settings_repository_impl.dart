@@ -29,6 +29,21 @@ const String _firstLineIndentKey = 'reader.firstLineIndent';
 /// `shared_preferences` key of the page padding preset index.
 const String _pagePaddingKey = 'reader.pagePadding';
 
+/// `shared_preferences` key of the TTS speech rate.
+const String _ttsRateKey = 'reader.ttsRate';
+
+/// `shared_preferences` key of the TTS pitch.
+const String _ttsPitchKey = 'reader.ttsPitch';
+
+/// `shared_preferences` key of the selected TTS voice name.
+const String _ttsVoiceNameKey = 'reader.ttsVoiceName';
+
+/// `shared_preferences` key of the selected TTS voice locale.
+const String _ttsVoiceLocaleKey = 'reader.ttsVoiceLocale';
+
+/// `shared_preferences` key of the “stop speech when leaving the reader” switch.
+const String _stopTtsOnExitKey = 'reader.stopTtsOnExit';
+
 /// [ReaderSettingsRepository] on top of [PreferenceStore] (`docs/dev/roadmap.md` 5.3, C-NET-9).
 ///
 /// Every read is defensive: an unknown enum index (a store written by a newer build, or a
@@ -50,6 +65,11 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     paragraphSpacing: _store.readDouble(_paragraphSpacingKey) ?? 0.5,
     firstLineIndent: _store.readDouble(_firstLineIndentKey) ?? 2,
     pagePadding: _pagePaddingOf(_store.readInt(_pagePaddingKey)),
+    ttsRate: _store.readDouble(_ttsRateKey) ?? 1,
+    ttsPitch: _store.readDouble(_ttsPitchKey) ?? 1,
+    ttsVoiceName: _nonEmpty(_store.readString(_ttsVoiceNameKey)),
+    ttsVoiceLocale: _nonEmpty(_store.readString(_ttsVoiceLocaleKey)),
+    stopTtsOnExit: _store.readBool(_stopTtsOnExitKey) ?? true,
   );
 
   @override
@@ -63,6 +83,12 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     await _store.writeDouble(_paragraphSpacingKey, settings.paragraphSpacing);
     await _store.writeDouble(_firstLineIndentKey, settings.firstLineIndent);
     await _store.writeInt(_pagePaddingKey, settings.pagePadding.index);
+    await _store.writeDouble(_ttsRateKey, settings.ttsRate);
+    await _store.writeDouble(_ttsPitchKey, settings.ttsPitch);
+    // 音色是「没选」= null：清空时写空串，读回时按 null 处理（PreferenceStore 没有删除 API）。
+    await _store.writeString(_ttsVoiceNameKey, settings.ttsVoiceName ?? '');
+    await _store.writeString(_ttsVoiceLocaleKey, settings.ttsVoiceLocale ?? '');
+    await _store.writeBool(_stopTtsOnExitKey, settings.stopTtsOnExit);
   }
 
   /// Maps a stored index onto [ReaderFontFamily], defaulting when it names nothing.
@@ -109,3 +135,10 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     return ReaderPageMode.values[stored];
   }
 }
+
+/// Treats an empty string as “no value”.
+///
+/// `PreferenceStore` has no delete, so “system default voice” is stored as an empty string; the
+/// read path turns it back into `null` so the rest of the app has one representation.
+String? _nonEmpty(String? value) =>
+    value == null || value.isEmpty ? null : value;

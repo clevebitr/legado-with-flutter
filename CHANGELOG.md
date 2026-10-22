@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Listen to audio sources and read chapters aloud (M17, ADR-0054)
+
+- **Audio book sources finally play.** `ruleContent` of a `bookSourceType = 1` source yields direct
+  audio addresses; one matched value is one track. The chapter URL goes through the same walk as a
+  text body (rate budget, rule-based `header`, `nextContentUrl` paging), relative addresses resolve
+  against the page they were read on, duplicates collapse, and a chapter with no playable address
+  fails instead of showing an empty player.
+- **A player in the reader.** `ReaderPage` dispatches on the source type to `AudioReaderView`:
+  play / pause, seek, 0.75×–2× speed, previous / next chapter, automatic continuation within a
+  multi-track chapter and into the next chapter, retry after a failure. Progress is written to
+  `reading_progress` in **milliseconds** every five seconds while playing and on pause / exit.
+- **Read aloud with the system TTS engine.** The text reader's toolbar opens `ReaderTtsSheet`
+  (rate, pitch, voice, keep-reading-on-exit); chapters are split into utterance-sized chunks so
+  Android's input limit cannot truncate them, and the last chunk advances to the next chapter.
+- **Background playback and media notification.** A `PlaybackNotification` port in
+  `core/platform/` is bound to `audio_service` on Android / iOS (foreground service, media
+  notification, lock-screen controls, `POST_NOTIFICATIONS` request) and deliberately degrades to a
+  no-op on Windows. `MainActivity` now extends `AudioServiceActivity`.
+- **Windows build prerequisites changed**: `flutter_tts` needs `nuget.exe` on `PATH` and
+  `just_audio_windows` needs MSVC `/utf-8`; both are documented in `docs/dev/platform.md` §1.2 and
+  the compile option is set in `windows/CMakeLists.txt`.
+- **Engine fix found by the real-source check**: a `@js:` field on a JSON item lost the page's
+  `baseUrl`; JSON item scopes now keep their page context, which JSON-API sources need to build
+  chapter addresses.
+- The real audio source used for the acceptance check could not be played end to end: it relies on
+  `{{…}}` expansion inside `@js:` rule text and on the upstream `book` JS binding, neither of which
+  this repository implements. Both are registered in `docs/dev/roadmap.md` §3.7 and the check is
+  recorded as “implemented, not verified”.
+
 ### Book source management can finally write: batch edits, search, groups, an editor, export (M13-S2..S5)
 
 - **Selection mode**: long-press a row, then select all / invert and run **enable / disable / delete /

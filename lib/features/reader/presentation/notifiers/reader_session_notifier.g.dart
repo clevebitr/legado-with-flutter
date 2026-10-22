@@ -228,6 +228,118 @@ final class ReaderContentFamily extends $Family
   String toString() => r'readerContentProvider';
 }
 
+/// The chapter index the session is on, or `null` while it is loading.
+///
+/// It exists so a listener can depend on the **index only**: the session's state also carries the
+/// character offset (the audio player writes it every few seconds), and watching the whole session
+/// from the player would reload the track on every progress write. A derived provider recomputes,
+/// but its value is `==` to the previous one, so its listeners are not notified.
+
+@ProviderFor(readerChapterIndex)
+final readerChapterIndexProvider = ReaderChapterIndexFamily._();
+
+/// The chapter index the session is on, or `null` while it is loading.
+///
+/// It exists so a listener can depend on the **index only**: the session's state also carries the
+/// character offset (the audio player writes it every few seconds), and watching the whole session
+/// from the player would reload the track on every progress write. A derived provider recomputes,
+/// but its value is `==` to the previous one, so its listeners are not notified.
+
+final class ReaderChapterIndexProvider
+    extends $FunctionalProvider<int?, int?, int?>
+    with $Provider<int?> {
+  /// The chapter index the session is on, or `null` while it is loading.
+  ///
+  /// It exists so a listener can depend on the **index only**: the session's state also carries the
+  /// character offset (the audio player writes it every few seconds), and watching the whole session
+  /// from the player would reload the track on every progress write. A derived provider recomputes,
+  /// but its value is `==` to the previous one, so its listeners are not notified.
+  ReaderChapterIndexProvider._({
+    required ReaderChapterIndexFamily super.from,
+    required ReaderBook super.argument,
+  }) : super(
+         retry: null,
+         name: r'readerChapterIndexProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$readerChapterIndexHash();
+
+  @override
+  String toString() {
+    return r'readerChapterIndexProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $ProviderElement<int?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  int? create(Ref ref) {
+    final argument = this.argument as ReaderBook;
+    return readerChapterIndex(ref, argument);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(int? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<int?>(value),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ReaderChapterIndexProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$readerChapterIndexHash() =>
+    r'09d3732c771bb4344708b88fd67d69226ff46575';
+
+/// The chapter index the session is on, or `null` while it is loading.
+///
+/// It exists so a listener can depend on the **index only**: the session's state also carries the
+/// character offset (the audio player writes it every few seconds), and watching the whole session
+/// from the player would reload the track on every progress write. A derived provider recomputes,
+/// but its value is `==` to the previous one, so its listeners are not notified.
+
+final class ReaderChapterIndexFamily extends $Family
+    with $FunctionalFamilyOverride<int?, ReaderBook> {
+  ReaderChapterIndexFamily._()
+    : super(
+        retry: null,
+        name: r'readerChapterIndexProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The chapter index the session is on, or `null` while it is loading.
+  ///
+  /// It exists so a listener can depend on the **index only**: the session's state also carries the
+  /// character offset (the audio player writes it every few seconds), and watching the whole session
+  /// from the player would reload the track on every progress write. A derived provider recomputes,
+  /// but its value is `==` to the previous one, so its listeners are not notified.
+
+  ReaderChapterIndexProvider call(ReaderBook book) =>
+      ReaderChapterIndexProvider._(argument: book, from: this);
+
+  @override
+  String toString() => r'readerChapterIndexProvider';
+}
+
 /// The reading session: which chapter is open and where the user is inside it
 /// (`docs/dev/roadmap.md` 5.3).
 ///

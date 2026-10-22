@@ -44,8 +44,15 @@ Please enable Developer Mode in your system settings.
 或执行 `start ms-settings:developers`。
 
 > 本项目依赖多个带原生代码的插件（`drift_flutter`、`path_provider`、`shared_preferences`、
-> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`），因此该开关是 Windows 开发的
-> **硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
+> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`、`just_audio_windows`、`flutter_tts`），
+> 因此该开关是 Windows 开发的**硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
+
+**M17 起新增的两个 Windows 构建前提（ADR-0054 A-0 实测）：**
+
+| 前提 | 谁需要 | 不满足时的表现 |
+|---|---|---|
+| `nuget.exe` 在 `PATH` 上（本机放在 `C:/Users/<user>/tools/nuget.exe`） | `flutter_tts` 的 Windows 实现（C++/WinRT，`nuget install Microsoft.Windows.CppWinRT`） | `CMake Error at flutter_tts/windows/CMakeLists.txt: nuget.exe not found` |
+| MSVC `/utf-8`（已在 `windows/CMakeLists.txt` 的 `APPLY_STANDARD_SETTINGS` 统一加） | `just_audio_windows` 的 UTF-8 源码；代码页 936 下 C4819 被 `/WX` 放大成构建失败 | `error C2220: 以下警告被视为错误` + `warning C4819` |
 
 ---
 
@@ -61,6 +68,7 @@ Please enable Developer Mode in your system settings.
 | `SystemUiController` | 状态栏透明、edge-to-edge 适配 | 在 `core/theme/` 统一调用 |
 | `HapticsController` | 触感反馈能力探测与降级 | 组件内调用，不判断平台 |
 | `LongRunningTask` | 长任务的前台标记（Android 为 `PARTIAL_WAKE_LOCK`） | 批量书源校验开始 / 结束时 `acquire` / `release`（ADR-0043 §决策 3） |
+| `PlaybackNotification` | 媒体通知 / 锁屏控制（Android / iOS 由 `audio_service` 实现；Windows 返回 no-op 的 `null` 句柄） | 音频播放器在播放状态变化时 `attach` / `update` / `detach`；**UI 不判断平台**（ADR-0054 §决策 3/4） |
 
 **契约：** 每个接口在不支持的平台返回 `null` 或 no-op，**禁止抛出异常**；
 调用方必须把 `null` 当作正常分支处理，不得用 `!` 解包（C-TYPE-2）。

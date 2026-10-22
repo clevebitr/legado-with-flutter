@@ -47,6 +47,13 @@ dependencies:
   shared_preferences: ^2.5.3
   path_provider: ^2.1.6
 
+  # 听书与音频（ADR-0054）：播放、Windows 实现、后台通知、系统朗读。
+  # `just_audio_windows` 不是联邦插件的 endorsed 实现，必须单独声明（C-BAN-4）。
+  just_audio: ^0.10.6
+  just_audio_windows: ^0.2.3
+  audio_service: ^0.18.19
+  flutter_tts: ^4.2.5
+
   # 观测：业务侧只允许经 core/logging 使用（C-ERR-5、ADR-0006）
   logger: ^2.8.0
   # 日志脱敏摘要（sha256）与 `@js:` 沙箱的 crypto.* 绑定：仅 core/logging/redaction.dart

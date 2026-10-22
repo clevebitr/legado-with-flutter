@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/router/app_navigation.dart';
 import 'package:flutter_reader/core/router/app_router.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/audio_track.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
@@ -29,11 +30,15 @@ import 'package:flutter_reader/features/bookshelf/presentation/bookshelf_route.d
 import 'package:flutter_reader/features/bookshelf/presentation/notifiers/bookshelf_notifier.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/pages/bookshelf_page.dart';
 import 'package:flutter_reader/features/reader/di.dart';
+import 'package:flutter_reader/features/reader/domain/entities/audio_track.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reader_media_kind.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/audio_track_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/source_kind_provider.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/reader_route.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
@@ -71,6 +76,9 @@ List<Override> appProviderOverrides() => <Override>[
   readerChapterListProvider.overrideWith(_ChapterListSource.new),
   readerChapterContentProvider.overrideWith(_ChapterContentSource.new),
   readerProgressStoreProvider.overrideWith(_ProgressStore.new),
+  // 音频链路（ADR-0054 §决策 1/2）：同样由装配根绑定，reader 仍然不认识 book_source。
+  readerAudioTrackProvider.overrideWith(_AudioTrackSource.new),
+  readerSourceKindProvider.overrideWith(_SourceKind.new),
 ];
 
 /// Root widget: wires theming, localization and the route table.
@@ -320,6 +328,69 @@ final class _ChapterContentSource implements ChapterContentProvider {
             bookName: bookName,
           ),
         );
+  }
+}
+
+/// `AudioTrackProvider` bound to `book_source`'s `FetchAudioTracks` (ADR-0054 §决策 2).
+final class _AudioTrackSource implements AudioTrackProvider {
+  const _AudioTrackSource(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<ParseResult<List<ReaderAudioTrack>>> fetch({
+    required String sourceUrl,
+    required String chapterUrl,
+    String bookName = '',
+    String chapterTitle = '',
+  }) async {
+    final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
+    if (source == null) {
+      return failureAt<List<ReaderAudioTrack>>(
+        kind: ParseFailureKind.invalidBookSource,
+        rulePath: 'reader.audioTracks',
+      );
+    }
+
+    final ParseResult<List<AudioTrack>> result = await _ref
+        .read(fetchAudioTracksProvider)
+        .execute(
+          source,
+          ChapterRequest(
+            url: chapterUrl,
+            title: chapterTitle,
+            bookName: bookName,
+          ),
+        );
+
+    return switch (result) {
+      ParseSuccess<List<AudioTrack>>(:final List<AudioTrack> data) =>
+        ParseSuccess<List<ReaderAudioTrack>>(<ReaderAudioTrack>[
+          for (final AudioTrack track in data)
+            ReaderAudioTrack(url: track.url, headers: track.headers),
+        ]),
+      ParseFailure<List<AudioTrack>>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        failureAt<List<ReaderAudioTrack>>(kind: kind, rulePath: rulePath),
+    };
+  }
+}
+
+/// `SourceKindProvider` bound to the stored book source (ADR-0054 §决策 1).
+final class _SourceKind implements SourceKindProvider {
+  const _SourceKind(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<ReaderMediaKind> kindOf({required String sourceUrl}) async {
+    final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
+
+    return source?.sourceType == BookSourceType.audio
+        ? ReaderMediaKind.audio
+        : ReaderMediaKind.text;
   }
 }
 

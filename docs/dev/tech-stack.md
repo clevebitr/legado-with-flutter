@@ -58,6 +58,19 @@
 | `flutter` | SDK | 框架 | BSD-3-Clause | — |
 | `flutter_localizations` | SDK | 本地化运行时 | BSD-3-Clause | C-UI-5 |
 
+### 2.1 听书与音频（M17，ADR-0054）
+
+| 依赖 | 版本 | 用途 | 平台 | 许可证 | 关联约束 |
+|---|---|---|---|---|---|
+| `just_audio` | `^0.10.6` | 音频播放（Android ExoPlayer / iOS AVPlayer / Windows 由下面的实现提供） | Android / iOS / Windows | MIT | C-DEP-7、ADR-0054 §决策 3 |
+| `just_audio_windows` | `^0.2.3` | `just_audio` 的 Windows 实现（Media Foundation）；不是 endorsed 联邦实现，必须单独声明 | Windows | MIT | C-BAN-4、ADR-0054 §决策 3 |
+| `audio_service` | `^0.18.19` | Android 前台服务 + 媒体通知 / 锁屏控制；Windows 无实现，端口降级为 no-op | Android / iOS（无 Windows） | MIT | C-PLT-1、ADR-0054 §决策 3/4 |
+| `flutter_tts` | `^4.2.5` | 系统 TTS 朗读（语速 / 音高 / 音色） | Android / iOS / Windows | MIT | ADR-0054 §决策 5 |
+
+构建前提（本机实测，`docs/dev/platform.md` §1.2）：Windows 上 `flutter_tts` 需要 `nuget.exe` 在 PATH
+（C++/WinRT 包），`just_audio_windows` 在中文代码页下需要 `/utf-8` 编译选项；`windows/CMakeLists.txt`
+的 `APPLY_STANDARD_SETTINGS` 已加后者。
+
 ## 3. UI 与主题
 
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |

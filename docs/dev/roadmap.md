@@ -336,15 +336,27 @@ Phase 6    发布前                          清单见 §5
 | M-2 | `MangaReaderPage`（按 `sourceType` 分派；竖滚动 + 左右翻页、双击/双指缩放、失败页重试、页号进度） |
 | M-3 | 预取前后各 1 页、解码尺寸上限；零新依赖（`cached_network_image` + `InteractiveViewer`） |
 
-**M17 — 听书与音频（ADR-0054）** —— ⏳ 未开工
+**M17 — 听书与音频（ADR-0054）** —— ✅ 已交付（2026-10-22，真源抽查受阻，见下）
 
-| # | 交付物 |
-|---|---|
-| A-0 | 依赖探针：`just_audio` / `just_audio_windows` / `audio_service` / `flutter_tts` 的三端可编译 + 双端实跑；许可证写 `NOTICE.md` §5 |
-| A-1 | `FetchAudioTracks`（音频源 `ruleContent` → 直链音轨） |
-| A-2 | 音频播放器（播放/暂停/seek/倍速/上下章/失败重试）+ 进度写 `reading_progress`（毫秒偏移） |
-| A-3 | 系统 TTS 朗读（语速/音高/音色、暂停/继续/停止、读完自动下一章、退出默认停止） |
-| A-4 | 后台与通知：Android `audio_service` 前台服务，Windows 降级为 no-op |
+| # | 交付物 | 状态 |
+|---|---|---|
+| A-0 | 依赖探针：`just_audio` / `just_audio_windows` / `audio_service` / `flutter_tts` 的三端可编译 + 双端实跑；许可证写 `NOTICE.md` §5 | ✅ Windows + Android 设备级探针全过；176 包 / Risky none（MIT 46） |
+| A-1 | `FetchAudioTracks`（音频源 `ruleContent` → 直链音轨） | ✅ 列表 / 单地址 / 相对地址 / 去重 / 分页 / 空列表失败；真源抽查另行登记 |
+| A-2 | 音频播放器（播放/暂停/seek/倍速/上下章/失败重试）+ 进度写 `reading_progress`（毫秒偏移） | ✅ `AudioReaderView` + `AudioReader`；本地 WAV 双端实播 |
+| A-3 | 系统 TTS 朗读（语速/音高/音色、暂停/继续/停止、读完自动下一章、退出默认停止） | ✅ `ReaderTtsSheet` + `ReaderTts`；块级切分、连续章节 |
+| A-4 | 后台与通知：Android `audio_service` 前台服务，Windows 降级为 no-op | ✅ 媒体通知端口 + Manifest / `AudioServiceActivity` / `POST_NOTIFICATIONS`；Android 探针挂载成功 |
+
+> **M17 落地记录（2026-10-22）：** 依赖按 ADR-0054 §决策 3 落地（`just_audio 0.10.6` /
+> `just_audio_windows 0.2.3` / `audio_service 0.18.19` / `flutter_tts 4.2.5`）；Windows 额外需要
+> `nuget.exe` 与 `/utf-8`（`platform.md` §1.2）。两条链路：音频源在 `ReaderPage` 按 `sourceType` 分派到
+> `AudioReaderView`，TTS 由文本阅读器工具条的「朗读」进入 `ReaderTtsSheet`；两者共用目录 / 会话 / 进度
+> 三端口。设备级证据：`integration_test/audio_playback_test.dart` 在 Windows 与 Android 全过（本地 WAV
+> 真实解码推进、系统 TTS 读完一句、Android 媒体通知 attach/update/detach）。
+> **真源抽查（用户提供的「🔊书音M」）未通过**：该源 `chapterUrl` 把 `{{$.id}}` 写在 `@js:` 字符串里，
+> 依赖本仓未实现的「`@js:` 规则文本内嵌 `{{…}}` 展开 + JS `book` 绑定」方言；链条止于目录（章节地址
+> 里留下字面量 `movieId={{$.id}}`，站点返回「章节不存在」）。按验收口径记「已实现未验证」，两条缺口
+> 登记在 §3.7。顺带修掉真源暴露的一个引擎 bug：JSON 条目上的 `@js:` 字段丢失页面 `baseUrl`
+> （`_jsContextOf(JsonScope)`），已补测试。
 
 > **M15 落地记录（2026-10-22）：** schema v5 → v6（`source_checks` 表 + `is_explore_enabled` 列 + dump
 > 与迁移测试）；状态灯四态与「上次校验」摘要、探索徽标/批量开关、置顶/置底、分组重命名/删除/移出、
@@ -401,6 +413,9 @@ Phase 6    发布前                          清单见 §5
 | Big5 的**检测**（`betto_charset_detector` 候选表里没有 Big5） | **未做（ADR-0048 §决策 3）**：只补解码不补检测，无声明页面仍按嗅探结果解。触发 = 语料出现「无声明 Big5 页面且整条源失败」的实例 |
 | Big5-HKSCS 扩展区字符 | **部分支持（ADR-0048）**：扩展区解成 U+FFFD。触发 = 繁体语料反馈缺字 |
 | `shift-jis` / `euc-jp` 严格解码抛 `RangeError`（`Error`，越出 `ParseResult` 契约） | **未做（ADR-0048 §决策 4）**：`enough_convert` 不含日文码表，加字节预校验层无收益可验（语料 0 条日文源）。触发 = 出现日文源 |
+| `@js:` 规则**文本内**的 `{{…}}` 未按内层规则展开（真实听书源 `chapterUrl` 依赖它拼 `movieId`） | **未做（M17 真源抽查发现，ADR-0054 §后果）**：矩阵 #14 现按「脚本里的 `{{…}}` 属于脚本」处理，改了会影响既有语料与 ADR-0029/0047 的裁决；触发 = 再有 ≥1 条真实音频 / JSON 源因它整条不可用，届时新 ADR + 语料统计后再动 |
+| JS 沙箱只有 `bookName` / `chapterTitle`，没有上游的 `book` 对象（`Book` 字段绑定） | **未做（M17 真源抽查发现）**：源可用 `typeof book` 守卫回落到 `baseUrl`，但依赖 `book.tocUrl` / `book.name` 的 `chapterUrl` 会走错分支；触发 = 同上，需与 `book-source.md` §6 的绑定白名单一起裁决 |
+| HLS / m3u8、云 TTS、语音缓存、句级高亮、定时停止、投屏、Windows 后台播放 | **未做（ADR-0054 §后果）**：本轮只支持直链音频 + 系统 TTS；HLS 需要播放器能力与真源证据，其余无用户需求证据 |
 | 已登记为**有意差异 / 具名拒绝**的一族：`{{…}}` 在列表规则里的语义、模板 JS 返回列表取首值、发现页 `infoMap` 与排名模块、`java.timeFormatUTC`、HTML 实体反转义、同步 `http.*` 形态、列表规则上的 `@js:`、`parse.*` 嵌套与 `parse.getElements` 非 DOM、元素 scope 的 `result` 形态、矩阵 #7 多元素倒置 | **无待办**：行为与触发条件归 `book-source.md` §3 / §4.2 / §6 / §11 与 ADR-0029 / 0035 的注记，本表不再复述 |
 
 ---

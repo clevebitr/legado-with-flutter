@@ -1839,10 +1839,16 @@ final class RuleEngine {
       );
 
   /// The page context of [scope], or an empty one for a scope built without a fetch.
+  ///
+  /// A **JSON item** keeps the page's context: `_jsonScopesOf` builds every item with the page's
+  /// [JsPageContext], and a per-item `@js:` field is exactly where `baseUrl` (and the book /
+  /// chapter names) has to stay visible — without this, a JSON API source's `@js:` URL rule sees
+  /// an empty `baseUrl` and produces a relative or truncated address (M17 真源抽查发现).
   JsPageContext _jsContextOf(RuleScope scope) => switch (scope) {
     DomScope(:final JsPageContext? jsContext) =>
       jsContext ?? const JsPageContext(baseUrl: ''),
-    JsonScope() => const JsPageContext(baseUrl: ''),
+    JsonScope(:final JsPageContext? jsContext) =>
+      jsContext ?? const JsPageContext(baseUrl: ''),
   };
 
   /// The page content a bare `@js:` rule receives as `result` (`book-source.md` §6).

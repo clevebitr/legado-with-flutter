@@ -35,6 +35,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
@@ -47,15 +48,18 @@ import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
 import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/audio_track.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/fetch_audio_tracks.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
+import 'package:just_audio/just_audio.dart';
 
 /// How much of a produced value the report shows before the hash takes over.
 const int _sampleLength = 60;
@@ -167,6 +171,8 @@ final class _NoContentCache implements ContentCache {
 }
 
 Future<void> main(List<String> arguments) async {
+  // just_audio 播放真实音轨需要平台通道与绑定（A-0 / M17 的真源抽查）。
+  WidgetsFlutterBinding.ensureInitialized();
   final Map<String, String> options = _parseOptions(_argumentsOf(arguments));
   final String? collection = options['list'];
   if (collection != null) {
@@ -195,6 +201,7 @@ Future<void> main(List<String> arguments) async {
     source,
     keyword,
     allowPlainHttp: options.containsKey('plain-http'),
+    audio: options.containsKey('audio'),
   );
   stopwatch.stop();
   report.elapsedMilliseconds = stopwatch.elapsedMilliseconds;
@@ -236,6 +243,7 @@ Future<_Report> _runChain(
   BookSource source,
   String keyword, {
   bool allowPlainHttp = false,
+  bool audio = false,
 }) async {
   final AppLogger logger = AppLogger(level: LogLevel.warning);
   // 请求层是唯一的上网入口（C-NET-1）：页面抓取与规则里的 `http.*` 共用同一个客户端，
@@ -264,6 +272,15 @@ Future<_Report> _runChain(
     logger: logger,
   );
   final _Report report = _Report(source: source, keyword: keyword);
+  if (audio) {
+    report.requiredStages = const <String>[
+      'search',
+      'bookInfo',
+      'toc',
+      'audioTracks',
+      'playback',
+    ];
+  }
 
   // 逐段跑：上一段的产物是下一段的输入，任何一段失败都保留已得到的证据。
   final List<Book> books = <Book>[];
@@ -347,6 +364,17 @@ Future<_Report> _runChain(
     return report;
   }
 
+  if (audio) {
+    await _runAudio(
+      source,
+      chapters.first,
+      FetchAudioTracks(pages: pages),
+      report,
+    );
+
+    return report;
+  }
+
   switch (await FetchContent(
     pages: pages,
     cache: _noContentCache,
@@ -364,6 +392,72 @@ Future<_Report> _runChain(
   }
 
   return report;
+}
+
+/// The audio branch of the chain (`docs/dev/roadmap.md` §3.10, ADR-0054 A-1/A-2).
+///
+/// It reads the chapter's tracks and then **really plays** the first one for three seconds, so a
+/// passing run is evidence that the address the rules produced can be decoded on this device —
+/// not merely that it looks like a URL.
+Future<void> _runAudio(
+  BookSource source,
+  Chapter chapter,
+  FetchAudioTracks fetch,
+  _Report report,
+) async {
+  final ParseResult<List<AudioTrack>> tracks = await fetch.execute(
+    source,
+    ChapterRequest(url: chapter.url, title: chapter.name),
+  );
+  switch (tracks) {
+    case ParseFailure<List<AudioTrack>>(
+      :final ParseFailureKind kind,
+      :final String rulePath,
+    ):
+      report.fail('audioTracks', kind, rulePath);
+
+      return;
+    case ParseSuccess<List<AudioTrack>>(:final List<AudioTrack> data):
+      report.record(
+        'audioTracks',
+        _stage(data.length, <String>[
+          for (final AudioTrack track in data)
+            '${_sample(track.url)} headers=${track.headers.length}',
+        ]),
+      );
+      if (data.isEmpty) {
+        return;
+      }
+      await _playFirstTrack(data.first, report);
+  }
+}
+
+/// Plays [track] for three seconds and records the position the player reached.
+Future<void> _playFirstTrack(AudioTrack track, _Report report) async {
+  final AudioPlayer player = AudioPlayer();
+  try {
+    final Duration? duration = await player.setUrl(
+      track.url,
+      headers: track.headers.isEmpty ? null : track.headers,
+    );
+    await player.play();
+    await Future<void>.delayed(const Duration(seconds: 3));
+    final Duration position = player.position;
+    report.record(
+      'playback',
+      _stage(1, <String>[
+        'duration=${duration ?? '-'} position=${position.inMilliseconds}ms',
+      ]),
+    );
+    if (position <= Duration.zero) {
+      report.fail('playback', ParseFailureKind.networkFailed, 'AudioPlayer');
+    }
+  } on PlayerException catch (error) {
+    stderr.writeln('playback failed: ${error.code} ${error.message}');
+    report.fail('playback', ParseFailureKind.networkFailed, 'AudioPlayer');
+  } finally {
+    await player.dispose();
+  }
 }
 
 /// Lists the sources of a collection that this repository can evaluate today.
@@ -1082,15 +1176,18 @@ final class _Report {
   void fail(String stage, ParseFailureKind kind, String rulePath) =>
       _failures[stage] = (kind: kind, rulePath: rulePath);
 
-  /// Whether every stage of the chain produced values.
+  /// The stages a complete run must produce; the audio branch swaps the text ones.
+  List<String> requiredStages = const <String>[
+    'search',
+    'bookInfo',
+    'toc',
+    'content',
+  ];
+
+  /// Whether every required stage produced values.
   bool get isComplete =>
       _failures.isEmpty &&
-      const <String>[
-        'search',
-        'bookInfo',
-        'toc',
-        'content',
-      ].every((String stage) => (_stages[stage]?.count ?? 0) > 0);
+      requiredStages.every((String stage) => (_stages[stage]?.count ?? 0) > 0);
 
   /// The report as a JSON object, for the `book-source.md` §10 record.
   Map<String, Object?> toJson() => <String, Object?>{

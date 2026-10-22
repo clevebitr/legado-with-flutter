@@ -82,6 +82,16 @@ String _chapterTitleOf(Ref ref, ReaderBook book, String chapterUrl) {
   return '';
 }
 
+/// The chapter index the session is on, or `null` while it is loading.
+///
+/// It exists so a listener can depend on the **index only**: the session's state also carries the
+/// character offset (the audio player writes it every few seconds), and watching the whole session
+/// from the player would reload the track on every progress write. A derived provider recomputes,
+/// but its value is `==` to the previous one, so its listeners are not notified.
+@riverpod
+int? readerChapterIndex(Ref ref, ReaderBook book) =>
+    ref.watch(readerSessionProvider(book)).value?.chapterIndex;
+
 /// The reading session: which chapter is open and where the user is inside it
 /// (`docs/dev/roadmap.md` 5.3).
 ///

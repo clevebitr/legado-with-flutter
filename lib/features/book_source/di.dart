@@ -18,6 +18,7 @@ import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engi
 import 'package:flutter_reader/features/book_source/domain/usecases/aggregate_search_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/check_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/explore_books.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/fetch_audio_tracks.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_explore_categories.dart';
@@ -103,6 +104,11 @@ FetchContent fetchContent(Ref ref) => FetchContent(
   pages: ref.watch(pageFetchServiceProvider),
   cache: ref.watch(contentCacheProvider),
 );
+
+/// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+@riverpod
+FetchAudioTracks fetchAudioTracks(Ref ref) =>
+    FetchAudioTracks(pages: ref.watch(pageFetchServiceProvider));
 
 /// Provides the use case that reads a source's discover-page categories.
 @riverpod

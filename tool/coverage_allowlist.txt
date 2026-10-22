@@ -55,3 +55,13 @@ lib/features/book_source/domain/repositories/book_source_view_store.dart  # 纯�
 lib/features/book_source/domain/search_match_mode.dart  # 纯枚举声明（无可测量行），属 ADR-0019 §2 的「源文件无可测量行」子情形；行为由 search_result_merger_test.dart 逐桶行使
 lib/features/book_source/domain/repositories/search_scope_store.dart  # 纯接口声明（只有抽象方法签名），同属「无可测量行」子情形；契约由 SearchScopeStoreImpl 与其测试行使
 lib/features/book_source/domain/entities/chapter_request.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂声明；行为由 test/features/book_source/domain/entities/chapter_request_test.dart 与 FetchContent / FetchToc / reader 的上下文接线测试构造并读取保证（ADR-0049）
+
+# --- 3.10 听书与音频（ADR-0054）新增的豁免项 ---
+lib/core/platform/audio_service_playback_notification.dart  # ADR-0019 第二类：audio_service 的前台服务与媒体通知只在 Android / iOS 可达（Windows 走 NoopPlaybackNotification），宿主 VM 没有平台通道；状态映射由 PlaybackNotificationHandle 的接口契约与 integration_test/audio_playback_test.dart 的双端实跑验证能编译链接
+lib/features/reader/data/just_audio_playback_engine.dart  # ADR-0019 第二类：构造即创建原生播放器（just_audio），flutter test 的宿主 VM 无法加载平台实现；命令 / 快照 / 失败映射由 FakeAudioPlaybackEngine 驱动的 Notifier 测试与 integration_test/audio_playback_test.dart 的真机播放验证
+lib/features/reader/data/flutter_tts_speech_synthesizer.dart  # ADR-0019 第二类：flutter_tts 依赖系统 TTS 引擎与平台通道；音块切分、连续章节与失败语义由 ReaderTts 的 Notifier 测试覆盖，本文件由 integration_test/audio_playback_test.dart 在 Windows / Android 上验证
+lib/features/book_source/domain/entities/audio_track.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂声明；行为由 test/features/book_source/domain/usecases/fetch_audio_tracks_test.dart 构造并读取保证
+lib/features/reader/domain/entities/audio_track.dart  # 同上：阅读器侧的音频值对象（重定向工厂），由 AudioReader 的 Notifier 测试与 FakeAudioTrackProvider 构造并读取
+lib/features/reader/domain/entities/reader_media_kind.dart  # 纯枚举声明（无可测量行）：文本 / 音频分派；行为由 test/features/reader/presentation/pages/reader_page_audio_test.dart 行使
+lib/features/reader/domain/repositories/audio_playback_engine.dart  # 纯接口 + freezed 快照声明（无可测量行）：契约由 FakeAudioPlaybackEngine 与 AudioReader 的 Notifier 测试行使
+lib/features/reader/domain/repositories/speech_synthesizer.dart  # 纯接口 + freezed 值对象声明（无可测量行）：契约由 FakeSpeechSynthesizer 与 ReaderTts 的 Notifier 测试行使

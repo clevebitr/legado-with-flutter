@@ -1,7 +1,14 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- 批量书源校验期间持有 PARTIAL_WAKE_LOCK（ADR-0043 §决策 3）：
          lib/core/platform/long_running_task.dart 的 Android 实现需要它。 -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- 音频书源的后台播放与媒体通知（ADR-0054 §决策 3/4）。
+         `audio_service` 的前台服务需要前两条；Android 13+ 的通知需要 POST_NOTIFICATIONS，
+         运行时请求在 MainActivity 里（core/platform/notification_permission.dart）。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="flutter_reader"
         android:name="${applicationName}"
@@ -33,6 +40,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 后台播放：audio_service 的前台服务与媒体按钮接收器（ADR-0054 §决策 3/4）。 -->
+        <service android:name="com.ryanheise.audioservice.AudioService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="true" tools:ignore="Instantiatable">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+        <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+            android:exported="true" tools:ignore="Instantiatable">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -43,6 +64,10 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Android 11+ 的包可见性：flutter_tts 要能枚举系统 TTS 引擎与音色（ADR-0054 §决策 5）。 -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE"/>
         </intent>
     </queries>
 </manifest>
