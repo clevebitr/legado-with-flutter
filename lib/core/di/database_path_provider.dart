@@ -10,6 +10,6 @@ part 'database_path_provider.g.dart';
 /// The platform lookup is isolated here so tests can assert the resolved path
 /// without opening a file database: they fake the `path_provider` channel
 /// instead of touching the real application directory.
-@riverpod
+@Riverpod(keepAlive: true)
 Future<String> databaseFilePath(Ref ref) async =>
     databasePathIn(await getApplicationSupportDirectory());

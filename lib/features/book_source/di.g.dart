@@ -92,7 +92,7 @@ final class ImportBookSourcesProvider
         argument: null,
         retry: null,
         name: r'importBookSourcesProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -120,7 +120,7 @@ final class ImportBookSourcesProvider
   }
 }
 
-String _$importBookSourcesHash() => r'e7e4eeefd10c4f2e40171a1809a46e56d3a6eb32';
+String _$importBookSourcesHash() => r'df8a22019b3996ae60946c6ccb241c8f33e1756e';
 
 /// Provides the shelf writer the detail page uses (`docs/dev/roadmap.md` 5.4)。
 ///
@@ -152,7 +152,7 @@ final class BookshelfWriterProvider
         argument: null,
         retry: null,
         name: r'bookshelfWriterProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -179,7 +179,7 @@ final class BookshelfWriterProvider
   }
 }
 
-String _$bookshelfWriterHash() => r'3b48eee793c6708d8afb0bdcbeb73bbac8e71083';
+String _$bookshelfWriterHash() => r'e16cb76446a358f2d2ffca62d6fa0820fcc26815';
 
 /// Provides the rule engine every book source use case shares.
 
@@ -198,7 +198,7 @@ final class RuleEngineProvider
         argument: null,
         retry: null,
         name: r'ruleEngineProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -225,7 +225,7 @@ final class RuleEngineProvider
   }
 }
 
-String _$ruleEngineHash() => r'ca7f7326492927765c60c2210a2f972e4328d04d';
+String _$ruleEngineHash() => r'efef60215a5a91151b038adb01a6dfcab6ba7f60';
 
 /// Provides the page fetch + rule reading service the use cases are built on.
 
@@ -249,7 +249,7 @@ final class PageFetchServiceProvider
         argument: null,
         retry: null,
         name: r'pageFetchServiceProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -276,7 +276,7 @@ final class PageFetchServiceProvider
   }
 }
 
-String _$pageFetchServiceHash() => r'4b4736bb50ab5cb4aacc106f78e388157905a807';
+String _$pageFetchServiceHash() => r'a2fef1ef971aa69f18523af0313bd88abdb5165e';
 
 /// Provides the search use case.
 
@@ -295,7 +295,7 @@ final class SearchBooksProvider
         argument: null,
         retry: null,
         name: r'searchBooksProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -322,7 +322,7 @@ final class SearchBooksProvider
   }
 }
 
-String _$searchBooksHash() => r'f4cdc87cec7d35a85234d6f93bfc160dc3f57931';
+String _$searchBooksHash() => r'6d7cbf5b3183d483361c7bf200494aaf0eebe805';
 
 /// Provides the book detail use case.
 
@@ -341,7 +341,7 @@ final class FetchBookInfoProvider
         argument: null,
         retry: null,
         name: r'fetchBookInfoProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -368,7 +368,7 @@ final class FetchBookInfoProvider
   }
 }
 
-String _$fetchBookInfoHash() => r'605262c76e564274f7e44ba29b976bbeee8cf599';
+String _$fetchBookInfoHash() => r'e1d6e447dd0b7856306d39f542b7e472b31a73ba';
 
 /// Provides the table of contents use case.
 
@@ -387,7 +387,7 @@ final class FetchTocProvider
         argument: null,
         retry: null,
         name: r'fetchTocProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -414,7 +414,7 @@ final class FetchTocProvider
   }
 }
 
-String _$fetchTocHash() => r'8335386d48a19a74d44d8ce23c0940adc791c7e1';
+String _$fetchTocHash() => r'd725d39896df190f4073285f957df865f3acf86e';
 
 /// Provides the chapter body cache (`docs/dev/roadmap.md` 5.2, C-NET-6).
 ///
@@ -442,7 +442,7 @@ final class ContentCacheProvider
         argument: null,
         retry: null,
         name: r'contentCacheProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -469,7 +469,7 @@ final class ContentCacheProvider
   }
 }
 
-String _$contentCacheHash() => r'2f1a62a958994768b915678dbd0bc914c864b921';
+String _$contentCacheHash() => r'5e08d495d2c3fe5ee30bffb08be83d8f66cd34c9';
 
 /// Provides the chapter body use case.
 
@@ -488,7 +488,7 @@ final class FetchContentProvider
         argument: null,
         retry: null,
         name: r'fetchContentProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -515,7 +515,7 @@ final class FetchContentProvider
   }
 }
 
-String _$fetchContentHash() => r'f778bcebf4143d26704370a08269f10212a1c2a0';
+String _$fetchContentHash() => r'ff2400b9199601c795ec64f858569ad2bb2ec8af';
 
 /// Provides the use case that reads a manga chapter's image list
 /// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
@@ -538,7 +538,7 @@ final class FetchMangaPagesProvider
         argument: null,
         retry: null,
         name: r'fetchMangaPagesProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -565,7 +565,7 @@ final class FetchMangaPagesProvider
   }
 }
 
-String _$fetchMangaPagesHash() => r'317767712cb305bb7b342a0ce2b97e565c43910b';
+String _$fetchMangaPagesHash() => r'e6f3da185aacb0be6493fb63af1e906fb74a9609';
 
 /// Provides the use case that reads a source's discover-page categories.
 
@@ -589,7 +589,7 @@ final class FetchExploreCategoriesProvider
         argument: null,
         retry: null,
         name: r'fetchExploreCategoriesProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -618,7 +618,7 @@ final class FetchExploreCategoriesProvider
 }
 
 String _$fetchExploreCategoriesHash() =>
-    r'066872b260152d04964c630b72583af2748ce896';
+    r'e652fb14178db5c4d49c29b7cd844fe9a0c25d2e';
 
 /// Provides the use case that opens one discover-page category.
 
@@ -637,7 +637,7 @@ final class ExploreBooksProvider
         argument: null,
         retry: null,
         name: r'exploreBooksProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -664,7 +664,7 @@ final class ExploreBooksProvider
   }
 }
 
-String _$exploreBooksHash() => r'85b8bacec5fa339e01b4afc0d3e18c4fc42c9989';
+String _$exploreBooksHash() => r'928c380bf90c3f429c82108f9953173894512931';
 
 /// Provides the batch check of `docs/dev/roadmap.md` §5.10.
 ///
@@ -793,7 +793,7 @@ final class SwitchBookSourceProvider
         argument: null,
         retry: null,
         name: r'switchBookSourceProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -820,7 +820,7 @@ final class SwitchBookSourceProvider
   }
 }
 
-String _$switchBookSourceHash() => r'c37a69b842418fb2ee312f0718044a0e5c5c480b';
+String _$switchBookSourceHash() => r'bebcfcdb713f5f02695867ce8f9b4547ae7a1058';
 
 /// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
 

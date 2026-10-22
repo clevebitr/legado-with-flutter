@@ -89,7 +89,7 @@ final class ReaderChapterListProvider
         argument: null,
         retry: null,
         name: r'readerChapterListProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -117,7 +117,7 @@ final class ReaderChapterListProvider
   }
 }
 
-String _$readerChapterListHash() => r'3b847da206a3d53186a4dfec3e5322342cecf74e';
+String _$readerChapterListHash() => r'fe4ae74b0e0df70f276a4d789a89c2895d1ce45b';
 
 /// Provides the chapter-body port, **unbound** by default.
 
@@ -141,7 +141,7 @@ final class ReaderChapterContentProvider
         argument: null,
         retry: null,
         name: r'readerChapterContentProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -170,7 +170,7 @@ final class ReaderChapterContentProvider
 }
 
 String _$readerChapterContentHash() =>
-    r'71afbfd8814ede15f4fe7f43b9c28d2afe91f366';
+    r'a5792a7bb57225978d151b106b5f387d5a25d468';
 
 /// Provides the manga-page port, **unbound** by default
 /// (`docs/dev/roadmap.md` §3.10 M16).
@@ -197,7 +197,7 @@ final class ReaderMangaPagesProvider
         argument: null,
         retry: null,
         name: r'readerMangaPagesProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -225,7 +225,7 @@ final class ReaderMangaPagesProvider
   }
 }
 
-String _$readerMangaPagesHash() => r'd014eac0a758db1643bc5911c252bdb5ecac19a9';
+String _$readerMangaPagesHash() => r'b710936e44514fe497273eac1dff7b772bb1fdc2';
 
 /// Provides the source-kind port, **unbound** by default: an unbound reader opens text.
 
@@ -249,7 +249,7 @@ final class ReaderSourceKindPortProvider
         argument: null,
         retry: null,
         name: r'readerSourceKindPortProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -278,7 +278,7 @@ final class ReaderSourceKindPortProvider
 }
 
 String _$readerSourceKindPortHash() =>
-    r'6f83a1250b92e73c85a908ab28302910a50347d4';
+    r'f0d436c479aec9d29d38d4616febd1a9b8efca98';
 
 /// Provides the reading-progress port, **unbound** by default.
 ///
@@ -311,7 +311,7 @@ final class ReaderProgressStoreProvider
         argument: null,
         retry: null,
         name: r'readerProgressStoreProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -340,7 +340,7 @@ final class ReaderProgressStoreProvider
 }
 
 String _$readerProgressStoreHash() =>
-    r'dd9eeeee651d67ee3e19a0a882d83218be17480e';
+    r'280a7662c55e36009b1af3fb3403791c5970233e';
 
 /// Provides the source-switch port, **unbound** by default.
 ///
@@ -376,7 +376,7 @@ final class BookSourceSwitcherProvider
         argument: null,
         retry: null,
         name: r'bookSourceSwitcherProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -405,4 +405,4 @@ final class BookSourceSwitcherProvider
 }
 
 String _$bookSourceSwitcherHash() =>
-    r'd85b5f95e1b8fbade0d11ebad7fb73b93a2f2adc';
+    r'ec6fd4eace21025a8fa2dd41e1fee987e9a3f449';

@@ -42,7 +42,7 @@ BookSourceRepository bookSourceRepository(Ref ref) => BookSourceRepositoryImpl(
 );
 
 /// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
-@riverpod
+@Riverpod(keepAlive: true)
 ImportBookSources importBookSources(Ref ref) => ImportBookSources(
   repository: ref.watch(bookSourceRepositoryProvider),
   http: ref.watch(httpClientProvider),
@@ -54,12 +54,12 @@ ImportBookSources importBookSources(Ref ref) => ImportBookSources(
 /// The default is the **unbound** port: the composition root overrides it with the shelf's real
 /// writer (ADR-0041 §决策 2), which is why this feature names no shelf type at all — 「加入书架」
 /// 是一个端口，而不是一次 `features/bookshelf` 的 import（C-ARCH-2）。
-@riverpod
+@Riverpod(keepAlive: true)
 BookshelfWriter bookshelfWriter(Ref ref) =>
     UnboundBookshelfWriter(logger: ref.watch(appLoggerProvider));
 
 /// Provides the rule engine every book source use case shares.
-@riverpod
+@Riverpod(keepAlive: true)
 RuleEngine ruleEngine(Ref ref) => RuleEngine(
   logger: ref.watch(appLoggerProvider),
   jsBridge: ref.watch(jsBridgeProvider),
@@ -67,7 +67,7 @@ RuleEngine ruleEngine(Ref ref) => RuleEngine(
 );
 
 /// Provides the page fetch + rule reading service the use cases are built on.
-@riverpod
+@Riverpod(keepAlive: true)
 PageFetchService pageFetchService(Ref ref) => PageFetchService(
   engine: ref.watch(ruleEngineProvider),
   http: ref.watch(httpClientProvider),
@@ -75,17 +75,17 @@ PageFetchService pageFetchService(Ref ref) => PageFetchService(
 );
 
 /// Provides the search use case.
-@riverpod
+@Riverpod(keepAlive: true)
 SearchBooks searchBooks(Ref ref) =>
     SearchBooks(pages: ref.watch(pageFetchServiceProvider));
 
 /// Provides the book detail use case.
-@riverpod
+@Riverpod(keepAlive: true)
 FetchBookInfo fetchBookInfo(Ref ref) =>
     FetchBookInfo(pages: ref.watch(pageFetchServiceProvider));
 
 /// Provides the table of contents use case.
-@riverpod
+@Riverpod(keepAlive: true)
 FetchToc fetchToc(Ref ref) =>
     FetchToc(pages: ref.watch(pageFetchServiceProvider));
 
@@ -93,14 +93,14 @@ FetchToc fetchToc(Ref ref) =>
 ///
 /// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
 /// the expiry column were already there, so 5.2 adds no column and no table.
-@riverpod
+@Riverpod(keepAlive: true)
 ContentCache contentCache(Ref ref) => CacheDaoContentCache(
   ref.watch(cacheDaoProvider),
   logger: ref.watch(appLoggerProvider),
 );
 
 /// Provides the chapter body use case.
-@riverpod
+@Riverpod(keepAlive: true)
 FetchContent fetchContent(Ref ref) => FetchContent(
   pages: ref.watch(pageFetchServiceProvider),
   cache: ref.watch(contentCacheProvider),
@@ -108,14 +108,14 @@ FetchContent fetchContent(Ref ref) => FetchContent(
 
 /// Provides the use case that reads a manga chapter's image list
 /// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
-@riverpod
+@Riverpod(keepAlive: true)
 FetchMangaPages fetchMangaPages(Ref ref) => FetchMangaPages(
   pages: ref.watch(pageFetchServiceProvider),
   logger: ref.watch(appLoggerProvider),
 );
 
 /// Provides the use case that reads a source's discover-page categories.
-@riverpod
+@Riverpod(keepAlive: true)
 FetchExploreCategories fetchExploreCategories(Ref ref) =>
     FetchExploreCategories(
       engine: ref.watch(ruleEngineProvider),
@@ -123,7 +123,7 @@ FetchExploreCategories fetchExploreCategories(Ref ref) =>
     );
 
 /// Provides the use case that opens one discover-page category.
-@riverpod
+@Riverpod(keepAlive: true)
 ExploreBooks exploreBooks(Ref ref) =>
     ExploreBooks(pages: ref.watch(pageFetchServiceProvider));
 
@@ -157,7 +157,7 @@ RunSourceDebug runSourceDebug(Ref ref) => RunSourceDebug(
 );
 
 /// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
-@riverpod
+@Riverpod(keepAlive: true)
 SwitchBookSource switchBookSource(Ref ref) => SwitchBookSource(
   search: ref.watch(searchBooksProvider),
   bookInfo: ref.watch(fetchBookInfoProvider),

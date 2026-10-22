@@ -33,7 +33,7 @@ final class ClockProvider extends $FunctionalProvider<Clock, Clock, Clock>
         argument: null,
         retry: null,
         name: r'clockProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -60,4 +60,4 @@ final class ClockProvider extends $FunctionalProvider<Clock, Clock, Clock>
   }
 }
 
-String _$clockHash() => r'51dfbf45b6f587fbcfbb074c52c85416118b4ff3';
+String _$clockHash() => r'55214d6539f7396a3ae1aa23b06eea79fdac0ebe';

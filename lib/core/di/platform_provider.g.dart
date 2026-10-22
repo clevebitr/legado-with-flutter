@@ -34,7 +34,7 @@ final class PlatformInfoProvider
         argument: null,
         retry: null,
         name: r'platformInfoProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -61,7 +61,7 @@ final class PlatformInfoProvider
   }
 }
 
-String _$platformInfoHash() => r'ac1b6ad7f08ed596944a3dc7d4daea8f0278565a';
+String _$platformInfoHash() => r'cac1cdfd452c2761363bd21226093e0ef4f8783c';
 
 /// Provides the platform dynamic color source, or `null` when the platform has
 /// none (`docs/dev/platform.md` §3).
@@ -115,7 +115,7 @@ final class PlatformDynamicColorProvider
         argument: null,
         retry: null,
         name: r'platformDynamicColorProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -144,7 +144,7 @@ final class PlatformDynamicColorProvider
 }
 
 String _$platformDynamicColorHash() =>
-    r'2e2a1cce18f3fde23676be4d723a6b63a58fe1a2';
+    r'e65a7da4798de930ff708a4e625ff68248e4c2ac';
 
 /// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
 ///
@@ -183,7 +183,7 @@ final class BookSourceFilePickerProvider
         argument: null,
         retry: null,
         name: r'bookSourceFilePickerProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -212,7 +212,7 @@ final class BookSourceFilePickerProvider
 }
 
 String _$bookSourceFilePickerHash() =>
-    r'03ffd09c149b1f20aaab463e862cc267bead4c59';
+    r'f7d7e3123b6a021aa45663689c93ced0c7b1817a';
 
 /// Provides the platform save dialog used by a single-source export
 /// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
@@ -248,7 +248,7 @@ final class BookSourceFileSaverProvider
         argument: null,
         retry: null,
         name: r'bookSourceFileSaverProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -277,7 +277,7 @@ final class BookSourceFileSaverProvider
 }
 
 String _$bookSourceFileSaverHash() =>
-    r'88c70f5bdf5aba91ae397542b8b97ae3b3e1737a';
+    r'324c249ec6b41181bbadd92c67a5496c0926efbf';
 
 /// Provides the long-task marker a batch check holds while it runs
 /// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).

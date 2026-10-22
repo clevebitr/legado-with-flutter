@@ -37,7 +37,7 @@ final class AppNavigationProvider
         argument: null,
         retry: null,
         name: r'appNavigationProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -64,4 +64,4 @@ final class AppNavigationProvider
   }
 }
 
-String _$appNavigationHash() => r'7b79db211b63e4577815dc9cf282d1e6fdd97575';
+String _$appNavigationHash() => r'd6180e7439ec8aa4bd5c663f4b7602fc3f6eac56';

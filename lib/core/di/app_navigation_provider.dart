@@ -9,7 +9,7 @@ part 'app_navigation_provider.g.dart';
 /// The composition root overrides this with the real implementation
 /// (`appProviderOverrides` in `lib/app.dart`); the default is the unbound no-op, so a page can
 /// always call it and tests that do not care about navigation need no override.
-@riverpod
+@Riverpod(keepAlive: true)
 AppNavigation appNavigation(Ref ref) {
   final logger = ref.watch(appLoggerProvider);
 

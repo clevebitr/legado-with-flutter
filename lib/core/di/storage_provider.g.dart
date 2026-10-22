@@ -25,7 +25,7 @@ final class ReaderDatabaseProvider
         argument: null,
         retry: null,
         name: r'readerDatabaseProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -52,7 +52,7 @@ final class ReaderDatabaseProvider
   }
 }
 
-String _$readerDatabaseHash() => r'f606a4fcbc572f992c56ff05fb855e56c463d1f0';
+String _$readerDatabaseHash() => r'aa0db4441a56db6a50c6a27d92daa7a9fe72108d';
 
 /// Provides the TTL cache for network payloads (C-NET-6).
 
@@ -117,7 +117,7 @@ final class BookSourceDaoProvider
         argument: null,
         retry: null,
         name: r'bookSourceDaoProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -144,7 +144,7 @@ final class BookSourceDaoProvider
   }
 }
 
-String _$bookSourceDaoHash() => r'2876b7e038c32c3aa0fa82b43ec0f2bbcacbca56';
+String _$bookSourceDaoHash() => r'b2ca7154a6b8bd15f046c93f5d1dac09c61330e4';
 
 /// Provides the DAO of the shelf and the reading progress (`docs/dev/roadmap.md` 5.4).
 
@@ -163,7 +163,7 @@ final class BookshelfDaoProvider
         argument: null,
         retry: null,
         name: r'bookshelfDaoProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -190,4 +190,4 @@ final class BookshelfDaoProvider
   }
 }
 
-String _$bookshelfDaoHash() => r'b3fee9aaccad1665226fd69919a1506adc0e8e0e';
+String _$bookshelfDaoHash() => r'7bbfb5bc863cc03300300b2963bc12e607a7f18e';

@@ -14,7 +14,7 @@ part 'platform_provider.g.dart';
 /// (C-PLT-1).
 ///
 /// Tests override it with a fake to simulate Android or a desktop host.
-@riverpod
+@Riverpod(keepAlive: true)
 PlatformInfo platformInfo(Ref ref) => const SystemPlatformInfo();
 
 /// Provides the platform dynamic color source, or `null` when the platform has
@@ -28,7 +28,7 @@ PlatformInfo platformInfo(Ref ref) => const SystemPlatformInfo();
 /// Consumers must handle `null` by falling back to the seed color; tests pin the
 /// fallback with `platformDynamicColorProvider.overrideWithValue(null)`
 /// (`docs/dev/testing.md` §5).
-@riverpod
+@Riverpod(keepAlive: true)
 DynamicColorProvider? platformDynamicColor(Ref ref) =>
     resolveDynamicColorProvider(ref.watch(platformInfoProvider));
 
@@ -38,7 +38,7 @@ DynamicColorProvider? platformDynamicColor(Ref ref) =>
 /// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
 /// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
 /// plugin (`docs/dev/testing.md` §4).
-@riverpod
+@Riverpod(keepAlive: true)
 BookSourceFilePicker bookSourceFilePicker(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 
@@ -52,7 +52,7 @@ BookSourceFilePicker bookSourceFilePicker(Ref ref) {
 ///
 /// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
 /// else gets “not saved”, and a test overrides the port rather than the plugin.
-@riverpod
+@Riverpod(keepAlive: true)
 BookSourceFileSaver bookSourceFileSaver(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 

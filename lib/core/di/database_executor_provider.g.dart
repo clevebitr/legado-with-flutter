@@ -55,7 +55,7 @@ final class DatabaseExecutorProvider
         argument: null,
         retry: null,
         name: r'databaseExecutorProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -82,4 +82,4 @@ final class DatabaseExecutorProvider
   }
 }
 
-String _$databaseExecutorHash() => r'b1cafcd50e2efd40e42daaa6ec73a59314bd81a8';
+String _$databaseExecutorHash() => r'57ccdecc39a69e1fa7793a2cf18e2fec0a49eb9b';

@@ -67,7 +67,7 @@ final class JsBridgeProvider
         argument: null,
         retry: null,
         name: r'jsBridgeProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -94,7 +94,7 @@ final class JsBridgeProvider
   }
 }
 
-String _$jsBridgeHash() => r'1345804b08bde31f4aebebabbeaeb4da22b9fc5e';
+String _$jsBridgeHash() => r'69f5374c6d7b08f8fbeb9e5234a4554f1159e4b5';
 
 /// Provides the rule variables `@put:` / `@get:` and `java.put` / `java.get` share
 /// (`docs/dev/book-source.md` §4 and §6, matrix #16 / #17).
@@ -138,7 +138,7 @@ final class JsVariableStoreProvider
         argument: null,
         retry: null,
         name: r'jsVariableStoreProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -165,4 +165,4 @@ final class JsVariableStoreProvider
   }
 }
 
-String _$jsVariableStoreHash() => r'2757af5cd35b30cfd6127455a7f867c15cc9c1fd';
+String _$jsVariableStoreHash() => r'c6e15401e66da680841340a4e08b1644de9e2c08';

@@ -40,7 +40,7 @@ final class DatabaseFilePathProvider
         argument: null,
         retry: null,
         name: r'databaseFilePathProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -59,4 +59,4 @@ final class DatabaseFilePathProvider
   }
 }
 
-String _$databaseFilePathHash() => r'f4f82349a8e36dd7520d9d50abcce88cc9cd77a5';
+String _$databaseFilePathHash() => r'98b9222a6a572e19f7e172322e97139c739e9ed6';

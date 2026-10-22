@@ -7,5 +7,5 @@ part 'clock_provider.g.dart';
 /// `docs/dev/testing.md` §4).
 ///
 /// Tests override it with a fixed clock instead of sleeping.
-@riverpod
+@Riverpod(keepAlive: true)
 Clock clock(Ref ref) => const SystemClock();

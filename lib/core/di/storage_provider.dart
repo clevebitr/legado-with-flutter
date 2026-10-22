@@ -11,7 +11,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'storage_provider.g.dart';
 
 /// Provides the application database (ADR-0003).
-@riverpod
+@Riverpod(keepAlive: true)
 ReaderDatabase readerDatabase(Ref ref) {
   final ReaderDatabase database = ReaderDatabase(
     ref.watch(databaseExecutorProvider),
@@ -29,14 +29,14 @@ CacheDao cacheDao(Ref ref) => CacheDao(
 );
 
 /// Provides the DAO of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
-@riverpod
+@Riverpod(keepAlive: true)
 BookSourceDao bookSourceDao(Ref ref) => BookSourceDao(
   ref.watch(readerDatabaseProvider),
   clock: ref.watch(clockProvider),
 );
 
 /// Provides the DAO of the shelf and the reading progress (`docs/dev/roadmap.md` 5.4).
-@riverpod
+@Riverpod(keepAlive: true)
 BookshelfDao bookshelfDao(Ref ref) => BookshelfDao(
   ref.watch(readerDatabaseProvider),
   clock: ref.watch(clockProvider),
