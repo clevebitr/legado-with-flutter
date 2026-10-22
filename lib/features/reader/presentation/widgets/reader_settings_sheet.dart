@@ -82,6 +82,81 @@ class ReaderSettingsSheet extends StatelessWidget {
               ],
             ),
             SizedBox(height: tokens.spacing.md),
+            Text(
+              l10n.readerFontFamily,
+              style: tokens.typography.base.labelLarge,
+            ),
+            SizedBox(height: tokens.spacing.sm),
+            Wrap(
+              spacing: tokens.spacing.sm,
+              children: <Widget>[
+                for (final ReaderFontFamily family in ReaderFontFamily.values)
+                  ChoiceChip(
+                    label: Text(_familyLabel(l10n, family)),
+                    selected: settings.fontFamily == family,
+                    onSelected: (_) =>
+                        onChanged(settings.copyWith(fontFamily: family)),
+                  ),
+              ],
+            ),
+            SizedBox(height: tokens.spacing.md),
+            Text(
+              l10n.readerParagraphSpacing,
+              style: tokens.typography.base.labelLarge,
+            ),
+            SizedBox(height: tokens.spacing.sm),
+            SegmentedButton<double>(
+              segments: <ButtonSegment<double>>[
+                for (final double step in readerParagraphSpacingSteps)
+                  ButtonSegment<double>(
+                    value: step,
+                    label: Text(_stepLabel(step)),
+                  ),
+              ],
+              selected: <double>{settings.paragraphSpacing},
+              onSelectionChanged: (Set<double> selection) => onChanged(
+                settings.copyWith(paragraphSpacing: selection.single),
+              ),
+            ),
+            SizedBox(height: tokens.spacing.md),
+            Text(
+              l10n.readerFirstLineIndent,
+              style: tokens.typography.base.labelLarge,
+            ),
+            SizedBox(height: tokens.spacing.sm),
+            SegmentedButton<double>(
+              segments: <ButtonSegment<double>>[
+                for (final double step in readerFirstLineIndentSteps)
+                  ButtonSegment<double>(
+                    value: step,
+                    label: Text(_stepLabel(step)),
+                  ),
+              ],
+              selected: <double>{settings.firstLineIndent},
+              onSelectionChanged: (Set<double> selection) => onChanged(
+                settings.copyWith(firstLineIndent: selection.single),
+              ),
+            ),
+            SizedBox(height: tokens.spacing.md),
+            Text(
+              l10n.readerPagePadding,
+              style: tokens.typography.base.labelLarge,
+            ),
+            SizedBox(height: tokens.spacing.sm),
+            Wrap(
+              spacing: tokens.spacing.sm,
+              children: <Widget>[
+                for (final ReaderPagePadding padding
+                    in ReaderPagePadding.values)
+                  ChoiceChip(
+                    label: Text(_paddingLabel(l10n, padding)),
+                    selected: settings.pagePadding == padding,
+                    onSelected: (_) =>
+                        onChanged(settings.copyWith(pagePadding: padding)),
+                  ),
+              ],
+            ),
+            SizedBox(height: tokens.spacing.md),
             Text(l10n.readerPageMode, style: tokens.typography.base.labelLarge),
             SizedBox(height: tokens.spacing.sm),
             SegmentedButton<ReaderPageMode>(
@@ -132,6 +207,27 @@ class ReaderSettingsSheet extends StatelessWidget {
       ],
     );
   }
+
+  /// The ARB label of [family].
+  String _familyLabel(AppLocalizations l10n, ReaderFontFamily family) =>
+      switch (family) {
+        ReaderFontFamily.theme => l10n.readerFontFamilyTheme,
+        ReaderFontFamily.serif => l10n.readerFontFamilySerif,
+        ReaderFontFamily.sans => l10n.readerFontFamilySans,
+        ReaderFontFamily.mono => l10n.readerFontFamilyMono,
+      };
+
+  /// The ARB label of [padding].
+  String _paddingLabel(AppLocalizations l10n, ReaderPagePadding padding) =>
+      switch (padding) {
+        ReaderPagePadding.narrow => l10n.readerPaddingNarrow,
+        ReaderPagePadding.medium => l10n.readerPaddingMedium,
+        ReaderPagePadding.wide => l10n.readerPaddingWide,
+      };
+
+  /// A numeric step label ("0", "0.5", "1", "2") — a number, so it needs no ARB entry.
+  String _stepLabel(double step) =>
+      step == step.roundToDouble() ? '${step.round()}' : '$step';
 
   /// The ARB label of [background].
   String _backgroundLabel(AppLocalizations l10n, ReaderBackground background) =>

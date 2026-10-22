@@ -17,7 +17,7 @@
 | **实测工具链**（本机与 CI 使用） | Flutter **3.47.7**（stable）· Dart **3.13.5** |
 | 依赖版本写法 | `^` 或精确版本，**禁止 `any`**（C-DEP-2） |
 | 锁文件 | 提交 `pubspec.lock`；升级依赖必须单独 PR |
-| 许可证 | 必须 GPL-3.0 兼容（C-DEP-7）；清单见 `NOTICE.md` §5 |
+| 许可证 | 必须 GPL-3.0 兼容（C-DEP-7）；**MPL-2.0 只按 `tool/scan_licenses.dart` 白名单放行**（首例 ADR-0048）；清单见 `NOTICE.md` §5 |
 | lint 规则名基准 | Dart **3.13.x** 官方清单（`https://dart.dev/tools/linter-rules/all`）。`analysis_options.yaml` 的 47 条规则已逐名机器比对通过 |
 
 **版本号必须同步的四处**（改任一处必须同时改其余三处）：
@@ -141,6 +141,7 @@ m3e.spacing.md;
 | `flutter_qjs_next` | `^1.5.2` | JS 引擎（QuickJS，构建时从 `cxx/` 源码编译） | Android/iOS/Windows/Linux/macOS | MIT | C-SRC-2、C-SRC-3 |
 | `betto_charset_detector` | `^0.1.0` | 字符编码检测（唯一，纯 Dart） | 全平台 | Apache-2.0 | C-NET-3 |
 | `charset` | `^2.0.1` | 字符编码解码（把检测出的标签变成 `Encoding`；支持标签集见 `book-source.md` §5.1） | 全平台 | Apache-2.0 | C-NET-3 |
+| `enough_convert` | `^1.7.1` | 补齐 `charset` 缺失的 **Big5 / Big5-HKSCS** 码表（纯 Dart、零依赖、Dart 3.11+） | 全平台 | **MPL-2.0**（白名单，ADR-0048） | C-NET-3、C-DEP-7 |
 
 > **JS 引擎已实测选定（2026-10-10，ADR-0015）**：9 项探针全通过，无预编译库、无需打补丁；
 > 引擎级 `timeout` 与 `memoryLimit` **真实生效**。配额数值与实测证据分别归

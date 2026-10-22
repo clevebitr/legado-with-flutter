@@ -4,6 +4,7 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
@@ -57,6 +58,25 @@ final class _FakeRepository implements BookSourceRepository {
 
   @override
   Future<void> delete(int id) async {}
+
+  // 导入路径不碰这三个写口（ADR-0050）：实现成空操作，避免测试为了「能编译」而假装它们被调用。
+  @override
+  Future<String?> payloadOf(int id) async => null;
+
+  @override
+  Future<void> setEnabledFor(List<int> ids, {required bool isEnabled}) async {}
+
+  @override
+  Future<void> deleteMany(List<int> ids) async {}
+
+  @override
+  Future<void> setGroupFor(List<int> ids, String? group) async {}
+
+  @override
+  Future<BookSourceEditOutcome> update({
+    required int id,
+    required Map<String, Object?> entry,
+  }) async => BookSourceEditOutcome.sourceMissing;
 }
 
 /// One valid book source object.
@@ -236,22 +256,46 @@ void main() {
       );
     });
 
-    test('execute_givenARuleBasedHeader_importsTheEntryWithoutIt', () async {
-      // 真实 504 条导出里有 27 条把 header 写成规则或非严格 JSON：为一条 UA 丢掉整个书源
-      // 比「少一个 header」更糟，所以字段降级 + warning（ADR-0040 §决策 6 的修订注记）。
+    test('execute_givenARuleBasedHeader_keepsTheRuleForTheFetch', () async {
+      // 真实语料写 `header: "<js>…</js>"` / `"@js: …"`：那是**求值后**给出 header 表的规则，
+      // 不是读不懂的 JSON。M12-A2 之后它被保留（`headerRule`），由取页前求值；既不丢字段，
+      // 也不该再报「降级」。
       repository.inserted = 1;
-      final Map<String, Object?> withRuleHeader = _entry()
-        ..['header'] = '@js: JSON.stringify({"User-Agent": "x"})';
+      const String rule = '@js: JSON.stringify({"User-Agent": "x"})';
+      final Map<String, Object?> withRuleHeader = _entry()..['header'] = rule;
 
       final ParseResult<BookSourceImportReport> result = await useCase()
           .execute(BookSourceImportText(jsonEncode(<Object?>[withRuleHeader])));
 
       expect(result.dataOrNull?.inserted, 1);
       expect(result.dataOrNull?.skipped, 0);
-      // 存下去的那条不再带 header（模型默认值），但其余字段逐字在。
+      // payload 逐字保留（导出保真），规则本身落在 headerRule 上。
+      final Map<String, Object?> stored = repository.saved.single.single;
+      expect(stored['header'], rule);
+      expect(stored['bookSourceUrl'], 'https://a.test');
+      expect(BookSource.fromLegadoJson(stored).headerRule, rule);
+      expect(BookSource.fromLegadoJson(stored).headers, isNull);
+      expect(
+        printer.events
+            .map((event) => event.message.toString())
+            .any((String message) => message.contains('degraded field')),
+        isFalse,
+      );
+    });
+
+    test('execute_givenAHeaderThatIsNotAnObject_dropsTheField', () async {
+      // 读不懂的 `header`（裸 UA、被截断的对象）仍然降级：字段丢掉 + warning，
+      // 书源本身留下（ADR-0040 §决策 6）。
+      repository.inserted = 1;
+      final Map<String, Object?> bareAgent = _entry()
+        ..['header'] = 'Mozilla/5.0 (not json at all)';
+
+      final ParseResult<BookSourceImportReport> result = await useCase()
+          .execute(BookSourceImportText(jsonEncode(<Object?>[bareAgent])));
+
+      expect(result.dataOrNull?.inserted, 1);
       final Map<String, Object?> stored = repository.saved.single.single;
       expect(stored.containsKey('header'), isFalse);
-      expect(stored['bookSourceUrl'], 'https://a.test');
       expect(
         printer.events
             .map((event) => event.message.toString())

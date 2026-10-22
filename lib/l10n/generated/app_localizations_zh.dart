@@ -603,4 +603,225 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchTypeVideo => '视频';
+
+  @override
+  String get bookSourceStartReading => '开始阅读';
+
+  @override
+  String get bookSourceContinueReading => '继续阅读';
+
+  @override
+  String get bookSourceIntroExpand => '展开简介';
+
+  @override
+  String get bookSourceIntroCollapse => '收起简介';
+
+  @override
+  String get bookSourceListSearchHint => '搜索名称、URL 或分组';
+
+  @override
+  String get bookSourceListSelectAll => '全选';
+
+  @override
+  String get bookSourceListInvertSelection => '反选';
+
+  @override
+  String bookSourceListSelectedCount(int count) {
+    return '已选 $count 项';
+  }
+
+  @override
+  String get bookSourceListBatchEnable => '启用';
+
+  @override
+  String get bookSourceListBatchDisable => '禁用';
+
+  @override
+  String get bookSourceListBatchDelete => '删除';
+
+  @override
+  String bookSourceListBatchDeleteTitle(int count) {
+    return '删除 $count 个书源？';
+  }
+
+  @override
+  String get bookSourceListBatchDeleteBody => '从它们加入书架的书仍会保留。';
+
+  @override
+  String get bookSourceListBatchGroup => '分组';
+
+  @override
+  String get bookSourceListGroupNone => '不分组';
+
+  @override
+  String get bookSourceListGroupNew => '新建分组…';
+
+  @override
+  String get bookSourceListGroupNameHint => '分组名称';
+
+  @override
+  String get bookSourceCheckFilterLabel => '校验状态';
+
+  @override
+  String get bookSourceCheckFilterAll => '全部';
+
+  @override
+  String get bookSourceCheckFilterHealthy => '全正常';
+
+  @override
+  String get bookSourceCheckFilterFailing => '有失效';
+
+  @override
+  String get bookSourceRowCheck => '校验该书源';
+
+  @override
+  String get bookSourceRowEdit => '编辑';
+
+  @override
+  String get bookSourceRowExport => '导出';
+
+  @override
+  String get bookSourceCheckPassed => '校验通过';
+
+  @override
+  String bookSourceCheckFound(String groups) {
+    return '校验结果：$groups';
+  }
+
+  @override
+  String get bookSourceExportCopied => '书源 JSON 已复制';
+
+  @override
+  String get bookSourceExportSaved => '已保存';
+
+  @override
+  String get bookSourceExportFailed => '无法导出该书源';
+
+  @override
+  String get bookSourceEditTitle => '编辑书源';
+
+  @override
+  String get bookSourceEditSaved => '已保存';
+
+  @override
+  String get bookSourceEditInvalidFields => '请先修正标红的字段';
+
+  @override
+  String get bookSourceEditIdentityConflict => '另一个书源已经完全相同';
+
+  @override
+  String get bookSourceEditUrlHint => '修改 URL 等于换源：书架保留旧的那一个。';
+
+  @override
+  String get bookSourceFieldName => '名称';
+
+  @override
+  String get bookSourceFieldUrl => '书源 URL';
+
+  @override
+  String get bookSourceFieldGroup => '分组';
+
+  @override
+  String get bookSourceFieldType => '类型';
+
+  @override
+  String get bookSourceFieldWeight => '权重';
+
+  @override
+  String get bookSourceFieldHeader => '请求头（JSON）';
+
+  @override
+  String get bookSourceFieldSearchRule => '搜索规则';
+
+  @override
+  String get bookSourceFieldBookInfoRule => '详情规则';
+
+  @override
+  String get bookSourceFieldTocRule => '目录规则';
+
+  @override
+  String get bookSourceFieldContentRule => '正文规则';
+
+  @override
+  String get actionSave => '保存';
+
+  @override
+  String get bookSourceRowCheckRunning => '正在校验…';
+
+  @override
+  String get readerFontFamily => '字体';
+
+  @override
+  String get readerFontFamilyTheme => '跟随主题';
+
+  @override
+  String get readerFontFamilySerif => '衬线';
+
+  @override
+  String get readerFontFamilySans => '无衬线';
+
+  @override
+  String get readerFontFamilyMono => '等宽';
+
+  @override
+  String get readerParagraphSpacing => '段间距';
+
+  @override
+  String get readerFirstLineIndent => '首行缩进';
+
+  @override
+  String get readerPagePadding => '页边距';
+
+  @override
+  String get readerPaddingNarrow => '窄';
+
+  @override
+  String get readerPaddingMedium => '中';
+
+  @override
+  String get readerPaddingWide => '宽';
+
+  @override
+  String readerChapterProgress(int current, int total) {
+    return '第 $current/$total 章';
+  }
+
+  @override
+  String readerChapterPercent(int percent) {
+    return '本章 $percent%';
+  }
+
+  @override
+  String get readerChangeSource => '换源';
+
+  @override
+  String get readerBrightness => '亮度';
+
+  @override
+  String get readerTocSort => '倒序';
+
+  @override
+  String get readerTocSearchHint => '搜索章节';
+
+  @override
+  String get readerSourceTitle => '换源';
+
+  @override
+  String get readerSourceEmpty => '其它书源里没有这本书。';
+
+  @override
+  String get readerSourceSearching => '正在搜索其它书源…';
+
+  @override
+  String readerSourceChapters(int count) {
+    return '$count 章';
+  }
+
+  @override
+  String get readerSourceFailed => '换源失败';
+
+  @override
+  String readerSourceAligned(String chapter) {
+    return '对齐到：$chapter';
+  }
 }

@@ -113,7 +113,7 @@ final class SelectedBookSourceProvider
 }
 
 String _$selectedBookSourceHash() =>
-    r'3134ff5f6b506479f89081a6cca21588eb23766f';
+    r'28794878379138f6136bbd698534bf6e5b94be30';
 
 /// Which stored source the pages work with, and the only place that changes it.
 ///
@@ -329,4 +329,85 @@ final class BookSourceListDataProvider
 }
 
 String _$bookSourceListDataHash() =>
-    r'fe1c7a0c6211b14313a25893320fbada6ef261d0';
+    r'af5a9aebe5154a933c57469bf1e644c0c6878c4b';
+
+/// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
+///
+/// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
+/// right now" (usually "show me what broke"), and a stored value would silently hide sources on
+/// the next launch.
+
+@ProviderFor(BookSourceCheckFilterSelection)
+final bookSourceCheckFilterSelectionProvider =
+    BookSourceCheckFilterSelectionProvider._();
+
+/// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
+///
+/// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
+/// right now" (usually "show me what broke"), and a stored value would silently hide sources on
+/// the next launch.
+final class BookSourceCheckFilterSelectionProvider
+    extends
+        $NotifierProvider<
+          BookSourceCheckFilterSelection,
+          BookSourceCheckFilter
+        > {
+  /// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
+  ///
+  /// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
+  /// right now" (usually "show me what broke"), and a stored value would silently hide sources on
+  /// the next launch.
+  BookSourceCheckFilterSelectionProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceCheckFilterSelectionProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceCheckFilterSelectionHash();
+
+  @$internal
+  @override
+  BookSourceCheckFilterSelection create() => BookSourceCheckFilterSelection();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookSourceCheckFilter value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookSourceCheckFilter>(value),
+    );
+  }
+}
+
+String _$bookSourceCheckFilterSelectionHash() =>
+    r'480163a0f83616a3e38d817f3d0c57ea18f765e2';
+
+/// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
+///
+/// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
+/// right now" (usually "show me what broke"), and a stored value would silently hide sources on
+/// the next launch.
+
+abstract class _$BookSourceCheckFilterSelection
+    extends $Notifier<BookSourceCheckFilter> {
+  BookSourceCheckFilter build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<BookSourceCheckFilter, BookSourceCheckFilter>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<BookSourceCheckFilter, BookSourceCheckFilter>,
+              BookSourceCheckFilter,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}

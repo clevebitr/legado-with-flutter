@@ -22,31 +22,40 @@ final class FetchBookInfo {
   Future<ParseResult<BookInfo>> execute(BookSource source, String url) async {
     // 书源自己的限速要在第一个请求之前进预算（book-source.md §8、ADR-0036）。
     _pages.applySourceRate(source);
-    final ParseResult<RuleScope> page = await _pages.fetch(
+    // `header` 写成规则时要在**第一个请求之前**求值（book-source.md §2、M12-A2）。
+    final Map<String, String>? headers = await _pages.headersOf(source);
+    // 详情页地址也是 **URL 规则**（可以带 `,{…}` 后缀，`book-source.md` §4.3）。
+    final ParseResult<FetchedPage> fetched = await _pages.fetchRule(
       url,
       rulePath: 'ruleBookInfo',
-      headers: source.headers,
+      params: const <String, String>{},
+      context: JsPageContext(
+        baseUrl: url,
+        source: source.jsSourceInfo,
+        headers: headers,
+      ),
+      headers: headers,
       sourceId: source.url,
       source: source.jsSourceInfo,
     );
 
-    return switch (page) {
-      ParseFailure<RuleScope>(
+    return switch (fetched) {
+      ParseFailure<FetchedPage>(
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
         failureAt<BookInfo>(kind: kind, rulePath: failedAt),
-      ParseSuccess<RuleScope>(:final RuleScope data) =>
-        switch (await _initScope(source, data)) {
+      ParseSuccess<FetchedPage>(data: final FetchedPage page) =>
+        switch (await _initScope(source, page.scope)) {
           ParseFailure<RuleScope>(
             :final ParseFailureKind kind,
             rulePath: final String failedAt,
           ) =>
             failureAt<BookInfo>(kind: kind, rulePath: failedAt),
-          ParseSuccess<RuleScope>(:final RuleScope data) => await _read(
+          ParseSuccess<RuleScope>(data: final RuleScope scope) => await _read(
             source,
-            url,
-            data,
+            page.url,
+            scope,
           ),
         },
     };

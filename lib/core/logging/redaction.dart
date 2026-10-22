@@ -95,11 +95,24 @@ String redactUrl(String url, {String? keyword}) {
     return '<unparsable-url>';
   }
 
+  // `queryParameters` **throws** on a value that is not valid percent-encoded UTF-8, and a rule
+  // can produce exactly that (a site that encodes the keyword in GBK, a JS template that pastes
+  // a raw byte). Logging must never be the thing that fails a request, so an undecodable query is
+  // masked pair by pair on the **raw** text instead of being decoded: every value is replaced
+  // anyway, so nothing is lost but the crash (C-SEC-4 is still honoured).
+  String? maskedQuery;
+  try {
+    final List<String> names = uri.queryParameters.keys.toList(growable: false);
+    maskedQuery = uri.query.isEmpty ? null : _maskQuery(names);
+  } on FormatException {
+    maskedQuery = uri.query.isEmpty ? null : _maskRawQuery(uri.query);
+  }
+
   return uri
       .replace(
         userInfo: uri.userInfo.isEmpty ? null : _mask,
         pathSegments: _maskPathSegments(uri.pathSegments, keyword),
-        query: uri.query.isEmpty ? null : _maskQuery(uri.queryParameters.keys),
+        query: maskedQuery,
       )
       .toString();
 }
@@ -192,6 +205,21 @@ String _maskKeyword(String segment, String? keyword) =>
 /// Builds `<name>=***&<name>=***` from [names], preserving the parameter names.
 String _maskQuery(Iterable<String> names) => names
     .map((String name) => '${Uri.encodeQueryComponent(name)}=$_mask')
+    .join('&');
+
+/// [_maskQuery] for a query whose percent-encoding cannot be decoded.
+///
+/// `name=value` pairs are split on the raw text, so a malformed byte can no longer throw on the
+/// way to the mask; a pair without `=` keeps its name and is otherwise masked whole.
+String _maskRawQuery(String rawQuery) => rawQuery
+    .split('&')
+    .map((String pair) {
+      final int equals = pair.indexOf('=');
+      if (equals < 0) {
+        return _mask;
+      }
+      return '${pair.substring(0, equals)}=$_mask';
+    })
     .join('&');
 
 /// Builds the `<label: N chars, sha256=xxxxxxxx>` summary.

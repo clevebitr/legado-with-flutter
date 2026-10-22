@@ -7,6 +7,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Book source management can finally write: batch edits, search, groups, an editor, export (M13-S2..S5)
+
+- **Selection mode**: long-press a row, then select all / invert and run **enable / disable / delete /
+  group** over the whole selection — one transaction each, so a half-applied batch cannot happen. The
+  row's “read” marker and the check columns are untouched by batch actions: they only move **user
+  state** (ADR-0050 §decision 2).
+- **Two filter axes instead of one mixed one** (the reason 「全正常的书源分组」 was impossible): the
+  **group** chips read `bookSourceGroup` from the payload, the new **check-status** chips
+  (all / healthy / has-failures) read the check's own columns. A checked source used to show
+  「搜索失效」 where its author's group should be; now both are visible and independent.
+- **Search** filters the visible rows by name / URL / group without touching the store.
+- **Group management**: put the selection into an existing group, a new one, or none — it rewrites
+  the payload's `bookSourceGroup` only (the fingerprint does not include it, so identities are stable).
+- **Editor page** (`/sources/edit`): name / URL / group / type / weight / header and the five rule
+  blocks, seeded from the **stored payload** so unmodelled keys survive; saving validates with
+  `BookSource.fromLegadoJson` and refuses an edit whose new `(url, fingerprint)` already belongs to
+  another row instead of merging two sources (ADR-0050 §decision 3).
+- **Single-source check and export** in the row menu: the check reuses M10's `CheckBookSource` (so a
+  single check and a batch check cannot disagree), and the export copies the **payload bytes** to the
+  clipboard and offers a save dialog — the payload, not `toJson`, is what makes a re-import produce
+  the same source (ADR-0050 §decision 4). New `BookSourceFileSaver` port with the `file_selector`
+  implementation and an “unsupported platform = not saved” fallback (C-PLT-1).
+- Testing: the list page gained selection / search / check-filter / export widget tests, the editor
+  has fill / save / invalid-input / identity-conflict tests, the repository got payload, batch,
+  group and update tests (including “a row with a broken payload is skipped, not fatal”), and the
+  saver's adapter is tested through an injected writer.
+- ADR-0050 records all four decisions; roadmap §3.9 marks S1–S6.
+- Gates: format 0 changed, analyze clean, **1263** tests, `core` 100%, `domain` 100%, `data` 98.72%,
+  license scan `Risky items: none`, generated files in sync.
+
+
+### Covers everywhere, and a detail page that can start reading (M13-S1/S6, `roadmap.md` §3.9)
+
+- **Book covers are shown at last**: `cached_network_image` had been a dependency since the first UI
+  slice and was **never referenced**, so not one cover appeared anywhere. A shared `CoverImage`
+  (placeholder / failure state / decode bounded to the thumbnail / decorative for screen readers) now
+  backs the discover list, the merged search results, the detail page and the shelf. The URL was
+  already resolved to an absolute one by the domain (`Book` / `SearchBook` / `BookInfo` / `ShelvedBook`),
+  so this is a pure UI slice.
+- **The detail page can start reading**: it had no way in except tapping one chapter row, which only
+  works if the reader already knows where to go. It now offers 「开始阅读」(first chapter) and
+  「继续阅读」(no chapter URL — the reader restores the stored position, ADR-0044 §decision 4), both
+  through the `AppNavigation` port so `book_source` still does not import `reader` (ADR-0042).
+- **The introduction collapses to three lines** with a show-more toggle: a thousand-chapter table of
+  contents used to be pushed off-screen by one long blurb.
+- The shelf keeps its “read” marker as a badge on the cover, because the cover replaced the icon slot.
+- Testing: `CoverImage` takes an `ImageProvider` seam, so the loaded and failed branches are reachable
+  in a widget test with a 1×1 PNG and with undecodable bytes — no network stack, no cache-manager
+  mock. New `FakeAppNavigation` lets a page test assert *what* it asked to open (`chapterUrl == null`
+  for “continue”).
+- Gates: format 0 changed, analyze clean, **1234** tests, `core` 100%, `domain` 100%, `data` 98.47%.
+
+
+### Book context reaches the rules, one budget for one source, and Big5 decodes (M12, second slice)
+
+- **`java.get('bookName')` / `java.get('title')` work** (the last rule-surface item of M12): both are
+  upstream **built-in** keys, answered *before* the source's variables, so `java.put('title', …)` cannot
+  hijack them. `FetchContent` now takes a `ChapterRequest{url, title, bookName}` instead of a bare URL —
+  a `@js:` rule can only read what the caller knows, and the reader is the one caller that knows both
+  names. The reader's two ports gained optional parameters, so nothing else had to change (ADR-0049).
+- **One `SourceBudget` instead of two `.timeout(...)` wrappers**: "this source has had its turn" is now
+  one collaborator (limit + remaining + `run`), used by the aggregate search (60 s, ADR-0046) and the
+  source check (180 s, ADR-0043) — a third batch caller no longer has to write a third copy. The budget
+  only decides *how long we wait*, never *whether it worked*, and it never cancels an in-flight request
+  (the HTTP layer has no cancellation primitive, the same reason pause/cancel are cooperative).
+- **Big5 / Big5-HKSCS decode now, detect still does not.** `charset` ships no Big5 codec and no permissive
+  alternative existed, so the licence policy changed instead: MPL-2.0 is GPL-3.0 compatible, and
+  `enough_convert` (pure Dart, zero dependencies) is admitted **through a one-entry allow-list** in
+  `tool/scan_licenses.dart` — a second MPL dependency fails the scan until someone writes another ADR
+  (ADR-0048). The URL-declared charset (§4.3) and `Content-Type` / `<meta>` declarations all reach it;
+  an undeclared Big5 page is still not guessed, and HKSCS' extension区 decodes to U+FFFD.
+- `shift-jis` / `euc-jp`'s `RangeError` stays registered: `enough_convert` has no Japanese tables, and a
+  byte pre-validation layer would be unverifiable with zero Japanese sources in the corpus.
+- ADR-0048 / ADR-0049 record the decisions and the four evidence sets; `NOTICE.md` §5/§6, C-DEP-7 and
+  `tech-stack.md` §5 now state the allow-list rule instead of "MPL is forbidden".
+- Gates: format 0 changed, analyze clean, **1223** tests, `core` 100%, `domain` 100%, `data` 98.47%,
+  license scan `Risky items: none` (166 packages, MPL 1 = the allow-listed one), generated files in sync;
+  device probes on Windows and Android, `js_bridge` **25/25** on both (the new built-in-key probe included).
+
+
+### Real sources actually run: URL rules, `<js>`, and one broken source no longer sinks the batch (M12, first slice)
+
+Measured, not guessed: a new `tool/spot_check/batch_probe.dart` runs a whole collection through the four stages and
+prints a `stage/kind/rulePath` histogram. On the 128-source collection this was checked against, **8 of 128 completed**
+before this slice and **10** after — and the 118 that still fail are dead sites (DNS gone, 301 to another domain, empty
+body, login token required), not rules this repository cannot read. The distribution is in ADR-0047.
+
+- **`searchUrl` is a rule, not an address.** 50 of the 128 sources write `…/search.php,{"method":"POST",
+  "body":"searchkey={{key}}"}` or append `{"charset":"gbk"}`. Sending that comma as part of the URL is why so many
+  answered 404. `domain/url_rule.dart` now splits the `,{…}` suffix with a tolerant scanner (single quotes, unquoted
+  keys, `{{…}}` inside values), and `PageFetchService.fetchRule` owns the whole rule: POST bodies, per-request headers,
+  a `charset` that decides both how `{{key}}` is escaped **and** how the response is decoded, and a keyword that stays
+  verbatim inside a JSON payload while being percent-encoded in a form (`book-source.md` §4.3).
+- **`<js>…</js>` anywhere in a rule** (matrix #31, 50 sources): segments are evaluated in order and each one receives
+  the previous one's output as `result`, which is what makes `<js>…</js>https://…/{{result}}.html` produce an address.
+  A trailing `@js:` keeps its old single-segment semantics — the chain only runs when `<js>` is really there.
+- **List rules accept JavaScript**: `bookList` / `chapterList` written as `@js:` or `<js>` return the element list
+  (a string becomes a DOM fragment, an object a JSON item), replacing the old `unsupported:@js:list` refusal.
+- **A JSON item's `result` is the item**, not its JSON text (`book-source.md` §6): `@js:result.Name` works on a
+  `bookList` entry now, while a fetched page still hands the script its body.
+- **`header` written as a rule is evaluated before the first request** (3 sources used to fail at *import*): the text
+  lands in `BookSource.headerRule`, `PageFetchService.headersOf` turns it into a header map, and a broken header script
+  keeps the static headers with a warning instead of costing the source.
+- **`$.[*]`** (a Legado JSONPath spelling RFC 9535 rejects) is normalised, which turned one source's search from
+  `parseFailed` into real hits.
+- **Two "investigate first, then decide" registrations ended as *no change***: reading default/`@@` rules as JSON on a
+  JSON page, and the `page` binding of field rules. Upstream's jayway JsonPath also needs the `$` prefix and field rules
+  never consume `page`, so switching the analyser would only move where wrong rules fail (ADR-0047 §decision 6).
+- **One broken source can no longer blank the screen**: three separate leaks are closed. `redactUrl` no longer throws on
+  a query that is not valid percent-encoded UTF-8 (a GBK keyword does exactly that — and logging must never be what
+  fails a request); a `receiveTimeout` that arrives while the body is *read* is mapped to a `ParseFailureKind` instead
+  of escaping `HttpClient`; and the aggregate search counts a throwing source as one failed source, keeps the hits it
+  already published, and the page only shows the failure message when there is nothing to show.
+- ADR-0047 records the decisions, the three "no change" verdicts and the evidence table; `book-source.md` gained §4.3,
+  a new `header` row, the `#14`/`#31` matrix statuses and a §10 evidence block.
+- Gates: format 0 changed, analyze clean, **1204** tests, `core` 100%, `domain` 100%, `data` 98.47%, generated files in
+  sync.
+
+
 ### Aggregate search reaches the screen: scopes, filters, progress and one merged list (M11, second half)
 
 - **The search page searches a scope, not "the selected source"** — a behaviour change worth naming: the default

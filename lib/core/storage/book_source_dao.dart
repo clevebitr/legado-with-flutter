@@ -184,6 +184,54 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
             ..where(($BookSourcesTable table) => table.id.equals(id)))
           .write(BookSourcesCompanion(isEnabled: Value<bool>(isEnabled)));
 
+  /// Enables or disables every row in [ids] in **one transaction** (ADR-0050 §决策 2).
+  Future<void> setEnabledFor(List<int> ids, {required bool isEnabled}) =>
+      transaction(() async {
+        for (final int id in ids) {
+          await setEnabled(id: id, isEnabled: isEnabled);
+        }
+      });
+
+  /// Deletes every row in [ids] in one transaction and answers how many went away.
+  Future<int> deleteByIds(List<int> ids) => transaction(() async {
+    var deleted = 0;
+    for (final int id in ids) {
+      deleted += await deleteById(id);
+    }
+
+    return deleted;
+  });
+
+  /// Replaces the stored payload of [id] — the **edit** path (ADR-0050 §决策 3).
+  ///
+  /// The identity columns move with it, because editing a URL or a rule changes the fingerprint:
+  /// what must not move is user state (`isEnabled` / `customOrder`). The caller has already
+  /// validated the payload and checked that the new identity does not collide with another row.
+  Future<void> updatePayload({
+    required int id,
+    required String url,
+    required String fingerprint,
+    required String payload,
+    required String name,
+    required int sourceType,
+    required int weight,
+    required int? lastUpdateTime,
+  }) =>
+      (update(
+        bookSources,
+      )..where(($BookSourcesTable table) => table.id.equals(id))).write(
+        BookSourcesCompanion(
+          url: Value<String>(url),
+          fingerprint: Value<String>(fingerprint),
+          payload: Value<String>(payload),
+          name: Value<String>(name),
+          sourceType: Value<int>(sourceType),
+          weight: Value<int>(weight),
+          lastUpdateTime: Value<int?>(lastUpdateTime),
+          updatedAt: Value<DateTime>(_clock.now()),
+        ),
+      );
+
   /// Deletes row [id] and reports how many rows went away (0 or 1).
   Future<int> deleteById(int id) => (delete(
     bookSources,

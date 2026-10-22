@@ -2,6 +2,42 @@ import 'package:flutter_reader/features/reader/domain/entities/reader_settings.d
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('typography presets', () {
+    test('ReaderSettings_givenAnOffStepSpacing_snapsToTheNearestStep', () {
+      // 段距与缩进只有预设台阶（ADR-0051 §决策 4）：读回来的永远是 UI 能表示的取值。
+      final ReaderSettings settings = ReaderSettings(
+        paragraphSpacing: 0.7,
+        firstLineIndent: 1.4,
+      );
+
+      expect(settings.paragraphSpacing, 0.5);
+      expect(settings.firstLineIndent, 1);
+    });
+
+    test('ReaderSettings_givenNegativePresets_snapToZero', () {
+      final ReaderSettings settings = ReaderSettings(
+        paragraphSpacing: -1,
+        firstLineIndent: -3,
+      );
+
+      expect(settings.paragraphSpacing, 0);
+      expect(settings.firstLineIndent, 0);
+    });
+
+    test('readerPagePaddingOf_whenAsked_answersThePresetPixels', () {
+      expect(readerPagePaddingOf(ReaderPagePadding.narrow), 16);
+      expect(readerPagePaddingOf(ReaderPagePadding.medium), 24);
+      expect(readerPagePaddingOf(ReaderPagePadding.wide), 32);
+    });
+
+    test('readerFontFamilyName_whenAsked_answersThePlatformFamily', () {
+      expect(readerFontFamilyName(ReaderFontFamily.theme), isNull);
+      expect(readerFontFamilyName(ReaderFontFamily.serif), 'serif');
+      expect(readerFontFamilyName(ReaderFontFamily.sans), 'sans-serif');
+      expect(readerFontFamilyName(ReaderFontFamily.mono), 'monospace');
+    });
+  });
+
   group('ReaderSettings', () {
     test('ReaderSettings_whenDefault_isReadableAndScrolls', () {
       const ReaderSettings settings = ReaderSettings.defaults;

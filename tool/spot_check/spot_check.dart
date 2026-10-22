@@ -10,7 +10,7 @@
 //
 // Usage (from the repository root):
 //
-//   flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<file.json> --keyword=剑来
+//   flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<file.json> --keyword=剑来 [--plain-http]
 //   flutter run -d windows -t tool/spot_check/spot_check.dart -- --list=<collection.json>
 //
 // `dart run` does **not** work here: the chain needs the real JS engine and the Flutter
@@ -49,6 +49,7 @@ import 'package:flutter_reader/features/book_source/domain/book_source_fingerpri
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
@@ -190,7 +191,11 @@ Future<void> main(List<String> arguments) async {
   );
   final String keyword = options['keyword'] ?? '剑来';
   final Stopwatch stopwatch = Stopwatch()..start();
-  final _Report report = await _runChain(source, keyword);
+  final _Report report = await _runChain(
+    source,
+    keyword,
+    allowPlainHttp: options.containsKey('plain-http'),
+  );
   stopwatch.stop();
   report.elapsedMilliseconds = stopwatch.elapsedMilliseconds;
 
@@ -227,14 +232,20 @@ BookSource _loadSource(File file, {String? name}) {
 }
 
 /// Runs the four stages of `docs/dev/roadmap.md` §4 against the live site of [source].
-Future<_Report> _runChain(BookSource source, String keyword) async {
+Future<_Report> _runChain(
+  BookSource source,
+  String keyword, {
+  bool allowPlainHttp = false,
+}) async {
   final AppLogger logger = AppLogger(level: LogLevel.warning);
   // 请求层是唯一的上网入口（C-NET-1）：页面抓取与规则里的 `http.*` 共用同一个客户端，
   // 因此也共用 cookie 与同一份书源并发预算（book-source.md §8）。
   final DioHttpClient http = DioHttpClient(
     cookies: InMemoryCookieManager(),
     logger: logger,
-    policy: const HttpPolicy(),
+    // `--plain-http` 与 App 设置里的开关同义（C-SEC-2）：真实语料里仍有 `http://` 站点，
+    // 而默认策略会直接拒绝它们（默认关闭是对的，探测时才需要显式打开）。
+    policy: HttpPolicy(allowPlainHttp: allowPlainHttp),
   );
   // 引擎与桥共一份变量表：`@put:` / `@get:` 与 `java.put` / `java.get` 是同一份（ADR-0034）。
   final JsVariableStore variables = JsVariableStore();
@@ -339,7 +350,7 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
   switch (await FetchContent(
     pages: pages,
     cache: _noContentCache,
-  ).execute(source, chapters.first.url)) {
+  ).execute(source, ChapterRequest(url: chapters.first.url))) {
     case ParseSuccess<String>(:final String data):
       report.record(
         'content',

@@ -126,3 +126,69 @@ M6（roadmap §5.5）落地，官方决策记录是 **ADR-0045**（注意：`DEC
 - **拖拽写归一化而不是交换**：把当前顺序编号成 `0..n-1` 一次事务写回全部行（含禁用源），幂等且不受中间值相等影响；其它排序键下不给拖拽（拖完会按别的键跳回去 = 拖了没反应）。
 
 验证：单测 + Widget 测试（排序切换 / 分组筛选 / 拖拽重排 / 行内字段 / 注释对话框）、format/analyze/test/coverage 全绿、双端设备级实跑。
+
+## 2026-10-22 — M12 第一切片：URL 规则后缀、`<js>` 分段、header 规则与失败隔离（ADR-0047）
+
+用户要求「继续 M12 + 修聚合搜索 UI 覆盖 + 用 4dc410d1.json 测引擎兼容性」。做法是**先量后改**：新增 `tool/spot_check/batch_probe.dart`（全量四段跑 + stage/kind/rulePath 直方图），128 条语料首轮只有 8 条全通。
+
+落地的七件事（全部有单测，ADR-0047 记录决策与取证结论）：
+1. `url,{…}` URL 规则后缀（50/128 条）：`domain/url_rule.dart` 宽松扫描器 + `PageFetchService.fetchRule`；POST body / 每请求 headers / charset 双向（请求侧编码 `{{key}}`、响应侧 `decodeBody(declaredCharset:)`）；JSON 载荷里关键词原样。
+2. `<js>…</js>` 分段链（矩阵 #31，50 条）：上一段产出 = 下一段 `result`，`{{result}}` 由此拼进文本；值规则与列表规则各一条链。
+3. 列表规则 `@js:` / `<js>`（原 `unsupported:@js:list`）：脚本返回数组即条目，字符串按 HTML 解析成 DOM scope。
+4. JSON 条目上裸 `@js:` 的 `result` 改为**条目对象**（M12-A1）。
+5. `header` 规则：原文进 `BookSource.headerRule`，`headersOf` 在首个请求前求值（M12-A2）；3 条源的导入失败清零。
+6. `$.[*]` 方言归一化（M12-A6）。
+7. 三处失败隔离：`redactUrl` 在非法 percent-encoding 上不再抛；流式读 body 的 `DioException` 映射成 kind；聚合搜索逐源 `on Exception` + notifier 保留已发布命中 + 页面只在无结果时显示失败（用户报的「一个坏源冲掉整屏结果」）。
+
+取证后**不改**语义的两条（写进 ADR）：JSON 页面上的默认/`@@` 规则（上游 jayway 同样要 `$` 前缀，换分析器只改变错误位置）、字段规则的 `page` 绑定（字段规则不消费它）。
+
+未做（已登记 roadmap §3.7）：A5 `java.get('bookName'/'title')`（要改域层端口）、Big5 系解码（要换依赖）、统一单源预算（两处各写一份）、`webView` 类 URL 选项。
+
+结果：四段全通 8 → 10；导入失败 3 → 0；抛到批外异常 2 → 0。真源证据：阅友小说（`<js>` header，search=5/toc=57/content=676）、飞卢小说💰（`charset:gbk`，toc 291 → 1087）。双端 integration_test 各 3 文件全过。门禁：1204 用例、core/domain 100%、data 98.47%、生成物同步。
+
+## 2026-10-22 — M12 余项：Big5 解码（MPL 白名单）、A5 书源上下文、统一单源预算（ADR-0048/0049）
+
+用户裁决三项后（「改 C-DEP-7 允许 MPL，引 enough_convert」/「改端口，一次做对」/「新增 domain 协作者 SourceBudget」），M12 余项收尾。
+
+1. **Big5 系（ADR-0048）**：新增 `enough_convert ^1.7.1`（MPL-2.0，纯 Dart、零依赖）。政策从「MPL 一律禁止」改为「MPL 只按白名单放行」：`tool/scan_licenses.dart` 的 `_forbiddenFamilies` 去掉 MPL，新增 `_mplAllowList = {enough_convert}`，名单外的 MPL 仍让扫描退出码非 0。`charset_decoder.dart` 新增 `_encodingOf`（先 `charset` 再 Big5 家族），严格/宽容两条车道共用；宽容车道加 `Big5Codec(allowInvalid: true)`。**只补解码不补检测**：无声明页面仍不猜 Big5（`betto_charset_detector` 没有该候选），HKSCS 扩展区 → U+FFFD。GBK 仍用 `charset`（避免同标签两套结果）。日文 `RangeError` 不动（`enough_convert` 无日文表，语料 0 条日文源）。
+
+2. **A5（ADR-0049）**：`ChapterRequest{url,title,bookName}` 取代裸 URL；`FetchToc.execute(..., {bookName})`；`JsJob` + worker 消息带 `bookName`/`chapterTitle`；`applyJsJavaCall` 的读是 `named[key] ?? variables[key] ?? ''`（内置键先于变量表，`java.put('title')` 不能劫持）。上下文挂在**页面**的 `JsPageContext` 上（`fetchRule`/`fetch`/`_pageOf`/`walk` 都建到 scope），所以条目、翻页规则自动继承。阅读器两个端口加可选参数，`reader_session_notifier` 从 `ReaderBook.name` + 目录项标题填。
+
+3. **单源预算（ADR-0049）**：`domain/source_budget.dart`，`SourceBudget(limit, {clock})` + `remaining`/`isExpired`/`run(op, rulePath:)`；只决定等多久、不作废在飞请求；聚合搜索 60 s 与校验 180 s（跨阶段共享一份）都改用它，删掉两处 `.timeout` 包装与 `_CheckRun.deadline`。
+
+踩坑两条：① `FetchBookInfo`/`FetchContent` 原来在 `walk` 里传 `context`，但 `fetchRule` 自己重建 `JsPageContext` 并把名字丢了 —— 必须在 `_pageOf` 建带名字的页面 scope，否则 job 上永远是 null（单测先发现）。② 覆盖率门禁把「只有 freezed 重定向工厂」的文件判为未测量，`chapter_request.dart` 需登记进 `tool/coverage_allowlist.txt`（第三类）；另外 `decodeJsNamedContext` 里一行 `if (a && b)` 在 short-circuit 下 lcov 记 0 命中，改成 `_putName` 辅助函数后才算覆盖。
+
+验证：1223 用例全过；core 1279/1279、domain 2848/2848、data 98.47%；format 0、analyze 干净、生成物同步；许可扫描 166 包 / MPL 1 / risky none；双端设备级各 3 文件全过，`js_bridge` 25/25（含新增 `jsBridge_whenAJobCarriesBookNames_javaGetAnswersThemFirst`）。注意：`tool/test/run_windows.ps1 -TestFile js_bridge` 会挂住（16 min 超时），直接用 `flutter test integration_test/js_bridge_test.dart -d windows` 正常，脚本这条路径待查。
+
+## 2026-10-22 — M13 范围：UI 修复 + 书源管理（封面、批量、搜索/分组、编辑页、单条校验/导出）；阅读体验归 M14
+
+用户裁决（4 问）：
+1. UI 问题位置 = 书源相关页 + 阅读器 + 书架/详情页，并**点名新需求**：发现页要显示书源给的封面图。
+2. 书源管理四项全做（批量操作、列表搜索 + 分组管理、书源编辑页、单条校验 + 导出），并追加「支持显示全正常的书源分组」。
+3. 阅读体验四项（底部阅读菜单 + 进度/亮度、目录增强、换源、排版扩展）全要，但归 M14。
+4. 节奏 = 分两批：**M13 = UI 修复 + 书源管理；M14 = 阅读体验**。
+
+M13 切分（每项独立可验收）：
+- S1 封面管线：`cached_network_image` 早就在依赖里却**从未使用**（全仓 0 处引用），所以现在所有列表/详情都没有封面。新增共用 `CoverImage`（占位、错误态、解码尺寸、装饰性语义），接入发现页 / 聚合搜索 / 详情页 / 书架。
+- S2 批量操作：长按进入多选，全选/反选/退出，批量启用/禁用/删除/加入分组/移出分组；DAO 补批量方法（现在只有单条 setEnabled / delete）。
+- S3 列表搜索 + 分组管理 + 「全正常」：搜索框（名称/URL/分组）；分组增删改；筛选维度加「全正常 / 有失效」——把「全正常的书源分组」落实为：分组列表覆盖**全部**自带分组（含没有任何校验标记的），且能筛出「全部正常」的源。
+- S4 书源编辑页：字段编辑 + 保存前用 `BookSource.fromLegadoJson` 校验；保存要重写 payload 并**重算指纹**，而指纹参与 `(url, 指纹)` 唯一索引（ADR-0040）→ 必须先写 ADR-0050（更新同一行 vs 冲突如何呈现；分组写 payload 还是写列）。
+- S5 单条校验 + 导出：行菜单加「校验」（复用 M10 `CheckBookSource` 只跑这一条）与「导出」（payload 原文；先做复制到剪贴板 + 保存文件，5.8 的批量导出仍归后续）。
+- S6 UI 缺陷修复（审计所得）：详情页没有「开始阅读/继续阅读」（只能从目录项进）、书架/搜索/发现列表无封面（S1）、详情页信息块无封面与简介折叠、搜索页加载更多时无进度提示。阅读器的沉浸式/菜单等归 M14，M13 只修「不修就是 bug」的部分。
+
+规格前置：ADR-0050 必须先于 S3/S4 动代码（分组写哪、编辑后的身份、导出形态）。其余各项无新决策，沿用 ADR-0040/0045/0046。
+
+## 2026-10-22 — M13 落地：封面管线、批量操作、分组/校验双轴、编辑页、单条校验与导出（ADR-0050）
+
+M13 交付（UI 修复 + 书源管理），用户四处裁决见 #11。落地六项：
+
+1. **S1 封面**：`cached_network_image` 在依赖里躺了多个里程碑却 0 处引用（一个封面都不显示）。新增 `core/widgets/cover_image.dart`：占位/失败态同一块、解码按缩略图（`ResizeImage`）、`ExcludeSemantics`（装饰性，C-UI-7）、**`ImageProvider` 注入缝**让 widget 测试能覆盖「加载成功」与「坏字节」两条分支（1×1 PNG / 非图片字节），不依赖网络栈或 cache manager mock。接入发现页、聚合搜索、详情页、书架（书架把「已读」做成封面角标）。
+2. **S2 批量操作**：长按进入多选；全选/反选/退出；批量启用/禁用/删除/加入或移出分组。DAO 三个批量方法各在一个事务里；端口加 `setEnabledFor` / `deleteMany` / `setGroupFor`。踩坑：`_selected..clear()..addAll(all.difference(_selected))` 会先清空再求差 → 变成全选，必须先把差集算进局部变量。
+3. **S3 搜索 + 分组 + 全正常**：搜索框（名称/URL/分组，页面内状态，不落库）；**两个筛选轴分开**（ADR-0050 §决策 1）——分组读 payload 的 `bookSourceGroup`，校验状态（全部/全正常/有失效）读校验列（`checkOwnedGroups` + 注释）。这条修掉了一个真 bug：`groupName ?? payload.group` 让一次校验把用户分组顶成「搜索失效」。
+4. **S4 编辑页**：`/sources/edit`，字段从**payload** 起填（未建模键保留），五组规则用 JSON 文本域（避免第二份 schema），保存前 `BookSource.fromLegadoJson` 校验，撞另一行 `(url, 指纹)` 显式失败（不合并）。用户态（enabled/customOrder）不被编辑重置。
+5. **S5 单条校验 + 导出**：行菜单三新项；校验复用 `CheckBookSource`（单条与批量不会不一致）；导出写 **payload 原文**到剪贴板 + 保存对话框（新端口 `BookSourceFileSaver` + `file_selector` 实现 + 不支持平台回落）。剪贴板**不 await**：测试宿主没有该通道的应答，await 会把整个动作挂住。
+6. **S6 缺陷修复**：详情页新增「开始阅读/继续阅读」（经 `AppNavigation` 端口，`bookSource` 仍不 import reader）与可折叠简介；封面四处接入。
+
+踩坑两条值得记：①`pumpSourceManagementPage` 里 `localizationOf(tester, ...)` 必须在 pump 之后调用，否则「No element」；②上一轮遗留的 `flutter_reader.exe` 占着 `reader.db`，`on_disk_database_test` 会以 `PathAccessException` 失败——双端实跑前先结束进程。
+
+验证：1263 用例全过；core 1341/1341、domain 2848/2848、data 98.72%；format 0、analyze 干净、生成物同步；许可扫描 risky none；双端设备级各 3 文件全过（js_bridge 25/25）。

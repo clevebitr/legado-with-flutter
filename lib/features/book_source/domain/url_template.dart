@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:charset/charset.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 
 /// Characters upstream's `URLEncoder` leaves alone.
@@ -43,6 +44,7 @@ String renderUrlTemplate(
   String template,
   Map<String, String> params, {
   required AppLogger logger,
+  String? charset,
 }) {
   final List<String> unresolved = <String>[];
 
@@ -58,7 +60,7 @@ String renderUrlTemplate(
       return '';
     }
 
-    return name == _keywordVariable ? _encodeFormValue(value) : value;
+    return name == _keywordVariable ? _encodeFormValue(value, charset) : value;
   });
 
   if (unresolved.isNotEmpty) {
@@ -96,23 +98,45 @@ String? resolveAbsoluteUrlOrNull(String? url, String baseUrl) =>
 /// is percent-encoded from its UTF-8 bytes with upper-case hex. A `+` is encoded
 /// again (`%2B`), which upstream does as well, because its already-encoded check
 /// does not accept `+`; callers therefore pass the raw keyword.
-String _encodeFormValue(String value) {
+///
+/// [charset] is the request's declared encoding (`url,{“charset”:“gbk”}`,
+/// `book-source.md` §4.3). It changes **which bytes** are escaped, not which characters:
+/// `剑` becomes `%BD%A3` under GBK rather than `%E5%89%91` under UTF-8, which is what a
+/// GBK-era site actually decodes back to the keyword. An unknown label falls back to
+/// UTF-8 instead of failing the request, because the label is arbitrary text from an
+/// imported file.
+String _encodeFormValue(String value, [String? charset]) {
   if (_isFormEncoded(value)) {
     return value;
   }
 
   final StringBuffer buffer = StringBuffer();
-  for (final int byte in utf8.encode(value)) {
-    if (byte == 0x20) {
+  for (final int rune in value.runes) {
+    final String character = String.fromCharCode(rune);
+    if (rune < 0x80 && _formSafe.hasMatch(character)) {
+      buffer.write(character);
+      continue;
+    }
+    if (rune == 0x20) {
       buffer.write('+');
-    } else if (_formSafe.hasMatch(String.fromCharCode(byte))) {
-      buffer.write(String.fromCharCode(byte));
-    } else {
+      continue;
+    }
+    // 逐字符编码：一个字符在声明编码里可能是 1–4 字节。
+    for (final int byte in _encodeWith(character, charset)) {
       buffer.write('%${byte.toRadixString(16).toUpperCase().padLeft(2, '0')}');
     }
   }
 
   return buffer.toString();
+}
+
+/// The bytes of [text] in [charset], or UTF-8 when the label is absent or unknown.
+List<int> _encodeWith(String text, String? charset) {
+  final Encoding? encoding = charset == null || charset.isEmpty
+      ? null
+      : Charset.getByName(charset);
+
+  return (encoding ?? utf8).encode(text);
 }
 
 /// Whether [value] is already form-encoded, mirroring upstream `encodedForm`.

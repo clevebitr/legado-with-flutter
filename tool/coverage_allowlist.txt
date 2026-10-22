@@ -54,3 +54,4 @@ lib/features/book_source/domain/repositories/book_source_view_store.dart  # 纯�
 # --- 3.8 聚合搜索（ADR-0046）新增的豁免项 ---
 lib/features/book_source/domain/search_match_mode.dart  # 纯枚举声明（无可测量行），属 ADR-0019 §2 的「源文件无可测量行」子情形；行为由 search_result_merger_test.dart 逐桶行使
 lib/features/book_source/domain/repositories/search_scope_store.dart  # 纯接口声明（只有抽象方法签名），同属「无可测量行」子情形；契约由 SearchScopeStoreImpl 与其测试行使
+lib/features/book_source/domain/entities/chapter_request.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂声明；行为由 test/features/book_source/domain/entities/chapter_request_test.dart 与 FetchContent / FetchToc / reader 的上下文接线测试构造并读取保证（ADR-0049）

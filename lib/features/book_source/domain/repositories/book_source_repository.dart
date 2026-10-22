@@ -2,6 +2,18 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source_
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 
+/// What one edit of a stored source did (ADR-0050 §决策 3).
+enum BookSourceEditOutcome {
+  /// The row was rewritten.
+  saved,
+
+  /// Another row already has this `(url, fingerprint)`: the edit was **not** applied.
+  identityConflict,
+
+  /// The row is gone (deleted while the editor was open).
+  sourceMissing,
+}
+
 /// Persistence for the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
 ///
 /// The port is **total**, in the same sense `CacheDao` is (ADR-0033 §决策 1): every method
@@ -60,4 +72,41 @@ abstract interface class BookSourceRepository {
 
   /// Deletes [id].
   Future<void> delete(int id);
+
+  /// The **raw payload** of [id] exactly as imported, or `null` when the row is gone
+  /// (ADR-0050 §决策 4).
+  ///
+  /// Export and the editor both work from these bytes: a model round-trip would drop unmodelled
+  /// keys and reorder the rest (`docs/dev/roadmap.md` §3.7's `extra` note).
+  Future<String?> payloadOf(int id);
+
+  /// Enables or disables every id in [ids] in one transaction (ADR-0050 §决策 2).
+  ///
+  /// A batch touches **user state only**, so it never invalidates the payload or the identity.
+  Future<void> setEnabledFor(List<int> ids, {required bool isEnabled});
+
+  /// Deletes every id in [ids] in one transaction (ADR-0050 §决策 2).
+  ///
+  /// The selection fallback (a deleted row that happened to be the current source) is the
+  /// caller's, exactly as it is for a single delete (5.1).
+  Future<void> deleteMany(List<int> ids);
+
+  /// Puts every id in [ids] into [group] (`bookSourceGroup`), or clears it when [group] is `null`.
+  ///
+  /// It rewrites the **payload** (ADR-0050 §决策 1: the user's group lives there) and leaves the
+  /// check columns alone; the fingerprint does not include the group, so the identity is unchanged.
+  /// A row whose payload does not parse is skipped with a warning rather than failing the batch.
+  Future<void> setGroupFor(List<int> ids, String? group);
+
+  /// Replaces the stored source [id] with [entry], validated by the caller
+  /// (ADR-0050 §决策 3).
+  ///
+  /// It rewrites the payload, recomputes the identity and keeps user state. It answers
+  /// [BookSourceEditOutcome.identityConflict] when the new `(url, fingerprint)` already belongs to
+  /// **another** row — a collision is reported, never merged — and
+  /// [BookSourceEditOutcome.sourceMissing] when the row vanished meanwhile.
+  Future<BookSourceEditOutcome> update({
+    required int id,
+    required Map<String, Object?> entry,
+  });
 }

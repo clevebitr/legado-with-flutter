@@ -170,7 +170,7 @@ Windows 与 Android 两侧都已实测通过。
 
 ---
 
-## 7. 实测证据（2026-10-11；最新一次 **书源文件导入，2026-10-14**，双端按 ADR-0039）
+## 7. 实测证据（2026-10-11；最新一次 **M13 封面 + 书源管理，2026-10-22**，双端按 ADR-0039）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
@@ -206,6 +206,12 @@ Windows 与 Android 两侧都已实测通过。
 | **M6 书源列表排序/筛选（5.5，2026-10-21）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1083** 用例全过；覆盖率退出码 0（`core` 1245/1245、`domain` 2211/2211 均 100%，`data` 98.41% ≥ 80%）；设备级 Windows / Android 各 3 文件全过（`js_bridge` 24/24、`on_disk_database` 3/3），退出码 0 |
 
 | **M11 聚合搜索（3.8，2026-10-21）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1155** 用例全过；覆盖率退出码 0（`core` 1245/1245、`domain` 2458/2458 均 100%，`data` 98.47% ≥ 80%）；设备级 Windows / Android 各 3 文件全过（`js_bridge` 24/24、`on_disk_database` 3/3），退出码 0 |
+
+| **M12 引擎兼容面（3.7，2026-10-21）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1204** 用例全过；覆盖率退出码 0（`core` 1268/1268、`domain` 2816/2816 均 100%，`data` 98.47% ≥ 80%）；设备级 **Windows 3 文件全过**、**Android（`Medium_Phone` 含冷启动）3 文件全过**（`js_bridge` 24/24、`on_disk_database` 3/3），退出码 0。`lib/core/network/`（流式读 body 的异常映射、`declaredCharset`）与 `integration_test/js_bridge_test.dart` 的 `_ProbeHttpClient` 都改了，所以这一轮的双端实跑同时是它们的构建验证 |
+
+| **M12 余项（A5 / Big5 / 单源预算，2026-10-21）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1223** 用例全过；覆盖率退出码 0（`core` 1279/1279、`domain` 2848/2848 均 100%，`data` 98.47% ≥ 80%）；设备级 Windows / Android（`Medium_Phone` 含冷启动）各 3 文件全过、`js_bridge` **25/25**（新增的内置键探针 `jsBridge_whenAJobCarriesBookNames_javaGetAnswersThemFirst` 在列），退出码 0。**`lib/core/js/**` 改了**（`JsJob` 两个字段 + 内置键优先 + worker 解码），所以这一轮的双端实跑也是它的验证入口 |
+
+| **M13 封面 + 书源管理（§3.9，2026-10-22）** | `flutter test --coverage` + `dart run tool/check_coverage.dart` + 双端 `run_*.ps1` | 主机侧 **1263** 用例全过；覆盖率退出码 0（`core` 1341/1341、`domain` 2848/2848 均 100%，`data` 98.72% ≥ 80%）；设备级 Windows / Android（`Medium_Phone` 含冷启动）各 3 文件全过（`js_bridge` 25/25），退出码 0。**新增 `core/platform/` 的保存端口**（`file_selector` 的 `getSaveLocation`），所以这一轮的双端实跑同时是它的构建验证。踩坑：上一轮遗留的 `flutter_reader.exe` 占着 `reader.db`，`on_disk_database_test` 会以 `PathAccessException` 失败——先结束进程再跑 |
 
 > Android 补跑命令：`pwsh -File tool/test/run_android.ps1`（`Medium_Phone` 自动启停；需要网络，因 `flutter build apk` 的 native assets 要下载 `libsqlite3.arm.android.so`，见 §6 与本表旧记录）。
 >

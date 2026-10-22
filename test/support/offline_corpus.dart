@@ -3,12 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/app.dart';
+import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
@@ -21,6 +23,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import 'fake_app_navigation.dart';
 import 'fake_book_source_repository.dart';
 import 'fake_book_source_view_store.dart';
 import 'fake_bookshelf_repository.dart';
@@ -116,6 +119,7 @@ Future<void> pumpBookSourcePage(
   required Widget page,
   required BookSource? source,
   required FakeHttpClient http,
+  FakeAppNavigation? navigation,
 }) async {
   _fixViewSize(tester);
 
@@ -124,6 +128,10 @@ Future<void> pumpBookSourcePage(
       overrides: <Override>[
         currentBookSourceProvider.overrideWithValue(source),
         httpClientProvider.overrideWithValue(http),
+        // 跨 feature 的入口是端口（ADR-0042）：测试可以塞一个记录器，断言页面**请求了**
+        // 什么（哪一章 / 哪本书），而不是去追一个路由。
+        if (navigation != null)
+          appNavigationProvider.overrideWithValue(navigation),
         // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
         // （端口是 total，替身与适配器对页面是同一件事）。
         contentCacheProvider.overrideWithValue(FakeContentCache()),
@@ -154,6 +162,7 @@ Future<void> pumpSourceManagementPage(
   FakeHttpClient? http,
   BookSourceFilePicker? picker,
   FakeBookSourceViewStore? viewStore,
+  BookSourceFileSaver? saver,
 }) async {
   _fixViewSize(tester);
 
@@ -166,6 +175,10 @@ Future<void> pumpSourceManagementPage(
         // 文件选择器的默认实现要走平台通道；测试永远覆盖端口（testing.md §4）。
         bookSourceFilePickerProvider.overrideWithValue(
           picker ?? const UnsupportedBookSourceFilePicker(),
+        ),
+        // 单条导出同理：保存对话框是平台通道，测试覆盖端口。
+        bookSourceFileSaverProvider.overrideWithValue(
+          saver ?? const UnsupportedBookSourceFileSaver(),
         ),
         // 5.5 起列表页还读「排序 + 分组筛选」这条视图偏好；宿主 VM 里没有平台存储，
         // 所以端口给内存替身（testing.md §4）。

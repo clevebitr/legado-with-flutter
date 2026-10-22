@@ -13,8 +13,12 @@ import '../../../../support/fake_book_source_view_store.dart';
 import '../../../../support/offline_corpus.dart';
 
 /// A stored source with a distinct [name] and URL.
-BookSource _source(String name, {String? url}) => loadCorpusBookSource()
-    .copyWith(name: name, url: url ?? 'https://$name.test');
+BookSource _source(String name, {String? url, String? group}) =>
+    loadCorpusBookSource().copyWith(
+      name: name,
+      url: url ?? 'https://$name.test',
+      group: group,
+    );
 
 /// The strings the page renders, taken from the page's own localization.
 AppLocalizations _l10n(WidgetTester tester) =>
@@ -188,8 +192,9 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeBookSourceRepository repository = FakeBookSourceRepository();
-      repository.add(source: _source('picked'), groupName: '精选');
-      repository.add(source: _source('other'), groupName: '玄幻');
+      // 用户分组在 payload 里（ADR-0050 §决策 1）。
+      repository.add(source: _source('picked', group: '精选'));
+      repository.add(source: _source('other', group: '玄幻'));
 
       await pumpSourceManagementPage(
         tester,

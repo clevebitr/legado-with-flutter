@@ -1,13 +1,13 @@
-import 'dart:async';
-
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/explore_category.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check_settings.dart';
+import 'package:flutter_reader/features/book_source/domain/source_budget.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_failure.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_keyword.dart';
@@ -84,7 +84,9 @@ final class CheckBookSource {
     final _CheckRun run = _CheckRun(
       settings: settings,
       clock: _clock,
-      deadline: startedAt.add(settings.timeout),
+      // 一个源一份预算，跨全部阶段共用（§3.7-B7、ADR-0049）：前一阶段花掉的时间
+      // 直接从后一阶段的余量里扣。
+      budget: SourceBudget(settings.timeout, clock: _clock),
       cancellation: cancellation,
     );
 
@@ -254,7 +256,15 @@ final class CheckBookSource {
       emptyGroup: isFromSearch
           ? searchContentInvalidGroup
           : exploreContentInvalidGroup,
-      operation: () => _content.execute(source, chapters.first.url),
+      // §6 / ADR-0049：校验也知道书名与章节名，顺手喂给 `java.get('bookName' / 'title')`。
+      operation: () => _content.execute(
+        source,
+        ChapterRequest(
+          url: chapters.first.url,
+          title: chapters.first.name,
+          bookName: info.name,
+        ),
+      ),
     );
   }
 
@@ -276,22 +286,18 @@ final class CheckBookSource {
       return null;
     }
 
-    final Duration remaining = run.remaining;
-    if (remaining <= Duration.zero) {
-      run.recordTimeout(stage, rulePath: rulePath);
-      return null;
-    }
-
-    final ParseResult<T> result;
-    try {
-      result = await operation().timeout(remaining);
-    } on TimeoutException {
-      // 只是「不再等」：底层请求仍按自己的策略超时结束（ADR-0043 §后果），所以这里不发取消。
+    if (run.budget.isExpired) {
       run.recordTimeout(stage, rulePath: rulePath);
 
       return null;
     }
 
+    // 单源预算（§3.7-B7）：只是「不再等」，底层请求仍按自己的策略超时结束
+    // （ADR-0043 §后果），所以这里不发取消。
+    final ParseResult<T> result = await run.budget.run(
+      operation,
+      rulePath: rulePath,
+    );
     switch (result) {
       case ParseFailure<T>(
         :final ParseFailureKind kind,
@@ -349,25 +355,19 @@ final class _CheckRun {
   _CheckRun({
     required this.settings,
     required this.clock,
-    required this.deadline,
+    required this.budget,
     this.cancellation,
   });
 
   final SourceCheckSettings settings;
   final Clock clock;
-  final DateTime deadline;
+  final SourceBudget budget;
   final TaskCancellation? cancellation;
   final List<SourceCheckStageOutcome> stages = <SourceCheckStageOutcome>[];
   final List<String> invalidGroups = <String>[];
 
   /// Whether the user has asked to stop; the stages are checked against it one by one.
   bool get isCancelled => cancellation?.isCancelled ?? false;
-
-  /// How much of the per-source budget is left.
-  ///
-  /// It is read from the clock at each stage instead of being computed once, so a stage that spent
-  /// its time leaves the rest of the chain with the remainder rather than with the full budget.
-  Duration get remaining => deadline.difference(clock.now());
 
   /// Records a stage that produced a usable value.
   void recordSuccess(SourceCheckStage stage) => stages.add(

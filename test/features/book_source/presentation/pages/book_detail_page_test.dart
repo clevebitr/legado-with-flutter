@@ -1,9 +1,11 @@
+import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../../support/fake_app_navigation.dart';
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/offline_corpus.dart';
 
@@ -116,12 +118,93 @@ void main() {
       );
     });
 
+    testWidgets('build_givenAReadableBook_showsTheCoverAndStartsAtChapterOne', (
+      WidgetTester tester,
+    ) async {
+      // S1/S6（roadmap §3.9）：详情页要显示封面，并给出「开始阅读」的入口 —— 以前只能点
+      // 某一个目录项才进得去阅读器。
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+      final FakeAppNavigation navigation = FakeAppNavigation();
+
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: http,
+        navigation: navigation,
+      );
+
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      expect(find.byType(CoverImage), findsOneWidget);
+      expect(find.text(l10n.bookSourceStartReading), findsOneWidget);
+
+      await tester.tap(find.text(l10n.bookSourceStartReading));
+      await tester.pump();
+
+      // 「开始阅读」= 第一章；「继续阅读」= 不带章节（由阅读器恢复进度）。
+      expect(navigation.readerCalls.single.chapterUrl, isNotNull);
+      expect(navigation.readerCalls.single.bookName, isNotEmpty);
+    });
+
+    testWidgets('build_givenTheContinueAction_resumesWithoutAChapter', (
+      WidgetTester tester,
+    ) async {
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+      final FakeAppNavigation navigation = FakeAppNavigation();
+
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: http,
+        navigation: navigation,
+      );
+
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+      await tester.tap(find.text(l10n.bookSourceContinueReading));
+      await tester.pump();
+
+      expect(navigation.readerCalls.single.chapterUrl, isNull);
+    });
+
+    testWidgets('build_givenAnIntro_collapsesAndExpandsIt', (
+      WidgetTester tester,
+    ) async {
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: http,
+      );
+
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      // 默认折三行；点一下展开，按钮文案随之变化（S6）。
+      expect(find.text(l10n.bookSourceIntroExpand), findsOneWidget);
+      await tester.tap(find.text(l10n.bookSourceIntroExpand));
+      await tester.pump();
+
+      expect(find.text(l10n.bookSourceIntroCollapse), findsOneWidget);
+    });
+
     testWidgets('build_givenAFailingChapterList_keepsTheInformationVisible', (
       WidgetTester tester,
     ) async {
       final BookSource source = loadCorpusBookSource();
       final BookSource unsupportedToc = source.copyWith(
-        tocRule: source.tocRule.copyWith(chapterList: '@js:result'),
+        tocRule: source.tocRule.copyWith(chapterList: '@xpath://a'),
       );
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 

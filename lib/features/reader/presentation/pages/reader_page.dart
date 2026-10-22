@@ -14,6 +14,7 @@ import 'package:flutter_reader/features/reader/presentation/notifiers/reader_ses
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_toc_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -65,6 +66,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   int _lastOffset = 0;
   List<ReadingChapter> _chapters = const <ReadingChapter>[];
 
+  /// Whether the chrome (app bar + tool bar) is shown (ADR-0051 §决策 1).
+  ///
+  /// It starts **hidden**: a reader that opens with a toolbar is a reader that never gets out of
+  /// the way. A tap in the middle third brings it back.
+  bool _chromeVisible = false;
+
+  /// Counts down while the chrome is shown; every interaction restarts it (4 s, §决策 1).
+  Timer? _chromeTimer;
+
+  /// The dimming overlay's opacity, 0..1 (1 = no dimming). App-level, not system brightness.
+  double _brightness = 1;
+
+  /// The session the last build saw, so the tool bar can show the chapter position.
+  ReaderSessionState? _lastSession;
+
+  /// The body of the chapter the last build showed, for the percent estimate.
+  String? _lastBody;
+
+  /// Whether the user is dragging the progress slider right now.
+  ///
+  /// While dragging, the label follows the finger but the chapter does **not** change: changing it
+  /// per frame would start a fetch per frame (§决策 1).
+  double? _scrubbing;
+
   @override
   void initState() {
     super.initState();
@@ -91,8 +116,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ),
       );
     }
+    _chromeTimer?.cancel();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Shows the chrome and restarts its auto-hide countdown (ADR-0051 §决策 1).
+  void _showChrome() {
+    _chromeTimer?.cancel();
+    setState(() => _chromeVisible = true);
+    _chromeTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() => _chromeVisible = false);
+      }
+    });
+  }
+
+  /// Hides the chrome immediately.
+  void _hideChrome() {
+    _chromeTimer?.cancel();
+    setState(() => _chromeVisible = false);
+  }
+
+  /// Runs [action] and keeps the chrome alive a little longer.
+  void _keepAlive(VoidCallback action) {
+    _chromeTimer?.cancel();
+    action();
+    if (_chromeVisible) {
+      _chromeTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) {
+          setState(() => _chromeVisible = false);
+        }
+      });
+    }
   }
 
   @override
@@ -111,48 +167,228 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     return Scaffold(
       backgroundColor: palette.background,
-      appBar: AppBar(
-        backgroundColor: palette.background,
-        foregroundColor: palette.foreground,
-        title: Text(_title(chapters, l10n)),
-        actions: <Widget>[
-          IconButton(
-            icon: const Icon(Icons.list),
-            tooltip: l10n.readerTocAction,
-            onPressed: () => _openToc(_chaptersOf(chapters)),
-          ),
-          IconButton(
-            icon: const Icon(Icons.text_fields),
-            tooltip: l10n.readerSettingsAction,
-            onPressed: () => _openSettings(settings),
-          ),
-        ],
-      ),
-      body: switch (chapters) {
-        AsyncData<ParseResult<List<ReadingChapter>>>(
-          :final ParseResult<List<ReadingChapter>> value,
-        ) =>
-          switch (value) {
-            ParseSuccess<List<ReadingChapter>>(
-              :final List<ReadingChapter> data,
-            ) =>
-              data.isEmpty
-                  ? StateMessage(message: l10n.readerNoChapter)
-                  : _sessionBody(data, settings, palette),
-            ParseFailure<List<ReadingChapter>>(:final ParseFailureKind kind) =>
-              FailureMessage(
-                kind: kind,
+      // 沉浸式（ADR-0051 §决策 1）：AppBar 与工具条默认都不在，点正文中间 ⅓ 才出现。
+      appBar: _chromeVisible
+          ? AppBar(
+              backgroundColor: palette.background,
+              foregroundColor: palette.foreground,
+              title: Text(_title(chapters, l10n)),
+              actions: <Widget>[
+                IconButton(
+                  icon: const Icon(Icons.text_fields),
+                  tooltip: l10n.readerSettingsAction,
+                  onPressed: () => _keepAlive(() => _openSettings(settings)),
+                ),
+              ],
+            )
+          : null,
+      body: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: switch (chapters) {
+              AsyncData<ParseResult<List<ReadingChapter>>>(
+                :final ParseResult<List<ReadingChapter>> value,
+              ) =>
+                switch (value) {
+                  ParseSuccess<List<ReadingChapter>>(
+                    :final List<ReadingChapter> data,
+                  ) =>
+                    data.isEmpty
+                        ? StateMessage(message: l10n.readerNoChapter)
+                        : _sessionBody(data, settings, palette),
+                  ParseFailure<List<ReadingChapter>>(
+                    :final ParseFailureKind kind,
+                  ) =>
+                    FailureMessage(
+                      kind: kind,
+                      onRetry: () =>
+                          ref.invalidate(readerChaptersProvider(widget.book)),
+                    ),
+                },
+              AsyncError<ParseResult<List<ReadingChapter>>>() => FailureMessage(
+                kind: ParseFailureKind.parseFailed,
                 onRetry: () =>
                     ref.invalidate(readerChaptersProvider(widget.book)),
               ),
-          },
-        AsyncError<ParseResult<List<ReadingChapter>>>() => FailureMessage(
-          kind: ParseFailureKind.parseFailed,
-          onRetry: () => ref.invalidate(readerChaptersProvider(widget.book)),
+              _ => const Center(child: CircularProgressIndicator()),
+            },
+          ),
+          // 亮度是**应用级遮罩**（ADR-0051 §决策 1）：不碰系统亮度，三端行为一致。
+          if (_brightness < 1)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 1 - _brightness),
+                ),
+              ),
+            ),
+        ],
+      ),
+      bottomNavigationBar: _chromeVisible
+          ? _toolBar(context, l10n, chapters, palette)
+          : null,
+    );
+  }
+
+  /// The bottom tool bar of the immersive chrome (ADR-0051 §决策 1).
+  Widget _toolBar(
+    BuildContext context,
+    AppLocalizations l10n,
+    AsyncValue<ParseResult<List<ReadingChapter>>> chapters,
+    ({Color background, Color foreground}) palette,
+  ) {
+    final M3ETheme tokens = context.m3e;
+    final List<ReadingChapter> known = _chaptersOf(chapters);
+    final int index = _currentIndex;
+    final int total = known.length;
+    final double? scrubbing = _scrubbing;
+
+    return SafeArea(
+      child: Container(
+        color: palette.background,
+        padding: EdgeInsets.symmetric(
+          horizontal: tokens.spacing.sm,
+          vertical: tokens.spacing.xs,
         ),
-        _ => const Center(child: CircularProgressIndicator()),
-      },
-      bottomNavigationBar: _navBar(chapters, palette),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (total > 0)
+              Row(
+                children: <Widget>[
+                  Text(
+                    l10n.readerChapterProgress(index + 1, total),
+                    style: tokens.typography.base.labelSmall,
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: (scrubbing ?? index.toDouble()).clamp(
+                        0,
+                        (total - 1).toDouble(),
+                      ),
+                      max: (total - 1).toDouble(),
+                      divisions: total > 1 ? total - 1 : null,
+                      label: l10n.readerChapterProgress(
+                        (scrubbing ?? index).round() + 1,
+                        total,
+                      ),
+                      // 拖动只动标签（§决策 1）：每帧换章会引发每帧一次抓取。
+                      onChanged: total > 1
+                          ? (double value) => setState(() => _scrubbing = value)
+                          : null,
+                      onChangeEnd: (double value) {
+                        setState(() => _scrubbing = null);
+                        _jumpToChapter(value.round());
+                      },
+                    ),
+                  ),
+                  Text(
+                    l10n.readerChapterPercent(_chapterPercent),
+                    style: tokens.typography.base.labelSmall,
+                  ),
+                ],
+              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: <Widget>[
+                IconButton(
+                  icon: const Icon(Icons.skip_previous),
+                  tooltip: l10n.readerPreviousChapter,
+                  onPressed: index > 0 ? () => _jumpToChapter(index - 1) : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.list),
+                  tooltip: l10n.readerTocAction,
+                  onPressed: () => _keepAlive(() => _openToc(known)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.brightness_6_outlined),
+                  tooltip: l10n.readerBrightness,
+                  onPressed: () => _keepAlive(() => _openBrightness(tokens)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.skip_next),
+                  tooltip: l10n.readerNextChapter,
+                  onPressed: index + 1 < total
+                      ? () => _jumpToChapter(index + 1)
+                      : null,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The chapter the session shows, or 0 when there is none yet.
+  int get _currentIndex {
+    final ReaderSessionState? state = _lastSession;
+    if (state == null || _chapters.isEmpty) {
+      return 0;
+    }
+
+    return state.chapterIndex.clamp(0, _chapters.length - 1);
+  }
+
+  /// The reading fraction inside the current chapter, 0–100 (the estimate of ADR-0044 §决策 4).
+  int get _chapterPercent {
+    final ReaderSessionState? state = _lastSession;
+    final String? body = _lastBody;
+    if (state == null || body == null || body.isEmpty) {
+      return 0;
+    }
+
+    return (state.charOffset / body.length * 100).clamp(0, 100).round();
+  }
+
+  /// Jumps to chapter [index] and keeps the chrome alive.
+  void _jumpToChapter(int index) {
+    if (_chapters.isEmpty) {
+      return;
+    }
+    final int target = index.clamp(0, _chapters.length - 1);
+    unawaited(
+      ref
+          .read(readerSessionProvider(widget.book).notifier)
+          .selectChapter(target),
+    );
+    _keepAlive(() {});
+  }
+
+  /// Opens the brightness slider (an app-level overlay, ADR-0051 §决策 1).
+  void _openBrightness(M3ETheme tokens) {
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (BuildContext context) => StatefulBuilder(
+          builder: (BuildContext context, StateSetter setSheetState) =>
+              SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.all(tokens.spacing.lg),
+                  child: Row(
+                    children: <Widget>[
+                      const Icon(Icons.brightness_low),
+                      Expanded(
+                        child: Slider(
+                          value: _brightness,
+                          min: 0.2,
+                          max: 1,
+                          divisions: 16,
+                          label: '${(_brightness * 100).round()}%',
+                          onChanged: (double value) {
+                            setSheetState(() {});
+                            setState(() => _brightness = value);
+                          },
+                        ),
+                      ),
+                      const Icon(Icons.brightness_high),
+                    ],
+                  ),
+                ),
+              ),
+        ),
+      ),
     );
   }
 
@@ -231,48 +467,90 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final ReadingChapter chapter = chapters[session.chapterIndex];
     _lastIndex = session.chapterIndex;
     _lastOffset = session.charOffset;
+    _lastSession = session;
     final M3ETheme tokens = context.m3e;
     final TextStyle style = readerTextStyle(
       tokens: tokens,
       fontScale: settings.fontScale * MediaQuery.textScalerOf(context).scale(1),
       lineHeight: settings.lineHeight,
       foreground: palette.foreground,
+      family: settings.fontFamily,
     );
 
     final AsyncValue<ParseResult<String>> content = ref.watch(
       readerContentProvider((widget.book, chapter.url)),
     );
 
-    return switch (content) {
-      AsyncData<ParseResult<String>>(:final ParseResult<String> value) =>
-        switch (value) {
-          ParseSuccess<String>(:final String data) =>
-            settings.pageMode == ReaderPageMode.scroll
-                ? _scrollBody(chapter, data, style, session.charOffset, palette)
-                : _pagedBody(
-                    chapter,
-                    data,
-                    style,
-                    session.charOffset,
-                    chapters.length,
-                    session.chapterIndex,
-                    palette,
-                  ),
-          ParseFailure<String>(:final ParseFailureKind kind) => FailureMessage(
-            kind: kind,
-            onRetry: () => ref.invalidate(
-              readerContentProvider((widget.book, chapter.url)),
+    // 三区点击（ADR-0051 §决策 1）：中间 ⅓ 唤出菜单，左右各 ⅓ 唤出菜单前先收起它。
+    return _tapZones(
+      child: switch (content) {
+        AsyncData<ParseResult<String>>(:final ParseResult<String> value) =>
+          switch (value) {
+            // 段距与首行缩进是**排版**（ADR-0051 §决策 4）：在渲染前套一次，正文数据不动。
+            ParseSuccess<String>(:final String data) =>
+              _remembered(data) && settings.pageMode == ReaderPageMode.scroll
+                  ? _scrollBody(
+                      chapter,
+                      readerBodyText(data, settings),
+                      style,
+                      session.charOffset,
+                      palette,
+                      _paddingOf(settings),
+                    )
+                  : _pagedBody(
+                      chapter,
+                      readerBodyText(data, settings),
+                      style,
+                      session.charOffset,
+                      chapters.length,
+                      session.chapterIndex,
+                      palette,
+                      _paddingOf(settings),
+                    ),
+            ParseFailure<String>(:final ParseFailureKind kind) =>
+              FailureMessage(
+                kind: kind,
+                onRetry: () => ref.invalidate(
+                  readerContentProvider((widget.book, chapter.url)),
+                ),
+              ),
+          },
+        AsyncError<ParseResult<String>>() => FailureMessage(
+          kind: ParseFailureKind.parseFailed,
+          onRetry: () =>
+              ref.invalidate(readerContentProvider((widget.book, chapter.url))),
+        ),
+        _ => const Center(child: CircularProgressIndicator()),
+      },
+    );
+  }
+
+  /// Wraps [child] in the three tap zones of §决策 1.
+  ///
+  /// Only the **middle** one is wired here; the left/right thirds keep the platform's own scroll
+  /// and page gestures (a tap there hides the chrome instead of fighting the gesture recognizer).
+  Widget _tapZones({required Widget child}) => LayoutBuilder(
+    builder: (BuildContext context, BoxConstraints constraints) {
+      final double width = constraints.maxWidth;
+      final double third = width / 3;
+
+      return Stack(
+        children: <Widget>[
+          Positioned.fill(child: child),
+          Positioned(
+            left: third,
+            width: third,
+            top: 0,
+            bottom: 0,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _chromeVisible ? _hideChrome : _showChrome,
             ),
           ),
-        },
-      AsyncError<ParseResult<String>>() => FailureMessage(
-        kind: ParseFailureKind.parseFailed,
-        onRetry: () =>
-            ref.invalidate(readerContentProvider((widget.book, chapter.url))),
-      ),
-      _ => const Center(child: CircularProgressIndicator()),
-    };
-  }
+        ],
+      );
+    },
+  );
 
   /// The scrolling body: one `Text`, restored once per chapter, saved when a scroll settles.
   Widget _scrollBody(
@@ -281,32 +559,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     TextStyle style,
     int initialOffset,
     ({Color background, Color foreground}) palette,
-  ) {
-    final M3ETheme tokens = context.m3e;
+    double padding,
+  ) => NotificationListener<ScrollEndNotification>(
+    onNotification: (ScrollEndNotification notification) {
+      // 滚动停下时记一次：按比例换算成字符偏移（ADR-0044 §决策 4）。
+      final double max = _scroll.hasClients
+          ? _scroll.position.maxScrollExtent
+          : 0;
+      final int offset = max <= 0
+          ? 0
+          : (_scroll.offset / max * body.length).round();
+      _rememberOffset(offset);
+      unawaited(
+        ref.read(readerSessionProvider(widget.book).notifier).saveProgress(),
+      );
 
-    return NotificationListener<ScrollEndNotification>(
-      onNotification: (ScrollEndNotification notification) {
-        // 滚动停下时记一次：按比例换算成字符偏移（ADR-0044 §决策 4）。
-        final double max = _scroll.hasClients
-            ? _scroll.position.maxScrollExtent
-            : 0;
-        final int offset = max <= 0
-            ? 0
-            : (_scroll.offset / max * body.length).round();
-        _rememberOffset(offset);
-        unawaited(
-          ref.read(readerSessionProvider(widget.book).notifier).saveProgress(),
-        );
-
-        return false;
-      },
-      child: SingleChildScrollView(
-        controller: _scroll,
-        padding: EdgeInsets.all(tokens.spacing.lg),
-        child: _restoredScrollText(chapter, body, style, initialOffset),
-      ),
-    );
-  }
+      return false;
+    },
+    child: SingleChildScrollView(
+      controller: _scroll,
+      padding: EdgeInsets.all(padding),
+      child: _restoredScrollText(chapter, body, style, initialOffset),
+    ),
+  );
 
   /// The body text, jumped to [initialOffset] the first time this chapter is shown.
   Widget _restoredScrollText(
@@ -341,11 +616,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     int chapterCount,
     int chapterIndex,
     ({Color background, Color foreground}) palette,
+    double padding,
   ) {
-    final M3ETheme tokens = context.m3e;
-
     return Padding(
-      padding: EdgeInsets.all(tokens.spacing.lg),
+      padding: EdgeInsets.all(padding),
       child: _PagedBody(
         key: ValueKey<String>(
           '${chapter.url}|${style.fontSize}|${style.height}',
@@ -369,58 +643,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.read(readerSessionProvider(widget.book).notifier).updateOffset(offset);
   }
 
-  /// The previous / next chapter bar with the position in the middle.
-  Widget _navBar(
-    AsyncValue<ParseResult<List<ReadingChapter>>> chapters,
-    ({Color background, Color foreground}) palette,
-  ) {
-    final List<ReadingChapter> known = _chaptersOf(chapters);
-    final AsyncValue<ReaderSessionState> session = ref.watch(
-      readerSessionProvider(widget.book),
-    );
-    final int index = session.value?.chapterIndex ?? 0;
-    final AppLocalizations l10n = AppLocalizations.of(context);
-
-    return SafeArea(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: <Widget>[
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            tooltip: l10n.readerPreviousChapter,
-            color: palette.foreground,
-            onPressed: index <= 0
-                ? null
-                : () => unawaited(
-                    ref
-                        .read(readerSessionProvider(widget.book).notifier)
-                        .previousChapter(),
-                  ),
-          ),
-          Text(
-            known.isEmpty ? '' : '${index + 1} / ${known.length}',
-            style: context.m3e.typography.base.labelLarge?.copyWith(
-              color: palette.foreground,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            tooltip: l10n.readerNextChapter,
-            color: palette.foreground,
-            onPressed: known.isEmpty || index >= known.length - 1
-                ? null
-                : () => unawaited(
-                    ref
-                        .read(readerSessionProvider(widget.book).notifier)
-                        .nextChapter(),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// The chapter list of the current provider state, empty while it loads or fails.
+  /// The chapters of [chapters], or none while they load.
   List<ReadingChapter> _chaptersOf(
     AsyncValue<ParseResult<List<ReadingChapter>>> chapters,
   ) => switch (chapters.value) {
@@ -435,8 +658,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     AppLocalizations l10n,
   ) {
     final List<ReadingChapter> known = _chaptersOf(chapters);
-    final int index =
-        ref.watch(readerSessionProvider(widget.book)).value?.chapterIndex ?? 0;
+    final int index = _currentIndex;
     if (index < known.length && known[index].title.isNotEmpty) {
       return known[index].title;
     }
@@ -446,31 +668,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         : widget.book.name;
   }
 
-  /// Opens the chapter list and jumps to the chosen chapter.
+  /// Remembers the loaded body for the percent label and answers `true` (so it reads as a
+  /// condition in the layout switch).
+  bool _remembered(String body) {
+    _lastBody = body;
+
+    return true;
+  }
+
+  /// The padding the body uses, from the page-margin preset (ADR-0051 §决策 4).
+  double _paddingOf(ReaderSettings settings) =>
+      readerPagePaddingOf(settings.pagePadding);
+
+  /// Opens the chapter list and jumps to the chosen chapter (ADR-0051 §决策 2).
   void _openToc(List<ReadingChapter> chapters) {
     if (chapters.isEmpty) {
       return;
     }
-    final int current =
-        ref.read(readerSessionProvider(widget.book)).value?.chapterIndex ?? 0;
     unawaited(
       showModalBottomSheet<void>(
         context: context,
-        builder: (BuildContext context) => SafeArea(
-          child: ListView.builder(
-            itemCount: chapters.length,
-            itemBuilder: (BuildContext context, int index) => ListTile(
-              selected: index == current,
-              title: Text(chapters[index].title),
-              onTap: () {
-                unawaited(
-                  ref
-                      .read(readerSessionProvider(widget.book).notifier)
-                      .selectChapter(index),
-                );
-                Navigator.of(context).pop();
-              },
-            ),
+        isScrollControlled: true,
+        builder: (BuildContext context) => SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.7,
+          child: ReaderTocSheet(
+            chapters: chapters,
+            currentIndex: _currentIndex,
+            onSelected: (int index) {
+              Navigator.of(context).pop();
+              _jumpToChapter(index);
+            },
           ),
         ),
       ),

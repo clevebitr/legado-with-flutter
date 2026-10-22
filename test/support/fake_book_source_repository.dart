@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
@@ -56,6 +58,7 @@ final class FakeBookSourceRepository implements BookSourceRepository {
       comment: comment,
     );
     _rows[stored.id] = stored;
+    _identities[_identityOf(source)] = stored.id;
 
     return stored;
   }
@@ -228,4 +231,88 @@ final class FakeBookSourceRepository implements BookSourceRepository {
     _rows.remove(id);
     _identities.removeWhere((String _, int rowId) => rowId == id);
   }
+
+  @override
+  Future<String?> payloadOf(int id) async {
+    final StoredBookSource? row = _rows[id];
+
+    return row == null ? null : jsonEncode(row.source.toJson());
+  }
+
+  @override
+  Future<void> setEnabledFor(List<int> ids, {required bool isEnabled}) async {
+    for (final int id in ids) {
+      await setEnabled(id: id, isEnabled: isEnabled);
+    }
+  }
+
+  @override
+  Future<void> deleteMany(List<int> ids) async {
+    for (final int id in ids) {
+      await delete(id);
+    }
+  }
+
+  @override
+  Future<void> setGroupFor(List<int> ids, String? group) async {
+    for (final int id in ids) {
+      final StoredBookSource? row = _rows[id];
+      if (row == null) {
+        continue;
+      }
+      // 分组是 payload 里的字段（ADR-0050 §决策 1）：替身改的是模型上的 `group`，
+      // 身份（指纹）不动 —— 与真实适配器一致。
+      _rows[id] = StoredBookSource(
+        id: row.id,
+        source: row.source.copyWith(group: group),
+        isEnabled: row.isEnabled,
+        customOrder: row.customOrder,
+        importedAt: row.importedAt,
+        groupName: row.groupName,
+        lastUpdateTime: row.lastUpdateTime,
+        respondTime: row.respondTime,
+        weight: row.weight,
+        comment: row.comment,
+      );
+    }
+  }
+
+  @override
+  Future<BookSourceEditOutcome> update({
+    required int id,
+    required Map<String, Object?> entry,
+  }) async {
+    final StoredBookSource? row = _rows[id];
+    if (row == null) {
+      return BookSourceEditOutcome.sourceMissing;
+    }
+    final BookSource edited = BookSource.fromLegadoJson(entry);
+    final String identity = _identityOf(edited);
+    final int? owner = _identities[identity];
+    if (owner != null && owner != id) {
+      return BookSourceEditOutcome.identityConflict;
+    }
+
+    _identities.remove(_identityOf(row.source));
+    _identities[identity] = id;
+    _rows[id] = StoredBookSource(
+      id: row.id,
+      // 用户态以列为准（与真实适配器同一条口径）。
+      source: edited.copyWith(isEnabled: row.isEnabled),
+      isEnabled: row.isEnabled,
+      customOrder: row.customOrder,
+      importedAt: row.importedAt,
+      groupName: row.groupName,
+      lastUpdateTime: row.lastUpdateTime,
+      respondTime: row.respondTime,
+      weight: row.weight,
+      comment: row.comment,
+    );
+
+    return BookSourceEditOutcome.saved;
+  }
+
+  /// The in-memory stand-in for the `(url, fingerprint)` unique key (ADR-0040 §决策 1).
+  String _identityOf(BookSource source) =>
+      '${source.url}|${bookSourceFingerprint(source.toJson())}';
 }

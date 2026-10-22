@@ -10,12 +10,14 @@ import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_check_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_debug_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/book_source_edit_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_list_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
@@ -109,6 +111,9 @@ class ReaderApp extends ConsumerWidget {
     BookSourceImportRoute() => const BookSourceImportPage(),
     BookSourceCheckRoute() => const BookSourceCheckPage(),
     final BookSourceDebugRoute route => BookSourceDebugPage(
+      sourceId: route.sourceId,
+    ),
+    final BookSourceEditRoute route => BookSourceEditPage(
       sourceId: route.sourceId,
     ),
     ShelfRoute() => const BookshelfPage(),
@@ -252,6 +257,7 @@ final class _ChapterListSource implements ChapterListProvider {
   Future<ParseResult<List<ReadingChapter>>> fetch({
     required String sourceUrl,
     required String tocUrl,
+    String bookName = '',
   }) async {
     final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
     if (source == null) {
@@ -263,7 +269,7 @@ final class _ChapterListSource implements ChapterListProvider {
 
     final ParseResult<List<Chapter>> result = await _ref
         .read(fetchTocProvider)
-        .execute(source, tocUrl);
+        .execute(source, tocUrl, bookName: bookName);
 
     return switch (result) {
       ParseSuccess<List<Chapter>>(:final List<Chapter> data) =>
@@ -293,6 +299,8 @@ final class _ChapterContentSource implements ChapterContentProvider {
   Future<ParseResult<String>> fetch({
     required String sourceUrl,
     required String chapterUrl,
+    String bookName = '',
+    String chapterTitle = '',
   }) async {
     final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
     if (source == null) {
@@ -302,7 +310,16 @@ final class _ChapterContentSource implements ChapterContentProvider {
       );
     }
 
-    return _ref.read(fetchContentProvider).execute(source, chapterUrl);
+    return _ref
+        .read(fetchContentProvider)
+        .execute(
+          source,
+          ChapterRequest(
+            url: chapterUrl,
+            title: chapterTitle,
+            bookName: bookName,
+          ),
+        );
   }
 }
 

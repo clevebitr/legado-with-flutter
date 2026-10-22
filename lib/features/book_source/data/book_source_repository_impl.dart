@@ -134,6 +134,113 @@ final class BookSourceRepositoryImpl implements BookSourceRepository {
     await _dao.deleteById(id);
   }
 
+  @override
+  Future<String?> payloadOf(int id) async {
+    final BookSourceRow? row = await _dao.findById(id);
+
+    return row?.payload;
+  }
+
+  @override
+  Future<void> setEnabledFor(List<int> ids, {required bool isEnabled}) =>
+      _dao.setEnabledFor(ids, isEnabled: isEnabled);
+
+  @override
+  Future<void> deleteMany(List<int> ids) async {
+    await _dao.deleteByIds(ids);
+  }
+
+  @override
+  Future<void> setGroupFor(List<int> ids, String? group) async {
+    for (final int id in ids) {
+      final BookSourceRow? row = await _dao.findById(id);
+      if (row == null) {
+        continue;
+      }
+      final Map<String, Object?>? payload = _payloadOf(row);
+      if (payload == null) {
+        continue;
+      }
+      // 只动 `bookSourceGroup`：其余键（包括未建模的 extra）逐字保留，导出仍然保真。
+      final Map<String, Object?> next = Map<String, Object?>.of(payload);
+      if (group == null || group.isEmpty) {
+        next.remove('bookSourceGroup');
+      } else {
+        next['bookSourceGroup'] = group;
+      }
+      await _dao.updatePayload(
+        id: id,
+        url: row.url,
+        fingerprint: row.fingerprint,
+        payload: jsonEncode(next),
+        name: row.name,
+        sourceType: row.sourceType,
+        weight: row.weight,
+        lastUpdateTime: row.lastUpdateTime,
+      );
+    }
+  }
+
+  @override
+  Future<BookSourceEditOutcome> update({
+    required int id,
+    required Map<String, Object?> entry,
+  }) async {
+    final BookSourceRow? row = await _dao.findById(id);
+    if (row == null) {
+      return BookSourceEditOutcome.sourceMissing;
+    }
+
+    final String url = _text(entry['bookSourceUrl']);
+    final String fingerprint = bookSourceFingerprint(entry);
+    final BookSourceRow? colliding = await _dao.findIdentity(
+      url: url,
+      fingerprint: fingerprint,
+    );
+    if (colliding != null && colliding.id != id) {
+      // 身份冲突是显式失败：合并会删掉用户可能正在用的那一行，共存会撞唯一索引
+      // （ADR-0050 §决策 3）。名字写进日志供排查，界面自己再提示一次。
+      _logger.warning(
+        'Book source edit would duplicate an existing row: edited=$id '
+        'existing=${colliding.id} url=$url',
+      );
+
+      return BookSourceEditOutcome.identityConflict;
+    }
+
+    await _dao.updatePayload(
+      id: id,
+      url: url,
+      fingerprint: fingerprint,
+      payload: jsonEncode(entry),
+      name: _text(entry['bookSourceName']),
+      sourceType: _number(entry['bookSourceType']),
+      weight: _number(entry['weight']),
+      lastUpdateTime: _numberOrNull(entry['lastUpdateTime']),
+    );
+
+    return BookSourceEditOutcome.saved;
+  }
+
+  /// The stored payload of [row] as a map, or `null` plus a warning when it no longer parses.
+  Map<String, Object?>? _payloadOf(BookSourceRow row) {
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(row.payload);
+    } on FormatException {
+      _skip(row, 'the stored payload is not JSON');
+
+      return null;
+    }
+    if (decoded is! Map<String, Object?>) {
+      _skip(row, 'the stored payload is not a JSON object');
+
+      return null;
+    }
+
+    return decoded;
+  }
+
   /// Turns one row into a [StoredBookSource], or `null` plus a warning when its payload is broken.
   ///
   /// A row whose payload no longer parses is a **data defect** (the importer only stores what it
@@ -141,15 +248,11 @@ final class BookSourceRepositoryImpl implements BookSourceRepository {
   /// warning names the row and its URL, never the payload (C-SEC-4, C-ERR-8). Only nameable
   /// exceptions are caught: storage failures keep travelling (C-ERR-2, ADR-0033 §决策 1).
   StoredBookSource? _toStored(BookSourceRow row) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(row.payload);
-    } on FormatException {
-      return _skip(row, 'the stored payload is not JSON');
+    final Map<String, Object?>? decodedPayload = _payloadOf(row);
+    if (decodedPayload == null) {
+      return null;
     }
-    if (decoded is! Map<String, Object?>) {
-      return _skip(row, 'the stored payload is not a JSON object');
-    }
+    final Map<String, Object?> decoded = decodedPayload;
 
     final BookSource source;
     try {

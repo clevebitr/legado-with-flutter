@@ -3,6 +3,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_list_view.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -15,16 +16,21 @@ StoredBookSource _seed(
   FakeBookSourceRepository repository,
   String name, {
   String? group,
+  String? checkGroup,
+  String? comment,
   int weight = 0,
 }) => repository.add(
   source: BookSource.fromLegadoJson(<String, Object?>{
     'bookSourceName': name,
     'bookSourceUrl': 'https://$name.test',
+    // 用户分组在 payload 里（ADR-0050 §决策 1）；`checkGroup` 才是校验列。
+    'bookSourceGroup': ?group,
     'ruleSearch': <String, Object?>{'bookList': 'class.item'},
     'ruleToc': <String, Object?>{'chapterList': 'class.c'},
     'ruleContent': <String, Object?>{'content': 'class.body'},
   }),
-  groupName: group,
+  groupName: checkGroup,
+  comment: comment,
   weight: weight,
 );
 
@@ -147,6 +153,36 @@ void main() {
         <String>['a'],
       );
       expect(data.view.group, '精选');
+    });
+
+    test('build_givenACheckGroup_doesNotChangeTheGroupAxis', () async {
+      // ADR-0050 §决策 1 的回归点：校验写回的「搜索失效」以前会顶掉用户分组，
+      // 现在它只属于校验状态轴。
+      _seed(repository, 'a', group: '精选', checkGroup: searchInvalidGroup);
+
+      final BookSourceListData data = await container().read(
+        bookSourceListDataProvider.future,
+      );
+
+      expect(data.groups, <String>['精选']);
+    });
+
+    test('checkFilter_givenAFailureGroup_hidesTheSourceFromHealthy', () async {
+      _seed(repository, 'bad', checkGroup: searchInvalidGroup);
+      _seed(repository, 'good');
+      final ProviderContainer scope = container();
+      scope
+          .read(bookSourceCheckFilterSelectionProvider.notifier)
+          .select(BookSourceCheckFilter.healthy);
+
+      final BookSourceListData data = await scope.read(
+        bookSourceListDataProvider.future,
+      );
+
+      expect(
+        data.rows.map((StoredBookSource source) => source.source.name),
+        <String>['good'],
+      );
     });
 
     test('build_givenAStoredGroupThatIsGone_dropsTheFilter', () async {

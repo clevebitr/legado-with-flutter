@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_search_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
@@ -180,7 +181,7 @@ void main() {
       final BookSource source = loadCorpusBookSource();
       final BookSource unsupported = source.copyWith(
         // 顶层规则被拒才是整次失败（ADR-0026 §决策 1）；非顶层字段会降级。
-        searchRule: source.searchRule.copyWith(bookList: '@js:result'),
+        searchRule: source.searchRule.copyWith(bookList: '@xpath://div'),
       );
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 
@@ -262,6 +263,23 @@ void main() {
       expect(find.text(l10n.bookSourceSearchEmpty), findsOneWidget);
     });
 
+    testWidgets('search_givenAHitWithACover_showsIt', (
+      WidgetTester tester,
+    ) async {
+      // S1：命中带 `coverUrl` 时列表要显示封面（以前根本没有图片控件）。
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+
+      await pumpSearchPage(
+        tester,
+        repository: FakeBookSourceRepository()
+          ..add(source: loadCorpusBookSource()),
+        http: http,
+      );
+      await _search(tester, corpusKeyword);
+
+      expect(find.byType(CoverImage), findsWidgets);
+    });
+
     testWidgets('search_givenASourceThatFails_stillShowsTheOtherHits', (
       WidgetTester tester,
     ) async {
@@ -286,6 +304,35 @@ void main() {
       final AppLocalizations l10n = _l10n(tester);
 
       expect(find.text('书名一'), findsOneWidget);
+      expect(find.textContaining(l10n.searchPartialFailed(1)), findsWidgets);
+    });
+
+    testWidgets('search_givenASourceThatThrows_stillShowsTheOtherHits', (
+      WidgetTester tester,
+    ) async {
+      // 一个源把异常抛出请求层时，结果区不能被失败页盖掉：已经拿到的命中是用户的
+      // 真实所得，只剩“有几个源失败”这一行提示（ADR-0046 §决策 5）。
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient())
+        ..throwOn(
+          'https://broken.test/s?q=%E5%89%91%E6%9D%A5&p=1',
+          const FormatException('broken source'),
+        );
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(source: loadCorpusBookSource())
+        ..add(
+          source: loadCorpusBookSource().copyWith(
+            name: '坏源',
+            url: 'https://broken.test',
+            searchUrl: 'https://broken.test/s?q={{key}}&p={{page}}',
+          ),
+        );
+
+      await pumpSearchPage(tester, repository: repository, http: http);
+      await _search(tester, corpusKeyword);
+      final AppLocalizations l10n = _l10n(tester);
+
+      expect(find.text('书名一'), findsOneWidget);
+      expect(find.text(l10n.failureParseFailed), findsNothing);
       expect(find.textContaining(l10n.searchPartialFailed(1)), findsWidgets);
     });
 

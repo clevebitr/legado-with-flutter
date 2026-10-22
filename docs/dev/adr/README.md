@@ -68,3 +68,8 @@
 | [0044](0044-reader-session-and-progress.md) | 阅读器会话：自有字号/行距/背景（与全局 textScale 叠乘）、进度端口读写、`books.tocUrl` 列（v5）、两种翻页模式与偏移估算、`canReName` 在加入书架时消费 | Accepted（2026-10-21，M4 规格前置，用户裁决四项） | 本次新增 |
 | [0045](0045-book-source-list-order-and-display.md) | 书源列表以投影列为准、四排序键 + 固定 tie-breaker、拖拽只写归一化 `customOrder`、排序与分组筛选持久化、行内展示与格式 | Accepted（2026-10-21，M6 规格前置，用户裁决四项） | 本次新增 |
 | [0046](0046-aggregate-search-scope-match-and-merge.md) | 聚合搜索：范围三态与回落、类型默认文本、匹配模式=分桶排序（equal/tags/contains/other）、`(name,author)` 去重 + origins、并发/60 s 单源超时/失败语义、暂停取消、分页与 `hasMore`、1000 条上限 | Accepted（2026-10-21，M11 规格前置，范围由 #6 裁决） | 本次新增 |
+| [0047](0047-engine-rule-surface-and-failure-isolation.md) | 引擎兼容面（M12）：URL 后缀 `url,{…}`（含 charset/body/headers）、`<js>` 分段链（#31）、列表 JS、JSON 条目 `result` 绑定、`header` 规则前置求值、`$.[…]` 归一化、三处失败隔离 | Accepted（2026-10-21，M12 规格前置 + 落地；真实语料 128 条度量） | 本次新增 |
+| [0048](0048-mpl-2-0-policy-and-big5-decoding.md) | 许可政策：MPL-2.0 进入允许族但**只按白名单**放行（`enough_convert` 提供 Big5 解码）；只补解码不补检测，HKSCS 部分支持 | Accepted（2026-10-21，M12 规格前置；用户裁决改 C-DEP-7） | 本次新增 |
+| [0049](0049-source-context-and-budget.md) | 规则上下文与单源预算：`ChapterRequest` 替代裸 URL、`java.get('bookName'/'title')` 先于变量表、`SourceBudget` 成为「一个源一份预算」的唯一实现 | Accepted（2026-10-21，M12 规格前置；用户裁决两项） | 本次新增 |
+| [0050](0050-book-source-write-paths.md) | 书源管理的写路径：用户分组（payload）与校验分组（列）分轴、批量操作单事务且只写用户态、编辑按 id 更新同一行（身份冲突显式失败）、单条导出 = payload 原文 | Accepted（2026-10-22，M13 规格前置；范围由 #11 裁决） | 本次新增 |
+| [0051](0051-reader-experience.md) | 阅读体验（M14）：三区点击 + 可隐藏工具条（进度/亮度）、目录居中/正倒序/搜索、换源（候选→重取目录→按名对齐→`migrateIdentity`）、排版四轴（字体族用平台通用名、不打包字体） | Accepted（2026-10-22，M14 规格前置；范围由 #11 裁决） | 本次新增 |

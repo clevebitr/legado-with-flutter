@@ -95,17 +95,23 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；
 **GPL-2.0-only、无许可证、专有许可一律禁止引入**（GPL-2.0-only 与 GPL-3.0 不兼容）。
 
+**MPL-2.0：只按白名单放行（2026-10-21，ADR-0048）。** MPL-2.0 与 GPL-3.0 兼容（FSF 认定；
+MPL-2.0 §3.3 的 Secondary License 允许并入 GPL 作品），但它仍是**文件级 copyleft**，所以政策不是
+「MPL 等同 MIT」而是「每一个 MPL 依赖都要一次 ADR + 一个 `tool/scan_licenses.dart` 白名单条目」。
+当前白名单只有一个：`enough_convert`（纯 Dart、零依赖，提供 `charset` 缺失的 Big5 码表）。
+
 **核实结果（2026-10-11，新增 `integration_test` 后重扫）：** 对 `pubspec.lock` 中全部 **156 个包**
 逐个读取其 `LICENSE` / `COPYING` 文件并分类，结果：
 
 | 许可证 | 数量 |
 |---|---|
-| BSD-3-Clause | 95 |
+| BSD-3-Clause | 104 |
 | MIT | 37 |
 | Apache-2.0 | 10 |
 | BSD-2-Clause | 6 |
+| **MPL-2.0（白名单：`enough_convert`，ADR-0048）** | **1** |
 | Flutter SDK 自带（`source: sdk`，未在 pub cache 中） | 8 |
-| **GPL / LGPL / AGPL / MPL / 无许可证 / 未识别** | **0** |
+| **GPL / LGPL / AGPL / 无许可证 / 未识别** | **0** |
 
 > **2026-10-11 增量（搭建设备级测试环境）：** 为支持 Windows / Android 的
 > `integration_test`，`dev_dependencies` 新增 SDK 包 `integration_test`（BSD-3-Clause，
@@ -123,6 +129,12 @@ Legado 上游项目采用 GPL-3.0 许可。本项目采用同一许可，双方�
 > （后四个均 BSD-3-Clause）。因此基线由 **156 包 / BSD-3 95 / MIT 37 / Apache 10 / BSD-2 6 / SDK 8**
 > 变为 **165 包 / BSD-3 104 / MIT 37 / Apache 10 / BSD-2 6 / SDK 8**（`dart run tool/scan_licenses.dart`
 > 复算，Risky items: none）。风险判定不变：**GPL / LGPL / AGPL / MPL / 无许可证 / 未识别 = 0**。
+
+> **2026-10-21 增量（Big5 解码，M12）：** `dependencies` 新增 `enough_convert ^1.7.1`
+> （**MPL-2.0**，纯 Dart、零传递依赖，`sdk: >=3.11.0`），它的 `Big5Codec` 补上 `charset` 缺失的
+> Big5 码表（ADR-0048）。基线由 **165 包 / BSD-3 104 / MIT 37 / Apache 10 / BSD-2 6 / SDK 8**
+> 变为 **166 包 + MPL 1**。这是本项目**第一个也是唯一一个** MPL 依赖，靠
+> `tool/scan_licenses.dart` 的 `_mplAllowList` 守住：MPL 计数一旦大于白名单条目数，扫描退出码非 0。
 
 > **本次修正了什么：** 旧结果（BSD-2 = 98 / BSD-3 = 1）是因为 §6 的分类特征串写成了
 > `3. Neither the name`。Dart 官方包把 BSD 第三条写成**项目符号** `* Neither the name`，
@@ -197,10 +209,12 @@ dart run tool/scan_licenses.dart --list     # 额外逐包打印分类，便于�
 4. **计数校验：** 各许可证数量之和必须等于 `pubspec.lock` 的包数（当前 95 + 37 + 10 + 6 = 148，
    加 8 个 Flutter SDK 自带包 = 156）。重扫后与 §5 的基线**逐项 diff**：有差异时先判断是
    “新增/升级依赖”还是“分类规则变了”，后者必须先修规则再回写基线。
-5. 出现 GPL 系 / MPL / 无许可证文件 / 无法识别任一情况时，**先开 ADR 再决定**是否引入。
+5. 出现 GPL 系 / 无许可证文件 / 无法识别任一情况时，**先开 ADR 再决定**是否引入；
+   MPL 系先查 `tool/scan_licenses.dart` 的 `_mplAllowList`：不在名单里就是风险项（退出码非 0），
+   加入名单必须同时写 ADR（首例 ADR-0048）并更新本节基线。
 
 **触发时机：** 新增依赖、升级依赖、以及**每次发布前**（发布时还需覆盖二进制产物）。
 
 ---
 
-**最后更新：** 2026-10-11
+**最后更新：** 2026-10-21

@@ -10,9 +10,14 @@ import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.d
 /// shelf row may name a source that is not the currently selected one.
 abstract interface class ChapterListProvider {
   /// Reads the chapters of [sourceUrl] that live at [tocUrl].
+  ///
+  /// [bookName] is context, not a rule: it answers `java.get('bookName')` for the source's
+  /// `@js:` rules (`docs/dev/book-source.md` §6, ADR-0049). It is empty when the caller does not
+  /// know it, and the read then falls through to the source's variables.
   Future<ParseResult<List<ReadingChapter>>> fetch({
     required String sourceUrl,
     required String tocUrl,
+    String bookName = '',
   });
 }
 
@@ -22,9 +27,15 @@ abstract interface class ChapterListProvider {
 /// cache of 5.2 (a second visit costs no request).
 abstract interface class ChapterContentProvider {
   /// Reads the body at [chapterUrl] of [sourceUrl].
+  ///
+  /// [bookName] / [chapterTitle] answer `java.get('bookName')` / `java.get('title')` for the
+  /// source's rules (§6, ADR-0049). Both are optional context: an empty value leaves the read to
+  /// the source's variables.
   Future<ParseResult<String>> fetch({
     required String sourceUrl,
     required String chapterUrl,
+    String bookName = '',
+    String chapterTitle = '',
   });
 }
 
@@ -43,6 +54,7 @@ final class UnboundChapterListProvider implements ChapterListProvider {
   Future<ParseResult<List<ReadingChapter>>> fetch({
     required String sourceUrl,
     required String tocUrl,
+    String bookName = '',
   }) async {
     _logger.warning(
       'No ChapterListProvider is bound: the reader cannot read a table of contents.',
@@ -66,6 +78,8 @@ final class UnboundChapterContentProvider implements ChapterContentProvider {
   Future<ParseResult<String>> fetch({
     required String sourceUrl,
     required String chapterUrl,
+    String bookName = '',
+    String chapterTitle = '',
   }) async {
     _logger.warning(
       'No ChapterContentProvider is bound: the reader cannot read a chapter body.',

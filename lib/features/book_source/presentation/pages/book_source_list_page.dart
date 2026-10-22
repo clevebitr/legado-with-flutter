@@ -1,67 +1,115 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
+import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check_settings.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
 
-/// Lists the imported book sources, with the sort, the group filter and the check's own verdicts
-/// (`docs/dev/roadmap.md` 5.5, ADR-0045).
+/// Lists the imported book sources, with the sort, the two filter axes and the row actions
+/// (`docs/dev/roadmap.md` 5.5 / §3.9, ADR-0045, ADR-0050).
 ///
-/// Three things are worth knowing before reading the code:
+/// Five things are worth knowing before reading the code:
 ///
-/// * the rows come from [bookSourceListDataProvider], which applies the sort in SQL and the group
-///   filter in memory, and which drops a stored filter whose group is gone (ADR-0045 §决策 4);
-/// * **dragging is only available in the manual order**: in any other order the list is a plain
-///   `ListView`, because a drag there would jump back the moment it was dropped
-///   (ADR-0045 §决策 3);
-/// * every row shows the **column** projections (`groupName`, `respondTime`, `comment`), not the
-///   payload's copies — those are what the batch check of 5.10 writes (ADR-0045 §决策 1).
+/// * the rows come from [bookSourceListDataProvider], which applies the sort in SQL and both
+///   filters in memory, and which drops a stored filter whose group is gone (ADR-0045 §决策 4);
+/// * the two filters are **independent axes** (ADR-0050 §决策 1): the **group** chips read the
+///   user's `bookSourceGroup` from the payload, the **check-status** chips read the check's own
+///   columns. Mixing them is what used to make a checked source look regrouped;
+/// * the search field filters the visible rows by name / URL / group without touching the store —
+///   it is “what am I looking at”, not a persisted choice;
+/// * **dragging is only available in the manual order and outside selection mode**: in any other
+///   order a drag would jump back the moment it was dropped (ADR-0045 §决策 3), and dragging a
+///   multi-selection would have two meanings;
+/// * long-pressing a row starts **selection mode** (ADR-0050 §决策 2): batch enable / disable /
+///   delete / regroup, one write each.
 ///
-/// Accessibility (C-UI-7): the sort menu and every row action carry tooltips, the group filter is a
-/// row of `FilterChip`s with their own labels, and the drag handle is provided by
-/// `ReorderableListView` whose items are labelled by their text.
-class BookSourceListPage extends ConsumerWidget {
+/// Accessibility (C-UI-7): the sort menu, the batch bar and every row action carry tooltips or
+/// labels, the filter rows are labelled `FilterChip`s, and selection mode uses `Checkbox`es whose
+/// state is read from the same set the batch actions use.
+class BookSourceListPage extends ConsumerStatefulWidget {
   /// Creates the page.
   const BookSourceListPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BookSourceListPage> createState() => _BookSourceListPageState();
+}
+
+class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
+  /// The rows the user ticked; empty means “not in selection mode”.
+  final Set<int> _selected = <int>{};
+
+  /// The search field's controller; its text filters the visible rows.
+  final TextEditingController _search = TextEditingController();
+
+  bool get _isSelecting => _selected.isNotEmpty;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final M3ETheme tokens = context.m3e;
     final AsyncValue<BookSourceListData> data = ref.watch(
       bookSourceListDataProvider,
     );
+    final BookSourceListData? loaded = data.value;
+    final String query = _search.text.trim().toLowerCase();
+    final List<StoredBookSource> rows = loaded == null
+        ? const <StoredBookSource>[]
+        : _matching(loaded.rows, query);
+    // 选中的行可能被筛掉（搜索 / 筛选变化）：批量动作只作用于仍然看得见的行。
+    final Set<int> selected = <int>{
+      for (final StoredBookSource source in rows)
+        if (_selected.contains(source.id)) source.id,
+    };
+    if (selected.length != _selected.length) {
+      _selected
+        ..clear()
+        ..addAll(selected);
+    }
 
     return Scaffold(
       backgroundColor: tokens.colors.surface,
-      appBar: AppBar(
-        title: Text(l10n.bookSourceListTitle),
-        backgroundColor: tokens.colors.surface,
-        actions: <Widget>[
-          _sortMenu(context, ref, l10n, data.value),
-          IconButton(
-            icon: const Icon(Icons.fact_check_outlined),
-            tooltip: l10n.bookSourceCheckTitle,
-            onPressed: () => pushBookSourceRoute(
-              context,
-              const BookSourceRoute.checkSources(),
+      appBar: _isSelecting
+          ? _selectionAppBar(l10n, selected, rows)
+          : AppBar(
+              title: Text(l10n.bookSourceListTitle),
+              backgroundColor: tokens.colors.surface,
+              actions: <Widget>[
+                _sortMenu(context, ref, l10n, loaded),
+                IconButton(
+                  icon: const Icon(Icons.fact_check_outlined),
+                  tooltip: l10n.bookSourceCheckTitle,
+                  onPressed: () => pushBookSourceRoute(
+                    context,
+                    const BookSourceRoute.checkSources(),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: l10n.actionImport,
+                  onPressed: () => pushBookSourceRoute(
+                    context,
+                    const BookSourceRoute.importSources(),
+                  ),
+                ),
+              ],
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: l10n.actionImport,
-            onPressed: () => pushBookSourceRoute(
-              context,
-              const BookSourceRoute.importSources(),
-            ),
-          ),
-        ],
-      ),
       body: switch (data) {
         AsyncLoading<BookSourceListData>() => const Center(
           child: CircularProgressIndicator(),
@@ -72,9 +120,134 @@ class BookSourceListPage extends ConsumerWidget {
         AsyncData<BookSourceListData>(:final BookSourceListData value) =>
           value.rows.isEmpty && value.groups.isEmpty
               ? _empty(context, l10n)
-              : _body(context, ref, l10n, value),
+              : _body(context, ref, l10n, value, rows),
       },
+      bottomNavigationBar: _isSelecting
+          ? _batchBar(context, ref, l10n, selected)
+          : null,
     );
+  }
+
+  /// The app bar while rows are ticked: count, select all / invert, and a way out.
+  AppBar _selectionAppBar(
+    AppLocalizations l10n,
+    Set<int> selected,
+    List<StoredBookSource> rows,
+  ) {
+    final M3ETheme tokens = context.m3e;
+
+    return AppBar(
+      backgroundColor: tokens.colors.surface,
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        tooltip: l10n.actionCancel,
+        onPressed: () => setState(_selected.clear),
+      ),
+      title: Text(l10n.bookSourceListSelectedCount(selected.length)),
+      actions: <Widget>[
+        IconButton(
+          icon: const Icon(Icons.select_all),
+          tooltip: l10n.bookSourceListSelectAll,
+          onPressed: () => setState(() {
+            _selected
+              ..clear()
+              ..addAll(rows.map((StoredBookSource source) => source.id));
+          }),
+        ),
+        IconButton(
+          icon: const Icon(Icons.flip_to_back),
+          tooltip: l10n.bookSourceListInvertSelection,
+          onPressed: () => setState(() {
+            final Set<int> all = <int>{
+              for (final StoredBookSource source in rows) source.id,
+            };
+            // 先算差集再清空：写在级联里会拿清空后的集合去求差，结果变成“全选”。
+            final Set<int> inverted = all.difference(_selected);
+            _selected
+              ..clear()
+              ..addAll(inverted);
+          }),
+        ),
+      ],
+    );
+  }
+
+  /// The batch actions, one write per action (ADR-0050 §决策 2).
+  Widget _batchBar(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    Set<int> selected,
+  ) {
+    final M3ETheme tokens = context.m3e;
+    void run(Future<void> Function() action) =>
+        unawaited(action().then((_) => setState(_selected.clear)));
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: tokens.spacing.sm,
+          vertical: tokens.spacing.xs,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: <Widget>[
+            _batchAction(
+              l10n.bookSourceListBatchEnable,
+              Icons.toggle_on_outlined,
+              () => run(
+                () => ref
+                    .read(selectedBookSourceProvider.notifier)
+                    .setEnabledFor(selected, isEnabled: true),
+              ),
+            ),
+            _batchAction(
+              l10n.bookSourceListBatchDisable,
+              Icons.toggle_off_outlined,
+              () => run(
+                () => ref
+                    .read(selectedBookSourceProvider.notifier)
+                    .setEnabledFor(selected, isEnabled: false),
+              ),
+            ),
+            _batchAction(
+              l10n.bookSourceListBatchGroup,
+              Icons.folder_outlined,
+              () => unawaited(_openGroupPicker(l10n, selected)),
+            ),
+            _batchAction(
+              l10n.bookSourceListBatchDelete,
+              Icons.delete_outline,
+              () => unawaited(_confirmBatchDelete(l10n, selected)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One labelled batch button.
+  Widget _batchAction(String label, IconData icon, VoidCallback onPressed) =>
+      TextButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+      );
+
+  /// The rows whose name / URL / group contains [query].
+  List<StoredBookSource> _matching(List<StoredBookSource> rows, String query) {
+    if (query.isEmpty) {
+      return rows;
+    }
+
+    return rows
+        .where(
+          (StoredBookSource source) =>
+              source.source.name.toLowerCase().contains(query) ||
+              source.source.url.toLowerCase().contains(query) ||
+              (source.source.group ?? '').toLowerCase().contains(query),
+        )
+        .toList(growable: false);
   }
 
   /// The sort menu; a check mark marks the key in use.
@@ -163,35 +336,108 @@ class BookSourceListPage extends ConsumerWidget {
     );
   }
 
-  /// The group filter followed by the rows (C-PERF-2: built lazily).
+  /// The search field, the two filter rows and the rows themselves (C-PERF-2: built lazily).
   Widget _body(
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l10n,
     BookSourceListData data,
+    List<StoredBookSource> rows,
   ) {
+    final M3ETheme tokens = context.m3e;
     final bool canDrag =
         data.view.order == BookSourceSortOrder.defaultOrder &&
-        data.view.group == null;
+        data.view.group == null &&
+        !_isSelecting;
 
     return Column(
       children: <Widget>[
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            tokens.spacing.lg,
+            tokens.spacing.sm,
+            tokens.spacing.lg,
+            0,
+          ),
+          child: TextField(
+            controller: _search,
+            decoration: InputDecoration(
+              hintText: l10n.bookSourceListSearchHint,
+              isDense: true,
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _search.text.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: l10n.actionCancel,
+                      onPressed: () => setState(_search.clear),
+                    ),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
         _groupFilter(context, ref, l10n, data),
+        _checkFilter(context, ref, l10n),
         Expanded(
-          child: data.rows.isEmpty
+          child: rows.isEmpty
               ? Center(
                   child: Text(
                     l10n.bookSourceListNoMatch,
-                    style: context.m3e.typography.base.bodyLarge,
+                    style: tokens.typography.base.bodyLarge,
                   ),
                 )
               : canDrag
-              ? _draggableList(context, ref, l10n, data)
-              : _plainList(context, ref, l10n, data),
+              ? _draggableList(context, ref, l10n, data, rows)
+              : _plainList(context, ref, l10n, data, rows),
         ),
       ],
     );
   }
+
+  /// The check-status chips (ADR-0050 §决策 1's second axis).
+  Widget _checkFilter(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
+    final M3ETheme tokens = context.m3e;
+    final BookSourceCheckFilter current = ref.watch(
+      bookSourceCheckFilterSelectionProvider,
+    );
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(
+        horizontal: tokens.spacing.lg,
+        vertical: tokens.spacing.xs,
+      ),
+      child: Row(
+        children: <Widget>[
+          for (final BookSourceCheckFilter filter
+              in BookSourceCheckFilter.values) ...<Widget>[
+            ChoiceChip(
+              label: Text(_checkFilterLabel(l10n, filter)),
+              selected: filter == current,
+              onSelected: (_) => ref
+                  .read(bookSourceCheckFilterSelectionProvider.notifier)
+                  .select(filter),
+            ),
+            SizedBox(width: tokens.spacing.sm),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// The label of one check-status chip.
+  String _checkFilterLabel(
+    AppLocalizations l10n,
+    BookSourceCheckFilter filter,
+  ) => switch (filter) {
+    BookSourceCheckFilter.all => l10n.bookSourceCheckFilterAll,
+    BookSourceCheckFilter.healthy => l10n.bookSourceCheckFilterHealthy,
+    BookSourceCheckFilter.failing => l10n.bookSourceCheckFilterFailing,
+  };
 
   /// The「全部分组 / 分组…」chips.
   Widget _groupFilter(
@@ -206,7 +452,7 @@ class BookSourceListPage extends ConsumerWidget {
       scrollDirection: Axis.horizontal,
       padding: EdgeInsets.symmetric(
         horizontal: tokens.spacing.lg,
-        vertical: tokens.spacing.sm,
+        vertical: tokens.spacing.xs,
       ),
       child: Row(
         children: <Widget>[
@@ -240,12 +486,13 @@ class BookSourceListPage extends ConsumerWidget {
     WidgetRef ref,
     AppLocalizations l10n,
     BookSourceListData data,
+    List<StoredBookSource> rows,
   ) => ReorderableListView.builder(
-    itemCount: data.rows.length,
+    itemCount: rows.length,
     // `onReorderItem` 已经把「向下拖动减一」算好了，直接插到 newIndex 即可。
     onReorderItem: (int oldIndex, int newIndex) {
       final List<int> ids = <int>[
-        for (final StoredBookSource source in data.rows) source.id,
+        for (final StoredBookSource source in rows) source.id,
       ];
       ids.insert(newIndex, ids.removeAt(oldIndex));
       unawaited(ref.read(bookSourceViewProvider.notifier).reorder(ids));
@@ -255,8 +502,8 @@ class BookSourceListPage extends ConsumerWidget {
       ref,
       l10n,
       data,
-      data.rows[index],
-      key: ValueKey<int>(data.rows[index].id),
+      rows[index],
+      key: ValueKey<int>(rows[index].id),
     ),
   );
 
@@ -266,10 +513,11 @@ class BookSourceListPage extends ConsumerWidget {
     WidgetRef ref,
     AppLocalizations l10n,
     BookSourceListData data,
+    List<StoredBookSource> rows,
   ) => ListView.builder(
-    itemCount: data.rows.length,
+    itemCount: rows.length,
     itemBuilder: (BuildContext context, int index) =>
-        _row(context, ref, l10n, data, data.rows[index]),
+        _row(context, ref, l10n, data, rows[index]),
   );
 
   /// One row: name, the four projected fields, and the row actions in a menu.
@@ -297,13 +545,32 @@ class BookSourceListPage extends ConsumerWidget {
       if (comment != null && comment.isNotEmpty) comment.split('\n').first,
     ];
 
+    final bool ticked = _selected.contains(source.id);
+
     return ListTile(
       key: key,
-      onTap: () => unawaited(
-        ref.read(selectedBookSourceProvider.notifier).select(source.id),
-      ),
-      selected: isSelected,
-      leading: isSelected
+      // 长按进入多选（ADR-0050 §决策 2）；多选期间点一下是勾选，不是切换当前源。
+      onLongPress: () => setState(() => _selected.add(source.id)),
+      onTap: () => _isSelecting
+          ? setState(() {
+              if (!_selected.remove(source.id)) {
+                _selected.add(source.id);
+              }
+            })
+          : unawaited(
+              ref.read(selectedBookSourceProvider.notifier).select(source.id),
+            ),
+      selected: isSelected || ticked,
+      leading: _isSelecting
+          ? Checkbox(
+              value: ticked,
+              onChanged: (_) => setState(() {
+                if (!_selected.remove(source.id)) {
+                  _selected.add(source.id);
+                }
+              }),
+            )
+          : isSelected
           ? Icon(
               Icons.check_circle,
               color: tokens.colors.primary,
@@ -332,6 +599,18 @@ class BookSourceListPage extends ConsumerWidget {
               PopupMenuItem<_RowAction>(
                 value: _RowAction.debug,
                 child: Text(l10n.bookSourceCheckOpenDebug),
+              ),
+              PopupMenuItem<_RowAction>(
+                value: _RowAction.check,
+                child: Text(l10n.bookSourceRowCheck),
+              ),
+              PopupMenuItem<_RowAction>(
+                value: _RowAction.edit,
+                child: Text(l10n.bookSourceRowEdit),
+              ),
+              PopupMenuItem<_RowAction>(
+                value: _RowAction.export,
+                child: Text(l10n.bookSourceRowExport),
               ),
               if (comment != null && comment.isNotEmpty)
                 PopupMenuItem<_RowAction>(
@@ -364,10 +643,218 @@ class BookSourceListPage extends ConsumerWidget {
           context,
           BookSourceRoute.debugSource(sourceId: source.id),
         );
+      case _RowAction.check:
+        unawaited(_checkOne(context, ref, l10n, source));
+      case _RowAction.edit:
+        pushBookSourceRoute(
+          context,
+          BookSourceRoute.editSource(sourceId: source.id),
+        );
+      case _RowAction.export:
+        unawaited(_export(context, ref, l10n, source));
       case _RowAction.comment:
         unawaited(_showComment(context, l10n, source));
       case _RowAction.delete:
         unawaited(_confirmDelete(context, ref, l10n, source));
+    }
+  }
+
+  /// Runs the check on **one** source and reports what it found (ADR-0050 §决策 2's neighbour).
+  ///
+  /// It reuses M10's `CheckBookSource`, so a single check and a batch check cannot disagree; the
+  /// outcome lands in the same columns, which is why the list is invalidated afterwards.
+  Future<void> _checkOne(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    StoredBookSource source,
+  ) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.bookSourceRowCheckRunning)),
+    );
+
+    final ParseResult<SourceCheckReport> checked = await ref
+        .read(checkBookSourceProvider)
+        .execute(source.source, const SourceCheckSettings());
+    ref.invalidate(bookSourceListDataProvider);
+    if (!context.mounted) {
+      return;
+    }
+
+    final String message = switch (checked) {
+      ParseSuccess<SourceCheckReport>(:final SourceCheckReport data) =>
+        data.invalidGroups.isEmpty
+            ? l10n.bookSourceCheckPassed
+            : l10n.bookSourceCheckFound(joinGroups(data.invalidGroups)),
+      ParseFailure<SourceCheckReport>() => l10n.bookSourceExportFailed,
+    };
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Copies the source's JSON to the clipboard and offers to save it (ADR-0050 §决策 4).
+  ///
+  /// The bytes are the stored **payload**, so a re-import of the export produces the same source.
+  /// The clipboard write is **not awaited**: it is a platform channel, and a test host that never
+  /// answers it must not stop the save dialog from opening (a hung clipboard would otherwise hang
+  /// the whole action).
+  Future<void> _export(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    StoredBookSource source,
+  ) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final String? payload = await ref
+        .read(bookSourceRepositoryProvider)
+        .payloadOf(source.id);
+    if (payload == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.bookSourceExportFailed)),
+      );
+
+      return;
+    }
+
+    unawaited(_copyToClipboard(payload));
+    final ParseResult<bool> saved = await ref
+        .read(bookSourceFileSaverProvider)
+        .save(suggestedName: '${source.source.name}.json', contents: payload);
+    if (!context.mounted) {
+      return;
+    }
+    final String message = switch (saved) {
+      // 「已保存」与「已复制」是两条不同的回执：取消保存对话框时，剪贴板里仍然有内容。
+      ParseSuccess<bool>(:final bool data) =>
+        data ? l10n.bookSourceExportSaved : l10n.bookSourceExportCopied,
+      ParseFailure<bool>() => l10n.bookSourceExportFailed,
+    };
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Puts [payload] on the clipboard; a platform that refuses it is not an export failure.
+  Future<void> _copyToClipboard(String payload) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: payload));
+    } on Exception {
+      // 只读剪贴板 / 无平台通道：保存文件那条路仍然可用。
+    }
+  }
+
+  /// Offers the existing groups, a new one, or “no group” (ADR-0050 §决策 1).
+  Future<void> _openGroupPicker(
+    AppLocalizations l10n,
+    Set<int> selected,
+  ) async {
+    final BookSourceListData? data = ref.read(bookSourceListDataProvider).value;
+    final List<String> groups = data?.groups ?? const <String>[];
+
+    final String? choice = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => SimpleDialog(
+        title: Text(l10n.bookSourceListBatchGroup),
+        children: <Widget>[
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(_noGroupToken),
+            child: Text(l10n.bookSourceListGroupNone),
+          ),
+          for (final String group in groups)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(group),
+              child: Text(group),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(_newGroupToken),
+            child: Text(l10n.bookSourceListGroupNew),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) {
+      return;
+    }
+
+    String? group = choice;
+    if (choice == _newGroupToken) {
+      group = await _askGroupName(l10n);
+      if (group == null || !mounted) {
+        return;
+      }
+    }
+    if (choice == _noGroupToken) {
+      group = null;
+    }
+
+    await ref
+        .read(selectedBookSourceProvider.notifier)
+        .setGroupFor(selected, group);
+    if (mounted) {
+      setState(_selected.clear);
+    }
+  }
+
+  /// Asks for a group name; `null` when the user cancels or types nothing.
+  Future<String?> _askGroupName(AppLocalizations l10n) async {
+    final TextEditingController controller = TextEditingController();
+    final String? name = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text(l10n.bookSourceListGroupNew),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: l10n.bookSourceListGroupNameHint,
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.actionCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: Text(l10n.actionSave),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    return name == null || name.isEmpty ? null : name;
+  }
+
+  /// Asks before deleting the whole selection (ADR-0050 §决策 2).
+  Future<void> _confirmBatchDelete(
+    AppLocalizations l10n,
+    Set<int> selected,
+  ) async {
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: Text(l10n.bookSourceListBatchDeleteTitle(selected.length)),
+            content: Text(l10n.bookSourceListBatchDeleteBody),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(l10n.actionCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(l10n.bookSourceListBatchDelete),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    await ref.read(selectedBookSourceProvider.notifier).deleteMany(selected);
+    if (mounted) {
+      setState(_selected.clear);
     }
   }
 
@@ -445,7 +932,13 @@ class BookSourceListPage extends ConsumerWidget {
 }
 
 /// The actions a row's menu offers.
-enum _RowAction { debug, comment, delete }
+enum _RowAction { debug, check, edit, export, comment, delete }
+
+/// The dialog answer that means “put the selection into no group”.
+const String _noGroupToken = ' none';
+
+/// The dialog answer that means “ask for a new group name”.
+const String _newGroupToken = ' new';
 
 /// Formats a stored millisecond timestamp the way the platform writes a short date.
 ///

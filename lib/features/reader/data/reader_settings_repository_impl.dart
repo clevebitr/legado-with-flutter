@@ -17,6 +17,18 @@ const String _backgroundKey = 'reader.background';
 /// `shared_preferences` key of the page mode index.
 const String _pageModeKey = 'reader.pageMode';
 
+/// `shared_preferences` key of the font family index.
+const String _fontFamilyKey = 'reader.fontFamily';
+
+/// `shared_preferences` key of the paragraph spacing step.
+const String _paragraphSpacingKey = 'reader.paragraphSpacing';
+
+/// `shared_preferences` key of the first-line indent step.
+const String _firstLineIndentKey = 'reader.firstLineIndent';
+
+/// `shared_preferences` key of the page padding preset index.
+const String _pagePaddingKey = 'reader.pagePadding';
+
 /// [ReaderSettingsRepository] on top of [PreferenceStore] (`docs/dev/roadmap.md` 5.3, C-NET-9).
 ///
 /// Every read is defensive: an unknown enum index (a store written by a newer build, or a
@@ -34,6 +46,10 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     lineHeight: _store.readDouble(_lineHeightKey) ?? defaultReaderLineHeight,
     background: _backgroundOf(_store.readInt(_backgroundKey)),
     pageMode: _pageModeOf(_store.readInt(_pageModeKey)),
+    fontFamily: _fontFamilyOf(_store.readInt(_fontFamilyKey)),
+    paragraphSpacing: _store.readDouble(_paragraphSpacingKey) ?? 0.5,
+    firstLineIndent: _store.readDouble(_firstLineIndentKey) ?? 2,
+    pagePadding: _pagePaddingOf(_store.readInt(_pagePaddingKey)),
   );
 
   @override
@@ -43,6 +59,32 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     await _store.writeDouble(_lineHeightKey, settings.lineHeight);
     await _store.writeInt(_backgroundKey, settings.background.index);
     await _store.writeInt(_pageModeKey, settings.pageMode.index);
+    await _store.writeInt(_fontFamilyKey, settings.fontFamily.index);
+    await _store.writeDouble(_paragraphSpacingKey, settings.paragraphSpacing);
+    await _store.writeDouble(_firstLineIndentKey, settings.firstLineIndent);
+    await _store.writeInt(_pagePaddingKey, settings.pagePadding.index);
+  }
+
+  /// Maps a stored index onto [ReaderFontFamily], defaulting when it names nothing.
+  ReaderFontFamily _fontFamilyOf(int? stored) {
+    if (stored == null ||
+        stored < 0 ||
+        stored >= ReaderFontFamily.values.length) {
+      return ReaderFontFamily.theme;
+    }
+
+    return ReaderFontFamily.values[stored];
+  }
+
+  /// Maps a stored index onto [ReaderPagePadding], defaulting when it names nothing.
+  ReaderPagePadding _pagePaddingOf(int? stored) {
+    if (stored == null ||
+        stored < 0 ||
+        stored >= ReaderPagePadding.values.length) {
+      return ReaderPagePadding.medium;
+    }
+
+    return ReaderPagePadding.values[stored];
   }
 
   /// Maps a stored index onto [ReaderBackground], defaulting when it names nothing.

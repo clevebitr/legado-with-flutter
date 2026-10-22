@@ -32,6 +32,7 @@ final class FakeBookshelfRepository implements BookshelfRepository {
     bool canReName = false,
     ShelfStatus status = ShelfStatus.tracking,
     bool isPinned = false,
+    String? coverUrl,
     ReadingProgressPosition? progress,
   }) {
     final ShelvedBook book = ShelvedBook(
@@ -40,6 +41,7 @@ final class FakeBookshelfRepository implements BookshelfRepository {
       bookUrl: bookUrl ?? 'https://source.test/book/$_nextId',
       tocUrl: tocUrl,
       name: name,
+      coverUrl: coverUrl,
       status: status,
       isPinned: isPinned,
       addedAt: DateTime(2026, 10, 21),

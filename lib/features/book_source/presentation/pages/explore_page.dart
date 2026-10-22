@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
@@ -153,6 +154,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         final Book book = books[index];
 
         return ListTile(
+          // 封面是 S1（roadmap §3.9）：书源给了 `coverUrl` 就显示，没给就是占位块。
+          leading: CoverImage(url: book.coverUrl, width: 48, height: 64),
           title: Text(book.name),
           subtitle: book.author == null ? null : Text(book.author ?? ''),
           onTap: () => pushBookSourceRoute(

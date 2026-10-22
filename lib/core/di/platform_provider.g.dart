@@ -214,6 +214,71 @@ final class BookSourceFilePickerProvider
 String _$bookSourceFilePickerHash() =>
     r'03ffd09c149b1f20aaab463e862cc267bead4c59';
 
+/// Provides the platform save dialog used by a single-source export
+/// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+///
+/// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
+/// else gets “not saved”, and a test overrides the port rather than the plugin.
+
+@ProviderFor(bookSourceFileSaver)
+final bookSourceFileSaverProvider = BookSourceFileSaverProvider._();
+
+/// Provides the platform save dialog used by a single-source export
+/// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+///
+/// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
+/// else gets “not saved”, and a test overrides the port rather than the plugin.
+
+final class BookSourceFileSaverProvider
+    extends
+        $FunctionalProvider<
+          BookSourceFileSaver,
+          BookSourceFileSaver,
+          BookSourceFileSaver
+        >
+    with $Provider<BookSourceFileSaver> {
+  /// Provides the platform save dialog used by a single-source export
+  /// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+  ///
+  /// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
+  /// else gets “not saved”, and a test overrides the port rather than the plugin.
+  BookSourceFileSaverProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceFileSaverProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceFileSaverHash();
+
+  @$internal
+  @override
+  $ProviderElement<BookSourceFileSaver> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BookSourceFileSaver create(Ref ref) {
+    return bookSourceFileSaver(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookSourceFileSaver value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookSourceFileSaver>(value),
+    );
+  }
+}
+
+String _$bookSourceFileSaverHash() =>
+    r'88c70f5bdf5aba91ae397542b8b97ae3b3e1737a';
+
 /// Provides the long-task marker a batch check holds while it runs
 /// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
 ///

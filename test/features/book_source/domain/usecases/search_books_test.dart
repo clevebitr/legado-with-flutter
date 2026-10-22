@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
@@ -323,18 +324,17 @@ void main() {
         final ({PageFetchService pages, FakeLogPrinter printer}) service =
             _service(http);
         final BookSource source = _source();
-        final BookSource withJs = source.copyWith(
-          searchRule: source.searchRule.copyWith(bookList: '@js:result'),
+        final BookSource withXpath = source.copyWith(
+          searchRule: source.searchRule.copyWith(bookList: '@xpath://div'),
         );
 
         final ParseFailure<Never> failure = _failure(
-          await SearchBooks(pages: service.pages).execute(withJs, '剑来'),
+          await SearchBooks(pages: service.pages).execute(withXpath, '剑来'),
         );
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        // `bookList` 是列表规则，而 `@js:` 目前只在值规则上实现（3.4 登记边界）：
-        // 列表规则上的 JS 仍报 unsupported，且顶层规则被拒必须整次失败（C-SRC-4）。
-        expect(failure.rulePath, 'unsupported:@js:list');
+        // 顶层列表规则被拒必须整次失败（C-SRC-4），且报的是那条语法本身。
+        expect(failure.rulePath, 'unsupported:@xpath:');
       },
     );
 
@@ -374,7 +374,7 @@ void main() {
         await FetchContent(
           pages: service.pages,
           cache: FakeContentCache(),
-        ).execute(source, chapters.first.url),
+        ).execute(source, ChapterRequest(url: chapters.first.url)),
       );
       expect(content, '正文第一段。\n正文第二段。\n正文第三段。');
 
@@ -441,7 +441,7 @@ void main() {
         await FetchContent(
           pages: service.pages,
           cache: FakeContentCache(),
-        ).execute(source, chapters.first.url),
+        ).execute(source, ChapterRequest(url: chapters.first.url)),
       );
       // JSON 里的 `\n` 是转义序列，解出来是一个真正的换行。
       expect(content, '正文第一段。\n正文第二段。');
@@ -580,6 +580,27 @@ void main() {
         expect(http.requestedSourceIds, <String>[source.url]);
       },
     );
+    test('execute_givenAHeaderRule_sendsTheEvaluatedHeaders', () async {
+      // M12-A2：`header` 写成规则时，实际发出去的 header 是**求值结果**，不是规则文本。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_searchUrl, _page('search_result.html'));
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = '{"User-Agent": "from-rule"}';
+      final BookSource source = _source().copyWith(
+        headerRule: '@js:JSON.stringify({User-Agent:"from-rule"})',
+      );
+
+      _data(
+        await SearchBooks(pages: _service(http, jsBridge: bridge).pages)
+            .execute(source, '剑来'),
+      );
+
+      expect(http.requestedHeaders.single, <String, String>{
+        'User-Agent': 'from-rule',
+      });
+      expect(bridge.jobs.first.rulePath, 'header');
+    });
+
     test('execute_givenAnUpdateTimeRule_carriesItOnTheHit', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(

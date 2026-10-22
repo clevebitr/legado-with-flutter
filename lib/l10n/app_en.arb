@@ -830,5 +830,319 @@
   "searchTypeVideo": "Video",
   "@searchTypeVideo": {
     "description": "Source type: video."
+  },
+  "bookSourceStartReading": "Start reading",
+  "@bookSourceStartReading": {
+    "description": "Detail page action: opens the reader at the first chapter."
+  },
+  "bookSourceContinueReading": "Continue reading",
+  "@bookSourceContinueReading": {
+    "description": "Detail page action: opens the reader at the stored position."
+  },
+  "bookSourceIntroExpand": "Show more",
+  "@bookSourceIntroExpand": {
+    "description": "Expands the truncated introduction on the detail page."
+  },
+  "bookSourceIntroCollapse": "Show less",
+  "@bookSourceIntroCollapse": {
+    "description": "Collapses the expanded introduction on the detail page."
+  },
+  "bookSourceListSearchHint": "Search name, URL or group",
+  "@bookSourceListSearchHint": {
+    "description": "Search field on the source list."
+  },
+  "bookSourceListSelectAll": "Select all",
+  "@bookSourceListSelectAll": {
+    "description": "Selection mode: selects every visible row."
+  },
+  "bookSourceListInvertSelection": "Invert",
+  "@bookSourceListInvertSelection": {
+    "description": "Selection mode: inverts the current selection."
+  },
+  "bookSourceListSelectedCount": "{count} selected",
+  "@bookSourceListSelectedCount": {
+    "description": "Selection mode: how many rows are selected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListBatchEnable": "Enable",
+  "@bookSourceListBatchEnable": {
+    "description": "Batch action: enables every selected source."
+  },
+  "bookSourceListBatchDisable": "Disable",
+  "@bookSourceListBatchDisable": {
+    "description": "Batch action: disables every selected source."
+  },
+  "bookSourceListBatchDelete": "Delete",
+  "@bookSourceListBatchDelete": {
+    "description": "Batch action: deletes every selected source."
+  },
+  "bookSourceListBatchDeleteTitle": "Delete {count} sources?",
+  "@bookSourceListBatchDeleteTitle": {
+    "description": "Confirmation title for a batch delete.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListBatchDeleteBody": "Books you added from them stay on the shelf.",
+  "@bookSourceListBatchDeleteBody": {
+    "description": "Confirmation body for a batch delete."
+  },
+  "bookSourceListBatchGroup": "Group",
+  "@bookSourceListBatchGroup": {
+    "description": "Batch action: puts the selection into a group."
+  },
+  "bookSourceListGroupNone": "No group",
+  "@bookSourceListGroupNone": {
+    "description": "Group picker: clears the group."
+  },
+  "bookSourceListGroupNew": "New group…",
+  "@bookSourceListGroupNew": {
+    "description": "Group picker: asks for a new group name."
+  },
+  "bookSourceListGroupNameHint": "Group name",
+  "@bookSourceListGroupNameHint": {
+    "description": "Text field hint for a group name."
+  },
+  "bookSourceCheckFilterLabel": "Check status",
+  "@bookSourceCheckFilterLabel": {
+    "description": "Chip row label for the check-status filter."
+  },
+  "bookSourceCheckFilterAll": "All",
+  "@bookSourceCheckFilterAll": {
+    "description": "Check-status filter: every source."
+  },
+  "bookSourceCheckFilterHealthy": "Healthy",
+  "@bookSourceCheckFilterHealthy": {
+    "description": "Check-status filter: sources with no failure group or note."
+  },
+  "bookSourceCheckFilterFailing": "Has failures",
+  "@bookSourceCheckFilterFailing": {
+    "description": "Check-status filter: sources whose last check failed."
+  },
+  "bookSourceRowCheck": "Check this source",
+  "@bookSourceRowCheck": {
+    "description": "Row menu: runs the check on this one source."
+  },
+  "bookSourceRowEdit": "Edit",
+  "@bookSourceRowEdit": {
+    "description": "Row menu: opens the editor."
+  },
+  "bookSourceRowExport": "Export",
+  "@bookSourceRowExport": {
+    "description": "Row menu: copies / saves the source JSON."
+  },
+  "bookSourceCheckPassed": "Check passed",
+  "@bookSourceCheckPassed": {
+    "description": "Snack bar after a single check that found nothing wrong."
+  },
+  "bookSourceCheckFound": "Check found: {groups}",
+  "@bookSourceCheckFound": {
+    "description": "Snack bar after a single check, naming the failure groups.",
+    "placeholders": {
+      "groups": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceExportCopied": "Source JSON copied",
+  "@bookSourceExportCopied": {
+    "description": "Snack bar after copying one source."
+  },
+  "bookSourceExportSaved": "Saved",
+  "@bookSourceExportSaved": {
+    "description": "Snack bar after saving one source to a file."
+  },
+  "bookSourceExportFailed": "Could not export this source",
+  "@bookSourceExportFailed": {
+    "description": "Snack bar when the export fails."
+  },
+  "bookSourceEditTitle": "Edit source",
+  "@bookSourceEditTitle": {
+    "description": "Editor page title."
+  },
+  "bookSourceEditSaved": "Saved",
+  "@bookSourceEditSaved": {
+    "description": "Snack bar after saving an edit."
+  },
+  "bookSourceEditInvalidFields": "Fix the highlighted fields first",
+  "@bookSourceEditInvalidFields": {
+    "description": "Editor: validation failed."
+  },
+  "bookSourceEditIdentityConflict": "Another source already has exactly these rules",
+  "@bookSourceEditIdentityConflict": {
+    "description": "Editor: the new identity already exists."
+  },
+  "bookSourceEditUrlHint": "Changing the URL is like switching source: the shelf keeps the old one.",
+  "@bookSourceEditUrlHint": {
+    "description": "Editor hint when the URL differs from the stored one."
+  },
+  "bookSourceFieldName": "Name",
+  "@bookSourceFieldName": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldUrl": "Source URL",
+  "@bookSourceFieldUrl": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldGroup": "Group",
+  "@bookSourceFieldGroup": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldType": "Type",
+  "@bookSourceFieldType": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldWeight": "Weight",
+  "@bookSourceFieldWeight": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldHeader": "Header (JSON)",
+  "@bookSourceFieldHeader": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldSearchRule": "Search rule",
+  "@bookSourceFieldSearchRule": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldBookInfoRule": "Book info rule",
+  "@bookSourceFieldBookInfoRule": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldTocRule": "Chapters rule",
+  "@bookSourceFieldTocRule": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldContentRule": "Content rule",
+  "@bookSourceFieldContentRule": {
+    "description": "Editor field label."
+  },
+  "actionSave": "Save",
+  "@actionSave": {
+    "description": "Generic save action."
+  },
+  "bookSourceRowCheckRunning": "Checking…",
+  "@bookSourceRowCheckRunning": {
+    "description": "Snack bar shown while a single-source check runs."
+  },
+  "readerFontFamily": "Font",
+  "@readerFontFamily": {
+    "description": "Reader setting: which font family the body uses."
+  },
+  "readerFontFamilyTheme": "Theme default",
+  "@readerFontFamilyTheme": {
+    "description": "Font family option: the app theme’s own font."
+  },
+  "readerFontFamilySerif": "Serif",
+  "@readerFontFamilySerif": {
+    "description": "Font family option: serif."
+  },
+  "readerFontFamilySans": "Sans-serif",
+  "@readerFontFamilySans": {
+    "description": "Font family option: sans-serif."
+  },
+  "readerFontFamilyMono": "Monospace",
+  "@readerFontFamilyMono": {
+    "description": "Font family option: monospace."
+  },
+  "readerParagraphSpacing": "Paragraph spacing",
+  "@readerParagraphSpacing": {
+    "description": "Reader setting: space between paragraphs."
+  },
+  "readerFirstLineIndent": "First-line indent",
+  "@readerFirstLineIndent": {
+    "description": "Reader setting: first-line indent."
+  },
+  "readerPagePadding": "Page margin",
+  "@readerPagePadding": {
+    "description": "Reader setting: page margin preset."
+  },
+  "readerPaddingNarrow": "Narrow",
+  "@readerPaddingNarrow": {
+    "description": "Page margin preset: narrow."
+  },
+  "readerPaddingMedium": "Medium",
+  "@readerPaddingMedium": {
+    "description": "Page margin preset: medium."
+  },
+  "readerPaddingWide": "Wide",
+  "@readerPaddingWide": {
+    "description": "Page margin preset: wide."
+  },
+  "readerChapterProgress": "{current}/{total} chapters",
+  "@readerChapterProgress": {
+    "description": "Reader UI text: readerChapterProgress.",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerChapterPercent": "{percent}%",
+  "@readerChapterPercent": {
+    "description": "Reader UI text: readerChapterPercent.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "readerChangeSource": "Change source",
+  "@readerChangeSource": {
+    "description": "Reader UI text: readerChangeSource."
+  },
+  "readerBrightness": "Brightness",
+  "@readerBrightness": {
+    "description": "Reader UI text: readerBrightness."
+  },
+  "readerTocSort": "Reversed",
+  "@readerTocSort": {
+    "description": "Reader UI text: readerTocSort."
+  },
+  "readerTocSearchHint": "Search chapters",
+  "@readerTocSearchHint": {
+    "description": "Reader UI text: readerTocSearchHint."
+  },
+  "readerSourceTitle": "Change source",
+  "@readerSourceTitle": {
+    "description": "Reader UI text: readerSourceTitle."
+  },
+  "readerSourceEmpty": "No other source has this book.",
+  "@readerSourceEmpty": {
+    "description": "Reader UI text: readerSourceEmpty."
+  },
+  "readerSourceSearching": "Searching other sources…",
+  "@readerSourceSearching": {
+    "description": "Reader UI text: readerSourceSearching."
+  },
+  "readerSourceChapters": "{count} chapters",
+  "@readerSourceChapters": {
+    "description": "Reader UI text: readerSourceChapters.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSourceFailed": "Could not switch source",
+  "@readerSourceFailed": {
+    "description": "Reader UI text: readerSourceFailed."
+  },
+  "readerSourceAligned": "Aligned to: {chapter}",
+  "@readerSourceAligned": {
+    "description": "Reader UI text: readerSourceAligned.",
+    "placeholders": {
+      "chapter": {
+        "type": "String"
+      }
+    }
   }
 }

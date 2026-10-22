@@ -211,6 +211,31 @@ void main() {
       },
     );
 
+    test('execute_givenASourceThrows_keepsTheBatchAndTheOtherHits', () async {
+      // 请求层破坏契约抛异常（真实案例：打日志时的 FormatException）时，它只能算
+      // 这一个源失败。否则异常会冲出 `execute`，把已经发布的命中全冲掉。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_searchUrl('a', '剑来'), _page('a', '剑来'))
+        ..throwOn(_searchUrl('b', '剑来'), const FormatException('boom'));
+      final _Fixture fixture = _fixture(http);
+
+      final ParseResult<AggregateSearchResult> result = await fixture.search
+          .execute(
+            AggregateSearchRequest(
+              keyword: '剑来',
+              sources: <BookSource>[_source('a'), _source('b')],
+              matchMode: SearchMatchMode.defaultMode,
+              concurrency: 2,
+            ),
+          );
+
+      final AggregateSearchResult data =
+          (result as ParseSuccess<AggregateSearchResult>).data;
+      expect(_names(data.books), <String>['剑来']);
+      expect(data.failedSources, 1);
+      expect(data.processedSources, 2);
+    });
+
     test('execute_givenEverySourceReturnsNothing_isASuccess', () async {
       // 全部源都「没搜到」不是失败：只有全部**出错**才算（ADR-0046 §决策 5）。
       final FakeHttpClient http = FakeHttpClient()

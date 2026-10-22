@@ -11,6 +11,7 @@ import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.d
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -123,8 +124,16 @@ AppLocalizations _l10n(WidgetTester tester) =>
 /// The body text widget of the reader.
 Finder _bodyFinder() => find.textContaining('第1行');
 
-/// Opens the settings sheet.
+/// Reveals the immersive chrome by tapping the middle third (ADR-0051 §决策 1).
+Future<void> _showChrome(WidgetTester tester) async {
+  final Size size = tester.getSize(find.byType(ReaderPage));
+  await tester.tapAt(Offset(size.width / 2, size.height / 2));
+  await tester.pump();
+}
+
+/// Opens the settings sheet (chrome first: the reader starts immersive).
 Future<void> _openSettings(WidgetTester tester) async {
+  await _showChrome(tester);
   await tester.tap(find.byTooltip(_l10n(tester).readerSettingsAction));
   await tester.pumpAndSettle();
 }
@@ -138,6 +147,9 @@ void main() {
 
       await _pump(tester, fixture);
 
+      // AppBar 默认隐藏（沉浸式）：章节标题在唤出 chrome 后才出现。
+      expect(find.text('第1章 开端'), findsNothing);
+      await _showChrome(tester);
       expect(find.text('第1章 开端'), findsWidgets);
       expect(_bodyFinder(), findsOneWidget);
       expect(fixture.chapters.requests.single.$2, _book.tocUrl);
@@ -157,8 +169,9 @@ void main() {
       await _pump(tester, fixture);
 
       // 恢复到存下来的那一章，而不是永远从第一章开始。
+      expect(find.textContaining('第二章正文'), findsOneWidget);
+      await _showChrome(tester);
       expect(find.text('第2章 继续'), findsWidgets);
-      expect(find.text('第二章正文'), findsOneWidget);
     });
 
     testWidgets('build_givenAChapterUrl_opensTheRequestedChapter', (
@@ -172,7 +185,7 @@ void main() {
 
       await _pump(tester, fixture, chapterUrl: 'https://source.test/2.html');
 
-      expect(find.text('第二章正文'), findsOneWidget);
+      expect(find.textContaining('第二章正文'), findsOneWidget);
     });
 
     testWidgets('build_givenAFailingChapterList_showsTheFailure', (
@@ -197,10 +210,11 @@ void main() {
       final _Fixture fixture = _fixture();
 
       await _pump(tester, fixture);
+      await _showChrome(tester);
       await tester.tap(find.byTooltip(_l10n(tester).readerNextChapter));
       await tester.pumpAndSettle();
 
-      expect(find.text('第二章正文'), findsOneWidget);
+      expect(find.textContaining('第二章正文'), findsOneWidget);
       expect(fixture.progress.writes, isNotEmpty);
     });
 
@@ -210,12 +224,13 @@ void main() {
       final _Fixture fixture = _fixture();
 
       await _pump(tester, fixture);
+      await _showChrome(tester);
       await tester.tap(find.byTooltip(_l10n(tester).readerTocAction));
       await tester.pumpAndSettle();
       await tester.tap(find.text('第2章 继续').last);
       await tester.pumpAndSettle();
 
-      expect(find.text('第二章正文'), findsOneWidget);
+      expect(find.textContaining('第二章正文'), findsOneWidget);
     });
 
     testWidgets('settings_whenTheFontSizeIsRaised_appliesItToTheBody', (
@@ -227,8 +242,17 @@ void main() {
       final double before = tester.widget<Text>(_bodyFinder()).style!.fontSize!;
 
       await _openSettings(tester);
-      // 字号滑块是设置面板里的第一根；往右拖一档。
-      await tester.drag(find.byType(Slider).first, const Offset(200, 0));
+      // 字号滑块是设置面板里的第一根；往右拖一档。**必须限定在面板内**：工具条的进度滑块
+      // 也是一个 `Slider`，用 `.first` 会拖错那一个。
+      await tester.drag(
+        find
+            .descendant(
+              of: find.byType(ReaderSettingsSheet),
+              matching: find.byType(Slider),
+            )
+            .first,
+        const Offset(200, 0),
+      );
       await tester.pumpAndSettle();
       await tester.tapAt(const Offset(20, 20));
       await tester.pumpAndSettle();

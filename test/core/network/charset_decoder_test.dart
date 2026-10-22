@@ -6,6 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// GBK bytes for 「天」, the kind of non-UTF-8 page Chinese book sources serve.
 const List<int> _gbkTian = <int>[0xCC, 0xEC];
 
+/// Big5 bytes for 「天」: the one family `charset` has no codec for (ADR-0048).
+const List<int> _big5Tian = <int>[0xA4, 0xD1];
+
 /// UTF-8 bytes for 「剑」 followed by one byte that cannot continue the sequence: the
 /// shape of a real page whose declaration is right but whose byte stream is not
 /// (ADR-0031, found by the G2b spot-check).
@@ -233,6 +236,75 @@ void main() {
         expect(decoded.text, '天');
       },
     );
+
+    test('decodeBody_whenContentTypeDeclaresBig5_decodesBig5Bytes', () {
+      // 繁体站点的声明：`charset` 没有 Big5 码表，靠 `enough_convert` 补齐（ADR-0048）。
+      final DecodedBody decoded = decodeBody(
+        _big5Tian,
+        contentType: 'text/html; charset=big5',
+      );
+
+      expect(decoded.text, '天');
+      expect(decoded.charset, 'big5');
+      expect(decoded.isDetected, isFalse);
+    });
+
+    test('decodeBody_givenBig5HkscsDeclaration_decodesTheBig5Range', () {
+      // HKSCS 的扩展区没有码表：常用字照常解出，扩展区降级成 U+FFFD 并留痕
+      // （book-source.md §5.1 登记的「部分支持」）。
+      final DecodedBody decoded = decodeBody(<int>[
+        ..._big5Tian,
+        0x88,
+        0x40,
+      ], contentType: 'text/html; charset=big5-hkscs');
+
+      expect(decoded.text, startsWith('天'));
+      expect(decoded.charset, 'big5-hkscs');
+    });
+
+    test('decodeBody_givenABig5UrlCharset_decodesWithIt', () {
+      final DecodedBody decoded = decodeBody(
+        _big5Tian,
+        declaredCharset: 'BIG5',
+      );
+
+      expect(decoded.text, '天');
+    });
+
+    test('decodeBody_givenAnUndeclaredBig5ByteStream_doesNotGuessBig5', () {
+      // 检测器仍然不认识 Big5（ADR-0048 只补**解码**，不补检测）：没有声明的页面
+      // 不会因为新增码表就“自动变对”，它照旧按嗅探结果解——这正是登记缺口的剩余部分。
+      final DecodedBody decoded = decodeBody(_big5Tian);
+
+      expect(decoded.isDetected, isTrue);
+      expect(decoded.text, isNot('天'));
+    });
+
+    test('decodeBody_givenAUrlDeclaredCharset_decodesWithIt', () {
+      // `url,{"charset":"gbk"}` 是**书源**声明的编码（book-source.md §4.3）：它比响应
+      // 自己的声明更靠前，站点把 GBK 页面标成 utf-8 是常态。
+      final DecodedBody decoded = decodeBody(
+        _gbkTian,
+        contentType: 'text/html; charset=utf-8',
+        declaredCharset: ' GBK ',
+      );
+
+      expect(decoded.charset, 'gbk');
+      expect(decoded.text, '天');
+      expect(decoded.isDetected, isFalse);
+    });
+
+    test('decodeBody_givenABlankUrlDeclaredCharset_ignoresIt', () {
+      // 空标签不能“赢过”响应自己的声明，否则会掉进回退车道。
+      final DecodedBody decoded = decodeBody(
+        _gbkTian,
+        contentType: 'text/html; charset=gbk',
+        declaredCharset: '   ',
+      );
+
+      expect(decoded.charset, 'gbk');
+      expect(decoded.text, '天');
+    });
 
     test('decodeBody_givenNoDeclaration_reportsThatItDetected', () {
       // `isDetected` 是「这个标签值不值得缓存」的判据：只有嗅探出来的才写缓存。

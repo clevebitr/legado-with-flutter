@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_status.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/bookshelf_route.dart';
@@ -60,6 +61,22 @@ void main() {
       expect(find.text('雪中悍刀行'), findsOneWidget);
       // 读过的书显示进度，未读的回落到「在追」（下文用 ARB 文案断言，不写死中文）。
       expect(find.textContaining('第三章'), findsOneWidget);
+    });
+
+    testWidgets('page_givenACoveredBook_showsTheCoverAndTheReadBadge', (
+      WidgetTester tester,
+    ) async {
+      // S1（roadmap §3.9）：封面取代了原来的图标位，所以「已读」要变成封面上的角标。
+      repository.seed(
+        name: '剑来',
+        coverUrl: 'https://source.test/covers/1.jpg',
+        status: ShelfStatus.read,
+      );
+
+      await pump(tester);
+
+      expect(find.byType(CoverImage), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle), findsOneWidget);
     });
 
     testWidgets('page_whenTheReadFails_showsTheLoadFailure', (

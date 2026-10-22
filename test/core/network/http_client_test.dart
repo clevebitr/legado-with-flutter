@@ -373,6 +373,23 @@ void main() {
       }
     });
 
+    test('get_whenTheBodyStreamFails_answersAKindInsteadOfThrowing', () async {
+      // 正文字是流式读的，`receiveTimeout` 会在**读**的过程中来。它必须变成
+      // ParseFailure（C-ERR-1），否则会穿过请求层，把一次单源超时变成整批失败。
+      // 关掉重试：可重试的 kind 会再发一次，而队列空了会得到 200 + 空正文。
+      final _Fixture fixture = _buildClient(
+        policy: const HttpPolicy(maxRetries: 0),
+      );
+      fixture.adapter.enqueueStreamFailure(DioExceptionType.receiveTimeout);
+
+      final ParseResult<HttpResponse> result = await fixture.client.get(
+        'https://example.test/book/1',
+        rulePath: 'ruleContent',
+      );
+
+      expect(_expectFailure(result), ParseFailureKind.networkTimeout);
+    });
+
     test('get_whenUrlIsMalformed_returnsNetworkFailedWithoutSending', () async {
       final _Fixture fixture = _buildClient();
 

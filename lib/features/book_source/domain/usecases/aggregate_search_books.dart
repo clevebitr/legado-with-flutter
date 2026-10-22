@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/search_book.dart';
 import 'package:flutter_reader/features/book_source/domain/search_match_mode.dart';
 import 'package:flutter_reader/features/book_source/domain/search_result_merger.dart';
 import 'package:flutter_reader/features/book_source/domain/search_source_resolver.dart';
+import 'package:flutter_reader/features/book_source/domain/source_budget.dart';
 import 'package:flutter_reader/features/book_source/domain/task_cancellation.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
 
@@ -136,12 +139,16 @@ final class AggregateSearchBooks {
     required this._search,
     required this._logger,
     this.timeout = sourceSearchTimeout,
+    this._clock = const SystemClock(),
   });
 
   final SearchBooks _search;
   final AppLogger _logger;
+  final Clock _clock;
 
   /// How long one source may take; injected so a test can shrink it instead of waiting 60 s.
+  ///
+  /// It is the [SourceBudget] every source gets — **not** a per-request timeout.
   final Duration timeout;
 
   /// Searches every source of [request] and answers the merged page.
@@ -216,12 +223,39 @@ final class AggregateSearchBooks {
           continue;
         }
 
+        // 每个源一份**单源预算**（§3.7-B7、ADR-0049）：60 s 是它的整份预算，不是每次请求。
+        // 预算只决定「还等不等」，不作废在飞的请求（HTTP 层没有取消原语，ADR-0046 §决策 5）。
+        final SourceBudget budget = SourceBudget(timeout, clock: _clock);
         final ParseResult<List<Book>> result;
         try {
-          result = await _search
-              .execute(source, request.keyword, page: request.page)
-              .timeout(timeout);
-        } on TimeoutException {
+          result = await budget.run(
+            () => _search.execute(source, request.keyword, page: request.page),
+            rulePath: 'searchUrl',
+          );
+        } on Exception catch (error, stackTrace) {
+          // 一个源的请求层抛出异常（例如打日志时的 FormatException、另一份 Dio 适配器的
+          // 转换异常）时，**不能**让它冒到批外：那会把整批状态变成失败，把已经发布的结果
+          // 全部冲掉（ADR-0046 §决策 5）。这里把它读成这个源失败，语义与 `ParseFailure`
+          // 完全一样，只是先记一条日志 —— C-ERR-8 仍然不写关键词与正文，`describeError`
+          // 只留类型 / 长度 / 摘要（C-SEC-4）。
+          failed++;
+          processed++;
+          _logger.warning(
+            'Aggregate search threw on one source: source=${source.url} '
+            'page=${request.page} error=${describeError(error)}',
+            error,
+            stackTrace,
+          );
+          publish();
+          continue;
+        }
+
+        // 预算耗尽 = 这个源超时：记失败但**不**把它当成整批的失败原因（ADR-0046 §决策 5）。
+        final bool timedOut =
+            budget.isExpired &&
+            result is ParseFailure<List<Book>> &&
+            result.kind == ParseFailureKind.networkTimeout;
+        if (timedOut) {
           failed++;
           processed++;
           _logger.warning(

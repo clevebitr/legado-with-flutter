@@ -82,7 +82,7 @@ final class ReaderChaptersProvider
   }
 }
 
-String _$readerChaptersHash() => r'1223d6e14319f33a6b68d7299929a903212591eb';
+String _$readerChaptersHash() => r'7986f7f67b4a65b338fa6a077fecadf714f43c46';
 
 /// Reads the chapter list of [book] (`docs/dev/roadmap.md` 5.3).
 ///
@@ -192,7 +192,7 @@ final class ReaderContentProvider
   }
 }
 
-String _$readerContentHash() => r'b44b3a4459539cc1e874537502156526fc32ae87';
+String _$readerContentHash() => r'35b7f95c64422b332ff9bbc8a2d23dae92c9f804';
 
 /// Reads the body of one chapter (`docs/dev/roadmap.md` 5.3).
 ///

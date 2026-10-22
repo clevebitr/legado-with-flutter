@@ -1,7 +1,10 @@
 import 'package:flutter_reader/core/di/platform_provider.dart';
+import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/file_selector_book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_book_source_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -87,6 +90,47 @@ void main() {
       );
     });
   });
+  group('bookSourceFileSaver', () {
+    test('bookSourceFileSaver_givenAShippedPlatform_usesTheRealDialog', () {
+      for (final FakePlatformInfo platform in <FakePlatformInfo>[
+        const FakePlatformInfo.android(),
+        const FakePlatformInfo.ios(),
+        const FakePlatformInfo.desktop(),
+      ]) {
+        final ProviderContainer container = ProviderContainer.test(
+          overrides: <Override>[
+            platformInfoProvider.overrideWithValue(platform),
+          ],
+        );
+
+        expect(
+          container.read(bookSourceFileSaverProvider),
+          isA<FileSelectorBookSourceFileSaver>(),
+        );
+      }
+    });
+
+    test('bookSourceFileSaver_givenAnUnshippedPlatform_doesNotSave', () async {
+      final ProviderContainer container = ProviderContainer.test(
+        overrides: <Override>[
+          platformInfoProvider.overrideWithValue(
+            const FakePlatformInfo.unsupported(),
+          ),
+        ],
+      );
+
+      expect(
+        container.read(bookSourceFileSaverProvider),
+        isA<UnsupportedBookSourceFileSaver>(),
+      );
+      // 没对话框的平台 = 用户取消：`ParseSuccess(false)`，不是失败。
+      final ParseResult<bool> saved = await container
+          .read(bookSourceFileSaverProvider)
+          .save(suggestedName: 'a.json', contents: '{}');
+      expect((saved as ParseSuccess<bool>).data, isFalse);
+    });
+  });
+
   group('longRunningTask', () {
     test('longRunningTask_whenPlatformIsAndroid_holdsAWakeLock', () {
       final ProviderContainer container = ProviderContainer.test(

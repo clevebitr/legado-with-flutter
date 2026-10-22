@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -8,8 +9,10 @@ import 'package:flutter_reader/features/book_source/data/book_source_repository_
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 
 import '../../../support/fake_log_printer.dart';
 
@@ -411,6 +414,146 @@ void main() {
         0,
         1,
       ]);
+    });
+
+    test('payloadOf_givenARow_answersTheImportedBytes', () async {
+      final Map<String, Object?> entry = _entry();
+      await repository.saveAll(<Map<String, Object?>>[entry]);
+      final int id = (await repository.getAll()).single.id;
+
+      // ADR-0050 §决策 4：导出的是**原文**，不是模型重建。
+      expect(
+        await repository.payloadOf(id),
+        contains('"bookSourceUrl":"https://a.test"'),
+      );
+      expect(await repository.payloadOf(999), isNull);
+    });
+
+    test('setEnabledFor_givenASelection_flipsEveryRow', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(name: 'a', url: 'https://a.test'),
+        _entry(name: 'b', url: 'https://b.test'),
+      ]);
+      final List<int> ids = (await repository.getAll())
+          .map((StoredBookSource source) => source.id)
+          .toList();
+
+      await repository.setEnabledFor(ids, isEnabled: false);
+
+      expect(
+        (await repository.getAll()).every(
+          (StoredBookSource source) => !source.isEnabled,
+        ),
+        isTrue,
+      );
+    });
+
+    test('deleteMany_givenAWholeSelection_removesThemAll', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(name: 'a', url: 'https://a.test'),
+        _entry(name: 'b', url: 'https://b.test'),
+      ]);
+      final List<int> ids = (await repository.getAll())
+          .map((StoredBookSource source) => source.id)
+          .toList();
+
+      await repository.deleteMany(ids);
+
+      expect(await repository.getAll(), isEmpty);
+    });
+
+    test('setGroupFor_givenAGroup_writesThePayloadOnly', () async {
+      await repository.saveAll(<Map<String, Object?>>[_entry()]);
+      final StoredBookSource before = (await repository.getAll()).single;
+
+      await repository.setGroupFor(<int>[before.id], '精选');
+
+      final StoredBookSource after = (await repository.getAll()).single;
+      expect(after.source.group, '精选');
+      // 身份不变（分组不在指纹里），校验列也不动（ADR-0050 §决策 1）。
+      expect(after.groupName, isNull);
+      expect(after.comment, isNull);
+      expect(after.id, before.id);
+    });
+
+    test('setGroupFor_givenNull_clearsTheGroup', () async {
+      await repository.saveAll(<Map<String, Object?>>[_entry()]);
+      final int id = (await repository.getAll()).single.id;
+      await repository.setGroupFor(<int>[id], '精选');
+
+      await repository.setGroupFor(<int>[id], null);
+
+      expect((await repository.getAll()).single.source.group, isNull);
+    });
+
+    test('update_givenAChangedField_savesAndKeepsUserState', () async {
+      await repository.saveAll(<Map<String, Object?>>[_entry()]);
+      final StoredBookSource before = (await repository.getAll()).single;
+      await repository.setEnabled(id: before.id, isEnabled: false);
+
+      final BookSourceEditOutcome outcome = await repository.update(
+        id: before.id,
+        entry: _entry(name: '改名之后'),
+      );
+
+      expect(outcome, BookSourceEditOutcome.saved);
+      final StoredBookSource after = (await repository.getAll()).single;
+      expect(after.source.name, '改名之后');
+      // 用户态不被编辑重置（ADR-0050 §决策 3）。
+      expect(after.isEnabled, isFalse);
+    });
+
+    test('update_givenAnotherRowsIdentity_refusesTheEdit', () async {
+      await repository.saveAll(<Map<String, Object?>>[
+        _entry(name: 'a', url: 'https://a.test', content: 'class.body'),
+        _entry(name: 'b', url: 'https://b.test', content: 'class.body'),
+      ]);
+      final List<StoredBookSource> rows = await repository.getAll();
+      final StoredBookSource first = rows.firstWhere(
+        (StoredBookSource source) => source.source.name == 'a',
+      );
+
+      // 把 a 改成与 b 完全相同的 (url, 指纹)：显式失败，不合并、不删行。
+      final BookSourceEditOutcome outcome = await repository.update(
+        id: first.id,
+        entry: _entry(name: 'b', url: 'https://b.test', content: 'class.body'),
+      );
+
+      expect(outcome, BookSourceEditOutcome.identityConflict);
+      expect(await repository.getAll(), hasLength(2));
+      expect(
+        (await repository.getAll()).map(
+          (StoredBookSource source) => source.source.name,
+        ),
+        containsAll(<String>['a', 'b']),
+      );
+    });
+
+    test('update_givenAMissingRow_reportsIt', () async {
+      expect(
+        await repository.update(id: 404, entry: _entry()),
+        BookSourceEditOutcome.sourceMissing,
+      );
+    });
+
+    test('setGroupFor_givenARowWithABrokenPayload_skipsIt', () async {
+      await repository.saveAll(<Map<String, Object?>>[_entry()]);
+      final int id = (await repository.getAll()).single.id;
+      // 直接破坏负载：批量改分组必须跳过它而不是整批失败（端口是 total 的口径）。
+      await (database.update(
+        database.bookSources,
+      )..where(($BookSourcesTable table) => table.id.equals(id))).write(
+        const BookSourcesCompanion(payload: Value<String>('{not json')),
+      );
+
+      await repository.setGroupFor(<int>[id], '精选');
+
+      expect(
+        printer.events
+            .map((LogEvent event) => event.message)
+            .any((Object? message) => '$message'.contains('skipped')),
+        isTrue,
+      );
     });
 
     test('delete_givenAnExistingSource_removesIt', () async {

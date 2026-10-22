@@ -35,6 +35,10 @@ sealed class BookSourceRoute with _$BookSourceRoute {
   const factory BookSourceRoute.debugSource({int? sourceId}) =
       BookSourceDebugRoute;
 
+  /// The route that edits one stored source (`docs/dev/roadmap.md` §3.9-S4, ADR-0050).
+  const factory BookSourceRoute.editSource({required int sourceId}) =
+      BookSourceEditRoute;
+
   /// The path this route is served under.
   String get path => switch (this) {
     ExploreRoute() => _explorePath,
@@ -43,6 +47,7 @@ sealed class BookSourceRoute with _$BookSourceRoute {
     BookSourceImportRoute() => _sourceImportPath,
     BookSourceCheckRoute() => _sourceCheckPath,
     BookSourceDebugRoute() => _sourceDebugPath,
+    BookSourceEditRoute() => _sourceEditPath,
   };
 }
 
@@ -63,6 +68,9 @@ const String _sourceCheckPath = '/sources/check';
 
 /// Path of [BookSourceDebugRoute].
 const String _sourceDebugPath = '/sources/debug';
+
+/// Path of [BookSourceEditRoute].
+const String _sourceEditPath = '/sources/edit';
 
 /// Pushes [route] through the app's route table (ADR-0011 §4).
 void pushBookSourceRoute(BuildContext context, BookSourceRoute route) =>

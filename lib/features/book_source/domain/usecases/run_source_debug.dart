@@ -2,6 +2,7 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/explore_category.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_debug.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
@@ -272,9 +273,11 @@ final class RunSourceDebug {
     }
 
     run.source(chapterUrl);
+    // 控制台只拿到一个 URL：书名 / 章节名留空，`java.get('bookName' / 'title')` 会回落到
+    // 书源变量（§6、ADR-0049）。
     final ParseResult<String> result = await _content.execute(
       source,
-      chapterUrl,
+      ChapterRequest(url: chapterUrl),
     );
     if (_stopped(run, cancellation)) {
       return SourceDebugStatus.cancelled;

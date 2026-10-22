@@ -534,6 +534,37 @@ void main() {
     }, 'searchRule.name:js:error');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_whenAJobCarriesBookNames_javaGetAnswersThemFirst', (
+    WidgetTester tester,
+  ) async {
+    // M12-A5 / ADR-0049：`bookName` / `title` 是**内置键**，先于变量表；`java.put` 不能劫持它们。
+    // 这一条只能在设备上验：解码与赋值都发生在 worker 隔离区里。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(
+            script: "java.put('bookName', '变量里的书名'); java.get('bookName') + '|' + java.get('title')",
+            bookName: '剑来',
+            chapterTitle: '第一章',
+          ),
+        ),
+      ),
+      '剑来|第一章',
+    );
+    // 没有上下文的阶段（搜索 / 目录）回落到变量表。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(
+            script: "java.get('title')",
+            variables: const <String, String>{'title': '变量章节'},
+          ),
+        ),
+      ),
+      '变量章节',
+    );
+  });
+
   testWidgets('jsBridge_whenAUrlRuleUsesKey_bindsItOnlyThere', (
     WidgetTester tester,
   ) async {
@@ -670,6 +701,8 @@ JsJob _job({
     name: '示例书源',
     url: 'https://example-novel.test',
   ),
+  String? bookName,
+  String? chapterTitle,
 }) => JsJob(
   script: script,
   rulePath: 'searchRule.name',
@@ -679,6 +712,8 @@ JsJob _job({
   result: 'raw',
   sourceHeaders: sourceHeaders,
   variables: variables,
+  bookName: bookName,
+  chapterTitle: chapterTitle,
 );
 
 /// The value of a successful evaluation, failing the test otherwise.
@@ -749,6 +784,7 @@ final class _ProbeHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     int? maxBytes,
+    String? declaredCharset,
   }) async {
     requestedUrls.add(url);
     requestedMethods.add('GET');
@@ -766,6 +802,7 @@ final class _ProbeHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    String? declaredCharset,
   }) async {
     requestedUrls.add(url);
     requestedMethods.add('POST');

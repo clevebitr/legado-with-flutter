@@ -43,6 +43,10 @@ final class FakeHttpClient implements HttpClient {
   /// The request body of every request, in order (`null` for a GET).
   final List<String?> requestedBodies = <String?>[];
 
+  /// The `charset` a URL rule declared for every request, in order
+  /// (`book-source.md` §4.3): `url,{“charset”:“gbk”}` has to reach the decoder.
+  final List<String?> requestedCharsets = <String?>[];
+
   /// Awaited after a request is recorded and before it answers, when set.
   ///
   /// The hook lets a test hold a request open and decide when it may answer — needed to
@@ -96,6 +100,7 @@ final class FakeHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     int? maxBytes,
+    String? declaredCharset,
   }) => _serve(
     method: 'GET',
     url: url,
@@ -103,6 +108,7 @@ final class FakeHttpClient implements HttpClient {
     headers: headers,
     sourceId: sourceId,
     maxBytes: maxBytes,
+    declaredCharset: declaredCharset,
   );
 
   @override
@@ -113,6 +119,7 @@ final class FakeHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    String? declaredCharset,
   }) => _serve(
     method: 'POST',
     url: url,
@@ -120,6 +127,7 @@ final class FakeHttpClient implements HttpClient {
     body: body,
     headers: headers,
     sourceId: sourceId,
+    declaredCharset: declaredCharset,
   );
 
   /// Records one request and answers from the registered bodies / failures.
@@ -131,6 +139,7 @@ final class FakeHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? sourceId,
     int? maxBytes,
+    String? declaredCharset,
   }) async {
     requestedUrls.add(url);
     requestedRulePaths.add(rulePath);
@@ -139,6 +148,7 @@ final class FakeHttpClient implements HttpClient {
     requestedMethods.add(method);
     requestedBodies.add(body);
     requestedMaxBytes.add(maxBytes);
+    requestedCharsets.add(declaredCharset);
 
     final Future<void> Function()? hook = onRequest;
     if (hook != null) {

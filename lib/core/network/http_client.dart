@@ -50,6 +50,7 @@ abstract interface class HttpClient {
     String? keyword,
     String? sourceId,
     int? maxBytes,
+    String? declaredCharset,
   });
 
   /// Sends a POST request to [url], carrying [body] as the request payload.
@@ -72,6 +73,7 @@ abstract interface class HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    String? declaredCharset,
   });
 
   /// Applies the `concurrentRate` [sourceId] declares to that source's budget
@@ -189,6 +191,7 @@ final class DioHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     int? maxBytes,
+    String? declaredCharset,
   }) => _request(
     method: 'GET',
     url: url,
@@ -197,6 +200,7 @@ final class DioHttpClient implements HttpClient {
     keyword: keyword,
     sourceId: sourceId,
     maxBytes: maxBytes,
+    declaredCharset: declaredCharset,
   );
 
   @override
@@ -207,6 +211,7 @@ final class DioHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    String? declaredCharset,
   }) => _request(
     method: 'POST',
     url: url,
@@ -215,6 +220,7 @@ final class DioHttpClient implements HttpClient {
     headers: headers,
     keyword: keyword,
     sourceId: sourceId,
+    declaredCharset: declaredCharset,
   );
 
   /// Sends one request of [method] with the shared policy, budget and retry loop.
@@ -230,6 +236,7 @@ final class DioHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     int? maxBytes,
+    String? declaredCharset,
   }) async {
     final Uri? uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
@@ -273,6 +280,7 @@ final class DioHttpClient implements HttpClient {
           keyword: keyword,
           sourceId: sourceId,
           maxBytes: maxBytes,
+          declaredCharset: declaredCharset,
         ),
       );
 
@@ -308,6 +316,7 @@ final class DioHttpClient implements HttpClient {
     required String? sourceId,
     String? body,
     int? maxBytes,
+    String? declaredCharset,
   }) async {
     final Response<ResponseBody> response;
     try {
@@ -366,6 +375,22 @@ final class DioHttpClient implements HttpClient {
         rulePath: rulePath,
         cause: error,
       );
+    } on Exception catch (error, stackTrace) {
+      // 正文是**流式**读的（C-PERF-5），所以读的过程中也会超时 / 断连，而 dio 的
+      // `receiveTimeout` 在那里表现为一个 `DioException`。它在 `_dio.request` 的
+      // try 之外抛出，不接住就会穿过 `HttpClient` 契约（C-ERR-1），把一个「读超时」
+      // 变成上一层的整批失败（真实案例：一个源把整次聚合搜索打成了失败）。
+      final ParseFailureKind kind = error is DioException
+          ? _failureKindForDioError(error)
+          : ParseFailureKind.networkFailed;
+      _logger.warning(
+        'Response body could not be read: rule=$rulePath kind=${kind.name} '
+        'url=${redactUrl(url, keyword: keyword)}',
+        describeError(error),
+        stackTrace,
+      );
+
+      return ParseFailure<HttpResponse>(kind: kind, rulePath: rulePath);
     }
 
     return _decode(
@@ -376,6 +401,7 @@ final class DioHttpClient implements HttpClient {
       keyword: keyword,
       url: url,
       sourceId: sourceId,
+      declaredCharset: declaredCharset,
     );
   }
 
@@ -421,6 +447,7 @@ final class DioHttpClient implements HttpClient {
     required String? keyword,
     required String url,
     required String? sourceId,
+    String? declaredCharset,
   }) async {
     final String? sniffedCharset = await _readCachedCharset(sourceId, url);
 
@@ -429,6 +456,7 @@ final class DioHttpClient implements HttpClient {
         bytes,
         contentType: headers.value(HttpHeaders.contentTypeHeader),
         sniffedCharset: sniffedCharset,
+        declaredCharset: declaredCharset,
       );
       if (decoded.isDetected && sniffedCharset == null) {
         // 命中的标签不需要重写（DAO 已把它当成未过期才会返回）；只有**这次刚嗅探出来**的才写。

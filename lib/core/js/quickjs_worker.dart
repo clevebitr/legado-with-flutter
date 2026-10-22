@@ -172,6 +172,10 @@ final class _Worker {
   /// back into a removal instead of the text "null".
   Map<String, String?> _variables = <String, String?>{};
 
+  /// The book / chapter a `java.get('bookName')` / `java.get('title')` reads answer with
+  /// (`book-source.md` §6, ADR-0049); empty when the stage does not know them.
+  Map<String, String> _named = const <String, String>{};
+
   /// Registers §6's binding channels.
   ///
   /// The sync bindings (`crypto.*`, `log.*`) complete inside this isolate, so JavaScript
@@ -221,7 +225,8 @@ final class _Worker {
   /// The value is a JSON envelope ([applyJsJavaCall]) rather than a bare value: a write has
   /// no value to return, so `null` cannot serve as “failed” here. The variable map is this
   /// job's snapshot, which the result envelope carries back to the host (ADR-0034 §决策 1).
-  Object? _applyJava(Object? args) => applyJsJavaCall(_variables, args);
+  Object? _applyJava(Object? args) =>
+      applyJsJavaCall(_variables, args, named: _named);
 
   /// Runs one job and reports its result envelope.
   Future<void> evaluate(Object? job) async {
@@ -241,6 +246,7 @@ final class _Worker {
 
     final Map<String, Object?> fields = Map<String, Object?>.from(job);
     _variables = decodeJsVariables(fields['variables']);
+    _named = decodeJsNamedContext(fields);
     final Stopwatch stopwatch = Stopwatch()..start();
     JsEvalResult result = _runtime.evaluate(_evaluationSource(fields));
     if (result.rawResult is Future) {

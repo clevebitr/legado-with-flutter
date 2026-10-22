@@ -38,7 +38,7 @@
 | `bookSourceGroup` | `group` | `String?` | M0 | — |
 | `bookSourceType` | `sourceType` | `BookSourceType` | M0 | 0 文本 / 1 音频 / 2 图片 / 3 文件 |
 | `enabled` | `isEnabled` | `bool` | M0 | 默认 `true` |
-| `header` | `headers` | `Map<String, String>?` | M0 | 原为 JSON 字符串，导入时解析；单个引号的宽松写法（GSON 接受）也解析；**写成规则**（`@js:` / `<js>`）尚未求值，导入时降级为无 header + warning（ADR-0040 §决策 6 的修订注记、`docs/dev/roadmap.md` §3.7） |
+| `header` | `headers` + `headerRule` | `Map<String, String>?` + `String?` | M0（规则形态 **M12**） | 原为 JSON 字符串，导入时解析；单个引号的宽松写法（GSON 接受）也解析。**写成规则**（`@js:` / `<js>`）时原文落 `headerRule`，在**首个请求之前**求值成 header 表（ADR-0047 §决策 5）；仍不是规则、也读不成对象的写法继续降级为无 header + warning（ADR-0040 §决策 6） |
 | `searchUrl` | `searchUrl` | `String?` | M0 | 支持 `{{key}}` / `{{page}}` |
 | `exploreUrl` | `exploreUrl` | `String?` | **M1** | 发现页；两种形态（分类串 / 整字段 JS）、条目语义与回落规则**全部**见 §4.2（ADR-0035） |
 | `ruleSearch` | `searchRule` | `SearchRule` | M0 | 必填 |
@@ -138,7 +138,7 @@
 | 11 | `&&` **合并两侧结果（并集，非串联；仅限同种规则，不含 js 与正则）** | `class.odd.0@tag.a.0@text&&tag.dd.0@tag.h1@text` | 所有字段 | M0 | 已确认 |
 | 12 | `@css:` 标准 CSS 选择器 | `@css:.book-list li@text` | 所有字段 | M0 | 已确认 |
 | 13 | `@json:` JSONPath（以 `$.` 开头时可省略标志） | `@json:$.data.list[*].name` | 所有字段 | M0 | 已确认 |
-| 14 | `@js:` JavaScript | `@js:result.replace(/\\s/g,'')` | 所有字段 | **M0** | 已确认 |
+| 14 | `@js:` JavaScript | `@js:result.replace(/\\s/g,'')` | 所有字段 | **M0** | 已确认（**列表规则**自 M12 起支持：脚本返回数组即条目，ADR-0047 §决策 3） |
 | 15 | `@@` 默认规则标志（在 `{{}}` 内使用时必填） | `@@class.odd.0@text` | 所有字段 | M1 | 已确认 |
 | 16 | `@put:{key:rule}` / `@get:{key}`（**仅限 js 以外**的规则；`@put` 内 JSONPath 不加引号，其他规则加引号） | `@put:{bid:"//*[@bid-data]/@bid-data"}` | 所有字段 | M1 | 已确认 |
 | 17 | `java.put(key,value)` / `java.get(key)`（**仅限 js 内**，js 中不能使用 `@get`） | — | 所有字段 | M1 | 已确认 |
@@ -155,7 +155,7 @@
 | 28 | 索引作为 `@` 分段后每段的首规则：`.1` / `[1]` / `!0` / `children[1]`，等价于 `children` + 该索引（可与 #5 / #6 / #26 的位置写法组合） | `head@.1@text`、`head@[1]@text`、`head@children[1]@text`（等价） | 所有字段 | **M0** → Phase 3.1（已实现） | 已确认 |
 | 29 | `@css:` 内的 jsoup 索引伪类 `:eq(n)` / `:gt(n)` / `:lt(n)`（**兄弟索引**，0-based，**不是**结果集索引） | `@css:div#info > p:eq(3) @text` | 所有字段 | **M0** → Phase 3.2 | 已确认 |
 | 30 | 提取段里的**嵌套规则**（末段本身是一条规则，如 `class.a@css:.b`） | `class.a@css:.b` | 所有字段 | **M2 / 暂不实现**（复审触发条件：真实语料统计显示使用率 > 0 且影响可用率时改判 M1） | 不支持 |
-| 31 | `<js>…</js>` JS 包装（**任意位置**，可作其他规则的分隔符；与 #14 同能力、不同包装） | `tag.li<js>…</js>//a`（原版文档示例） | 所有字段 | **M2 / 暂不实现**（复审触发条件：真实语料统计显示使用率 > 0 且影响可用率时改判，与 #30 同口径；需先扩规则串的分段能力）**例外：** 整个 `exploreUrl` 字段就是一个 `<js>…</js>` 时按发现页整字段 JS 支持（§4.2、ADR-0035 §决策 6） | 不支持 |
+| 31 | `<js>…</js>` JS 包装（**任意位置**，可作其他规则的分隔符；与 #14 同能力、不同包装） | `tag.li<js>…</js>//a`（原版文档示例） | 所有字段 | **M12**（值规则与列表规则都支持） | 已确认（**分段链**：上一段产出是下一段 `result`，`{{result}}` 由此拼进后续文本；ADR-0047 §决策 2） |
 
 > **G4 状态（2026-10-14）：** #15–#19 **全部**已翻「已确认」，逐行证据（源名 + 字段 + 产出样本）见
 > `tool/spot_check/README.md` §4 的 G4 记录（RUN 1 = 漫客栈，#16/#18/#19；RUN 2 = QB女生派生，#17；
@@ -273,9 +273,11 @@
 > - **#17 `java.put` / `java.get`**：与 #16 是**同一份**变量（上游 `bindings["java"]` 就是那个
 >   `AnalyzeRule`，`AnalyzeRule.kt:835`）。存储位置、快照与回程语义归 **ADR-0034**；
 >   `java.timeFormat` 属 `updateTime`，仍按 §6 表的分期。
->   **登记的实现差异：** 上游 `java.get` 还有 `bookName` / `title` 两个特例
->   （`AnalyzeRule.kt:812-821`，取 Book / Chapter 的名字），Phase 5 之前本仓没有这两个实体，
->   它们按普通变量读（登记在 `docs/dev/roadmap.md` §3.7）。
+>   **两个内置键（M12 起支持，ADR-0049）：** 上游 `java.get` 先答 `bookName` / `title`
+>   （`AnalyzeRule.kt:812-821`，取 Book / Chapter 的名字），**再**查变量表。本仓照此实现：
+>   `JsJob` 带 `bookName` / `chapterTitle`（来自 `JsPageContext`，即**页面**的上下文），
+>   读的顺序是 `内置键 → 变量表 → 空串`，所以 `java.put('title', …)` **不能**劫持内置键。
+>   阶段不知道名字时（搜索、目录、调试控制台）内置键缺失，读回落变量表。
 > - **#18 `{{…}}`**：内层文本按上游 `isRule` 分流（`AnalyzeRule.kt:736-752`）：以
 >   `@` / `$.` / `$[` / `//` 开头就当**规则**求值（取首个值），否则**当 JS**求值（取单个标量，
 >   `null` / 无值都变空串）。在**搜索 / 发现 URL** 里只允许 JS，规则头按名报
@@ -468,6 +470,32 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 > 绝不把章节变成失败（C-ERR-1、ADR-0033）。过期条目在**读**时即未命中，物理清理归 `docs/dev/roadmap.md` 5.7。
 > 命中时 `FetchContent` 连书源限速都不进预算，因为这次操作一个请求都不发。
 
+### 4.3 URL 规则的后缀 `,{…}`（M12，ADR-0047 §决策 1）
+
+真实语料里 **50/128** 条源的 `searchUrl`（以及部分 `exploreUrl` 条目 / `tocUrl`）不是一个地址，而是
+「地址 + 请求选项」：
+
+```
+https://a.test/modules/article/search.php,{ "method": "POST", "body": "searchkey={{key}}" }
+https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"charset":"gbk"}
+```
+
+| 字段 | 语义 | 本仓 |
+|---|---|---|
+| `method` | `GET` / `POST`（`HEAD` 等本仓没有消费方） | ✅ `POST` 发 body；其余按 `GET` 发并记 `method:<名字>` |
+| `body` | POST 载荷，可含 `{{…}}` | ✅ 是**规则**：URL / 表单里 `{{key}}` 按 `charset` 百分号编码，**JSON / XML 载荷里原样** |
+| `charset` | 该请求的编码 | ✅ 双向：请求侧编码 `{{key}}`，响应侧作为 §5 的**最高优先级声明** |
+| `headers` | 该请求额外 header（对象，或**字符串形式的对象**） | ✅ 合并到书源 `header` **之上** |
+| `webView` / `webJs` / `retry` / `origin` / `type` / `js` | 浏览器 / 重试 / 源类型等 | ❌ 记 `unsupported` 并按名 warning（ADR-0032 的降级口径） |
+
+约定：
+
+- 切点是 `,\s*(?=\{)` **且**后面必须是「以 `}` 收尾的平衡对象」（上游 `AnalyzeUrl.paramPattern`）；
+  `?q={{key}}`、地址里的普通逗号都不算后缀。
+- 后缀是**宽松 JSON**：单引号、裸键、尾逗号、值里嵌 `{{…}}` 都是真实写法。
+- 读不懂的后缀是 `unsupported:url-options` 的显式失败——**绝不**把 `,{…}` 当 URL 发出去
+  （那是真实语料里 50 条源 404 的来源）。
+
 ### 4.2 发现页（`exploreUrl` 与 `ruleExplore`）
 
 本节是发现页的**唯一出处**（决策理由与四条登记差异见 **ADR-0035**；字段分期归 §2）。
@@ -509,8 +537,10 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 ## 5. 编码
 
 - 必须使用 `betto_charset_detector` 检测（C-NET-3），检测顺序：
-  HTTP `Content-Type` → HTML `<meta charset>` → 字节嗅探 → 回退 UTF-8。
+  **URL 规则声明的 `charset`（§4.3）** → HTTP `Content-Type` → HTML `<meta charset>` → 字节嗅探 → 回退 UTF-8。
   前两步是**权威声明**：只要有声明就必须用它，嗅探仅用于两者都缺失的页面。
+  URL 规则（书源作者）的声明排在最前，因为站点"声明 utf-8、实际发 GBK"是常态，而作者已经写明了；
+  它走 §5 的**已声明车道**（宽容 + warning），不是嗅探车道。
 - 本节的缓存只讲**编码检测**；**正文缓存**复用同一张表与同一种键形状，其键与 TTL 归 §4.1。
 - 检测结果必须缓存到「书源 ID + URL」维度，避免重复嗅探（**已落地：Phase 3.9**）：
   缓存的是**嗅探车道的结果**，键复用 `CacheDao` 的稳定键（`ruleField` 固定为 `charset`、`page` 固定，
@@ -545,15 +575,17 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 | `gbk`、`gb2312`、`gb18030`、`cp936` | ✅（四者共用 GBK 解码器） |
 | `windows-1252`、`iso-8859-1/2/15`、`latin1` | ✅ |
 | `shift-jis`、`euc-jp`、`euc-kr`、`us-ascii` | ✅ |
-| `big5`、`big5-hkscs`、`euc-cn`、`sjis`、`windows-31j`、`iso-2022-jp`、`koi8-r` | ❌ 回落 UTF-8 → 通常 `encodingFailed` |
+| `big5`、`big5-hkscs`、`cp950`、`csbig5` | ✅ **已声明车道可解码**（`enough_convert` 的 `Big5Codec`，ADR-0048）；**检测仍不认识 Big5**：无声明时不会自动猜成 Big5。`big5-hkscs` 的扩展区 → U+FFFD（部分支持） |
+| `euc-cn`、`sjis`、`windows-31j`、`iso-2022-jp`、`koi8-r` | ❌ 回落 UTF-8 → 通常 `encodingFailed` |
 
-**已知缺口：Big5 / Big5-HKSCS。** 当前依赖树**既不能检测也不能解码** Big5 系编码
-（已核实：`betto_charset_detector 0.1.0` 的候选表只有 windows-1252 / iso-8859-1/2/15 /
-shift-jis / euc-jp / euc-kr / gbk；`charset 2.0.1` 未注册任何 Big5 编解码器）。
-实际行为：`Content-Type` 声明 `big5` → `Charset.getByName('big5')` 返回 `null` → 按本节顺序
-回退 UTF-8 → 繁体内容通常随即解码失败 → `ParseFailure(encodingFailed)`。
-补齐需新增 Big5 解码依赖（走 C-DEP-1 评审 + C-DEP-7 许可核实 + ADR），或在 `core/network/`
-内自带码表（体积与维护成本更高）。**状态：已知缺口，未排期；是否覆盖繁体书源由排期决定。**
+**Big5 系：解码已补齐，检测仍缺（2026-10-21，ADR-0048）。** `charset 2.0.1` 未注册任何 Big5 编解码器，
+因此新增 `enough_convert`（MPL-2.0，纯 Dart、零依赖）的 `Big5Codec` 补解码。现在：
+
+- `Content-Type` / `<meta>` / **URL 规则（§4.3）** 声明 `big5` / `big5-hkscs` / `cp950` / `csbig5`
+  → 按 Big5 解码（已声明车道，坏字节容错为 U+FFFD + warning）；
+- **没有声明时仍然不猜**：`betto_charset_detector 0.1.0` 的候选表里没有 Big5，
+  所以页面会按嗅探结果解（通常 `encodingFailed`）。所谓「缺口闭合」只到解码这一半；
+- HKSCS 扩展区不在码表内，解成 U+FFFD，属**部分支持**。
 
 **其它已知限制：** `gb18030` 按 GBK 解码，四字节扩展区字符会失败，属 M0 已知限制。
 本表不因 ADR-0031（声明车道的宽容解码）而改变：宽容**不**扩大可解码的标签集，Big5 系仍然既不能
@@ -900,6 +932,18 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 链路：搜索 → 目录 → 正文
 结论：已确认 / 行为差异：<描述> → 已更新矩阵
 ```
+
+> **#14 列表形态 / #31 `<js>` / §4.3 URL 后缀的当前证据（2026-10-21，ADR-0047）：**
+> 语料 `4dc410d1.json`（128 条公开合集，`tool/spot_check/batch_probe.dart` 全量复跑）+
+> 单源 spot-check（`--plain-http`）。逐条记录：
+>
+> | 语法 / 字段 | 书源 | 链路 | 结论 |
+> |---|---|---|---|
+> | `#31 <js>` + `header` 规则（§4.3 之外的 A2） | 阅友小说（`sma.yueyouxs.com`） | 搜索 → 详情 → 目录 → 正文 | 已确认（search=5 / toc=57 / content=676，`sha256=d7e97e3157580991`）；该源在改造前**导入即失败** |
+> | `#14` 列表 JS + §4.3 `charset` | 飞卢小说💰（`b.faloo.com`，`searchUrl` 带 `{"charset":"gbk"}`） | 搜索 → 详情 → 目录 → 正文 | 已确认（search=28 / toc=1087 / content=1156，`sha256=d208052977d3039c`）；目录页数由 291 变为 1087，证明 GBK 链路真的被解开 |
+> | `$.[*]` 方言（§3 的 #13 变体） | 有声听书网 | 搜索 | 由 `parseFailed` 变为真命中（2 条） |
+>
+> 未覆盖的部分（`@xpath:` / `webJs` / `sourceRegex`）保持「不支持」，不受本轮影响。
 
 > **#13（`@json:` / 裸 `$.`）的当前证据（2026-10-11）：**
 > 语法 `#13 @json:`；书源 示例书源（JSON 规则，真实导出结构，已脱敏，

@@ -194,7 +194,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-DEP-4 | 生成命令固定为 `dart run build_runner build`（`--delete-conflicting-outputs` 已在 `build_runner 2.16.2` 中移除并被忽略，见 ADR-0013 §6）。 |
 | C-DEP-5 | 生成文件（`*.g.dart`、`*.freezed.dart`、`*.gr.dart`）禁止手改；冲突必须重新生成。 |
 | C-DEP-6 | `pubspec.yaml` 是依赖的唯一来源；`docs/dev/tech-stack.md` 的说明表必须与其同步，禁止只在其中一处新增依赖。 |
-| C-DEP-7 | 新增依赖必须与 GPL-3.0 兼容：宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；**禁止引入 GPL-2.0-only、无许可证或专有许可的依赖**。核实结果记入 `NOTICE.md` §5。 |
+| C-DEP-7 | 新增依赖必须与 GPL-3.0 兼容：宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；**MPL-2.0 只按 `tool/scan_licenses.dart` 的白名单放行**（每加一个都要 ADR，ADR-0048 是第一个）；**禁止引入 GPL-2.0-only、无许可证或专有许可的依赖**。核实结果记入 `NOTICE.md` §5。 |
 
 ---
 

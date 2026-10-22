@@ -628,4 +628,228 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get searchTypeVideo => 'Video';
+
+  @override
+  String get bookSourceStartReading => 'Start reading';
+
+  @override
+  String get bookSourceContinueReading => 'Continue reading';
+
+  @override
+  String get bookSourceIntroExpand => 'Show more';
+
+  @override
+  String get bookSourceIntroCollapse => 'Show less';
+
+  @override
+  String get bookSourceListSearchHint => 'Search name, URL or group';
+
+  @override
+  String get bookSourceListSelectAll => 'Select all';
+
+  @override
+  String get bookSourceListInvertSelection => 'Invert';
+
+  @override
+  String bookSourceListSelectedCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String get bookSourceListBatchEnable => 'Enable';
+
+  @override
+  String get bookSourceListBatchDisable => 'Disable';
+
+  @override
+  String get bookSourceListBatchDelete => 'Delete';
+
+  @override
+  String bookSourceListBatchDeleteTitle(int count) {
+    return 'Delete $count sources?';
+  }
+
+  @override
+  String get bookSourceListBatchDeleteBody =>
+      'Books you added from them stay on the shelf.';
+
+  @override
+  String get bookSourceListBatchGroup => 'Group';
+
+  @override
+  String get bookSourceListGroupNone => 'No group';
+
+  @override
+  String get bookSourceListGroupNew => 'New group…';
+
+  @override
+  String get bookSourceListGroupNameHint => 'Group name';
+
+  @override
+  String get bookSourceCheckFilterLabel => 'Check status';
+
+  @override
+  String get bookSourceCheckFilterAll => 'All';
+
+  @override
+  String get bookSourceCheckFilterHealthy => 'Healthy';
+
+  @override
+  String get bookSourceCheckFilterFailing => 'Has failures';
+
+  @override
+  String get bookSourceRowCheck => 'Check this source';
+
+  @override
+  String get bookSourceRowEdit => 'Edit';
+
+  @override
+  String get bookSourceRowExport => 'Export';
+
+  @override
+  String get bookSourceCheckPassed => 'Check passed';
+
+  @override
+  String bookSourceCheckFound(String groups) {
+    return 'Check found: $groups';
+  }
+
+  @override
+  String get bookSourceExportCopied => 'Source JSON copied';
+
+  @override
+  String get bookSourceExportSaved => 'Saved';
+
+  @override
+  String get bookSourceExportFailed => 'Could not export this source';
+
+  @override
+  String get bookSourceEditTitle => 'Edit source';
+
+  @override
+  String get bookSourceEditSaved => 'Saved';
+
+  @override
+  String get bookSourceEditInvalidFields => 'Fix the highlighted fields first';
+
+  @override
+  String get bookSourceEditIdentityConflict =>
+      'Another source already has exactly these rules';
+
+  @override
+  String get bookSourceEditUrlHint =>
+      'Changing the URL is like switching source: the shelf keeps the old one.';
+
+  @override
+  String get bookSourceFieldName => 'Name';
+
+  @override
+  String get bookSourceFieldUrl => 'Source URL';
+
+  @override
+  String get bookSourceFieldGroup => 'Group';
+
+  @override
+  String get bookSourceFieldType => 'Type';
+
+  @override
+  String get bookSourceFieldWeight => 'Weight';
+
+  @override
+  String get bookSourceFieldHeader => 'Header (JSON)';
+
+  @override
+  String get bookSourceFieldSearchRule => 'Search rule';
+
+  @override
+  String get bookSourceFieldBookInfoRule => 'Book info rule';
+
+  @override
+  String get bookSourceFieldTocRule => 'Chapters rule';
+
+  @override
+  String get bookSourceFieldContentRule => 'Content rule';
+
+  @override
+  String get actionSave => 'Save';
+
+  @override
+  String get bookSourceRowCheckRunning => 'Checking…';
+
+  @override
+  String get readerFontFamily => 'Font';
+
+  @override
+  String get readerFontFamilyTheme => 'Theme default';
+
+  @override
+  String get readerFontFamilySerif => 'Serif';
+
+  @override
+  String get readerFontFamilySans => 'Sans-serif';
+
+  @override
+  String get readerFontFamilyMono => 'Monospace';
+
+  @override
+  String get readerParagraphSpacing => 'Paragraph spacing';
+
+  @override
+  String get readerFirstLineIndent => 'First-line indent';
+
+  @override
+  String get readerPagePadding => 'Page margin';
+
+  @override
+  String get readerPaddingNarrow => 'Narrow';
+
+  @override
+  String get readerPaddingMedium => 'Medium';
+
+  @override
+  String get readerPaddingWide => 'Wide';
+
+  @override
+  String readerChapterProgress(int current, int total) {
+    return '$current/$total chapters';
+  }
+
+  @override
+  String readerChapterPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get readerChangeSource => 'Change source';
+
+  @override
+  String get readerBrightness => 'Brightness';
+
+  @override
+  String get readerTocSort => 'Reversed';
+
+  @override
+  String get readerTocSearchHint => 'Search chapters';
+
+  @override
+  String get readerSourceTitle => 'Change source';
+
+  @override
+  String get readerSourceEmpty => 'No other source has this book.';
+
+  @override
+  String get readerSourceSearching => 'Searching other sources…';
+
+  @override
+  String readerSourceChapters(int count) {
+    return '$count chapters';
+  }
+
+  @override
+  String get readerSourceFailed => 'Could not switch source';
+
+  @override
+  String readerSourceAligned(String chapter) {
+    return 'Aligned to: $chapter';
+  }
 }

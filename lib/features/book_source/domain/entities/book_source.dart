@@ -71,6 +71,15 @@ abstract class BookSource with _$BookSource {
     @JsonKey(name: 'header')
     @_HeaderJsonConverter()
     Map<String, String>? headers,
+
+    /// The source's `header` when it is a **rule** rather than a JSON object
+    /// (`docs/dev/book-source.md` §2, M12-A2).
+    ///
+    /// Upstream evaluates it before every request and parses its result as a JSON object
+    /// (`BaseSource.getHeaderMap`). The text is kept here rather than dropped, because a
+    /// source that signs its requests cannot be used at all without it; the evaluation itself
+    /// belongs to the fetch (`PageFetchService.headersOf`), which is where the sandbox is.
+    @JsonKey(includeFromJson: false, includeToJson: false) String? headerRule,
     String? searchUrl,
     @JsonKey(name: 'exploreUrl') String? exploreUrl,
     @JsonKey(name: 'ruleSearch') required SearchRule searchRule,
@@ -102,11 +111,20 @@ abstract class BookSource with _$BookSource {
   /// happens once per file, so the repeated parse is irrelevant next to keeping
   /// the retention rule in one obvious place.
   factory BookSource.fromLegadoJson(Map<String, Object?> json) {
-    final BookSource source = _$BookSourceFromJson(json);
+    final String? headerRule = headerRuleOf(json['header']);
+    // 规则形式的 header 不进转换器：它的文本留给 [headerRule]，由取页前求值。
+    // 括号不能省：级联 `..remove` 的优先级比条件表达式**低**，不括起来会作用在
+    // 整个三元表达式上、把调用方传进来的 map 也改掉（实测：payload 里的 header 被删）。
+    final BookSource source = _$BookSourceFromJson(
+      headerRule == null
+          ? json
+          : (Map<String, Object?>.of(json)..remove('header')),
+    );
     final Object? bookInfoJson = json['ruleBookInfo'];
     final Object? exploreJson = json['ruleExplore'];
 
     return source.copyWith(
+      headerRule: headerRule,
       searchRule: SearchRule.fromLegadoJson(_nestedObject(json, 'ruleSearch')),
       exploreRule: exploreJson == null
           ? null
@@ -333,6 +351,9 @@ final class _HeaderJsonConverter
   @override
   Map<String, String>? fromJson(Object? json) => switch (json) {
     null => null,
+    // 规则形式的 header（`@js:` / `<js>`）不是 JSON：它由 [BookSource.headerRule] 承载，
+    // 这里回答“没有静态 header”，而不是让整条源导入失败（M12-A2）。
+    final String raw when headerRuleOf(raw) != null => null,
     final String raw => _parseHeaderString(raw),
     final Map<Object?, Object?> raw => _toStringMap(raw),
     _ => throw FormatException(
@@ -344,6 +365,22 @@ final class _HeaderJsonConverter
   @override
   Object? toJson(Map<String, String>? object) =>
       object == null ? null : jsonEncode(object);
+}
+
+/// The **rule** a source wrote in its `header` field, or `null` when it is a JSON object.
+///
+/// Upstream's spelling is `@js:…` or `<js>…</js>` (`BaseSource.getHeaderMap`); both are kept
+/// verbatim here so the fetch can evaluate them.
+String? headerRuleOf(Object? header) {
+  if (header is! String) {
+    return null;
+  }
+  final String trimmed = header.trim();
+
+  return trimmed.toLowerCase().startsWith('@js:') ||
+          trimmed.toLowerCase().startsWith('<js>')
+      ? trimmed
+      : null;
 }
 
 /// Parses a `header` JSON string, or returns `null` when it declares nothing.

@@ -131,7 +131,7 @@ final class AggregateSearchProvider
   }
 }
 
-String _$aggregateSearchHash() => r'bf3943dea2f339c1a3c9362ad84751791a76bb86';
+String _$aggregateSearchHash() => r'844c711fab1f79dd144c6c87938dc5969e209a3d';
 
 /// Runs the aggregate search and publishes its progress (`docs/dev/roadmap.md` 3.8).
 ///

@@ -265,9 +265,10 @@ class AggregateSearch extends _$AggregateSearch {
       ref
           .read(appLoggerProvider)
           .error('Aggregate search threw.', error, stackTrace);
-      state = state.copyWith(
-        status: AggregateSearchStatus.failed,
-        failureKind: ParseFailureKind.parseFailed,
+      // 已经发布的命中不能被一次 "整批异常" 抹掉（用户看到的是「结果变少」，不是「结果消失」）。
+      state = _settled(
+        kind: ParseFailureKind.parseFailed,
+        isCancelled: _cancellation?.isCancelled ?? false,
       );
 
       return;
@@ -276,14 +277,9 @@ class AggregateSearch extends _$AggregateSearch {
     switch (result) {
       case ParseFailure<AggregateSearchResult>(:final ParseFailureKind kind):
         // 取消不是失败：已找到的结果保留，状态回到 done（ADR-0046 §决策 6）。
-        final bool cancelled = _cancellation?.isCancelled ?? false;
-        state = state.copyWith(
-          status: cancelled
-              ? AggregateSearchStatus.done
-              : AggregateSearchStatus.failed,
-          failureKind: cancelled ? null : kind,
-          hasMore: false,
-          isPaused: false,
+        state = _settled(
+          kind: kind,
+          isCancelled: _cancellation?.isCancelled ?? false,
         );
       case ParseSuccess<AggregateSearchResult>(
         :final AggregateSearchResult data,
@@ -299,6 +295,28 @@ class AggregateSearch extends _$AggregateSearch {
           isPaused: false,
         );
     }
+  }
+
+  /// Folds a failed run into the state **without discarding hits already published**.
+  ///
+  /// A failure that *replaces* the list is the bug the user sees as “one broken source wiped every
+  /// good result”: progress already delivered rows, and the failure path used to overwrite the whole
+  /// screen with an error. So the rule is: keep the rows, and keep `done` when there is something to
+  /// show; only an empty run reports `failed` (ADR-0046 §决策 5).
+  AggregateSearchState _settled({
+    required ParseFailureKind kind,
+    required bool isCancelled,
+  }) {
+    final bool hasBooks = state.books.isNotEmpty;
+
+    return state.copyWith(
+      status: isCancelled || hasBooks
+          ? AggregateSearchStatus.done
+          : AggregateSearchStatus.failed,
+      failureKind: isCancelled ? null : kind,
+      hasMore: false,
+      isPaused: false,
+    );
   }
 }
 

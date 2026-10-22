@@ -17,12 +17,17 @@ final class FakeChapterListProvider implements ChapterListProvider {
   /// The `(sourceUrl, tocUrl)` pairs requested, in order.
   final List<(String, String)> requests = <(String, String)>[];
 
+  /// The `java.get('bookName')` context of every request, in order (ADR-0049).
+  final List<String> bookNames = <String>[];
+
   @override
   Future<ParseResult<List<ReadingChapter>>> fetch({
     required String sourceUrl,
     required String tocUrl,
+    String bookName = '',
   }) async {
     requests.add((sourceUrl, tocUrl));
+    bookNames.add(bookName);
 
     return failure ?? ParseSuccess<List<ReadingChapter>>(chapters);
   }
@@ -39,12 +44,18 @@ final class FakeChapterContentProvider implements ChapterContentProvider {
   /// The chapter URLs requested, in order.
   final List<String> requests = <String>[];
 
+  /// The `(bookName, chapterTitle)` context of every request, in order (ADR-0049).
+  final List<(String, String)> contexts = <(String, String)>[];
+
   @override
   Future<ParseResult<String>> fetch({
     required String sourceUrl,
     required String chapterUrl,
+    String bookName = '',
+    String chapterTitle = '',
   }) async {
     requests.add(chapterUrl);
+    contexts.add((bookName, chapterTitle));
     final ParseFailureKind? kind = failures[chapterUrl];
     if (kind != null) {
       return failureAt<String>(kind: kind, rulePath: 'reader.chapterContent');

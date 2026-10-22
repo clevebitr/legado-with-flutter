@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_status.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
@@ -66,10 +67,23 @@ class BookshelfPage extends ConsumerWidget {
       return ListTile(
         // 从书架打开阅读器：`tocUrl` 在 5.3 之后入库，老行回落到书籍页（ADR-0044 §决策 3）。
         onTap: () => _open(context, ref, book),
-        leading: Icon(
-          book.status == ShelfStatus.read
-              ? Icons.check_circle_outline
-              : Icons.book_outlined,
+        // 书架封面：入库时存的 `coverUrl`（5.4 起就有），没封面时是占位块（S1）。
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            CoverImage(url: book.coverUrl, width: 40, height: 54),
+            // 已读完仍然要在封面上留一个角标：封面替换掉了原来的图标位，状态不能丢。
+            if (book.status == ShelfStatus.read)
+              Positioned(
+                right: -4,
+                bottom: -4,
+                child: Icon(
+                  Icons.check_circle,
+                  size: 16,
+                  semanticLabel: l10n.shelfStatusRead,
+                ),
+              ),
+          ],
         ),
         title: Text(book.name),
         subtitle: Text(_subtitle(book, l10n)),

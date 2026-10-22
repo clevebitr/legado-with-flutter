@@ -63,9 +63,6 @@ const Map<String, String> _unsupportedRules = <String, String>{
   // 矩阵 #7 的 `-` 先摘掉再识别标志头，所以标志头的报错保持原样（不能被 `-` 顶掉）。
   // 矩阵 #15：中段 `@@`（`@` 切分后留空段，必须在切段前判掉，否则误报畸形）。
   'class.a@@class.b@text': 'unsupported:@@',
-  // `<js>` 包装不是矩阵里的标志：语义（整条规则写成 JS）本仓未实现，按名字拒绝，
-  // 不得当成未知类型交给 cascadia（ADR-0032 §决策 3）。
-  '<js>result</js>': 'unsupported:<js>',
 };
 
 /// Selector segments that carry syntax a later phase of the matrix owns.
@@ -450,7 +447,7 @@ void main() {
       final FakeLogPrinter printer = FakeLogPrinter();
 
       await _engine(printer).selectAll(
-        '@js:result',
+        '@xpath://div',
         _scope(_document(_listHtml)),
         rulePath: 'searchRule.name',
       );
@@ -463,9 +460,105 @@ void main() {
       );
       expect(
         printer.events.single.message.toString(),
-        contains('unsupported:@js:list'),
+        contains('unsupported:@xpath:'),
       );
     });
+
+    test('selectAll_givenAJavaScriptListRule_returnsElementScopes', () async {
+      // 列表规则上的 JS（上游 `getElements` 的 `Mode.Js`）：脚本返回一列 HTML 片段，
+      // 每个片段是一个 DOM 条目，后面的逐项字段照旧用选择器读（book-source.md §3, #14/#31）。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = <Object?>[
+          '<li class="result"><a class="title">One</a></li>',
+          '<li class="result"><a class="title">Two</a></li>',
+        ];
+
+      final ParseResult<List<RuleScope>> result = await _engine(null, bridge)
+          .selectAll(
+            '@js:result.data.items',
+            _scope(_document('<ul></ul>')),
+            rulePath: 'searchRule.bookList',
+          );
+
+      expect((result as ParseSuccess<List<RuleScope>>).data, hasLength(2));
+      expect(bridge.jobs.single.script, 'result.data.items');
+    });
+
+    test('selectAll_givenAScriptThenASelector_readsEachItem', () async {
+      // `<js>` 之后还能跟选择器段：脚本产出的 HTML 片段成为条目，下一段在**每个条目**上跑
+      // 一次，结果按条目顺序拼接。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = <Object?>[
+          '<li class="result"><a class="title">One</a></li>',
+          '<li class="result"><a class="title">Two</a></li>',
+        ];
+
+      final ParseResult<List<RuleScope>> result = await _engine(null, bridge)
+          .selectAll(
+            '<js>fragments()</js>class.title',
+            _scope(_document('<ul></ul>')),
+            rulePath: 'searchRule.bookList',
+          );
+
+      expect((result as ParseSuccess<List<RuleScope>>).data, hasLength(2));
+    });
+
+    test('selectAll_givenTwoScripts_handsTheFirstScopesToTheSecond', () async {
+      // 两段脚本：第二段的 `result` 是第一段产出的条目（元素给 outerHtml）。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..results.addAll(<Object?>[
+          <Object?>['<li class="result">One</li>'],
+          'done',
+        ]);
+
+      final ParseResult<List<RuleScope>> result = await _engine(null, bridge)
+          .selectAll(
+            '<js>split()</js><js>result.length</js>',
+            _scope(_document('<ul></ul>')),
+            rulePath: 'searchRule.bookList',
+          );
+
+      // 第二段脚本返回字符串 `done`，它被当**一个**条目（DOM scope）。
+      expect((result as ParseSuccess<List<RuleScope>>).data, hasLength(1));
+      expect(bridge.jobs.last.result, isA<List<Object?>>());
+    });
+
+    test('selectAll_givenAFailingListScript_failsTheRule', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = const ParseFailure<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'js:error',
+        );
+
+      final Future<ParseFailure<Never>> result = _failure(
+        _engine(null, bridge).selectAll(
+          '@js:boom()',
+          _scope(_document('<ul></ul>')),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect((await result).rulePath, 'js:error');
+    });
+
+    test(
+      'selectAll_givenAJavaScriptListRuleOfObjects_returnsJsonScopes',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..result = <Object?>[
+            <String, Object?>{'name': 'One'},
+          ];
+
+        final ParseResult<List<RuleScope>> result = await _engine(null, bridge)
+            .selectAll(
+              r'@json:$.data<js>result</js>',
+              RuleScope.json(<String, Object?>{'data': <Object?>[]}),
+              rulePath: 'searchRule.bookList',
+            );
+
+        expect((result as ParseSuccess<List<RuleScope>>).data, hasLength(1));
+      },
+    );
   });
 
   group('RuleEngine extractAll', () {
@@ -2256,6 +2349,21 @@ void main() {
       },
     );
 
+    test('extractAll_givenADotBeforeASubscript_readsItLikeUpstream', () async {
+      // M12-A6：`$.[*]` 是 Legado 的写法（宜搜小说 / 有声听书网的 `bookList`），
+      // RFC 9535 的下标前不允许那个点。
+      expect(
+        await _values(
+          _engine().extractAll(
+            r'$.[*]',
+            _page('[{"name":"a"},{"name":"b"}]'),
+            rulePath: 'searchRule.bookList',
+          ),
+        ),
+        <String>['{"name":"a"}', '{"name":"b"}'],
+      );
+    });
+
     test(
       'extractAll_givenABracketFollowedByAMemberNameAtTheRoot_readsIt',
       () async {
@@ -2456,6 +2564,159 @@ void main() {
         expect(failure.rulePath, 'searchRule.name');
       },
     );
+  });
+
+  group('RuleEngine matrix #31 (<js> wrapper)', () {
+    test('extractFirst_givenABareJsBlock_runsItOnThePageBody', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+
+      final String? value = await _first(
+        _engine(null, bridge).extractFirst(
+          '<js>result.length</js>',
+          _pageWithContext(_countHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(value, 'ok');
+      expect(bridge.jobs.single.result, _countHtml);
+    });
+
+    test('extractFirst_givenJsThenText_feedsTheResultIntoTheTemplate', () async {
+      // 真实写法：`<js>java.put('cid', …)</js>https://…/{{result}}/info.html` —— 脚本的产出
+      // 通过 `{{result}}` 拼进后面的文本，整段就是这一条规则的值。
+      final FakeJsBridge bridge = FakeJsBridge()..result = '42';
+
+      final String? value = await _first(
+        _engine(null, bridge).extractFirst(
+          '<js>java.put("cid", 42)</js>https://infos.test/{{result}}/info.html',
+          _pageWithContext(_countHtml),
+          rulePath: 'searchRule.bookUrl',
+        ),
+      );
+
+      expect(value, 'https://infos.test/42/info.html');
+      // 第一段是脚本，第二段的 `{{result}}` 是又一次沙箱调用，拿到的正是第一段的产出。
+      expect(bridge.jobs, hasLength(2));
+      expect(bridge.jobs.last.result, '42');
+      expect(bridge.jobs.first.rulePath, 'searchRule.bookUrl');
+    });
+
+    test('extractFirst_givenTextThenJs_passesTheExtractedValues', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'done';
+
+      final String? value = await _first(
+        _engine(null, bridge).extractFirst(
+          'class.title@text<js>result.length</js>',
+          _scope(_document(_listHtml)),
+          rulePath: 'searchRule.kind',
+        ),
+      );
+
+      expect(value, 'done');
+      // 选择器段的产出就是脚本的 `result`（单值字段传第一个值，§4.1）。
+      expect(bridge.jobs.single.result, 'One');
+    });
+
+    test('extractFirst_givenAFailingScript_failsTheWholeRule', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = const ParseFailure<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'js:error',
+        );
+
+      final Future<ParseFailure<Never>> result = _failure(
+        _engine(null, bridge).extractFirst(
+          '<js>boom()</js>https://x.test/{{result}}',
+          _pageWithContext(_countHtml),
+          rulePath: 'searchRule.bookUrl',
+        ),
+      );
+
+      expect((await result).rulePath, 'js:error');
+    });
+
+    test('extractFirst_givenJsBlockAndTrailingJsFlag_chainsBoth', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..results.addAll(<Object?>['mid', 'end']);
+
+      final String? value = await _first(
+        _engine(null, bridge).extractFirst(
+          '<js>"mid"</js>@js:result + "!"',
+          _pageWithContext(_countHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(value, 'end');
+      // 第二段拿到的是第一段的产出。
+      expect(bridge.jobs.last.result, 'mid');
+    });
+  });
+
+  group('RuleEngine book context (ADR-0049)', () {
+    test(
+      'extractFirst_givenAPageContextWithNames_carriesThemOnTheJob',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+
+        await _first(
+          _engine(null, bridge).extractFirst(
+            '@js:java.get("bookName") + java.get("title")',
+            RuleScope.dom(
+              parser.parse(_countHtml),
+              body: _countHtml,
+              jsContext: const JsPageContext(
+                baseUrl: 'https://example-novel.test/book/1/2.html',
+                source: JsSourceInfo(
+                  name: '示例书源',
+                  url: 'https://example-novel.test',
+                ),
+                bookName: '示例书',
+                chapterTitle: '第一章',
+              ),
+            ),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        expect(bridge.jobs.single.bookName, '示例书');
+        expect(bridge.jobs.single.chapterTitle, '第一章');
+      },
+    );
+
+    test('extractFirst_givenAPageContextWithoutNames_leavesThemNull', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+
+      await _first(
+        _engine(null, bridge).extractFirst(
+          '@js:1',
+          _pageWithContext(_countHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(bridge.jobs.single.bookName, isNull);
+      expect(bridge.jobs.single.chapterTitle, isNull);
+    });
+  });
+
+  group('RuleEngine result binding', () {
+    test('extractFirst_givenABareJsRuleOnANullJsonScope_passesNull', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+
+      final String? value = await _first(
+        _engine(null, bridge).extractFirst(
+          '@js:result',
+          RuleScope.json(null),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(value, 'ok');
+      // 空 JSON 值就是 `null`（上游把 `content` 原样绑给 `result`）。
+      expect(bridge.jobs.single.result, isNull);
+    });
   });
 
   group('RuleEngine matrix #14 (@js:)', () {
@@ -2683,8 +2944,9 @@ void main() {
           ),
         );
 
-        // JSON 条目上的 `@js:` 拿不到页面上下文（它不由 fetch 建），`result` 是该条目的 JSON 文本。
-        expect(bridge.jobs.single.result, '{"a":1}');
+        // JSON 条目上的裸 `@js:` 拿到的是**条目对象**（上游 `evalJS` 的 `result` 就是
+        // NativeObject，book-source.md §6 / M12-A1）；页面才是 JSON 文本。
+        expect(bridge.jobs.single.result, <String, Object?>{'a': 1});
         expect(bridge.jobs.single.baseUrl, isEmpty);
         expect(bridge.jobs.single.page, 1);
       },

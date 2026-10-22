@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/router/app_navigation.dart';
+import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
@@ -250,7 +251,9 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
       AggregateSearchStatus.running when search.books.isEmpty => const Center(
         child: CircularProgressIndicator(),
       ),
-      AggregateSearchStatus.failed => FailureMessage(
+      // 失败只在**没有结果**时占满结果区：一次「有源解析失败」不能把已经拿到的命中盖掉
+      // （那正是用户看到的「成功的结果也被覆盖」）。有结果时失败计数由上方的进度行说出来。
+      AggregateSearchStatus.failed when search.books.isEmpty => FailureMessage(
         kind: search.failureKind ?? ParseFailureKind.parseFailed,
       ),
       _ when search.books.isEmpty => StateMessage(
@@ -313,6 +316,8 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     };
 
     return ListTile(
+      // 封面来自命中它的**第一个**源（ADR-0046 §决策 4 的单条合并口径）。
+      leading: CoverImage(url: book.coverUrl, width: 48, height: 64),
       title: Text(book.name),
       subtitle: Text(
         <String>[

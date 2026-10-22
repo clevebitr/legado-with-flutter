@@ -85,6 +85,24 @@ void main() {
       expect(fixture.chapters.requests.single, (_book.sourceUrl, _book.tocUrl));
     });
 
+    test(
+      'readerContent_givenABookAndChapter_passesTheirNamesToTheSource',
+      () async {
+        // M12-A5 / ADR-0049：阅读器是**唯一**同时知道书名与章节名的调用方，所以它必须把
+        // 这两个值交给书源（`java.get('bookName')` / `java.get('title')`）。
+        final _Fixture fixture = _fixture();
+        // 先让目录加载完，章节名才对得上。
+        await fixture.container.read(readerChaptersProvider(_book).future);
+
+        await fixture.container.read(
+          readerContentProvider((_book, 'https://source.test/1.html')).future,
+        );
+
+        expect(fixture.chapters.bookNames.single, '剑来');
+        expect(fixture.content.contexts.single, ('剑来', '第1章'));
+      },
+    );
+
     test('build_givenAStoredPosition_restoresChapterAndOffset', () async {
       // 进度写入 → 恢复的往返：写进 store 的那一份必须原样回来（验收要求的往返测试）。
       final FakeReadingProgressStore store = FakeReadingProgressStore()

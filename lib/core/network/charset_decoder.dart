@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:betto_charset_detector/betto_charset_detector.dart';
 import 'package:charset/charset.dart';
+import 'package:enough_convert/big5.dart' show Big5Codec;
 
 /// Number of leading bytes scanned for an HTML `<meta>` charset declaration.
 ///
@@ -88,13 +89,22 @@ final class DecodedBody {
 /// detected (`book-source.md` §5). When the page declares nothing it replaces the sniff,
 /// which is the expensive step; a declaration still wins over it, exactly as it does over
 /// a fresh sniff, so the two decoding lanes of ADR-0031 cannot change because of a cache.
+///
+/// [declaredCharset] is the label the **book source** declared for this request
+/// (`url,{“charset”:“gbk”}`, `book-source.md` §4.3). It comes first: the source author
+/// knows the site, and a GBK-era site routinely serves no `Content-Type` charset and a
+/// `<meta>` the detector reads wrong. Because it is a declaration, it uses the tolerant lane
+/// of ADR-0031 (a stray byte is reported, not fatal), unlike the sniff lane.
 DecodedBody decodeBody(
   List<int> bytes, {
   String? contentType,
   String? sniffedCharset,
+  String? declaredCharset,
 }) {
   final String? declared =
-      _charsetFromContentType(contentType) ?? _charsetFromMeta(bytes);
+      _normalizeLabel(declaredCharset) ??
+      _charsetFromContentType(contentType) ??
+      _charsetFromMeta(bytes);
 
   // 声明优先：服务端显式说了编码就用它，没说才去嗅探（book-source.md §5 的顺序）。
   if (declared == null) {
@@ -132,9 +142,47 @@ DecodedBody decodeBody(
 /// The number of U+FFFD replacements [text] carries (ADR-0031 §决策 2).
 int _replacementsIn(String text) => '\uFFFD'.allMatches(text).length;
 
+/// [label] trimmed and lower-cased, or `null` when it names nothing.
+///
+/// A URL rule writes its encoding as free text (`url,{“charset”:“GBK”}`); the decoder's
+/// lookup is case-insensitive, but an empty string would otherwise win over the response's
+/// own declaration and force the fallback lane.
+String? _normalizeLabel(String? label) {
+  final String trimmed = label?.trim().toLowerCase() ?? '';
+
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+/// The labels `charset` does not know but `enough_convert` does (ADR-0048).
+///
+/// Big5 is the one family `charset 2.0.1` ships no decoder for, and real collections do contain
+/// Traditional-Chinese sources. `big5-hkscs` is decoded with the same table: the HKSCS extension
+///区 falls back to U+FFFD, which is the registered partial support (`book-source.md` §5.1).
+const Set<String> _big5Labels = <String>{
+  'big5',
+  'big5-hkscs',
+  'cp950',
+  'csbig5',
+};
+
+/// The decoder for [label], or `null` when no codec knows it.
+///
+/// `charset` stays the primary source (it covers UTF-8/16/32, the GBK family, latin-1/2/15,
+/// windows-1252, shift-jis, euc-jp/kr, us-ascii), and `enough_convert` only fills the Big5 hole.
+/// Keeping the two lookups in one function is what makes the strict and tolerant lanes agree on
+/// which labels are decodable at all.
+Encoding? _encodingOf(String label) {
+  final Encoding? known = Charset.getByName(label);
+  if (known != null) {
+    return known;
+  }
+
+  return _big5Labels.contains(label) ? const Big5Codec() : null;
+}
+
 /// Decodes [bytes] with [label], falling back to UTF-8 for unknown labels.
 String _decodeWith(String label, List<int> bytes) =>
-    (Charset.getByName(label) ?? utf8).decode(bytes);
+    (_encodingOf(label) ?? utf8).decode(bytes);
 
 /// Decodes [bytes] with the declared [label], replacing malformed sequences, or
 /// returns `null` when that label has no reachable tolerant path.
@@ -161,14 +209,14 @@ String _decodeWith(String label, List<int> bytes) =>
 /// * `us-ascii` / `utf-16` / `utf-32` are left out on purpose: a page that declares them
 ///   and then fails to decode has a wrong declaration, not a stray byte, and per
 ///   ADR-0031 §决策 3 those keep failing loudly.
-String? _decodeTolerantly(String label, List<int> bytes) =>
-    switch (Charset.getByName(label)) {
-      final Utf8Codec _ => const Utf8Decoder(
-        allowMalformed: true,
-      ).convert(bytes),
-      final GbkCodec _ => const GbkCodec(allowMalformed: true).decode(bytes),
-      _ => null,
-    };
+String? _decodeTolerantly(String label, List<int> bytes) => switch (_encodingOf(
+  label,
+)) {
+  final Utf8Codec _ => const Utf8Decoder(allowMalformed: true).convert(bytes),
+  final GbkCodec _ => const GbkCodec(allowMalformed: true).decode(bytes),
+  final Big5Codec _ => const Big5Codec(allowInvalid: true).decode(bytes),
+  _ => null,
+};
 
 /// Extracts the `charset` parameter from a `Content-Type` header value.
 String? _charsetFromContentType(String? contentType) => contentType == null

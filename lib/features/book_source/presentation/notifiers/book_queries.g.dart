@@ -285,7 +285,7 @@ final class ChapterContentProvider
   }
 }
 
-String _$chapterContentHash() => r'3d8d727489441714fd5f782c69c39d5ffbd7f35a';
+String _$chapterContentHash() => r'56a60c5716ab7a1f814cbd0466ad60007836f753';
 
 /// Reads the body of the chapter at [url] of [source].
 

@@ -41,6 +41,32 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 
 **证据形态：** stdout 里只出现**截断样本（≤60 字符）与全文 sha256**，不落盘页面正文。
 
+### 2.1 批量探针（M12 起）
+
+单个源回答「这条还能不能跑」；**一条语料里到底坏在哪**要用批量探针：
+
+```bash
+# 整个合集逐源跑四段，输出直方图 + 可选 JSON 报告
+SPOT_CHECK_ARGS="--source=<collection.json> --keyword=剑来 --concurrency=6 --plain-http   --out=build/probe.json"   flutter run -d windows -t tool/spot_check/batch_probe.dart
+```
+
+| 选项 | 含义 |
+|---|---|
+| `--source=` | 合集或单条 JSON（必填） |
+| `--keyword=` | 搜索词，默认「剑来」 |
+| `--concurrency=` | 同时在跑的源数，默认 4（每个源内部仍受 §8 预算约束） |
+| `--limit=` | 只跑前 N 条（冒烟用） |
+| `--plain-http` | 允许 `http://` 源（与 App 设置里的开关同义；**默认拒绝是真的**，语料里却仍有明文站点） |
+| `--out=` | 写 JSON 报告（逐源的 `stage` / `kind` / `rulePath` / 样本哈希） |
+
+它输出三张直方图：`byStage`（每段成功 / 失败条数）、`byReason`（`stage/kind`）、
+`byRulePath`（`stage/rulePath`，即「哪条规则把它们挡住了」）。**样本与哈希只截断、不落正文**（与单源一致）。
+
+> **M12 首轮（2026-10-21）**：128 条语料只有 8 条四段全通；直方图把 54 条指向 `searchUrl`、54 条指向
+> `bookList`、3 条指向导入、2 条指向一次异常。逐条查证后：`searchUrl` 那一批里 50 条是
+> `url,{…}` 后缀被当 URL 发出去，2 条是 `redactUrl` 在 GBK 查询串上抛异常；导入那 3 条是
+> `header` 写成规则。这些就是 ADR-0047 的取材方式——**先量分布，再改引擎**，改完用同一条命令复跑对比。
+
 ## 3. 选源（可复现）
 
 | 项 | 值 |
@@ -462,6 +488,34 @@ Declared charset utf-8 carried illegal bytes; 1 malformed byte replacement(s) in
 | `.searchresult` / `li` / `dd` 等未知类型 → 搜索段即失败 | `ihuaben.com` / `zhulang.com` 等 10 条 | 本仓口径 | **ADR-0032**：未知类型退化为原始 CSS（已实现，`ihuaben.com` 随后搜索段拿到 30 条真实结果） |
 | 声明 `shift-jis` / `euc-jp` 且字节不完整 → 依赖抛 `RangeError`（`Error`）逃出 `ParseResult` 契约；`euc-kr` 则静默丢弃非法字节 | — | 依赖缺陷 + `Error` 不得捕获（ADR-0022） | 登记为已知缺口，见 §6（宽容映射因此只含 `utf-8` / `gbk`，见 `book-source.md` §5.1） |
 | 搜索参数改版（源写 `wd=`，站点现在用 `qd=`）、目录结构改版 | `dushu.com` / `linovel.net` | **源失效**，非本仓缺陷 | 记录即可；矩阵状态列仍由 3.7 的真实回归决定 |
+
+## 4c. M12 复跑（2026-10-21）：同一份语料，改造前后
+
+语料：`4dc410d1.json`（128 条公开合集，导出后站点大量迁移）。
+
+```bash
+SPOT_CHECK_ARGS="--source=<collection.json> --keyword=剑来 --concurrency=6 --plain-http \
+  --out=build/probe3.json" flutter run -d windows -t tool/spot_check/batch_probe.dart
+# -- 8/128 → 10/128 四段全通；导入失败 3 → 0；抛到批外的异常 2 → 0
+```
+
+单源记录（`--plain-http`，与 §4 的格式一致）：
+
+| 字段 | 值 |
+|---|---|
+| 书源 | 阅友小说（`https://sma.yueyouxs.com/`） |
+| 证据点 | `header` 写成 `<js>…</js>`（改造前**导入即失败**）、规则里含 `<js>` 分段 |
+| 结果 | search=5、bookInfo=1、toc=57、content=676 / `sha256=d7e97e3157580991` |
+
+| 字段 | 值 |
+|---|---|
+| 书源 | 飞卢小说💰（`https://b.faloo.com`） |
+| 证据点 | `searchUrl` 带 `{"charset":"gbk"}`（§4.3），目录翻页 291 → 1087 页 |
+| 结果 | search=28、bookInfo=1、toc=1087、content=1156 / `sha256=d208052977d3039c` |
+
+> 剩下 118 条的失败在报告里逐条可见，全部是**站点侧**问题（DNS 不存在、301 到别站、200 + 空体、
+> 需要登录 token）。这组数字是「语料的现实」，不是「规则还能再好」的空间——再往上要换语料，
+> 而不是继续改引擎。
 
 ## 4b. 3.7 真实回归（2026-10-12）：矩阵 M0 行的状态列
 

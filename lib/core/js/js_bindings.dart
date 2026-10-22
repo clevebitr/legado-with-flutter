@@ -394,7 +394,14 @@ JsJavaRequest? decodeJsJavaRequest(Object? args) {
 /// The engine answers this inside the worker, so it stays synchronous ([javaEncodeUri], the
 /// `timeFormat` formatter and the variable map) — nothing here crosses an isolate (ADR-0037
 /// §决策 2).
-String applyJsJavaCall(Map<String, String?> variables, Object? args) {
+/// [named] answers the two **built-in** keys upstream intercepts before its variable lookup
+/// (`AnalyzeRule.get`, `AnalyzeRule.kt:812-821`): `bookName` and `title`. It is empty for a
+/// stage that knows neither, so the variable store keeps deciding then.
+String applyJsJavaCall(
+  Map<String, String?> variables,
+  Object? args, {
+  Map<String, String> named = const <String, String>{},
+}) {
   final JsJavaRequest? call = decodeJsJavaRequest(args);
   if (call == null) {
     return '{"ok":false}';
@@ -411,7 +418,8 @@ String applyJsJavaCall(Map<String, String?> variables, Object? args) {
 
       return jsonEncode(<String, Object?>{
         'ok': true,
-        'value': variables[readKey] ?? '',
+        // 上游的优先序：内置键（bookName / title）先答，再查变量表。
+        'value': named[readKey] ?? variables[readKey] ?? '',
       });
     case JsJavaOperation.put:
       final String? writeKey = call.key;
@@ -433,6 +441,26 @@ String applyJsJavaCall(Map<String, String?> variables, Object? args) {
         'ok': true,
         'value': javaEncodeUri(call.value as String),
       });
+  }
+}
+
+/// Reads the book / chapter names a job carries (`book-source.md` §6, ADR-0049).
+///
+/// The worker keeps them apart from the variable snapshot on purpose: `java.put('title', …)`
+/// must not be able to hijack the built-in `java.get('title')`, which is what upstream's
+/// `when (key)` interception means. A field that is missing or blank is simply absent.
+Map<String, String> decodeJsNamedContext(Map<String, Object?> fields) {
+  final Map<String, String> named = <String, String>{};
+  _putName(named, 'bookName', fields['bookName']);
+  _putName(named, 'title', fields['chapterTitle']);
+
+  return named;
+}
+
+/// Adds `key: value` to [named] when [value] is a non-empty string (§6, ADR-0049).
+void _putName(Map<String, String> named, String key, Object? value) {
+  if (value is String && value.isNotEmpty) {
+    named[key] = value;
   }
 }
 

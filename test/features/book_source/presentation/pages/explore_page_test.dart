@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -93,6 +94,35 @@ void main() {
         'https://example-novel.test/list/c0.html',
       ]);
       expect(find.text('书名一'), findsOneWidget);
+    });
+
+    testWidgets('open_givenABookWithACover_showsTheCover', (
+      WidgetTester tester,
+    ) async {
+      // S1（roadmap §3.9）：发现页是用户点名要看封面的那一页。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/list/c0.html',
+          '<ul class="result-list"><div class="result-item">'
+              '<div class="result-item-pic"><img src="/covers/1.jpg"/></div>'
+              '<div class="result-item-title"><a href="/book/1/">书名一</a></div>'
+              '</div></ul>',
+        );
+
+      await pumpBookSourcePage(
+        tester,
+        page: const ExplorePage(),
+        source: loadCorpusBookSource().copyWith(
+          exploreUrl: _exploreUrl(<String>['玄幻']),
+        ),
+        http: http,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('玄幻'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CoverImage), findsOneWidget);
     });
 
     testWidgets('open_givenACategoryWithoutUsableBooks_showsItsOwnEmptyState', (

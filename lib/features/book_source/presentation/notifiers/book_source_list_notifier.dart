@@ -67,6 +67,51 @@ class SelectedBookSource extends _$SelectedBookSource {
     state = AsyncData<StoredBookSource?>(_resolve(await _reload()));
   }
 
+  /// Enables or disables every id in [ids] in one write (ADR-0050 §决策 2).
+  Future<void> setEnabledFor(Set<int> ids, {required bool isEnabled}) async {
+    if (ids.isEmpty) {
+      return;
+    }
+    await ref
+        .read(bookSourceRepositoryProvider)
+        .setEnabledFor(ids.toList(growable: false), isEnabled: isEnabled);
+    await _refreshAfterBatch();
+  }
+
+  /// Deletes every id in [ids] in one write (ADR-0050 §决策 2).
+  ///
+  /// The selection is re-resolved through the same path a single delete uses, so deleting the
+  /// current source inside a batch falls back exactly like deleting it alone.
+  Future<void> deleteMany(Set<int> ids) async {
+    if (ids.isEmpty) {
+      return;
+    }
+    await ref
+        .read(bookSourceRepositoryProvider)
+        .deleteMany(ids.toList(growable: false));
+    await _refreshAfterBatch();
+  }
+
+  /// Puts every id in [ids] into [group], or clears the group when [group] is `null`.
+  ///
+  /// It writes the **payload's** `bookSourceGroup` (ADR-0050 §决策 1): the check columns keep
+  /// describing what the last check found.
+  Future<void> setGroupFor(Set<int> ids, String? group) async {
+    if (ids.isEmpty) {
+      return;
+    }
+    await ref
+        .read(bookSourceRepositoryProvider)
+        .setGroupFor(ids.toList(growable: false), group);
+    await _refreshAfterBatch();
+  }
+
+  /// Re-reads the list after a batch write and re-resolves the selection.
+  Future<void> _refreshAfterBatch() async {
+    ref.invalidate(bookSourceListDataProvider);
+    state = AsyncData<StoredBookSource?>(_resolve(await _reload()));
+  }
+
   /// Reads a fresh list and publishes nothing; the callers decide what state to set.
   Future<List<StoredBookSource>> _reload() async {
     ref.invalidate(bookSourceListProvider);
@@ -180,6 +225,9 @@ Future<BookSourceListData> bookSourceListData(Ref ref) async {
   final BookSourceListView view = await ref.watch(
     bookSourceViewProvider.future,
   );
+  final BookSourceCheckFilter checkFilter = ref.watch(
+    bookSourceCheckFilterSelectionProvider,
+  );
   final List<StoredBookSource> all = await ref
       .watch(bookSourceRepositoryProvider)
       .getAll(order: view.order);
@@ -188,20 +236,69 @@ Future<BookSourceListData> bookSourceListData(Ref ref) async {
   final String? group = stored != null && groups.contains(stored)
       ? stored
       : null;
-  final List<StoredBookSource> rows = group == null
+  final Iterable<StoredBookSource> byGroup = group == null
       ? all
-      : all
-            .where(
-              (StoredBookSource source) =>
-                  splitGroups(_groupOf(source)).contains(group),
-            )
-            .toList(growable: false);
+      : all.where(
+          (StoredBookSource source) =>
+              splitGroups(_groupOf(source)).contains(group),
+        );
+  // 两个轴互相独立（ADR-0050 §决策 1）：分组是用户写的，校验状态是上一次校验写的。
+  final List<StoredBookSource> rows = byGroup
+      .where(checkFilter.accepts)
+      .toList(growable: false);
 
   return (
     rows: rows,
     groups: groups,
     view: group == null ? view.copyWith(clearGroup: true) : view,
   );
+}
+
+/// Which side of the last check the list shows (ADR-0050 §决策 1).
+enum BookSourceCheckFilter {
+  /// Every source, checked or not.
+  all,
+
+  /// Sources with no failure group and no error note — including ones never checked.
+  healthy,
+
+  /// Sources whose last check wrote a failure group or an error note.
+  failing;
+
+  /// Whether [source] belongs to this side.
+  bool accepts(StoredBookSource source) => switch (this) {
+    BookSourceCheckFilter.all => true,
+    BookSourceCheckFilter.healthy => !hasCheckFailure(source),
+    BookSourceCheckFilter.failing => hasCheckFailure(source),
+  };
+}
+
+/// Whether [source]'s last check found something wrong.
+///
+/// It reads the **columns** only (ADR-0043 §决策 1, ADR-0045 §决策 1): a note or a group token the
+/// check owns. The group tokens come from `source_check_group.dart`, which stays their only
+/// source of truth.
+bool hasCheckFailure(StoredBookSource source) {
+  if ((source.comment ?? '').isNotEmpty) {
+    return true;
+  }
+
+  return splitGroups(source.groupName)
+      .any((String name) => checkOwnedGroups.contains(name));
+}
+
+/// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
+///
+/// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
+/// right now" (usually "show me what broke"), and a stored value would silently hide sources on
+/// the next launch.
+@Riverpod(keepAlive: true)
+class BookSourceCheckFilterSelection extends _$BookSourceCheckFilterSelection {
+  @override
+  BookSourceCheckFilter build() => BookSourceCheckFilter.all;
+
+  /// Switches the axis.
+  void select(BookSourceCheckFilter filter) => state = filter;
 }
 
 /// The rows the list shows, the groups they carry and the view that produced them.
@@ -222,6 +319,8 @@ List<String> _groupsOf(List<StoredBookSource> sources) {
   return sorted;
 }
 
-/// The group column of [source], falling back to the payload for rows stored before 5.5.
-String? _groupOf(StoredBookSource source) =>
-    source.groupName ?? source.source.group;
+/// The **user's** group of [source], read from the payload (ADR-0050 §决策 1).
+///
+/// It deliberately does not fall back to `groupName`: that column is the check's output, and
+/// mixing the two is what made a checked source look like it had been regrouped.
+String? _groupOf(StoredBookSource source) => source.source.group;

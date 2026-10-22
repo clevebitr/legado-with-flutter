@@ -1,7 +1,9 @@
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/file_selector_book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_book_source_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -43,6 +45,20 @@ BookSourceFilePicker bookSourceFilePicker(Ref ref) {
   return platform.isMobile || platform.isDesktop
       ? const FileSelectorBookSourceFilePicker()
       : const UnsupportedBookSourceFilePicker();
+}
+
+/// Provides the platform save dialog used by a single-source export
+/// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+///
+/// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
+/// else gets “not saved”, and a test overrides the port rather than the plugin.
+@riverpod
+BookSourceFileSaver bookSourceFileSaver(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBookSourceFileSaver()
+      : const UnsupportedBookSourceFileSaver();
 }
 
 /// Provides the long-task marker a batch check holds while it runs
