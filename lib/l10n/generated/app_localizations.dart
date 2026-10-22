@@ -314,6 +314,82 @@ abstract class AppLocalizations {
   /// **'Imported {count} book sources.'**
   String bookSourceImportSucceeded(int count);
 
+  /// Preview summary: how the file splits into new, refresh and rejected entries.
+  ///
+  /// In en, this message translates to:
+  /// **'{newCount} new · {refreshCount} to refresh · {rejected} rejected'**
+  String bookSourceImportPreviewSummary(
+    int newCount,
+    int refreshCount,
+    int rejected,
+  );
+
+  /// Preview entry label: this identity is not stored yet.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get bookSourceImportEntryNew;
+
+  /// Preview entry label: the same identity is stored and only its payload will be refreshed.
+  ///
+  /// In en, this message translates to:
+  /// **'Already imported · will refresh'**
+  String get bookSourceImportEntryRefresh;
+
+  /// Preview entry title when the entry has no readable name.
+  ///
+  /// In en, this message translates to:
+  /// **'Entry {index}'**
+  String bookSourceImportEntryUnknown(int index);
+
+  /// Preview rejection: the entry has no usable bookSourceUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing bookSourceUrl'**
+  String get bookSourceImportRejectionMissingUrl;
+
+  /// Preview rejection: the entry has no usable bookSourceName.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing bookSourceName'**
+  String get bookSourceImportRejectionMissingName;
+
+  /// Preview rejection: a required rule object or another structural field is unreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'This entry cannot be read as a book source'**
+  String get bookSourceImportRejectionUnreadable;
+
+  /// Preview rejection: the element of the file is not a JSON object.
+  ///
+  /// In en, this message translates to:
+  /// **'Not a JSON object'**
+  String get bookSourceImportRejectionNotAnObject;
+
+  /// Preview action: stores the ticked entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Import selected ({count})'**
+  String bookSourceImportCommit(int count);
+
+  /// Preview action: ticks every usable entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get bookSourceImportSelectAll;
+
+  /// Preview action: unticks every entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect all'**
+  String get bookSourceImportDeselectAll;
+
+  /// Preview action: drops the preview without storing anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to the form'**
+  String get bookSourceImportBack;
+
   /// Summary after an import where some entries were skipped; the reasons are logged, never shown per entry.
   ///
   /// In en, this message translates to:

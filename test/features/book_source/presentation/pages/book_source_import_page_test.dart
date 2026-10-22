@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -39,6 +40,16 @@ final class _FakePicker implements BookSourceFilePicker {
   }
 }
 
+/// Confirms the preview by importing [count] ticked entries.
+Future<void> _commit(
+  WidgetTester tester,
+  AppLocalizations l10n,
+  int count,
+) async {
+  await tester.tap(find.text(l10n.bookSourceImportCommit(count)));
+  await tester.pumpAndSettle();
+}
+
 /// Types `text` into the first field, or `url` into the second one.
 Future<void> _type(WidgetTester tester, {String? text, String? url}) async {
   final Finder field = find.byType(TextField);
@@ -65,6 +76,13 @@ void main() {
       await _type(tester, text: _corpusFile());
       await tester.tap(find.byTooltip(l10n.actionImport));
       await tester.pumpAndSettle();
+      // 提交只读文件：先出预览，再确认（ADR-0052 §决策 5）。
+      expect(
+        find.textContaining(l10n.bookSourceImportEntryNew),
+        findsOneWidget,
+      );
+      expect(await repository.getAll(), isEmpty);
+      await _commit(tester, l10n, 1);
 
       expect(find.text(l10n.bookSourceImportSucceeded(1)), findsOneWidget);
       expect(await repository.getAll(), hasLength(1));
@@ -93,6 +111,12 @@ void main() {
       );
       await tester.tap(find.byTooltip(l10n.actionImport));
       await tester.pumpAndSettle();
+      // 被拒绝的条目也在预览里，并带着原因（不再是只出现在计数里）。
+      expect(
+        find.text(l10n.bookSourceImportRejectionMissingUrl),
+        findsOneWidget,
+      );
+      await _commit(tester, l10n, 1);
 
       expect(
         find.text(l10n.bookSourceImportPartiallySkipped(1, 1)),
@@ -140,6 +164,7 @@ void main() {
       await _type(tester, url: 'https://sources.test/all.json');
       await tester.tap(find.byTooltip(l10n.actionImport));
       await tester.pumpAndSettle();
+      await _commit(tester, l10n, 1);
 
       expect(find.text(l10n.bookSourceImportSucceeded(1)), findsOneWidget);
       expect(http.requestedRulePaths, <String>['import.url']);
@@ -166,6 +191,7 @@ void main() {
         find.widgetWithText(FilledButton, l10n.bookSourceImportFileAction),
       );
       await tester.pumpAndSettle();
+      await _commit(tester, l10n, 1);
 
       expect(find.text(l10n.bookSourceImportSucceeded(1)), findsOneWidget);
       expect(await repository.getAll(), hasLength(1));
@@ -194,6 +220,65 @@ void main() {
       expect(find.text(l10n.failureInvalidBookSource), findsNothing);
       expect(find.text(l10n.bookSourceImportSucceeded(1)), findsNothing);
       expect(await repository.getAll(), isEmpty);
+    });
+
+    testWidgets('preview_givenAnExistingIdentity_labelsTheEntryAsARefresh', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookSourceRepository repository = FakeBookSourceRepository();
+      // 先导入一次，再提交同一个文件：第二次的预览必须是「将刷新」而不是「新增」。
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceImportPage(),
+        repository: repository,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+      await _type(tester, text: _corpusFile());
+      await tester.tap(find.byTooltip(l10n.actionImport));
+      await tester.pumpAndSettle();
+      await _commit(tester, l10n, 1);
+
+      await _type(tester, text: _corpusFile());
+      await tester.tap(find.byTooltip(l10n.actionImport));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining(l10n.bookSourceImportEntryRefresh),
+        findsOneWidget,
+      );
+      expect(find.textContaining(l10n.bookSourceImportEntryNew), findsNothing);
+      // 预览阶段仍然没有写库：刷新是提交后才会发生。
+      expect(await repository.getAll(), hasLength(1));
+    });
+
+    testWidgets('preview_whenAnEntryIsUnticked_isNotStored', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookSourceRepository repository = FakeBookSourceRepository();
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceImportPage(),
+        repository: repository,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+      final Map<String, Object?> first =
+          jsonDecode(_corpusFile()) as Map<String, Object?>;
+      final Map<String, Object?> second = <String, Object?>{...first}
+        ..['bookSourceName'] = '第二条'
+        ..['bookSourceUrl'] = 'https://second.test';
+
+      await _type(tester, text: jsonEncode(<Object?>[first, second]));
+      await tester.tap(find.byTooltip(l10n.actionImport));
+      await tester.pumpAndSettle();
+
+      // 取消勾选第一条，只提交剩下的一条（ADR-0052 §决策 5）。
+      await tester.tap(find.byType(CheckboxListTile).first);
+      await tester.pumpAndSettle();
+      await _commit(tester, l10n, 1);
+
+      final List<StoredBookSource> rows = await repository.getAll();
+      expect(rows, hasLength(1));
+      expect(rows.single.source.url, 'https://second.test');
     });
 
     testWidgets('file_givenAnOversizedFile_showsTheInvalidSourceMessage', (

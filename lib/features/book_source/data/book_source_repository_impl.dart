@@ -71,6 +71,13 @@ final class BookSourceRepositoryImpl implements BookSourceRepository {
   }
 
   @override
+  Future<bool> exists({
+    required String url,
+    required String fingerprint,
+  }) async =>
+      await _dao.findIdentity(url: url, fingerprint: fingerprint) != null;
+
+  @override
   Future<BookSourceSaveReport> saveAll(
     List<Map<String, Object?>> entries,
   ) async {

@@ -56,12 +56,14 @@ extension BookSourceImportStatePatterns on BookSourceImportState {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( BookSourceImportIdle value)?  idle,TResult Function( BookSourceImporting value)?  importing,TResult Function( BookSourceImportDone value)?  done,TResult Function( BookSourceImportFailed value)?  failed,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( BookSourceImportIdle value)?  idle,TResult Function( BookSourceImporting value)?  importing,TResult Function( BookSourceImportPreviewing value)?  preview,TResult Function( BookSourceImportCommitting value)?  committing,TResult Function( BookSourceImportDone value)?  done,TResult Function( BookSourceImportFailed value)?  failed,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case BookSourceImportIdle() when idle != null:
 return idle(_that);case BookSourceImporting() when importing != null:
-return importing(_that);case BookSourceImportDone() when done != null:
+return importing(_that);case BookSourceImportPreviewing() when preview != null:
+return preview(_that);case BookSourceImportCommitting() when committing != null:
+return committing(_that);case BookSourceImportDone() when done != null:
 return done(_that);case BookSourceImportFailed() when failed != null:
 return failed(_that);case _:
   return orElse();
@@ -81,12 +83,14 @@ return failed(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( BookSourceImportIdle value)  idle,required TResult Function( BookSourceImporting value)  importing,required TResult Function( BookSourceImportDone value)  done,required TResult Function( BookSourceImportFailed value)  failed,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( BookSourceImportIdle value)  idle,required TResult Function( BookSourceImporting value)  importing,required TResult Function( BookSourceImportPreviewing value)  preview,required TResult Function( BookSourceImportCommitting value)  committing,required TResult Function( BookSourceImportDone value)  done,required TResult Function( BookSourceImportFailed value)  failed,}){
 final _that = this;
 switch (_that) {
 case BookSourceImportIdle():
 return idle(_that);case BookSourceImporting():
-return importing(_that);case BookSourceImportDone():
+return importing(_that);case BookSourceImportPreviewing():
+return preview(_that);case BookSourceImportCommitting():
+return committing(_that);case BookSourceImportDone():
 return done(_that);case BookSourceImportFailed():
 return failed(_that);}
 }
@@ -102,12 +106,14 @@ return failed(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( BookSourceImportIdle value)?  idle,TResult? Function( BookSourceImporting value)?  importing,TResult? Function( BookSourceImportDone value)?  done,TResult? Function( BookSourceImportFailed value)?  failed,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( BookSourceImportIdle value)?  idle,TResult? Function( BookSourceImporting value)?  importing,TResult? Function( BookSourceImportPreviewing value)?  preview,TResult? Function( BookSourceImportCommitting value)?  committing,TResult? Function( BookSourceImportDone value)?  done,TResult? Function( BookSourceImportFailed value)?  failed,}){
 final _that = this;
 switch (_that) {
 case BookSourceImportIdle() when idle != null:
 return idle(_that);case BookSourceImporting() when importing != null:
-return importing(_that);case BookSourceImportDone() when done != null:
+return importing(_that);case BookSourceImportPreviewing() when preview != null:
+return preview(_that);case BookSourceImportCommitting() when committing != null:
+return committing(_that);case BookSourceImportDone() when done != null:
 return done(_that);case BookSourceImportFailed() when failed != null:
 return failed(_that);case _:
   return null;
@@ -126,11 +132,13 @@ return failed(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  idle,TResult Function()?  importing,TResult Function( BookSourceImportReport report)?  done,TResult Function( ParseFailureKind kind)?  failed,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  idle,TResult Function()?  importing,TResult Function( BookSourceImportPreview preview)?  preview,TResult Function()?  committing,TResult Function( BookSourceImportReport report)?  done,TResult Function( ParseFailureKind kind)?  failed,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case BookSourceImportIdle() when idle != null:
 return idle();case BookSourceImporting() when importing != null:
-return importing();case BookSourceImportDone() when done != null:
+return importing();case BookSourceImportPreviewing() when preview != null:
+return preview(_that.preview);case BookSourceImportCommitting() when committing != null:
+return committing();case BookSourceImportDone() when done != null:
 return done(_that.report);case BookSourceImportFailed() when failed != null:
 return failed(_that.kind);case _:
   return orElse();
@@ -150,11 +158,13 @@ return failed(_that.kind);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  idle,required TResult Function()  importing,required TResult Function( BookSourceImportReport report)  done,required TResult Function( ParseFailureKind kind)  failed,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  idle,required TResult Function()  importing,required TResult Function( BookSourceImportPreview preview)  preview,required TResult Function()  committing,required TResult Function( BookSourceImportReport report)  done,required TResult Function( ParseFailureKind kind)  failed,}) {final _that = this;
 switch (_that) {
 case BookSourceImportIdle():
 return idle();case BookSourceImporting():
-return importing();case BookSourceImportDone():
+return importing();case BookSourceImportPreviewing():
+return preview(_that.preview);case BookSourceImportCommitting():
+return committing();case BookSourceImportDone():
 return done(_that.report);case BookSourceImportFailed():
 return failed(_that.kind);}
 }
@@ -170,11 +180,13 @@ return failed(_that.kind);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  idle,TResult? Function()?  importing,TResult? Function( BookSourceImportReport report)?  done,TResult? Function( ParseFailureKind kind)?  failed,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  idle,TResult? Function()?  importing,TResult? Function( BookSourceImportPreview preview)?  preview,TResult? Function()?  committing,TResult? Function( BookSourceImportReport report)?  done,TResult? Function( ParseFailureKind kind)?  failed,}) {final _that = this;
 switch (_that) {
 case BookSourceImportIdle() when idle != null:
 return idle();case BookSourceImporting() when importing != null:
-return importing();case BookSourceImportDone() when done != null:
+return importing();case BookSourceImportPreviewing() when preview != null:
+return preview(_that.preview);case BookSourceImportCommitting() when committing != null:
+return committing();case BookSourceImportDone() when done != null:
 return done(_that.report);case BookSourceImportFailed() when failed != null:
 return failed(_that.kind);case _:
   return null;
@@ -240,6 +252,106 @@ int get hashCode => runtimeType.hashCode;
 @override
 String toString() {
     return 'BookSourceImportState.importing()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class BookSourceImportPreviewing implements BookSourceImportState {
+  const BookSourceImportPreviewing(this.preview);
+  
+
+ final  BookSourceImportPreview preview;
+
+/// Create a copy of BookSourceImportState
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$BookSourceImportPreviewingCopyWith<BookSourceImportPreviewing> get copyWith => _$BookSourceImportPreviewingCopyWithImpl<BookSourceImportPreviewing>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceImportPreviewing&&(identical(other.preview, preview) || other.preview == preview));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,preview);
+}
+
+@override
+String toString() {
+    return 'BookSourceImportState.preview(preview: $preview)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $BookSourceImportPreviewingCopyWith<$Res> implements $BookSourceImportStateCopyWith<$Res> {
+  factory $BookSourceImportPreviewingCopyWith(BookSourceImportPreviewing value, $Res Function(BookSourceImportPreviewing) _then) = _$BookSourceImportPreviewingCopyWithImpl;
+@useResult
+$Res call({
+ BookSourceImportPreview preview
+});
+
+
+
+
+}
+/// @nodoc
+class _$BookSourceImportPreviewingCopyWithImpl<$Res>
+    implements $BookSourceImportPreviewingCopyWith<$Res> {
+  _$BookSourceImportPreviewingCopyWithImpl(this._self, this._then);
+
+  final BookSourceImportPreviewing _self;
+  final $Res Function(BookSourceImportPreviewing) _then;
+
+/// Create a copy of BookSourceImportState
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? preview = null,}) {
+  return _then(BookSourceImportPreviewing(
+null == preview ? _self.preview : preview // ignore: cast_nullable_to_non_nullable
+as BookSourceImportPreview,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class BookSourceImportCommitting implements BookSourceImportState {
+  const BookSourceImportCommitting();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceImportCommitting);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'BookSourceImportState.committing()';
 }
 
 

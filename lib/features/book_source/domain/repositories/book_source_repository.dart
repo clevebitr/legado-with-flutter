@@ -54,6 +54,13 @@ abstract interface class BookSourceRepository {
   /// The stored source with [id], or `null` when it was deleted meanwhile.
   Future<StoredBookSource?> findById(int id);
 
+  /// Whether `(url, fingerprint)` is already stored (`docs/dev/roadmap.md` §3.10 V5).
+  ///
+  /// The import preview uses it to label an entry **new** or **refresh** before anything is
+  /// written; `saveAll` then makes the same decision again, so the label is a prediction and the
+  /// store stays the authority (ADR-0052 §决策 5).
+  Future<bool> exists({required String url, required String fingerprint});
+
   /// Stores the raw imported [entries] under their `(url, fingerprint)` identity.
   ///
   /// Each entry is the **raw JSON object** of one book source, not a parsed model: the payload

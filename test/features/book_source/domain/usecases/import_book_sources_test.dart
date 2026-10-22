@@ -4,7 +4,9 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
+import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_import_preview.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
@@ -52,6 +54,15 @@ final class _FakeRepository implements BookSourceRepository {
 
   @override
   Future<StoredBookSource?> findById(int id) async => null;
+
+  /// Identities (`url|fingerprint`) the fake reports as already stored.
+  final Set<String> existingIdentities = <String>{};
+
+  @override
+  Future<bool> exists({
+    required String url,
+    required String fingerprint,
+  }) async => existingIdentities.contains('$url|$fingerprint');
 
   @override
   Future<void> setEnabled({required int id, required bool isEnabled}) async {}
@@ -120,6 +131,14 @@ ParseFailure<Never> _failure<T>(ParseResult<T> result) => switch (result) {
   ParseFailure<T>(:final ParseFailureKind kind, :final String rulePath) =>
     ParseFailure<Never>(kind: kind, rulePath: rulePath),
   ParseSuccess<T>() => fail('Expected a failure.'),
+};
+
+/// Returns the data of [result], failing the test when it failed.
+T _success<T>(ParseResult<T> result) => switch (result) {
+  ParseSuccess<T>(:final T data) => data,
+  ParseFailure<T>(:final ParseFailureKind kind) => fail(
+    'Expected success, got ${kind.name}.',
+  ),
 };
 
 void main() {
@@ -390,6 +409,108 @@ void main() {
         expect(failure.rulePath, 'import.sizeLimit');
       },
     );
+
+    test(
+      'preview_givenMixedEntries_writesNothingAndExplainsEveryRejection',
+      () async {
+        final BookSourceImportPreview preview = _success(
+          await useCase().preview(
+            BookSourceImportText(
+              jsonEncode(<Object?>[
+                _entry(),
+                // 不是对象
+                42,
+                // 缺 URL
+                <String, Object?>{'bookSourceName': '缺 URL'},
+                // 缺规则对象：模型拒绝（ADR-0022 checked 模式）
+                <String, Object?>{
+                  'bookSourceUrl': 'https://missing.test',
+                  'bookSourceName': '缺规则',
+                },
+              ]),
+            ),
+          ),
+        );
+
+        expect(preview.entries, hasLength(4));
+        expect(preview.usableCount, 1);
+        expect(preview.rejectedCount, 3);
+        expect(preview.newCount, 1);
+        expect(preview.refreshCount, 0);
+        expect(
+          preview.entries[1].rejection,
+          BookSourceImportRejection.notAnObject,
+        );
+        expect(
+          preview.entries[2].rejection,
+          BookSourceImportRejection.missingUrl,
+        );
+        expect(
+          preview.entries[3].rejection,
+          BookSourceImportRejection.unreadable,
+        );
+        // 预览一个字节都不写（ADR-0052 §决策 5）。
+        expect(repository.saved, isEmpty);
+      },
+    );
+
+    test('preview_givenAnExistingIdentity_marksItAsARefresh', () async {
+      final Map<String, Object?> entry = _entry();
+      repository.existingIdentities.add(
+        '${entry['bookSourceUrl']}|${bookSourceFingerprint(entry)}',
+      );
+
+      final BookSourceImportPreview preview = _success(
+        await useCase().preview(BookSourceImportText(jsonEncode(entry))),
+      );
+
+      expect(preview.entries.single.isRefresh, isTrue);
+      expect(preview.refreshCount, 1);
+      expect(preview.newCount, 0);
+    });
+
+    test('commit_givenASubset_storesOnlyTheTickedEntries', () async {
+      final BookSourceImportPreview preview = _success(
+        await useCase().preview(
+          BookSourceImportText(
+            jsonEncode(<Object?>[
+              _entry(name: '甲', url: 'https://a.test'),
+              _entry(name: '乙', url: 'https://b.test'),
+            ]),
+          ),
+        ),
+      );
+
+      final BookSourceImportReport report = _success(
+        await useCase().commit(preview, selected: <int>{1}),
+      );
+
+      expect(repository.saved, hasLength(1));
+      expect(repository.saved.single.single['bookSourceUrl'], 'https://b.test');
+      expect(report.inserted, repository.inserted);
+      expect(report.skipped, 0);
+    });
+
+    test('commit_givenARejectedEntry_countsItAsSkipped', () async {
+      final BookSourceImportPreview preview = _success(
+        await useCase().preview(
+          BookSourceImportText(
+            jsonEncode(<Object?>[
+              _entry(),
+              <String, Object?>{'bookSourceName': '缺 URL'},
+            ]),
+          ),
+        ),
+      );
+
+      final BookSourceImportReport report = _success(
+        await useCase().commit(preview),
+      );
+
+      // 未勾选 ≠ 被拒绝：只有真的坏条目才进 skipped（ADR-0052 §决策 5）。
+      expect(report.skipped, 1);
+      expect(repository.saved.single, hasLength(1));
+    });
 
     test(
       'execute_givenADownloadThatFailed_reportsTheTransportFailure',

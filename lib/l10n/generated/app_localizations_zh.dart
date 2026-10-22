@@ -128,6 +128,52 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String bookSourceImportPreviewSummary(
+    int newCount,
+    int refreshCount,
+    int rejected,
+  ) {
+    return '$newCount 条新增 · $refreshCount 条刷新 · $rejected 条被拒绝';
+  }
+
+  @override
+  String get bookSourceImportEntryNew => '新增';
+
+  @override
+  String get bookSourceImportEntryRefresh => '已导入 · 将刷新';
+
+  @override
+  String bookSourceImportEntryUnknown(int index) {
+    return '第 $index 条';
+  }
+
+  @override
+  String get bookSourceImportRejectionMissingUrl => '缺少 bookSourceUrl';
+
+  @override
+  String get bookSourceImportRejectionMissingName => '缺少 bookSourceName';
+
+  @override
+  String get bookSourceImportRejectionUnreadable => '这条书源无法解析';
+
+  @override
+  String get bookSourceImportRejectionNotAnObject => '不是 JSON 对象';
+
+  @override
+  String bookSourceImportCommit(int count) {
+    return '导入选中 $count 条';
+  }
+
+  @override
+  String get bookSourceImportSelectAll => '全选';
+
+  @override
+  String get bookSourceImportDeselectAll => '取消全选';
+
+  @override
+  String get bookSourceImportBack => '返回修改';
+
+  @override
   String bookSourceImportPartiallySkipped(int count, int skipped) {
     return '已导入 $count 个书源，跳过 $skipped 条无效条目。';
   }

@@ -129,6 +129,12 @@ final class FakeBookSourceRepository implements BookSourceRepository {
   Future<StoredBookSource?> findById(int id) async => _rows[id];
 
   @override
+  Future<bool> exists({
+    required String url,
+    required String fingerprint,
+  }) async => _identities.containsKey('$url|$fingerprint');
+
+  @override
   Future<BookSourceSaveReport> saveAll(
     List<Map<String, Object?>> entries,
   ) async {

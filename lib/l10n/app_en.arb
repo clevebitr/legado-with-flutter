@@ -161,6 +161,75 @@
       }
     }
   },
+  "bookSourceImportPreviewSummary": "{newCount} new · {refreshCount} to refresh · {rejected} rejected",
+  "@bookSourceImportPreviewSummary": {
+    "description": "Preview summary: how the file splits into new, refresh and rejected entries.",
+    "placeholders": {
+      "newCount": {
+        "type": "int"
+      },
+      "refreshCount": {
+        "type": "int"
+      },
+      "rejected": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceImportEntryNew": "New",
+  "@bookSourceImportEntryNew": {
+    "description": "Preview entry label: this identity is not stored yet."
+  },
+  "bookSourceImportEntryRefresh": "Already imported · will refresh",
+  "@bookSourceImportEntryRefresh": {
+    "description": "Preview entry label: the same identity is stored and only its payload will be refreshed."
+  },
+  "bookSourceImportEntryUnknown": "Entry {index}",
+  "@bookSourceImportEntryUnknown": {
+    "description": "Preview entry title when the entry has no readable name.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceImportRejectionMissingUrl": "Missing bookSourceUrl",
+  "@bookSourceImportRejectionMissingUrl": {
+    "description": "Preview rejection: the entry has no usable bookSourceUrl."
+  },
+  "bookSourceImportRejectionMissingName": "Missing bookSourceName",
+  "@bookSourceImportRejectionMissingName": {
+    "description": "Preview rejection: the entry has no usable bookSourceName."
+  },
+  "bookSourceImportRejectionUnreadable": "This entry cannot be read as a book source",
+  "@bookSourceImportRejectionUnreadable": {
+    "description": "Preview rejection: a required rule object or another structural field is unreadable."
+  },
+  "bookSourceImportRejectionNotAnObject": "Not a JSON object",
+  "@bookSourceImportRejectionNotAnObject": {
+    "description": "Preview rejection: the element of the file is not a JSON object."
+  },
+  "bookSourceImportCommit": "Import selected ({count})",
+  "@bookSourceImportCommit": {
+    "description": "Preview action: stores the ticked entries.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceImportSelectAll": "Select all",
+  "@bookSourceImportSelectAll": {
+    "description": "Preview action: ticks every usable entry."
+  },
+  "bookSourceImportDeselectAll": "Deselect all",
+  "@bookSourceImportDeselectAll": {
+    "description": "Preview action: unticks every entry."
+  },
+  "bookSourceImportBack": "Back to the form",
+  "@bookSourceImportBack": {
+    "description": "Preview action: drops the preview without storing anything."
+  },
   "bookSourceImportPartiallySkipped": "Imported {count} book sources; {skipped} entries were skipped as invalid.",
   "@bookSourceImportPartiallySkipped": {
     "description": "Summary after an import where some entries were skipped; the reasons are logged, never shown per entry.",

@@ -140,6 +140,53 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String bookSourceImportPreviewSummary(
+    int newCount,
+    int refreshCount,
+    int rejected,
+  ) {
+    return '$newCount new · $refreshCount to refresh · $rejected rejected';
+  }
+
+  @override
+  String get bookSourceImportEntryNew => 'New';
+
+  @override
+  String get bookSourceImportEntryRefresh => 'Already imported · will refresh';
+
+  @override
+  String bookSourceImportEntryUnknown(int index) {
+    return 'Entry $index';
+  }
+
+  @override
+  String get bookSourceImportRejectionMissingUrl => 'Missing bookSourceUrl';
+
+  @override
+  String get bookSourceImportRejectionMissingName => 'Missing bookSourceName';
+
+  @override
+  String get bookSourceImportRejectionUnreadable =>
+      'This entry cannot be read as a book source';
+
+  @override
+  String get bookSourceImportRejectionNotAnObject => 'Not a JSON object';
+
+  @override
+  String bookSourceImportCommit(int count) {
+    return 'Import selected ($count)';
+  }
+
+  @override
+  String get bookSourceImportSelectAll => 'Select all';
+
+  @override
+  String get bookSourceImportDeselectAll => 'Deselect all';
+
+  @override
+  String get bookSourceImportBack => 'Back to the form';
+
+  @override
   String bookSourceImportPartiallySkipped(int count, int skipped) {
     return 'Imported $count book sources; $skipped entries were skipped as invalid.';
   }

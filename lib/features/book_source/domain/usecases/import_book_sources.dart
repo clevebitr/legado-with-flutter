@@ -4,7 +4,9 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source_import_preview.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -98,11 +100,38 @@ final class ImportBookSources {
 
   /// Imports [input] and reports what was stored and what was skipped.
   ///
-  /// Failures are file-level and reuse [ParseFailureKind.invalidBookSource] with a locating
-  /// `rulePath` (`import.sizeLimit` / `import.notJson` / `import.noEntries`), because the user
-  /// consequence of all of them is the same file being unusable (ADR-0040 §决策 7). Single
-  /// entries that fail are **skipped and counted**, never silently dropped (C-SRC-4).
+  /// It is [preview] followed by [commit] over every usable entry: the two-step form the page
+  /// shows, collapsed for callers that do not want to look first (`docs/dev/roadmap.md` §3.10 V5).
+  /// File-level failures reuse [ParseFailureKind.invalidBookSource] with a locating `rulePath`
+  /// (`import.sizeLimit` / `import.notJson` / `import.noEntries`), because the user consequence of
+  /// all of them is the same file being unusable (ADR-0040 §决策 7).
   Future<ParseResult<BookSourceImportReport>> execute(
+    BookSourceImportInput input,
+  ) async {
+    final ParseResult<BookSourceImportPreview> preview = await this.preview(
+      input,
+    );
+
+    return switch (preview) {
+      ParseFailure<BookSourceImportPreview>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ) =>
+        failureAt<BookSourceImportReport>(kind: kind, rulePath: failedAt),
+      ParseSuccess<BookSourceImportPreview>(
+        :final BookSourceImportPreview data,
+      ) =>
+        await commit(data),
+    };
+  }
+
+  /// Reads [input] and answers what could be stored, **without writing anything**
+  /// (ADR-0052 §决策 5).
+  ///
+  /// Rejected entries stay in the preview with their reason, so the page can show the user which
+  /// lines of the file were dropped instead of only counting them (C-SRC-4). The byte cap and the
+  /// per-entry sanitising are exactly the `execute` ones: splitting the step did not loosen them.
+  Future<ParseResult<BookSourceImportPreview>> preview(
     BookSourceImportInput input,
   ) async {
     final ParseResult<String> json = switch (input) {
@@ -115,9 +144,36 @@ final class ImportBookSources {
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
-        failureAt<BookSourceImportReport>(kind: kind, rulePath: failedAt),
-      ParseSuccess<String>(:final String data) => await _store(data),
+        failureAt<BookSourceImportPreview>(kind: kind, rulePath: failedAt),
+      ParseSuccess<String>(:final String data) => await _previewOf(data),
     };
+  }
+
+  /// Stores the entries of [preview] the caller kept, and reports what landed.
+  ///
+  /// [selected] is the set of `entry.index` values to store, or `null` for every usable entry.
+  /// Rejected entries are never stored and are reported as `skipped`; usable entries the user
+  /// unticked are simply not imported (they are not invalid, so counting them as skipped would
+  /// blame the file for the user's choice).
+  Future<ParseResult<BookSourceImportReport>> commit(
+    BookSourceImportPreview preview, {
+    Set<int>? selected,
+  }) async {
+    final List<Map<String, Object?>> entries = <Map<String, Object?>>[
+      for (final BookSourceImportEntry entry in preview.entries)
+        if (entry.isUsable &&
+            (selected == null || selected.contains(entry.index)))
+          entry.entry,
+    ];
+    final BookSourceSaveReport saved = await _repository.saveAll(entries);
+
+    return ParseSuccess<BookSourceImportReport>(
+      BookSourceImportReport(
+        inserted: saved.inserted,
+        refreshed: saved.refreshed,
+        skipped: preview.rejectedCount,
+      ),
+    );
   }
 
   /// Checks the pasted document against the byte cap **before** anything parses it.
@@ -155,13 +211,16 @@ final class ImportBookSources {
     };
   }
 
-  /// Decodes [json], keeps the usable entries and stores them.
-  Future<ParseResult<BookSourceImportReport>> _store(String json) async {
+  /// Decodes [json] and answers one preview entry per element, rejected ones included.
+  ///
+  /// The identity lookup is what tells "new" from "refresh"; it happens **before** any write, so
+  /// the preview is a prediction the store confirms in [commit] (ADR-0052 §决策 5).
+  Future<ParseResult<BookSourceImportPreview>> _previewOf(String json) async {
     final Object? decoded;
     try {
       decoded = jsonDecode(json);
     } on FormatException {
-      return failureAt<BookSourceImportReport>(
+      return failureAt<BookSourceImportPreview>(
         kind: ParseFailureKind.invalidBookSource,
         rulePath: 'import.notJson',
       );
@@ -172,50 +231,81 @@ final class ImportBookSources {
         ? decoded
         : <Object?>[decoded];
     if (entries.isEmpty) {
-      return failureAt<BookSourceImportReport>(
+      return failureAt<BookSourceImportPreview>(
         kind: ParseFailureKind.invalidBookSource,
         rulePath: 'import.noEntries',
       );
     }
 
-    final List<Map<String, Object?>> accepted = <Map<String, Object?>>[];
-    var skipped = 0;
+    final List<BookSourceImportEntry> previews = <BookSourceImportEntry>[];
     for (var index = 0; index < entries.length; index++) {
       final Object? entry = entries[index];
       if (entry is! Map<String, Object?>) {
-        skipped++;
         _logSkipped(index: index, entry: null, field: 'entry');
+        previews.add(_rejected(index, BookSourceImportRejection.notAnObject));
 
         continue;
       }
       final String? missing = _missingRequiredField(entry);
       if (missing != null) {
-        skipped++;
         _logSkipped(index: index, entry: entry, field: missing);
+        previews.add(
+          _rejected(
+            index,
+            missing == 'bookSourceUrl'
+                ? BookSourceImportRejection.missingUrl
+                : BookSourceImportRejection.missingName,
+          ),
+        );
 
         continue;
       }
       // 其余字段由模型裁决（checked 模式点名出错的 JSON 键，ADR-0022）；这里只决定拿这份裁决
-      // 怎么办：可降级的字段去掉后照常导入，别的（结构缺失）跳过该条。
+      // 怎么办：可降级的字段去掉后照常导入，别的（结构缺失）拒绝该条。
       final Map<String, Object?>? usable = _sanitise(entry, index: index);
       if (usable == null) {
-        skipped++;
+        previews.add(_rejected(index, BookSourceImportRejection.unreadable));
 
         continue;
       }
-      accepted.add(usable);
+      final String url = _textOf(usable['bookSourceUrl']);
+      final bool exists = await _repository.exists(
+        url: url,
+        fingerprint: bookSourceFingerprint(usable),
+      );
+      final ({String? name, String? url, String? group}) fields =
+          previewFieldsOf(usable);
+      previews.add(
+        BookSourceImportEntry(
+          index: index,
+          entry: usable,
+          isRefresh: exists,
+          rejection: null,
+          name: fields.name,
+          url: fields.url,
+          group: fields.group,
+        ),
+      );
     }
 
-    final BookSourceSaveReport saved = await _repository.saveAll(accepted);
-
-    return ParseSuccess<BookSourceImportReport>(
-      BookSourceImportReport(
-        inserted: saved.inserted,
-        refreshed: saved.refreshed,
-        skipped: skipped,
-      ),
+    return ParseSuccess<BookSourceImportPreview>(
+      BookSourceImportPreview(entries: previews),
     );
   }
+
+  /// One entry the preview shows as rejected.
+  BookSourceImportEntry _rejected(
+    int index,
+    BookSourceImportRejection reason,
+  ) => BookSourceImportEntry(
+    index: index,
+    entry: const <String, Object?>{},
+    isRefresh: false,
+    rejection: reason,
+  );
+
+  /// A non-empty [String] field, or `''` when the raw value is missing or of another type.
+  String _textOf(Object? value) => value is String ? value : '';
 
   /// The **required** field [entry] misses, or `null` when both are there.
   ///
