@@ -517,6 +517,56 @@ final class FetchContentProvider
 
 String _$fetchContentHash() => r'f778bcebf4143d26704370a08269f10212a1c2a0';
 
+/// Provides the use case that reads a manga chapter's image list
+/// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
+
+@ProviderFor(fetchMangaPages)
+final fetchMangaPagesProvider = FetchMangaPagesProvider._();
+
+/// Provides the use case that reads a manga chapter's image list
+/// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
+
+final class FetchMangaPagesProvider
+    extends
+        $FunctionalProvider<FetchMangaPages, FetchMangaPages, FetchMangaPages>
+    with $Provider<FetchMangaPages> {
+  /// Provides the use case that reads a manga chapter's image list
+  /// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
+  FetchMangaPagesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'fetchMangaPagesProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$fetchMangaPagesHash();
+
+  @$internal
+  @override
+  $ProviderElement<FetchMangaPages> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  FetchMangaPages create(Ref ref) {
+    return fetchMangaPages(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(FetchMangaPages value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<FetchMangaPages>(value),
+    );
+  }
+}
+
+String _$fetchMangaPagesHash() => r'317767712cb305bb7b342a0ce2b97e565c43910b';
+
 /// Provides the use case that reads a source's discover-page categories.
 
 @ProviderFor(fetchExploreCategories)

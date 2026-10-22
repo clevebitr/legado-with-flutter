@@ -11,6 +11,7 @@ import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/manga_pages.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
@@ -30,8 +31,12 @@ import 'package:flutter_reader/features/bookshelf/presentation/notifiers/bookshe
 import 'package:flutter_reader/features/bookshelf/presentation/pages/bookshelf_page.dart';
 import 'package:flutter_reader/features/reader/di.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reader_source_kind.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reading_page.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/manga_page_source.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/reader_source_kind_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
@@ -70,6 +75,8 @@ List<Override> appProviderOverrides() => <Override>[
   // `book_source` 的规则链路与 `bookshelf` 的进度表，两个 feature 之间零 import。
   readerChapterListProvider.overrideWith(_ChapterListSource.new),
   readerChapterContentProvider.overrideWith(_ChapterContentSource.new),
+  readerMangaPagesProvider.overrideWith(_MangaPageSource.new),
+  readerSourceKindPortProvider.overrideWith(_SourceKindSource.new),
   readerProgressStoreProvider.overrideWith(_ProgressStore.new),
 ];
 
@@ -320,6 +327,84 @@ final class _ChapterContentSource implements ChapterContentProvider {
             bookName: bookName,
           ),
         );
+  }
+}
+
+/// `MangaPageProvider` bound to `book_source`'s `FetchMangaPages`
+/// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053 §决策 2).
+///
+/// The mapping `MangaPages` → `List<ReadingPage>` happens here, the one place allowed to know both
+/// features' types (ADR-0041 §决策 3). The source's headers travel with every page because the image
+/// host may check the same `Referer` the rule chain used.
+final class _MangaPageSource implements MangaPageProvider {
+  const _MangaPageSource(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<ParseResult<List<ReadingPage>>> fetch({
+    required String sourceUrl,
+    required String chapterUrl,
+    String bookName = '',
+    String chapterTitle = '',
+  }) async {
+    final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
+    if (source == null) {
+      return failureAt<List<ReadingPage>>(
+        kind: ParseFailureKind.invalidBookSource,
+        rulePath: 'reader.mangaPages',
+      );
+    }
+
+    final ParseResult<MangaPages> result = await _ref
+        .read(fetchMangaPagesProvider)
+        .execute(
+          source,
+          ChapterRequest(
+            url: chapterUrl,
+            title: chapterTitle,
+            bookName: bookName,
+          ),
+        );
+
+    return switch (result) {
+      ParseSuccess<MangaPages>(:final MangaPages data) =>
+        ParseSuccess<List<ReadingPage>>(<ReadingPage>[
+          for (final String url in data.urls)
+            ReadingPage(
+              url: url,
+              headers: data.headers ?? const <String, String>{},
+            ),
+        ]),
+      ParseFailure<MangaPages>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        failureAt<List<ReadingPage>>(kind: kind, rulePath: rulePath),
+    };
+  }
+}
+
+/// `ReaderSourceKindProvider` bound to the stored source's `bookSourceType`
+/// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053 §决策 1).
+///
+/// A source whose row is gone answers text: the reader then shows the ordinary failure/empty path
+/// instead of a manga page for a source that does not exist.
+final class _SourceKindSource implements ReaderSourceKindProvider {
+  const _SourceKindSource(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<ParseResult<ReaderSourceKind>> of(String sourceUrl) async {
+    final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
+    if (source == null) {
+      return const ParseSuccess<ReaderSourceKind>(ReaderSourceKind.text);
+    }
+
+    return ParseSuccess<ReaderSourceKind>(
+      isMangaSource(source) ? ReaderSourceKind.image : ReaderSourceKind.text,
+    );
   }
 }
 

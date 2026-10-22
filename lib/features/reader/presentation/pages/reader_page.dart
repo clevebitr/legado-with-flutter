@@ -7,10 +7,13 @@ import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/reader/di.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_settings.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reader_source_kind.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/manga_queries.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
+import 'package:flutter_reader/features/reader/presentation/pages/manga_reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
@@ -151,8 +154,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
+  /// Decides which body the book needs and builds it
+  /// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053 §决策 1).
+  ///
+  /// The kind is awaited before either body is built: guessing "text" while the port loads would
+  /// fetch a chapter body nobody shows, and an image source would pay for it on every open.
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<ParseResult<ReaderSourceKind>> kind = ref.watch(
+      readerSourceKindProvider(widget.book.sourceUrl),
+    );
+
+    return switch (kind) {
+      AsyncData<ParseResult<ReaderSourceKind>>(
+        :final ParseResult<ReaderSourceKind> value,
+      ) =>
+        switch (value) {
+          ParseSuccess<ReaderSourceKind>(data: ReaderSourceKind.image) =>
+            MangaReaderPage(book: widget.book, chapterUrl: widget.chapterUrl),
+          _ => _textReader(context),
+        },
+      // 端口不该失败（失败在适配器里被吸收成 text），真抛了也不能把书挡住。
+      AsyncError<ParseResult<ReaderSourceKind>>() => _textReader(context),
+      _ => const Scaffold(body: Center(child: CircularProgressIndicator())),
+    };
+  }
+
+  /// The text reader this page has always been (`docs/dev/roadmap.md` 5.3).
+  Widget _textReader(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final M3ETheme tokens = context.m3e;
     final ReaderSettings settings =

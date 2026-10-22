@@ -36,8 +36,10 @@
 
 - 竖滚动：`ListView.builder` 懒加载（C-PERF-2），每页 `CachedNetworkImage`（C-PERF-3）。
 - 左右翻页：`PageView`，方向按源/用户的漫画方向设置决定（LTR / RTL）。
-- 双击缩放、双指缩放用 `InteractiveViewer`（Flutter 内置，**不新增依赖**）；
-  缩放后单指拖动即平移，翻页手势在缩放态下让位给平移。
+- 缩放用 `InteractiveViewer`（Flutter 内置，**不新增依赖**），但**只在放大后挂上**：常驻的
+  `InteractiveViewer` 会抢走横向拖动（`ScaleGestureRecognizer` 即使在 `panEnabled: false` 时也赢手势竞技场），
+  翻页会失效。因此 1 倍时是一张普通图片 + 双击放大，放大后才是可平移的 `InteractiveViewer`，
+  再次双击复位（这一条是落地时被 Widget 测试逼出来的修正）。
 - 图片加载失败：页内占位 + 「重试」按钮，不整章崩；失败页不写进度锚点。
 - 进度：沿用 `reading_progress`（章节 + 页号），页号是**页码**而不是字符比例（文本用的比例估算
   不适用于图片）；跨章继续阅读按页号恢复。

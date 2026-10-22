@@ -172,6 +172,114 @@ final class ReaderChapterContentProvider
 String _$readerChapterContentHash() =>
     r'71afbfd8814ede15f4fe7f43b9c28d2afe91f366';
 
+/// Provides the manga-page port, **unbound** by default
+/// (`docs/dev/roadmap.md` §3.10 M16).
+
+@ProviderFor(readerMangaPages)
+final readerMangaPagesProvider = ReaderMangaPagesProvider._();
+
+/// Provides the manga-page port, **unbound** by default
+/// (`docs/dev/roadmap.md` §3.10 M16).
+
+final class ReaderMangaPagesProvider
+    extends
+        $FunctionalProvider<
+          MangaPageProvider,
+          MangaPageProvider,
+          MangaPageProvider
+        >
+    with $Provider<MangaPageProvider> {
+  /// Provides the manga-page port, **unbound** by default
+  /// (`docs/dev/roadmap.md` §3.10 M16).
+  ReaderMangaPagesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'readerMangaPagesProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$readerMangaPagesHash();
+
+  @$internal
+  @override
+  $ProviderElement<MangaPageProvider> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  MangaPageProvider create(Ref ref) {
+    return readerMangaPages(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(MangaPageProvider value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<MangaPageProvider>(value),
+    );
+  }
+}
+
+String _$readerMangaPagesHash() => r'd014eac0a758db1643bc5911c252bdb5ecac19a9';
+
+/// Provides the source-kind port, **unbound** by default: an unbound reader opens text.
+
+@ProviderFor(readerSourceKindPort)
+final readerSourceKindPortProvider = ReaderSourceKindPortProvider._();
+
+/// Provides the source-kind port, **unbound** by default: an unbound reader opens text.
+
+final class ReaderSourceKindPortProvider
+    extends
+        $FunctionalProvider<
+          ReaderSourceKindProvider,
+          ReaderSourceKindProvider,
+          ReaderSourceKindProvider
+        >
+    with $Provider<ReaderSourceKindProvider> {
+  /// Provides the source-kind port, **unbound** by default: an unbound reader opens text.
+  ReaderSourceKindPortProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'readerSourceKindPortProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$readerSourceKindPortHash();
+
+  @$internal
+  @override
+  $ProviderElement<ReaderSourceKindProvider> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  ReaderSourceKindProvider create(Ref ref) {
+    return readerSourceKindPort(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ReaderSourceKindProvider value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ReaderSourceKindProvider>(value),
+    );
+  }
+}
+
+String _$readerSourceKindPortHash() =>
+    r'6f83a1250b92e73c85a908ab28302910a50347d4';
+
 /// Provides the reading-progress port, **unbound** by default.
 ///
 /// The composition root binds it to `bookshelf`, which owns the table (ADR-0041 §决策 4,

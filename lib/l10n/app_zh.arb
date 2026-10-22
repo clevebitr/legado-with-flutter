@@ -167,6 +167,8 @@
   "readerChapterEnd": "本章读完",
   "readerLastChapter": "已是最后一章",
   "readerNoChapter": "这本书没有可读的章节。",
+  "mangaPageIndicator": "{current} / {total}",
+  "mangaImageFailed": "这一页加载失败。",
   "bookSourceUpdateTimeLine": "更新于：{value}",
   "bookSourceListSortLabel": "排序",
   "bookSourceListSortDefault": "手动排序",

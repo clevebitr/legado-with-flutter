@@ -52,7 +52,8 @@ Phase 6    发布前                          清单见 §5
 |---|---|
 | Phase 0–4 — 环境 / core / 引擎 / M0 / M1 | ✅ 完成（G1–G4 达成；证据见 `tool/spot_check/README.md` §4 与 `CHANGELOG.md`） |
 | Phase 5 — 阅读体验 | 🚧 进行中：5.0 ✅、5.1 ✅、5.2 ✅、5.3 ✅、5.4 ✅、5.5 ✅、5.6 ✅、5.7 ① ✅、5.8 的文件选择半程 ✅、5.10 ✅、M11 ✅、M12 ✅、M13 🚧（见 §3.9）、M15 🚧（见 §3.10）；其余见 §3.6 |
-| M16 / M17 — 漫画、听书与音频 | ⏳ 未开工（口径与出口见 §3.10，判据归 ADR-0053 / ADR-0054） |
+| M16 — 漫画引擎 | 🚧 落地中：M-1–M-3 ✅；设备级实跑与真源抽查未闭环（见 §3.10） |
+| M17 — 听书与音频 | ⏳ 未开工（已交给另一个代理；判断归 ADR-0054） |
 | Phase 6 — 发布前 | ⏳ 未开始（清单见 §5） |
 
 > 步骤级「下一步」不写在此处，由 `todo` 工具决定。
@@ -328,13 +329,22 @@ Phase 6    发布前                          清单见 §5
 | V4 ✅ | **列表视图**：升 / 降序切换（默认序倒序 = 手动序反转，此形态禁用拖拽）+ 按域名分节 | 现在四个排序键固定方向、无域名分节 |
 | V5 ✅ | **导入预览**：`ImportBookSources.preview` + `commit`，预览逐条勾选（new / refresh / 拒绝原因），`execute` 保留为「全选 + 提交」 | 现在导入一按就落库，错误只能从计数里猜 |
 
-**M16 — 漫画引擎（ADR-0053）** —— ⏳ 未开工
+**M16 — 漫画引擎（ADR-0053）** —— 🚧 进行中（M-1–M-3 已落地；待设备级实跑 + 真源抽查）
 
 | # | 交付物 |
 |---|---|
-| M-1 | `FetchMangaPages`（`ruleContent` 列表语义 → 图片页，相对地址按章节页解析，空列表整章失败） |
-| M-2 | `MangaReaderPage`（按 `sourceType` 分派；竖滚动 + 左右翻页、双击/双指缩放、失败页重试、页号进度） |
-| M-3 | 预取前后各 1 页、解码尺寸上限；零新依赖（`cached_network_image` + `InteractiveViewer`） |
+| M-1 ✅ | `FetchMangaPages`（`ruleContent` 列表语义 → 图片页，相对地址按章节页解析，空列表整章失败） |
+| M-2 ✅ | `MangaReaderPage`（按 `sourceType` 分派；竖滚动 + 左右翻页、双击/双指缩放、失败页重试、页号进度） |
+| M-3 ✅ | 预取前后各 1 页、解码尺寸上限；零新依赖（`cached_network_image` + `InteractiveViewer`） |
+
+> **M16 落地记录（2026-10-22）：** `FetchMangaPages`（`ruleContent` 列表语义、相对地址按章节页
+> 解析、分页去重、非 http(s) 地址点名丢弃、空结果整章失败）与 `reader.mangaPages` /
+> `reader.sourceKind` 两条端口；`ReaderPage` 按源类型分派到 `MangaReaderPage`（滚动条 / PageView
+> 两种观影、页号进度复用 `reading_progress`、图片带源 header、失败页独立重试、前后各 1 页预取）。
+> 图片走 `CachedNetworkImageProvider`（C-PERF-3），测试用 `ImageProvider` 注入缝 + 1×1 PNG，不触网。
+> **落地修正（已写回 ADR-0053 §决策 3）：** 常驻 `InteractiveViewer` 会抢走翻页横滑，改为 1 倍普通图片
+> + 双击放大后才挂 `InteractiveViewer`。**未闭环：** Windows/Android `integration_test` 与真源抽查
+> （Android 当前无设备）。
 
 **M17 — 听书与音频（ADR-0054）** —— ⏳ 未开工
 

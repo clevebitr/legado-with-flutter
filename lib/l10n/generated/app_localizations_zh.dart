@@ -545,6 +545,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerNoChapter => '这本书没有可读的章节。';
 
   @override
+  String mangaPageIndicator(int current, int total) {
+    return '$current / $total';
+  }
+
+  @override
+  String get mangaImageFailed => '这一页加载失败。';
+
+  @override
   String bookSourceUpdateTimeLine(String value) {
     return '更新于：$value';
   }

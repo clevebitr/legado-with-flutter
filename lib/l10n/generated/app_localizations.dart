@@ -1104,6 +1104,18 @@ abstract class AppLocalizations {
   /// **'This book has no readable chapter.'**
   String get readerNoChapter;
 
+  /// Manga reader: which page of the chapter is on screen.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} / {total}'**
+  String mangaPageIndicator(int current, int total);
+
+  /// Manga reader: one image could not be loaded; the tile offers a retry.
+  ///
+  /// In en, this message translates to:
+  /// **'This page failed to load.'**
+  String get mangaImageFailed;
+
   /// Foot line showing the update time a rule returned.
   ///
   /// In en, this message translates to:

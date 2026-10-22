@@ -571,6 +571,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerNoChapter => 'This book has no readable chapter.';
 
   @override
+  String mangaPageIndicator(int current, int total) {
+    return '$current / $total';
+  }
+
+  @override
+  String get mangaImageFailed => 'This page failed to load.';
+
+  @override
   String bookSourceUpdateTimeLine(String value) {
     return 'Updated: $value';
   }

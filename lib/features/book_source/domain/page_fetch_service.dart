@@ -539,6 +539,18 @@ final class PageFetchService {
     );
   }
 
+  /// Returns **every value** of [rule] on [scope] (upstream `getStringList`).
+  ///
+  /// It is the list-shaped sibling of [content]: an image rule
+  /// (`class.page img@src`) matches many nodes, and taking the first value would show a one-page
+  /// chapter (ADR-0053 §决策 2). An empty list is a **success** here; whether "no value" is a
+  /// failure is the stage's decision (`FetchMangaPages` turns it into one).
+  Future<ParseResult<List<String>>> extractAll(
+    String rule,
+    RuleScope scope,
+    String rulePath,
+  ) => _engine.extractAll(rule, scope, rulePath: rulePath);
+
   /// Returns every match of a **top-level list** rule.
   ///
   /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7).

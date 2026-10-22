@@ -21,6 +21,7 @@ import 'package:flutter_reader/features/book_source/domain/usecases/explore_book
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_explore_categories.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/fetch_manga_pages.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/run_source_debug.dart';
@@ -102,6 +103,14 @@ ContentCache contentCache(Ref ref) => CacheDaoContentCache(
 FetchContent fetchContent(Ref ref) => FetchContent(
   pages: ref.watch(pageFetchServiceProvider),
   cache: ref.watch(contentCacheProvider),
+);
+
+/// Provides the use case that reads a manga chapter's image list
+/// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
+@riverpod
+FetchMangaPages fetchMangaPages(Ref ref) => FetchMangaPages(
+  pages: ref.watch(pageFetchServiceProvider),
+  logger: ref.watch(appLoggerProvider),
 );
 
 /// Provides the use case that reads a source's discover-page categories.

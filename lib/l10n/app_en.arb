@@ -744,6 +744,22 @@
   "@readerNoChapter": {
     "description": "Shown when the chapter list came back empty."
   },
+  "mangaPageIndicator": "{current} / {total}",
+  "@mangaPageIndicator": {
+    "description": "Manga reader: which page of the chapter is on screen.",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "mangaImageFailed": "This page failed to load.",
+  "@mangaImageFailed": {
+    "description": "Manga reader: one image could not be loaded; the tile offers a retry."
+  },
   "bookSourceUpdateTimeLine": "Updated: {value}",
   "@bookSourceUpdateTimeLine": {
     "description": "Foot line showing the update time a rule returned.",
