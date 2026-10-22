@@ -34,6 +34,22 @@ abstract interface class BookshelfRepository {
     required bool isPinned,
   });
 
+  /// Moves entry [id] onto a new identity after a source switch (ADR-0051 §决策 3).
+  ///
+  /// Answers `false` when the target identity already has a row: the caller then keeps both — two
+  /// shelf entries for the same book in two sources is what the user created, and merging them
+  /// would silently drop one source's progress.
+  Future<bool> migrateIdentity({
+    required int id,
+    required String sourceUrl,
+    required String bookUrl,
+    required String? tocUrl,
+    required String name,
+    required String? author,
+    required String? coverUrl,
+    required String? lastChapter,
+  });
+
   /// Deletes entry [id] together with its reading progress.
   Future<void> remove(int id);
 

@@ -26,6 +26,7 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.da
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/run_source_debug.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/switch_book_source.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'di.g.dart';
@@ -153,6 +154,14 @@ RunSourceDebug runSourceDebug(Ref ref) => RunSourceDebug(
   toc: ref.watch(fetchTocProvider),
   content: ref.watch(fetchContentProvider),
   clock: ref.watch(clockProvider),
+);
+
+/// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
+@riverpod
+SwitchBookSource switchBookSource(Ref ref) => SwitchBookSource(
+  search: ref.watch(searchBooksProvider),
+  bookInfo: ref.watch(fetchBookInfoProvider),
+  toc: ref.watch(fetchTocProvider),
 );
 
 /// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).

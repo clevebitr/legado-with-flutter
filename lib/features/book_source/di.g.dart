@@ -771,6 +771,57 @@ final class RunSourceDebugProvider
 
 String _$runSourceDebugHash() => r'62fea9b5a61629868734e88f23febc301eb3df3d';
 
+/// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
+
+@ProviderFor(switchBookSource)
+final switchBookSourceProvider = SwitchBookSourceProvider._();
+
+/// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
+
+final class SwitchBookSourceProvider
+    extends
+        $FunctionalProvider<
+          SwitchBookSource,
+          SwitchBookSource,
+          SwitchBookSource
+        >
+    with $Provider<SwitchBookSource> {
+  /// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
+  SwitchBookSourceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'switchBookSourceProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$switchBookSourceHash();
+
+  @$internal
+  @override
+  $ProviderElement<SwitchBookSource> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SwitchBookSource create(Ref ref) {
+    return switchBookSource(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SwitchBookSource value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SwitchBookSource>(value),
+    );
+  }
+}
+
+String _$switchBookSourceHash() => r'c37a69b842418fb2ee312f0718044a0e5c5c480b';
+
 /// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
 
 @ProviderFor(bookSourceViewStore)

@@ -113,6 +113,45 @@ final class FakeBookshelfRepository implements BookshelfRepository {
   }
 
   @override
+  Future<bool> migrateIdentity({
+    required int id,
+    required String sourceUrl,
+    required String bookUrl,
+    required String? tocUrl,
+    required String name,
+    required String? author,
+    required String? coverUrl,
+    required String? lastChapter,
+  }) async {
+    _guard();
+    final int index = _books.indexWhere((ShelvedBook book) => book.id == id);
+    if (index < 0) {
+      return false;
+    }
+    // 目标身份已有行 → 两行并存（ADR-0051 §决策 3）。
+    if (_books.any(
+      (ShelvedBook book) =>
+          book.id != id &&
+          book.sourceUrl == sourceUrl &&
+          book.bookUrl == bookUrl,
+    )) {
+      return false;
+    }
+    final ShelvedBook current = _books[index];
+    _books[index] = current.copyWith(
+      sourceUrl: sourceUrl,
+      bookUrl: bookUrl,
+      tocUrl: tocUrl,
+      name: name,
+      author: author,
+      coverUrl: coverUrl,
+      lastChapter: lastChapter,
+    );
+
+    return true;
+  }
+
+  @override
   Future<void> remove(int id) async {
     _guard();
     _books.removeWhere((ShelvedBook book) => book.id == id);

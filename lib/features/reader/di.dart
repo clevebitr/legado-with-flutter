@@ -1,6 +1,7 @@
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/preference_store_provider.dart';
 import 'package:flutter_reader/features/reader/data/reader_settings_repository_impl.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/book_source_switcher.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/manga_page_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_settings_repository.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_source_kind_source.dart';
@@ -49,3 +50,12 @@ ReaderSourceKindProvider readerSourceKindPort(Ref ref) =>
 @riverpod
 ReadingProgressStore readerProgressStore(Ref ref) =>
     UnboundReadingProgressStore(logger: ref.watch(appLoggerProvider));
+
+/// Provides the source-switch port, **unbound** by default.
+///
+/// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity
+/// migration (ADR-0051 §决策 3). Unbound it answers an `unsupportedRule` failure, so the sheet shows
+/// a message instead of throwing (`docs/dev/platform.md` §2's habit).
+@riverpod
+BookSourceSwitcher bookSourceSwitcher(Ref ref) =>
+    const UnboundBookSourceSwitcher();

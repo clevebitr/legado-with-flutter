@@ -100,6 +100,28 @@ void main() {
       );
     });
 
+    test('migrateIdentity_whenCalled_rewritesTheIdentityInPlace', () async {
+      // ADR-0051 §决策 3：换源改的是身份，不是行 —— `addedAt` / 状态 / 置顶都要留住。
+      final int id = await insert();
+
+      await dao.migrateIdentity(
+        id: id,
+        sourceUrl: 'https://other.test',
+        bookUrl: 'https://other.test/book/9',
+        tocUrl: 'https://other.test/book/9/toc',
+        name: '剑来（新源）',
+        author: '烽火戏诸侯',
+        coverUrl: 'https://other.test/c.jpg',
+        lastChapter: '第1300章',
+      );
+
+      final BookshelfRow row = (await dao.findAll()).single;
+      expect(row.book.id, id);
+      expect(row.book.sourceUrl, 'https://other.test');
+      expect(row.book.bookUrl, 'https://other.test/book/9');
+      expect(row.book.addedAt, isNotNull);
+    });
+
     test(
       'refreshDetails_givenNoRenamePermission_keepsTheStoredTitle',
       () async {

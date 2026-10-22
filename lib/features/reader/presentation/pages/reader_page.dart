@@ -10,12 +10,14 @@ import 'package:flutter_reader/features/reader/domain/entities/reader_settings.d
 import 'package:flutter_reader/features/reader/domain/entities/reader_source_kind.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/book_source_switcher.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/manga_queries.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/manga_reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_source_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_toc_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -54,6 +56,11 @@ class ReaderPage extends ConsumerStatefulWidget {
 /// State of the reader page: the scroll controller, the save bookkeeping and the last position.
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   final ScrollController _scroll = ScrollController();
+
+  /// The book currently open. It starts as the route's book and **changes** on a source switch:
+  /// every provider below is keyed by it, so a new value naturally re-reads the new source
+  /// (ADR-0051 §决策 3) — no navigation, no flash, and the reader stays where it was.
+  late ReaderBook _book = widget.book;
 
   /// The progress port, captured in `initState` so `dispose` may still write.
   ReadingProgressStore? _store;
@@ -109,8 +116,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       final ReadingChapter chapter = _chapters[_lastIndex];
       unawaited(
         store.write(
-          sourceUrl: widget.book.sourceUrl,
-          bookUrl: widget.book.bookUrl,
+          sourceUrl: _book.sourceUrl,
+          bookUrl: _book.bookUrl,
           position: ReadingPosition(
             chapterUrl: chapter.url,
             chapterName: chapter.title.isEmpty ? null : chapter.title,
@@ -191,7 +198,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       settings.background,
     );
     final AsyncValue<ParseResult<List<ReadingChapter>>> chapters = ref.watch(
-      readerChaptersProvider(widget.book),
+      readerChaptersProvider(_book),
     );
 
     return Scaffold(
@@ -231,13 +238,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     FailureMessage(
                       kind: kind,
                       onRetry: () =>
-                          ref.invalidate(readerChaptersProvider(widget.book)),
+                          ref.invalidate(readerChaptersProvider(_book)),
                     ),
                 },
               AsyncError<ParseResult<List<ReadingChapter>>>() => FailureMessage(
                 kind: ParseFailureKind.parseFailed,
-                onRetry: () =>
-                    ref.invalidate(readerChaptersProvider(widget.book)),
+                onRetry: () => ref.invalidate(readerChaptersProvider(_book)),
               ),
               _ => const Center(child: CircularProgressIndicator()),
             },
@@ -331,6 +337,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   onPressed: () => _keepAlive(() => _openToc(known)),
                 ),
                 IconButton(
+                  icon: const Icon(Icons.swap_horiz),
+                  tooltip: l10n.readerChangeSource,
+                  onPressed: () => _keepAlive(_openChangeSource),
+                ),
+                IconButton(
                   icon: const Icon(Icons.brightness_6_outlined),
                   tooltip: l10n.readerBrightness,
                   onPressed: () => _keepAlive(() => _openBrightness(tokens)),
@@ -378,11 +389,68 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     final int target = index.clamp(0, _chapters.length - 1);
     unawaited(
-      ref
-          .read(readerSessionProvider(widget.book).notifier)
-          .selectChapter(target),
+      ref.read(readerSessionProvider(_book).notifier).selectChapter(target),
     );
     _keepAlive(() {});
+  }
+
+  /// Opens the “change source” sheet and switches when the user picks one (ADR-0051 §决策 3).
+  ///
+  /// The switch happens **in place**: `_book` changes, every provider keyed by it re-reads the new
+  /// source, and the session is told which chapter to open. No navigation, so the reader keeps its
+  /// scroll position for the frame and the user never sees a page flash.
+  Future<void> _openChangeSource() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final Object? picked = await showModalBottomSheet<Object?>(
+      context: context,
+      builder: (BuildContext context) => ReaderSourceSheet(book: _book),
+    );
+    if (!mounted || picked is! ReaderSourceCandidate) {
+      return;
+    }
+
+    final String chapterName =
+        _chaptersOf(ref.read(readerChaptersProvider(_book)))
+            .elementAtOrNull(_currentIndex)
+            ?.title ??
+        '';
+    final ParseResult<ReaderSourceSwitch> switched = await ref
+        .read(bookSourceSwitcherProvider)
+        .switchTo(
+          book: _book,
+          candidate: picked,
+          currentChapterName: chapterName,
+          currentChapterIndex: _currentIndex,
+        );
+    if (!mounted) {
+      return;
+    }
+
+    switch (switched) {
+      case ParseSuccess<ReaderSourceSwitch>(:final ReaderSourceSwitch data):
+        setState(() {
+          _book = data.book;
+          _restoredChapterUrl = null;
+          _lastBody = null;
+        });
+        // 新身份上的会话从零开始：直接告诉它对齐到哪一章（进度也由它在新身份下落盘）。
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
+          unawaited(
+            ref
+                .read(readerSessionProvider(_book).notifier)
+                .selectChapter(data.chapterIndex),
+          );
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.readerSourceAligned(data.chapterName))),
+        );
+      case ParseFailure<ReaderSourceSwitch>():
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.readerSourceFailed)));
+    }
   }
 
   /// Opens the brightness slider (an app-level overlay, ADR-0051 §决策 1).
@@ -430,7 +498,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _chapters = chapters;
 
     final AsyncValue<ReaderSessionState> session = ref.watch(
-      readerSessionProvider(widget.book),
+      readerSessionProvider(_book),
     );
     _applyStartChapter(chapters, session.value);
 
@@ -439,7 +507,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _chapterBody(chapters, value, settings, palette),
       AsyncError<ReaderSessionState>() => FailureMessage(
         kind: ParseFailureKind.parseFailed,
-        onRetry: () => ref.invalidate(readerSessionProvider(widget.book)),
+        onRetry: () => ref.invalidate(readerSessionProvider(_book)),
       ),
       _ => const Center(child: CircularProgressIndicator()),
     };
@@ -474,9 +542,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         return;
       }
       unawaited(
-        ref
-            .read(readerSessionProvider(widget.book).notifier)
-            .selectChapter(index),
+        ref.read(readerSessionProvider(_book).notifier).selectChapter(index),
       );
     });
   }
@@ -507,7 +573,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
 
     final AsyncValue<ParseResult<String>> content = ref.watch(
-      readerContentProvider((widget.book, chapter.url)),
+      readerContentProvider((_book, chapter.url)),
     );
 
     // 三区点击（ADR-0051 §决策 1）：中间 ⅓ 唤出菜单，左右各 ⅓ 唤出菜单前先收起它。
@@ -539,15 +605,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ParseFailure<String>(:final ParseFailureKind kind) =>
               FailureMessage(
                 kind: kind,
-                onRetry: () => ref.invalidate(
-                  readerContentProvider((widget.book, chapter.url)),
-                ),
+                onRetry: () =>
+                    ref.invalidate(readerContentProvider((_book, chapter.url))),
               ),
           },
         AsyncError<ParseResult<String>>() => FailureMessage(
           kind: ParseFailureKind.parseFailed,
           onRetry: () =>
-              ref.invalidate(readerContentProvider((widget.book, chapter.url))),
+              ref.invalidate(readerContentProvider((_book, chapter.url))),
         ),
         _ => const Center(child: CircularProgressIndicator()),
       },
@@ -599,9 +664,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           ? 0
           : (_scroll.offset / max * body.length).round();
       _rememberOffset(offset);
-      unawaited(
-        ref.read(readerSessionProvider(widget.book).notifier).saveProgress(),
-      );
+      unawaited(ref.read(readerSessionProvider(_book).notifier).saveProgress());
 
       return false;
     },
@@ -660,7 +723,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         isLastChapter: chapterIndex == chapterCount - 1,
         onOffsetChanged: _rememberOffset,
         onNextChapter: () => unawaited(
-          ref.read(readerSessionProvider(widget.book).notifier).nextChapter(),
+          ref.read(readerSessionProvider(_book).notifier).nextChapter(),
         ),
       ),
     );
@@ -669,7 +732,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// Remembers [offset] in the session; the next chapter switch or exit writes it.
   void _rememberOffset(int offset) {
     _lastOffset = offset;
-    ref.read(readerSessionProvider(widget.book).notifier).updateOffset(offset);
+    ref.read(readerSessionProvider(_book).notifier).updateOffset(offset);
   }
 
   /// The chapters of [chapters], or none while they load.
@@ -692,9 +755,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return known[index].title;
     }
 
-    return widget.book.name.isEmpty
-        ? l10n.bookSourceReaderTitle
-        : widget.book.name;
+    return _book.name.isEmpty ? l10n.bookSourceReaderTitle : _book.name;
   }
 
   /// Remembers the loaded body for the percent label and answers `true` (so it reads as a

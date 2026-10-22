@@ -192,3 +192,20 @@ M13 交付（UI 修复 + 书源管理），用户四处裁决见 #11。落地六
 踩坑两条值得记：①`pumpSourceManagementPage` 里 `localizationOf(tester, ...)` 必须在 pump 之后调用，否则「No element」；②上一轮遗留的 `flutter_reader.exe` 占着 `reader.db`，`on_disk_database_test` 会以 `PathAccessException` 失败——双端实跑前先结束进程。
 
 验证：1263 用例全过；core 1341/1341、domain 2848/2848、data 98.72%；format 0、analyze 干净、生成物同步；许可扫描 risky none；双端设备级各 3 文件全过（js_bridge 25/25）。
+
+## 2026-10-22 — M14 落地：沉浸式菜单、目录 sheet、换源（含身份迁移）、排版四轴（ADR-0051）
+
+M14 交付（阅读体验 R1–R4，ADR-0051）：
+
+1. **R1 沉浸式 chrome**：AppBar 与工具条默认隐藏，点正文中间 ⅓ 唤出、4 s 自动隐藏（`_keepAlive` 重置）；工具条含章节进度滑块（拖动只动标签、松手才换章，否则每帧一次抓取）、上一/下一章、目录、换源、亮度。**亮度是应用级遮罩**（`IgnorePointer` + 黑层 0.2–1.0），不碰系统亮度——Windows 无统一 API、移动端要平台通道，遮罩三端一致且可测；系统亮度登记未做。
+2. **R2 目录**：`ReaderTocSheet`，当前章初始偏移居中 + 高亮，正/倒序只反转视图（点行仍回原索引，单测钉住），章节名搜索。
+3. **R3 换源**：`SwitchBookSource`（book_source）做候选搜索与切换；候选**逐源**搜（聚合结果的合并行只留一个 bookUrl，换源需要目标源内的地址），并发 4 + `SourceBudget(60s)`，单源失败只少一条候选。对齐顺序：同名 → 包含 → 同索引（clamp）。切换**原地**发生：页面把 `widget.book` 换成可变 `_book`，所有 provider 以它为 key 自动重取；书架身份用新方法 `BookshelfRepository.migrateIdentity` 原地改写（目标身份已有行则两行并存），保住 `addedAt`/状态/置顶。阅读器声明 `BookSourceSwitcher` 端口，装配根（`lib/app.dart` 的 `_SourceSwitcher`）绑到 book_source + bookshelf，两个 feature 仍零 import。
+4. **R4 排版**：新增 fontFamily（平台通用族名，**不打包字体**，否则 10+ MB + 许可）、paragraphSpacing（0/0.5/1 → 0–2 空行）、firstLineIndent（0/1/2 em，CJK 用全角空格）、pagePadding（16/24/32）。四轴与旧四轴同存 shared_preferences，越界值在 `ReaderSettings` 工厂钳制到预设台阶；段距/缩进在**渲染前**套一次（`readerBodyText`），正文数据与缓存不动。
+
+踩坑四条：① `String.fromCharCode(10)` 之外写 `'\n'` 的 python 补丁会被转义成真换行，把源码写坏——改用 `_newline` 常量；② `readerBodyText` 原来的 `separator = '\n' * (1 + spacing.round()*2)` 让 0.5 变成 3 个换行，正确是 `1 + (spacing*2).round()`；③ 旧 reader 测试用 `find.text('第二章正文')`，正文现在带首行缩进 → 改 `textContaining`；④ 工具条也有 `Slider`，设置面板的单测必须把 finder 限定在 `ReaderSettingsSheet` 内；⑤ const 构造在编译期折叠，覆盖率统计不到 → 测试里用函数在运行时构造（并 ignore 对应 lint）。
+
+验证：1294 用例全过；core 1352/1352、domain 2971/2971、data 97.25%；format 0、analyze 干净、生成物同步；双端设备级各 3 文件全过（js_bridge 25/25）；无新增依赖。
+
+## 2026-10-22 — M17 落地：音频源播放 + 系统 TTS + 媒体通知；真源受阻于引擎方言缺口
+
+按 ADR-0054 交付 A-0…A-4（分支 feat/m17-audio，基于 feat/source-mgmt-manga-audio）：just_audio 0.10.6 + just_audio_windows 0.2.3 + audio_service 0.18.19 + flutter_tts 4.2.5（全 MIT；176 包 / Risky none）。阅读器按 sourceType 分派 AudioReaderView；TTS 从工具条进 ReaderTtsSheet；两者共用目录/会话/进度端口，音频进度写毫秒。通知端口 core/platform/PlaybackNotification：Android/iOS 用 audio_service（AudioServiceActivity + 前台服务 + POST_NOTIFICATIONS MethodChannel），Windows no-op。Windows 新增两个构建前提：nuget.exe 在 PATH、MSVC /utf-8（platform.md §1.2）。设备级 integration_test/audio_playback_test.dart 双端全过（本地 WAV 实播、TTS 读完一句、Android 通知 attach/update/detach）。真源抽查（用户提供的「🔊书音M」）未通过：chapterUrl 把 {{$.id}} 写进 @js: 字符串并引用上游 book 对象，本仓矩阵 #14 把脚本内 {{…}} 当脚本、沙箱只有 bookName/chapterTitle，目录地址留下字面量 movieId={{$.id}}，站点回「章节不存在」；记「已实现未验证」，两条缺口入 roadmap §3.7。顺带修真 bug：JSON 条目上的 @js: 字段丢失页面 baseUrl（_jsContextOf(JsonScope)），补单测。门禁：1384 用例全过、core 100% / domain 100% / data 98.53%、format 0、analyze 干净。

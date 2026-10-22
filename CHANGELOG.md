@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The reader becomes a reader: immersive chrome, chapter sheet, source switching, typography (M14, ADR-0051)
+
+- **Immersive chrome**: the app bar and tool bar are **hidden by default**; tapping the middle third of
+  the text brings them back for 4 s (any interaction restarts the clock). The tool bar carries the
+  chapter progress slider (drag shows the label, release changes chapter — a per-frame change would
+  start a fetch per frame), previous / next chapter, the chapter list, source switching and brightness.
+  The slider is the *book's* position; the percent beside it is the estimate inside the chapter.
+- **Brightness is an app-level overlay**, not the system one: a pointer-transparent black layer at
+  0.2–1.0. Windows has no uniform brightness API and the mobile paths need a platform channel, so the
+  overlay keeps the three targets identical and testable; system brightness is registered as not done.
+- **Chapter sheet**: the current chapter starts centred and highlighted, a **reversed** toggle flips the
+  view without touching the data (tapping a row still opens the chapter it names), and a search field
+  filters by title.
+- **Change source**: the sheet searches every other enabled text source for the book's title (per source,
+  because the merged search keeps only one book URL), then the switch re-reads the detail page and the
+  chapter list and aligns the chapter: same name → contained name → same index. The switch happens **in
+  place** — the reader's `ReaderBook` changes and every provider keyed by it re-reads — and the shelf row
+  is **migrated** to the new `(sourceUrl, bookUrl)` identity instead of being deleted and re-added, so
+  `addedAt`, status and pinning survive (ADR-0051 §decision 3).
+- **Typography**: four new axes — font family (theme / serif / sans / monospace, mapped onto the platform
+  families rather than bundling a 10 MB CJK font), paragraph spacing, first-line indent (ideographic space
+  for CJK, four spaces otherwise) and page margin. The body is laid out by one presentation transform, so
+  the cached chapter text stays the source's own.
+- ADR-0051 records the five decisions; testing covers the alignment order, the candidate search (incl. a
+  failing source that must not sink the list), the chapter sheet's view semantics, the source sheet's
+  three states, and the settings presets.
+- Gates: format 0 changed, analyze clean, **1294** tests, `core` 100%, `domain` 100%, `data` 97.25%.
+
+
 ### Book source management can finally write: batch edits, search, groups, an editor, export (M13-S2..S5)
 
 - **Selection mode**: long-press a row, then select all / invert and run **enable / disable / delete /

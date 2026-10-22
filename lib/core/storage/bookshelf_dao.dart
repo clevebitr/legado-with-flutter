@@ -154,6 +154,33 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
     ),
   );
 
+  /// Rewrites the identity of row [id] **in place** (ADR-0051 §决策 3).
+  ///
+  /// It exists because a source switch changes `(sourceUrl, bookUrl)` — the shelf's identity — and
+  /// deleting + re-inserting would lose `addedAt`, `status` and `isPinned`. The caller has already
+  /// established that the target identity has no row of its own.
+  Future<void> migrateIdentity({
+    required int id,
+    required String sourceUrl,
+    required String bookUrl,
+    required String? tocUrl,
+    required String name,
+    required String? author,
+    required String? coverUrl,
+    required String? lastChapter,
+  }) => (update(books)..where((Books table) => table.id.equals(id))).write(
+    BooksCompanion(
+      sourceUrl: Value<String>(sourceUrl),
+      bookUrl: Value<String>(bookUrl),
+      tocUrl: Value<String?>(tocUrl),
+      name: Value<String>(name),
+      author: Value<String?>(author),
+      coverUrl: Value<String?>(coverUrl),
+      lastChapter: Value<String?>(lastChapter),
+      updatedAt: Value<DateTime>(_clock.now()),
+    ),
+  );
+
   /// Deletes row [id] and reports how many rows went away (0 or 1).
   Future<int> deleteById(int id) =>
       (delete(books)..where((Books table) => table.id.equals(id))).go();

@@ -341,3 +341,68 @@ final class ReaderProgressStoreProvider
 
 String _$readerProgressStoreHash() =>
     r'dd9eeeee651d67ee3e19a0a882d83218be17480e';
+
+/// Provides the source-switch port, **unbound** by default.
+///
+/// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity
+/// migration (ADR-0051 §决策 3). Unbound it answers an `unsupportedRule` failure, so the sheet shows
+/// a message instead of throwing (`docs/dev/platform.md` §2's habit).
+
+@ProviderFor(bookSourceSwitcher)
+final bookSourceSwitcherProvider = BookSourceSwitcherProvider._();
+
+/// Provides the source-switch port, **unbound** by default.
+///
+/// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity
+/// migration (ADR-0051 §决策 3). Unbound it answers an `unsupportedRule` failure, so the sheet shows
+/// a message instead of throwing (`docs/dev/platform.md` §2's habit).
+
+final class BookSourceSwitcherProvider
+    extends
+        $FunctionalProvider<
+          BookSourceSwitcher,
+          BookSourceSwitcher,
+          BookSourceSwitcher
+        >
+    with $Provider<BookSourceSwitcher> {
+  /// Provides the source-switch port, **unbound** by default.
+  ///
+  /// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity
+  /// migration (ADR-0051 §决策 3). Unbound it answers an `unsupportedRule` failure, so the sheet shows
+  /// a message instead of throwing (`docs/dev/platform.md` §2's habit).
+  BookSourceSwitcherProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceSwitcherProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceSwitcherHash();
+
+  @$internal
+  @override
+  $ProviderElement<BookSourceSwitcher> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BookSourceSwitcher create(Ref ref) {
+    return bookSourceSwitcher(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookSourceSwitcher value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookSourceSwitcher>(value),
+    );
+  }
+}
+
+String _$bookSourceSwitcherHash() =>
+    r'd85b5f95e1b8fbade0d11ebad7fb73b93a2f2adc';

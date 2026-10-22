@@ -15,7 +15,9 @@ import 'package:flutter_reader/features/book_source/domain/entities/chapter_requ
 import 'package:flutter_reader/features/book_source/domain/entities/manga_pages.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/switch_book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_check_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_debug_page.dart';
@@ -26,6 +28,7 @@ import 'package:flutter_reader/features/book_source/presentation/pages/explore_p
 import 'package:flutter_reader/features/bookshelf/di.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_candidate.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
+import 'package:flutter_reader/features/bookshelf/domain/repositories/bookshelf_repository.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/bookshelf_route.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/notifiers/bookshelf_notifier.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/pages/bookshelf_page.dart';
@@ -35,6 +38,7 @@ import 'package:flutter_reader/features/reader/domain/entities/reader_source_kin
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_page.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/book_source_switcher.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/manga_page_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_source_kind_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
@@ -81,6 +85,7 @@ List<Override> appProviderOverrides() => <Override>[
   readerMangaPagesProvider.overrideWith(_MangaPageSource.new),
   readerSourceKindPortProvider.overrideWith(_SourceKindSource.new),
   readerProgressStoreProvider.overrideWith(_ProgressStore.new),
+  bookSourceSwitcherProvider.overrideWith(_SourceSwitcher.new),
 ];
 
 /// Root widget: wires theming, localization and the route table.
@@ -222,6 +227,178 @@ final class _RootNavigation implements AppNavigation {
       chapterUrl: chapterUrl,
     ),
   );
+}
+
+/// `BookSourceSwitcher` bound to `book_source`'s search chain and the shelf's identity migration
+/// (`docs/dev/roadmap.md` §3.9-R3, ADR-0051 §决策 3).
+///
+/// It is the one place that knows both sides: which rows are enabled (the search scope), how to
+/// switch (the use case), and that a switch changes the shelf's identity. The reader therefore only
+/// sees primitives, and neither feature imports the other (C-ARCH-2).
+final class _SourceSwitcher implements BookSourceSwitcher {
+  const _SourceSwitcher(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<ParseResult<List<ReaderSourceCandidate>>> candidates(
+    ReaderBook book,
+  ) async {
+    final List<StoredBookSource> rows = await _ref.read(
+      bookSourceListProvider.future,
+    );
+    // 范围与聚合搜索同一条口径（ADR-0046 §决策 2）：启用 + 文本源。
+    final List<BookSource> sources = <BookSource>[
+      for (final StoredBookSource row in rows)
+        if (row.isEnabled && row.source.sourceType == BookSourceType.text)
+          row.source,
+    ];
+    final ParseResult<List<SourceCandidate>> found = await _ref
+        .read(switchBookSourceProvider)
+        .candidates(
+          bookName: book.name,
+          sources: sources,
+          currentSourceUrl: book.sourceUrl,
+        );
+
+    return switch (found) {
+      ParseFailure<List<SourceCandidate>>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        failureAt<List<ReaderSourceCandidate>>(kind: kind, rulePath: rulePath),
+      ParseSuccess<List<SourceCandidate>>(:final List<SourceCandidate> data) =>
+        ParseSuccess<List<ReaderSourceCandidate>>(<ReaderSourceCandidate>[
+          for (final SourceCandidate candidate in data)
+            ReaderSourceCandidate(
+              sourceUrl: candidate.sourceUrl,
+              sourceName: candidate.sourceName,
+              bookUrl: candidate.bookUrl,
+              author: candidate.author,
+              lastChapter: candidate.lastChapter,
+            ),
+        ]),
+    };
+  }
+
+  @override
+  Future<ParseResult<ReaderSourceSwitch>> switchTo({
+    required ReaderBook book,
+    required ReaderSourceCandidate candidate,
+    required String currentChapterName,
+    required int currentChapterIndex,
+  }) async {
+    final BookSource? target = await _sourceByUrl(_ref, candidate.sourceUrl);
+    if (target == null) {
+      return failureAt<ReaderSourceSwitch>(
+        kind: ParseFailureKind.invalidBookSource,
+        rulePath: 'reader.changeSource',
+      );
+    }
+    final ParseResult<SourceSwitchResult> switched = await _ref
+        .read(switchBookSourceProvider)
+        .switchTo(
+          target: target,
+          candidate: SourceCandidate(
+            sourceUrl: candidate.sourceUrl,
+            sourceName: candidate.sourceName,
+            bookUrl: candidate.bookUrl,
+            author: candidate.author,
+            lastChapter: candidate.lastChapter,
+          ),
+          currentChapterName: currentChapterName,
+          currentChapterIndex: currentChapterIndex,
+        );
+    final SourceSwitchResult result;
+    switch (switched) {
+      case ParseFailure<SourceSwitchResult>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        return failureAt<ReaderSourceSwitch>(kind: kind, rulePath: rulePath);
+      case ParseSuccess<SourceSwitchResult>(:final SourceSwitchResult data):
+        result = data;
+    }
+
+    // 身份迁移（ADR-0051 §决策 3）：书架上有旧行就原地改写，目标身份已有行则两行并存。
+    final BookshelfRepository shelf = _ref.read(bookshelfRepositoryProvider);
+    final List<ShelvedBook> rows = await shelf.getAll();
+    for (final ShelvedBook row in rows) {
+      if (row.sourceUrl == book.sourceUrl && row.bookUrl == book.bookUrl) {
+        await shelf.migrateIdentity(
+          id: row.id,
+          sourceUrl: result.sourceUrl,
+          bookUrl: result.bookUrl,
+          tocUrl: result.tocUrl,
+          name: result.bookName,
+          author: result.author,
+          coverUrl: result.coverUrl,
+          lastChapter: result.lastChapter,
+        );
+        break;
+      }
+    }
+
+    return ParseSuccess<ReaderSourceSwitch>(
+      ReaderSourceSwitch(
+        book: ReaderBook(
+          sourceUrl: result.sourceUrl,
+          bookUrl: result.bookUrl,
+          name: result.bookName,
+          tocUrl: result.tocUrl,
+        ),
+        chapterUrl: result.chapterUrl,
+        chapterName: result.chapterName,
+        chapterIndex: result.chapterIndex,
+      ),
+    );
+  }
+}
+
+/// `ReadingProgressStore` bound to the shelf, which owns the table (ADR-0041 §决策 4).
+final class _ProgressStore implements ReadingProgressStore {
+  const _ProgressStore(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<ReadingPosition?> read({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async {
+    final ReadingProgressPosition? stored = await _ref
+        .read(bookshelfRepositoryProvider)
+        .findProgress(sourceUrl: sourceUrl, bookUrl: bookUrl);
+    if (stored == null) {
+      return null;
+    }
+
+    return ReadingPosition(
+      chapterUrl: stored.chapterUrl,
+      chapterName: stored.chapterName,
+      charOffset: stored.charOffset,
+    );
+  }
+
+  @override
+  Future<void> write({
+    required String sourceUrl,
+    required String bookUrl,
+    required ReadingPosition position,
+  }) async {
+    await _ref
+        .read(bookshelfRepositoryProvider)
+        .saveProgress(
+          sourceUrl: sourceUrl,
+          bookUrl: bookUrl,
+          chapterUrl: position.chapterUrl,
+          chapterName: position.chapterName,
+          charOffset: position.charOffset,
+        );
+    // 进度写进的是书架的「阅读到」那一行，所以由这里（唯一同时认识两侧的地方）让书架重新读一次：
+    // 阅读器不必知道还有个书架页，`keepAlive` 的书架也不会一直显示旧位置。
+    _ref.invalidate(bookshelfProvider);
+  }
 }
 
 /// `BookshelfWriter` bound to the shelf feature (ADR-0041 §决策 2).
@@ -419,51 +596,5 @@ final class _SourceKindSource implements ReaderSourceKindProvider {
     return ParseSuccess<ReaderSourceKind>(
       isMangaSource(source) ? ReaderSourceKind.image : ReaderSourceKind.text,
     );
-  }
-}
-
-/// `ReadingProgressStore` bound to the shelf, which owns the table (ADR-0041 §决策 4).
-final class _ProgressStore implements ReadingProgressStore {
-  const _ProgressStore(this._ref);
-
-  final Ref _ref;
-
-  @override
-  Future<ReadingPosition?> read({
-    required String sourceUrl,
-    required String bookUrl,
-  }) async {
-    final ReadingProgressPosition? stored = await _ref
-        .read(bookshelfRepositoryProvider)
-        .findProgress(sourceUrl: sourceUrl, bookUrl: bookUrl);
-    if (stored == null) {
-      return null;
-    }
-
-    return ReadingPosition(
-      chapterUrl: stored.chapterUrl,
-      chapterName: stored.chapterName,
-      charOffset: stored.charOffset,
-    );
-  }
-
-  @override
-  Future<void> write({
-    required String sourceUrl,
-    required String bookUrl,
-    required ReadingPosition position,
-  }) async {
-    await _ref
-        .read(bookshelfRepositoryProvider)
-        .saveProgress(
-          sourceUrl: sourceUrl,
-          bookUrl: bookUrl,
-          chapterUrl: position.chapterUrl,
-          chapterName: position.chapterName,
-          charOffset: position.charOffset,
-        );
-    // 进度写进的是书架的「阅读到」那一行，所以由这里（唯一同时认识两侧的地方）让书架重新读一次：
-    // 阅读器不必知道还有个书架页，`keepAlive` 的书架也不会一直显示旧位置。
-    _ref.invalidate(bookshelfProvider);
   }
 }
