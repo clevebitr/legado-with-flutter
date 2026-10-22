@@ -32,7 +32,7 @@ final class SettingsRepositoryProvider
         argument: null,
         retry: null,
         name: r'settingsRepositoryProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -53,7 +53,7 @@ final class SettingsRepositoryProvider
 }
 
 String _$settingsRepositoryHash() =>
-    r'b8ace07bde4bde58300579bd95460694c166ad3d';
+    r'8c7969f45b679bf9365fe9a7d5da69c1a5f466e8';
 
 /// Provides the cache purge the settings page offers (`docs/dev/roadmap.md` 5.7 ①)。
 
@@ -72,7 +72,7 @@ final class CachePurgerProvider
         argument: null,
         retry: null,
         name: r'cachePurgerProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -99,4 +99,4 @@ final class CachePurgerProvider
   }
 }
 
-String _$cachePurgerHash() => r'7a53849bb357e049a78f3da2c19556dcaafa2207';
+String _$cachePurgerHash() => r'3c09b112f8c750658ddd0a3407c5c01d09907e62';

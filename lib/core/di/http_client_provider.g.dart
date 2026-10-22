@@ -34,7 +34,7 @@ final class CookieManagerProvider
         argument: null,
         retry: null,
         name: r'cookieManagerProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -61,7 +61,7 @@ final class CookieManagerProvider
   }
 }
 
-String _$cookieManagerHash() => r'f60491ab9245ef9b1d9fc0489a13982415768039';
+String _$cookieManagerHash() => r'da2c49b0ddfc973f5c6b1cd8270e68cecc1bd200';
 
 /// Provides the network policy: timeout, retry bound, `User-Agent` and the
 /// plaintext-HTTP switch (C-NET-2, C-NET-4, C-SEC-2).
@@ -95,7 +95,7 @@ final class HttpPolicyProvider
         argument: null,
         retry: null,
         name: r'httpPolicyProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -122,7 +122,7 @@ final class HttpPolicyProvider
   }
 }
 
-String _$httpPolicyHash() => r'dcebbb011fa440f63070b79a39f09cee25cd72c3';
+String _$httpPolicyHash() => r'b6dcc4f5d47468a1d4ccd04e41e8c593dc98a22c';
 
 /// The per-source concurrency budget the user chose, or `null` when nobody chose one.
 ///
@@ -153,7 +153,7 @@ final class ConcurrencySettingProvider
         argument: null,
         retry: null,
         name: r'concurrencySettingProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -181,7 +181,7 @@ final class ConcurrencySettingProvider
 }
 
 String _$concurrencySettingHash() =>
-    r'f4c32706b9acf2b9196d4f5751df8d3a6fed3d59';
+    r'111cfdbb93c3bd5ae03ab33709aec712e2e6468f';
 
 /// Provides the app-wide HTTP client (C-NET-1).
 ///

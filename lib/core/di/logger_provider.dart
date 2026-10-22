@@ -18,5 +18,5 @@ const String _rawLogLevel = String.fromEnvironment(
 ///
 /// Tests inject a capturing printer with
 /// `appLoggerProvider.overrideWithValue(...)`.
-@riverpod
+@Riverpod(keepAlive: true)
 AppLogger appLogger(Ref ref) => AppLogger(level: LogLevel.parse(_rawLogLevel));

@@ -14,7 +14,7 @@ part 'http_client_provider.g.dart';
 ///
 /// In-memory for now; persistence and expiry arrive with the storage phase
 /// (see the [CookieManager] contract).
-@riverpod
+@Riverpod(keepAlive: true)
 CookieManager cookieManager(Ref ref) => InMemoryCookieManager();
 
 /// Provides the network policy: timeout, retry bound, `User-Agent` and the
@@ -23,7 +23,7 @@ CookieManager cookieManager(Ref ref) => InMemoryCookieManager();
 /// The concurrency budget comes from [concurrencySettingProvider], which the composition root
 /// binds to the settings feature; everything else still comes from the policy defaults, so
 /// nothing else may construct a policy of its own.
-@riverpod
+@Riverpod(keepAlive: true)
 HttpPolicy httpPolicy(Ref ref) => HttpPolicy(
   maxConcurrentRequestsPerSource: budgetOrDefault(
     ref.watch(concurrencySettingProvider),
@@ -36,7 +36,7 @@ HttpPolicy httpPolicy(Ref ref) => HttpPolicy(
 /// Declared here so `core/` never imports a feature (C-ARCH-2): the composition root overrides
 /// it with a value read from the settings feature (ADR-0042 的同一条机制）。 `null` is the
 /// normal state before the settings are loaded and in tests that do not care.
-@riverpod
+@Riverpod(keepAlive: true)
 int? concurrencySetting(Ref ref) => null;
 
 /// Maps a user-chosen budget to a value [RequestLimiter] can accept.

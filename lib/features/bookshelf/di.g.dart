@@ -42,7 +42,7 @@ final class BookshelfRepositoryProvider
         argument: null,
         retry: null,
         name: r'bookshelfRepositoryProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -71,4 +71,4 @@ final class BookshelfRepositoryProvider
 }
 
 String _$bookshelfRepositoryHash() =>
-    r'392b6f9f56ec7b7757bb57b3e7fa5a4a0ccb7059';
+    r'80d97e9176258a5e88053d8382c9207e66f3d6a7';

@@ -22,7 +22,7 @@ ReaderDatabase readerDatabase(Ref ref) {
 }
 
 /// Provides the TTL cache for network payloads (C-NET-6).
-@riverpod
+@Riverpod(keepAlive: true)
 CacheDao cacheDao(Ref ref) => CacheDao(
   ref.watch(readerDatabaseProvider),
   clock: ref.watch(clockProvider),

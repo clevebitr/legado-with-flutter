@@ -8,13 +8,13 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'di.g.dart';
 
 /// Provides the settings persistence (`docs/dev/roadmap.md` 5.6)。
-@riverpod
+@Riverpod(keepAlive: true)
 Future<SettingsRepository> settingsRepository(Ref ref) async =>
     SettingsRepositoryImpl(
       store: await ref.watch(preferenceStoreProvider.future),
     );
 
 /// Provides the cache purge the settings page offers (`docs/dev/roadmap.md` 5.7 ①)。
-@riverpod
+@Riverpod(keepAlive: true)
 CachePurger cachePurger(Ref ref) =>
     CacheDaoCachePurger(ref.watch(cacheDaoProvider));

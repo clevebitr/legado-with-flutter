@@ -12,7 +12,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'di.g.dart';
 
 /// Provides the reader's own settings store (`docs/dev/roadmap.md` 5.3).
-@riverpod
+@Riverpod(keepAlive: true)
 Future<ReaderSettingsRepository> readerSettingsRepository(Ref ref) async =>
     ReaderSettingsRepositoryImpl(
       store: await ref.watch(preferenceStoreProvider.future),

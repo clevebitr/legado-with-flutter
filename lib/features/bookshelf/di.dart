@@ -10,6 +10,6 @@ part 'di.g.dart';
 /// The composition root's `BookshelfWriter` adapter is the only consumer outside this feature;
 /// the reader (5.3) will write progress through its own port, so this provider stays feature
 /// internal (C-ARCH-2).
-@riverpod
+@Riverpod(keepAlive: true)
 BookshelfRepository bookshelfRepository(Ref ref) =>
     BookshelfRepositoryImpl(dao: ref.watch(bookshelfDaoProvider));

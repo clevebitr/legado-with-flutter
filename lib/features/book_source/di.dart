@@ -35,7 +35,7 @@ part 'di.g.dart';
 ///
 /// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
 /// consumes the `domain/` model directly instead of a DTO.
-@riverpod
+@Riverpod(keepAlive: true)
 BookSourceRepository bookSourceRepository(Ref ref) => BookSourceRepositoryImpl(
   dao: ref.watch(bookSourceDaoProvider),
   logger: ref.watch(appLoggerProvider),
@@ -132,7 +132,7 @@ ExploreBooks exploreBooks(Ref ref) =>
 /// It composes the same five use cases the pages use, so a check can never disagree with what
 /// "search" or "read the body" means — the only new thing here is the order and the group
 /// vocabulary (ADR-0043).
-@riverpod
+@Riverpod(keepAlive: true)
 CheckBookSource checkBookSource(Ref ref) => CheckBookSource(
   searchBooks: ref.watch(searchBooksProvider),
   exploreCategories: ref.watch(fetchExploreCategoriesProvider),
@@ -145,7 +145,7 @@ CheckBookSource checkBookSource(Ref ref) => CheckBookSource(
 );
 
 /// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
-@riverpod
+@Riverpod(keepAlive: true)
 RunSourceDebug runSourceDebug(Ref ref) => RunSourceDebug(
   pages: ref.watch(pageFetchServiceProvider),
   searchBooks: ref.watch(searchBooksProvider),
@@ -165,21 +165,21 @@ SwitchBookSource switchBookSource(Ref ref) => SwitchBookSource(
 );
 
 /// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
-@riverpod
+@Riverpod(keepAlive: true)
 Future<BookSourceViewStore> bookSourceViewStore(Ref ref) async =>
     BookSourceViewStoreImpl(
       store: await ref.watch(preferenceStoreProvider.future),
     );
 
 /// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
-@riverpod
+@Riverpod(keepAlive: true)
 AggregateSearchBooks aggregateSearchBooks(Ref ref) => AggregateSearchBooks(
   search: ref.watch(searchBooksProvider),
   logger: ref.watch(appLoggerProvider),
 );
 
 /// Provides the stored search scope (ADR-0046 §决策 1).
-@riverpod
+@Riverpod(keepAlive: true)
 Future<SearchScopeStore> searchScopeStore(Ref ref) async =>
     SearchScopeStoreImpl(
       store: await ref.watch(preferenceStoreProvider.future),

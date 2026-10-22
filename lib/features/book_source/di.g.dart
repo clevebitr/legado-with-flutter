@@ -39,7 +39,7 @@ final class BookSourceRepositoryProvider
         argument: null,
         retry: null,
         name: r'bookSourceRepositoryProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -68,7 +68,7 @@ final class BookSourceRepositoryProvider
 }
 
 String _$bookSourceRepositoryHash() =>
-    r'52294acdca35c53c8abc4c34afc3628eecbe7554';
+    r'3ecd37d01f723401a48df8ed049d7f0bb3d20900';
 
 /// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
 
@@ -696,7 +696,7 @@ final class CheckBookSourceProvider
         argument: null,
         retry: null,
         name: r'checkBookSourceProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -723,7 +723,7 @@ final class CheckBookSourceProvider
   }
 }
 
-String _$checkBookSourceHash() => r'45cc1c9c289f7763c15ce9cecdff95ff88bc8d18';
+String _$checkBookSourceHash() => r'ab69116e6f88a184bb4f4b8ef353c2b95c9d62ed';
 
 /// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
 
@@ -742,7 +742,7 @@ final class RunSourceDebugProvider
         argument: null,
         retry: null,
         name: r'runSourceDebugProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -769,7 +769,7 @@ final class RunSourceDebugProvider
   }
 }
 
-String _$runSourceDebugHash() => r'62fea9b5a61629868734e88f23febc301eb3df3d';
+String _$runSourceDebugHash() => r'f8316970316911069d632a7f15cae460d02865ed';
 
 /// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
 
@@ -846,7 +846,7 @@ final class BookSourceViewStoreProvider
         argument: null,
         retry: null,
         name: r'bookSourceViewStoreProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -867,7 +867,7 @@ final class BookSourceViewStoreProvider
 }
 
 String _$bookSourceViewStoreHash() =>
-    r'ed684284448cfde53d9ac00ecd256368f3fd307d';
+    r'2b592e47dbd9797292135d1f24ec8df01d570519';
 
 /// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
 
@@ -891,7 +891,7 @@ final class AggregateSearchBooksProvider
         argument: null,
         retry: null,
         name: r'aggregateSearchBooksProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -920,7 +920,7 @@ final class AggregateSearchBooksProvider
 }
 
 String _$aggregateSearchBooksHash() =>
-    r'4b247c6d51efc5cc47d0010dd49956d1154936f2';
+    r'6b6c637600f3cc09acdf5d63f9613523622699ce';
 
 /// Provides the stored search scope (ADR-0046 §决策 1).
 
@@ -944,7 +944,7 @@ final class SearchScopeStoreProvider
         argument: null,
         retry: null,
         name: r'searchScopeStoreProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -964,4 +964,4 @@ final class SearchScopeStoreProvider
   }
 }
 
-String _$searchScopeStoreHash() => r'0a82eb64b85b32c0364f86c5baa3dc6df811f379';
+String _$searchScopeStoreHash() => r'40f0f99208f634a20ee3ee7b02b540e4c5fbf18e';

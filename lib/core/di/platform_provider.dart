@@ -66,7 +66,7 @@ BookSourceFileSaver bookSourceFileSaver(Ref ref) {
 ///
 /// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
 /// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
-@riverpod
+@Riverpod(keepAlive: true)
 LongRunningTask longRunningTask(Ref ref) =>
     ref.watch(platformInfoProvider).isAndroid
     ? MethodChannelLongRunningTask(logger: ref.watch(appLoggerProvider))

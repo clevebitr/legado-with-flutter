@@ -32,7 +32,7 @@ final class ReaderSettingsRepositoryProvider
         argument: null,
         retry: null,
         name: r'readerSettingsRepositoryProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -53,7 +53,7 @@ final class ReaderSettingsRepositoryProvider
 }
 
 String _$readerSettingsRepositoryHash() =>
-    r'fd39b73defa3577d7b83a59ca17e8239db804aeb';
+    r'b01901417b22b8c3366313123d01ae16952f38f0';
 
 /// Provides the chapter-list port, **unbound** by default.
 ///

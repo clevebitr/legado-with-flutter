@@ -71,7 +71,7 @@ final class CacheDaoProvider
         argument: null,
         retry: null,
         name: r'cacheDaoProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -98,7 +98,7 @@ final class CacheDaoProvider
   }
 }
 
-String _$cacheDaoHash() => r'4ac549853cf2d91614cb0c24570a9f68e458110d';
+String _$cacheDaoHash() => r'7fcdcf8b71b7a43746acab008882baa25d54ffc3';
 
 /// Provides the DAO of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
 

@@ -309,7 +309,7 @@ final class LongRunningTaskProvider
         argument: null,
         retry: null,
         name: r'longRunningTaskProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -336,4 +336,4 @@ final class LongRunningTaskProvider
   }
 }
 
-String _$longRunningTaskHash() => r'b76545ddef9a827071a42e0b9a199aee0e37fedd';
+String _$longRunningTaskHash() => r'c4f24b2ab4e07af40943e68f73e182a163752df6';
