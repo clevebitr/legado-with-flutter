@@ -34,6 +34,7 @@
 | `docs/dev/testing.md` | 测试分层、覆盖率门禁、Golden 策略、CI 流水线 | `C-TEST-*` |
 | `docs/dev/test-environment.md` | 本机（Windows/Android）测试环境：一键脚本、设备级用例、排错与实测证据 | —（门禁与分层仍归 `testing.md`） |
 | `docs/dev/platform.md` | Android / iOS / Windows 平台基线与降级策略 | `C-PLT-*` |
+| `docs/dev/ui-gap.md` | 上游 UI 结构对照与本仓缺失的关键 UI 清单（P0/P1/P2）、里程碑切分 | —（UI 约束仍归 `constraints.md` §6） |
 
 ### 2.1 事实级归属矩阵（每个事实只有一处定义）
 
