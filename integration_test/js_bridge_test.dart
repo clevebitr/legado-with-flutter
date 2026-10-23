@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
@@ -856,6 +857,24 @@ final class _ProbeHttpClient implements HttpClient {
     lastSourceId = sourceId;
 
     return _answer();
+  }
+
+  @override
+  Future<ParseResult<Uint8List>> getBytes(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxBytes,
+  }) async {
+    // 探针不取二进制体：它只验证 worker 发出的调用；真字节走 `http_client_test`。
+    requestedUrls.add(url);
+    requestedMethods.add('GET');
+    lastHeaders = headers;
+    lastSourceId = sourceId;
+
+    return ParseSuccess<Uint8List>(Uint8List.fromList(utf8.encode(body)));
   }
 
   @override

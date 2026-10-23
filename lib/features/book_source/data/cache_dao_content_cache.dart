@@ -1,6 +1,7 @@
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
 import 'package:flutter_reader/core/storage/cache_failure_absorber.dart';
+import 'package:flutter_reader/core/storage/cache_key.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 
 /// [ContentCache] backed by the app's TTL cache ([CacheDao]) — no new column, no new table.
@@ -41,6 +42,7 @@ final class CacheDaoContentCache implements ContentCache {
     required String sourceId,
     required String url,
     required String body,
+    String? bookUrl,
   }) async {
     await absorbCacheFailure(
       () async {
@@ -51,6 +53,10 @@ final class CacheDaoContentCache implements ContentCache {
           page: _page,
           payload: body,
           ttl: chapterCacheTtl,
+          // 归属书只用于「按书统计/清理」，不参与键计算：旧条目没有 scope_key 仍然能命中。
+          scopeKey: bookUrl == null
+              ? null
+              : cacheScopeKeyFor(sourceId: sourceId, bookUrl: bookUrl),
         );
 
         return true;
@@ -59,5 +65,40 @@ final class CacheDaoContentCache implements ContentCache {
       scope: 'Chapter cache',
       url: url,
     );
+  }
+
+  @override
+  Future<int> countForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async {
+    // 吸收失败的读返回 null：统计不上就显示 0 项，不把失败抛到页面（ADR-0033 的 total 契约）。
+    final int? count = await absorbCacheFailure<int>(
+      () => _dao.countByScope(
+        cacheScopeKeyFor(sourceId: sourceId, bookUrl: bookUrl),
+      ),
+      logger: _logger,
+      scope: 'Chapter cache count',
+      url: bookUrl,
+    );
+
+    return count ?? 0;
+  }
+
+  @override
+  Future<int> clearForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async {
+    final int? removed = await absorbCacheFailure<int>(
+      () => _dao.deleteByScope(
+        cacheScopeKeyFor(sourceId: sourceId, bookUrl: bookUrl),
+      ),
+      logger: _logger,
+      scope: 'Chapter cache clear',
+      url: bookUrl,
+    );
+
+    return removed ?? 0;
   }
 }

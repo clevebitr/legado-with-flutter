@@ -2,15 +2,22 @@ import 'dart:async';
 
 import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/database_executor_provider.dart';
+import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/network/cookie_store.dart';
 import 'package:flutter_reader/core/storage/book_source_dao.dart';
+import 'package:flutter_reader/core/storage/bookmark_dao.dart';
 import 'package:flutter_reader/core/storage/bookshelf_dao.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
+import 'package:flutter_reader/core/storage/cookie_dao.dart';
+import 'package:flutter_reader/core/storage/cookie_dao_store.dart';
 import 'package:flutter_reader/core/storage/database.dart';
+import 'package:flutter_reader/core/storage/read_record_dao.dart';
+import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'storage_provider.g.dart';
 
-/// Provides the application database (ADR-0003).
+/// Provides the application database.
 @Riverpod(keepAlive: true)
 ReaderDatabase readerDatabase(Ref ref) {
   final ReaderDatabase database = ReaderDatabase(
@@ -21,23 +28,56 @@ ReaderDatabase readerDatabase(Ref ref) {
   return database;
 }
 
-/// Provides the TTL cache for network payloads (C-NET-6).
+/// Provides the TTL cache for network payloads.
 @Riverpod(keepAlive: true)
 CacheDao cacheDao(Ref ref) => CacheDao(
   ref.watch(readerDatabaseProvider),
   clock: ref.watch(clockProvider),
 );
 
-/// Provides the DAO of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
+/// Provides the DAO of the imported book sources.
 @Riverpod(keepAlive: true)
 BookSourceDao bookSourceDao(Ref ref) => BookSourceDao(
   ref.watch(readerDatabaseProvider),
   clock: ref.watch(clockProvider),
 );
 
-/// Provides the DAO of the shelf and the reading progress (`docs/dev/roadmap.md` 5.4).
+/// Provides the DAO of the shelf and the reading progress.
 @Riverpod(keepAlive: true)
 BookshelfDao bookshelfDao(Ref ref) => BookshelfDao(
   ref.watch(readerDatabaseProvider),
   clock: ref.watch(clockProvider),
 );
+
+/// Provides the DAO of the shelf groups.
+@Riverpod(keepAlive: true)
+ShelfGroupDao shelfGroupDao(Ref ref) => ShelfGroupDao(
+  ref.watch(readerDatabaseProvider),
+  clock: ref.watch(clockProvider),
+);
+
+/// Provides the DAO of the bookmarks.
+@Riverpod(keepAlive: true)
+BookmarkDao bookmarkDao(Ref ref) => BookmarkDao(
+  ref.watch(readerDatabaseProvider),
+  clock: ref.watch(clockProvider),
+);
+
+/// Provides the DAO of the persisted cookie jar.
+@Riverpod(keepAlive: true)
+CookieDao cookieDao(Ref ref) => CookieDao(
+  ref.watch(readerDatabaseProvider),
+  clock: ref.watch(clockProvider),
+);
+
+/// Provides the storage behind the cookie jar.
+@Riverpod(keepAlive: true)
+CookieStore cookieStore(Ref ref) => CookieDaoStore(
+  ref.watch(cookieDaoProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
+/// Provides the DAO of the reading records.
+@Riverpod(keepAlive: true)
+ReadRecordDao readRecordDao(Ref ref) =>
+    ReadRecordDao(ref.watch(readerDatabaseProvider));

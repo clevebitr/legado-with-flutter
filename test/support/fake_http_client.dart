@@ -1,3 +1,6 @@
+import 'dart:convert' show utf8;
+import 'dart:typed_data' show Uint8List;
+
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
@@ -110,6 +113,40 @@ final class FakeHttpClient implements HttpClient {
     maxBytes: maxBytes,
     declaredCharset: declaredCharset,
   );
+
+  /// Answers the **bytes** of the served body.
+  ///
+  /// The double re-encodes the text it was given: what it has to prove is that the caller went
+  /// through the request layer's byte door at all (C-NET-1), not how a real binary body survives
+  /// transport — that is `http_client_test`'s job with a Dio adapter.
+  @override
+  Future<ParseResult<Uint8List>> getBytes(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxBytes,
+  }) async {
+    final ParseResult<HttpResponse> result = await get(
+      url,
+      rulePath: rulePath,
+      headers: headers,
+      keyword: keyword,
+      sourceId: sourceId,
+      maxBytes: maxBytes,
+    );
+
+    return switch (result) {
+      ParseSuccess<HttpResponse>(:final HttpResponse data) =>
+        ParseSuccess<Uint8List>(Uint8List.fromList(utf8.encode(data.body))),
+      ParseFailure<HttpResponse>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        ParseFailure<Uint8List>(kind: kind, rulePath: rulePath),
+    };
+  }
 
   @override
   Future<ParseResult<HttpResponse>> post(

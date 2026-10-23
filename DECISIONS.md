@@ -219,3 +219,16 @@ M14 交付（阅读体验 R1–R4，ADR-0051）：
 修复：升级步骤前先查 sqlite_master / PRAGMA table_info（_hasSchemaObject / _addColumnIfMissing），版本门只做注释说明；回归测试 schemaAt(6) + PRAGMA user_version=5；ADR-0056 + C-NET-9 回链 + tech-stack §8 规则。实测：真实 reader.db 副本 503 行、版本升到 6。
 
 教训：日志脱敏把 sqlite 错误正文换成了哈希，先要拿到原始异常才能在库副本上用 drift 复现（flutter test + NativeDatabase 即可）。
+
+## 2026-10-23 — M19 落地：v7 迁移 + 分组/批量/书签/阅读记录/换封面/本书缓存（ADR-0066），六个坑
+
+M19 按用户裁决分两批，但结构改动一次升到 schemaVersion 7（ADR-0066）：批 A = 书签 + 阅读记录 + 详情入口 + `ReaderRoute` 三兄弟；批 B = 书架分组 chip/管理页/多选批量 + 详情改分组/换封面/本书缓存。
+
+1. **ADR 号撞车**：`CHANGELOG.md` 与 `.github/workflows/ci.yml` 早就引用「ADR-0065 = 分层 CI」，而我开工时 `ls docs/dev/adr` 只列到 0064（0065 的 CI ADR 文件当时还没落盘/被我漏看）。M19 的规格 ADR 因此从 0065 改名为 **0066**，并把 `lib/`、`test/`、`tool/coverage_allowlist.txt`、`architecture.md` 里的引用一并改掉。教训：新 ADR 号先 `grep -rn "ADR-00" CHANGELOG.md .github/ docs/` 再定，别只看目录。
+2. **drift 表文件没有 `part`**：`books.dart` / 新表文件都不带 `part`，`XxxRow` 生成在 `database.g.dart` 里。DAO 的 `where` 闭包参数必须是**表类**（`(Bookmarks table) => table.x.equals(...)`），写成 `(BookmarkRow row)` 会得到 `String/Int` 上的 `.equals` 未定义；repo/测试要用 row 类时 import `database.dart`，不能只 import 表文件。
+3. **两种 orderBy**：`select(t)..orderBy(...)` 的 cascade 要 `List<OrderClauseGenerator<$T>>`（参数是表结构类型），`JoinedSelectStatement` 才用 `OrderingTerm`；`cast` 错会同时报「元素类型不匹配」与「`.equals` 未定义」两串错。
+4. **书签 toggle 的首帧**：工具条只在唤出时才构建，`ref.watch(readerBookmarksProvider)` 放在工具条里会让第一帧仍是「未添加」（测试里 tooltip 找不到 `bookmarkRemove`）。改成在 `_textReader` 的 build 里先 watch，再把 `AsyncValue` 传进工具条。
+5. **autoDispose Notifier 的 UnmountedRefException**：`ref.read(xProvider.notifier).write()` 之后 Notifier 可能已被回收，紧跟的 `ref.invalidate(...)` / `ref.read(logger)` 会抛。端口与 logger 必须在 await 前取好，`ref.invalidate` 用 `if (ref.mounted)` 守卫（`ShelfBookActions` / `BookCacheActions`）。
+6. **对话框里的 TextEditingController**：`showDialog` 返回后立即 `dispose()` 会在退场动画那一帧再 build 一次 TextField，抛 “used after being disposed”。改成 StatefulWidget 对话框（`_GroupNameDialog`）自己持有并释放控制器。
+
+其它：`CoverImage` 新增 `localPath`（本地封面优先于网络 URL）；自定义封面存**绝对路径**（相对路径会让每行书架做一次异步基准目录查询）；`ContentCache.write` 加可选 `bookUrl` 写 `scope_key`，读仍是同一个 `cache_key`，旧条目只是不计入按书统计。验证：1659 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、`build_runner` 幂等；新增豁免项 5 条（封面 file_selector 适配器、ShelfCoverPicker 端口、ShelfGroup 与两个书签/记录 freezed 实体、三张 drift 表）。

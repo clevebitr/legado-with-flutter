@@ -28,18 +28,21 @@
 
 ## 2. 本仓现状（页面清单）
 
-`lib/features/*/presentation/pages/` 现有 12 个页面：
+`lib/features/*/presentation/pages/` 现有 19 个页面（M19 后）：
 
 | feature | 页面 | 已有能力 |
 |---|---|---|
 | `book_source` | `search_books_page` | 聚合搜索（范围/类型/匹配/暂停/继续/加载更多）——**当前是落地页** |
 | | `explore_page`、`book_detail_page` | 发现分类与列表；详情（封面/简介折叠/开始阅读/加入书架） |
 | | `book_source_*`（list/import/check/debug/edit） | 书源管理（M15：状态灯/批量/分组/预览导入） |
-| `bookshelf` | `bookshelf_page` | 在追/已读、置顶、删除、最近阅读排序 |
-| `reader` | `reader_page`、`manga_reader_page` | 文本沉浸式阅读（M14 部分）、漫画阅读（M16） |
+| `bookshelf` | `bookshelf_page`、`shelf_groups_page` | 在追/已读、置顶、删除、最近阅读排序；M19 加分组 chip / 多选批量 / 分组管理页 |
+| `reader` | `reader_page`、`manga_reader_page`、`bookmark_list_page`、`reading_records_page`、`book_reading_records_page` | 文本沉浸式阅读（M14）、漫画阅读（M16）、书签（M19）、阅读记录按天 / 按书（M19） |
+| `shell` | `my_page`、`about_page`、`legal_notices_page` | 我的入口聚合、关于、法律声明（M18） |
 | `settings` | `settings_page` | 主题模式 / 字号 / 并发上限 / 清空缓存 |
 
-**没有**：应用外壳与底部导航、「我的」页、关于/法律声明页、书架分组与管理页、书内搜索、书签、阅读记录、主题配置、规则管理、备份恢复、本地导入、二维码、登录、缓存按源清理、RSS、AI/翻译。
+**已有**（M18/M19 后补上）：应用外壳与底部导航、「我的」页、关于/法律声明页、书架分组与管理页、书签、阅读记录、详情改分组/换封面/本书缓存。
+
+**没有**：书内搜索、主题配置、规则管理、备份恢复、本地导入、二维码、登录、缓存按源清理、RSS、AI/翻译。
 
 ---
 
@@ -52,11 +55,11 @@
 | U1 | **应用外壳**：底部导航（书架 / 发现 / 搜索 / 我的）+ 保留各 tab 状态 | `ui/main/MainScreen.kt`、`AppNavigationBar` | 落地页是搜索页，四个 feature 只能互相 push，返回键行为混乱 | 用户每次都要「从搜索页往回退」才能到书架；没有稳定的家 |
 | U2 | **「我的」聚合页**：书源管理、缓存、关于、法律声明等入口 | `ui/main/my/MyScreen.kt` | 设置页只有 4 项；书源管理入口藏在搜索页工具栏 | 设置与工具没有归属，功能「找得到」是可用性的前提 |
 | U3 | **关于 + 法律声明页**（C-UI-9） | `ui/about/*` | 未做（roadmap 5.9） | GPL 门禁项；也是版本/许可/源码入口 |
-| U4 | **书架分组与管理**：分组 chip、分组管理、多选批量（分组/删除/置顶/缓存）、排序与封面模式 | `ui/main/bookshelf/*`、`ui/book/manage/*` | 只有「在追/已读」两态 + 单行操作 | 书架超过 10 本后不可用；分组是上游最常用的组织方式 |
-| U5 | **书籍详情增强**：目录预览、阅读记录、换源、换封面、改分组、本书缓存 | `ui/book/info/*`、`changesource/*`、`changecover/*` | 详情只有简介与两个按钮 | 「换源」是坏源的唯一补救路径；目录预览直接影响是否开始读 |
+| U4 | **书架分组与管理**：分组 chip、分组管理、多选批量（分组/删除/置顶/缓存）、排序与封面模式 | `ui/main/bookshelf/*`、`ui/book/manage/*` | ✅ M19：分组 chip + 分组管理页（增删改拖拽排序）+ 长按多选（改分组/置顶/标记已读/删除）；排序与封面模式配置**按用户裁决不做** | 书架超过 10 本后不可用；分组是上游最常用的组织方式 |
+| U5 | **书籍详情增强**：目录预览、阅读记录、换源、换封面、改分组、本书缓存 | `ui/book/info/*`、`changesource/*`、`changecover/*` | ✅ 目录预览与换源（M14）；M19 加阅读记录入口 / 改分组 / 换封面（本地图片）/ 本书缓存统计与清理 | 「换源」是坏源的唯一补救路径；目录预览直接影响是否开始读 |
 | U6 | **书内全文搜索** | `ui/book/searchContent/*` | 无 | 找一句话在长篇里是刚性需求 |
-| U7 | **书签与阅读记录** | `ui/book/bookmark/*`、`readRecord/*` | 无（只有单条阅读进度） | 阅读器的「回看/标记」能力缺失，阅读记录也让「最近读」有依据 |
-| U8 | **缓存管理（按书 / 按源）** | `ui/book/cache/*`、`config/downloadCache*` | 只有全量清空（5.7①） | 空间是手机上的硬约束；5.7② 已登记未做 |
+| U7 | **书签与阅读记录** | `ui/book/bookmark/*`、`readRecord/*` | ✅ M19 批 A：阅读器书签 toggle（位置唯一键）、「我的 → 书签 / 阅读记录（按天）」、详情页「阅读记录」入口 | 阅读器的「回看/标记」能力缺失，阅读记录也让「最近读」有依据 |
+| U8 | **缓存管理（按书 / 按源）** | `ui/book/cache/*`、`config/downloadCache*` | M19 已做**按书**（详情页：本书缓存 N 章 + 清理，`cache_entries.scope_key`）；按源与全量设在设置页（5.7①），按源统计仍归 M21 | 空间是手机上的硬约束；5.7② 已登记未做 |
 
 ### P1 — 让「可配置」追上上游
 

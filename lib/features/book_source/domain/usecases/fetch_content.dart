@@ -76,7 +76,7 @@ final class FetchContent {
         failureAt<String>(kind: kind, rulePath: failedAt),
       ParseSuccess<PageWalk>(:final PageWalk data) => await _read(
         source,
-        url,
+        request,
         data,
       ),
     };
@@ -94,7 +94,7 @@ final class FetchContent {
   /// to each page (`BookContent.kt:190-193`).
   Future<ParseResult<String>> _read(
     BookSource source,
-    String url,
+    ChapterRequest request,
     PageWalk walk,
   ) async {
     final ParseFailure<Never>? stopped = walk.stoppedBy;
@@ -135,7 +135,13 @@ final class FetchContent {
     );
     // 缓存的是**成品**：分页已拼好、`replaceRegex` 已跑过，所以命中可以直接跳过整个引擎。
     // 写只发生在成功路径上：失败在前面就已经返回，不会被当成内容存下来。
-    await _cache.write(sourceId: source.url, url: url, body: content);
+    await _cache.write(
+      sourceId: source.url,
+      url: request.url,
+      body: content,
+      // 章节正文知道它属于哪本书（`bookUrl` 本来就在请求上下文里），按书缓存因此不需要新参数。
+      bookUrl: request.bookUrl,
+    );
 
     return ParseSuccess<String>(content);
   }

@@ -298,5 +298,49 @@ void main() {
     test('deleteById_givenAnUnknownId_reportsNothingDeleted', () async {
       expect(await dao.deleteById(42), 0);
     });
+
+    test('deleteByIds_whenNoIdIsChosen_deletesNothing', () async {
+      await insert();
+
+      expect(await dao.deleteByIds(const <int>[]), 0);
+      expect(await dao.findAll(), hasLength(1));
+    });
+
+    test(
+      'deleteByIds_whenTwoRowsAreChosen_removesThemAndTheirProgress',
+      () async {
+        final int first = await insert();
+        final int second = await insert(bookUrl: 'https://source.test/book/2');
+        await insert(bookUrl: 'https://source.test/book/3');
+        await dao.upsertProgress(
+          sourceUrl: 'https://source.test',
+          bookUrl: 'https://source.test/book/1',
+          chapterUrl: 'https://source.test/1.html',
+          chapterName: '第1章',
+          charOffset: 0,
+        );
+
+        expect(await dao.deleteByIds(<int>[first, second]), 2);
+        expect(await dao.findAll(), hasLength(1));
+        expect(
+          await dao.findProgress(
+            sourceUrl: 'https://source.test',
+            bookUrl: 'https://source.test/book/1',
+          ),
+          isNull,
+        );
+      },
+    );
+
+    test('setCustomCover_whenCalled_writesThePath', () async {
+      final int id = await insert();
+
+      await dao.setCustomCover(id: id, path: '/covers/a.jpg');
+
+      expect(
+        (await dao.findAll()).single.book.customCoverPath,
+        '/covers/a.jpg',
+      );
+    });
   });
 }

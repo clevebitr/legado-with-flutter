@@ -71,3 +71,19 @@ lib/features/reader/domain/repositories/speech_synthesizer.dart  # 纯接口 + f
 lib/features/reader/data/media_kit_playback_engine.dart  # ADR-0019 第二类：构造即初始化 libmpv 并创建原生播放器，宿主 VM 无法加载；由 integration_test/audio_playback_test.dart 在 Windows 上实跑（本地 WAV + 真实 m4a），Notifier 侧由 FakeAudioPlaybackEngine 覆盖
 lib/core/platform/in_app_web_view_page_fetcher.dart  # ADR-0019 第二类：headless WebView 需要平台 WebView2 / Android WebView，宿主 VM 没有；由 integration_test/web_view_test.dart 在设备上验证 JS 已执行，选项分流由 PageFetchService 的 fake fetcher 单测覆盖
 lib/core/platform/playback_backend.dart  # ADR-0019 第一类：仅一行 Platform.isWindows 能力探测（C-PLT-1 允许的位置），无宿主可判定的行为；由双端设备级播放用例间接行使
+
+# --- M19 书架分组 / 书签 / 阅读记录（ADR-0066）新增的豁免项 ---
+lib/core/storage/book_groups.dart  # 同上：drift 表定义（列 getter 与 uniqueKeys 只在生成期被分析）；正确性由 migration_test.dart（与 drift_schemas/drift_schema_v7.json 逐列比对）与 shelf_group_dao_test.dart 保证
+lib/core/storage/bookmarks.dart  # 同上：drift 表定义（列 getter、唯一键与 @TableIndex 只在生成期被分析）；正确性由 migration_test.dart 与 bookmark_dao_test.dart（位置唯一键 / 排序 / 删除）保证
+lib/core/storage/read_records.dart  # 同上：drift 表定义（列 getter 与两个 @TableIndex 只在生成期被分析）；正确性由 migration_test.dart 与 read_record_dao_test.dart 保证
+lib/features/reader/domain/entities/bookmark.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂声明；行为由 bookmark_repository_impl_test.dart 与阅读器书签 Widget 测试构造并读取保证
+lib/features/reader/domain/entities/reading_record.dart  # 同上：只有重定向工厂声明；由 reading_record_repository_impl_test.dart 与 reading_records_page_test.dart 构造并读取
+lib/features/reader/domain/repositories/bookmark_repository.dart  # 纯接口声明（只有抽象方法签名），属「无可测量行」子情形；契约由 BookmarkRepositoryImpl 与其测试、FakeBookmarkRepository 行使
+lib/features/reader/domain/repositories/reading_record_repository.dart  # 纯接口声明 + 一个分页常量，同属「无可测量行」子情形；契约由 ReadingRecordRepositoryImpl 与其测试行使
+lib/core/platform/file_selector_cover_file_picker.dart  # ADR-0019 第二类：封面图片选择走 file_selector 的原生对话框，宿主 VM 没有平台通道、交互无法自动化；体积上限 / 目录 / 取消语义在 ShelfCoverPickerImpl 里由单测覆盖，本文件由双端构建与实跑验证能编译链接
+lib/features/bookshelf/domain/entities/shelf_group.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂声明；行为由 bookshelf_repository_impl_test.dart 与分组管理页 Widget 测试构造并读取保证
+lib/features/bookshelf/domain/repositories/shelf_cover_picker.dart  # 纯接口声明 + 一个未绑定实现（同 BookSourceFilePicker 的形态），属「无可测量行」子情形；契约由 ShelfCoverPickerImpl 与其测试、FakeCoverFilePicker 行使
+lib/core/storage/cookies.dart  # 同上：drift 表定义（列 getter 与 uniqueKeys 只在生成期被分析）；正确性由 migration_test.dart（与 drift_schemas/drift_schema_v8.json 逐列比对）与 cookie_dao_test.dart 保证
+lib/core/network/cookie_store.dart  # 纯接口声明（只有抽象方法签名），属 ADR-0019 §2 的「源文件无可测量行」子情形；契约由 CookieDaoStore 与 PersistentCookieManager 的测试行使
+lib/core/platform/in_app_webview_cookie_bridge.dart  # ADR-0019 第二类：插件 CookieManager 的平台通道只在真实 WebView 运行时可用（Android WebView / WebView2 / WKWebView），宿主 VM 没有通道；「何时写、写哪些、读回怎么用」由 PersistentCookieManager 与验证页测试钉住，本文件由设备级用例验证能编译链接
+lib/core/platform/webview_cookie_bridge.dart  # 纯接口声明（只有抽象方法签名），属 ADR-0019 §2 的「源文件无可测量行」子情形；契约由 InAppWebViewCookieBridge（设备级）与验证流程测试行使

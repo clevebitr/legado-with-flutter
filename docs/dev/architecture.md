@@ -202,10 +202,13 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | `BookDetailRoute`、`ExploreRoute` | `BookDetailPage`、`ExplorePage` | `book_source` | 已落地 |
 | `BookSourceListRoute`、`BookSourceImportRoute` | 书源列表页、导入页 | `book_source` | 5.1 |
 | `ReaderRoute` | `ReaderPage` | `reader` | ✅ 5.3（2026-10-21，从 `book_source` **迁入**） |
-| `BookshelfRoute` | `BookshelfPage` | `bookshelf` | ✅ 5.4（2026-10-21） |
+| `BookshelfRoute.shelf` | `BookshelfPage` | `bookshelf` | ✅ 5.4（2026-10-21）；M19 加分组 chip 与多选批量 |
+| `BookshelfRoute.groups` | `ShelfGroupsPage`（分组管理） | `bookshelf` | ✅ M19（ADR-0066 §决策 2） |
 | `SettingsRoute` | `SettingsPage` | `settings` | ✅ 5.6（2026-10-21） |
 | `BookSourceCheckRoute` | `BookSourceCheckPage` | `book_source` | ✅ 5.10（2026-10-21） |
 | `BookSourceDebugRoute` | `BookSourceDebugPage` | `book_source` | ✅ 5.10（2026-10-21） |
+| `ReaderRoute.read` | `ReaderPage`（可带 `chapterUrl` / `charOffset`） | `reader` | ✅ M19（ADR-0066 §决策 7：书签跳转需要偏移） |
+| `ReaderRoute.bookmarks` / `ReaderRoute.records` / `ReaderRoute.bookRecords` | `BookmarkListPage` / `ReadingRecordsPage` / `BookReadingRecordsPage` | `reader` | ✅ M19（书签 / 阅读记录） |
 | `ShellRoute.about` / `ShellRoute.legalNotices` | `AboutPage` / `LegalNoticesPage` | `shell` | ✅ M18（2026-10-22） |
 
 > 落地页是组合根里的 `AppShell`（ADR-0055）：它组合四个 feature 的页面，因此不进本表；

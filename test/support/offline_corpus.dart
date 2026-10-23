@@ -30,6 +30,7 @@ import 'fake_app_navigation.dart';
 import 'fake_book_source_repository.dart';
 import 'fake_book_source_view_store.dart';
 import 'fake_bookshelf_repository.dart';
+import 'fake_bookshelf_writer.dart';
 import 'fake_content_cache.dart';
 import 'fake_http_client.dart';
 import 'fake_log_printer.dart';
@@ -133,6 +134,8 @@ Future<ProviderContainer?> pumpBookSourcePage(
   required FakeHttpClient http,
   FakeAppNavigation? navigation,
   FakeBookSourceRepository? repository,
+  FakeBookshelfWriter? writer,
+  FakeContentCache? contentCache,
 }) async {
   _fixViewSize(tester);
 
@@ -155,7 +158,10 @@ Future<ProviderContainer?> pumpBookSourcePage(
         appNavigationProvider.overrideWithValue(navigation),
       // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
       // （端口是 total，替身与适配器对页面是同一件事）。
-      contentCacheProvider.overrideWithValue(FakeContentCache()),
+      contentCacheProvider.overrideWithValue(
+        contentCache ?? FakeContentCache(),
+      ),
+      if (writer != null) bookshelfWriterProvider.overrideWithValue(writer),
       appLoggerProvider.overrideWithValue(_logger()),
     ],
   );

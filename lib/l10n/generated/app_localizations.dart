@@ -2189,6 +2189,360 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.'**
   String get readerAudioPlainHttp;
+
+  /// No description provided for @bookmarkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks'**
+  String get bookmarkTitle;
+
+  /// No description provided for @bookmarkEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No bookmarks yet. Tap the bookmark button in the reader toolbar to mark your place.'**
+  String get bookmarkEmpty;
+
+  /// No description provided for @bookmarkLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks could not be loaded.'**
+  String get bookmarkLoadFailed;
+
+  /// No description provided for @bookmarkAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add bookmark'**
+  String get bookmarkAdd;
+
+  /// No description provided for @bookmarkRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove bookmark'**
+  String get bookmarkRemove;
+
+  /// No description provided for @bookmarkAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark added'**
+  String get bookmarkAdded;
+
+  /// No description provided for @bookmarkRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark removed'**
+  String get bookmarkRemoved;
+
+  /// No description provided for @bookmarkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The bookmark could not be saved.'**
+  String get bookmarkFailed;
+
+  /// No description provided for @bookmarkDeleteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete bookmark'**
+  String get bookmarkDeleteAction;
+
+  /// No description provided for @bookSourceReadingRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records'**
+  String get bookSourceReadingRecords;
+
+  /// No description provided for @readingRecordsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records'**
+  String get readingRecordsTitle;
+
+  /// No description provided for @readingRecordsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No reading records yet. Sessions shorter than a minute are not recorded.'**
+  String get readingRecordsEmpty;
+
+  /// No description provided for @readingRecordsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records could not be loaded.'**
+  String get readingRecordsLoadFailed;
+
+  /// No description provided for @bookReadingRecordsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records · {book}'**
+  String bookReadingRecordsTitle(String book);
+
+  /// No description provided for @bookReadingRecordsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This book has no reading records yet.'**
+  String get bookReadingRecordsEmpty;
+
+  /// No description provided for @readingRecordMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String readingRecordMinutes(int minutes);
+
+  /// No description provided for @readingRecordHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String readingRecordHours(int hours);
+
+  /// No description provided for @readingRecordHoursMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h {minutes} min'**
+  String readingRecordHoursMinutes(int hours, int minutes);
+
+  /// No description provided for @myBookmarks.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks'**
+  String get myBookmarks;
+
+  /// No description provided for @myBookmarksBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Every position you marked'**
+  String get myBookmarksBody;
+
+  /// No description provided for @myReadingRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records'**
+  String get myReadingRecords;
+
+  /// No description provided for @myReadingRecordsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'What you read, by day'**
+  String get myReadingRecordsBody;
+
+  /// No description provided for @shelfManageGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage groups'**
+  String get shelfManageGroups;
+
+  /// No description provided for @shelfGroupAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get shelfGroupAll;
+
+  /// No description provided for @shelfGroupUngrouped.
+  ///
+  /// In en, this message translates to:
+  /// **'Ungrouped'**
+  String get shelfGroupUngrouped;
+
+  /// No description provided for @shelfGroupEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No books in this group yet.'**
+  String get shelfGroupEmpty;
+
+  /// No description provided for @shelfGroupsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get shelfGroupsTitle;
+
+  /// No description provided for @shelfGroupsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No groups yet. Create one with the button below.'**
+  String get shelfGroupsEmpty;
+
+  /// No description provided for @shelfGroupCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'New group'**
+  String get shelfGroupCreate;
+
+  /// No description provided for @shelfGroupCreateAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get shelfGroupCreateAction;
+
+  /// No description provided for @shelfGroupNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Group name'**
+  String get shelfGroupNameHint;
+
+  /// No description provided for @shelfGroupRename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get shelfGroupRename;
+
+  /// No description provided for @shelfGroupRenameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename group'**
+  String get shelfGroupRenameTitle;
+
+  /// No description provided for @shelfGroupDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete group'**
+  String get shelfGroupDelete;
+
+  /// No description provided for @shelfGroupDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete group'**
+  String get shelfGroupDeleteTitle;
+
+  /// No description provided for @shelfGroupDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The books go back to ungrouped and are not deleted.'**
+  String get shelfGroupDeleteBody;
+
+  /// No description provided for @shelfGroupNameTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'A group with this name already exists.'**
+  String get shelfGroupNameTaken;
+
+  /// No description provided for @shelfSelectionExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit selection'**
+  String get shelfSelectionExit;
+
+  /// No description provided for @shelfSelectionCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String shelfSelectionCount(int count);
+
+  /// No description provided for @shelfSelectionClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get shelfSelectionClear;
+
+  /// No description provided for @shelfSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get shelfSelectAll;
+
+  /// No description provided for @shelfBatchAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Batch actions'**
+  String get shelfBatchAction;
+
+  /// No description provided for @shelfBatchGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to group'**
+  String get shelfBatchGroup;
+
+  /// No description provided for @bookSourceShelfGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to group'**
+  String get bookSourceShelfGroup;
+
+  /// No description provided for @bookSourceShelfGroupHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the book to the shelf before grouping it.'**
+  String get bookSourceShelfGroupHint;
+
+  /// No description provided for @bookSourceChangeCover.
+  ///
+  /// In en, this message translates to:
+  /// **'Change cover'**
+  String get bookSourceChangeCover;
+
+  /// No description provided for @bookSourceResetCover.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset cover'**
+  String get bookSourceResetCover;
+
+  /// No description provided for @bookSourceBookCache.
+  ///
+  /// In en, this message translates to:
+  /// **'Book cache'**
+  String get bookSourceBookCache;
+
+  /// No description provided for @bookSourceBookCacheCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters cached'**
+  String bookSourceBookCacheCount(int count);
+
+  /// No description provided for @bookSourceBookCacheClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear this book\'s cache'**
+  String get bookSourceBookCacheClear;
+
+  /// No description provided for @bookSourceBookCacheCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared {count} cached items'**
+  String bookSourceBookCacheCleared(int count);
+
+  /// No description provided for @bookSourceBookCacheFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The cache action failed.'**
+  String get bookSourceBookCacheFailed;
+
+  /// No description provided for @sourceVerificationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{title} · {source}'**
+  String sourceVerificationTitle(String title, String source);
+
+  /// No description provided for @sourceVerificationDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get sourceVerificationDone;
+
+  /// No description provided for @sourceVerificationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification was not completed.'**
+  String get sourceVerificationFailed;
+
+  /// No description provided for @sourceCaptchaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Captcha · {source}'**
+  String sourceCaptchaTitle(String source);
+
+  /// No description provided for @sourceCaptchaImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Captcha image'**
+  String get sourceCaptchaImage;
+
+  /// No description provided for @sourceCaptchaHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type the characters in the image'**
+  String get sourceCaptchaHint;
+
+  /// No description provided for @sourceCaptchaConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get sourceCaptchaConfirm;
 }
 
 class _AppLocalizationsDelegate

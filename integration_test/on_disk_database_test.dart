@@ -4,9 +4,13 @@ import 'package:drift/drift.dart';
 import 'package:flutter_reader/core/di/database_path_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/storage/book_source_dao.dart';
+import 'package:flutter_reader/core/storage/bookmark_dao.dart';
 import 'package:flutter_reader/core/storage/bookshelf_dao.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
+import 'package:flutter_reader/core/storage/cookie_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
+import 'package:flutter_reader/core/storage/read_record_dao.dart';
+import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -276,6 +280,149 @@ void main() {
       expect(rows.single.progress?.charOffset, 34);
     } finally {
       readerDao.close();
+      reader.dispose();
+    }
+  });
+
+  testWidgets('bookmarkDao_whenReopened_keepsTheMarksAndTheReadingRecords', (
+    WidgetTester tester,
+  ) async {
+    // M19 的三张新表（ADR-0066）：书签、阅读记录与分组写进真实 SQLite 后再读回来。
+    final ProviderContainer writer = ProviderContainer();
+    final ProviderSubscription<BookmarkDao> writerBookmarks = writer
+        .listen<BookmarkDao>(
+          bookmarkDaoProvider,
+          (BookmarkDao? previous, BookmarkDao next) {},
+        );
+    final ProviderSubscription<ReadRecordDao> writerRecords = writer
+        .listen<ReadRecordDao>(
+          readRecordDaoProvider,
+          (ReadRecordDao? previous, ReadRecordDao next) {},
+        );
+    final ProviderSubscription<ShelfGroupDao> writerGroups = writer
+        .listen<ShelfGroupDao>(
+          shelfGroupDaoProvider,
+          (ShelfGroupDao? previous, ShelfGroupDao next) {},
+        );
+    final int groupId;
+    final int bookmarkId;
+    try {
+      groupId = await writer
+          .read(shelfGroupDaoProvider)
+          .insertNew(name: '集成分组', sortOrder: 0);
+      bookmarkId = await writer
+          .read(bookmarkDaoProvider)
+          .insertNew(
+            sourceUrl: sourceId,
+            bookUrl: 'https://example.com/book/integration',
+            bookName: '集成用例书',
+            tocUrl: null,
+            chapterUrl: 'https://example.com/chapter/1.html',
+            chapterName: '第1章',
+            chapterIndex: 0,
+            charOffset: 12,
+            excerpt: '正文摘录',
+          );
+      await writer
+          .read(readRecordDaoProvider)
+          .insertNew(
+            sourceUrl: sourceId,
+            bookUrl: 'https://example.com/book/integration',
+            bookName: '集成用例书',
+            chapterUrl: 'https://example.com/chapter/1.html',
+            chapterName: '第1章',
+            startedAt: DateTime.utc(2026, 10, 23, 20),
+            endedAt: DateTime.utc(2026, 10, 23, 20, 30),
+            durationSeconds: 1800,
+          );
+    } finally {
+      writerBookmarks.close();
+      writerRecords.close();
+      writerGroups.close();
+      writer.dispose();
+    }
+
+    final ProviderContainer reader = ProviderContainer();
+    final ProviderSubscription<BookmarkDao> readerBookmarks = reader
+        .listen<BookmarkDao>(
+          bookmarkDaoProvider,
+          (BookmarkDao? previous, BookmarkDao next) {},
+        );
+    final ProviderSubscription<ReadRecordDao> readerRecords = reader
+        .listen<ReadRecordDao>(
+          readRecordDaoProvider,
+          (ReadRecordDao? previous, ReadRecordDao next) {},
+        );
+    final ProviderSubscription<ShelfGroupDao> readerGroups = reader
+        .listen<ShelfGroupDao>(
+          shelfGroupDaoProvider,
+          (ShelfGroupDao? previous, ShelfGroupDao next) {},
+        );
+    try {
+      final BookmarkRow mark =
+          (await reader.read(bookmarkDaoProvider).findAll()).single;
+      final ReadRecordRow record =
+          (await reader.read(readRecordDaoProvider).findRecent(limit: 10))
+              .single;
+      final BookGroupRow group =
+          (await reader.read(shelfGroupDaoProvider).findAll()).single;
+
+      expect(mark.id, bookmarkId);
+      expect(mark.excerpt, '正文摘录');
+      expect(mark.charOffset, 12);
+      expect(record.durationSeconds, 1800);
+      expect(group.id, groupId);
+      expect(group.name, '集成分组');
+    } finally {
+      readerBookmarks.close();
+      readerRecords.close();
+      readerGroups.close();
+      reader.dispose();
+    }
+  });
+
+  testWidgets('cookieDao_whenReopened_keepsTheCookieJar', (
+    WidgetTester tester,
+  ) async {
+    // M21a（ADR-0068）：登录态/验证结果要跨进程存活，因此 cookie 必须真的落盘。
+    final ProviderContainer writer = ProviderContainer();
+    final ProviderSubscription<CookieDao> writerCookies = writer
+        .listen<CookieDao>(
+          cookieDaoProvider,
+          (CookieDao? previous, CookieDao next) {},
+        );
+    try {
+      await writer
+          .read(cookieDaoProvider)
+          .upsert(
+            domain: 'example.com',
+            path: '/',
+            name: 'session',
+            value: 'integration',
+            isSecure: true,
+            expiresAt: DateTime.utc(2036, 10, 23),
+          );
+    } finally {
+      writerCookies.close();
+      writer.dispose();
+    }
+
+    final ProviderContainer reader = ProviderContainer();
+    final ProviderSubscription<CookieDao> readerCookies = reader
+        .listen<CookieDao>(
+          cookieDaoProvider,
+          (CookieDao? previous, CookieDao next) {},
+        );
+    try {
+      final CookieRow row =
+          (await reader.read(cookieDaoProvider).findAll()).single;
+
+      expect(row.domain, 'example.com');
+      expect(row.name, 'session');
+      expect(row.value, 'integration');
+      expect(row.isSecure, isTrue);
+    } finally {
+      readerCookies.close();
       reader.dispose();
     }
   });

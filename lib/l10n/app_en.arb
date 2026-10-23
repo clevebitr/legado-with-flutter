@@ -1623,5 +1623,292 @@
   "readerAudioPlainHttp": "This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.",
   "@readerAudioPlainHttp": {
     "description": "Shown when an audio track is http and the user has not opted in."
+  },
+  "bookmarkTitle": "Bookmarks",
+  "@bookmarkTitle": {
+    "@description": "Bookmark list page title."
+  },
+  "bookmarkEmpty": "No bookmarks yet. Tap the bookmark button in the reader toolbar to mark your place.",
+  "@bookmarkEmpty": {
+    "@description": "Empty state of the bookmark list."
+  },
+  "bookmarkLoadFailed": "Bookmarks could not be loaded.",
+  "@bookmarkLoadFailed": {
+    "@description": "Failure state of the bookmark list."
+  },
+  "bookmarkAdd": "Add bookmark",
+  "@bookmarkAdd": {
+    "@description": "Toolbar tooltip when the current position is not bookmarked."
+  },
+  "bookmarkRemove": "Remove bookmark",
+  "@bookmarkRemove": {
+    "@description": "Toolbar tooltip when the current position is bookmarked."
+  },
+  "bookmarkAdded": "Bookmark added",
+  "@bookmarkAdded": {
+    "@description": "Snack bar after marking a position."
+  },
+  "bookmarkRemoved": "Bookmark removed",
+  "@bookmarkRemoved": {
+    "@description": "Snack bar after unmarking a position."
+  },
+  "bookmarkFailed": "The bookmark could not be saved.",
+  "@bookmarkFailed": {
+    "@description": "Snack bar when the bookmark write failed."
+  },
+  "bookmarkDeleteAction": "Delete bookmark",
+  "@bookmarkDeleteAction": {
+    "@description": "Tooltip of the delete button of a bookmark row."
+  },
+  "bookSourceReadingRecords": "Reading records",
+  "@bookSourceReadingRecords": {
+    "@description": "Detail page button that opens one book's reading records."
+  },
+  "readingRecordsTitle": "Reading records",
+  "@readingRecordsTitle": {
+    "@description": "Reading records page title."
+  },
+  "readingRecordsEmpty": "No reading records yet. Sessions shorter than a minute are not recorded.",
+  "@readingRecordsEmpty": {
+    "@description": "Empty state of the reading records page."
+  },
+  "readingRecordsLoadFailed": "Reading records could not be loaded.",
+  "@readingRecordsLoadFailed": {
+    "@description": "Failure state of the reading records pages."
+  },
+  "bookReadingRecordsTitle": "Reading records · {book}",
+  "@bookReadingRecordsTitle": {
+    "@description": "Title of one book's reading records; {book} is the book title.",
+    "placeholders": {
+      "book": {
+        "type": "String"
+      }
+    }
+  },
+  "bookReadingRecordsEmpty": "This book has no reading records yet.",
+  "@bookReadingRecordsEmpty": {
+    "@description": "Empty state of one book's reading records."
+  },
+  "readingRecordMinutes": "{minutes} min",
+  "@readingRecordMinutes": {
+    "@description": "Duration label in minutes; {minutes} is an integer.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "readingRecordHours": "{hours} h",
+  "@readingRecordHours": {
+    "@description": "Duration label in whole hours; {hours} is an integer.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "readingRecordHoursMinutes": "{hours} h {minutes} min",
+  "@readingRecordHoursMinutes": {
+    "@description": "Duration label in hours and minutes.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "myBookmarks": "Bookmarks",
+  "@myBookmarks": {
+    "@description": "My page entry that opens the bookmark list."
+  },
+  "myBookmarksBody": "Every position you marked",
+  "@myBookmarksBody": {
+    "@description": "Subtitle of the bookmark entry on the My page."
+  },
+  "myReadingRecords": "Reading records",
+  "@myReadingRecords": {
+    "@description": "My page entry that opens the reading records."
+  },
+  "myReadingRecordsBody": "What you read, by day",
+  "@myReadingRecordsBody": {
+    "@description": "Subtitle of the reading-record entry on the My page."
+  },
+  "shelfManageGroups": "Manage groups",
+  "@shelfManageGroups": {
+    "@description": "Shelf app bar action that opens the group management page."
+  },
+  "shelfGroupAll": "All",
+  "@shelfGroupAll": {
+    "@description": "Group filter chip that shows every shelf entry."
+  },
+  "shelfGroupUngrouped": "Ungrouped",
+  "@shelfGroupUngrouped": {
+    "@description": "Group filter chip and dialog option for books without a group."
+  },
+  "shelfGroupEmpty": "No books in this group yet.",
+  "@shelfGroupEmpty": {
+    "@description": "Empty state when the selected group has no books."
+  },
+  "shelfGroupsTitle": "Groups",
+  "@shelfGroupsTitle": {
+    "@description": "Group management page title."
+  },
+  "shelfGroupsEmpty": "No groups yet. Create one with the button below.",
+  "@shelfGroupsEmpty": {
+    "@description": "Empty state of the group management page."
+  },
+  "shelfGroupCreate": "New group",
+  "@shelfGroupCreate": {
+    "@description": "Label of the create-group action."
+  },
+  "shelfGroupCreateAction": "Create",
+  "@shelfGroupCreateAction": {
+    "@description": "Confirm button of the create-group dialog."
+  },
+  "shelfGroupNameHint": "Group name",
+  "@shelfGroupNameHint": {
+    "@description": "Hint of the group name text field."
+  },
+  "shelfGroupRename": "Rename",
+  "@shelfGroupRename": {
+    "@description": "Row action that renames a group."
+  },
+  "shelfGroupRenameTitle": "Rename group",
+  "@shelfGroupRenameTitle": {
+    "@description": "Title of the rename-group dialog."
+  },
+  "shelfGroupDelete": "Delete group",
+  "@shelfGroupDelete": {
+    "@description": "Row action that deletes a group."
+  },
+  "shelfGroupDeleteTitle": "Delete group",
+  "@shelfGroupDeleteTitle": {
+    "@description": "Title of the delete-group confirmation."
+  },
+  "shelfGroupDeleteBody": "The books go back to ungrouped and are not deleted.",
+  "@shelfGroupDeleteBody": {
+    "@description": "Body of the delete-group confirmation."
+  },
+  "shelfGroupNameTaken": "A group with this name already exists.",
+  "@shelfGroupNameTaken": {
+    "@description": "Shown when a group name is blank or taken."
+  },
+  "shelfSelectionExit": "Exit selection",
+  "@shelfSelectionExit": {
+    "@description": "Tooltip of the button that leaves batch mode."
+  },
+  "shelfSelectionCount": "{count} selected",
+  "@shelfSelectionCount": {
+    "@description": "Batch-mode title; {count} is the number of selected books.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shelfSelectionClear": "Clear selection",
+  "@shelfSelectionClear": {
+    "@description": "Tooltip of the deselect-all button."
+  },
+  "shelfSelectAll": "Select all",
+  "@shelfSelectAll": {
+    "@description": "Tooltip of the select-all button."
+  },
+  "shelfBatchAction": "Batch actions",
+  "@shelfBatchAction": {
+    "@description": "Tooltip of the batch action menu."
+  },
+  "shelfBatchGroup": "Move to group",
+  "@shelfBatchGroup": {
+    "@description": "Batch action that moves the selection into a group."
+  },
+  "bookSourceShelfGroup": "Move to group",
+  "@bookSourceShelfGroup": {
+    "@description": "Detail page button that changes the shelf group."
+  },
+  "bookSourceShelfGroupHint": "Add the book to the shelf before grouping it.",
+  "@bookSourceShelfGroupHint": {
+    "@description": "Shown when the book is not on the shelf."
+  },
+  "bookSourceChangeCover": "Change cover",
+  "@bookSourceChangeCover": {
+    "@description": "Detail page button that picks a local cover image."
+  },
+  "bookSourceResetCover": "Reset cover",
+  "@bookSourceResetCover": {
+    "@description": "Detail page button that goes back to the source's cover."
+  },
+  "bookSourceBookCache": "Book cache",
+  "@bookSourceBookCache": {
+    "@description": "Detail page label for this book's cached chapters."
+  },
+  "bookSourceBookCacheCount": "{count} chapters cached",
+  "@bookSourceBookCacheCount": {
+    "@description": "How many chapters of this book are cached; {count} is an integer.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceBookCacheClear": "Clear this book's cache",
+  "@bookSourceBookCacheClear": {
+    "@description": "Detail page button that clears this book's cached chapters."
+  },
+  "bookSourceBookCacheCleared": "Cleared {count} cached items",
+  "@bookSourceBookCacheCleared": {
+    "@description": "Snack bar after clearing a book's cache.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceBookCacheFailed": "The cache action failed.",
+  "@bookSourceBookCacheFailed": {
+    "@description": "Snack bar when clearing the book cache failed."
+  },
+  "sourceVerificationTitle": "{title} · {source}",
+  "@sourceVerificationTitle": {
+    "@description": "Verification page title: the rule's title and the source name.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceVerificationDone": "Done",
+  "@sourceVerificationDone": {
+    "@description": "Confirm button of the verification page; finishes the challenge."
+  },
+  "sourceVerificationFailed": "Verification was not completed.",
+  "@sourceVerificationFailed": {
+    "@description": "Shown when the verification page was closed without finishing."
+  },
+  "sourceCaptchaTitle": "Captcha · {source}",
+  "@sourceCaptchaTitle": {
+    "@description": "Captcha page title; {source} is the source name.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceCaptchaImage": "Captcha image",
+  "@sourceCaptchaImage": {
+    "@description": "Semantic label of the captcha image."
+  },
+  "sourceCaptchaHint": "Type the characters in the image",
+  "@sourceCaptchaHint": {
+    "@description": "Hint of the captcha text field."
+  },
+  "sourceCaptchaConfirm": "Confirm",
+  "@sourceCaptchaConfirm": {
+    "@description": "Confirm button of the captcha page."
   }
 }

@@ -78,3 +78,14 @@
   drift 导出 `ConnectionClosedException` 之后仍必须换回具名 catch 并删掉这一支。
 - **验证方式不变：** 现有那份表驱动测试（`test/core/network/charset_cache_test.dart`）改走共享函数，
   `core` 覆盖率门禁仍为 100%（`absorbCacheFailure` 的每一支都被它覆盖）。
+
+---
+
+## 2026-10-23 修订注记（M21a）：吸收点新增一个消费者——持久化 Cookie jar
+
+`PersistentCookieManager`（ADR-0068 §决策 4）把 cookie 写穿到 Drift，写失败**不能**让请求失败：
+丢一条 cookie 的代价是一次重新登录，而不是一个抛异常的页面。它的存储适配器 `CookieDaoStore`
+因此同样经由 `absorbCacheFailure` 吸收失败——**不新增豁免点**，只是同一实现的第二个调用方。
+
+约束照抄本 ADR §决策 2：`Error` 仍不捕；被吸收的失败必须落 `debug` 且只带域名/摘要（C-SEC-4）；
+端口（`CookieStore`）契约保持 total。日落条件不变（drift 导出可点名的连接异常后换回具名 catch）。

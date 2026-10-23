@@ -9,7 +9,7 @@ import 'package:m3e_design/m3e_design.dart';
 /// (`docs/dev/roadmap.md` §3.11 M18, ADR-0055 §决策 3).
 ///
 /// Every row calls a method on the [AppNavigation] port (ADR-0042), so this page does not import
-/// `book_source` or `settings`: the composition root binds the real push functions. The cache
+/// `book_source`, `settings` or `reader`: the composition root binds the real push functions. The cache
 /// entry deliberately lives in settings only — two "clear cache" buttons would be two answers to
 /// the same question.
 class MyPage extends ConsumerWidget {
@@ -36,6 +36,19 @@ class MyPage extends ConsumerWidget {
             title: Text(l10n.myBookSources),
             subtitle: Text(l10n.myBookSourcesBody),
             onTap: () => navigation.openBookSources(context),
+          ),
+          // 书签与阅读记录是阅读产物，页面归 `reader`；这里只发一个导航请求（ADR-0066 §决策 7）。
+          ListTile(
+            leading: const Icon(Icons.bookmark_border),
+            title: Text(l10n.myBookmarks),
+            subtitle: Text(l10n.myBookmarksBody),
+            onTap: () => navigation.openBookmarks(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: Text(l10n.myReadingRecords),
+            subtitle: Text(l10n.myReadingRecordsBody),
+            onTap: () => navigation.openReadingRecords(context),
           ),
           _heading(context, l10n.mySectionApp),
           ListTile(

@@ -4,6 +4,7 @@ import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_status.d
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/bookshelf_route.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/pages/bookshelf_page.dart';
+import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_bookshelf_repository.dart';
@@ -211,6 +212,180 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('page_givenAGroupedBook_showsTheGroupChips', (
+      WidgetTester tester,
+    ) async {
+      repository
+        ..seed(name: '剑来')
+        ..seed(name: '雪中悍刀行');
+      await repository.createGroup('仙侠');
+      final int groupId = (await repository.getGroups()).single.id;
+      await repository.setGroupFor(
+        ids: <int>[repository.entries.first.id],
+        groupId: groupId,
+      );
+
+      await pump(tester);
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookshelfPage),
+      );
+
+      expect(find.text(l10n.shelfGroupAll), findsOneWidget);
+      expect(find.text('仙侠'), findsOneWidget);
+      expect(find.text(l10n.shelfGroupUngrouped), findsOneWidget);
+    });
+
+    testWidgets('page_whenAGroupChipIsChosen_showsOnlyThatGroup', (
+      WidgetTester tester,
+    ) async {
+      repository
+        ..seed(name: '剑来')
+        ..seed(name: '雪中悍刀行');
+      await repository.createGroup('仙侠');
+      final int groupId = (await repository.getGroups()).single.id;
+      await repository.setGroupFor(
+        ids: <int>[repository.entries.first.id],
+        groupId: groupId,
+      );
+      await pump(tester);
+
+      await tester.tap(find.text('仙侠'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('剑来'), findsOneWidget);
+      expect(find.text('雪中悍刀行'), findsNothing);
+    });
+
+    testWidgets('page_whenUngroupedIsChosen_showsTheRest', (
+      WidgetTester tester,
+    ) async {
+      repository
+        ..seed(name: '剑来')
+        ..seed(name: '雪中悍刀行');
+      await repository.createGroup('仙侠');
+      final int groupId = (await repository.getGroups()).single.id;
+      await repository.setGroupFor(
+        ids: <int>[repository.entries.first.id],
+        groupId: groupId,
+      );
+      await pump(tester);
+
+      await tester.tap(
+        find.text(
+          localizationOf(
+            tester,
+            find.byType(BookshelfPage),
+          ).shelfGroupUngrouped,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('雪中悍刀行'), findsOneWidget);
+      expect(find.text('剑来'), findsNothing);
+    });
+
+    testWidgets('page_whenTheManageGroupsActionIsTapped_asksTheRouteTable', (
+      WidgetTester tester,
+    ) async {
+      // 分组管理页是 shelf feature 自己的路由：这里只断言按钮存在且可达（路由由 app_test 覆盖）。
+      await pump(tester);
+
+      expect(
+        find.byTooltip(
+          localizationOf(tester, find.byType(BookshelfPage)).shelfManageGroups,
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('page_whenARowIsLongPressed_entersSelectionMode', (
+      WidgetTester tester,
+    ) async {
+      repository.seed(name: '剑来');
+      await pump(tester);
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookshelfPage),
+      );
+
+      await tester.longPress(find.text('剑来'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.shelfSelectionCount(1)), findsOneWidget);
+    });
+
+    testWidgets('page_whenTheSelectionIsPinned_pinsEveryChosenRow', (
+      WidgetTester tester,
+    ) async {
+      repository
+        ..seed(name: '剑来')
+        ..seed(name: '雪中悍刀行');
+      await pump(tester);
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookshelfPage),
+      );
+
+      await tester.longPress(find.text('剑来'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.shelfSelectAll));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.shelfBatchAction));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.shelfActionPin).last);
+      await tester.pumpAndSettle();
+
+      expect(
+        repository.entries.every((ShelvedBook book) => book.isPinned),
+        isTrue,
+      );
+      // 写入成功后自动退出多选。
+      expect(find.text(l10n.shelfTitle), findsOneWidget);
+    });
+
+    testWidgets('page_whenTheSelectionIsMovedToAGroup_writesTheGroup', (
+      WidgetTester tester,
+    ) async {
+      repository.seed(name: '剑来');
+      await repository.createGroup('仙侠');
+      await pump(tester);
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookshelfPage),
+      );
+      final int groupId = (await repository.getGroups()).single.id;
+
+      await tester.longPress(find.text('剑来'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.shelfBatchAction));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.shelfBatchGroup));
+      await tester.pumpAndSettle();
+      // chip 与弹窗里都有「仙侠」：只点弹窗里的那一个。
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SimpleDialog),
+          matching: find.text('仙侠'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.entries.single.groupId, groupId);
+    });
+
+    testWidgets('page_whenACustomCoverIsStored_showsTheLocalFile', (
+      WidgetTester tester,
+    ) async {
+      repository.seed(name: '剑来', customCoverPath: '/covers/abc.jpg');
+      await pump(tester);
+
+      final CoverImage cover = tester.widget<CoverImage>(
+        find.byType(CoverImage),
+      );
+      expect(cover.localPath, '/covers/abc.jpg');
     });
   });
 }

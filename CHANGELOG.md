@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Shelf groups, bookmarks, reading records and a per-book cache (ADR-0066, M19)
+
+- **The shelf can be organised.** Groups are a real table (`book_groups`) and `books.group_id`
+  points at them, so the chip row filters, a management page creates/renames/reorders/deletes them
+  (deleting keeps the books, moving them back to ungrouped), and a long press starts a batch that
+  moves / pins / marks / deletes the selection in one write.
+- **The reader has bookmarks.** The toolbar's bookmark button is a toggle keyed by the exact
+  position (`source, book, chapter, offset`), so pressing it twice removes the mark instead of
+  stacking a duplicate. Bookmarks carry a title snapshot and an excerpt from the rendered body, so
+  the global list («我的 → 书签») renders offline and jumps back to the same sentence.
+- **Reading time is recorded.** One row per reader session ending after at least a minute; the
+  «我的 → 阅读记录» page groups them by day with a daily total, and the detail page shows the same
+  history for one book.
+- **The detail page can adjust a book.** Change its group, pick a local cover (copied into the app
+  directory, shown instead of the source's) or clear it again, and see/clear how many chapters of
+  that book are cached. Per-book cache lives in a new `cache_entries.scope_key` (a digest, like every
+  other key), so the count never needs to know what was read.
+- **Schema v6 → v7.** Three new tables plus two `books` columns and one `cache_entries` column, with
+  the re-entrant upgrade path ADR-0056 requires and migrations verified from v1 through v6.
+
 ### Three release channels come out of CI (ADR-0065, ADR-0067)
 
 - **正式版**（`release.yml`）：推 `v<版本>` tag 时构建并发布正式 Release；tag 与 `pubspec.yaml` 的版本

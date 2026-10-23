@@ -16,13 +16,8 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$BookSource {
 
-@JsonKey(name: 'bookSourceName') String get name;@JsonKey(name: 'bookSourceUrl') String get url;@JsonKey(name: 'bookSourceGroup') String? get group;@JsonKey(name: 'bookSourceType') BookSourceType get sourceType;@JsonKey(name: 'enabled') bool get isEnabled;@JsonKey(name: 'header')@_HeaderJsonConverter() Map<String, String>? get headers;/// The source's `header` when it is a **rule** rather than a JSON object
-/// (`docs/dev/book-source.md` §2, M12-A2).
-///
-/// Upstream evaluates it before every request and parses its result as a JSON object
-/// (`BaseSource.getHeaderMap`). The text is kept here rather than dropped, because a
-/// source that signs its requests cannot be used at all without it; the evaluation itself
-/// belongs to the fetch (`PageFetchService.headersOf`), which is where the sandbox is.
+@JsonKey(name: 'bookSourceName') String get name;@JsonKey(name: 'bookSourceUrl') String get url;@JsonKey(name: 'bookSourceGroup') String? get group;@JsonKey(name: 'bookSourceType') BookSourceType get sourceType;@JsonKey(name: 'enabled') bool get isEnabled;@JsonKey(name: 'header')@_HeaderJsonConverter() Map<String, String>? get headers;/// The source's `header` when it holds a rule rather than a JSON object; evaluated before
+/// each request and parsed as a JSON object.
 @JsonKey(includeFromJson: false, includeToJson: false) String? get headerRule; String? get searchUrl;@JsonKey(name: 'exploreUrl') String? get exploreUrl;@JsonKey(name: 'ruleSearch') SearchRule get searchRule;@JsonKey(name: 'ruleExplore') ExploreRule? get exploreRule;@JsonKey(name: 'concurrentRate') String? get concurrentRate;@JsonKey(name: 'variableComment') String? get variableComment;@JsonKey(name: 'ruleBookInfo') BookInfoRule? get bookInfoRule;@JsonKey(name: 'ruleToc') TocRule get tocRule;@JsonKey(name: 'ruleContent') ContentRule get contentRule;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
 /// Create a copy of BookSource
 /// with the given fields replaced by the non-null parameter values.
@@ -306,13 +301,8 @@ class _BookSource implements BookSource {
   return EqualUnmodifiableMapView(value);
 }
 
-/// The source's `header` when it is a **rule** rather than a JSON object
-/// (`docs/dev/book-source.md` §2, M12-A2).
-///
-/// Upstream evaluates it before every request and parses its result as a JSON object
-/// (`BaseSource.getHeaderMap`). The text is kept here rather than dropped, because a
-/// source that signs its requests cannot be used at all without it; the evaluation itself
-/// belongs to the fetch (`PageFetchService.headersOf`), which is where the sandbox is.
+/// The source's `header` when it holds a rule rather than a JSON object; evaluated before
+/// each request and parsed as a JSON object.
 @override@JsonKey(includeFromJson: false, includeToJson: false) final  String? headerRule;
 @override final  String? searchUrl;
 @override@JsonKey(name: 'exploreUrl') final  String? exploreUrl;

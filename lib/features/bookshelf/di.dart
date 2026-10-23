@@ -11,5 +11,7 @@ part 'di.g.dart';
 /// the reader (5.3) will write progress through its own port, so this provider stays feature
 /// internal (C-ARCH-2).
 @Riverpod(keepAlive: true)
-BookshelfRepository bookshelfRepository(Ref ref) =>
-    BookshelfRepositoryImpl(dao: ref.watch(bookshelfDaoProvider));
+BookshelfRepository bookshelfRepository(Ref ref) => BookshelfRepositoryImpl(
+  dao: ref.watch(bookshelfDaoProvider),
+  groups: ref.watch(shelfGroupDaoProvider),
+);

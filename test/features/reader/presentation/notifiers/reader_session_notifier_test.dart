@@ -171,6 +171,33 @@ void main() {
       expect(fixture.progress.writes.single.chapterName, '第2章');
     });
 
+    test('selectChapter_givenACharOffset_startsThereAndWritesIt', () async {
+      // 书签跳转（ADR-0066 §决策 7）：章节与偏移一次写进同一个状态，正文才只恢复一次。
+      final _Fixture fixture = _fixture();
+      final ReaderSession session = fixture.container.read(
+        readerSessionProvider(_book).notifier,
+      );
+      await fixture.container.read(readerSessionProvider(_book).future);
+
+      await session.selectChapter(1, charOffset: 42);
+
+      expect(session.state.value?.chapterIndex, 1);
+      expect(session.state.value?.charOffset, 42);
+      expect(fixture.progress.writes.single.charOffset, 42);
+    });
+
+    test('selectChapter_givenANegativeCharOffset_clampsToZero', () async {
+      final _Fixture fixture = _fixture();
+      final ReaderSession session = fixture.container.read(
+        readerSessionProvider(_book).notifier,
+      );
+      await fixture.container.read(readerSessionProvider(_book).future);
+
+      await session.selectChapter(1, charOffset: -5);
+
+      expect(session.state.value?.charOffset, 0);
+    });
+
     test('selectChapter_givenAnIndexOutOfRange_doesNothing', () async {
       final _Fixture fixture = _fixture();
       final ReaderSession session = fixture.container.read(

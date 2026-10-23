@@ -53,6 +53,7 @@ final class _FailingCacheDao extends CacheDao {
     required int page,
     required String payload,
     required Duration ttl,
+    String? scopeKey,
   }) async => throw error;
 }
 

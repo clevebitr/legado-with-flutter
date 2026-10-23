@@ -75,6 +75,9 @@
 | [0051](0051-reader-experience.md) | 阅读体验（M14）：三区点击 + 可隐藏工具条（进度/亮度）、目录居中/正倒序/搜索、换源（候选→重取目录→按名对齐→`migrateIdentity`）、排版四轴（字体族用平台通用名、不打包字体） | Accepted（2026-10-22，M14 规格前置；范围由 #11 裁决） | 本次新增 |
 | [0052](0052-book-source-management-v2.md) | 书源管理二期（M15）：`source_checks` 历史表 + 四态状态灯、探索开关列、置顶/置底与分组重命名/删除/移出、排序方向与域名分节、导入预览/提交两步 | Accepted（2026-10-22，M15 规格前置；范围由 #13 裁决） | 本次新增 |
 | [0053](0053-manga-engine.md) | 漫画引擎（M16）：漫画是 reader 的一个模式（`sourceType = image` 分派）、`ruleContent` 列表语义产出图片页、滚动/翻页两种观影模式 + `InteractiveViewer` 缩放、页号进度与预取 ≤3 页、零新依赖 | Accepted（2026-10-22，M16 规格前置） | 本次新增 |
+| [0056](0056-idempotent-schema-migrations.md) | 数据库迁移步骤必须可重入：升级前先问 `sqlite_master` / `PRAGMA table_info`，裸 `addColumn` / `CREATE INDEX` 禁止只看版本号 | Accepted（2026-10-22，线上事故修复：`reader.db` 永久打不开） | 本次新增 |
+| [0057](0057-source-check-selection-and-handover.md) | 校验的参测源由「筛选 + 勾选」决定，并可跨页交接 | Accepted（2026-10-22，用户报障） | 本次新增 |
+| [0058](0058-source-derived-ui-must-follow-its-input.md) | 选源 / 选范围的界面必须跟随它的输入（修订 ADR-0046 §决策 1 的回落判据） | Accepted（2026-10-22，用户报障） | 本次新增 |
 | [0055](0055-app-shell-and-about-pages.md) | 应用外壳与关于/法律声明（M18）：`AppShell` 在组合根、四 tab `IndexedStack` 保活、「我的」只做入口聚合、关于页版本常量 + 打包 GPL 全文 + 源码地址（不引 `url_launcher`） | Accepted（2026-10-22，用户裁决「开始补齐 UI」） | 本次新增 |
 | [0054](0054-audio-and-tts-engine.md) | 听书与音频（M17）：音频源播放与系统 TTS 两条独立链路共用章节上下文；依赖选型与三端降级（`just_audio` / `audio_service` / `flutter_tts`，Windows 无媒体通知）；HLS/云 TTS/句级高亮未闭环 | Accepted（2026-10-22，M17 规格前置） | 本次新增 |
 | [0059](0059-book-source-batch-disposal.md) | 书源批量处置：多选模式独立状态 + 工具栏入口、多选期间行内开关/菜单失效、「有失效」筛选行旁一键禁用/删除、分组管理区分「删标签」与「删该组全部书源」 | Accepted（2026-10-22，用户裁决四项） | 本次新增 |
@@ -84,4 +87,6 @@
 | [0063](0063-cloud-tts-proposal.md) | 云 TTS：引擎抽象、凭据存储、合成与缓存、播放接线、六项待裁决 | **Proposed**（2026-10-23，M24-P6 立项；未裁决前不实现） | 本次新增 |
 | [0064](0064-audio-page-follows-structure-only.md) | 播放页只跟随「结构状态」：`AudioReaderSkeleton` 投影 + `select`，位置 tick 只重画滑条一行；Windows 的缩略图 / AXTree 日志登记为插件与嵌入层噪声，不用 `ExcludeSemantics` 换安静 | Accepted（2026-10-23，Windows 实跑听书源日志） | 本次新增 |
 | [0065](0065-layered-ci-and-release-artifacts.md) | 分层 CI：L1 `verify`（每个 PR）/ L2 平台构建（main、tag、手动）/ L3 Release（tag）；产物 = Windows zip + 通用 APK + AAB + 未签名 iOS archive；macOS 本轮不做；签名材料不进 CI；发布只用 `gh` | Accepted（2026-10-23，用户要求「分层 CI + release 产物」） | 本次新增 |
+| [0066](0066-shelf-groups-bookmarks-and-read-records.md) | 书架分组（独立 `book_groups` 表 + `books.groupId`）、书签（位置唯一键的 toggle）、阅读记录（每会话一行、≥60 s）、自定义封面与按书缓存 `scope_key`；schema v6→v7 一次迁移，交付分两批 | Accepted（2026-10-23，M19 规格前置，用户裁决四项） | 本次新增 |
 | [0067](0067-three-release-channels.md) | 三条发布通道各自一个 workflow：`release.yml`（tag ↔ 版本强校验、正式 Release）、`beta.yml`（`-beta.<sha7>`、预发布）、`debug.yml`（`-debug.<sha7>.<时间>`、预发布）；构建抽成可复用 `build-artifacts.yml`，跨 workflow 用 `wait-for-verify` 等门禁绿 | Accepted（2026-10-23，用户要求拆分三条通道与各自版本号） | 本次修订 0065 |
+| [0068](0068-m21a-webview-verification-and-cookie.md) | M21a：应用内可见 WebView 过人机验证 + Cookie 持久化（v8）与 WebView 双向同步 + 引擎兼容 A/B/C/D 四簇；新增 `ParseFailureKind.loginRequired` | Accepted（2026-10-23，M21a 规格前置；用户裁决四项） | 本次新增 |

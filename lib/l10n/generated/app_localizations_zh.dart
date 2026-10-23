@@ -1140,4 +1140,199 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerAudioPlainHttp => '这条音轨使用明文 HTTP。请在设置中开启「允许明文 HTTP」后播放。';
+
+  @override
+  String get bookmarkTitle => '书签';
+
+  @override
+  String get bookmarkEmpty => '还没有书签。阅读时点击工具条上的书签按钮即可标记当前位置。';
+
+  @override
+  String get bookmarkLoadFailed => '书签加载失败。';
+
+  @override
+  String get bookmarkAdd => '添加书签';
+
+  @override
+  String get bookmarkRemove => '取消书签';
+
+  @override
+  String get bookmarkAdded => '已添加书签';
+
+  @override
+  String get bookmarkRemoved => '已取消书签';
+
+  @override
+  String get bookmarkFailed => '书签操作失败。';
+
+  @override
+  String get bookmarkDeleteAction => '删除书签';
+
+  @override
+  String get bookSourceReadingRecords => '阅读记录';
+
+  @override
+  String get readingRecordsTitle => '阅读记录';
+
+  @override
+  String get readingRecordsEmpty => '还没有阅读记录。读满一分钟的会话才会记录。';
+
+  @override
+  String get readingRecordsLoadFailed => '阅读记录加载失败。';
+
+  @override
+  String bookReadingRecordsTitle(String book) {
+    return '阅读记录 · $book';
+  }
+
+  @override
+  String get bookReadingRecordsEmpty => '这本书还没有阅读记录。';
+
+  @override
+  String readingRecordMinutes(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String readingRecordHours(int hours) {
+    return '$hours 小时';
+  }
+
+  @override
+  String readingRecordHoursMinutes(int hours, int minutes) {
+    return '$hours 小时 $minutes 分钟';
+  }
+
+  @override
+  String get myBookmarks => '书签';
+
+  @override
+  String get myBookmarksBody => '全部标记过的位置';
+
+  @override
+  String get myReadingRecords => '阅读记录';
+
+  @override
+  String get myReadingRecordsBody => '按天查看读过的书';
+
+  @override
+  String get shelfManageGroups => '管理分组';
+
+  @override
+  String get shelfGroupAll => '全部';
+
+  @override
+  String get shelfGroupUngrouped => '未分组';
+
+  @override
+  String get shelfGroupEmpty => '这个分组里还没有书。';
+
+  @override
+  String get shelfGroupsTitle => '分组管理';
+
+  @override
+  String get shelfGroupsEmpty => '还没有分组。点右下角新建一个。';
+
+  @override
+  String get shelfGroupCreate => '新建分组';
+
+  @override
+  String get shelfGroupCreateAction => '新建';
+
+  @override
+  String get shelfGroupNameHint => '分组名称';
+
+  @override
+  String get shelfGroupRename => '重命名';
+
+  @override
+  String get shelfGroupRenameTitle => '重命名分组';
+
+  @override
+  String get shelfGroupDelete => '删除分组';
+
+  @override
+  String get shelfGroupDeleteTitle => '删除分组';
+
+  @override
+  String get shelfGroupDeleteBody => '组里的书会回到「未分组」，不会被删除。';
+
+  @override
+  String get shelfGroupNameTaken => '已经有同名分组了。';
+
+  @override
+  String get shelfSelectionExit => '退出多选';
+
+  @override
+  String shelfSelectionCount(int count) {
+    return '已选 $count 本';
+  }
+
+  @override
+  String get shelfSelectionClear => '取消全选';
+
+  @override
+  String get shelfSelectAll => '全选';
+
+  @override
+  String get shelfBatchAction => '批量操作';
+
+  @override
+  String get shelfBatchGroup => '改分组';
+
+  @override
+  String get bookSourceShelfGroup => '改分组';
+
+  @override
+  String get bookSourceShelfGroupHint => '加入书架后才能分组。';
+
+  @override
+  String get bookSourceChangeCover => '换封面';
+
+  @override
+  String get bookSourceResetCover => '恢复默认封面';
+
+  @override
+  String get bookSourceBookCache => '本书缓存';
+
+  @override
+  String bookSourceBookCacheCount(int count) {
+    return '已缓存 $count 章';
+  }
+
+  @override
+  String get bookSourceBookCacheClear => '清理本书缓存';
+
+  @override
+  String bookSourceBookCacheCleared(int count) {
+    return '已清理 $count 项缓存';
+  }
+
+  @override
+  String get bookSourceBookCacheFailed => '缓存操作失败。';
+
+  @override
+  String sourceVerificationTitle(String title, String source) {
+    return '$title · $source';
+  }
+
+  @override
+  String get sourceVerificationDone => '完成';
+
+  @override
+  String get sourceVerificationFailed => '验证未完成。';
+
+  @override
+  String sourceCaptchaTitle(String source) {
+    return '图片验证码 · $source';
+  }
+
+  @override
+  String get sourceCaptchaImage => '验证码图片';
+
+  @override
+  String get sourceCaptchaHint => '输入图中的字符';
+
+  @override
+  String get sourceCaptchaConfirm => '确定';
 }

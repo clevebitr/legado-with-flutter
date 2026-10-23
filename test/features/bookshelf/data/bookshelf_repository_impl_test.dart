@@ -1,9 +1,11 @@
 import 'package:drift/native.dart';
 import 'package:flutter_reader/core/storage/bookshelf_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
+import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/bookshelf/data/bookshelf_repository_impl.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_candidate.dart';
+import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_group.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_status.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +33,7 @@ void main() {
       clock = _FixedClock(DateTime(2026, 10, 21));
       repository = BookshelfRepositoryImpl(
         dao: BookshelfDao(database, clock: clock),
+        groups: ShelfGroupDao(database, clock: clock),
       );
     });
 
@@ -189,6 +192,154 @@ void main() {
       expect(progress?.chapterName, '第九章');
       expect(progress?.charOffset, 42);
       expect(progress?.updatedAt, clock.now());
+    });
+
+    test('removeMany_whenCalled_deletesEveryChosenEntry', () async {
+      await repository.add(candidate());
+      await repository.add(candidate(bookUrl: 'https://source.test/book/2'));
+      await repository.add(candidate(bookUrl: 'https://source.test/book/3'));
+      final List<ShelvedBook> stored = await repository.getAll();
+      await repository.saveProgress(
+        sourceUrl: 'https://source.test',
+        bookUrl: 'https://source.test/book/1',
+        chapterUrl: 'https://source.test/1.html',
+      );
+
+      await repository.removeMany(<int>[stored.first.id, stored.last.id]);
+
+      final List<ShelvedBook> left = await repository.getAll();
+      expect(left, hasLength(1));
+      // 进度跟着行一起删：留下的那本才有进度查询的意义（M19 的批量删除）。
+      expect(
+        await repository.findProgress(
+          sourceUrl: 'https://source.test',
+          bookUrl: 'https://source.test/book/1',
+        ),
+        isNull,
+      );
+    });
+
+    test('createGroup_whenTheNameIsNew_answersTheGroup', () async {
+      final ShelfGroup? group = await repository.createGroup('  仙侠 ');
+
+      expect(group?.name, '仙侠');
+      expect(await repository.getGroups(), hasLength(1));
+    });
+
+    test('createGroup_whenTheNameIsBlank_answersNull', () async {
+      expect(await repository.createGroup('   '), isNull);
+      expect(await repository.getGroups(), isEmpty);
+    });
+
+    test('createGroup_whenTheNameIsTaken_answersNull', () async {
+      await repository.createGroup('仙侠');
+
+      expect(await repository.createGroup('仙侠'), isNull);
+      expect(await repository.getGroups(), hasLength(1));
+    });
+
+    test('renameGroup_whenTheNameIsTakenByAnother_answersFalse', () async {
+      await repository.createGroup('仙侠');
+      final ShelfGroup other = (await repository.createGroup('历史'))!;
+
+      expect(await repository.renameGroup(id: other.id, name: '仙侠'), isFalse);
+      expect(
+        (await repository.getGroups()).map((ShelfGroup g) => g.name),
+        containsAll(<String>['仙侠', '历史']),
+      );
+    });
+
+    test('renameGroup_whenOnlyTheCaseDiffers_answersTrue', () async {
+      final ShelfGroup group = (await repository.createGroup('仙侠'))!;
+
+      expect(await repository.renameGroup(id: group.id, name: ' 修真 '), isTrue);
+      expect((await repository.getGroups()).single.name, '修真');
+    });
+
+    test('renameGroup_whenTheNameIsBlank_answersFalse', () async {
+      final ShelfGroup group = (await repository.createGroup('仙侠'))!;
+
+      expect(await repository.renameGroup(id: group.id, name: ' '), isFalse);
+    });
+
+    test('deleteGroup_whenTheGroupHasBooks_movesThemToUngrouped', () async {
+      await repository.add(candidate());
+      final ShelfGroup group = (await repository.createGroup('仙侠'))!;
+      final ShelvedBook book = (await repository.getAll()).single;
+      await repository.setGroupFor(ids: <int>[book.id], groupId: group.id);
+
+      await repository.deleteGroup(group.id);
+
+      expect(await repository.getGroups(), isEmpty);
+      expect((await repository.getAll()).single.groupId, isNull);
+    });
+
+    test('reorderGroups_whenCalled_keepsTheGivenOrder', () async {
+      final ShelfGroup first = (await repository.createGroup('仙侠'))!;
+      final ShelfGroup second = (await repository.createGroup('历史'))!;
+
+      await repository.reorderGroups(<int>[second.id, first.id]);
+
+      expect(
+        (await repository.getGroups()).map((ShelfGroup g) => g.name),
+        <String>['历史', '仙侠'],
+      );
+    });
+
+    test('setPinnedFor_whenCalled_pinsEveryChosenEntry', () async {
+      await repository.add(candidate());
+      final ShelvedBook book = (await repository.getAll()).single;
+
+      await repository.setPinnedFor(ids: <int>[book.id], isPinned: true);
+
+      expect((await repository.getAll()).single.isPinned, isTrue);
+    });
+
+    test('setStatusFor_whenCalled_setsEveryChosenEntry', () async {
+      await repository.add(candidate());
+      final ShelvedBook book = (await repository.getAll()).single;
+
+      await repository.setStatusFor(
+        ids: <int>[book.id],
+        status: ShelfStatus.read,
+      );
+
+      expect((await repository.getAll()).single.status, ShelfStatus.read);
+    });
+
+    test('saveCustomCover_whenCalled_keepsThePathAndCanClearIt', () async {
+      await repository.add(candidate());
+      final ShelvedBook book = (await repository.getAll()).single;
+
+      await repository.saveCustomCover(id: book.id, path: '/covers/abc.jpg');
+      expect(
+        (await repository.getAll()).single.customCoverPath,
+        '/covers/abc.jpg',
+      );
+
+      await repository.saveCustomCover(id: book.id, path: null);
+      expect((await repository.getAll()).single.customCoverPath, isNull);
+    });
+
+    test('findByUrl_whenTheBookIsOnTheShelf_answersItsRow', () async {
+      await repository.add(candidate());
+
+      final ShelvedBook? found = await repository.findByUrl(
+        sourceUrl: 'https://source.test',
+        bookUrl: 'https://source.test/book/1',
+      );
+
+      expect(found?.name, '剑来');
+    });
+
+    test('findByUrl_whenTheBookIsNotOnTheShelf_answersNull', () async {
+      expect(
+        await repository.findByUrl(
+          sourceUrl: 'https://source.test',
+          bookUrl: 'https://source.test/book/9',
+        ),
+        isNull,
+      );
     });
   });
 }

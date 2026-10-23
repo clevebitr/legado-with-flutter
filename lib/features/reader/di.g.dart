@@ -342,6 +342,121 @@ final class ReaderProgressStoreProvider
 String _$readerProgressStoreHash() =>
     r'280a7662c55e36009b1af3fb3403791c5970233e';
 
+/// Provides the bookmark store (`docs/dev/roadmap.md` M19, ADR-0066 §决策 3).
+///
+/// The reader owns this table, so the provider binds the real implementation here instead of
+/// waiting for the composition root: nothing outside the feature may write a bookmark.
+
+@ProviderFor(bookmarkRepository)
+final bookmarkRepositoryProvider = BookmarkRepositoryProvider._();
+
+/// Provides the bookmark store (`docs/dev/roadmap.md` M19, ADR-0066 §决策 3).
+///
+/// The reader owns this table, so the provider binds the real implementation here instead of
+/// waiting for the composition root: nothing outside the feature may write a bookmark.
+
+final class BookmarkRepositoryProvider
+    extends
+        $FunctionalProvider<
+          BookmarkRepository,
+          BookmarkRepository,
+          BookmarkRepository
+        >
+    with $Provider<BookmarkRepository> {
+  /// Provides the bookmark store (`docs/dev/roadmap.md` M19, ADR-0066 §决策 3).
+  ///
+  /// The reader owns this table, so the provider binds the real implementation here instead of
+  /// waiting for the composition root: nothing outside the feature may write a bookmark.
+  BookmarkRepositoryProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookmarkRepositoryProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookmarkRepositoryHash();
+
+  @$internal
+  @override
+  $ProviderElement<BookmarkRepository> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BookmarkRepository create(Ref ref) {
+    return bookmarkRepository(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookmarkRepository value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookmarkRepository>(value),
+    );
+  }
+}
+
+String _$bookmarkRepositoryHash() =>
+    r'a65648b02ac567d3dc8acbade5aabf5541ac4028';
+
+/// Provides the reading-record store (`docs/dev/roadmap.md` M19, ADR-0066 §决策 4).
+
+@ProviderFor(readingRecordRepository)
+final readingRecordRepositoryProvider = ReadingRecordRepositoryProvider._();
+
+/// Provides the reading-record store (`docs/dev/roadmap.md` M19, ADR-0066 §决策 4).
+
+final class ReadingRecordRepositoryProvider
+    extends
+        $FunctionalProvider<
+          ReadingRecordRepository,
+          ReadingRecordRepository,
+          ReadingRecordRepository
+        >
+    with $Provider<ReadingRecordRepository> {
+  /// Provides the reading-record store (`docs/dev/roadmap.md` M19, ADR-0066 §决策 4).
+  ReadingRecordRepositoryProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'readingRecordRepositoryProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$readingRecordRepositoryHash();
+
+  @$internal
+  @override
+  $ProviderElement<ReadingRecordRepository> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  ReadingRecordRepository create(Ref ref) {
+    return readingRecordRepository(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ReadingRecordRepository value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ReadingRecordRepository>(value),
+    );
+  }
+}
+
+String _$readingRecordRepositoryHash() =>
+    r'eefa1b9de76dc114d9cef6566a91cf2df8c99cae';
+
 /// Provides the source-switch port, **unbound** by default.
 ///
 /// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity

@@ -239,5 +239,86 @@ void main() {
         isNull,
       );
     });
+
+    test('countByScope_givenTwoEntriesOfOneBook_countsThem', () async {
+      await dao.put(
+        sourceId: sourceId,
+        ruleField: ruleField,
+        url: url,
+        page: page,
+        payload: 'a',
+        ttl: const Duration(hours: 1),
+        scopeKey: 'book-1',
+      );
+      await dao.put(
+        sourceId: sourceId,
+        ruleField: ruleField,
+        url: 'https://example.com/book/2',
+        page: page,
+        payload: 'b',
+        ttl: const Duration(hours: 1),
+        scopeKey: 'book-1',
+      );
+      await dao.put(
+        sourceId: sourceId,
+        ruleField: ruleField,
+        url: 'https://example.com/book/3',
+        page: page,
+        payload: 'c',
+        ttl: const Duration(hours: 1),
+        scopeKey: 'book-2',
+      );
+
+      expect(await dao.countByScope('book-1'), 2);
+      expect(await dao.countByScope('book-2'), 1);
+      expect(await dao.countByScope('book-3'), 0);
+    });
+
+    test('deleteByScope_givenTwoBooks_removesOnlyThatBook', () async {
+      await dao.put(
+        sourceId: sourceId,
+        ruleField: ruleField,
+        url: url,
+        page: page,
+        payload: 'a',
+        ttl: const Duration(hours: 1),
+        scopeKey: 'book-1',
+      );
+      await dao.put(
+        sourceId: sourceId,
+        ruleField: ruleField,
+        url: url,
+        page: 2,
+        payload: 'b',
+        ttl: const Duration(hours: 1),
+        scopeKey: 'book-2',
+      );
+
+      expect(await dao.deleteByScope('book-1'), 1);
+      expect(await dao.countByScope('book-1'), 0);
+      expect(await dao.countByScope('book-2'), 1);
+    });
+
+    test('put_givenNoScope_storesAnUnscopedEntry', () async {
+      await dao.put(
+        sourceId: sourceId,
+        ruleField: ruleField,
+        url: url,
+        page: page,
+        payload: 'a',
+        ttl: const Duration(hours: 1),
+      );
+
+      expect(await dao.countByScope('book-1'), 0);
+      expect(
+        await dao.get(
+          sourceId: sourceId,
+          ruleField: ruleField,
+          url: url,
+          page: page,
+        ),
+        'a',
+      );
+    });
   });
 }

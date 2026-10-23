@@ -1177,4 +1177,204 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get readerAudioPlainHttp =>
       'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.';
+
+  @override
+  String get bookmarkTitle => 'Bookmarks';
+
+  @override
+  String get bookmarkEmpty =>
+      'No bookmarks yet. Tap the bookmark button in the reader toolbar to mark your place.';
+
+  @override
+  String get bookmarkLoadFailed => 'Bookmarks could not be loaded.';
+
+  @override
+  String get bookmarkAdd => 'Add bookmark';
+
+  @override
+  String get bookmarkRemove => 'Remove bookmark';
+
+  @override
+  String get bookmarkAdded => 'Bookmark added';
+
+  @override
+  String get bookmarkRemoved => 'Bookmark removed';
+
+  @override
+  String get bookmarkFailed => 'The bookmark could not be saved.';
+
+  @override
+  String get bookmarkDeleteAction => 'Delete bookmark';
+
+  @override
+  String get bookSourceReadingRecords => 'Reading records';
+
+  @override
+  String get readingRecordsTitle => 'Reading records';
+
+  @override
+  String get readingRecordsEmpty =>
+      'No reading records yet. Sessions shorter than a minute are not recorded.';
+
+  @override
+  String get readingRecordsLoadFailed => 'Reading records could not be loaded.';
+
+  @override
+  String bookReadingRecordsTitle(String book) {
+    return 'Reading records · $book';
+  }
+
+  @override
+  String get bookReadingRecordsEmpty => 'This book has no reading records yet.';
+
+  @override
+  String readingRecordMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String readingRecordHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String readingRecordHoursMinutes(int hours, int minutes) {
+    return '$hours h $minutes min';
+  }
+
+  @override
+  String get myBookmarks => 'Bookmarks';
+
+  @override
+  String get myBookmarksBody => 'Every position you marked';
+
+  @override
+  String get myReadingRecords => 'Reading records';
+
+  @override
+  String get myReadingRecordsBody => 'What you read, by day';
+
+  @override
+  String get shelfManageGroups => 'Manage groups';
+
+  @override
+  String get shelfGroupAll => 'All';
+
+  @override
+  String get shelfGroupUngrouped => 'Ungrouped';
+
+  @override
+  String get shelfGroupEmpty => 'No books in this group yet.';
+
+  @override
+  String get shelfGroupsTitle => 'Groups';
+
+  @override
+  String get shelfGroupsEmpty =>
+      'No groups yet. Create one with the button below.';
+
+  @override
+  String get shelfGroupCreate => 'New group';
+
+  @override
+  String get shelfGroupCreateAction => 'Create';
+
+  @override
+  String get shelfGroupNameHint => 'Group name';
+
+  @override
+  String get shelfGroupRename => 'Rename';
+
+  @override
+  String get shelfGroupRenameTitle => 'Rename group';
+
+  @override
+  String get shelfGroupDelete => 'Delete group';
+
+  @override
+  String get shelfGroupDeleteTitle => 'Delete group';
+
+  @override
+  String get shelfGroupDeleteBody =>
+      'The books go back to ungrouped and are not deleted.';
+
+  @override
+  String get shelfGroupNameTaken => 'A group with this name already exists.';
+
+  @override
+  String get shelfSelectionExit => 'Exit selection';
+
+  @override
+  String shelfSelectionCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String get shelfSelectionClear => 'Clear selection';
+
+  @override
+  String get shelfSelectAll => 'Select all';
+
+  @override
+  String get shelfBatchAction => 'Batch actions';
+
+  @override
+  String get shelfBatchGroup => 'Move to group';
+
+  @override
+  String get bookSourceShelfGroup => 'Move to group';
+
+  @override
+  String get bookSourceShelfGroupHint =>
+      'Add the book to the shelf before grouping it.';
+
+  @override
+  String get bookSourceChangeCover => 'Change cover';
+
+  @override
+  String get bookSourceResetCover => 'Reset cover';
+
+  @override
+  String get bookSourceBookCache => 'Book cache';
+
+  @override
+  String bookSourceBookCacheCount(int count) {
+    return '$count chapters cached';
+  }
+
+  @override
+  String get bookSourceBookCacheClear => 'Clear this book\'s cache';
+
+  @override
+  String bookSourceBookCacheCleared(int count) {
+    return 'Cleared $count cached items';
+  }
+
+  @override
+  String get bookSourceBookCacheFailed => 'The cache action failed.';
+
+  @override
+  String sourceVerificationTitle(String title, String source) {
+    return '$title · $source';
+  }
+
+  @override
+  String get sourceVerificationDone => 'Done';
+
+  @override
+  String get sourceVerificationFailed => 'Verification was not completed.';
+
+  @override
+  String sourceCaptchaTitle(String source) {
+    return 'Captcha · $source';
+  }
+
+  @override
+  String get sourceCaptchaImage => 'Captcha image';
+
+  @override
+  String get sourceCaptchaHint => 'Type the characters in the image';
+
+  @override
+  String get sourceCaptchaConfirm => 'Confirm';
 }

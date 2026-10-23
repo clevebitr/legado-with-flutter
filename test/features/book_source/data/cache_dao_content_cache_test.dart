@@ -47,6 +47,7 @@ final class _FailingCacheDao extends CacheDao {
     required int page,
     required String payload,
     required Duration ttl,
+    String? scopeKey,
   }) async => throw error;
 }
 
@@ -124,6 +125,73 @@ void main() {
       await expectLater(
         failing.write(sourceId: sourceId, url: url, body: body),
         completes,
+      );
+    });
+
+    test('write_givenABookUrl_recordsTheScopeOnTheEntry', () async {
+      await cache.write(
+        sourceId: sourceId,
+        url: url,
+        body: body,
+        bookUrl: 'https://example-novel.test/book/1',
+      );
+
+      expect(
+        await cache.countForBook(
+          sourceId: sourceId,
+          bookUrl: 'https://example-novel.test/book/1',
+        ),
+        1,
+      );
+      // 作用域不参与键计算：读仍是同一个入口。
+      expect(await cache.read(sourceId: sourceId, url: url), body);
+    });
+
+    test('countForBook_givenNoEntryForThatBook_answersZero', () async {
+      await cache.write(
+        sourceId: sourceId,
+        url: url,
+        body: body,
+        bookUrl: 'https://example-novel.test/book/1',
+      );
+
+      expect(
+        await cache.countForBook(
+          sourceId: sourceId,
+          bookUrl: 'https://example-novel.test/book/2',
+        ),
+        0,
+      );
+    });
+
+    test('clearForBook_givenTwoBooks_removesOnlyThatBook', () async {
+      await cache.write(
+        sourceId: sourceId,
+        url: url,
+        body: body,
+        bookUrl: 'https://example-novel.test/book/1',
+      );
+      await cache.write(
+        sourceId: sourceId,
+        url: 'https://example-novel.test/book/2/1.html',
+        body: body,
+        bookUrl: 'https://example-novel.test/book/2',
+      );
+
+      expect(
+        await cache.clearForBook(
+          sourceId: sourceId,
+          bookUrl: 'https://example-novel.test/book/1',
+        ),
+        1,
+      );
+      expect(await cache.read(sourceId: sourceId, url: url), isNull);
+      expect(
+        await cache.countForBook(
+          sourceId: sourceId,
+          bookUrl: 'https://example-novel.test/book/2',
+        ),
+        1,
       );
     });
   });

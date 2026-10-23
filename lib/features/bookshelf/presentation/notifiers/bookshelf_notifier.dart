@@ -51,6 +51,50 @@ class Bookshelf extends _$Bookshelf {
   Future<ParseResult<void>> remove(int id) =>
       _write(() => ref.read(bookshelfRepositoryProvider).remove(id));
 
+  /// Deletes every entry in [ids] together with its progress (M19's batch delete).
+  Future<ParseResult<void>> removeMany(List<int> ids) =>
+      _write(() => ref.read(bookshelfRepositoryProvider).removeMany(ids));
+
+  /// Moves entries [ids] into [groupId] (`null` = 未分组).
+  Future<ParseResult<void>> setGroupFor({
+    required List<int> ids,
+    required int? groupId,
+  }) => _write(
+    () => ref
+        .read(bookshelfRepositoryProvider)
+        .setGroupFor(ids: ids, groupId: groupId),
+  );
+
+  /// Pins or unpins entries [ids].
+  Future<ParseResult<void>> setPinnedFor({
+    required List<int> ids,
+    required bool isPinned,
+  }) => _write(
+    () => ref
+        .read(bookshelfRepositoryProvider)
+        .setPinnedFor(ids: ids, isPinned: isPinned),
+  );
+
+  /// Sets the status of entries [ids].
+  Future<ParseResult<void>> setStatusFor({
+    required List<int> ids,
+    required ShelfStatus status,
+  }) => _write(
+    () => ref
+        .read(bookshelfRepositoryProvider)
+        .setStatusFor(ids: ids, status: status),
+  );
+
+  /// Remembers [path] as entry [id]'s own cover, or clears it with `null`.
+  Future<ParseResult<void>> saveCustomCover({
+    required int id,
+    required String? path,
+  }) => _write(
+    () => ref
+        .read(bookshelfRepositoryProvider)
+        .saveCustomCover(id: id, path: path),
+  );
+
   /// Runs one repository write, absorbs failures, and reloads the shelf afterwards.
   ///
   /// The catch is the `presentation` boundary C-ERR-2 allows (`on Exception`, logged, converted

@@ -15,6 +15,12 @@ final class FakeContentCache implements ContentCache {
   /// The keys written, in order.
   final List<String> writes = <String>[];
 
+  /// The `bookUrl` of every write, in order (`null` for an unscoped write).
+  final List<String?> writeScopes = <String?>[];
+
+  /// The per-book counts/clears asked for, in order.
+  final List<String> scopeCalls = <String>[];
+
   @override
   Future<String?> read({required String sourceId, required String url}) async {
     reads.add('$sourceId|$url');
@@ -27,8 +33,32 @@ final class FakeContentCache implements ContentCache {
     required String sourceId,
     required String url,
     required String body,
+    String? bookUrl,
   }) async {
     writes.add('$sourceId|$url');
+    writeScopes.add(bookUrl);
     entries['$sourceId|$url'] = body;
+  }
+
+  @override
+  Future<int> countForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async {
+    scopeCalls.add('count|$sourceId|$bookUrl');
+
+    return entries.length;
+  }
+
+  @override
+  Future<int> clearForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async {
+    scopeCalls.add('clear|$sourceId|$bookUrl');
+    final int removed = entries.length;
+    entries.clear();
+
+    return removed;
   }
 }

@@ -1,37 +1,20 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:m3e_design/m3e_design.dart';
 
-/// The width/height ratio of a book cover, used when one side is derived from the other.
+/// A book cover with a placeholder, an error state and a bounded decode size.
 ///
-/// Real covers are close to 3:4 (a paperback), and keeping the ratio in one place is what stops
-/// the four lists from showing four slightly different rectangles.
-const double bookCoverAspectRatio = 3 / 4;
-
-/// A book cover with a placeholder, an error state and a bounded decode size
-/// (`docs/dev/roadmap.md` §3.9-S1).
-///
-/// Four decisions are worth knowing:
-///
-/// * **it is decorative**: a row already names the book next to the cover, so announcing “image”
-///   again would only make a screen reader repeat itself. The image is excluded from semantics and
-///   the caller owns the label (C-UI-7);
-/// * **the decode is bounded** by [width] × the device's pixel ratio, because a cover is a
-///   thumbnail: decoding a 1200 px JPEG into a 48 px box is the kind of work C-PERF-5 keeps out of
-///   the list;
-/// * **a missing URL is a state, not an error**: `null` / empty renders the same placeholder an
-///   unreachable image does, so a source without a `coverUrl` rule looks intentional instead of
-///   broken;
-/// * **the source is an `ImageProvider`**, not a URL: production always builds a
-///   `CachedNetworkImageProvider` (the disk/memory cache policy belongs to that package and is not
-///   re-implemented here), while a test can hand in a `MemoryImage` and exercise the loaded and
-///   failed branches without a network stack or a fake cache manager.
+/// The image is decorative and excluded from semantics; a `null` or empty URL
+/// renders the same placeholder as an unreachable one.
 class CoverImage extends StatelessWidget {
   /// Creates a cover of [width] × [height] logical pixels.
   const CoverImage({
     required this.url,
     required this.width,
     required this.height,
+    this.localPath,
     this.borderRadius,
     this.image,
     super.key,
@@ -40,7 +23,10 @@ class CoverImage extends StatelessWidget {
   /// The absolute cover URL, or `null` when the source declared none.
   final String? url;
 
-  /// Logical width; the decode size derives from it and the device pixel ratio.
+  /// Path of a locally picked cover, which wins over [url] when set.
+  final String? localPath;
+
+  /// Logical width; also drives the decode size.
   final double width;
 
   /// Logical height.
@@ -49,25 +35,31 @@ class CoverImage extends StatelessWidget {
   /// Corner radius; defaults to the theme's small square radius.
   final BorderRadius? borderRadius;
 
-  /// Overrides the image source; `null` means “use [url] through the network cache”.
+  /// Overrides the image source; `null` loads [url] through the network cache.
   ///
-  /// It exists so the loaded and failed branches are reachable in a widget test. Production never
-  /// passes it: every list hands over a URL only.
+  /// Exists so tests can reach the loaded and failed branches.
   final ImageProvider? image;
 
   @override
   Widget build(BuildContext context) {
     final M3ETheme tokens = context.m3e;
-    // 直角族的小圆角（8）= 书封，不是胶囊：`round` 族在 xs 就已经是 999。
+    // 书封用直角族的小圆角；round 族在 xs 已是胶囊形。
     final BorderRadius radius = borderRadius ?? tokens.shapes.square.sm;
 
+    final String? local = localPath;
     final String? source = url;
     final ImageProvider? provider =
         image ??
-        (source == null || source.isEmpty
-            ? null
+        (local == null || local.isEmpty
+            ? (source == null || source.isEmpty
+                  ? null
+                  : ResizeImage(
+                      CachedNetworkImageProvider(source),
+                      width: _pixels(context),
+                      policy: ResizeImagePolicy.fit,
+                    ))
             : ResizeImage(
-                CachedNetworkImageProvider(source),
+                FileImage(File(local)),
                 width: _pixels(context),
                 policy: ResizeImagePolicy.fit,
               ));
@@ -75,7 +67,7 @@ class CoverImage extends StatelessWidget {
       return _placeholder(radius, tokens);
     }
 
-    // 封面是装饰：书名就在旁边，再报一遍「图片」只会让读屏重复（C-UI-7）。
+    // 封面是装饰：书名就在旁边，再报一遍「图片」只会让读屏重复。
     return ExcludeSemantics(
       child: ClipRRect(
         borderRadius: radius,
@@ -84,7 +76,7 @@ class CoverImage extends StatelessWidget {
           width: width,
           height: height,
           fit: BoxFit.cover,
-          // 还没解出第一帧时画占位块；不画图标，一闪而过的书本形状会被当成封面。
+          // 首帧未解出时画占位块；不画图标，避免被误认为封面。
           frameBuilder:
               (
                 BuildContext context,
@@ -94,7 +86,7 @@ class CoverImage extends StatelessWidget {
               ) => frame == null && !wasSynchronouslyLoaded
               ? _placeholder(radius, tokens, showIcon: false)
               : child,
-          // 加载失败与「没有封面」画同一个占位：站点 404 与规则没给封面是同一件事。
+          // 加载失败与「没有封面」共用同一占位。
           errorBuilder: (
             BuildContext context,
             Object error,
@@ -105,11 +97,11 @@ class CoverImage extends StatelessWidget {
     );
   }
 
-  /// The decode width in physical pixels, bounded so a thumbnail stays a thumbnail.
+  // 按设备像素比放大，让缩略图只解码到实际需要的尺寸。
   int _pixels(BuildContext context) =>
       (width * MediaQuery.devicePixelRatioOf(context)).round();
 
-  /// The empty / loading / failed state: the surface tint plus an optional book glyph.
+  // 空、加载中与失败三种状态共用：表面色块加可选书本图标。
   Widget _placeholder(
     BorderRadius radius,
     M3ETheme tokens, {

@@ -1,4 +1,5 @@
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_candidate.dart';
+import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_group.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_status.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
 import 'package:flutter_reader/features/bookshelf/domain/repositories/bookshelf_repository.dart';
@@ -20,6 +21,11 @@ final class FakeBookshelfRepository implements BookshelfRepository {
 
   int _nextId = 1;
 
+  /// The groups the shelf has, in display order.
+  final List<ShelfGroup> groups = <ShelfGroup>[];
+
+  int _nextGroupId = 1;
+
   /// The entries currently stored, for assertions after a UI action.
   List<ShelvedBook> get entries => List<ShelvedBook>.unmodifiable(_books);
 
@@ -33,6 +39,8 @@ final class FakeBookshelfRepository implements BookshelfRepository {
     ShelfStatus status = ShelfStatus.tracking,
     bool isPinned = false,
     String? coverUrl,
+    int? groupId,
+    String? customCoverPath,
     ReadingProgressPosition? progress,
   }) {
     final ShelvedBook book = ShelvedBook(
@@ -44,6 +52,8 @@ final class FakeBookshelfRepository implements BookshelfRepository {
       coverUrl: coverUrl,
       status: status,
       isPinned: isPinned,
+      groupId: groupId,
+      customCoverPath: customCoverPath,
       addedAt: DateTime(2026, 10, 21),
       progress: progress,
     );
@@ -155,6 +165,144 @@ final class FakeBookshelfRepository implements BookshelfRepository {
   Future<void> remove(int id) async {
     _guard();
     _books.removeWhere((ShelvedBook book) => book.id == id);
+  }
+
+  @override
+  Future<void> removeMany(List<int> ids) async {
+    _guard();
+    _books.removeWhere((ShelvedBook book) => ids.contains(book.id));
+  }
+
+  @override
+  Future<List<ShelfGroup>> getGroups() async {
+    if (failReads) {
+      throw Exception('the shelf is unavailable');
+    }
+
+    return List<ShelfGroup>.unmodifiable(
+      groups.toList()..sort(
+        (ShelfGroup left, ShelfGroup right) =>
+            left.sortOrder.compareTo(right.sortOrder),
+      ),
+    );
+  }
+
+  @override
+  Future<ShelfGroup?> createGroup(String name) async {
+    _guard();
+    final String trimmed = name.trim();
+    if (trimmed.isEmpty ||
+        groups.any((ShelfGroup group) => group.name == trimmed)) {
+      return null;
+    }
+    final ShelfGroup group = ShelfGroup(
+      id: _nextGroupId++,
+      name: trimmed,
+      sortOrder: groups.length,
+    );
+    groups.add(group);
+
+    return group;
+  }
+
+  @override
+  Future<bool> renameGroup({required int id, required String name}) async {
+    _guard();
+    final String trimmed = name.trim();
+    if (trimmed.isEmpty ||
+        groups.any(
+          (ShelfGroup group) => group.id != id && group.name == trimmed,
+        )) {
+      return false;
+    }
+    final int index = groups.indexWhere((ShelfGroup group) => group.id == id);
+    if (index < 0) {
+      return false;
+    }
+    groups[index] = groups[index].copyWith(name: trimmed);
+
+    return true;
+  }
+
+  @override
+  Future<void> deleteGroup(int id) async {
+    _guard();
+    groups.removeWhere((ShelfGroup group) => group.id == id);
+    for (var index = 0; index < _books.length; index++) {
+      if (_books[index].groupId == id) {
+        _books[index] = _books[index].copyWith(groupId: null);
+      }
+    }
+  }
+
+  @override
+  Future<void> reorderGroups(List<int> ids) async {
+    _guard();
+    for (var order = 0; order < ids.length; order++) {
+      final int index = groups.indexWhere(
+        (ShelfGroup group) => group.id == ids[order],
+      );
+      if (index >= 0) {
+        groups[index] = groups[index].copyWith(sortOrder: order);
+      }
+    }
+  }
+
+  @override
+  Future<void> setGroupFor({
+    required List<int> ids,
+    required int? groupId,
+  }) async {
+    _guard();
+    _mapBooks(ids, (ShelvedBook book) => book.copyWith(groupId: groupId));
+  }
+
+  @override
+  Future<void> setPinnedFor({
+    required List<int> ids,
+    required bool isPinned,
+  }) async {
+    _guard();
+    _mapBooks(ids, (ShelvedBook book) => book.copyWith(isPinned: isPinned));
+  }
+
+  @override
+  Future<void> setStatusFor({
+    required List<int> ids,
+    required ShelfStatus status,
+  }) async {
+    _guard();
+    _mapBooks(ids, (ShelvedBook book) => book.copyWith(status: status));
+  }
+
+  @override
+  Future<void> saveCustomCover({required int id, required String? path}) async {
+    _guard();
+    _mapBooks(<int>[
+      id,
+    ], (ShelvedBook book) => book.copyWith(customCoverPath: path));
+  }
+
+  @override
+  Future<ShelvedBook?> findByUrl({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async {
+    if (failReads) {
+      throw Exception('the shelf is unavailable');
+    }
+    final int index = _indexOf(sourceUrl, bookUrl);
+
+    return index < 0 ? null : _books[index];
+  }
+
+  /// Applies [change] to every entry whose id is in [ids].
+  void _mapBooks(List<int> ids, ShelvedBook Function(ShelvedBook book) change) {
+    for (var index = 0; index < _books.length; index++) {
+      if (ids.contains(_books[index].id)) {
+        _books[index] = change(_books[index]);
+      }
+    }
   }
 
   @override

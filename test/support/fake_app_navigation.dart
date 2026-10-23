@@ -40,6 +40,17 @@ final class FakeAppNavigation implements AppNavigation {
   /// How many times the about page was opened.
   int aboutCalls = 0;
 
+  /// How many times the bookmark list was opened.
+  int bookmarksCalls = 0;
+
+  /// How many times the reading records were opened.
+  int readingRecordsCalls = 0;
+
+  /// Every `openBookReadingRecords` call's arguments, in the order the port takes them.
+  final List<({String sourceUrl, String bookUrl, String bookName})>
+  bookReadingRecordsCalls =
+      <({String sourceUrl, String bookUrl, String bookName})>[];
+
   @override
   void openBookshelf(BuildContext context) => shelfCalls++;
 
@@ -51,6 +62,24 @@ final class FakeAppNavigation implements AppNavigation {
 
   @override
   void openAbout(BuildContext context) => aboutCalls++;
+
+  @override
+  void openBookmarks(BuildContext context) => bookmarksCalls++;
+
+  @override
+  void openReadingRecords(BuildContext context) => readingRecordsCalls++;
+
+  @override
+  void openBookReadingRecords(
+    BuildContext context, {
+    required String sourceUrl,
+    required String bookUrl,
+    required String bookName,
+  }) => bookReadingRecordsCalls.add((
+    sourceUrl: sourceUrl,
+    bookUrl: bookUrl,
+    bookName: bookName,
+  ));
 
   @override
   void openReader(

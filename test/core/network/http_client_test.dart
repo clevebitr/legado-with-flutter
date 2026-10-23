@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data' show Uint8List;
 
 import 'package:dio/dio.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
@@ -179,6 +180,50 @@ void main() {
       );
 
       expect(response.body, '{}');
+    });
+
+    test('getBytes_givenABinaryBody_answersTheRawBytes', () async {
+      // 验证码图片 / 字体（ADR-0068）：字节门必须**不**走文本解码，原样返回。
+      final List<int> png = <int>[0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0x0a];
+      final _Fixture fixture = _buildClient();
+      fixture.adapter.enqueueResponse(bytes: png);
+
+      final ParseResult<Uint8List> result = await fixture.client.getBytes(
+        'https://example.test/code.jpg',
+        rulePath: 'java.getVerificationCode',
+      );
+
+      expect((result as ParseSuccess<Uint8List>).data, Uint8List.fromList(png));
+    });
+
+    test('getBytes_givenA404_answersThatFailure', () async {
+      final _Fixture fixture = _buildClient();
+      fixture.adapter.enqueueResponse(statusCode: 404);
+
+      final ParseResult<Uint8List> result = await fixture.client.getBytes(
+        'https://example.test/missing.jpg',
+        rulePath: 'java.getVerificationCode',
+      );
+
+      expect(
+        (result as ParseFailure<Uint8List>).kind,
+        ParseFailureKind.notFound,
+      );
+    });
+
+    test('getBytes_givenAPolicyRefusal_answersNetworkFailed', () async {
+      // 明文 HTTP 未开启时，字节门与文本门执行同一条策略（C-SEC-2）。
+      final _Fixture fixture = _buildClient();
+
+      final ParseResult<Uint8List> result = await fixture.client.getBytes(
+        'http://example.test/code.jpg',
+        rulePath: 'java.getVerificationCode',
+      );
+
+      expect(
+        (result as ParseFailure<Uint8List>).kind,
+        ParseFailureKind.networkFailed,
+      );
     });
 
     test('get_givenANonSuccessStatusWithACap_releasesTheBody', () async {

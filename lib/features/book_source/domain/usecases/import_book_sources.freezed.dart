@@ -17,7 +17,7 @@ mixin _$BookSourceImportReport {
 
 /// How many entries were new identities.
  int get inserted;/// How many entries matched a stored row and only refreshed its payload.
- int get refreshed;/// How many entries were rejected and left out (`ADR-0040` §决策 6).
+ int get refreshed;/// How many entries were rejected and left out.
  int get skipped;
 
 
@@ -188,7 +188,7 @@ class _BookSourceImportReport extends BookSourceImportReport {
 @override final  int inserted;
 /// How many entries matched a stored row and only refreshed its payload.
 @override final  int refreshed;
-/// How many entries were rejected and left out (`ADR-0040` §决策 6).
+/// How many entries were rejected and left out.
 @override final  int skipped;
 
 

@@ -62,6 +62,48 @@ void main() {
       expect(navigation.settingsCalls, 0);
     });
 
+    testWidgets('build_givenTheContentEntries_showsBookmarksAndRecords', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester);
+      final AppLocalizations l10n = AppLocalizations.of(
+        tester.element(find.byType(MyPage)),
+      );
+
+      expect(find.text(l10n.myBookmarks), findsOneWidget);
+      expect(find.text(l10n.myReadingRecords), findsOneWidget);
+    });
+
+    testWidgets('tap_whenBookmarksIsChosen_asksTheNavigationPort', (
+      WidgetTester tester,
+    ) async {
+      final FakeAppNavigation navigation = await _pump(tester);
+      final AppLocalizations l10n = AppLocalizations.of(
+        tester.element(find.byType(MyPage)),
+      );
+
+      await tester.tap(find.text(l10n.myBookmarks));
+      await tester.pumpAndSettle();
+
+      expect(navigation.bookmarksCalls, 1);
+      expect(navigation.readingRecordsCalls, 0);
+    });
+
+    testWidgets('tap_whenReadingRecordsAreChosen_asksTheNavigationPort', (
+      WidgetTester tester,
+    ) async {
+      final FakeAppNavigation navigation = await _pump(tester);
+      final AppLocalizations l10n = AppLocalizations.of(
+        tester.element(find.byType(MyPage)),
+      );
+
+      await tester.tap(find.text(l10n.myReadingRecords));
+      await tester.pumpAndSettle();
+
+      expect(navigation.readingRecordsCalls, 1);
+      expect(navigation.bookmarksCalls, 0);
+    });
+
     testWidgets('tap_whenAboutIsChosen_asksTheNavigationPort', (
       WidgetTester tester,
     ) async {
