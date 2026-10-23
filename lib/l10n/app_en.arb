@@ -895,6 +895,10 @@
   "@searchScopeAll": {
     "description": "Scope option: every enabled source."
   },
+  "searchScopeFellBack": "That scope no longer exists, so every enabled source was searched.",
+  "@searchScopeFellBack": {
+    "description": "Shown after a search ran because the picked scope (a deleted group or a removed source) named nothing any more."
+  },
   "searchScopeNamed": "Chosen sources",
   "@searchScopeNamed": {
     "description": "Scope chip label when specific sources are chosen."
@@ -1017,6 +1021,56 @@
   "@bookSourceListInvertSelection": {
     "description": "Selection mode: inverts the current selection."
   },
+  "bookSourceListSelectMode": "Select sources",
+  "@bookSourceListSelectMode": {
+    "description": "Toolbar action: enters the multi-select mode with nothing ticked yet."
+  },
+  "bookSourceListInvalidDisable": "Disable failing",
+  "@bookSourceListInvalidDisable": {
+    "description": "One-click action next to the failing filter: disables every failing source currently listed."
+  },
+  "bookSourceListInvalidDelete": "Delete failing",
+  "@bookSourceListInvalidDelete": {
+    "description": "One-click action next to the failing filter: deletes every failing source currently listed, after a confirmation."
+  },
+  "bookSourceListInvalidDisabled": "Disabled {count} failing sources",
+  "@bookSourceListInvalidDisabled": {
+    "description": "Feedback after the one-click disable.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListInvalidDeleteTitle": "Delete {count} failing sources?",
+  "@bookSourceListInvalidDeleteTitle": {
+    "description": "Confirmation title of the one-click delete for failing sources.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListGroupSelectSources": "Select every source in this group",
+  "@bookSourceListGroupSelectSources": {
+    "description": "Group dialog action: switches the list to the group and ticks all of its sources."
+  },
+  "bookSourceListGroupDeleteSources": "Delete every source in this group",
+  "@bookSourceListGroupDeleteSources": {
+    "description": "Group dialog action: deletes the sources of the group, not just the group label."
+  },
+  "bookSourceListGroupDeleteSourcesTitle": "Delete the {count} sources in “{group}”?",
+  "@bookSourceListGroupDeleteSourcesTitle": {
+    "description": "Confirmation title for deleting every source of a group.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
   "bookSourceListSelectedCount": "{count} selected",
   "@bookSourceListSelectedCount": {
     "description": "Selection mode: how many rows are selected.",
@@ -1025,6 +1079,10 @@
         "type": "int"
       }
     }
+  },
+  "bookSourceListBatchCheck": "Check selected",
+  "@bookSourceListBatchCheck": {
+    "description": "Batch action: opens the check page with exactly the selected sources ticked."
   },
   "bookSourceListBatchEnable": "Enable",
   "@bookSourceListBatchEnable": {

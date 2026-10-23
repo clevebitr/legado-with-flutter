@@ -1296,6 +1296,12 @@ abstract class AppLocalizations {
   /// **'All enabled sources'**
   String get searchScopeAll;
 
+  /// Shown after a search ran because the picked scope (a deleted group or a removed source) named nothing any more.
+  ///
+  /// In en, this message translates to:
+  /// **'That scope no longer exists, so every enabled source was searched.'**
+  String get searchScopeFellBack;
+
   /// Scope chip label when specific sources are chosen.
   ///
   /// In en, this message translates to:
@@ -1452,11 +1458,65 @@ abstract class AppLocalizations {
   /// **'Invert'**
   String get bookSourceListInvertSelection;
 
+  /// Toolbar action: enters the multi-select mode with nothing ticked yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Select sources'**
+  String get bookSourceListSelectMode;
+
+  /// One-click action next to the failing filter: disables every failing source currently listed.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable failing'**
+  String get bookSourceListInvalidDisable;
+
+  /// One-click action next to the failing filter: deletes every failing source currently listed, after a confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete failing'**
+  String get bookSourceListInvalidDelete;
+
+  /// Feedback after the one-click disable.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled {count} failing sources'**
+  String bookSourceListInvalidDisabled(int count);
+
+  /// Confirmation title of the one-click delete for failing sources.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {count} failing sources?'**
+  String bookSourceListInvalidDeleteTitle(int count);
+
+  /// Group dialog action: switches the list to the group and ticks all of its sources.
+  ///
+  /// In en, this message translates to:
+  /// **'Select every source in this group'**
+  String get bookSourceListGroupSelectSources;
+
+  /// Group dialog action: deletes the sources of the group, not just the group label.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete every source in this group'**
+  String get bookSourceListGroupDeleteSources;
+
+  /// Confirmation title for deleting every source of a group.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the {count} sources in “{group}”?'**
+  String bookSourceListGroupDeleteSourcesTitle(int count, String group);
+
   /// Selection mode: how many rows are selected.
   ///
   /// In en, this message translates to:
   /// **'{count} selected'**
   String bookSourceListSelectedCount(int count);
+
+  /// Batch action: opens the check page with exactly the selected sources ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'Check selected'**
+  String get bookSourceListBatchCheck;
 
   /// Batch action: enables every selected source.
   ///

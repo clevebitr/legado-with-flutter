@@ -649,6 +649,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchScopeAll => '全部启用源';
 
   @override
+  String get searchScopeFellBack => '所选范围已不存在，本次按全部启用书源搜索。';
+
+  @override
   String get searchScopeNamed => '指定书源';
 
   @override
@@ -733,9 +736,42 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bookSourceListInvertSelection => '反选';
 
   @override
+  String get bookSourceListSelectMode => '多选';
+
+  @override
+  String get bookSourceListInvalidDisable => '禁用失效源';
+
+  @override
+  String get bookSourceListInvalidDelete => '删除失效源';
+
+  @override
+  String bookSourceListInvalidDisabled(int count) {
+    return '已禁用 $count 个失效书源';
+  }
+
+  @override
+  String bookSourceListInvalidDeleteTitle(int count) {
+    return '删除 $count 个失效书源？';
+  }
+
+  @override
+  String get bookSourceListGroupSelectSources => '选中该组全部书源';
+
+  @override
+  String get bookSourceListGroupDeleteSources => '删除该组全部书源';
+
+  @override
+  String bookSourceListGroupDeleteSourcesTitle(int count, String group) {
+    return '删除「$group」的 $count 个书源？';
+  }
+
+  @override
   String bookSourceListSelectedCount(int count) {
     return '已选 $count 项';
   }
+
+  @override
+  String get bookSourceListBatchCheck => '校验';
 
   @override
   String get bookSourceListBatchEnable => '启用';

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/source_check_notifier.dart';
@@ -109,6 +110,154 @@ void main() {
 
       expect(find.text('picked'), findsOneWidget);
       expect(find.text('other'), findsNothing);
+    });
+
+    testWidgets('start_whenAGroupIsPicked_checksOnlyThatGroup', (
+      WidgetTester tester,
+    ) async {
+      // 回归点（ADR-0057）：「按分组筛选选源」是 M11 的交付规则（roadmap §3.8），不是列表装饰。
+      // 旧实现把分组 chip 当纯展示筛选，开始校验时又把**全库**丢进去，于是「只测这一组」不可能。
+      final FakeBookSourceRepository repository = FakeBookSourceRepository();
+      final StoredBookSource picked = repository.add(
+        source: loadCorpusBookSource().copyWith(name: 'picked'),
+        groupName: '精选',
+      );
+      final StoredBookSource other = repository.add(
+        source: loadCorpusBookSource().copyWith(
+          name: 'other',
+          url: 'https://other.test',
+        ),
+        groupName: '玄幻',
+      );
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+
+      await pumpSourceConsolePage(
+        tester,
+        page: const BookSourceCheckPage(),
+        repository: repository,
+        http: http,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+      await _useKeyword(tester, corpusKeyword);
+
+      await tester.tap(find.widgetWithText(FilterChip, '精选'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, l10n.bookSourceCheckStart),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.respondTimeOf(picked.id), isNotNull);
+      expect(
+        repository.respondTimeOf(other.id),
+        isNull,
+        reason: '被分组筛掉的源不该参与校验',
+      );
+    });
+
+    testWidgets('selection_whenARunFinished_canCheckADifferentSet', (
+      WidgetTester tester,
+    ) async {
+      // 回归点（ADR-0057）：勾选不再派生自「上一轮的 entries」。旧实现跑完一轮后每行都变成
+      // 只读的结论行，勾选被忽略，第二轮永远是同一批 —— 用户说的「无法多选书源并测试」。
+      final FakeBookSourceRepository repository = FakeBookSourceRepository();
+      final StoredBookSource first = repository.add(
+        source: loadCorpusBookSource().copyWith(name: 'first'),
+      );
+      final StoredBookSource second = repository.add(
+        source: loadCorpusBookSource().copyWith(
+          name: 'second',
+          url: 'https://second.test',
+        ),
+      );
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+
+      final ProviderContainer container = await pumpSourceConsolePage(
+        tester,
+        page: const BookSourceCheckPage(),
+        repository: repository,
+        http: http,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+      await _useKeyword(tester, corpusKeyword);
+
+      // 第一轮：默认全选。
+      await tester.tap(
+        find.widgetWithText(FilledButton, l10n.bookSourceCheckStart),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        container.read(sourceCheckProvider).entries.length,
+        2,
+        reason: '默认勾选 = 当前筛选可见的全部行',
+      );
+
+      // 第二轮：把 second 取消勾选，只跑 first。
+      await tester.tap(find.text('second'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, l10n.bookSourceCheckStart),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        <int>[
+          for (final SourceCheckEntry entry
+              in container.read(sourceCheckProvider).entries)
+            entry.sourceId,
+        ],
+        <int>[first.id],
+      );
+      // second 这一行回到未跑状态：勾选框空着，副标题还是它的 URL。
+      expect(find.text(second.source.url), findsOneWidget);
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.widgetWithText(CheckboxListTile, 'second'),
+            )
+            .value,
+        isFalse,
+      );
+    });
+
+    testWidgets('build_givenInitialSourceIds_ticksOnlyThem', (
+      WidgetTester tester,
+    ) async {
+      // 列表页「校验选中的书源」交过来的目标：只有这些行是勾上的，开始就直接跑它们
+      // （ADR-0057）。头像源也一样：带着明确目标进来时，类型筛选不能把它筛成不可见。
+      final FakeBookSourceRepository repository = FakeBookSourceRepository();
+      repository.add(source: loadCorpusBookSource().copyWith(name: 'kept'));
+      final StoredBookSource picked = repository.add(
+        source: loadCorpusBookSource().copyWith(
+          name: 'picked',
+          url: 'https://picked.test',
+          sourceType: BookSourceType.image,
+        ),
+      );
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+
+      final ProviderContainer container = await pumpSourceConsolePage(
+        tester,
+        page: BookSourceCheckPage(initialSourceIds: <int>{picked.id}),
+        repository: repository,
+        http: http,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      expect(find.text('picked'), findsOneWidget);
+      await tester.tap(
+        find.widgetWithText(FilledButton, l10n.bookSourceCheckStart),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        <int>[
+          for (final SourceCheckEntry entry
+              in container.read(sourceCheckProvider).entries)
+            entry.sourceId,
+        ],
+        <int>[picked.id],
+      );
     });
 
     testWidgets('start_givenAHealthyChain_showsPassedAndWritesTheVerdict', (
@@ -338,8 +487,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text(l10n.bookSourceCheckStatusSucceeded), findsOneWidget);
-      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(
+        find.textContaining(l10n.bookSourceCheckStatusSucceeded),
+        findsOneWidget,
+      );
+      // 结论行仍然可勾选：否则第二轮只能重跑同一批（ADR-0057）。
+      expect(find.byType(CheckboxListTile), findsOneWidget);
+      expect(
+        tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+        isTrue,
+      );
     });
   });
 }

@@ -124,7 +124,11 @@ class ReaderApp extends ConsumerWidget {
     ExploreRoute() => const ExplorePage(),
     BookSourceListRoute() => const BookSourceListPage(),
     BookSourceImportRoute() => const BookSourceImportPage(),
-    BookSourceCheckRoute() => const BookSourceCheckPage(),
+    BookSourceCheckRoute(:final Set<int>? sourceIds, :final String? group) =>
+      BookSourceCheckPage(
+        initialSourceIds: sourceIds ?? const <int>{},
+        initialGroup: group,
+      ),
     final BookSourceDebugRoute route => BookSourceDebugPage(
       sourceId: route.sourceId,
     ),

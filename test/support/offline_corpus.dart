@@ -126,34 +126,44 @@ Future<void> pumpReaderApp(
 ///
 /// Used for the per-page smoke tests of C-TEST-2, i.e. where navigation is not part
 /// of what is being asserted.
-Future<void> pumpBookSourcePage(
+Future<ProviderContainer?> pumpBookSourcePage(
   WidgetTester tester, {
   required Widget page,
   required BookSource? source,
   required FakeHttpClient http,
   FakeAppNavigation? navigation,
+  FakeBookSourceRepository? repository,
 }) async {
   _fixViewSize(tester);
 
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: <Override>[
+  final ProviderContainer container = ProviderContainer(
+    overrides: <Override>[
+      // 传 [repository] 时让真实的「当前源」派生（列表 → 选中行）：换源相关的测试需要它。
+      if (repository == null) ...<Override>[
         currentBookSourceProvider.overrideWithValue(source),
         // 发现页读的是**存储投影**（探索开关是列，ADR-0052 §决策 3），所以替身也要给出它：
         // 只覆盖 `currentBookSourceProvider` 会让页面误判「没有书源」。
         selectedBookSourceProvider.overrideWith(
           () => _FixedSelectedBookSource(source),
         ),
-        httpClientProvider.overrideWithValue(http),
-        // 跨 feature 的入口是端口（ADR-0042）：测试可以塞一个记录器，断言页面**请求了**
-        // 什么（哪一章 / 哪本书），而不是去追一个路由。
-        if (navigation != null)
-          appNavigationProvider.overrideWithValue(navigation),
-        // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
-        // （端口是 total，替身与适配器对页面是同一件事）。
-        contentCacheProvider.overrideWithValue(FakeContentCache()),
-        appLoggerProvider.overrideWithValue(_logger()),
-      ],
+      ] else
+        bookSourceRepositoryProvider.overrideWithValue(repository),
+      httpClientProvider.overrideWithValue(http),
+      // 跨 feature 的入口是端口（ADR-0042）：测试可以塞一个记录器，断言页面**请求了**
+      // 什么（哪一章 / 哪本书），而不是去追一个路由。
+      if (navigation != null)
+        appNavigationProvider.overrideWithValue(navigation),
+      // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
+      // （端口是 total，替身与适配器对页面是同一件事）。
+      contentCacheProvider.overrideWithValue(FakeContentCache()),
+      appLoggerProvider.overrideWithValue(_logger()),
+    ],
+  );
+  addTearDown(container.dispose);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
       child: MaterialApp(
         // 固定英文：断言取的是 `AppLocalizations` 的值，而不是写死的字面量。
         locale: const Locale('en'),
@@ -165,6 +175,8 @@ Future<void> pumpBookSourcePage(
     ),
   );
   await tester.pumpAndSettle();
+
+  return repository == null ? null : container;
 }
 
 /// Pumps a source-management [page] (the source list, the import screen) against an in-memory
@@ -181,6 +193,7 @@ Future<void> pumpSourceManagementPage(
   FakeBookSourceViewStore? viewStore,
   BookSourceFileSaver? saver,
   Clock? clock,
+  void Function(Object? arguments)? onPush,
 }) async {
   _fixViewSize(tester);
 
@@ -211,6 +224,18 @@ Future<void> pumpSourceManagementPage(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: buildReaderTheme(fallbackLightColorScheme()),
+        // 要断言「点了哪个入口、带着什么参数」的测试传 [onPush]：真实路由表归 `app.dart`
+        // （ADR-0011），这里只把握到的 typed route 交回去。
+        onGenerateRoute: onPush == null
+            ? null
+            : (RouteSettings settings) {
+                onPush(settings.arguments);
+
+                return MaterialPageRoute<void>(
+                  settings: settings,
+                  builder: (BuildContext context) => const SizedBox.shrink(),
+                );
+              },
         home: page,
       ),
     ),

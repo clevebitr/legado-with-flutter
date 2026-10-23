@@ -28,7 +28,14 @@ sealed class BookSourceRoute with _$BookSourceRoute {
   const factory BookSourceRoute.importSources() = BookSourceImportRoute;
 
   /// The route that runs the batch check over the imported sources (`docs/dev/roadmap.md` 5.10).
-  const factory BookSourceRoute.checkSources() = BookSourceCheckRoute;
+  ///
+  /// [sourceIds] / [group] let the source list hand over a target: its batch bar passes the ticked
+  /// rows, its toolbar passes the group filter that is active (ADR-0057). An empty route (both
+  /// `null`) is what the 「校验」 toolbar entry uses when nothing is filtered.
+  const factory BookSourceRoute.checkSources({
+    Set<int>? sourceIds,
+    String? group,
+  }) = BookSourceCheckRoute;
 
   /// The route that opens the debug console, optionally pinned to [sourceId]
   /// (`docs/dev/roadmap.md` 5.10).

@@ -34,8 +34,10 @@ import 'package:m3e_design/m3e_design.dart';
 /// * **dragging is only available in the manual order and outside selection mode**: in any other
 ///   order a drag would jump back the moment it was dropped (ADR-0045 §决策 3), and dragging a
 ///   multi-selection would have two meanings;
-/// * long-pressing a row starts **selection mode** (ADR-0050 §决策 2): batch enable / disable /
-///   delete / regroup, one write each.
+/// * long-pressing a row starts **selection mode** (ADR-0050 §决策 2): check / enable / disable /
+///   delete / regroup, one write each. The check action does not write: it hands the ticked rows
+///   to the check page (`BookSourceRoute.checkSources`), and the toolbar's check entry hands over
+///   the group filter that is active (ADR-0057).
 ///
 /// Accessibility (C-UI-7): the sort menu, the batch bar and every row action carry tooltips or
 /// labels, the filter rows are labelled `FilterChip`s, and selection mode uses `Checkbox`es whose
@@ -49,19 +51,39 @@ class BookSourceListPage extends ConsumerStatefulWidget {
 }
 
 class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
-  /// The rows the user ticked; empty means “not in selection mode”.
+  /// The rows the user ticked.
   final Set<int> _selected = <int>{};
+
+  /// Whether selection mode is on.
+  ///
+  /// A flag of its own, not `_selected.isNotEmpty`: the toolbar's 「多选」 entry has to open the
+  /// mode with nothing ticked yet (ADR-0059), and long-press opens it with the pressed row.
+  bool _selecting = false;
 
   /// The search field's controller; its text filters the visible rows.
   final TextEditingController _search = TextEditingController();
 
-  bool get _isSelecting => _selected.isNotEmpty;
+  bool get _isSelecting => _selecting;
 
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
   }
+
+  /// Enters selection mode, optionally with [ids] already ticked.
+  void _startSelecting([Iterable<int> ids = const <int>[]]) => setState(() {
+    _selecting = true;
+    _selected
+      ..clear()
+      ..addAll(ids);
+  });
+
+  /// Leaves selection mode and drops the ticks.
+  void _stopSelecting() => setState(() {
+    _selecting = false;
+    _selected.clear();
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -98,11 +120,18 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
                 _directionToggle(context, ref, l10n, loaded),
                 _viewMenu(context, ref, l10n, loaded),
                 IconButton(
+                  icon: const Icon(Icons.checklist),
+                  tooltip: l10n.bookSourceListSelectMode,
+                  onPressed: _startSelecting,
+                ),
+                IconButton(
                   icon: const Icon(Icons.fact_check_outlined),
                   tooltip: l10n.bookSourceCheckTitle,
+                  // 带着当前的分组筛选进校验页：用户点了「玄幻」再点校验，想测的就是这一组
+                  // （ADR-0057）。没筛选时 group 为 null，校验页照旧跟着它自己的 chips 走。
                   onPressed: () => pushBookSourceRoute(
                     context,
-                    const BookSourceRoute.checkSources(),
+                    BookSourceRoute.checkSources(group: loaded?.view.group),
                   ),
                 ),
                 IconButton(
@@ -146,7 +175,7 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
       leading: IconButton(
         icon: const Icon(Icons.close),
         tooltip: l10n.actionCancel,
-        onPressed: () => setState(_selected.clear),
+        onPressed: _stopSelecting,
       ),
       title: Text(l10n.bookSourceListSelectedCount(selected.length)),
       actions: <Widget>[
@@ -191,17 +220,27 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
         ?.view
         .group;
     void run(Future<void> Function() action) =>
-        unawaited(action().then((_) => setState(_selected.clear)));
+        unawaited(action().then((_) => _stopSelecting()));
 
     return SafeArea(
-      child: Padding(
+      // 横向滚动而不是 spaceAround：宽屏上都排得下，窄屏上也不会把删除挤出可视区（M15 踩坑）。
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(
           horizontal: tokens.spacing.sm,
           vertical: tokens.spacing.xs,
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: <Widget>[
+            // 「测试选中的源」：把勾选的行交给校验页，改动落在那里（ADR-0057）。
+            _batchAction(
+              l10n.bookSourceListBatchCheck,
+              Icons.fact_check_outlined,
+              () => pushBookSourceRoute(
+                context,
+                BookSourceRoute.checkSources(sourceIds: selected),
+              ),
+            ),
             _batchAction(
               l10n.bookSourceListBatchEnable,
               Icons.toggle_on_outlined,
@@ -230,7 +269,7 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
               Icons.delete_outline,
               () => unawaited(_confirmBatchDelete(l10n, selected)),
             ),
-            // 其余动作放进溢出菜单：一排按钮在窄屏上会把删除挤出可视区（M15 踩坑）。
+            // 其余动作放进溢出菜单（置顶 / 置底 / 移出分组 / 探索开关）。
             PopupMenuButton<_BatchAction>(
               tooltip: l10n.bookSourceListMoreActions,
               icon: const Icon(Icons.more_horiz),
@@ -466,6 +505,18 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
             onPressed: () => Navigator.of(context).pop(_GroupAction.delete),
             child: Text(l10n.bookSourceListGroupDelete),
           ),
+          // 下面两项作用于**书源**，而不只是分组标签（ADR-0059 §决策 3）：
+          // 「选中」进入多选，后续用批量动作；「删除」连书源一起删，所以带二次确认。
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.of(context).pop(_GroupAction.selectSources),
+            child: Text(l10n.bookSourceListGroupSelectSources),
+          ),
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.of(context).pop(_GroupAction.deleteSources),
+            child: Text(l10n.bookSourceListGroupDeleteSources),
+          ),
         ],
       ),
     );
@@ -491,7 +542,81 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
           return;
         }
         await ref.read(selectedBookSourceProvider.notifier).deleteGroup(chosen);
+      case _GroupAction.selectSources:
+        await _selectGroup(chosen);
+      case _GroupAction.deleteSources:
+        await _deleteGroupSources(l10n, chosen);
     }
+  }
+
+  /// The ids of every stored source that carries the user group [group].
+  ///
+  /// 读的是**未筛选**的全量列表（`bookSourceListProvider`）：分组动作针对「该组全部」，
+  /// 不该被当前的分组 / 校验 / 搜索三个筛子左右。分组轴取 payload 里的 `bookSourceGroup`，
+  /// 与分组 chips 同一口径（ADR-0050 §决策 1）。
+  Set<int> _idsOfGroup(String group) {
+    final List<StoredBookSource> all =
+        ref.read(bookSourceListProvider).value ?? const <StoredBookSource>[];
+
+    return <int>{
+      for (final StoredBookSource source in all)
+        if (splitGroups(source.source.group).contains(group)) source.id,
+    };
+  }
+
+  /// Switches the list to [group] and enters selection mode with every one of its sources ticked.
+  ///
+  /// 先切视图再勾选：多选只作用于看得见的行（ADR-0050 §决策 2），如果分组筛选停在别处、
+  /// 或者「全正常 / 有失效」把行藏了一部分，刚勾上的 id 会在下一帧被剪掉。搜索框也清掉，
+  /// 否则用户看到的是一份被关键词缩小的清单。
+  Future<void> _selectGroup(String group) async {
+    final Set<int> ids = _idsOfGroup(group);
+    _search.clear();
+    await ref.read(bookSourceViewProvider.notifier).setGroup(group);
+    ref
+        .read(bookSourceCheckFilterSelectionProvider.notifier)
+        .select(BookSourceCheckFilter.all);
+    if (!mounted) {
+      return;
+    }
+    _startSelecting(ids);
+  }
+
+  /// Asks, then deletes every source of [group].
+  ///
+  /// 与「删除分组」不同：那个只把 `bookSourceGroup` 里的 token 去掉（书源保留），这个连行一起删
+  /// （ADR-0059 §决策 3），所以标题里要同时点名分组与条数。
+  Future<void> _deleteGroupSources(AppLocalizations l10n, String group) async {
+    final Set<int> ids = _idsOfGroup(group);
+    if (ids.isEmpty) {
+      return;
+    }
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: Text(
+              l10n.bookSourceListGroupDeleteSourcesTitle(ids.length, group),
+            ),
+            content: Text(l10n.bookSourceListBatchDeleteBody),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(l10n.actionCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(l10n.bookSourceListGroupDeleteSources),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    await ref.read(selectedBookSourceProvider.notifier).deleteMany(ids);
   }
 
   /// Asks before removing [group] from every source.
@@ -638,7 +763,7 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
           ),
         ),
         _groupFilter(context, ref, l10n, data),
-        _checkFilter(context, ref, l10n),
+        _checkFilter(context, ref, l10n, rows),
         Expanded(
           child: rows.isEmpty
               ? Center(
@@ -657,16 +782,29 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     );
   }
 
-  /// The check-status chips (ADR-0050 §决策 1's second axis).
+  /// The check-status chips (ADR-0050 §决策 1's second axis), plus the one-click actions that only
+  /// make sense there.
+  ///
+  /// When the axis is 「有失效」 the row is exactly “the failing sources you can see”, so the two
+  /// buttons that act on them belong next to the chip that selected them (ADR-0059 §决策 2): no
+  /// second entry to discover, and the list under the buttons is the confirmation of what will be
+  /// hit. They work on [rows] — the same visible set the 「有失效」 chip produced — not on the whole
+  /// library.
   Widget _checkFilter(
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l10n,
+    List<StoredBookSource> rows,
   ) {
     final M3ETheme tokens = context.m3e;
     final BookSourceCheckFilter current = ref.watch(
       bookSourceCheckFilterSelectionProvider,
     );
+    final Set<int> failing = <int>{
+      if (current == BookSourceCheckFilter.failing)
+        for (final StoredBookSource source in rows)
+          if (hasCheckFailure(source)) source.id,
+    };
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -687,9 +825,78 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
             ),
             SizedBox(width: tokens.spacing.sm),
           ],
+          if (current == BookSourceCheckFilter.failing) ...<Widget>[
+            SizedBox(width: tokens.spacing.sm),
+            TextButton.icon(
+              onPressed: failing.isEmpty
+                  ? null
+                  : () => unawaited(_disableFailing(failing)),
+              icon: const Icon(Icons.toggle_off_outlined),
+              label: Text(l10n.bookSourceListInvalidDisable),
+            ),
+            SizedBox(width: tokens.spacing.sm),
+            TextButton.icon(
+              onPressed: failing.isEmpty
+                  ? null
+                  : () => unawaited(_confirmFailingDelete(l10n, failing)),
+              icon: const Icon(Icons.delete_outline),
+              label: Text(l10n.bookSourceListInvalidDelete),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  /// Disables every source in [ids] in one write.
+  ///
+  /// 没有二次确认：禁用是用户态且可逆，校验失败本身已经是他想要的信号；删除另说。
+  Future<void> _disableFailing(Set<int> ids) async {
+    await ref
+        .read(selectedBookSourceProvider.notifier)
+        .setEnabledFor(ids, isEnabled: false);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          AppLocalizations.of(context)
+              .bookSourceListInvalidDisabled(ids.length),
+        ),
+      ),
+    );
+  }
+
+  /// Asks before deleting every failing source of the current list.
+  Future<void> _confirmFailingDelete(
+    AppLocalizations l10n,
+    Set<int> ids,
+  ) async {
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: Text(l10n.bookSourceListInvalidDeleteTitle(ids.length)),
+            content: Text(l10n.bookSourceListBatchDeleteBody),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(l10n.actionCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(l10n.bookSourceListInvalidDelete),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    await ref.read(selectedBookSourceProvider.notifier).deleteMany(ids);
   }
 
   /// The label of one check-status chip.
@@ -870,7 +1077,7 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     return ListTile(
       key: key,
       // 长按进入多选（ADR-0050 §决策 2）；多选期间点一下是勾选，不是切换当前源。
-      onLongPress: () => setState(() => _selected.add(source.id)),
+      onLongPress: () => _startSelecting(<int>[source.id]),
       onTap: () => _isSelecting
           ? setState(() {
               if (!_selected.remove(source.id)) {
@@ -900,14 +1107,19 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
         children: <Widget>[
           Switch(
             value: source.isEnabled,
-            onChanged: (bool isEnabled) => unawaited(
-              ref
-                  .read(selectedBookSourceProvider.notifier)
-                  .toggleEnabled(id: source.id, isEnabled: isEnabled),
-            ),
+            // 多选期间行内的开关与行菜单都关掉：此时点行内的东西一律是「勾选」意图，
+            // 一个误触就把单条源改了（ADR-0059）。
+            onChanged: _isSelecting
+                ? null
+                : (bool isEnabled) => unawaited(
+                    ref
+                        .read(selectedBookSourceProvider.notifier)
+                        .toggleEnabled(id: source.id, isEnabled: isEnabled),
+                  ),
           ),
           PopupMenuButton<_RowAction>(
             tooltip: source.source.name,
+            enabled: !_isSelecting,
             onSelected: (_RowAction action) =>
                 _act(context, ref, l10n, data, source, action),
             itemBuilder: (BuildContext context) => <PopupMenuEntry<_RowAction>>[
@@ -1175,7 +1387,7 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
 
     await ref.read(selectedBookSourceProvider.notifier).deleteMany(selected);
     if (mounted) {
-      setState(_selected.clear);
+      _stopSelecting();
     }
   }
 
@@ -1262,7 +1474,7 @@ enum _ViewAction { groupByDomain, manageGroups }
 enum _BatchAction { moveTop, moveBottom, removeGroup, exploreOn, exploreOff }
 
 /// What to do with a group in the management dialog (ADR-0052 §决策 4).
-enum _GroupAction { rename, delete }
+enum _GroupAction { rename, delete, selectSources, deleteSources }
 
 /// One entry of the domain-grouped list: either a host header or a source row.
 sealed class _ListEntry {

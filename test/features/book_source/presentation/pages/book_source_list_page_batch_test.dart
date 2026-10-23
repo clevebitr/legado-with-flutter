@@ -6,6 +6,8 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
+import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_list_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -366,6 +368,326 @@ void main() {
       expect(
         rows.where((StoredBookSource row) => !row.isExploreEnabled),
         hasLength(1),
+      );
+    });
+  });
+
+  group('BookSourceListPage check handover', () {
+    testWidgets('selection_whenCheckIsChosen_handsTheTickedRowsOver', (
+      WidgetTester tester,
+    ) async {
+      // 回归点（ADR-0057）：多选后要能把「这几条」直接交给校验页。旧的选择工具栏只有启停、
+      // 分组、删除，没有测试入口。
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(source: _source('甲', group: '精选'))
+        ..add(source: _source('乙', group: '玄幻'))
+        ..add(source: _source('丙', group: '玄幻'));
+      Object? pushed;
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+        onPush: (Object? arguments) => pushed = arguments,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+      final List<StoredBookSource> rows = await repository.getAll();
+      final Set<int> picked = <int>{rows[0].id, rows[2].id};
+
+      await tester.longPress(find.text('甲'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('丙'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.bookSourceListBatchCheck));
+      await tester.pumpAndSettle();
+
+      expect(pushed, isA<BookSourceCheckRoute>());
+      expect(
+        (pushed! as BookSourceCheckRoute).sourceIds,
+        unorderedEquals(picked),
+        reason: '只交出勾选的两条，不是全库',
+      );
+    });
+
+    testWidgets('toolbar_whenAGroupIsFiltered_handsTheGroupOver', (
+      WidgetTester tester,
+    ) async {
+      // 「选中分组并单独测试该组」：工具栏的校验入口要把当前分组带上（ADR-0057）。
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(source: _source('甲', group: '精选'))
+        ..add(source: _source('乙', group: '玄幻'));
+      Object? pushed;
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+        onPush: (Object? arguments) => pushed = arguments,
+      );
+
+      await tester.tap(find.widgetWithText(FilterChip, '精选'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.fact_check_outlined));
+      await tester.pumpAndSettle();
+
+      expect(pushed, isA<BookSourceCheckRoute>());
+      expect((pushed! as BookSourceCheckRoute).group, '精选');
+      expect(
+        (pushed! as BookSourceCheckRoute).sourceIds,
+        isNull,
+        reason: '按分组进来时由分组决定参测源，不另写一份 id',
+      );
+    });
+
+    testWidgets('toolbar_whenNoGroupIsFiltered_handsNoTargetOver', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookSourceRepository repository = await _pump(tester);
+      Object? pushed;
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+        onPush: (Object? arguments) => pushed = arguments,
+      );
+
+      await tester.tap(find.byIcon(Icons.fact_check_outlined));
+      await tester.pumpAndSettle();
+
+      expect((pushed! as BookSourceCheckRoute).group, isNull);
+      expect((pushed! as BookSourceCheckRoute).sourceIds, isNull);
+    });
+  });
+
+  group('BookSourceListPage select mode', () {
+    testWidgets('selection_whenTheToolbarEntryIsUsed_startsEmptyAndTicksRows', (
+      WidgetTester tester,
+    ) async {
+      // 回归点（ADR-0059 §决策 1）：多选过去只能长按进入，且一进去就带着一行。
+      // 桌面用户需要能看见的入口，也需要能从零开始挑。
+      await _pump(tester);
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.bookSourceListSelectMode));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.bookSourceListSelectedCount(0)), findsOneWidget);
+      expect(
+        tester
+            .widgetList<Checkbox>(find.byType(Checkbox))
+            .every((Checkbox box) => box.value != true),
+        isTrue,
+      );
+
+      await tester.tap(find.text('甲'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.bookSourceListSelectedCount(1)), findsOneWidget);
+    });
+
+    testWidgets('selection_whenTheRowSwitchIsReached_itIsInert', (
+      WidgetTester tester,
+    ) async {
+      // 多选期间行内开关与行菜单关掉：否则一个误触就把单条源改了或开了某个菜单。
+      final FakeBookSourceRepository repository = await _pump(tester);
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.bookSourceListSelectMode));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<Switch>(find.byType(Switch).first).onChanged,
+        isNull,
+      );
+      // 行菜单（tooltip 是源名）也关掉：多选时点行是「勾选」，不该弹出编辑 / 删除菜单。
+      // 批量工具栏自己的“⋯”仍然可用，所以只断言行上那个。
+      expect(
+        tester
+            .widget<PopupMenuButton<Object?>>(
+              find.byWidgetPredicate(
+                (Widget widget) =>
+                    widget is PopupMenuButton<Object?> && widget.tooltip == '甲',
+              ),
+            )
+            .enabled,
+        isFalse,
+      );
+      expect(
+        (await repository.getAll()).every(
+          (StoredBookSource row) => row.isEnabled,
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('BookSourceListPage failing actions', () {
+    /// Two failing sources (a note and a check-owned group) and one healthy source.
+    FakeBookSourceRepository failingRepository() => FakeBookSourceRepository()
+      ..add(source: _source('好源'))
+      ..add(source: _source('坏源'), comment: '// Error: 404')
+      ..add(source: _source('坏源二'), groupName: searchInvalidGroup);
+
+    testWidgets('failing_whenDisableIsChosen_disablesEveryListedFailure', (
+      WidgetTester tester,
+    ) async {
+      // 一键处置（ADR-0059 §决策 2）：「有失效」筛选下面的就是被处理的集合。
+      final FakeBookSourceRepository repository = failingRepository();
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(
+        find.widgetWithText(ChoiceChip, l10n.bookSourceCheckFilterFailing),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(TextButton, l10n.bookSourceListInvalidDisable),
+      );
+      await tester.pumpAndSettle();
+
+      final List<StoredBookSource> rows = await repository.getAll();
+      expect(
+        rows
+            .where((StoredBookSource row) => row.source.name == '好源')
+            .single
+            .isEnabled,
+        isTrue,
+      );
+      expect(
+        rows
+            .where((StoredBookSource row) => row.source.name != '好源')
+            .every((StoredBookSource row) => !row.isEnabled),
+        isTrue,
+      );
+    });
+
+    testWidgets('failing_whenDeleteIsConfirmed_removesOnlyTheFailures', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookSourceRepository repository = failingRepository();
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(
+        find.widgetWithText(ChoiceChip, l10n.bookSourceCheckFilterFailing),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(TextButton, l10n.bookSourceListInvalidDelete),
+      );
+      await tester.pumpAndSettle();
+      // 确认对话框里的同名按钮。
+      await tester.tap(
+        find.widgetWithText(TextButton, l10n.bookSourceListInvalidDelete).last,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        (await repository.getAll()).map(
+          (StoredBookSource row) => row.source.name,
+        ),
+        <String>['好源'],
+      );
+    });
+  });
+
+  group('BookSourceListPage group actions', () {
+    /// Opens 「视图 → 分组管理」 and picks [group] in the list of groups.
+    Future<void> openGroupDialog(WidgetTester tester, String group) async {
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.bookSourceListViewOptions));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.bookSourceListGroupManage));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SimpleDialog),
+          matching: find.text(group),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('groups_whenSelectEverySourceIsChosen_ticksTheWholeGroup', (
+      WidgetTester tester,
+    ) async {
+      // 「根据分组一键管理」（ADR-0059 §决策 3）：先把列表切到该组，再把它的行全部勾上。
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(source: _source('甲', group: '精选'))
+        ..add(source: _source('乙', group: '玄幻'))
+        ..add(source: _source('丙', group: '玄幻'));
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await openGroupDialog(tester, '玄幻');
+      await tester.tap(find.text(l10n.bookSourceListGroupSelectSources));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.bookSourceListSelectedCount(2)), findsOneWidget);
+      // 列表已经切到该分组：别的组不在视野里，勾选也不会被剪掉。
+      expect(find.text('甲'), findsNothing);
+
+      // 选中之后就能用批量动作（一键禁用 / 删除 / 分组 / 移动）。
+      await tester.tap(find.text(l10n.bookSourceListBatchDisable));
+      await tester.pumpAndSettle();
+
+      final List<StoredBookSource> rows = await repository.getAll();
+      expect(
+        rows
+            .where((StoredBookSource row) => row.source.group == '玄幻')
+            .every((StoredBookSource row) => !row.isEnabled),
+        isTrue,
+      );
+      expect(
+        rows
+            .where((StoredBookSource row) => row.source.group == '精选')
+            .single
+            .isEnabled,
+        isTrue,
+      );
+    });
+
+    testWidgets('groups_whenDeleteEverySourceIsConfirmed_deletesThatGroup', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(source: _source('甲', group: '精选'))
+        ..add(source: _source('乙', group: '玄幻'))
+        ..add(source: _source('丙', group: '玄幻'));
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await openGroupDialog(tester, '玄幻');
+      await tester.tap(find.text(l10n.bookSourceListGroupDeleteSources));
+      await tester.pumpAndSettle();
+      // 确认对话框里的同名按钮。
+      await tester.tap(
+        find
+            .widgetWithText(TextButton, l10n.bookSourceListGroupDeleteSources)
+            .last,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        (await repository.getAll()).map(
+          (StoredBookSource row) => row.source.name,
+        ),
+        <String>['甲'],
       );
     });
   });

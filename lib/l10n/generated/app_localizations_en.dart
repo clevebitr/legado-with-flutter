@@ -676,6 +676,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchScopeAll => 'All enabled sources';
 
   @override
+  String get searchScopeFellBack =>
+      'That scope no longer exists, so every enabled source was searched.';
+
+  @override
   String get searchScopeNamed => 'Chosen sources';
 
   @override
@@ -760,9 +764,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookSourceListInvertSelection => 'Invert';
 
   @override
+  String get bookSourceListSelectMode => 'Select sources';
+
+  @override
+  String get bookSourceListInvalidDisable => 'Disable failing';
+
+  @override
+  String get bookSourceListInvalidDelete => 'Delete failing';
+
+  @override
+  String bookSourceListInvalidDisabled(int count) {
+    return 'Disabled $count failing sources';
+  }
+
+  @override
+  String bookSourceListInvalidDeleteTitle(int count) {
+    return 'Delete $count failing sources?';
+  }
+
+  @override
+  String get bookSourceListGroupSelectSources =>
+      'Select every source in this group';
+
+  @override
+  String get bookSourceListGroupDeleteSources =>
+      'Delete every source in this group';
+
+  @override
+  String bookSourceListGroupDeleteSourcesTitle(int count, String group) {
+    return 'Delete the $count sources in “$group”?';
+  }
+
+  @override
   String bookSourceListSelectedCount(int count) {
     return '$count selected';
   }
+
+  @override
+  String get bookSourceListBatchCheck => 'Check selected';
 
   @override
   String get bookSourceListBatchEnable => 'Enable';
