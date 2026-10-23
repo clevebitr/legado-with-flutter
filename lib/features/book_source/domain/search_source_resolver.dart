@@ -65,8 +65,10 @@ SearchSourceResolution resolveSearchSources({
   Set<BookSourceType> types = defaultSearchSourceTypes,
 }) {
   final List<StoredBookSource> candidates = _candidates(rows, scope);
-  // 回落只在「这个范围里一条能用的都没有」时发生；`all` 本身就是全集，不需要回落。
-  final bool fellBack = candidates.isEmpty && scope is! SearchScopeAll;
+  // 回落只在「这个范围本身已经不存在」时发生（分组改名 / 删源后留下的旧范围），
+  // 而不是「范围里没有能搜的源」：后者应当如实回答「一条也没搜」，否则用户点名了一个分组
+  // 却被搜了全库，看起来就是「范围筛选失效」（ADR-0058 修定 ADR-0046 §决策 1）。
+  final bool fellBack = candidates.isEmpty && _scopeVanished(rows, scope);
   final List<StoredBookSource> scoped = fellBack
       ? rows.where((StoredBookSource row) => row.isEnabled).toList()
       : candidates;
@@ -132,6 +134,26 @@ List<StoredBookSource> _candidates(
         if (row.source.url == named.url) row,
   ],
 };
+
+/// Whether [scope] itself is gone, i.e. the names it carries match **no row at all** in [rows].
+///
+/// 这个判断是回落的分界线（ADR-0058）：「名字还对得上」= 范围还在，只是里面没有能跑的源，
+/// 应当报「没得搜」；「名字一条也对不上」= 范围已经不存在（分组重命名 / 删源），才回落到
+/// 全部启用源，免得给用户一个永远空的搜索页。判断**不看**启用 / 类型 / `searchUrl`：
+/// 那些回答的是「这一条能不能搜」，不是「这个范围还在不在」。
+bool _scopeVanished(List<StoredBookSource> rows, BookSearchScope scope) =>
+    switch (scope) {
+      // 「全部」永远不算「已经不存在的范围」。
+      SearchScopeAll() => false,
+      SearchScopeGroups(:final Set<String> groups) => !rows.any(
+        (StoredBookSource row) =>
+            splitGroups(row.groupName ?? row.source.group).any(groups.contains),
+      ),
+      SearchScopeSources(:final List<ScopeSource> sources) => !rows.any(
+        (StoredBookSource row) =>
+            sources.any((ScopeSource named) => named.url == row.source.url),
+      ),
+    };
 
 /// Whether the source of [searchUrl] can answer a search page beyond the first
 /// (`docs/dev/roadmap.md` 3.8, ADR-0046 §决策 7).

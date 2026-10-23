@@ -119,6 +119,54 @@ void main() {
       expect(resolution.scopeFellBack, isTrue);
     });
 
+    test(
+      'resolve_givenASourcesScopeWhereEveryUrlIsGone_fallsBackToEverything',
+      () {
+        // 点名的源全被删掉：范围本身已经不在了，回落与分组同一条规则（ADR-0058）。
+        final SearchSourceResolution resolution = resolveSearchSources(
+          rows: <StoredBookSource>[_row(name: 'a')],
+          scope: const BookSearchScope.sources(<ScopeSource>[
+            ScopeSource(name: 'gone', url: 'https://gone.test'),
+          ]),
+        );
+
+        expect(
+          resolution.sources.map((BookSource source) => source.name),
+          <String>['a'],
+        );
+        expect(resolution.scopeFellBack, isTrue);
+      },
+    );
+
+    test('resolve_givenAGroupWhoseSourcesAreAllDisabled_doesNotFallBack', () {
+      // 范围还在（有行带着这个 token），只是里面没有能搜的源：如实回答「没得搜」，
+      // 不得静默扩大成全库（ADR-0058）。
+      final SearchSourceResolution resolution = resolveSearchSources(
+        rows: <StoredBookSource>[
+          _row(name: 'a', group: '精选', isEnabled: false),
+          _row(name: 'b'),
+        ],
+        scope: const BookSearchScope.groups(<String>{'精选'}),
+      );
+
+      expect(resolution.sources, isEmpty);
+      expect(resolution.scopeFellBack, isFalse);
+    });
+
+    test(
+      'resolve_givenAllAndEveryRowDisabled_answersNothingWithoutFallback',
+      () {
+        // 「全部」不是一个会消失的范围：一条都搜不到就是如实回答，不存在回落（ADR-0058）。
+        final SearchSourceResolution resolution = resolveSearchSources(
+          rows: <StoredBookSource>[_row(name: 'a', isEnabled: false)],
+          scope: const BookSearchScope.all(),
+        );
+
+        expect(resolution.sources, isEmpty);
+        expect(resolution.scopeFellBack, isFalse);
+      },
+    );
+
     test('resolve_givenAWidenedTypeSet_keepsTheAudioSource', () {
       final SearchSourceResolution resolution = resolveSearchSources(
         rows: <StoredBookSource>[_row(name: 'a', type: BookSourceType.audio)],

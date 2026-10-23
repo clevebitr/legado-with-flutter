@@ -29,8 +29,12 @@ class ExplorePage extends ConsumerStatefulWidget {
 }
 
 class _ExplorePageState extends ConsumerState<ExplorePage> {
-  /// Whether a category load was already requested for the current source.
-  bool _requested = false;
+  /// The id of the stored source whose discover categories were already requested.
+  ///
+  /// 用 id 而不是一个「只做一次」的布尔标记：发现页在 shell 的 `IndexedStack` 里常驻，
+  /// 用户到书源管理里换一个源再切回来时页面**不会重建** —— 只有看 id 变了才会重拉分类，
+  /// 否则 chip 行会一直是上一个源的分类（ADR-0058）。
+  int? _loadedSourceId;
 
   @override
   void initState() {
@@ -50,17 +54,25 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
 
   /// Loads the categories once the selected source is known and its discover page is on.
   ///
+  /// 换源（或从「发现已关闭」的源切回来）会重拉一次：分类是**源的属性**，不是页面的属性。
+  ///
   /// The work is deferred to the next frame: `exploreProvider` is auto-dispose, and reading its
   /// notifier before the first `build` has watched it would create an element nobody keeps alive
   /// (the first attempt at this did exactly that, and the notifier then ran on a disposed `Ref`).
   void _loadCategoriesIfNeeded(StoredBookSource? stored) {
-    if (_requested || stored == null || !stored.isExploreEnabled) {
+    if (stored == null || !stored.isExploreEnabled) {
+      // 当前没有可展示的源：下一次真的选中源时必须重拉，所以清掉标记。
+      _loadedSourceId = null;
+
       return;
     }
-    _requested = true;
+    if (_loadedSourceId == stored.id) {
+      return;
+    }
+    _loadedSourceId = stored.id;
     final BookSource source = stored.source;
     WidgetsBinding.instance.addPostFrameCallback((Duration _) {
-      if (!mounted || ref.read(exploreProvider) is! ExploreIdle) {
+      if (!mounted) {
         return;
       }
       unawaited(ref.read(exploreProvider.notifier).loadCategories(source));

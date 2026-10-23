@@ -115,9 +115,11 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
             _keywordRow(l10n, hasSources),
             SizedBox(height: tokens.spacing.sm),
             _scopeRow(l10n, scope, rows.value ?? const <StoredBookSource>[]),
-            // 运行中显示进度；跑完后如果有源失败，仍要把「几个源失败」留在屏幕上
+            // 运行中显示进度；跑完后如果有源失败、或范围被回退，仍要把这件事留在屏幕上
             // （否则用户只会看到结果变少，不知道为什么）。
-            if (search.isRunning || search.failedSources > 0) ...<Widget>[
+            if (search.isRunning ||
+                search.failedSources > 0 ||
+                search.scopeFellBack) ...<Widget>[
               SizedBox(height: tokens.spacing.sm),
               _progressRow(l10n, search),
             ],
@@ -213,6 +215,13 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
                 style: tokens.typography.base.bodySmall,
               ),
             ),
+            // 范围已不存在的回退要说出来：否则「我选了一个分组，结果搜了全库」看起来就像
+            // 筛选坏了（ADR-0058）。
+            if (search.scopeFellBack)
+              Text(
+                l10n.searchScopeFellBack,
+                style: tokens.typography.base.bodySmall,
+              ),
             if (search.isRunning)
               TextButton(
                 onPressed: search.isPaused
@@ -415,6 +424,10 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
   /// One sheet instead of a nested picker: "all" and the groups are the radio part, the named
   /// sources are the check-box part, and ticking any source switches the scope to `sources`
   /// (ADR-0046 §决策 1).
+  ///
+  /// The body is a [Consumer] that **watches** the scope instead of rendering a snapshot
+  /// (ADR-0058): with a snapshot, ticking a source changed the provider but not the sheet — the box
+  /// stayed empty, and because the tile kept reporting `false` the tick could never be undone.
   void _openScopeSheet(
     AppLocalizations l10n,
     BookSearchScope scope,
@@ -424,117 +437,141 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
       for (final StoredBookSource row in rows)
         ...splitGroups(row.groupName ?? row.source.group),
     }.toList()..sort();
-    final Set<String> named = <String>{
-      for (final ScopeSource source in scope.sourcesOrEmpty) source.url,
-    };
-    final String currentKey = switch (scope) {
-      SearchScopeAll() => '',
-      SearchScopeGroups(:final Set<String> groups) when groups.length == 1 =>
-        'group:${groups.first}',
-      SearchScopeGroups() => '',
-      SearchScopeSources() => '',
-    };
 
     unawaited(
       showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        builder: (BuildContext context) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: <Widget>[
-              ListTile(title: Text(l10n.searchScopeLabel)),
-              RadioGroup<String>(
-                groupValue: currentKey,
-                onChanged: (String? key) => _selectScope(
-                  l10n,
-                  key == null || key.isEmpty
-                      ? BookSearchScope.defaults
-                      : BookSearchScope.groups(<String>{
-                          key.substring('group:'.length),
-                        }),
-                ),
-                child: Column(
-                  children: <Widget>[
-                    RadioListTile<String>(
-                      value: '',
-                      title: Text(l10n.searchScopeAll),
-                    ),
-                    for (final String group in groups)
-                      RadioListTile<String>(
-                        value: 'group:$group',
-                        title: Text(group),
+        builder: (BuildContext sheetContext) => SafeArea(
+          child: Consumer(
+            builder: (BuildContext context, WidgetRef ref, Widget? _) {
+              final BookSearchScope current =
+                  ref.watch(searchScopeSelectionProvider).value ??
+                  BookSearchScope.defaults;
+              final Set<String> named = <String>{
+                for (final ScopeSource source in current.sourcesOrEmpty)
+                  source.url,
+              };
+
+              return ListView(
+                shrinkWrap: true,
+                children: <Widget>[
+                  ListTile(title: Text(l10n.searchScopeLabel)),
+                  RadioGroup<String>(
+                    groupValue: _scopeKeyOf(current),
+                    onChanged: (String? key) => unawaited(
+                      _selectScope(
+                        key == null || key.isEmpty
+                            ? BookSearchScope.defaults
+                            : BookSearchScope.groups(<String>{
+                                key.substring(_groupKeyPrefix.length),
+                              }),
+                        sheetContext,
                       ),
-                  ],
-                ),
-              ),
-              const Divider(),
-              ListTile(
-                title: Text(l10n.searchScopeNamed),
-                subtitle: Text(
-                  named.isEmpty
-                      ? l10n.searchScopeAll
-                      : rows
-                            .where(
-                              (StoredBookSource row) =>
-                                  named.contains(row.source.url),
-                            )
-                            .map((StoredBookSource row) => row.source.name)
-                            .join('、'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              for (final StoredBookSource row in rows)
-                CheckboxListTile(
-                  value: named.contains(row.source.url),
-                  title: Text(row.source.name),
-                  onChanged: (bool? checked) =>
-                      _toggleNamed(l10n, rows, named, row, checked ?? false),
-                ),
-            ],
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        RadioListTile<String>(
+                          value: '',
+                          title: Text(l10n.searchScopeAll),
+                        ),
+                        for (final String group in groups)
+                          RadioListTile<String>(
+                            value: '$_groupKeyPrefix$group',
+                            title: Text(group),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    title: Text(l10n.searchScopeNamed),
+                    subtitle: Text(
+                      named.isEmpty
+                          ? l10n.searchScopeAll
+                          : rows
+                                .where(
+                                  (StoredBookSource row) =>
+                                      named.contains(row.source.url),
+                                )
+                                .map((StoredBookSource row) => row.source.name)
+                                .join('、'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  for (final StoredBookSource row in rows)
+                    CheckboxListTile(
+                      value: named.contains(row.source.url),
+                      title: Text(row.source.name),
+                      onChanged: (bool? checked) => unawaited(
+                        _toggleNamed(current, rows, row, checked ?? false),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  /// Applies [scope], closes the sheet and stores the choice.
-  void _selectScope(AppLocalizations l10n, BookSearchScope scope) {
-    unawaited(ref.read(searchScopeSelectionProvider.notifier).select(scope));
-    Navigator.of(context).pop();
+  /// The radio value of [scope]: `''` for everything / several groups / named sources, or
+  /// `group:<token>` for exactly one group.
+  String _scopeKeyOf(BookSearchScope scope) => switch (scope) {
+    SearchScopeAll() => '',
+    SearchScopeGroups(:final Set<String> groups) when groups.length == 1 =>
+      '$_groupKeyPrefix${groups.first}',
+    SearchScopeGroups() || SearchScopeSources() => '',
+  };
+
+  /// Applies [scope] and closes the sheet.
+  ///
+  /// The write is awaited **before** popping: 范围是持久化的偏好，弹回后用户可能立刻点搜索，
+  /// 写入还没落地就会拿到旧范围（ADR-0058）。
+  Future<void> _selectScope(
+    BookSearchScope scope,
+    BuildContext sheetContext,
+  ) async {
+    await ref.read(searchScopeSelectionProvider.notifier).select(scope);
+    if (!sheetContext.mounted) {
+      return;
+    }
+    Navigator.of(sheetContext).pop();
   }
 
   /// Adds or removes one named source, switching the scope to `sources` as soon as one is ticked.
-  void _toggleNamed(
-    AppLocalizations l10n,
+  ///
+  /// The sheet stays open so a user can tick several sources; the boxes redraw themselves because
+  /// the sheet watches the scope ([Consumer] above).
+  Future<void> _toggleNamed(
+    BookSearchScope current,
     List<StoredBookSource> rows,
-    Set<String> named,
     StoredBookSource row,
     bool checked,
-  ) {
-    final Set<String> next = <String>{...named};
+  ) async {
+    final Set<String> next = <String>{
+      for (final ScopeSource named in current.sourcesOrEmpty) named.url,
+    };
     if (checked) {
       next.add(row.source.url);
     } else {
       next.remove(row.source.url);
     }
-    if (next.isEmpty) {
-      _selectScope(l10n, BookSearchScope.defaults);
-
-      return;
-    }
-    ref
+    await ref
         .read(searchScopeSelectionProvider.notifier)
         .select(
-          BookSearchScope.sources(<ScopeSource>[
-            for (final StoredBookSource candidate in rows)
-              if (next.contains(candidate.source.url))
-                ScopeSource(
-                  name: candidate.source.name,
-                  url: candidate.source.url,
-                ),
-          ]),
+          next.isEmpty
+              ? BookSearchScope.defaults
+              : BookSearchScope.sources(<ScopeSource>[
+                  for (final StoredBookSource candidate in rows)
+                    if (next.contains(candidate.source.url))
+                      ScopeSource(
+                        name: candidate.source.name,
+                        url: candidate.source.url,
+                      ),
+                ]),
         );
   }
 
@@ -658,3 +695,6 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     );
   }
 }
+
+/// The radio-value prefix of a single-group scope in the scope sheet.
+const String _groupKeyPrefix = 'group:';

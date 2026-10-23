@@ -239,6 +239,88 @@ void main() {
       expect(find.text('精选'), findsWidgets);
     });
 
+    testWidgets('scope_whenANamedSourceIsTicked_redrawsTheBoxAndCanUntickIt', (
+      WidgetTester tester,
+    ) async {
+      // 回归点（ADR-0058）：范围 sheet 曾经只是一次性快照 —— 勾选改了 provider，但 sheet 不重画，
+      // 勾选框永远是空的，于是既看不到勾、也取消不了（tile 永远报 `false`，只能一路加）。
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(source: loadCorpusBookSource().copyWith(name: '甲源'))
+        ..add(
+          source: loadCorpusBookSource().copyWith(
+            name: '乙源',
+            url: 'https://b.test',
+          ),
+        );
+      final FakeSearchScopeStore store = FakeSearchScopeStore();
+
+      await pumpSearchPage(
+        tester,
+        repository: repository,
+        http: serveCorpusPages(FakeHttpClient()),
+        scopeStore: store,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.text(l10n.searchScopeAll));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CheckboxListTile, '甲源'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.widgetWithText(CheckboxListTile, '甲源'),
+            )
+            .value,
+        isTrue,
+        reason: '勾了必须看得见',
+      );
+      expect(
+        store.scope,
+        const BookSearchScope.sources(<ScopeSource>[
+          ScopeSource(name: '甲源', url: 'https://example-novel.test'),
+        ]),
+      );
+
+      // 再点一次能取消：最后一个勾去掉后回到「全部启用源」。
+      await tester.tap(find.widgetWithText(CheckboxListTile, '甲源'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.widgetWithText(CheckboxListTile, '甲源'),
+            )
+            .value,
+        isFalse,
+      );
+      expect(store.scope, BookSearchScope.defaults);
+    });
+
+    testWidgets('start_whenTheStoredScopeNoLongerExists_saysItFellBack', (
+      WidgetTester tester,
+    ) async {
+      // 存下来的范围指向一个已经不存在分组（改名 / 删源后残留）：回落仍然有效，但必须说出来，
+      // 否则用户看到的是「我选了分组，却搜了全库」=「范围筛选失效」（ADR-0058）。
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+      final FakeSearchScopeStore store = FakeSearchScopeStore(
+        initial: const BookSearchScope.groups(<String>{'已删除的分组'}),
+      );
+
+      await pumpSearchPage(
+        tester,
+        repository: FakeBookSourceRepository()
+          ..add(source: loadCorpusBookSource()),
+        http: http,
+        scopeStore: store,
+      );
+      await _search(tester, corpusKeyword);
+
+      final AppLocalizations l10n = _l10n(tester);
+      expect(find.text(l10n.searchScopeFellBack), findsOneWidget);
+    });
+
     testWidgets('filters_whenAnExactMatchIsPicked_keepsOnlyExactHits', (
       WidgetTester tester,
     ) async {

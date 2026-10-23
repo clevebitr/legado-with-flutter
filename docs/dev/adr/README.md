@@ -78,3 +78,6 @@
 | [0055](0055-app-shell-and-about-pages.md) | 应用外壳与关于/法律声明（M18）：`AppShell` 在组合根、四 tab `IndexedStack` 保活、「我的」只做入口聚合、关于页版本常量 + 打包 GPL 全文 + 源码地址（不引 `url_launcher`） | Accepted（2026-10-22，用户裁决「开始补齐 UI」） | 本次新增 |
 | [0054](0054-audio-and-tts-engine.md) | 听书与音频（M17）：音频源播放与系统 TTS 两条独立链路共用章节上下文；依赖选型与三端降级（`just_audio` / `audio_service` / `flutter_tts`，Windows 无媒体通知）；HLS/云 TTS/句级高亮未闭环 | Accepted（2026-10-22，M17 规格前置） | 本次新增 |
 | [0056](0056-idempotent-schema-migrations.md) | 数据库迁移步骤必须可重入：升级前先查 `sqlite_master` / `PRAGMA table_info`，版本号不再当作结构的事实来源；不做迁移事务（决策 2） | Accepted（2026-10-22，用户机器上 `reader.db` 打不开的事故修复） | 本次新增 |
+| [0057](0057-source-check-selection-and-handover.md) | 校验的参测源 = 可见行 ∩ 勾选（chips 是默认选择）；勾选不再派生自上一轮 `entries`；列表页多选 / 工具栏通过 `checkSources(sourceIds/group)` 交接；多选工具栏改横向滚动 | Accepted（2026-10-22，用户报障「多选不能测试 / 不能只测某分组」） | 本次新增 |
+| [0058](0058-source-derived-ui-must-follow-its-input.md) | 选源 / 选范围的界面必须跟随输入：范围 sheet 改 `Consumer` + 写后弹回；回落只在「范围不存在」时发生且必须上屏（修订 ADR-0046 §决策 1）；发现页按源 id 重拉分类 | Accepted（2026-10-22，用户报障「范围筛选失效 / 分类不随换源更新」） | 本次新增 |
+| [0059](0059-book-source-batch-disposal.md) | 书源批量处置：多选模式独立状态 + 工具栏入口、多选期间行内开关/菜单失效、「有失效」筛选行旁一键禁用/删除、分组管理区分「删标签」与「删该组全部书源」 | Accepted（2026-10-22，用户裁决四项） | 本次新增 |

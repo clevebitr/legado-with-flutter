@@ -70,6 +70,12 @@ abstract class AggregateSearchState with _$AggregateSearchState {
     @Default(<String, SearchSourceSkip>{})
     Map<String, SearchSourceSkip> skipped,
 
+    /// Whether the scope named something that no longer exists, so every enabled source ran.
+    ///
+    /// 回退不是一个内部细节：用户选了一个已经不存在的分组，却看到全库的结果，不告诉他就会读成
+    /// 「范围筛选失效」（ADR-0058）。
+    @Default(false) bool scopeFellBack,
+
     /// The match mode the next run uses.
     @Default(SearchMatchMode.defaultMode) SearchMatchMode matchMode,
 
@@ -143,6 +149,7 @@ class AggregateSearch extends _$AggregateSearch {
       status: AggregateSearchStatus.running,
       totalSources: resolution.sources.length,
       skipped: resolution.skipped,
+      scopeFellBack: resolution.scopeFellBack,
       page: 1,
       matchMode: state.matchMode,
       types: state.types,
@@ -189,6 +196,7 @@ class AggregateSearch extends _$AggregateSearch {
       status: AggregateSearchStatus.running,
       page: state.page + 1,
       isPaused: false,
+      scopeFellBack: resolution.scopeFellBack,
     );
 
     await _run(
