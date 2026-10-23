@@ -1,11 +1,27 @@
+# 分层 CI：L1 门禁（每个 PR）→ L2 平台构建（main / tag / 手动）→ L3 发布（tag）
+#
+# 分层与触发条件的唯一说明处是 `docs/dev/testing.md` §7，理由与取舍见 ADR-0065。
+# `verify` 这个 job 名是 `main` 规则集要求的 status check（CONTRIBUTING.md §5.4），不要改名。
 name: CI
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
+
+# 同一个 ref 上只留最新一次：PR 取消旧跑，main / tag 上的打包不相互取消。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FLUTTER_VERSION: '3.47.7'
 
 jobs:
+  # ---------------------------------------------------------------- L1 门禁
+  # 顺序与命令的唯一出处：`docs/dev/testing.md` §7 + `AGENTS.md` §4。
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -15,7 +31,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.7'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
@@ -39,3 +55,172 @@ jobs:
 
       - name: Coverage gate
         run: dart run tool/check_coverage.dart
+
+  # ---------------------------------------------------------------- L2 构建
+  # 只在 main / tag / 手动触发时打包：PR 上跑四平台构建会把合并阻塞十几分钟
+  # （macOS runner 计费也是 Linux 的 10 倍），见 ADR-0065 §决策 2。
+  build-windows:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Read the version from pubspec
+        id: version
+        shell: bash
+        run: |
+          version=$(grep -m1 '^version:' pubspec.yaml | sed 's/^version: *//; s/+.*//')
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build (release)
+        run: flutter build windows --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path build\windows\x64\runner\Release\* `
+            -DestinationPath "dist/flutter-reader-${{ steps.version.outputs.value }}-windows-x64.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/*.zip
+          if-no-files-found: error
+
+  build-android:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Flutter 3.47 的工具链要 Java 17；runner 自带的版本随镜像漂移，显式钉住。
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Read the version from pubspec
+        id: version
+        run: |
+          version=$(grep -m1 '^version:' pubspec.yaml | sed 's/^version: *//; s/+.*//')
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      # release 目前复用 debug 签名（`docs/dev/platform.md` §8.2）：产物可直接安装，
+      # 但**不能上架**。上架前必须换成真实 keystore 与 applicationId。
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Build AAB
+        run: flutter build appbundle --release
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "dist/flutter-reader-${{ steps.version.outputs.value }}-android.apk"
+          cp build/app/outputs/bundle/release/app-release.aab \
+            "dist/flutter-reader-${{ steps.version.outputs.value }}-android.aab"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*
+          if-no-files-found: error
+
+  build-ios:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # `ios/Podfile` 不在仓库里（Flutter 在第一次 iOS 构建时按模板生成），
+      # 所以这一步顺带跑 `pod install`，runner 自带 CocoaPods。
+      - name: Build an unsigned archive
+        run: flutter build ipa --no-codesign
+
+      - name: Read the version from pubspec
+        id: version
+        run: |
+          version=$(grep -m1 '^version:' pubspec.yaml | sed 's/^version: *//; s/+.*//')
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          # 未签名归档：能证明「能编译能归档」，但不能直接装真机（ADR-0065 §决策 3）。
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/ios/archive/Runner.xcarchive \
+            "dist/flutter-reader-${{ steps.version.outputs.value }}-ios-unsigned.xcarchive.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: dist/*.zip
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------- L3 发布
+  # 只有 tag（`v*`）会走到这里：把 L2 的产物挂到同名 GitHub Release。
+  # 用 runner 自带的 `gh`，不引入第三方 release action（ADR-0065 §决策 4）。
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-android, build-ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download every artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          ls -l dist
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --generate-notes
+          gh release upload "$tag" dist/* --repo "$GITHUB_REPOSITORY" --clobber

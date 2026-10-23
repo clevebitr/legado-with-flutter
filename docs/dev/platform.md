@@ -196,3 +196,29 @@ pageTransitionsTheme: const PageTransitionsTheme(
 | `applicationId` | 当前为 Flutter 默认的 `com.example.flutter_reader`；`com.example.*` 无法上架。改动点：`android/app/build.gradle.kts` 的 `namespace` 与 `applicationId`、`ios/Runner.xcodeproj` 中的 `PRODUCT_BUNDLE_IDENTIFIER`（共 3 处配置） |
 | 发布签名 | `android/app/build.gradle.kts` 的 release 构建当前复用 debug 签名 |
 | Windows 开发者模式 | 见 §1.2，需在每台开发机开启（管理员） |
+
+### 8.3 CI 构建产物与 iOS 签名
+
+`.github/workflows/ci.yml` 的 L2 在每次合并到 `main`、推 `v*` tag 或手动 dispatch 时产出（ADR-0065）：
+
+| 产物 | 文件 | 能不能直接用 |
+|---|---|---|
+| Windows | `flutter-reader-<版本>-windows-x64.zip` | 解压即用；目标机需 VS 2022 运行库 |
+| Android | `…-android.apk`（通用）与 `…-android.aab` | APK 可装（debug 签名）；AAB 仅占位，上架前必须换 keystore 与 `applicationId` |
+| iOS | `…-ios-unsigned.xcarchive.zip` | **不能装**：只是「能编译能归档」的证明 |
+
+**iOS 签名怎么拿（回答「没有签名怎么办」）：** 签名只能来自 Apple 的开发者体系，代码层面拿不到：
+
+1. 加入 **Apple Developer Program**（个人 99 美元/年；公司/组织需 D-U-N-S 号）；
+2. 在 developer.apple.com 建 App ID（bundle id；当前工程用的是 `com.example.flutterReader`，上架前必须换）；
+3. 生成 **Distribution Certificate** 并导出 `.p12`（带密码）；
+4. 生成 **Provisioning Profile**（App Store 或 Ad Hoc），绑定上面两步；
+5. 若要接进 CI：把 `.p12` 与描述文件 base64 存成仓库 secrets（如 `IOS_CERT_P12_BASE64`、
+   `IOS_CERT_PASSWORD`、`IOS_PROFILE_BASE64`、`IOS_TEAM_ID`），job 里解码到临时 keychain +
+   `~/Library/MobileDevice/Provisioning Profiles`，再用
+   `flutter build ipa --export-method app-store`（或 `--export-options-plist`）导出可分发 `.ipa`。
+
+现在的选择是**不接**：无签名归档已经能满足「每次合并都能打包」，而把长期有效的分发证书放进单人维护期的
+CI，风险大于收益（ADR-0065 §决策 5）。触发条件 = 需要真机安装 / TestFlight / 上架。
+
+macOS 不在当前目标平台里（见 ADR-0065 §决策 3）：要做先补 `macos/` 平台工程与插件面复核，单独立项。

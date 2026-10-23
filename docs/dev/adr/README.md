@@ -83,3 +83,4 @@
 | [0062](0062-audio-phase-two.md) | 听书二期（M24）：`webView` 的 POST/body、`book` 方法面（变量表复用 + `setType` 族语义缺失登记）、HLS 现状（Android 可播 / Windows 随包 libmpv 无 HLS demuxer）、Windows SMTC（`audio_service_win`，无时间轴）、TTS 句级高亮 | Accepted（2026-10-23，M24；用户指令，附双端探针证据） | 本次新增 |
 | [0063](0063-cloud-tts-proposal.md) | 云 TTS：引擎抽象、凭据存储、合成与缓存、播放接线、六项待裁决 | **Proposed**（2026-10-23，M24-P6 立项；未裁决前不实现） | 本次新增 |
 | [0064](0064-audio-page-follows-structure-only.md) | 播放页只跟随「结构状态」：`AudioReaderSkeleton` 投影 + `select`，位置 tick 只重画滑条一行；Windows 的缩略图 / AXTree 日志登记为插件与嵌入层噪声，不用 `ExcludeSemantics` 换安静 | Accepted（2026-10-23，Windows 实跑听书源日志） | 本次新增 |
+| [0065](0065-layered-ci-and-release-artifacts.md) | 分层 CI：L1 `verify`（每个 PR）/ L2 平台构建（main、tag、手动）/ L3 Release（tag）；产物 = Windows zip + 通用 APK + AAB + 未签名 iOS archive；macOS 本轮不做；签名材料不进 CI；发布只用 `gh` | Accepted（2026-10-23，用户要求「分层 CI + release 产物」） | 本次新增 |

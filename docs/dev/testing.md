@@ -164,6 +164,19 @@ await tester.pumpAndSettle();
 | 6 | `flutter test --coverage` | 覆盖率报告是第 7 步的输入 |
 | 7 | `dart run tool/check_coverage.dart` | 阈值 + 未测量源文件（§2、ADR-0019） |
 
+
+### 7.1 分层与触发
+
+`.github/workflows/ci.yml` 现在有三层（判据与取舍见 ADR-0065）：
+
+| 层 | job | 触发 | 说明 |
+|---|---|---|---|
+| L1 门禁 | `verify` | 每个 PR / push main / tag / 手动 | 上面的 1–7 步；**job 名是 `main` 规则集的 status check，不许改名** |
+| L2 构建 | `build-windows` / `build-android` / `build-ios` | `push` main、`v*` tag、`workflow_dispatch`；`needs: verify` | `--release` 打包并 upload-artifact；PR 上不跑（`if: github.event_name != 'pull_request'`） |
+| L3 发布 | `release` | 仅 `v*` tag；`needs:` 三个构建 | `gh release create/upload` 把产物挂到同名 Release（`contents: write`） |
+
+产物与局限（未签名 iOS、debug 签名的 APK）见 ADR-0065 §决策 3；签名材料不进 CI（同 ADR §决策 5）。
+
 要点：
 
 - 第 3 步的路径集比 `AGENTS.md` §4 多包含 `'**/*.gr.dart'`（Drift 生成物），CI 以 CI 侧为准。

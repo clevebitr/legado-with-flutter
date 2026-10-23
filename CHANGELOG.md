@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Release artifacts come out of CI, in three layers (ADR-0065)
+
+- **L1 门禁**（`AGENTS.md` §4 的全部命令）仍然是每个 PR 的门；**L2** 在合并到 `main`、推 `v*` tag 或手动
+  dispatch 时构建 Windows（zip）、Android（通用 APK + AAB）与 iOS（未签名 xcarchive）；**L3** 在 tag 上把
+  这些产物挂到同名 GitHub Release（`gh`，无第三方 release action）。
+- 无签名 iOS 归档只能证明「能编译能归档」；真机安装 / TestFlight 需要 Apple Developer Program 的证书与
+  描述文件，接入步骤写在 `docs/dev/platform.md` §8.3，现在**故意不接**。
+- macOS 不在本轮：仓库仍没有 `macos/` 平台工程。
+
 ### Read a book aloud: form WebViews, `book` methods, SMTC on Windows, sentence highlight (ADR-0062)
 
 - **`webView` rules may POST.** The `WebPageFetcher` port carries `method` / `body`, so a rule like
