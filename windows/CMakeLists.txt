@@ -56,6 +56,13 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 add_subdirectory("runner")
 
 
+# Visual Studio 2026（MSVC 14.5x）把 `<experimental/coroutine>` 的弃用从警告升级成硬错误：
+# `just_audio_windows` 走 C++/WinRT 的 experimental 协程，于是整条 Windows 构建在新工具链上直接
+# 编译失败（error C2338 / STL1011）。插件的 vcxproj 在 pub cache 里，不能改；这个宏是 MSVC 自己
+# 给出的逃生口，必须在 include(generated_plugins.cmake) **之前**定义，才能被插件子目录继承
+# （目录属性只对之后 add_subdirectory 的目录生效）。登记见 docs/dev/platform.md §8.1。
+add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
