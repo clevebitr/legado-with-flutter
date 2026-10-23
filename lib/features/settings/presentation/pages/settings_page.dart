@@ -89,6 +89,16 @@ class SettingsPage extends ConsumerWidget {
       _fontScale(ref, settings, tokens, l10n),
       _heading(l10n.settingsConcurrency, tokens),
       _concurrency(ref, settings, tokens, l10n),
+      _heading(l10n.settingsNetwork, tokens),
+      SwitchListTile(
+        secondary: const Icon(Icons.http),
+        title: Text(l10n.settingsPlainHttp),
+        subtitle: Text(l10n.settingsPlainHttpHint),
+        value: settings.allowPlainHttp,
+        onChanged: (bool allow) => unawaited(
+          ref.read(settingsProvider.notifier).setAllowPlainHttp(allow),
+        ),
+      ),
       _heading(l10n.settingsCache, tokens),
       ListTile(
         leading: const Icon(Icons.cleaning_services_outlined),

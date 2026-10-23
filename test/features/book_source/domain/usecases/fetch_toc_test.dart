@@ -106,6 +106,51 @@ T _data<T>(ParseResult<T> result) => switch (result) {
 
 void main() {
   group('FetchToc', () {
+    test('execute_givenAChapterUrlRule_exposesTheBookBinding', () async {
+      // ADR-0060 P2：`book.tocUrl` / `book.name` 在目录阶段可读（书源用它拼章节地址）。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = 'https://example-novel.test/c9.html';
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_tocUrl, _page('book_page.html'));
+      final BookSource source = _source().copyWith(
+        tocRule: _source().tocRule.copyWith(chapterUrl: '@js:book.tocUrl'),
+      );
+
+      await FetchToc(pages: _service(http, jsBridge: bridge).pages).execute(
+        source,
+        _tocUrl,
+        bookName: '剑来',
+        bookUrl: 'https://example-novel.test/book/1/',
+      );
+
+      expect(bridge.jobs.first.book?.name, '剑来');
+      expect(bridge.jobs.first.book?.tocUrl, _tocUrl);
+      expect(
+        bridge.jobs.first.book?.bookUrl,
+        'https://example-novel.test/book/1/',
+      );
+    });
+
+    test('execute_givenAChapterUrlWithOptions_keepsThemVerbatim', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _tocUrl,
+          '<div id="list"><dl><dd>'
+          '<a href="/1.html,{webView:“true”}">第1章</a>'
+          '</dd></dl></div>',
+        );
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages).execute(_source(), _tocUrl),
+      );
+
+      // 选项留在 URL 原文里，由取页时切掉；现在绝对化会把 `{` 编码成 `%7B`。
+      expect(
+        chapters.single.url,
+        'https://example-novel.test/1.html,{webView:“true”}',
+      );
+    });
+
     test('execute_givenTocPage_returnsEveryChapterWithAbsoluteUrls', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_tocUrl, _page('book_page.html'));

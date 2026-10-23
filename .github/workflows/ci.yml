@@ -1,9 +1,25 @@
+# L1 门禁：分层的第一层，其余三层在 `build-artifacts.yml`（可复用构建）与
+# `release.yml` / `beta.yml` / `debug.yml`（三条发布通道）。判据与版本方案见 ADR-0067，
+# 顺序与命令见 `docs/dev/testing.md` §7 与 `AGENTS.md` §4。
+#
+# `verify` 这个 job 名是 `main` 规则集要求的 status check（CONTRIBUTING.md §5.4），不要改名。
 name: CI
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
+  # 手动跑一次门禁：发布通道的 `wait-for-verify` 需要一个 push/tag 的 CI 运行可等。
+  workflow_dispatch:
+
+# 同一个 ref 上只留最新一次；PR 取消旧跑，main / tag 上的不相互取消。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FLUTTER_VERSION: '3.47.7'
 
 jobs:
   verify:
@@ -15,7 +31,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.7'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 

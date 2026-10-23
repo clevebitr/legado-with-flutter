@@ -1,0 +1,54 @@
+# 分层里「L1 门禁先绿，才允许打包」的跨 workflow 实现：轮询该 commit 的 `verify` 结论。
+# 为什么不用 `workflow_run`：手动 dispatch 与 tag 推送都没有「同一个 workflow 里的 needs」，
+# 轮询同一件事只需要一处实现（ADR-0067 §决策 1）。
+name: Wait for the gate
+description: Blocks until the CI workflow's verify job succeeded for this commit.
+
+inputs:
+  sha:
+    description: 'Commit to wait for'
+    required: true
+  timeout-seconds:
+    description: 'Give up after this long'
+    required: false
+    default: '2400'
+
+runs:
+  using: composite
+  steps:
+    - name: Poll the verify check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        SHA: ${{ inputs.sha }}
+        LIMIT: ${{ inputs.timeout-seconds }}
+      run: |
+        set -euo pipefail
+        deadline=$(( $(date +%s) + LIMIT ))
+        while :; do
+          run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml \
+                  --commit "$SHA" --limit 10 \
+                  --json databaseId,status,conclusion,event \
+                  --jq '[.[] | select(.event != "pull_request")] | first // empty' 2>/dev/null || echo '')
+          if [ -n "$run" ]; then
+            status=$(echo "$run" | jq -r .status)
+            conclusion=$(echo "$run" | jq -r .conclusion)
+            id=$(echo "$run" | jq -r .databaseId)
+            if [ "$status" = 'completed' ]; then
+              if [ "$conclusion" = 'success' ]; then
+                echo "verify is green for $SHA (run $id)"
+                exit 0
+              fi
+              echo "::error::the gate failed for $SHA (run $id): $conclusion"
+              exit 1
+            fi
+            echo "$(date -u +%H:%M:%S) verify still $status for $SHA (run $id)"
+          else
+            echo "$(date -u +%H:%M:%S) no CI run yet for $SHA"
+          fi
+          if [ "$(date +%s)" -ge "$deadline" ]; then
+            echo "::error::timed out waiting for the gate of $SHA"
+            exit 1
+          fi
+          sleep 20
+        done

@@ -78,6 +78,19 @@ void main() {
       expect(decrease.onPressed, isNull);
     });
 
+    testWidgets('page_whenPlainHttpIsTurnedOn_storesIt', (
+      WidgetTester tester,
+    ) async {
+      await pump(tester);
+      final AppLocalizations l10n = _l10n(tester);
+
+      expect(repository.stored.allowPlainHttp, isFalse);
+      await tester.tap(find.text(l10n.settingsPlainHttp));
+      await tester.pumpAndSettle();
+
+      expect(repository.stored.allowPlainHttp, isTrue);
+    });
+
     testWidgets('page_whenTheCacheIsCleared_showsTheCount', (
       WidgetTester tester,
     ) async {

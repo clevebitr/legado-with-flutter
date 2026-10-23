@@ -1,0 +1,173 @@
+# 可复用的构建步骤（不是 workflow：`release.yml` / `beta.yml` / `debug.yml` 共用）。
+#
+# 版本号方案见 ADR-0067 §决策 2：
+#   正式版  <pubspec version>                    （tag 必须与它一致）
+#   beta    <pubspec version>-beta.<sha7>
+#   debug   <pubspec version>-debug.<sha7>.<yyyyMMddHHmm>
+# `--build-number` 用工作流运行号（单调递增）—— Android 要求它是整数，iOS 用它做 CFBundleVersion。
+# iOS 的 `CFBundleShortVersionString` 只能是点分数字，所以它拿 `manifest`，通道信息只走
+# `APP_VERSION`（关于页）与产物文件名。
+#
+# 文档：`docs/dev/testing.md` §7.1/§7.2、`docs/dev/platform.md` §8.3。
+name: Build artifacts
+
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: 'release / beta / debug'
+        required: true
+        type: string
+      version:
+        description: 'Composed version (see the header of this file)'
+        required: true
+        type: string
+      manifest:
+        description: 'pubspec.yaml version without the build number'
+        required: true
+        type: string
+      ref:
+        description: 'Commit to build (empty = the ref that triggered the caller)'
+        required: false
+        type: string
+        default: ''
+
+env:
+  FLUTTER_VERSION: '3.47.7'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build (release mode)
+        run: |
+          flutter build windows --release `
+            --build-name=${{ inputs.version }} `
+            --build-number=${{ github.run_number }} `
+            --dart-define=APP_VERSION=${{ inputs.version }}
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path build\windows\x64\runner\Release\* `
+            -DestinationPath "dist/flutter-reader-${{ inputs.version }}-windows-x64.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/*.zip
+          if-no-files-found: error
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # Flutter 3.47 的工具链要 Java 17；runner 自带的版本随镜像漂移，显式钉住。
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # release 通道目前复用 debug 签名（`docs/dev/platform.md` §8.2）：产物能装、不能上架。
+      - name: Build APK
+        run: |
+          flutter build apk --release \
+            --build-name="${{ inputs.version }}" \
+            --build-number="${{ github.run_number }}" \
+            --dart-define=APP_VERSION="${{ inputs.version }}"
+
+      - name: Build AAB
+        run: |
+          flutter build appbundle --release \
+            --build-name="${{ inputs.version }}" \
+            --build-number="${{ github.run_number }}" \
+            --dart-define=APP_VERSION="${{ inputs.version }}"
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "dist/flutter-reader-${{ inputs.version }}-android.apk"
+          cp build/app/outputs/bundle/release/app-release.aab \
+            "dist/flutter-reader-${{ inputs.version }}-android.aab"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*
+          if-no-files-found: error
+
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # `ios/Podfile` 不在仓库里（Flutter 在第一次 iOS 构建时按模板生成），
+      # 所以这一步顺带跑 `pod install`，runner 自带 CocoaPods。
+      - name: Build an unsigned archive
+        run: |
+          flutter build ipa --no-codesign \
+            --build-name="${{ inputs.manifest }}" \
+            --build-number="${{ github.run_number }}" \
+            --dart-define=APP_VERSION="${{ inputs.version }}"
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          # 未签名归档：能证明「能编译能归档」，不能装真机（ADR-0065 §决策 3）。
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/ios/archive/Runner.xcarchive \
+            "dist/flutter-reader-${{ inputs.version }}-ios-unsigned.xcarchive.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: dist/*.zip
+          if-no-files-found: error

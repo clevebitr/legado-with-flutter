@@ -348,15 +348,30 @@ Phase 6    发布前                          清单见 §5
 > + 双击放大后才挂 `InteractiveViewer`。**未闭环：** Windows/Android `integration_test` 与真源抽查
 > （Android 当前无设备）。
 
-**M17 — 听书与音频（ADR-0054）** —— ⏳ 未开工
+**M17 — 听书与音频（ADR-0054）** —— ✅ 已交付（2026-10-22，真源抽查受阻，见下）
 
-| # | 交付物 |
-|---|---|
-| A-0 | 依赖探针：`just_audio` / `just_audio_windows` / `audio_service` / `flutter_tts` 的三端可编译 + 双端实跑；许可证写 `NOTICE.md` §5 |
-| A-1 | `FetchAudioTracks`（音频源 `ruleContent` → 直链音轨） |
-| A-2 | 音频播放器（播放/暂停/seek/倍速/上下章/失败重试）+ 进度写 `reading_progress`（毫秒偏移） |
-| A-3 | 系统 TTS 朗读（语速/音高/音色、暂停/继续/停止、读完自动下一章、退出默认停止） |
-| A-4 | 后台与通知：Android `audio_service` 前台服务，Windows 降级为 no-op |
+| # | 交付物 | 状态 |
+|---|---|---|
+| A-0 | 依赖探针：`just_audio` / `just_audio_windows` / `audio_service` / `flutter_tts` 的三端可编译 + 双端实跑；许可证写 `NOTICE.md` §5 | ✅ Windows + Android 设备级探针全过；176 包 / Risky none（MIT 46） |
+| A-1 | `FetchAudioTracks`（音频源 `ruleContent` → 直链音轨） | ✅ 列表 / 单地址 / 相对地址 / 去重 / 分页 / 空列表失败；真源抽查另行登记 |
+| A-2 | 音频播放器（播放/暂停/seek/倍速/上下章/失败重试）+ 进度写 `reading_progress`（毫秒偏移） | ✅ `AudioReaderView` + `AudioReader`；本地 WAV 双端实播 |
+| A-3 | 系统 TTS 朗读（语速/音高/音色、暂停/继续/停止、读完自动下一章、退出默认停止） | ✅ `ReaderTtsSheet` + `ReaderTts`；块级切分、连续章节 |
+| A-4 | 后台与通知：Android `audio_service` 前台服务，Windows 降级为 no-op | ✅ 媒体通知端口 + Manifest / `AudioServiceActivity` / `POST_NOTIFICATIONS`；Android 探针挂载成功 |
+
+> **M17 落地记录（2026-10-22）：** 依赖按 ADR-0054 §决策 3 落地（`just_audio 0.10.6` /
+> `just_audio_windows 0.2.3` / `audio_service 0.18.19` / `flutter_tts 4.2.5`）；Windows 额外需要
+> `nuget.exe` 与 `/utf-8`（`platform.md` §1.2）。两条链路：音频源在 `ReaderPage` 按 `sourceType` 分派到
+> `AudioReaderView`，TTS 由文本阅读器工具条的「朗读」进入 `ReaderTtsSheet`；两者共用目录 / 会话 / 进度
+> 三端口。设备级证据：`integration_test/audio_playback_test.dart` 在 Windows 与 Android 全过（本地 WAV
+> 真实解码推进、系统 TTS 读完一句、Android 媒体通知 attach/update/detach）。
+> **真源抽查（用户提供的「🔊书音M」）**：首轮止于目录（`movieId={{$.id}}` 原样进 URL）。按用户指令做了
+> 632 源普查并修复引擎方言（**ADR-0060**）：`@js:`/`<js>` 脚本内 `{{…}}` 展开、规则产出 URL 先切
+> `,{…}` 再绝对化、音频地址形态校验。复测：该书源 `search → bookInfo → toc → audioTracks` **complete**
+> （`movieId=1`，音轨 1 条）；恋听网同样走到音轨阶段（其整页 HTML 产物现在被显式拒绝）。
+> **播放**也已通过（ADR-0061）：Windows 改用 `media_kit`（mpv），同一条 m4a 实测
+> `position=0.109s` / `duration=32:34`，不再崩溃；明文 HTTP 变为设置页的独立开关；`,{webView:…}`
+> 走 headless WebView（Windows / Android 集成用例通过）；沙箱补了 `book` 对象。剩余缺口
+> （`webView` 的 POST/body、`book` 的可变方法、HLS/云 TTS 等）见 §3.7 / ADR-0061 §后果。
 
 > **M15 落地记录（2026-10-22）：** schema v5 → v6（`source_checks` 表 + `is_explore_enabled` 列 + dump
 > 与迁移测试）；状态灯四态与「上次校验」摘要、探索徽标/批量开关、置顶/置底、分组重命名/删除/移出、
@@ -438,13 +453,25 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 页面字段规则的 `page` 绑定与「已取到的那一页」不一致（搜得 / 发现阶段不传 `page`） | ✅ **取证后不改（M12，ADR-0047 §决策 6）**：字段规则本身不消费 `page`（只有 URL 模板与 `@js:` 绑定消费），语料无反例 |
 | `<js>…</js>` 分段链（矩阵 #31）与 `url,{…}` 后缀（§4.3） | ✅ **已闭环（M12，2026-10-21，ADR-0047 §决策 1/2）**：真实语料里各覆盖 50 条源；列表规则上的 `@js:` 与 JSON 条目 `result` 一并落地 |
 | 统一「单源预算」（超时 / 重试）抽成公共件 | ✅ **已闭环（M12，2026-10-21）**：`domain/source_budget.dart` 是「一个源一份预算」的唯一实现，聚合搜索 60 s / 校验 180 s 都改用它（ADR-0049 §决策 3）；单章正文仍靠 `HttpPolicy` 的逐请求超时 |
-| `webView` / `webJs` / `retry` 等 URL 选项字段 | **未做（M12 登记，ADR-0047 §决策 1）**：无浏览器 DOM，按名记 `unsupported` + warning（不静默丢弃） |
+| `webView` / `webJs` / `retry` 等 URL 选项字段 | **部分闭环（M24，ADR-0062 §决策 1）**：`webView` 走 headless WebView，**GET 与 POST+body 都支持**，失败 / 平台无 WebView2 回落普通 HTTP；`webJs` / `retry` 等仍按名记 `unsupported` |
 | `concurrentRate` 的真源只有 3 条且都跑不了原样链路 | 已登记（b2 用派生源 A/B 取证）；触发 = 其中任一条变得可跑 |
 | 「关于」页入口（设置页的菜单行） | **5.9**：与法律声明页一起落地；一个打开空页的菜单行是死链（C-BAN-2），所以 5.6 没有加它 |
 | Big5 / Big5-HKSCS 的解码 | ✅ **已闭环（M12，2026-10-21）**：`enough_convert`（MPL-2.0，白名单 + ADR-0048）的 `Big5Codec` 补解码；`book-source.md` §5.1 已更新 |
 | Big5 的**检测**（`betto_charset_detector` 候选表里没有 Big5） | **未做（ADR-0048 §决策 3）**：只补解码不补检测，无声明页面仍按嗅探结果解。触发 = 语料出现「无声明 Big5 页面且整条源失败」的实例 |
 | Big5-HKSCS 扩展区字符 | **部分支持（ADR-0048）**：扩展区解成 U+FFFD。触发 = 繁体语料反馈缺字 |
 | `shift-jis` / `euc-jp` 严格解码抛 `RangeError`（`Error`，越出 `ParseResult` 契约） | **未做（ADR-0048 §决策 4）**：`enough_convert` 不含日文码表，加字节预校验层无收益可验（语料 0 条日文源）。触发 = 出现日文源 |
+| `@js:` 规则**文本内**的 `{{…}}` 未按内层规则展开（真实听书源 `chapterUrl` 依赖它拼 `movieId`） | ✅ **已闭环（M17，2026-10-22，ADR-0060 §决策 1）**：`@js:`/`<js>` 脚本执行前展开 `{{…}}` / `@get:`；632 源普查命中 96 条，真源书音M 复测通过 |
+| 规则产出的章节/目录/书籍地址带 `,{…}` 选项时，先绝对化会编码 `{`，取页请求变成 `…,%7BwebView…%7D` | ✅ **已闭环（M17，2026-10-22，ADR-0060 §决策 2）**：`resolveUrlRule` 先切选项再绝对化；`fetchRule` 对渲染后的结果再解析一次选项 |
+| 音频 `content` 规则返回整页 HTML（webView 源）时被拼成假音轨 URL | ✅ **已闭环（M17，2026-10-22，ADR-0060 §决策 3）**：`FetchAudioTracks` 先做地址形态校验（无空白 / `<>` / 长度上限），不像地址就跳过并 warning |
+| `just_audio_windows` 对部分远端流（书音M 的 m4a）位置停在 0；对加载失败的流会**原生崩溃** | ✅ **已闭环（M17，2026-10-22，ADR-0061 §决策 1）**：Windows 改用 media_kit（mpv），同一 m4a 实测 `position=0.109s` / 32:34，不再崩溃；6 秒停滞看门狗兜底 |
+| 音频直链是 `http://` 时，C-SEC-2 的明文策略没有面向媒体播放的开关（Android 默认拒绝明文） | ✅ **已闭环（M17，2026-10-22，ADR-0061 §决策 3）**：`AppSettings.allowPlainHttp` 独立开关（页面 `HttpPolicy` 与媒体共用）、Android cleartext + `INTERNET` 权限、专用失败文案 |
+| JS 沙箱只有 `bookName` / `chapterTitle`，没有上游的 `book` 对象 | ✅ **已闭环（M17/M24，ADR-0061 §决策 5、ADR-0062 §决策 2）**：`book{name,author,bookUrl,tocUrl,intro,kind}` + `putVariable`/`getVariable`（规则变量表）+ `setType`/`setReverseToc`（job 内可读回、**不影响宿主**，语义缺失登记） |
+| HLS / m3u8 | **平台依赖（M24，ADR-0062 §决策 3）**：地址层原样交给播放器；Android/iOS 实测可播（mux 播放列表），**Windows 不可播**——随包 `libmpv` 没有 HLS demuxer。触发 = 换用含 HLS demuxer 的 libmpv 或加 Dart 侧播放列表跟随 |
+| 云 TTS、语音缓存、定时停止、投屏、Windows 后台播放 | **未做**：云 TTS 立项见 ADR-0063（Proposed，六项待裁决）；其余无用户需求证据 |
+| TTS 句级高亮 | ✅ **已闭环（M24，ADR-0062 §决策 5）**：`splitSpeechSegments` + `speechSentenceAt` + `SpeechSnapshot.spokenRange`，正文按句高亮；无进度回调的平台覆盖整块（≤800 字） |
+| Windows 媒体通知 | ✅ **已闭环（M24，ADR-0062 §决策 4）**：`audio_service_win`（WinRT SMTC），Windows 实测 attach/update/detach；**无时间轴与 seek**（插件缺口，登记） |
+| Windows 播报 `Failed to set thumbnail`（`audio_service_win`） | **不修（ADR-0064 §决策 2）**：我们从不填 `artUri`（拿不到可用封面文件），插件仍尝试设缩略图后自打日志。触发 = 插件提供「无封面跳过」的开关，或我们开始缓存封面文件 |
+| Windows 播报 `Failed to update ui::AXTree … Nodes left pending by the update` | **部分闭环（ADR-0064 §决策 1）**：位置 tick 不再重建整页（每秒五轮整页 → 一行），可控制的一半已削掉；剩余属 Flutter Windows 嵌入层缺陷（flutter/flutter#103808、#193588 同类），与播放功能无关。触发 = 升级 Flutter 后仍复现则按上游 issue 跟进 |
 | 已登记为**有意差异 / 具名拒绝**的一族：`{{…}}` 在列表规则里的语义、模板 JS 返回列表取首值、发现页 `infoMap` 与排名模块、`java.timeFormatUTC`、HTML 实体反转义、同步 `http.*` 形态、列表规则上的 `@js:`、`parse.*` 嵌套与 `parse.getElements` 非 DOM、元素 scope 的 `result` 形态、矩阵 #7 多元素倒置 | **无待办**：行为与触发条件归 `book-source.md` §3 / §4.2 / §6 / §11 与 ADR-0029 / 0035 的注记，本表不再复述 |
 
 ---

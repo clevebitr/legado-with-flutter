@@ -1,0 +1,104 @@
+# Beta：把「某一批 debug 迭代」定格成一个版本 → 三平台构建 → **预发布** Release。
+#
+# 版本号 = `<pubspec 版本>-beta.<commit sha7>`（ADR-0067 §决策 2）：同一个提交重复打都是同一个版本号，
+# 所以 beta 可以被重复校验；它比正式版多看到提交，少一层人工验收。
+#
+# 默认构建触发它的 ref；要挑一个已经验收过的提交，就在 dispatch 时给 `ref`。
+name: Beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit / branch / tag to publish as beta (empty = the dispatched ref)'
+        required: false
+        type: string
+      note:
+        description: 'What this beta closes (goes into the release notes)'
+        required: false
+        type: string
+
+concurrency:
+  group: beta-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      manifest: ${{ steps.version.outputs.manifest }}
+      tag: ${{ steps.tag.outputs.tag }}
+      sha: ${{ steps.tag.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Compose the version
+        id: version
+        uses: ./.github/actions/version
+        with:
+          channel: beta
+
+      - name: Tag and commit
+        id: tag
+        shell: bash
+        run: |
+          echo "tag=v${{ steps.version.outputs.version }}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout that commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+
+      - name: Wait for CI to be green on that commit
+        uses: ./.github/actions/wait-for-verify
+        with:
+          sha: ${{ needs.meta.outputs.sha }}
+
+  build:
+    needs: [meta, gate]
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      channel: beta
+      version: ${{ needs.meta.outputs.version }}
+      manifest: ${{ needs.meta.outputs.manifest }}
+      ref: ${{ needs.meta.outputs.sha }}
+
+  publish:
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download every artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish as a pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.meta.outputs.tag }}
+          SHA: ${{ needs.meta.outputs.sha }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          NOTE: ${{ inputs.note }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          body="Beta build of ${SHA:0:7}."
+          if [ -n "${NOTE:-}" ]; then
+            body="${body}"$'\n\n'"${NOTE}"
+          fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$SHA" \
+            --title "Beta $VERSION" --prerelease --notes "$body"
+          gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber

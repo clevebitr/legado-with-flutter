@@ -35,7 +35,7 @@
   `domain/usecases/fetch_audio_tracks.dart`。
 - 规则求值与漫画同一条路线（ADR-0053 §决策 2）：一项 = 一轨；相对地址按章节页地址解析；
   空列表按 `ParseFailureKind.parseFailed` 整章失败，不显示「0:00 / 0:00」的空播放器（C-SRC-4）。
-- 只支持直链音频（`http(s)://` 末尾是音频或返回音频 MIME）。HLS / m3u8 **不在本轮**：
+- 只支持直链音频（`http(s)://` 末尾是音频或返回音频 MIME）。**2026-10-23 修订（ADR-0062 §决策 3）：地址层不再按形状区分 HLS**——`.m3u8` 交给播放器，Android/iOS 实测可播，Windows 受随包 libmpv 限制不可播；原文「HLS 不在本轮」的判据（当时未做探针）已被该决策取代。以下为原文：
   需要额外播放器能力与真源证据，登记为未闭环（§3.7）。
 
 ### 决策 3 依赖：播放与 TTS 各一个插件，后台能力按平台降级
@@ -43,7 +43,7 @@
 | 用途 | 包 | 许可 | 平台 | 用途边界 |
 |---|---|---|---|---|
 | 音频播放 | `just_audio` + Windows 实现 `just_audio_windows` | MIT（扫描确认后写 `NOTICE.md` §5） | Android / iOS / Windows | 只做播放，不含媒体通知 |
-| 后台 / 通知 | `audio_service` | MIT | Android / iOS（**无 Windows**） | Android 前台服务 + 媒体通知、锁屏控制 |
+| 后台 / 通知 | `audio_service` | MIT | Android / iOS（**无 Windows**；2026-10-23 起 Windows 由 `audio_service_win` 补上 SMTC，见 ADR-0062 §决策 4） | Android 前台服务 + 媒体通知、锁屏控制 |
 | 朗读 | `flutter_tts` | MIT | Android / iOS / Windows | 系统 TTS；音色取系统列表 |
 
 - **Windows 降级（C-PLT-1）**：播放照常（`just_audio_windows`），但没有媒体通知/锁屏控制 ——
@@ -87,4 +87,34 @@
 - 好的方面：音频源与听书从「打开就是纯文本」变成可用；两条链路互不牵连，任一条失败不影响另一条。
 - 代价：三端插件接线与平台配置（Android `POST_NOTIFICATIONS`、前台服务类型 `mediaPlayback`、
   iOS 后台音频能力）是本次最重的原生工作；Windows 无媒体通知是**有意降级**。
-- 未闭环（登记 §3.7）：HLS / m3u8、云 TTS、语音缓存、句级高亮、定时停止、投屏、Windows 后台播放。
+- 未闭环（登记 §3.7）：云 TTS（ADR-0063 Proposed）、语音缓存、定时停止、投屏、Windows 后台播放。
+  **2026-10-23 更新（ADR-0062）：** 句级高亮已落地；HLS 在 Android/iOS 可播、Windows 受随包 libmpv 限制；
+  Windows 媒体通知已接入（无时间轴）。
+
+## 落地注记（2026-10-22，M17 交付）
+
+- **依赖与探针**：`just_audio 0.10.6` / `just_audio_windows 0.2.3` / `audio_service 0.18.19` /
+  `flutter_tts 4.2.5`（全部 MIT；`NOTICE.md` §5 基线 176 包 / Risky none）。探针在一次性工程里跑通
+  Windows + Android 构建后，才写入 `pubspec.yaml`；本机另需 `nuget.exe`（flutter_tts 的 C++/WinRT）
+  与 MSVC `/utf-8`（just_audio_windows 的 UTF-8 源码 + `/WX`），已写入 `platform.md` §1.2。
+- **A-1 的实体只有 `url` + `headers`**：Legado 的 `ruleContent` 没有供时长 / 标题的字段，章节标题已由
+  目录提供，时长由播放器解码后回报——ADR 正文里的「可选时长 / 标题」没有可消费来源，故不建死字段。
+- **播放器 / TTS 的失败复用 `ParseFailureKind`**（`parseFailed` / `unsupportedRule`），但 UI 用专用
+  文案（`readerAudioFailed` / `readerTtsFailed`）而不是 `FailureMessage`：播放失败不是书源解析失败，
+  共用一个按 kind 翻译的文案会把「音轨打不开」说成「规则失效」。
+- **`audio_service` 懒初始化**：`AudioService.init` 在第一次 `attach` 时调用（进程内单例），而不是在
+  `main()`；Windows 走 `NoopPlaybackNotification`（`null` 句柄）。Android 13+ 的
+  `POST_NOTIFICATIONS` 由 `MainActivity` 的专用 MethodChannel 请求，结果不阻塞播放。
+- **通知只推不连续点**：`PlaybackState.updatePosition` 只在播放 / 暂停 / 缓冲 / 片尾 / seek 时更新，
+  位置由系统按 `speed` 投影，避免每秒五次刷通知。
+- **进度列按模式解释**：音频写 `reading_progress.charOffset` 的**毫秒**值（与文本的比例估算共用一列，
+  这是 ADR §决策 4 的原意）；`ReaderSession` 换章会把偏移清零，音频只在首次装载时 seek。
+- **真源抽查未通过（记「已实现未验证」）**：用户提供的「🔊书音M」`chapterUrl` 是 `@js:` 字符串，里面
+  嵌了 `{{$.id}}`，并引用上游 `book` 对象；本仓的矩阵 #14 规定脚本里的 `{{…}}` 属于脚本、沙箱只暴露
+  `bookName` / `chapterTitle`，因此目录地址里留下字面量 `movieId={{$.id}}`，站点回「章节不存在」。
+  两条缺口登记在 `roadmap.md` §3.7；**播放器本身**已由 `integration_test/audio_playback_test.dart`
+  在 Windows / Android 用本地 WAV 实播验证。真源还暴露并修掉了一个引擎 bug：JSON 条目上的 `@js:`
+  字段丢失页面 `baseUrl`（`_jsContextOf(JsonScope)`），已补单测。
+
+> **2026-10-22 补记（ADR-0060）：** 真源解析阻塞已修复——脚本内 `{{…}}` 展开、URL 选项先切后绝对化、音频地址形态校验之后，书音M 跑到 `audioTracks ok(1)`；剩余 `book` 绑定、`webView`、远端流播放与明文媒体策略仍按 §后果 / `roadmap.md` §3.7 未闭环。
+

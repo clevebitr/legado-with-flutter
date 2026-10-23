@@ -1506,5 +1506,122 @@
         "type": "String"
       }
     }
+  },
+  "readerTtsAction": "Read aloud",
+  "@readerTtsAction": {
+    "description": "Action that starts reading the chapter aloud."
+  },
+  "readerTtsTitle": "Read aloud",
+  "@readerTtsTitle": {
+    "description": "Title of the read-aloud sheet."
+  },
+  "readerTtsStart": "Start reading",
+  "@readerTtsStart": {
+    "description": "Button that starts reading the chapter aloud."
+  },
+  "readerTtsPause": "Pause",
+  "@readerTtsPause": {
+    "description": "Button that pauses speech."
+  },
+  "readerTtsResume": "Resume",
+  "@readerTtsResume": {
+    "description": "Button that resumes paused speech."
+  },
+  "readerTtsStop": "Stop",
+  "@readerTtsStop": {
+    "description": "Button that stops speech."
+  },
+  "readerTtsRate": "Speed",
+  "@readerTtsRate": {
+    "description": "Label of the speech rate slider."
+  },
+  "readerTtsPitch": "Pitch",
+  "@readerTtsPitch": {
+    "description": "Label of the speech pitch slider."
+  },
+  "readerTtsVoice": "Voice",
+  "@readerTtsVoice": {
+    "description": "Label of the system voice picker."
+  },
+  "readerTtsVoiceLabel": "{name} ({locale})",
+  "@readerTtsVoiceLabel": {
+    "description": "Voice picker entry: display name and locale.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "locale": {
+        "type": "String"
+      }
+    }
+  },
+  "readerTtsSystemVoice": "System default",
+  "@readerTtsSystemVoice": {
+    "description": "Voice picker entry that keeps the platform default voice."
+  },
+  "readerTtsKeepOnExit": "Keep reading after leaving the reader",
+  "@readerTtsKeepOnExit": {
+    "description": "Switch that keeps speech running when the reader is closed."
+  },
+  "readerTtsFailed": "The system speech engine could not read this chapter.",
+  "@readerTtsFailed": {
+    "description": "Shown when the TTS engine fails."
+  },
+  "readerAudioFailed": "This track could not be played.",
+  "@readerAudioFailed": {
+    "description": "Shown when an audio track cannot be loaded or played."
+  },
+  "readerAudioPlay": "Play",
+  "@readerAudioPlay": {
+    "description": "Action that starts audio playback."
+  },
+  "readerAudioPause": "Pause",
+  "@readerAudioPause": {
+    "description": "Action that pauses audio playback."
+  },
+  "readerAudioReplay": "Play again",
+  "@readerAudioReplay": {
+    "description": "Action that restarts a finished track."
+  },
+  "readerAudioSpeed": "Speed",
+  "@readerAudioSpeed": {
+    "description": "Label of the playback speed choices."
+  },
+  "readerAudioSpeedValue": "{speed}×",
+  "@readerAudioSpeedValue": {
+    "description": "Playback speed label; the placeholder already contains the multiplier.",
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
+  "readerAudioTrackCount": "Part {index} of {total}",
+  "@readerAudioTrackCount": {
+    "description": "Part indicator when an audio chapter has several tracks.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsNetwork": "Network",
+  "@settingsNetwork": {
+    "description": "Settings section heading for network behaviour."
+  },
+  "settingsPlainHttp": "Allow plaintext HTTP",
+  "@settingsPlainHttp": {
+    "description": "Switch that opts into http:// for pages and media."
+  },
+  "settingsPlainHttpHint": "Some book sources and audio streams only provide http:// addresses. Page requests follow this switch too.",
+  "@settingsPlainHttpHint": {
+    "description": "Explanation under the plaintext-HTTP switch."
+  },
+  "readerAudioPlainHttp": "This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.",
+  "@readerAudioPlainHttp": {
+    "description": "Shown when an audio track is http and the user has not opted in."
   }
 }

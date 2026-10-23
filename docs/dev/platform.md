@@ -44,8 +44,20 @@ Please enable Developer Mode in your system settings.
 或执行 `start ms-settings:developers`。
 
 > 本项目依赖多个带原生代码的插件（`drift_flutter`、`path_provider`、`shared_preferences`、
-> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`），因此该开关是 Windows 开发的
-> **硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
+> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`、`just_audio_windows`、`flutter_tts`），
+> 因此该开关是 Windows 开发的**硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
+
+**M17 / M24 起新增的 Windows 构建与能力前提（ADR-0054 A-0、ADR-0062 实测）：**
+
+| 前提 | 谁需要 | 不满足时的表现 |
+|---|---|---|
+| `nuget.exe` 在 `PATH` 上（本机放在 `C:/Users/<user>/tools/nuget.exe`） | `flutter_tts` 与 `audio_service_win` 的 Windows 实现（C++/WinRT，`nuget install Microsoft.Windows.CppWinRT`） | `CMake Error at …/windows/CMakeLists.txt: nuget.exe not found` |
+| MSVC `/utf-8`（已在 `windows/CMakeLists.txt` 的 `APPLY_STANDARD_SETTINGS` 统一加） | `just_audio_windows` 的 UTF-8 源码；代码页 936 下 C4819 被 `/WX` 放大成构建失败 | `error C2220: 以下警告被视为错误` + `warning C4819` |
+| **WebView2 Evergreen 运行时** | `flutter_inappwebview_windows`（`,{webView:…}` 与 WebView 集成用例）；Win11 自带，Win10 装 Edge 即有；`flutter_inappwebview_windows` 构建也会经 NuGet 拉 WebView2 SDK | WebView 取页失败 → `WebPageFetcher` 回落普通 GET（不崩） |
+
+> **能力前提（不是构建前提）：** 媒体通知由 `audio_service_win` 的 WinRT `SystemMediaTransportControls` 提供，
+> 无需额外运行时（Windows 10+ 自带）；它**不显示进度、通知栏 seek 不生效**（ADR-0062 §决策 4）。
+> 同理，随包 `libmpv` 没有 HLS demuxer，`.m3u8` 在 Windows 上播放会失败（同一 ADR §决策 3）。
 
 ---
 
@@ -61,6 +73,9 @@ Please enable Developer Mode in your system settings.
 | `SystemUiController` | 状态栏透明、edge-to-edge 适配 | 在 `core/theme/` 统一调用 |
 | `HapticsController` | 触感反馈能力探测与降级 | 组件内调用，不判断平台 |
 | `LongRunningTask` | 长任务的前台标记（Android 为 `PARTIAL_WAKE_LOCK`） | 批量书源校验开始 / 结束时 `acquire` / `release`（ADR-0043 §决策 3） |
+| `PlaybackNotification` | 媒体通知 / 锁屏控制（Android / iOS 由 `audio_service` 实现；Windows 返回 no-op 的 `null` 句柄） | 音频播放器在播放状态变化时 `attach` / `update` / `detach`；**UI 不判断平台**（ADR-0054 §决策 3/4） |
+| `WebPageFetcher` | `,{webView:…}` 的 headless WebView（三端）；不支持的平台 `isSupported == false`，调用方回落普通 GET | `PageFetchService` 在 `webView` + GET + 无 body 时调用（ADR-0061 §决策 4） |
+| `usesMediaKitPlayback` | 播放后端的平台选择：Windows 用 media_kit，Android / iOS 用 just_audio | `reader/di.dart` 选适配器；**业务层不判断平台**（ADR-0061 §决策 1） |
 
 **契约：** 每个接口在不支持的平台返回 `null` 或 no-op，**禁止抛出异常**；
 调用方必须把 `null` 当作正常分支处理，不得用 `!` 解包（C-TYPE-2）。
@@ -168,6 +183,7 @@ pageTransitionsTheme: const PageTransitionsTheme(
 | 位置 | 设置 | 原因 |
 |---|---|---|
 | `android/gradle.properties` | `kotlin.incremental=false` | Kotlin 2.4 的增量编译缓存在 Windows 上偶发文件锁定，报 `Could not close incremental caches` 并中断构建（最近复现于 `dynamic_color` 模块）。**这是工具链问题，与任何插件无关，不要因更换插件而删除。** |
+| `android/gradle.properties` | `android.r8.proguardAndroidTxt.disallowed=false` | `flutter_inappwebview_android 1.1.3` 仍调用 `getDefaultProguardFile('proguard-android.txt')`，AGP 9 默认拒绝（`-dontoptimize`）。插件改用 `proguard-android-optimize.txt` 后删除该行（ADR-0061）。 |
 
 > 另一条曾经的变通 `kotlin.jvm.target.validation.mode=warning` **已删除**：它只为已移除的
 > `flutter_js_plus`（固定 `kotlin 1.7.20` / `jvmTarget 1.8`，与 AGP 9 默认的 Java 11 不一致）而加。
@@ -180,3 +196,31 @@ pageTransitionsTheme: const PageTransitionsTheme(
 | `applicationId` | 当前为 Flutter 默认的 `com.example.flutter_reader`；`com.example.*` 无法上架。改动点：`android/app/build.gradle.kts` 的 `namespace` 与 `applicationId`、`ios/Runner.xcodeproj` 中的 `PRODUCT_BUNDLE_IDENTIFIER`（共 3 处配置） |
 | 发布签名 | `android/app/build.gradle.kts` 的 release 构建当前复用 debug 签名 |
 | Windows 开发者模式 | 见 §1.2，需在每台开发机开启（管理员） |
+
+### 8.3 CI 构建产物与 iOS 签名
+
+`三条发布通道（`release.yml` / `beta.yml` / `debug.yml`，构建体在 `build-artifacts.yml`）按各自版本号
+产出同样的四个文件（ADR-0067 §决策 2；`<版本>` 分别是 `0.1.0` / `0.1.0-beta.<sha7>` /
+`0.1.0-debug.<sha7>.<时间>`）：
+
+| 产物 | 文件 | 能不能直接用 |
+|---|---|---|
+| Windows | `flutter-reader-<版本>-windows-x64.zip` | 解压即用；目标机需 VS 2022 运行库 |
+| Android | `…-android.apk`（通用）与 `…-android.aab` | APK 可装（debug 签名）；AAB 仅占位，上架前必须换 keystore 与 `applicationId` |
+| iOS | `…-ios-unsigned.xcarchive.zip` | **不能装**：只是「能编译能归档」的证明（Xcode 的短版本号必须是点分数字，所以 iOS 的 `build-name` 只取数字版本，通道信息在 `APP_VERSION` 与文件名里） |
+
+**iOS 签名怎么拿（回答「没有签名怎么办」）：** 签名只能来自 Apple 的开发者体系，代码层面拿不到：
+
+1. 加入 **Apple Developer Program**（个人 99 美元/年；公司/组织需 D-U-N-S 号）；
+2. 在 developer.apple.com 建 App ID（bundle id；当前工程用的是 `com.example.flutterReader`，上架前必须换）；
+3. 生成 **Distribution Certificate** 并导出 `.p12`（带密码）；
+4. 生成 **Provisioning Profile**（App Store 或 Ad Hoc），绑定上面两步；
+5. 若要接进 CI：把 `.p12` 与描述文件 base64 存成仓库 secrets（如 `IOS_CERT_P12_BASE64`、
+   `IOS_CERT_PASSWORD`、`IOS_PROFILE_BASE64`、`IOS_TEAM_ID`），job 里解码到临时 keychain +
+   `~/Library/MobileDevice/Provisioning Profiles`，再用
+   `flutter build ipa --export-method app-store`（或 `--export-options-plist`）导出可分发 `.ipa`。
+
+现在的选择是**不接**：无签名归档已经能满足「每次合并都能打包」，而把长期有效的分发证书放进单人维护期的
+CI，风险大于收益（ADR-0065 §决策 5）。触发条件 = 需要真机安装 / TestFlight / 上架。
+
+macOS 不在当前目标平台里（见 ADR-0065 §决策 3）：要做先补 `macos/` 平台工程与插件面复核，单独立项。

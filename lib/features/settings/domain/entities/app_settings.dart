@@ -32,6 +32,7 @@ final class AppSettings {
     required this.themeMode,
     required this.fontScale,
     required this.maxConcurrentPerSource,
+    required this.allowPlainHttp,
   });
 
   /// Creates settings, clamping every value into its documented range.
@@ -39,6 +40,7 @@ final class AppSettings {
     AppThemeMode themeMode = AppThemeMode.system,
     double fontScale = 1,
     int maxConcurrentPerSource = defaultMaxConcurrentRequestsPerSource,
+    bool allowPlainHttp = false,
   }) => AppSettings._(
     themeMode: themeMode,
     fontScale: fontScale.clamp(minFontScale, maxFontScale),
@@ -46,6 +48,7 @@ final class AppSettings {
       minConcurrentBudget,
       maxConcurrentBudget,
     ),
+    allowPlainHttp: allowPlainHttp,
   );
 
   /// The settings used before anything was stored and while the store is still loading.
@@ -53,6 +56,7 @@ final class AppSettings {
     themeMode: AppThemeMode.system,
     fontScale: 1,
     maxConcurrentPerSource: defaultMaxConcurrentRequestsPerSource,
+    allowPlainHttp: false,
   );
 
   /// Which scheme the app follows.
@@ -64,16 +68,24 @@ final class AppSettings {
   /// Requests one book source may have in flight at once (`book-source.md` §8).
   final int maxConcurrentPerSource;
 
+  /// Whether the user allows plaintext `http://` media (C-SEC-2's explicit opt-in).
+  ///
+  /// Page requests still go through `HttpPolicy` with the same flag; this value is shared by
+  /// both lanes, so turning it on cannot silently make the reader fetch pages over http.
+  final bool allowPlainHttp;
+
   /// Returns a copy with the given values, clamped the same way the factory does.
   AppSettings copyWith({
     AppThemeMode? themeMode,
     double? fontScale,
     int? maxConcurrentPerSource,
+    bool? allowPlainHttp,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     fontScale: fontScale ?? this.fontScale,
     maxConcurrentPerSource:
         maxConcurrentPerSource ?? this.maxConcurrentPerSource,
+    allowPlainHttp: allowPlainHttp ?? this.allowPlainHttp,
   );
 
   @override
@@ -81,8 +93,10 @@ final class AppSettings {
       other is AppSettings &&
       other.themeMode == themeMode &&
       other.fontScale == fontScale &&
-      other.maxConcurrentPerSource == maxConcurrentPerSource;
+      other.maxConcurrentPerSource == maxConcurrentPerSource &&
+      other.allowPlainHttp == allowPlainHttp;
 
   @override
-  int get hashCode => Object.hash(themeMode, fontScale, maxConcurrentPerSource);
+  int get hashCode =>
+      Object.hash(themeMode, fontScale, maxConcurrentPerSource, allowPlainHttp);
 }

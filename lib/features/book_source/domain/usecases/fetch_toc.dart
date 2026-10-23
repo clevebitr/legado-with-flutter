@@ -1,9 +1,10 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
-import 'package:flutter_reader/features/book_source/domain/url_template.dart';
+import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 
 /// Reads the table of contents of one book (`docs/dev/roadmap.md` 2.4, `ruleToc`).
 ///
@@ -27,6 +28,10 @@ final class FetchToc {
     BookSource source,
     String url, {
     String bookName = '',
+    String bookUrl = '',
+    String author = '',
+    String kind = '',
+    String intro = '',
   }) async {
     // 书源自己的限速要在第一个请求之前进预算（book-source.md §8、ADR-0036）。
     _pages.applySourceRate(source);
@@ -42,6 +47,14 @@ final class FetchToc {
         source: source.jsSourceInfo,
         headers: headers,
         bookName: bookName,
+        book: JsBookInfo(
+          name: bookName,
+          author: author,
+          bookUrl: bookUrl,
+          tocUrl: url,
+          intro: intro,
+          kind: kind,
+        ),
       ),
       headers: headers,
       sourceId: source.url,
@@ -185,7 +198,8 @@ final class FetchToc {
       chapters.add(
         Chapter(
           name: name.dataOrNull ?? '',
-          url: resolveAbsoluteUrl(chapterUrl, baseUrl),
+          // 选项（`,{webView:…}`）必须留在 URL 之外解析：先绝对化会把 `{` 编码成 `%7B`。
+          url: resolveUrlRule(chapterUrl, baseUrl),
           isVip: _isVip(vip.dataOrNull),
           // 展示用字符串：规则结果原文（`java.timeFormat` 已在脚本里跑过），
           // 这里不做日期解析（book-source.md §2）。

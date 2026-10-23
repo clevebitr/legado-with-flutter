@@ -1,12 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/preference_store_provider.dart';
+import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/platform/audio_service_playback_notification.dart';
+import 'package:flutter_reader/core/platform/playback_backend.dart';
+import 'package:flutter_reader/core/platform/playback_notification.dart';
+import 'package:flutter_reader/features/reader/data/flutter_tts_speech_synthesizer.dart';
+import 'package:flutter_reader/features/reader/data/just_audio_playback_engine.dart';
+import 'package:flutter_reader/features/reader/data/media_kit_playback_engine.dart';
 import 'package:flutter_reader/features/reader/data/reader_settings_repository_impl.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/audio_playback_engine.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/audio_track_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/book_source_switcher.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/manga_page_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_settings_repository.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_source_kind_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/speech_synthesizer.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'di.g.dart';
@@ -59,3 +71,44 @@ ReadingProgressStore readerProgressStore(Ref ref) =>
 @Riverpod(keepAlive: true)
 BookSourceSwitcher bookSourceSwitcher(Ref ref) =>
     const UnboundBookSourceSwitcher();
+
+/// Provides the audio player, **unbound** to a platform until it is really needed.
+///
+/// The adapter creates a native player in its constructor, so this provider is only instantiated
+/// when an audio book is opened (or a test overrides it). Its own disposal releases the native
+/// player once the page stops watching it.
+@riverpod
+AudioPlaybackEngine audioPlaybackEngine(Ref ref) {
+  final AppLogger logger = ref.watch(appLoggerProvider);
+  // Windows 用 media_kit（mpv）；Android / iOS 继续 just_audio（ADR-0061）。
+  final AudioPlaybackEngine engine = usesMediaKitPlayback
+      ? MediaKitPlaybackEngine(logger: logger)
+      : JustAudioPlaybackEngine(logger: logger);
+  ref.onDispose(() => unawaited(engine.dispose()));
+
+  return engine;
+}
+
+/// Provides the system TTS engine (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 5).
+@riverpod
+SpeechSynthesizer speechSynthesizer(Ref ref) {
+  final SpeechSynthesizer engine = FlutterTtsSpeechSynthesizer(
+    logger: ref.watch(appLoggerProvider),
+  );
+  ref.onDispose(() => unawaited(engine.dispose()));
+
+  return engine;
+}
+
+/// Provides the audio-track port, **unbound** by default.
+///
+/// The composition root binds it to `book_source`'s `FetchAudioTracks` (ADR-0041 §决策 2).
+@riverpod
+AudioTrackProvider readerAudioTrack(Ref ref) =>
+    UnboundAudioTrackProvider(logger: ref.watch(appLoggerProvider));
+
+/// Provides the media-notification binding for this platform
+/// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 3/4).
+@riverpod
+PlaybackNotification playbackNotification(Ref ref) =>
+    createPlaybackNotification(logger: ref.watch(appLoggerProvider));

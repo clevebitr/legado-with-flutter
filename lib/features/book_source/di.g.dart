@@ -276,7 +276,77 @@ final class PageFetchServiceProvider
   }
 }
 
-String _$pageFetchServiceHash() => r'a2fef1ef971aa69f18523af0313bd88abdb5165e';
+String _$pageFetchServiceHash() => r'468d712869d464c9328f014cebea12126c981668';
+
+/// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+///
+/// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
+/// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
+/// failing the source.
+///
+/// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
+/// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
+/// provider (ADR-0010).
+
+@ProviderFor(webPageFetcher)
+final webPageFetcherProvider = WebPageFetcherProvider._();
+
+/// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+///
+/// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
+/// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
+/// failing the source.
+///
+/// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
+/// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
+/// provider (ADR-0010).
+
+final class WebPageFetcherProvider
+    extends $FunctionalProvider<WebPageFetcher, WebPageFetcher, WebPageFetcher>
+    with $Provider<WebPageFetcher> {
+  /// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+  ///
+  /// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
+  /// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
+  /// failing the source.
+  ///
+  /// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
+  /// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
+  /// provider (ADR-0010).
+  WebPageFetcherProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'webPageFetcherProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$webPageFetcherHash();
+
+  @$internal
+  @override
+  $ProviderElement<WebPageFetcher> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  WebPageFetcher create(Ref ref) {
+    return webPageFetcher(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(WebPageFetcher value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<WebPageFetcher>(value),
+    );
+  }
+}
+
+String _$webPageFetcherHash() => r'e258afa898dc2d848748bdf28feb5fe1fe8478d9';
 
 /// Provides the search use case.
 
@@ -566,6 +636,57 @@ final class FetchMangaPagesProvider
 }
 
 String _$fetchMangaPagesHash() => r'e6f3da185aacb0be6493fb63af1e906fb74a9609';
+
+/// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+
+@ProviderFor(fetchAudioTracks)
+final fetchAudioTracksProvider = FetchAudioTracksProvider._();
+
+/// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+
+final class FetchAudioTracksProvider
+    extends
+        $FunctionalProvider<
+          FetchAudioTracks,
+          FetchAudioTracks,
+          FetchAudioTracks
+        >
+    with $Provider<FetchAudioTracks> {
+  /// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+  FetchAudioTracksProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'fetchAudioTracksProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$fetchAudioTracksHash();
+
+  @$internal
+  @override
+  $ProviderElement<FetchAudioTracks> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  FetchAudioTracks create(Ref ref) {
+    return fetchAudioTracks(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(FetchAudioTracks value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<FetchAudioTracks>(value),
+    );
+  }
+}
+
+String _$fetchAudioTracksHash() => r'76f5df3129241d5ddc03e924e7ea6e437280f7be';
 
 /// Provides the use case that reads a source's discover-page categories.
 

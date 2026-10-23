@@ -10,8 +10,10 @@ import 'package:flutter_reader/features/reader/domain/entities/reader_settings.d
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -338,6 +340,47 @@ void main() {
         fixture.progress.writes.last.chapterUrl,
         'https://source.test/1.html',
       );
+    });
+  });
+
+  group('ReaderPage tts highlight', () {
+    testWidgets('ttsHighlight_whenTheChapterIsBeingRead_paintsTheSentence', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+      await _pump(tester, fixture);
+
+      final String rendered = readerBodyText(
+        _longBody,
+        ReaderSettings.defaults,
+      );
+      fixture.container
+          .read(readerTtsHighlighterProvider.notifier)
+          .show(chapterUrl: 'https://source.test/1.html', start: 2, end: 10);
+      await tester.pump();
+
+      final Text body = tester.widget<Text>(_bodyFinder());
+      final TextSpan painted = (body.textSpan! as TextSpan).children!
+          .whereType<TextSpan>()
+          .firstWhere((TextSpan span) => span.style?.backgroundColor != null);
+
+      expect(painted.text, rendered.substring(2, 10));
+    });
+
+    testWidgets('ttsHighlight_whenItBelongsToAnotherChapter_paintsNothing', (
+      WidgetTester tester,
+    ) async {
+      // 读者可能已经翻到下一章：旧章节的句子不能画在新正文上。
+      final _Fixture fixture = _fixture();
+      await _pump(tester, fixture);
+
+      fixture.container
+          .read(readerTtsHighlighterProvider.notifier)
+          .show(chapterUrl: 'https://source.test/2.html', start: 2, end: 10);
+      await tester.pump();
+
+      final Text body = tester.widget<Text>(_bodyFinder());
+      expect(body.textSpan, isNull);
     });
   });
 }

@@ -80,6 +80,18 @@ const List<double> readerParagraphSpacingSteps = <double>[0, 0.5, 1];
 /// First-line indent presets, in `em` (`ADR-0051 §决策 4`).
 const List<double> readerFirstLineIndentSteps = <double>[0, 1, 2];
 
+/// The slowest speech rate the TTS sheet offers (ADR-0054 §决策 5).
+const double minTtsRate = 0.5;
+
+/// The fastest speech rate the TTS sheet offers (ADR-0054 §决策 5).
+const double maxTtsRate = 2;
+
+/// The lowest TTS pitch the sheet offers (ADR-0054 §决策 5).
+const double minTtsPitch = 0.5;
+
+/// The highest TTS pitch the sheet offers (ADR-0054 §决策 5).
+const double maxTtsPitch = 2;
+
 /// What the reading experience looks like (`docs/dev/roadmap.md` 5.3, ADR-0044 §决策 1).
 ///
 /// Every value is **clamped in the factory**, not asserted: an assertion is stripped in release
@@ -99,6 +111,11 @@ final class ReaderSettings {
     required this.paragraphSpacing,
     required this.firstLineIndent,
     required this.pagePadding,
+    required this.ttsRate,
+    required this.ttsPitch,
+    required this.ttsVoiceName,
+    required this.ttsVoiceLocale,
+    required this.stopTtsOnExit,
   });
 
   /// Creates reader settings, clamping both numeric values into their documented ranges.
@@ -111,6 +128,11 @@ final class ReaderSettings {
     double paragraphSpacing = 0.5,
     double firstLineIndent = 2,
     ReaderPagePadding pagePadding = ReaderPagePadding.medium,
+    double ttsRate = 1,
+    double ttsPitch = 1,
+    String? ttsVoiceName,
+    String? ttsVoiceLocale,
+    bool stopTtsOnExit = true,
   }) => ReaderSettings._(
     fontScale: fontScale.clamp(minReaderFontScale, maxReaderFontScale),
     lineHeight: lineHeight.clamp(minReaderLineHeight, maxReaderLineHeight),
@@ -121,6 +143,11 @@ final class ReaderSettings {
     paragraphSpacing: _nearest(readerParagraphSpacingSteps, paragraphSpacing),
     firstLineIndent: _nearest(readerFirstLineIndentSteps, firstLineIndent),
     pagePadding: pagePadding,
+    ttsRate: ttsRate.clamp(minTtsRate, maxTtsRate),
+    ttsPitch: ttsPitch.clamp(minTtsPitch, maxTtsPitch),
+    ttsVoiceName: ttsVoiceName,
+    ttsVoiceLocale: ttsVoiceLocale,
+    stopTtsOnExit: stopTtsOnExit,
   );
 
   /// What a reader that has stored nothing yet uses.
@@ -133,6 +160,11 @@ final class ReaderSettings {
     paragraphSpacing: 0.5,
     firstLineIndent: 2,
     pagePadding: ReaderPagePadding.medium,
+    ttsRate: 1,
+    ttsPitch: 1,
+    ttsVoiceName: null,
+    ttsVoiceLocale: null,
+    stopTtsOnExit: true,
   );
 
   /// Body text multiplier, on top of the app's accessibility scale.
@@ -159,6 +191,21 @@ final class ReaderSettings {
   /// Which page-padding preset the body uses.
   final ReaderPagePadding pagePadding;
 
+  /// Speech rate multiplier for the TTS reader (1.0 = normal, ADR-0054 §决策 5).
+  final double ttsRate;
+
+  /// Speech pitch for the TTS reader (1.0 = normal, ADR-0054 §决策 5).
+  final double ttsPitch;
+
+  /// The system voice the reader picked, or `null` for the platform default.
+  final String? ttsVoiceName;
+
+  /// The locale of [ttsVoiceName], which the platform needs to resolve the voice.
+  final String? ttsVoiceLocale;
+
+  /// Whether leaving the reader stops speech (ADR-0054 §决策 5).
+  final bool stopTtsOnExit;
+
   /// Returns a copy with the given values, clamped the same way the factory does.
   ReaderSettings copyWith({
     double? fontScale,
@@ -169,6 +216,12 @@ final class ReaderSettings {
     double? paragraphSpacing,
     double? firstLineIndent,
     ReaderPagePadding? pagePadding,
+    double? ttsRate,
+    double? ttsPitch,
+    String? ttsVoiceName,
+    String? ttsVoiceLocale,
+    bool? stopTtsOnExit,
+    bool clearTtsVoice = false,
   }) => ReaderSettings(
     fontScale: fontScale ?? this.fontScale,
     lineHeight: lineHeight ?? this.lineHeight,
@@ -178,6 +231,13 @@ final class ReaderSettings {
     paragraphSpacing: paragraphSpacing ?? this.paragraphSpacing,
     firstLineIndent: firstLineIndent ?? this.firstLineIndent,
     pagePadding: pagePadding ?? this.pagePadding,
+    ttsRate: ttsRate ?? this.ttsRate,
+    ttsPitch: ttsPitch ?? this.ttsPitch,
+    ttsVoiceName: clearTtsVoice ? null : ttsVoiceName ?? this.ttsVoiceName,
+    ttsVoiceLocale: clearTtsVoice
+        ? null
+        : ttsVoiceLocale ?? this.ttsVoiceLocale,
+    stopTtsOnExit: stopTtsOnExit ?? this.stopTtsOnExit,
   );
 
   @override
@@ -190,7 +250,12 @@ final class ReaderSettings {
       other.fontFamily == fontFamily &&
       other.paragraphSpacing == paragraphSpacing &&
       other.firstLineIndent == firstLineIndent &&
-      other.pagePadding == pagePadding;
+      other.pagePadding == pagePadding &&
+      other.ttsRate == ttsRate &&
+      other.ttsPitch == ttsPitch &&
+      other.ttsVoiceName == ttsVoiceName &&
+      other.ttsVoiceLocale == ttsVoiceLocale &&
+      other.stopTtsOnExit == stopTtsOnExit;
 
   @override
   int get hashCode => Object.hash(
@@ -202,6 +267,11 @@ final class ReaderSettings {
     paragraphSpacing,
     firstLineIndent,
     pagePadding,
+    ttsRate,
+    ttsPitch,
+    ttsVoiceName,
+    ttsVoiceLocale,
+    stopTtsOnExit,
   );
 }
 

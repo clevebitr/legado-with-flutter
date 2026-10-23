@@ -34,11 +34,20 @@ void main() {
         themeMode: AppThemeMode.dark,
         fontScale: 1.4,
         maxConcurrentPerSource: 6,
+        allowPlainHttp: true,
       );
 
       await repository.save(settings);
 
       expect(await repository.load(), settings);
+    });
+
+    test('load_whenNothingIsStored_keepsPlainHttpOff', () async {
+      final SettingsRepositoryImpl repository = await repositoryWith(
+        <String, Object>{},
+      );
+
+      expect((await repository.load()).allowPlainHttp, isFalse);
     });
 
     test('save_givenAnOutOfRangeBudget_storesTheClampedValue', () async {

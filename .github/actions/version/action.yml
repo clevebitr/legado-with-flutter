@@ -1,0 +1,42 @@
+# 版本号组合：唯一实现处（`release.yml` / `beta.yml` / `debug.yml` 都调它）。
+# 方案与理由见 ADR-0067 §决策 2；调用方必须先 checkout（要读 pubspec.yaml）。
+name: Compose the version
+description: Reads pubspec.yaml and composes the version of one channel.
+
+inputs:
+  channel:
+    description: 'release | beta | debug'
+    required: true
+
+outputs:
+  version:
+    description: 'The composed version, e.g. 0.1.0 / 0.1.0-beta.a1b2c3d / 0.1.0-debug.a1b2c3d.202610231540'
+    value: ${{ steps.compose.outputs.version }}
+  manifest:
+    description: 'pubspec.yaml version without the build number'
+    value: ${{ steps.compose.outputs.manifest }}
+  short-sha:
+    description: '7-character commit hash'
+    value: ${{ steps.compose.outputs.short_sha }}
+
+runs:
+  using: composite
+  steps:
+    - name: Compose
+      id: compose
+      shell: bash
+      run: |
+        set -euo pipefail
+        manifest=$(grep -m1 '^version:' pubspec.yaml | sed 's/^version: *//; s/+.*//')
+        sha=$(git rev-parse --short=7 HEAD)
+        stamp=$(date -u +%Y%m%d%H%M)
+        case "${{ inputs.channel }}" in
+          release) version="$manifest" ;;
+          beta)    version="$manifest-beta.$sha" ;;
+          debug)   version="$manifest-debug.$sha.$stamp" ;;
+          *) echo "::error::unknown channel '${{ inputs.channel }}'"; exit 1 ;;
+        esac
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
+        echo "short_sha=$sha" >> "$GITHUB_OUTPUT"
+        echo "composed version=$version"

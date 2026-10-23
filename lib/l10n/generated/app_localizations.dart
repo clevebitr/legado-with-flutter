@@ -2045,6 +2045,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Aligned to: {chapter}'**
   String readerSourceAligned(String chapter);
+
+  /// Action that starts reading the chapter aloud.
+  ///
+  /// In en, this message translates to:
+  /// **'Read aloud'**
+  String get readerTtsAction;
+
+  /// Title of the read-aloud sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Read aloud'**
+  String get readerTtsTitle;
+
+  /// Button that starts reading the chapter aloud.
+  ///
+  /// In en, this message translates to:
+  /// **'Start reading'**
+  String get readerTtsStart;
+
+  /// Button that pauses speech.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get readerTtsPause;
+
+  /// Button that resumes paused speech.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get readerTtsResume;
+
+  /// Button that stops speech.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get readerTtsStop;
+
+  /// Label of the speech rate slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get readerTtsRate;
+
+  /// Label of the speech pitch slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Pitch'**
+  String get readerTtsPitch;
+
+  /// Label of the system voice picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice'**
+  String get readerTtsVoice;
+
+  /// Voice picker entry: display name and locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({locale})'**
+  String readerTtsVoiceLabel(String name, String locale);
+
+  /// Voice picker entry that keeps the platform default voice.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get readerTtsSystemVoice;
+
+  /// Switch that keeps speech running when the reader is closed.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep reading after leaving the reader'**
+  String get readerTtsKeepOnExit;
+
+  /// Shown when the TTS engine fails.
+  ///
+  /// In en, this message translates to:
+  /// **'The system speech engine could not read this chapter.'**
+  String get readerTtsFailed;
+
+  /// Shown when an audio track cannot be loaded or played.
+  ///
+  /// In en, this message translates to:
+  /// **'This track could not be played.'**
+  String get readerAudioFailed;
+
+  /// Action that starts audio playback.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get readerAudioPlay;
+
+  /// Action that pauses audio playback.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get readerAudioPause;
+
+  /// Action that restarts a finished track.
+  ///
+  /// In en, this message translates to:
+  /// **'Play again'**
+  String get readerAudioReplay;
+
+  /// Label of the playback speed choices.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get readerAudioSpeed;
+
+  /// Playback speed label; the placeholder already contains the multiplier.
+  ///
+  /// In en, this message translates to:
+  /// **'{speed}×'**
+  String readerAudioSpeedValue(String speed);
+
+  /// Part indicator when an audio chapter has several tracks.
+  ///
+  /// In en, this message translates to:
+  /// **'Part {index} of {total}'**
+  String readerAudioTrackCount(int index, int total);
+
+  /// Settings section heading for network behaviour.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get settingsNetwork;
+
+  /// Switch that opts into http:// for pages and media.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow plaintext HTTP'**
+  String get settingsPlainHttp;
+
+  /// Explanation under the plaintext-HTTP switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Some book sources and audio streams only provide http:// addresses. Page requests follow this switch too.'**
+  String get settingsPlainHttpHint;
+
+  /// Shown when an audio track is http and the user has not opted in.
+  ///
+  /// In en, this message translates to:
+  /// **'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.'**
+  String get readerAudioPlainHttp;
 }
 
 class _AppLocalizationsDelegate

@@ -122,7 +122,7 @@ final class HttpPolicyProvider
   }
 }
 
-String _$httpPolicyHash() => r'b6dcc4f5d47468a1d4ccd04e41e8c593dc98a22c';
+String _$httpPolicyHash() => r'c5f23f4c6c5affcc7aaacffe8a9ab4255142d682';
 
 /// The per-source concurrency budget the user chose, or `null` when nobody chose one.
 ///
@@ -182,6 +182,76 @@ final class ConcurrencySettingProvider
 
 String _$concurrencySettingHash() =>
     r'111cfdbb93c3bd5ae03ab33709aec712e2e6468f';
+
+/// Whether the user opted into plaintext `http://` (C-SEC-2).
+///
+/// Declared here for the same reason as [concurrencySetting]: `core/` must not import
+/// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
+/// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+///
+/// `keepAlive` like the rest of the app-wide services: `httpPolicy` is itself keepAlive and
+/// watches it, and an auto-dispose dependency under a kept-alive provider is what
+/// `riverpod_lint`'s `only_use_keep_alive_inside_keep_alive` rejects (ADR-0010).
+
+@ProviderFor(plainHttpSetting)
+final plainHttpSettingProvider = PlainHttpSettingProvider._();
+
+/// Whether the user opted into plaintext `http://` (C-SEC-2).
+///
+/// Declared here for the same reason as [concurrencySetting]: `core/` must not import
+/// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
+/// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+///
+/// `keepAlive` like the rest of the app-wide services: `httpPolicy` is itself keepAlive and
+/// watches it, and an auto-dispose dependency under a kept-alive provider is what
+/// `riverpod_lint`'s `only_use_keep_alive_inside_keep_alive` rejects (ADR-0010).
+
+final class PlainHttpSettingProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Whether the user opted into plaintext `http://` (C-SEC-2).
+  ///
+  /// Declared here for the same reason as [concurrencySetting]: `core/` must not import
+  /// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
+  /// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+  ///
+  /// `keepAlive` like the rest of the app-wide services: `httpPolicy` is itself keepAlive and
+  /// watches it, and an auto-dispose dependency under a kept-alive provider is what
+  /// `riverpod_lint`'s `only_use_keep_alive_inside_keep_alive` rejects (ADR-0010).
+  PlainHttpSettingProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'plainHttpSettingProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$plainHttpSettingHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return plainHttpSetting(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$plainHttpSettingHash() => r'bde3225d0d3cd9cd13b18d93093e2cc39c08c479';
 
 /// Provides the app-wide HTTP client (C-NET-1).
 ///

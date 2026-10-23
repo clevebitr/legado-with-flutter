@@ -122,6 +122,37 @@ ParseFailure<Never> _failure(ParseResult<Object?> result) => switch (result) {
 };
 
 void main() {
+  test('JsBookInfo_toJson_keepsEveryField', () {
+    const JsBookInfo book = JsBookInfo(
+      name: '剑来',
+      author: '烽火戏诸侯',
+      bookUrl: 'https://example-novel.test/book/1',
+      tocUrl: 'https://example-novel.test/book/1/toc',
+      intro: '简介',
+      kind: '玄幻',
+    );
+
+    expect(book.toJson(), <String, Object?>{
+      'name': '剑来',
+      'author': '烽火戏诸侯',
+      'bookUrl': 'https://example-novel.test/book/1',
+      'tocUrl': 'https://example-novel.test/book/1/toc',
+      'intro': '简介',
+      'kind': '玄幻',
+    });
+    expect(
+      const JsJob(
+        script: 'book.name',
+        rulePath: 'tocRule.chapterUrl',
+        baseUrl: 'https://example-novel.test/toc',
+        page: 1,
+        source: JsSourceInfo(name: 's', url: 'https://example-novel.test'),
+        book: book,
+      ).toJson()['book'],
+      book.toJson(),
+    );
+  });
+
   group('QuickJsWorkerBridge', () {
     test('evaluate_givenAJob_returnsTheWorkerValue', () async {
       final _Fixture fixture = _buildBridge();
