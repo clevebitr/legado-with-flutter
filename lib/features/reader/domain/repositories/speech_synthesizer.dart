@@ -19,6 +19,22 @@ abstract class SpeechVoice with _$SpeechVoice {
   }) = _SpeechVoice;
 }
 
+/// A character range inside the text one utterance carries (`ADR-0057 §决策 5`).
+///
+/// The engine reports progress as offsets of the **string it was given**, so the notifier adds the
+/// current segment's start to turn it into an offset of the chapter body.
+@freezed
+abstract class SpeechRange with _$SpeechRange {
+  /// Creates a range.
+  const factory SpeechRange({
+    /// The offset of the first character being voiced.
+    required int start,
+
+    /// The offset just past the last character being voiced.
+    required int end,
+  }) = _SpeechRange;
+}
+
 /// One observation of the speech engine (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 5).
 @freezed
 abstract class SpeechSnapshot with _$SpeechSnapshot {
@@ -32,6 +48,12 @@ abstract class SpeechSnapshot with _$SpeechSnapshot {
 
     /// Whether the current utterance finished.
     @Default(false) bool isCompleted,
+
+    /// The range of the current utterance the engine is voicing right now, or `null`.
+    ///
+    /// Android and iOS report it; a platform without progress support leaves it `null`, and the
+    /// highlight then covers the whole utterance (ADR-0057 §决策 5).
+    SpeechRange? spokenRange,
 
     /// An engine error to show instead of the normal controls.
     ParseFailure<Never>? failure,

@@ -83,7 +83,7 @@ final class ReaderTtsProvider
   }
 }
 
-String _$readerTtsHash() => r'7acbcc421b1d2361d4e19778d338aa4bee44cadb';
+String _$readerTtsHash() => r'7c07a5489f5f4fe1e2ff6d029bca0cd513cc40b2';
 
 /// Reads the open book aloud with the system TTS engine
 /// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 5).

@@ -45,10 +45,11 @@ final class UrlRuleOptions {
   /// Headers the option adds to this request on top of the source's own `header`.
   final Map<String, String> headers;
 
-  /// Option fields this repository ignores, e.g. `webView` / `webJs` / `retry`.
+  /// Option fields this repository cannot honour, e.g. `webJs` / `retry`.
   ///
-  /// They travel to the caller so it can warn by name: a silently dropped `webView` would
-  /// look like a rule that stopped matching.
+  /// They travel to the caller so it can warn by name: a silently dropped `webJs` would look like a
+  /// rule that stopped matching. `webView` is listed here too, but the caller **consumes** it (it
+  /// routes the request through `WebPageFetcher`, ADR-0057 §决策 1) and therefore does not warn.
   final List<String> unsupported;
 }
 

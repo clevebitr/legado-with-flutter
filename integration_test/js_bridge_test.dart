@@ -556,6 +556,46 @@ void main() {
     );
   });
 
+  testWidgets('jsBridge_whenAScriptUsesBookMethods_readsAndWritesVariables', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0057 §决策 2：`book.putVariable` / `getVariable` 就是 `java.put` / `java.get` 那张表
+    // （上游 AnalyzeUrl.javaPut 先写 book 的 variableMap，AnalyzeUrl.kt:390-406）。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(
+            script:
+                "book.putVariable('token', 'abc'); "
+                "book.getVariable('token') + '|' + java.get('token')",
+            book: const JsBookInfo(name: '剑来'),
+          ),
+        ),
+      ),
+      'abc|abc',
+    );
+  });
+
+  testWidgets('jsBridge_whenAScriptCallsTheBookStateSetters_readsThemBack', (
+    WidgetTester tester,
+  ) async {
+    // `setType` / `setReverseToc` 在本 job 内可读回；它们**不改**宿主的章节顺序或书籍类型，
+    // 这条差异登记在 ADR-0057 §决策 2，所以这里只验「可调用、不静默崩」。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(
+            script:
+                'book.setType(1); book.setReverseToc(true); '
+                "book.getType() + '|' + book.getReverseToc() + '|' + book.type",
+            book: const JsBookInfo(name: '剑来'),
+          ),
+        ),
+      ),
+      '1|true|1',
+    );
+  });
+
   testWidgets('jsBridge_whenAJobCarriesBookNames_javaGetAnswersThemFirst', (
     WidgetTester tester,
   ) async {

@@ -284,12 +284,287 @@ as String,
 }
 
 /// @nodoc
+mixin _$SpeechRange {
+
+/// The offset of the first character being voiced.
+ int get start;/// The offset just past the last character being voiced.
+ int get end;
+/// Create a copy of SpeechRange
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$SpeechRangeCopyWith<SpeechRange> get copyWith => _$SpeechRangeCopyWithImpl<SpeechRange>(this as SpeechRange, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  final _this = this as SpeechRange;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SpeechRange&&(identical(other.start, _this.start) || other.start == _this.start)&&(identical(other.end, _this.end) || other.end == _this.end));
+}
+
+
+@override
+int get hashCode {
+  final _this = this as SpeechRange;
+  return Object.hash(runtimeType,_this.start,_this.end);
+}
+
+@override
+String toString() {
+  final _this = this as SpeechRange;
+  return 'SpeechRange(start: ${_this.start}, end: ${_this.end})';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $SpeechRangeCopyWith<$Res>  {
+  factory $SpeechRangeCopyWith(SpeechRange value, $Res Function(SpeechRange) _then) = _$SpeechRangeCopyWithImpl;
+@useResult
+$Res call({
+ int start, int end
+});
+
+
+
+
+}
+/// @nodoc
+class _$SpeechRangeCopyWithImpl<$Res>
+    implements $SpeechRangeCopyWith<$Res> {
+  _$SpeechRangeCopyWithImpl(this._self, this._then);
+
+  final SpeechRange _self;
+  final $Res Function(SpeechRange) _then;
+
+/// Create a copy of SpeechRange
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? start = null,Object? end = null,}) {
+  return _then(SpeechRange(
+start: null == start ? _self.start : start // ignore: cast_nullable_to_non_nullable
+as int,end: null == end ? _self.end : end // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [SpeechRange].
+extension SpeechRangePatterns on SpeechRange {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _SpeechRange value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _SpeechRange() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _SpeechRange value)  $default,){
+final _that = this;
+switch (_that) {
+case _SpeechRange():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _SpeechRange value)?  $default,){
+final _that = this;
+switch (_that) {
+case _SpeechRange() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int start,  int end)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _SpeechRange() when $default != null:
+return $default(_that.start,_that.end);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int start,  int end)  $default,) {final _that = this;
+switch (_that) {
+case _SpeechRange():
+return $default(_that.start,_that.end);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int start,  int end)?  $default,) {final _that = this;
+switch (_that) {
+case _SpeechRange() when $default != null:
+return $default(_that.start,_that.end);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _SpeechRange implements SpeechRange {
+  const _SpeechRange({required this.start, required this.end});
+  
+
+/// The offset of the first character being voiced.
+@override final  int start;
+/// The offset just past the last character being voiced.
+@override final  int end;
+
+/// Create a copy of SpeechRange
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$SpeechRangeCopyWith<_SpeechRange> get copyWith => __$SpeechRangeCopyWithImpl<_SpeechRange>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SpeechRange&&(identical(other.start, start) || other.start == start)&&(identical(other.end, end) || other.end == end));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,start,end);
+}
+
+@override
+String toString() {
+    return 'SpeechRange(start: $start, end: $end)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$SpeechRangeCopyWith<$Res> implements $SpeechRangeCopyWith<$Res> {
+  factory _$SpeechRangeCopyWith(_SpeechRange value, $Res Function(_SpeechRange) _then) = __$SpeechRangeCopyWithImpl;
+@override @useResult
+$Res call({
+ int start, int end
+});
+
+
+
+
+}
+/// @nodoc
+class __$SpeechRangeCopyWithImpl<$Res>
+    implements _$SpeechRangeCopyWith<$Res> {
+  __$SpeechRangeCopyWithImpl(this._self, this._then);
+
+  final _SpeechRange _self;
+  final $Res Function(_SpeechRange) _then;
+
+/// Create a copy of SpeechRange
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? start = null,Object? end = null,}) {
+  return _then(_SpeechRange(
+start: null == start ? _self.start : start // ignore: cast_nullable_to_non_nullable
+as int,end: null == end ? _self.end : end // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$SpeechSnapshot {
 
 /// Whether the engine is speaking (or paused, which the platform still reports as active).
  bool get isSpeaking;/// Whether the engine is paused.
  bool get isPaused;/// Whether the current utterance finished.
- bool get isCompleted;/// An engine error to show instead of the normal controls.
+ bool get isCompleted;/// The range of the current utterance the engine is voicing right now, or `null`.
+///
+/// Android and iOS report it; a platform without progress support leaves it `null`, and the
+/// highlight then covers the whole utterance (ADR-0057 §决策 5).
+ SpeechRange? get spokenRange;/// An engine error to show instead of the normal controls.
  ParseFailure<Never>? get failure;
 /// Create a copy of SpeechSnapshot
 /// with the given fields replaced by the non-null parameter values.
@@ -302,20 +577,20 @@ $SpeechSnapshotCopyWith<SpeechSnapshot> get copyWith => _$SpeechSnapshotCopyWith
 @override
 bool operator ==(Object other) {
   final _this = this as SpeechSnapshot;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SpeechSnapshot&&(identical(other.isSpeaking, _this.isSpeaking) || other.isSpeaking == _this.isSpeaking)&&(identical(other.isPaused, _this.isPaused) || other.isPaused == _this.isPaused)&&(identical(other.isCompleted, _this.isCompleted) || other.isCompleted == _this.isCompleted)&&const DeepCollectionEquality().equals(other.failure, _this.failure));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SpeechSnapshot&&(identical(other.isSpeaking, _this.isSpeaking) || other.isSpeaking == _this.isSpeaking)&&(identical(other.isPaused, _this.isPaused) || other.isPaused == _this.isPaused)&&(identical(other.isCompleted, _this.isCompleted) || other.isCompleted == _this.isCompleted)&&(identical(other.spokenRange, _this.spokenRange) || other.spokenRange == _this.spokenRange)&&const DeepCollectionEquality().equals(other.failure, _this.failure));
 }
 
 
 @override
 int get hashCode {
   final _this = this as SpeechSnapshot;
-  return Object.hash(runtimeType,_this.isSpeaking,_this.isPaused,_this.isCompleted,const DeepCollectionEquality().hash(_this.failure));
+  return Object.hash(runtimeType,_this.isSpeaking,_this.isPaused,_this.isCompleted,_this.spokenRange,const DeepCollectionEquality().hash(_this.failure));
 }
 
 @override
 String toString() {
   final _this = this as SpeechSnapshot;
-  return 'SpeechSnapshot(isSpeaking: ${_this.isSpeaking}, isPaused: ${_this.isPaused}, isCompleted: ${_this.isCompleted}, failure: ${_this.failure})';
+  return 'SpeechSnapshot(isSpeaking: ${_this.isSpeaking}, isPaused: ${_this.isPaused}, isCompleted: ${_this.isCompleted}, spokenRange: ${_this.spokenRange}, failure: ${_this.failure})';
 }
 
 
@@ -326,11 +601,11 @@ abstract mixin class $SpeechSnapshotCopyWith<$Res>  {
   factory $SpeechSnapshotCopyWith(SpeechSnapshot value, $Res Function(SpeechSnapshot) _then) = _$SpeechSnapshotCopyWithImpl;
 @useResult
 $Res call({
- bool isSpeaking, bool isPaused, bool isCompleted, ParseFailure<Never>? failure
+ bool isSpeaking, bool isPaused, bool isCompleted, SpeechRange? spokenRange, ParseFailure<Never>? failure
 });
 
 
-
+$SpeechRangeCopyWith<$Res>? get spokenRange;
 
 }
 /// @nodoc
@@ -343,16 +618,29 @@ class _$SpeechSnapshotCopyWithImpl<$Res>
 
 /// Create a copy of SpeechSnapshot
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? isSpeaking = null,Object? isPaused = null,Object? isCompleted = null,Object? failure = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? isSpeaking = null,Object? isPaused = null,Object? isCompleted = null,Object? spokenRange = freezed,Object? failure = freezed,}) {
   return _then(SpeechSnapshot(
 isSpeaking: null == isSpeaking ? _self.isSpeaking : isSpeaking // ignore: cast_nullable_to_non_nullable
 as bool,isPaused: null == isPaused ? _self.isPaused : isPaused // ignore: cast_nullable_to_non_nullable
 as bool,isCompleted: null == isCompleted ? _self.isCompleted : isCompleted // ignore: cast_nullable_to_non_nullable
-as bool,failure: freezed == failure ? _self.failure : failure // ignore: cast_nullable_to_non_nullable
+as bool,spokenRange: freezed == spokenRange ? _self.spokenRange : spokenRange // ignore: cast_nullable_to_non_nullable
+as SpeechRange?,failure: freezed == failure ? _self.failure : failure // ignore: cast_nullable_to_non_nullable
 as ParseFailure<Never>?,
   ));
 }
+/// Create a copy of SpeechSnapshot
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$SpeechRangeCopyWith<$Res>? get spokenRange {
+    if (_self.spokenRange == null) {
+    return null;
+  }
 
+  return $SpeechRangeCopyWith<$Res>(_self.spokenRange!, (value) {
+    return _then(_self.copyWith(spokenRange: value));
+  });
+}
 }
 
 
@@ -434,10 +722,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isSpeaking,  bool isPaused,  bool isCompleted,  ParseFailure<Never>? failure)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isSpeaking,  bool isPaused,  bool isCompleted,  SpeechRange? spokenRange,  ParseFailure<Never>? failure)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SpeechSnapshot() when $default != null:
-return $default(_that.isSpeaking,_that.isPaused,_that.isCompleted,_that.failure);case _:
+return $default(_that.isSpeaking,_that.isPaused,_that.isCompleted,_that.spokenRange,_that.failure);case _:
   return orElse();
 
 }
@@ -455,10 +743,10 @@ return $default(_that.isSpeaking,_that.isPaused,_that.isCompleted,_that.failure)
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isSpeaking,  bool isPaused,  bool isCompleted,  ParseFailure<Never>? failure)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isSpeaking,  bool isPaused,  bool isCompleted,  SpeechRange? spokenRange,  ParseFailure<Never>? failure)  $default,) {final _that = this;
 switch (_that) {
 case _SpeechSnapshot():
-return $default(_that.isSpeaking,_that.isPaused,_that.isCompleted,_that.failure);case _:
+return $default(_that.isSpeaking,_that.isPaused,_that.isCompleted,_that.spokenRange,_that.failure);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -475,10 +763,10 @@ return $default(_that.isSpeaking,_that.isPaused,_that.isCompleted,_that.failure)
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isSpeaking,  bool isPaused,  bool isCompleted,  ParseFailure<Never>? failure)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isSpeaking,  bool isPaused,  bool isCompleted,  SpeechRange? spokenRange,  ParseFailure<Never>? failure)?  $default,) {final _that = this;
 switch (_that) {
 case _SpeechSnapshot() when $default != null:
-return $default(_that.isSpeaking,_that.isPaused,_that.isCompleted,_that.failure);case _:
+return $default(_that.isSpeaking,_that.isPaused,_that.isCompleted,_that.spokenRange,_that.failure);case _:
   return null;
 
 }
@@ -490,7 +778,7 @@ return $default(_that.isSpeaking,_that.isPaused,_that.isCompleted,_that.failure)
 
 
 class _SpeechSnapshot implements SpeechSnapshot {
-  const _SpeechSnapshot({this.isSpeaking = false, this.isPaused = false, this.isCompleted = false, this.failure});
+  const _SpeechSnapshot({this.isSpeaking = false, this.isPaused = false, this.isCompleted = false, this.spokenRange, this.failure});
   
 
 /// Whether the engine is speaking (or paused, which the platform still reports as active).
@@ -499,6 +787,11 @@ class _SpeechSnapshot implements SpeechSnapshot {
 @override@JsonKey() final  bool isPaused;
 /// Whether the current utterance finished.
 @override@JsonKey() final  bool isCompleted;
+/// The range of the current utterance the engine is voicing right now, or `null`.
+///
+/// Android and iOS report it; a platform without progress support leaves it `null`, and the
+/// highlight then covers the whole utterance (ADR-0057 §决策 5).
+@override final  SpeechRange? spokenRange;
 /// An engine error to show instead of the normal controls.
 @override final  ParseFailure<Never>? failure;
 
@@ -512,18 +805,18 @@ _$SpeechSnapshotCopyWith<_SpeechSnapshot> get copyWith => __$SpeechSnapshotCopyW
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SpeechSnapshot&&(identical(other.isSpeaking, isSpeaking) || other.isSpeaking == isSpeaking)&&(identical(other.isPaused, isPaused) || other.isPaused == isPaused)&&(identical(other.isCompleted, isCompleted) || other.isCompleted == isCompleted)&&const DeepCollectionEquality().equals(other.failure, failure));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SpeechSnapshot&&(identical(other.isSpeaking, isSpeaking) || other.isSpeaking == isSpeaking)&&(identical(other.isPaused, isPaused) || other.isPaused == isPaused)&&(identical(other.isCompleted, isCompleted) || other.isCompleted == isCompleted)&&(identical(other.spokenRange, spokenRange) || other.spokenRange == spokenRange)&&const DeepCollectionEquality().equals(other.failure, failure));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,isSpeaking,isPaused,isCompleted,const DeepCollectionEquality().hash(failure));
+    return Object.hash(runtimeType,isSpeaking,isPaused,isCompleted,spokenRange,const DeepCollectionEquality().hash(failure));
 }
 
 @override
 String toString() {
-    return 'SpeechSnapshot(isSpeaking: $isSpeaking, isPaused: $isPaused, isCompleted: $isCompleted, failure: $failure)';
+    return 'SpeechSnapshot(isSpeaking: $isSpeaking, isPaused: $isPaused, isCompleted: $isCompleted, spokenRange: $spokenRange, failure: $failure)';
 }
 
 
@@ -534,11 +827,11 @@ abstract mixin class _$SpeechSnapshotCopyWith<$Res> implements $SpeechSnapshotCo
   factory _$SpeechSnapshotCopyWith(_SpeechSnapshot value, $Res Function(_SpeechSnapshot) _then) = __$SpeechSnapshotCopyWithImpl;
 @override @useResult
 $Res call({
- bool isSpeaking, bool isPaused, bool isCompleted, ParseFailure<Never>? failure
+ bool isSpeaking, bool isPaused, bool isCompleted, SpeechRange? spokenRange, ParseFailure<Never>? failure
 });
 
 
-
+@override $SpeechRangeCopyWith<$Res>? get spokenRange;
 
 }
 /// @nodoc
@@ -551,17 +844,30 @@ class __$SpeechSnapshotCopyWithImpl<$Res>
 
 /// Create a copy of SpeechSnapshot
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? isSpeaking = null,Object? isPaused = null,Object? isCompleted = null,Object? failure = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? isSpeaking = null,Object? isPaused = null,Object? isCompleted = null,Object? spokenRange = freezed,Object? failure = freezed,}) {
   return _then(_SpeechSnapshot(
 isSpeaking: null == isSpeaking ? _self.isSpeaking : isSpeaking // ignore: cast_nullable_to_non_nullable
 as bool,isPaused: null == isPaused ? _self.isPaused : isPaused // ignore: cast_nullable_to_non_nullable
 as bool,isCompleted: null == isCompleted ? _self.isCompleted : isCompleted // ignore: cast_nullable_to_non_nullable
-as bool,failure: freezed == failure ? _self.failure : failure // ignore: cast_nullable_to_non_nullable
+as bool,spokenRange: freezed == spokenRange ? _self.spokenRange : spokenRange // ignore: cast_nullable_to_non_nullable
+as SpeechRange?,failure: freezed == failure ? _self.failure : failure // ignore: cast_nullable_to_non_nullable
 as ParseFailure<Never>?,
   ));
 }
 
+/// Create a copy of SpeechSnapshot
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$SpeechRangeCopyWith<$Res>? get spokenRange {
+    if (_self.spokenRange == null) {
+    return null;
+  }
 
+  return $SpeechRangeCopyWith<$Res>(_self.spokenRange!, (value) {
+    return _then(_self.copyWith(spokenRange: value));
+  });
+}
 }
 
 // dart format on

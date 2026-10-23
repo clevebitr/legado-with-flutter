@@ -1,5 +1,7 @@
 // coverage:ignore-file
 import 'dart:async';
+import 'dart:convert' show utf8;
+import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -36,6 +38,8 @@ final class InAppWebViewPageFetcher implements WebPageFetcher {
     required String url,
     Map<String, String>? headers,
     required String rulePath,
+    WebPageRequestMethod method = WebPageRequestMethod.get,
+    String? body,
   }) async {
     WidgetsFlutterBinding.ensureInitialized();
     final Completer<FetchedWebPage> completer = Completer<FetchedWebPage>();
@@ -60,6 +64,12 @@ final class InAppWebViewPageFetcher implements WebPageFetcher {
     headless = HeadlessInAppWebView(
       initialUrlRequest: URLRequest(
         url: WebUri(url),
+        // POST 型 `webView` 把渲染后的 body 一起交给页面本身（ADR-0057 §决策 1）：
+        // 这类站点的结果页只在表单提交后才存在，先 GET 一次再谈渲染是没有意义的。
+        method: method == WebPageRequestMethod.post ? 'POST' : 'GET',
+        body: method == WebPageRequestMethod.post && body != null
+            ? Uint8List.fromList(utf8.encode(body))
+            : null,
         headers: headers == null || headers.isEmpty ? null : headers,
       ),
       initialSettings: InAppWebViewSettings(

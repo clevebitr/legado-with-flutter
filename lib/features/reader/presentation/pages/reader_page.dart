@@ -12,6 +12,7 @@ import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.d
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
@@ -507,6 +508,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final AsyncValue<ParseResult<String>> content = ref.watch(
       readerContentProvider((widget.book, chapter.url)),
     );
+    // ADR-0057 §决策 5：读出声时把那句话画出来。这个 provider 只在读声时才有值，
+    // 所以没开 TTS 的读者只多一次空读，不会因此拉起语音引擎。
+    final ReaderTtsHighlight? spoken = ref.watch(readerTtsHighlighterProvider);
+    final ({int start, int end})? spokenRange =
+        spoken != null && spoken.chapterUrl == chapter.url
+        ? (start: spoken.start, end: spoken.end)
+        : null;
 
     // 三区点击（ADR-0051 §决策 1）：中间 ⅓ 唤出菜单，左右各 ⅓ 唤出菜单前先收起它。
     return _tapZones(
@@ -523,6 +531,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       session.charOffset,
                       palette,
                       _paddingOf(settings),
+                      spokenRange,
                     )
                   : _pagedBody(
                       chapter,
@@ -533,6 +542,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       session.chapterIndex,
                       palette,
                       _paddingOf(settings),
+                      spokenRange,
                     ),
             ParseFailure<String>(:final ParseFailureKind kind) =>
               FailureMessage(
@@ -587,6 +597,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     int initialOffset,
     ({Color background, Color foreground}) palette,
     double padding,
+    ({int start, int end})? spokenRange,
   ) => NotificationListener<ScrollEndNotification>(
     onNotification: (ScrollEndNotification notification) {
       // 滚动停下时记一次：按比例换算成字符偏移（ADR-0044 §决策 4）。
@@ -606,7 +617,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     child: SingleChildScrollView(
       controller: _scroll,
       padding: EdgeInsets.all(padding),
-      child: _restoredScrollText(chapter, body, style, initialOffset),
+      child: _restoredScrollText(
+        chapter,
+        body,
+        style,
+        initialOffset,
+        spokenRange,
+      ),
     ),
   );
 
@@ -616,6 +633,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     String body,
     TextStyle style,
     int initialOffset,
+    ({int start, int end})? spokenRange,
   ) {
     if (_restoredChapterUrl != chapter.url) {
       _restoredChapterUrl = chapter.url;
@@ -631,7 +649,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       });
     }
 
-    return Text(body, style: style);
+    return readingText(
+      body: body,
+      style: style,
+      highlightStyle: spokenSentenceStyle(context, style),
+      highlight: spokenRange,
+    );
   }
 
   /// The paged body: pages measured by [readerPageStarts], turned horizontally.
@@ -644,6 +667,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     int chapterIndex,
     ({Color background, Color foreground}) palette,
     double padding,
+    ({int start, int end})? spokenRange,
   ) {
     return Padding(
       padding: EdgeInsets.all(padding),
@@ -656,6 +680,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         initialOffset: initialOffset,
         foreground: palette.foreground,
         isLastChapter: chapterIndex == chapterCount - 1,
+        spokenRange: spokenRange,
         onOffsetChanged: _rememberOffset,
         onNextChapter: () => unawaited(
           ref.read(readerSessionProvider(widget.book).notifier).nextChapter(),
@@ -778,6 +803,7 @@ class _PagedBody extends StatefulWidget {
     required this.initialOffset,
     required this.foreground,
     required this.isLastChapter,
+    required this.spokenRange,
     required this.onOffsetChanged,
     required this.onNextChapter,
     super.key,
@@ -788,6 +814,10 @@ class _PagedBody extends StatefulWidget {
   final int initialOffset;
   final Color foreground;
   final bool isLastChapter;
+
+  /// The sentence being read aloud, as an offset range of [text] (ADR-0057 §决策 5).
+  final ({int start, int end})? spokenRange;
+
   final ValueChanged<int> onOffsetChanged;
   final VoidCallback onNextChapter;
 
@@ -842,9 +872,13 @@ class _PagedBodyState extends State<_PagedBody> {
 
             return SingleChildScrollView(
               physics: const NeverScrollableScrollPhysics(),
-              child: Text(
-                widget.text.substring(start, end),
+              child: readingText(
+                body: widget.text,
+                start: start,
+                end: end,
                 style: widget.style,
+                highlightStyle: spokenSentenceStyle(context, widget.style),
+                highlight: widget.spokenRange,
               ),
             );
           },

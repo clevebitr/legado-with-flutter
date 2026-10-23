@@ -27,7 +27,8 @@ import 'package:path_provider/path_provider.dart';
 ///
 /// * 播放：在应用目录写一个 1 秒的 16-bit PCM WAV，`just_audio` 真的解码它并推进播放位置；
 /// * 朗读：系统 TTS 引擎能列出音色并读完一句（没有引擎的平台按「不可用」通过并留下记录）；
-/// * 通知：Android 上能挂上媒体通知，Windows 上有意降级为 `null`（ADR-0054 §决策 3）。
+/// * 通知：Android 上能挂上媒体通知；Windows 经 `audio_service_win` 挂上 WinRT 的 SMTC
+///   （ADR-0057 §决策 4），其余平台维持 `null` 的有意降级（ADR-0054 §决策 3）。
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -125,6 +126,50 @@ void main() {
     await engine.dispose();
   });
 
+  testWidgets('hlsProbe_whenGivenAPlaylist_playsIt', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0057 §决策 3：HLS（`.m3u8`）不需要本仓做任何解析——两个后端都原生支持
+    // （Android 的 ExoPlayer、Windows 的 libmpv/FFmpeg）。这条探针是它的设备级证据，
+    // 网络 URL 由 `--dart-define=HLS_URL=…` 传入，CI 不联网时自动跳过。
+    const String hlsUrl = String.fromEnvironment('HLS_URL');
+    if (hlsUrl.isEmpty) {
+      debugPrint('hlsProbe skipped: pass --dart-define=HLS_URL=<playlist>');
+
+      return;
+    }
+    final AudioPlaybackEngine engine = usesMediaKitPlayback
+        ? MediaKitPlaybackEngine(logger: logger)
+        : JustAudioPlaybackEngine(logger: logger);
+    addTearDown(engine.dispose);
+    final List<AudioPlaybackSnapshot> snapshots = <AudioPlaybackSnapshot>[];
+    final StreamSubscription<AudioPlaybackSnapshot> subscription = engine
+        .snapshots
+        .listen(snapshots.add);
+    addTearDown(subscription.cancel);
+
+    final ParseResult<void> load = await engine.load(url: hlsUrl);
+    expect(load, isA<ParseSuccess<void>>(), reason: 'the playlist must load');
+    await engine.play();
+    // HLS 要先取到分片才推进位置，给的时间比本地 WAV 宽一倍。
+    for (var attempt = 0; attempt < 80; attempt++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (snapshots.any(
+        (AudioPlaybackSnapshot snapshot) => snapshot.position > Duration.zero,
+      )) {
+        break;
+      }
+    }
+    expect(
+      snapshots.any(
+        (AudioPlaybackSnapshot snapshot) => snapshot.position > Duration.zero,
+      ),
+      isTrue,
+      reason: 'the playlist must play',
+    );
+    await engine.pause();
+  });
+
   testWidgets('ttsProbe_whenAsked_readsOneSentence', (
     WidgetTester tester,
   ) async {
@@ -179,8 +224,12 @@ void main() {
       ),
     );
 
-    if (defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS) {
+    const Set<TargetPlatform> withNotification = <TargetPlatform>{
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+      TargetPlatform.windows,
+    };
+    if (withNotification.contains(defaultTargetPlatform)) {
       expect(handle, isNotNull);
       await handle?.update(
         metadata: const PlaybackNotificationMetadata(
@@ -194,7 +243,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await handle?.detach();
     } else {
-      // Windows 的**有意降级**：没有媒体通知，播放照常（ADR-0054 §决策 3）。
+      // 没有系统媒体通知的平台是**有意降级**：播放照常（ADR-0054 §决策 3）。
       expect(handle, isNull);
     }
   });

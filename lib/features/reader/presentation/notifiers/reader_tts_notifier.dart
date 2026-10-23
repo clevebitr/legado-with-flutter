@@ -9,6 +9,8 @@ import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.d
 import 'package:flutter_reader/features/reader/domain/repositories/speech_synthesizer.dart';
 import 'package:flutter_reader/features/reader/domain/speech_text.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_riverpod/misc.dart' show KeepAliveLink;
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -73,8 +75,11 @@ class ReaderTts extends _$ReaderTts {
   ReaderBook? _book;
   List<ReadingChapter> _chapters = const <ReadingChapter>[];
   List<SpeechVoice> _voices = const <SpeechVoice>[];
-  List<String> _chunks = const <String>[];
+  List<SpeechSegment> _segments = const <SpeechSegment>[];
   int _chunkIndex = 0;
+  String _chapterText = '';
+  String _chapterUrl = '';
+  ReaderSettings? _settings;
   double _rate = 1;
   double _pitch = 1;
   SpeechVoice? _voice;
@@ -96,6 +101,7 @@ class ReaderTts extends _$ReaderTts {
     final ReaderSettings settings = await ref.read(
       readerSettingsProvider.future,
     );
+    _settings = settings;
     if (!_settingsLoaded) {
       _settingsLoaded = true;
       _rate = settings.ttsRate;
@@ -186,7 +192,7 @@ class ReaderTts extends _$ReaderTts {
   /// continues it, which is why the **current chunk** is sent again instead of the whole chapter.
   Future<void> resume() async {
     final SpeechSynthesizer? engine = _engine;
-    if (engine == null || _chunks.isEmpty) {
+    if (engine == null || _segments.isEmpty) {
       return;
     }
     _updateState(
@@ -196,7 +202,7 @@ class ReaderTts extends _$ReaderTts {
     _awaitingCompletion = true;
     await _guard(
       () => engine.speak(
-        _chunks[_chunkIndex],
+        _segments[_chunkIndex].text,
         rate: _rate,
         pitch: _pitch,
         voice: _voice,
@@ -208,8 +214,11 @@ class ReaderTts extends _$ReaderTts {
   Future<void> stop() async {
     _continue = false;
     _awaitingCompletion = false;
-    _chunks = const <String>[];
+    _segments = const <SpeechSegment>[];
     _chunkIndex = 0;
+    _chapterText = '';
+    _chapterUrl = '';
+    ref.read(readerTtsHighlighterProvider.notifier).clear();
     _releaseAlive();
     final SpeechSynthesizer? engine = _engine;
     if (engine != null) {
@@ -293,6 +302,7 @@ class ReaderTts extends _$ReaderTts {
     }
     final int index = session.chapterIndex.clamp(0, _chapters.length - 1);
     final ReadingChapter chapter = _chapters[index];
+    _chapterUrl = chapter.url;
     final ParseResult<String> content = await ref.read(
       readerContentProvider((book, chapter.url)).future,
     );
@@ -306,9 +316,13 @@ class ReaderTts extends _$ReaderTts {
       ):
         _fail(kind: kind, rulePath: rulePath);
       case ParseSuccess<String>(:final String data):
-        _chunks = splitSpeechText(data);
+        // 与阅读页同一份排版后的正文（`readerBodyText`）：高亮的偏移必须落在**渲染出来的**
+        // 那段文字上，否则缩进与段距会把位置推偏（ADR-0057 §决策 5）。
+        _chapterText = readerBodyText(data, _settings ?? ReaderSettings());
+        _segments = splitSpeechSegments(_chapterText);
         _chunkIndex = 0;
-        if (_chunks.isEmpty) {
+        ref.read(readerTtsHighlighterProvider.notifier).clear();
+        if (_segments.isEmpty) {
           _fail(kind: ParseFailureKind.parseFailed, rulePath: 'reader.ttsText');
 
           return;
@@ -317,11 +331,11 @@ class ReaderTts extends _$ReaderTts {
     }
   }
 
-  /// Speaks [_chunkIndex] of [_chunks].
+  /// Speaks [_chunkIndex] of [_segments].
   Future<void> _speakChunk() async {
     final SpeechSynthesizer? engine = _engine;
     final ReaderTtsState? current = state.value;
-    if (engine == null || current == null || _chunks.isEmpty) {
+    if (engine == null || current == null || _segments.isEmpty) {
       return;
     }
     _awaitingCompletion = true;
@@ -333,8 +347,9 @@ class ReaderTts extends _$ReaderTts {
         failure: null,
       ),
     );
+    _announce(_segments[_chunkIndex].start);
     final ParseResult<void> result = await engine.speak(
-      _chunks[_chunkIndex],
+      _segments[_chunkIndex].text,
       rate: _rate,
       pitch: _pitch,
       voice: _voice,
@@ -369,10 +384,37 @@ class ReaderTts extends _$ReaderTts {
 
       return;
     }
+    final SpeechRange? spoken = snapshot.spokenRange;
+    if (spoken != null &&
+        _awaitingCompletion &&
+        !snapshot.isCompleted &&
+        !snapshot.isPaused &&
+        _chunkIndex < _segments.length) {
+      // 引擎报的是**当前这一段**里的偏移，加上段起点才是正文里的位置。
+      _announce(_segments[_chunkIndex].start + spoken.start);
+    }
     if (snapshot.isCompleted && _awaitingCompletion) {
       _awaitingCompletion = false;
       unawaited(_onChunkCompleted());
     }
+  }
+
+  /// Highlights the sentence of the chapter body that contains [offset].
+  void _announce(int offset) {
+    if (_chapterText.isEmpty) {
+      return;
+    }
+    final SpeechSegment sentence = speechSentenceAt(_chapterText, offset);
+    if (sentence.end <= sentence.start) {
+      return;
+    }
+    ref
+        .read(readerTtsHighlighterProvider.notifier)
+        .show(
+          chapterUrl: _chapterUrl,
+          start: sentence.start,
+          end: sentence.end,
+        );
   }
 
   /// Speaks the next chunk, or advances to the next chapter after the last one.
@@ -380,7 +422,7 @@ class ReaderTts extends _$ReaderTts {
     if (!_continue) {
       return;
     }
-    if (_chunkIndex + 1 < _chunks.length) {
+    if (_chunkIndex + 1 < _segments.length) {
       _chunkIndex++;
       await _speakChunk();
 

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
@@ -45,4 +46,62 @@ void main() {
     expect(page.body, contains('rendered'));
     expect(page.body, isNot(contains('pending')));
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets(
+    'webPageFetcher_whenTheRulePosts_submitsTheBodyInsideTheWebView',
+    (WidgetTester tester) async {
+      // ADR-0057 §决策 1：表单型源的页面只有提交后才存在，所以 POST 必须真的由 WebView 发出，
+      // 而不是先 GET 一次再渲染。这里用一个本地服务器同时当验收方：它记下收到的动词与 body。
+      final List<String> methods = <String>[];
+      final List<String> bodies = <String>[];
+      final HttpServer server = await HttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      server.listen((HttpRequest request) async {
+        methods.add(request.method);
+        bodies.add(await utf8.decoder.bind(request).join());
+        // 两种动词给不同内容：这样「渲染出来的到底是提交后的页面，还是又 GET 了一次」可判。
+        final bool posted = request.method == 'POST';
+        request.response
+          ..headers.contentType = ContentType.html
+          ..write(
+            '<html><body><div id="out">pending</div>'
+            '<script>document.getElementById("out").textContent = '
+            '"${posted ? 'posted' : 'got'}-rendered";</script>'
+            '</body></html>',
+          );
+        await request.response.close();
+      });
+
+      try {
+        final InAppWebViewPageFetcher fetcher = InAppWebViewPageFetcher(
+          logger: AppLogger(printer: SimplePrinter()),
+        );
+        final ParseResult<FetchedWebPage> result = await fetcher.fetch(
+          url: 'http://127.0.0.1:${server.port}/search',
+          rulePath: 'searchUrl',
+          method: WebPageRequestMethod.post,
+          body: 'k=%E5%89%91%E6%9D%A5',
+          headers: const <String, String>{
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        );
+
+        expect(
+          result,
+          isA<ParseSuccess<FetchedWebPage>>(),
+          reason: 'the WebView must render the posted page',
+        );
+        final FetchedWebPage page =
+            (result as ParseSuccess<FetchedWebPage>).data;
+        expect(page.body, contains('posted-rendered'));
+        expect(methods.first, 'POST');
+        expect(bodies.first, 'k=%E5%89%91%E6%9D%A5');
+      } finally {
+        await server.close(force: true);
+      }
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 }

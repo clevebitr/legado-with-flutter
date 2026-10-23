@@ -84,3 +84,77 @@ String readerBodyText(String body, ReaderSettings settings) {
 /// The character one indent step uses: the ideographic space for CJK, four spaces otherwise.
 String _indentUnit(String body) =>
     body.runes.any((int rune) => rune > 0x2E80) ? '\u3000' : '    ';
+
+/// The style the sentence being read aloud is painted with (`ADR-0057 §决策 5`).
+///
+/// Only colours change: the metrics stay exactly those of [style], because the paged body measures
+/// its pages with that very style (`readerPageStarts`) and a heavier weight would reflow the page
+/// under the reader's eyes.
+TextStyle spokenSentenceStyle(BuildContext context, TextStyle style) {
+  final M3ETheme tokens = context.m3e;
+
+  return style.copyWith(
+    backgroundColor: tokens.colors.primaryContainer,
+    color: tokens.colors.onPrimaryContainer,
+  );
+}
+
+/// [body]`[start, end)` as one span, with [highlight] painted in [highlightStyle].
+///
+/// The range is **clamped** into the slice: a page shows a window of the body and the engine's
+/// sentence may start before or end after it, so the highlight is clipped instead of skipped
+/// (ADR-0057 §决策 5). Nothing is highlighted when the two ranges do not overlap at all.
+TextSpan readingSpan({
+  required String body,
+  required TextStyle style,
+  required TextStyle highlightStyle,
+  required ({int start, int end})? highlight,
+  int start = 0,
+  int? end,
+}) {
+  final int stop = (end ?? body.length).clamp(start, body.length);
+  if (highlight == null) {
+    return TextSpan(text: body.substring(start, stop), style: style);
+  }
+  final int from = highlight.start.clamp(start, stop);
+  final int to = highlight.end.clamp(start, stop);
+  if (from >= to) {
+    return TextSpan(text: body.substring(start, stop), style: style);
+  }
+
+  return TextSpan(
+    style: style,
+    children: <TextSpan>[
+      if (from > start) TextSpan(text: body.substring(start, from)),
+      TextSpan(text: body.substring(from, to), style: highlightStyle),
+      if (to < stop) TextSpan(text: body.substring(to, stop)),
+    ],
+  );
+}
+
+/// [readingSpan] as a widget: a plain [Text] unless something is highlighted.
+///
+/// The plain path is not just an optimisation: a `Text.rich` carries its style on the spans, so the
+/// body's own [TextStyle] would no longer be readable from the widget tree (and the reader's style
+/// tests check exactly that).
+Widget readingText({
+  required String body,
+  required TextStyle style,
+  required TextStyle highlightStyle,
+  required ({int start, int end})? highlight,
+  int start = 0,
+  int? end,
+}) {
+  final TextSpan span = readingSpan(
+    body: body,
+    style: style,
+    highlightStyle: highlightStyle,
+    highlight: highlight,
+    start: start,
+    end: end,
+  );
+
+  return span.children == null
+      ? Text(span.text ?? '', style: style)
+      : Text.rich(span);
+}

@@ -16,12 +16,13 @@ const String notificationPermissionChannel =
 
 /// Picks the media-notification binding for this platform (C-PLT-1).
 ///
-/// Android and iOS have a system media notification (audio_service supports both); every other
-/// target — Windows is the one this project ships — gets the no-op binding, so playback still works
-/// while the app is in front. This function is the **only** place in the audio path that asks which
-/// platform it runs on.
+/// Android, iOS and Windows all show the current track in the system's own media surface:
+/// `audio_service` covers the first two and `audio_service_win` implements its platform interface
+/// with WinRT `SystemMediaTransportControls` (ADR-0057 §决策 4). Any other target gets the no-op
+/// binding, so playback still works while the app is in front. This function is the **only** place
+/// in the audio path that asks which platform it runs on.
 PlaybackNotification createPlaybackNotification({required AppLogger logger}) {
-  if (Platform.isAndroid || Platform.isIOS) {
+  if (Platform.isAndroid || Platform.isIOS || Platform.isWindows) {
     return AudioServicePlaybackNotification(logger: logger);
   }
 

@@ -30,6 +30,14 @@ final class FlutterTtsSpeechSynthesizer implements SpeechSynthesizer {
     _tts.setContinueHandler(
       () => _emit(const SpeechSnapshot(isSpeaking: true)),
     );
+    _tts.setProgressHandler(
+      (String text, int start, int end, String word) => _emit(
+        SpeechSnapshot(
+          isSpeaking: true,
+          spokenRange: SpeechRange(start: start, end: end),
+        ),
+      ),
+    );
     _tts.setErrorHandler(_onError);
   }
 

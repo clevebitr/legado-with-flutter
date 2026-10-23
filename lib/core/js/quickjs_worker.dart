@@ -362,7 +362,7 @@ String _evaluationSource(Map<String, Object?> fields) {
     ..writeln('var source = Object.freeze(${jsonEncode(fields['source'])});');
   final Object? book = fields['book'];
   buffer.writeln(
-    'var book = ${book == null ? 'null' : 'Object.freeze(${jsonEncode(book)})'};',
+    'var book = __sandboxBook(${book == null ? 'null' : jsonEncode(book)});',
   );
   // `key` 只有 URL 规则才有（上游 `AnalyzeUrl.evalJS`，AnalyzeUrl.kt:377）。缺席时用
   // `globalThis` 删掉而不是 `var` 声明，因为 `var` 建的属性删不掉，上一个 job 的词就会漏进来。
@@ -508,6 +508,52 @@ globalThis.__javaRejected = function (name) {
   return function () {
     throw new Error('java.' + name + ' is not supported (M2): see book-source.md §11');
   };
+};
+
+// 沙箱的 `book` 对象（ADR-0056 §决策 5 的数据面 + ADR-0057 §决策 2 的方法面）。
+//
+// 数据字段从 `JsBookInfo` 的 JSON 拷来，方法分两类：
+// * `getVariable` / `putVariable` 是**规则变量**，与 `java.get` / `java.put` 同一张表——
+//   上游 AnalyzeUrl 的 javaPut/javaGet 也是先写 book 的 variableMap（AnalyzeUrl.kt:390-406）；
+// * `setType` / `setReverseToc` 在本仓没有对应的书籍状态：它们在本 job 内可读回，但**不影响**
+//   宿主（章节顺序 / 书籍类型不变），差异登记在 ADR-0057 §决策 2。
+// 每次 job 重建，所以这里不再 `Object.freeze`：规则自己的写入不会漏到下一份规则。
+globalThis.__sandboxBook = function (data) {
+  if (data === null || data === undefined) {
+    return null;
+  }
+  var book = {};
+  for (var field in data) {
+    if (Object.prototype.hasOwnProperty.call(data, field)) {
+      book[field] = data[field];
+    }
+  }
+  var state = { type: 0, reverseToc: false };
+  book.type = state.type;
+  book.getVariable = function (key) {
+    return __java({ operation: 'get', key: String(key) });
+  };
+  book.putVariable = function (key, value) {
+    var call = { operation: 'put', key: String(key) };
+    if (value !== undefined && value !== null) {
+      call.value = String(value);
+    }
+    __java(call);
+  };
+  book.setType = function (type) {
+    state.type = Number(type) || 0;
+    book.type = state.type;
+  };
+  book.getType = function () {
+    return state.type;
+  };
+  book.setReverseToc = function (reverseToc) {
+    state.reverseToc = reverseToc === true;
+  };
+  book.getReverseToc = function () {
+    return state.reverseToc;
+  };
+  return book;
 };
 
 // 注意：`get` / `put` **不在**这个列表里——`book-source.md` §6 把 `java.get(key)` / `java.put(key,value)`

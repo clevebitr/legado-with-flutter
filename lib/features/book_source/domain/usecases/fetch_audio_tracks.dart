@@ -163,9 +163,10 @@ bool _looksLikeAddress(String value) =>
 
 /// Whether [url] can be handed to the player.
 ///
-/// Only direct `http(s)` streams are supported in this iteration (ADR-0054 §决策 2); an HLS
-/// playlist is a separate player capability and stays registered as open, so a source that only
-/// offers `m3u8` fails here instead of starting a player that cannot decode it.
+/// Only `http(s)` addresses are accepted; **no shape filter beyond that**. An `.m3u8` playlist is a
+/// player capability, not a parsing one: Android/iOS decode it, while Windows' bundled libmpv has no
+/// HLS demuxer and answers with a retryable playback failure (ADR-0057 §决策 3). Refusing the
+/// address here would make the source look broken on the platforms that can play it.
 bool _isMediaUrl(String url) {
   final Uri? uri = Uri.tryParse(url);
 

@@ -47,13 +47,17 @@ Please enable Developer Mode in your system settings.
 > `dynamic_color`、`cached_network_image`、`flutter_qjs_next`、`just_audio_windows`、`flutter_tts`），
 > 因此该开关是 Windows 开发的**硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
 
-**M17 起新增的两个 Windows 构建前提（ADR-0054 A-0 实测）：**
+**M17 / M24 起新增的 Windows 构建与能力前提（ADR-0054 A-0、ADR-0057 实测）：**
 
 | 前提 | 谁需要 | 不满足时的表现 |
 |---|---|---|
-| `nuget.exe` 在 `PATH` 上（本机放在 `C:/Users/<user>/tools/nuget.exe`） | `flutter_tts` 的 Windows 实现（C++/WinRT，`nuget install Microsoft.Windows.CppWinRT`） | `CMake Error at flutter_tts/windows/CMakeLists.txt: nuget.exe not found` |
+| `nuget.exe` 在 `PATH` 上（本机放在 `C:/Users/<user>/tools/nuget.exe`） | `flutter_tts` 与 `audio_service_win` 的 Windows 实现（C++/WinRT，`nuget install Microsoft.Windows.CppWinRT`） | `CMake Error at …/windows/CMakeLists.txt: nuget.exe not found` |
 | MSVC `/utf-8`（已在 `windows/CMakeLists.txt` 的 `APPLY_STANDARD_SETTINGS` 统一加） | `just_audio_windows` 的 UTF-8 源码；代码页 936 下 C4819 被 `/WX` 放大成构建失败 | `error C2220: 以下警告被视为错误` + `warning C4819` |
 | **WebView2 Evergreen 运行时** | `flutter_inappwebview_windows`（`,{webView:…}` 与 WebView 集成用例）；Win11 自带，Win10 装 Edge 即有；`flutter_inappwebview_windows` 构建也会经 NuGet 拉 WebView2 SDK | WebView 取页失败 → `WebPageFetcher` 回落普通 GET（不崩） |
+
+> **能力前提（不是构建前提）：** 媒体通知由 `audio_service_win` 的 WinRT `SystemMediaTransportControls` 提供，
+> 无需额外运行时（Windows 10+ 自带）；它**不显示进度、通知栏 seek 不生效**（ADR-0057 §决策 4）。
+> 同理，随包 `libmpv` 没有 HLS demuxer，`.m3u8` 在 Windows 上播放会失败（同一 ADR §决策 3）。
 
 ---
 

@@ -39,17 +39,19 @@ ADR-0055 修完解析方言后，真源「🔊书音M」的链路已到 `audioTr
 
 - `core/platform/web_page_fetcher.dart` 定义端口（`WebPageFetcher` / `FetchedWebPage`）；`InAppWebViewPageFetcher` 用 `flutter_inappwebview` 的 `HeadlessInAppWebView` 每次请求创建一个，`onLoadStop` 后等 400 ms 让页面脚本跑完，再 `getHtml()`；20 秒超时。
 - `PageFetchService.fetchRule` 在 `webView` 选项、GET、无 body、端口可用时走 WebView；失败或平台不支持（端口 `isSupported == false`）**回落普通 GET** 并 warning。POST/body 的 `webView` 仍回落（WebView 无法携带表单体）。
+  **2026-10-23 修订（ADR-0057 §决策 1）：** POST/body 的 `webView` 不再回落——端口增加 `method`/`body`，由 `URLRequest` 真的把表单交给页面；只有「平台没有 WebView」与「WebView 取页失败」两种情形回落普通 HTTP。
 - `webPageFetcherProvider` 默认 `UnsupportedWebPageFetcher`（宿主测试与无 WebView2 的平台走 HTTP），装配根绑定真实现。
 - Android / iOS / Windows 都由 `flutter_inappwebview` 覆盖（Windows 需要 WebView2 运行时，`platform.md` §1.2 登记）；集成用例 `integration_test/web_view_test.dart` 在本地 HTML 上验证 JS 已执行。
 
 ### 决策 5 沙箱 `book` 对象（ADR-0055 P2）
 
 - `JsBookInfo{name, author, bookUrl, tocUrl, intro, kind}`；`JsPageContext.book` → `JsJob.book` → worker 的 `book` 绑定；没有上下文的阶段绑定 `null`（源的 `typeof book` 守卫照旧）。
-- 目录阶段由 `FetchToc` 填 `tocUrl = 目录地址`、`bookUrl` 由阅读器端口透传；正文 / 音频阶段由 `ChapterRequest` 的 `bookUrl` / `tocUrl` / `author` / `kind` / `intro` 填。上游的可变方法（`setType` / `putVariable` 等）**不实现**，调用会像以前一样失败并登记。
+- 目录阶段由 `FetchToc` 填 `tocUrl = 目录地址`、`bookUrl` 由阅读器端口透传；正文 / 音频阶段由 `ChapterRequest` 的 `bookUrl` / `tocUrl` / `author` / `kind` / `intro` 填。
+  **2026-10-23 修订（ADR-0057 §决策 2）：** 可变方法已落地——`putVariable`/`getVariable` 走规则变量表，`setType`/`setReverseToc` 在 job 内可读回但不影响宿主（语义缺失已登记）。
 
 ## 后果
 
 - 好的方面：Windows 上真实 m4a 可播、加载失败不再原生崩溃；明文媒体变成显式开关；`webView` 源有真渲染路径；`book.*` 源拿到目录 / 书名 / 作者上下文。
 - 代价：Windows 包体增加 libmpv 与 WebView2 插件；`flutter_inappwebview` 的 Windows 构建首次约 2.5 分钟；WebView 必须在 UI isolate 运行（当前所有取页都从 UI 触发，符合）。
-- 仍未闭环：`webView` 的 POST/body 形态；`setType` 族 `book` 方法；Windows 无媒体通知（ADR-0054 的有意降级）；HLS / 云 TTS / 句级高亮（ADR-0054 §后果）。
+- 仍未闭环（2026-10-23 更新，ADR-0057）：Windows HLS（随包 libmpv 无 HLS demuxer）、云 TTS（ADR-0058 Proposed）、Windows SMTC 无时间轴/seek。原列的四项里，`webView` POST/body、`book` 方法与 Windows 通知已落地，句级高亮随 M24 落地。
 - 验证：全量门禁 + 真源（书音M：`audioTracks ok` + media_kit 实际推进；WebView 集成用例 Windows 通过）；MediaKit 适配器与 WebView 实现按 ADR-0019 第二类豁免覆盖率，由 `integration_test/audio_playback_test.dart` / `web_view_test.dart` 覆盖。

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Read a book aloud: form WebViews, `book` methods, SMTC on Windows, sentence highlight (ADR-0057)
+
+- **`webView` rules may POST.** The `WebPageFetcher` port carries `method` / `body`, so a rule like
+  `…/search,{"method":"POST","body":"k={{key}}","webView":true}` submits the form **inside** the
+  WebView instead of falling back to a GET that the site answers with an empty page. A missing
+  `Content-Type` is filled from the payload's shape; falling back to plain HTTP now only happens
+  when the platform has no WebView or the WebView itself fails.
+- **The sandbox `book` object has its methods.** `putVariable` / `getVariable` share the rule
+  variable table (`java.put` / `java.get`, as upstream's `AnalyzeUrl` does), and
+  `setType` / `getType` / `setReverseToc` / `getReverseToc` answer within the job. They do **not**
+  change the host's chapter order or media type — that gap is registered in ADR-0057 §decision 2.
+- **Windows shows a media notification.** `audio_service_win` implements `audio_service`'s platform
+  interface with WinRT `SystemMediaTransportControls`; `createPlaybackNotification` now covers
+  Windows, and the device probe attached, updated and detached a real session. The plugin has no
+  timeline or seek support, so the Windows panel shows no progress — recorded, not hidden.
+- **Read-aloud highlights the sentence being spoken.** Chapters are spoken from the *laid-out* body
+  (the same text the reader paints), every chunk keeps its source range, and the engine's progress
+  callback is mapped to the sentence it falls in. A separate keep-alive provider publishes the
+  range, so the reader body never has to build the speech engine to ask. Platforms without a
+  progress callback highlight the whole chunk.
+- **HLS is a player capability, not a parsing one.** A real `.m3u8` probe passes on Android
+  (ExoPlayer) and fails on Windows: the bundled `libmpv` has no HLS demuxer. The old "HLS not
+  supported" entry is narrowed to Windows with that evidence and a trigger condition.
+- Cloud TTS is scoped, not built: ADR-0058 (Proposed) lists the six decisions it needs first.
+- Licence note: `audio_service_win` 0.0.3 is MIT (193 packages, Risky items: none); `smtc_windows`
+  was evaluated and rejected for needing a Rust toolchain and a second notification port.
 ### Play real streams on Windows, opt into plain HTTP, and render webView pages (ADR-0056)
 
 - **Windows playback moved to `media_kit` (mpv).** `just_audio_windows` stalled at 0:00 for a real

@@ -16,6 +16,18 @@ final class FetchedWebPage {
   final String body;
 }
 
+/// The verb a WebView request uses (`book-source.md` §4.3, ADR-0057).
+///
+/// It mirrors the URL rule's own `method`, but the port lives in `core/` and the rule dialect in
+/// `features/`, so the split is repeated here instead of importing upwards.
+enum WebPageRequestMethod {
+  /// A plain page load.
+  get,
+
+  /// A load whose payload is the rule's rendered `body`.
+  post,
+}
+
 /// Loads a page in the platform's WebView for sources that declare `,{webView:…}`
 /// (`book-source.md` §4.3, ADR-0056).
 ///
@@ -31,10 +43,18 @@ abstract interface class WebPageFetcher {
   ///
   /// [headers] are the source's own request headers; [rulePath] keeps a failure locatable
   /// (C-SRC-8).
+  ///
+  /// [method] and [body] carry the URL rule's verb and payload, so a source that spells
+  /// `…,{“method”:”POST”,“body”:”k={{key}}”,“webView”:true}` posts **inside** the rendered page
+  /// instead of falling back to a plain GET that its site answers with an empty list
+  /// (ADR-0057 §决策 1). [body] is already rendered and is ignored for
+  /// [WebPageRequestMethod.get].
   Future<ParseResult<FetchedWebPage>> fetch({
     required String url,
     Map<String, String>? headers,
     required String rulePath,
+    WebPageRequestMethod method = WebPageRequestMethod.get,
+    String? body,
   });
 }
 
@@ -51,6 +71,8 @@ final class UnsupportedWebPageFetcher implements WebPageFetcher {
     required String url,
     Map<String, String>? headers,
     required String rulePath,
+    WebPageRequestMethod method = WebPageRequestMethod.get,
+    String? body,
   }) async => const ParseFailure<FetchedWebPage>(
     kind: ParseFailureKind.unsupportedRule,
     rulePath: 'webView',

@@ -9,6 +9,7 @@ import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.d
 import 'package:flutter_reader/features/reader/domain/repositories/speech_synthesizer.dart';
 import 'package:flutter_reader/features/reader/domain/speech_text.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_notifier.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -95,6 +96,10 @@ ReaderTtsState _state(_Fixture fixture) {
 /// The notifier under test.
 ReaderTts _notifier(_Fixture fixture) =>
     fixture.container.read(readerTtsProvider(_book).notifier);
+
+/// The sentence the reader would highlight right now (ADR-0057 §决策 5).
+ReaderTtsHighlight? _highlight(_Fixture fixture) =>
+    fixture.container.read(readerTtsHighlighterProvider);
 
 void main() {
   group('ReaderTts', () {
@@ -289,6 +294,68 @@ void main() {
       await pumpEventQueue();
 
       expect(fixture.speech.stopCalls, 0);
+    });
+
+    test('start_givenAChapter_highlightsItsFirstSentence', () async {
+      final _Fixture fixture = _fixture();
+      await _open(fixture);
+
+      await _notifier(fixture).start();
+      await pumpEventQueue();
+
+      // 读声用的正文是**排版后**的（段首缩进已就位），所以第一句从偏移 2 开始。
+      final ReaderTtsHighlight? highlight = _highlight(fixture);
+      expect(highlight?.chapterUrl, 'https://source.test/1.html');
+      expect(highlight?.start, 2);
+      expect(highlight?.end, 6);
+    });
+
+    test('progress_givenTheSecondSentence_movesTheHighlight', () async {
+      final _Fixture fixture = _fixture();
+      await _open(fixture);
+      await _notifier(fixture).start();
+      await pumpEventQueue();
+
+      // 引擎报的是**当前这一段**里的偏移（'第二句。' 在块里从第 4 个字开始）。
+      fixture.speech.emit(
+        const SpeechSnapshot(
+          isSpeaking: true,
+          spokenRange: SpeechRange(start: 4, end: 8),
+        ),
+      );
+      await pumpEventQueue();
+
+      final ReaderTtsHighlight? highlight = _highlight(fixture);
+      expect(highlight?.start, 6);
+      expect(highlight?.end, 10);
+    });
+
+    test('stop_clearsTheHighlight', () async {
+      final _Fixture fixture = _fixture();
+      await _open(fixture);
+      await _notifier(fixture).start();
+      await pumpEventQueue();
+
+      await _notifier(fixture).stop();
+      await pumpEventQueue();
+
+      expect(_highlight(fixture), isNull);
+    });
+
+    test('nextChapter_highlightsTheNextChaptersSentence', () async {
+      final _Fixture fixture = _fixture();
+      await _open(fixture);
+      await _notifier(fixture).start();
+      await pumpEventQueue();
+
+      // 每章读完会触发换章重建；新一章的第一句必须带上新章的地址，否则高亮会落在旧正文上。
+      fixture.speech.emit(
+        const SpeechSnapshot(isSpeaking: false, isCompleted: true),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      expect(_highlight(fixture)?.chapterUrl, 'https://source.test/2.html');
     });
   });
 }

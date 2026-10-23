@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audio_service_win
   dynamic_color
   file_selector_windows
   flutter_inappwebview_windows

@@ -137,10 +137,12 @@ final class PageFetchService {
   /// * suffix headers are merged **over** the source's own `header`, which is what upstream
   ///   does and what a site asking for a per-request `Referer` expects.
   ///
-  /// Option fields this repository cannot honour (`webView`, `webJs`, `retry`, …) are logged
-  /// by name and ignored, so a source degrades instead of disappearing (ADR-0032's stance
-  /// for unknown syntax). [headers] stays the **source-level** table; the caller keeps passing
-  /// the same map it would pass to [fetch].
+  /// Option fields this repository cannot honour (`webJs`, `retry`, …) are logged by name and
+  /// ignored, so a source degrades instead of disappearing (ADR-0032's stance for unknown syntax).
+  /// `webView` is **not** ignored: a GET or POST request is routed through the [WebPageFetcher]
+  /// port and rendered, and only a platform without a WebView falls back to plain HTTP
+  /// (ADR-0057 §决策 1). [headers] stays the **source-level** table; the caller keeps passing the
+  /// same map it would pass to [fetch].
   Future<ParseResult<FetchedPage>> fetchRule(
     String rule, {
     required String rulePath,
@@ -196,11 +198,10 @@ final class PageFetchService {
       ),
     };
     final UrlRuleOptions options = renderedRule.options ?? textOptions;
-    // `webView` 有真正的实现时不要再报「忽略」；只有平台没有 WebView / 请求带 body 才回落。
+    // `webView` 有真正的实现时不要再报「忽略」；只有平台没有 WebView 才回落。
+    // POST/body 不再排除在外：表单型站点（ADR-0057 §决策 1）只有提交之后才有结果页。
     final bool canWebView =
         options.unsupported.contains('webView') &&
-        options.method == UrlRequestMethod.get &&
-        options.body == null &&
         (_webPages?.isSupported ?? false);
     for (final String ignored in options.unsupported) {
       if (canWebView && ignored == 'webView') {
@@ -221,9 +222,45 @@ final class PageFetchService {
       ...options.headers,
     };
 
+    String? body;
+    if (options.body != null) {
+      final ParseResult<String> renderedBody = await _engine.renderUrl(
+        options.body!,
+        rulePath: rulePath,
+        params: params,
+        context: context,
+        charset: options.charset,
+        // JSON / XML 载荷里关键词必须原样出现（上游同样跳过表单编码）。
+        encodeKeyword: !_isStructuredBody(options.body!),
+      );
+      switch (renderedBody) {
+        case ParseFailure<String>(
+          :final ParseFailureKind kind,
+          rulePath: final String failedAt,
+        ):
+          return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
+        case ParseSuccess<String>(:final String data):
+          body = data;
+      }
+    }
+
     if (canWebView) {
+      final bool post = options.method == UrlRequestMethod.post;
+      if (post) {
+        // 页面自己带的脚本会按这个头解析 body；规则没写就按载荷形状定（ADR-0057 §决策 1）。
+        requestHeaders.putIfAbsent(
+          'Content-Type',
+          () => _contentTypeOf(body ?? ''),
+        );
+      }
       final ParseResult<FetchedWebPage> rendered = await _requireWebPages()
-          .fetch(url: url, headers: requestHeaders, rulePath: rulePath);
+          .fetch(
+            url: url,
+            headers: requestHeaders,
+            rulePath: rulePath,
+            method: post ? WebPageRequestMethod.post : WebPageRequestMethod.get,
+            body: post ? body : null,
+          );
       switch (rendered) {
         case ParseSuccess<FetchedWebPage>(:final FetchedWebPage data):
           return _pageOf(
@@ -251,28 +288,6 @@ final class PageFetchService {
             'WebView fetch failed, falling back to HTTP: rule=$rulePath '
             'kind=${kind.name} source=${sourceId ?? 'unknown'}',
           );
-      }
-    }
-
-    String? body;
-    if (options.body != null) {
-      final ParseResult<String> renderedBody = await _engine.renderUrl(
-        options.body!,
-        rulePath: rulePath,
-        params: params,
-        context: context,
-        charset: options.charset,
-        // JSON / XML 载荷里关键词必须原样出现（上游同样跳过表单编码）。
-        encodeKeyword: !_isStructuredBody(options.body!),
-      );
-      switch (renderedBody) {
-        case ParseFailure<String>(
-          :final ParseFailureKind kind,
-          rulePath: final String failedAt,
-        ):
-          return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
-        case ParseSuccess<String>(:final String data):
-          body = data;
       }
     }
 
@@ -318,6 +333,23 @@ final class PageFetchService {
     return trimmed.startsWith('{') ||
         trimmed.startsWith('[') ||
         trimmed.startsWith('<');
+  }
+
+  /// The `Content-Type` a WebView POST declares when the rule declares none.
+  ///
+  /// Upstream sends the same three shapes through a WebView, and a page whose script reads
+  /// `request.getParameter` needs the form type to be present: a body sent as
+  /// `text/plain` reaches the site but parses to nothing (ADR-0057 §决策 1).
+  String _contentTypeOf(String body) {
+    final String trimmed = body.trimLeft();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      return 'application/json';
+    }
+    if (trimmed.startsWith('<')) {
+      return 'application/xml';
+    }
+
+    return 'application/x-www-form-urlencoded';
   }
 
   /// Fetches [url] and parses the body into a page scope.

@@ -30,8 +30,9 @@ final class JsSourceInfo {
 ///
 /// Upstream binds its `Book` entity as `book` (`AnalyzeUrl.kt:373`), and real sources read
 /// `book.name` / `book.author` / `book.bookUrl` / `book.tocUrl` / `book.intro` from URL and
-/// chapter rules. Only data fields are exposed: the mutating methods (`setType`,
-/// `putVariable`, …) stay unimplemented and are registered as such.
+/// chapter rules. This class carries the **data** fields; the methods a source may call
+/// (`getVariable` / `putVariable` / `setType` / `setReverseToc`) are built by the sandbox
+/// prelude around that JSON, because they need the rule-variable table (ADR-0057 §决策 2).
 final class JsBookInfo {
   /// Creates the sandbox view of a book.
   const JsBookInfo({

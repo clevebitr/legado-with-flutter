@@ -148,6 +148,13 @@ MPL-2.0 §3.3 的 Secondary License 允许并入 GPL 作品），但它仍是**�
 **176 包 / BSD-3 105 / MIT 46 / Apache 10 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**。
 GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_convert`。
 
+**2026-10-23 增量（听书二期，ADR-0057）：** `dependencies` 新增 `audio_service_win ^0.0.3`
+（Windows 的 SMTC 平台实现，**MIT**）。`dart run tool/scan_licenses.dart` 复算：
+**193 包 / BSD-3 105 / MIT 55 / Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**。
+GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_convert`。
+**评估后未采用：** `smtc_windows`（同样 MIT，但走 flutter_rust_bridge，构建需要 Rust 工具链，
+且要另起一套通知端口实现）；`audio_service_win` 复用已有 `audio_service` 接线，代价更小。
+
 **2026-10-22 增量（播放后端与 WebView，ADR-0056）：** `dependencies` 新增
 `media_kit ^1.2.6`（MIT）、`media_kit_libs_windows_audio ^1.0.9`（包 LICENSE 为 MIT；
 Windows 构建随包的 **libmpv / FFmpeg 动态库为 LGPL-2.1+**，见下方手工登记）、
@@ -194,6 +201,7 @@ GPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_c
 | `just_audio` | 0.10.6 | MIT |
 | `just_audio_windows` | 0.2.3 | MIT |
 | `audio_service` | 0.18.19 | MIT |
+| `audio_service_win` | 0.0.3 | MIT |
 | `flutter_tts` | 4.2.5 | MIT |
 | `media_kit` | 1.2.6 | MIT |
 | `media_kit_libs_windows_audio` | 1.0.9 | MIT（随包 libmpv / FFmpeg 动态库：LGPL-2.1+，手工登记） |

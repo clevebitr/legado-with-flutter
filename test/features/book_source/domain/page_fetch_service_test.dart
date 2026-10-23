@@ -43,10 +43,19 @@ BookSource _source({Map<String, String>? headers, String? headerRule}) =>
       contentRule: const ContentRule(content: 'class.body'),
     );
 
-/// A WebView double that records URLs and answers with a fixed page.
+/// A WebView double that records what it was asked to load and answers with a fixed page.
 final class _FakeWebPages implements WebPageFetcher {
   /// URLs handed to the WebView, in order.
   final List<String> urls = <String>[];
+
+  /// The verbs handed to the WebView, in order (ADR-0057 §决策 1).
+  final List<WebPageRequestMethod> methods = <WebPageRequestMethod>[];
+
+  /// The bodies handed to the WebView, in order.
+  final List<String?> bodies = <String?>[];
+
+  /// The headers of the last request.
+  Map<String, String>? headers;
 
   /// The body the fake page answers with.
   String body = '<div class="body">from-webview</div>';
@@ -62,8 +71,13 @@ final class _FakeWebPages implements WebPageFetcher {
     required String url,
     Map<String, String>? headers,
     required String rulePath,
+    WebPageRequestMethod method = WebPageRequestMethod.get,
+    String? body,
   }) async {
     urls.add(url);
+    methods.add(method);
+    bodies.add(body);
+    this.headers = headers;
     if (fail) {
       return failureAt<FetchedWebPage>(
         kind: ParseFailureKind.unsupportedRule,
@@ -71,7 +85,9 @@ final class _FakeWebPages implements WebPageFetcher {
       );
     }
 
-    return ParseSuccess<FetchedWebPage>(FetchedWebPage(url: url, body: body));
+    return ParseSuccess<FetchedWebPage>(
+      FetchedWebPage(url: url, body: this.body),
+    );
   }
 }
 
@@ -359,6 +375,123 @@ void main() {
         expect(http.requestedUrls, <String>['https://example-novel.test/page']);
       },
     );
+
+    test(
+      'fetchRule_givenWebViewPost_sendsTheFormBodyThroughTheWebView',
+      () async {
+        // ADR-0057 §决策 1：表单型 `webView` 源（POST + body + webView）以前会回落普通 GET，
+        // 得到的永远是未提交的空结果页。
+        final FakeLogPrinter printer = FakeLogPrinter();
+        final FakeHttpClient http = FakeHttpClient();
+        final _FakeWebPages web = _FakeWebPages();
+        final PageFetchService pages = PageFetchService(
+          engine: RuleEngine(
+            logger: AppLogger(level: LogLevel.debug, printer: printer),
+            jsBridge: FakeJsBridge(),
+            variables: JsVariableStore(),
+          ),
+          http: http,
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          webPages: web,
+        );
+
+        final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+          'https://example-novel.test/s,{"method":"POST",'
+          '"body":"k={{key}}","webView":true}',
+          rulePath: 'searchUrl',
+          params: <String, String>{'key': '剑来'},
+          context: _context(),
+        );
+
+        expect(fetched, isA<ParseSuccess<FetchedPage>>());
+        expect(web.methods, <WebPageRequestMethod>[WebPageRequestMethod.post]);
+        expect(web.bodies, <String?>['k=%E5%89%91%E6%9D%A5']);
+        expect(
+          web.headers?['Content-Type'],
+          'application/x-www-form-urlencoded',
+        );
+        expect(http.requestedUrls, isEmpty);
+      },
+    );
+
+    test('fetchRule_givenWebViewPostWithAJsonBody_keepsItVerbatim', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient();
+      final _FakeWebPages web = _FakeWebPages();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+        webPages: web,
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/v1/search,{"method":"POST",'
+        '"body":"{\\"keyword\\":\\"{{key}}\\"}","webView":true}',
+        rulePath: 'searchUrl',
+        params: <String, String>{'key': '剑来'},
+        context: _context(),
+      );
+
+      expect(web.bodies.single, '{"keyword":"剑来"}');
+      expect(web.headers?['Content-Type'], 'application/json');
+    });
+
+    test('fetchRule_givenWebViewPostWithADeclaredType_keepsIt', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient();
+      final _FakeWebPages web = _FakeWebPages();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+        webPages: web,
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/s,{"method":"POST","body":"k={{key}}",'
+        '"headers":{"Content-Type":"text/plain;charset=gbk"},"webView":true}',
+        rulePath: 'searchUrl',
+        params: <String, String>{'key': '剑来'},
+        context: _context(),
+      );
+
+      expect(web.headers?['Content-Type'], 'text/plain;charset=gbk');
+    });
+
+    test('fetchRule_givenWebViewGet_declaresNoContentType', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient();
+      final _FakeWebPages web = _FakeWebPages();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+        webPages: web,
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/page,{"webView":true}',
+        rulePath: 'ruleContent',
+        params: const <String, String>{},
+        context: _context(),
+      );
+
+      expect(web.headers?.containsKey('Content-Type'), isFalse);
+      expect(web.bodies, <String?>[null]);
+    });
 
     test('fetchRule_givenAJsonBody_keepsTheKeywordVerbatim', () async {
       final FakeLogPrinter printer = FakeLogPrinter();
