@@ -82,3 +82,4 @@
 | [0061](0061-playback-http-and-webview.md) | 播放后端 / 明文 HTTP / WebView：Windows 改用 media_kit（libmpv LGPL 白名单）、`allowPlainHttp` 独立开关（页面与媒体共用）、headless WebView 端口与回落、沙箱 `book` 对象 | Accepted（2026-10-22，M17 真源复测；用户裁决三项） | 本次新增 |
 | [0062](0062-audio-phase-two.md) | 听书二期（M24）：`webView` 的 POST/body、`book` 方法面（变量表复用 + `setType` 族语义缺失登记）、HLS 现状（Android 可播 / Windows 随包 libmpv 无 HLS demuxer）、Windows SMTC（`audio_service_win`，无时间轴）、TTS 句级高亮 | Accepted（2026-10-23，M24；用户指令，附双端探针证据） | 本次新增 |
 | [0063](0063-cloud-tts-proposal.md) | 云 TTS：引擎抽象、凭据存储、合成与缓存、播放接线、六项待裁决 | **Proposed**（2026-10-23，M24-P6 立项；未裁决前不实现） | 本次新增 |
+| [0064](0064-audio-page-follows-structure-only.md) | 播放页只跟随「结构状态」：`AudioReaderSkeleton` 投影 + `select`，位置 tick 只重画滑条一行；Windows 的缩略图 / AXTree 日志登记为插件与嵌入层噪声，不用 `ExcludeSemantics` 换安静 | Accepted（2026-10-23，Windows 实跑听书源日志） | 本次新增 |

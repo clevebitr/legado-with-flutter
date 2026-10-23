@@ -11,6 +11,7 @@ import 'package:flutter_reader/features/reader/domain/entities/audio_track.dart'
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/audio_playback_engine.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/audio_reader_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -153,6 +154,77 @@ void main() {
       expect(find.text('0:03'), findsOneWidget);
       expect(find.text('0:30'), findsOneWidget);
       expect(find.byTooltip(_l10n(tester).readerAudioPause), findsOneWidget);
+    });
+
+    testWidgets('snapshots_givenOnlyThePositionChanges_doNotNotifyThePage', (
+      WidgetTester tester,
+    ) async {
+      // 回归点（ADR-0064 §决策 1）：位置每 ~200 ms 变一次，整页跟着重建会把 Windows 的 UIA
+      // 桥刷成 `Failed to update ui::AXTree … Nodes left pending by the update`。
+      // 页面订阅的是 audioReaderPageState（不含位置），所以位置跳变不该通知它。
+      final _Fixture fixture = _fixture();
+      await _pump(tester, fixture);
+      var notifications = 0;
+      fixture.container.listen<AsyncValue<AudioReaderSkeleton>>(
+        audioReaderProvider(_book).select(audioReaderPageState),
+        (
+          AsyncValue<AudioReaderSkeleton>? previous,
+          AsyncValue<AudioReaderSkeleton> next,
+        ) => notifications++,
+      );
+
+      fixture.engine.emit(
+        const AudioPlaybackSnapshot(
+          isPlaying: true,
+          position: Duration(seconds: 1),
+          duration: Duration(seconds: 30),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('0:01'), findsOneWidget);
+      final int afterFirstTick = notifications;
+
+      fixture.engine.emit(
+        const AudioPlaybackSnapshot(
+          isPlaying: true,
+          position: Duration(seconds: 2),
+          duration: Duration(seconds: 30),
+        ),
+      );
+      await tester.pump();
+
+      // 位置仍然上屏（那一行自己订阅了 position），但页面结构没有被通知重建。
+      expect(find.text('0:02'), findsOneWidget);
+      expect(find.text('0:01'), findsNothing);
+      expect(notifications, afterFirstTick, reason: '只有位置变化时，页面结构不该重建');
+    });
+
+    test('audioReaderSkeleton_ignoresTheTickingPosition', () {
+      // select 的等价性靠这个投影：位置不同的两个状态必须投影成相等值，否则「不重建」不成立。
+      const AudioReaderState base = AudioReaderState(
+        tracks: <ReaderAudioTrack>[
+          ReaderAudioTrack(url: 'https://cdn.test/1.mp3'),
+        ],
+        isPlaying: true,
+        position: Duration(seconds: 1),
+        duration: Duration(seconds: 30),
+        speed: 1.25,
+      );
+
+      expect(
+        audioReaderSkeleton(base),
+        audioReaderSkeleton(
+          base.copyWith(position: const Duration(seconds: 9)),
+        ),
+      );
+      expect(
+        audioReaderSkeleton(base),
+        isNot(audioReaderSkeleton(base.copyWith(isPlaying: false))),
+      );
+      expect(
+        audioReaderSkeleton(base),
+        isNot(audioReaderSkeleton(base.copyWith(speed: 1))),
+      );
     });
 
     testWidgets('tapNextChapter_loadsTheNextChapter', (

@@ -17,6 +17,12 @@ import 'package:m3e_design/m3e_design.dart';
 /// It is the audio half of `ReaderPage`'s dispatch: the page, the session and the chapter list are
 /// shared with the text reader, but the body is a player instead of a scroll view. The view holds
 /// only the scrub position while a finger is down — every other value lives in [AudioReader].
+///
+/// **The page follows [AudioReaderSkeleton], not the whole state** (ADR-0064 §决策 1): the notifier
+/// republishes the position on every engine snapshot (~5/s), and rebuilding the app bar, the tooltips,
+/// the speed chips and the slider on each of them kept the Windows UIA bridge busy enough to log
+/// `Failed to update ui::AXTree … Nodes left pending by the update` on every update while a source
+/// played. Only the position row (and the two time labels beside it) watches the ticking value.
 class AudioReaderView extends ConsumerStatefulWidget {
   /// Creates the player for [book].
   const AudioReaderView({required this.book, super.key});
@@ -53,8 +59,8 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final AsyncValue<AudioReaderState> state = ref.watch(
-      audioReaderProvider(widget.book),
+    final AsyncValue<AudioReaderSkeleton> state = ref.watch(
+      audioReaderProvider(widget.book).select(audioReaderPageState),
     );
     final AsyncValue<ParseResult<List<ReadingChapter>>> chapters = ref.watch(
       readerChaptersProvider(widget.book),
@@ -75,12 +81,9 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
       ),
       body: SafeArea(
         child: switch (state) {
-          AsyncData<AudioReaderState>(:final AudioReaderState value) => _body(
-            value,
-            known,
-            index,
-          ),
-          AsyncError<AudioReaderState>() => StateMessage(
+          AsyncData<AudioReaderSkeleton>(:final AudioReaderSkeleton value) =>
+            _body(value, known, index),
+          AsyncError<AudioReaderSkeleton>() => StateMessage(
             message: l10n.readerAudioFailed,
           ),
           _ => const Center(child: CircularProgressIndicator()),
@@ -91,7 +94,7 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
 
   /// The player, its failure state, or the empty-book message.
   Widget _body(
-    AudioReaderState state,
+    AudioReaderSkeleton state,
     List<ReadingChapter> chapters,
     int index,
   ) {
@@ -99,8 +102,8 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
     if (chapters.isEmpty) {
       return StateMessage(message: l10n.readerNoChapter);
     }
-    if (state.failure != null) {
-      return _failure(l10n);
+    if (state.failureRulePath != null) {
+      return _failure(l10n, state);
     }
     if (!state.hasTrack) {
       return const Center(child: CircularProgressIndicator());
@@ -130,32 +133,19 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
             textAlign: TextAlign.center,
             style: tokens.typography.base.labelMedium,
           ),
-          if (state.tracks.length > 1) ...<Widget>[
+          if (state.trackCount > 1) ...<Widget>[
             SizedBox(height: tokens.spacing.xs),
             Text(
               l10n.readerAudioTrackCount(
                 state.trackIndex + 1,
-                state.tracks.length,
+                state.trackCount,
               ),
               textAlign: TextAlign.center,
               style: tokens.typography.base.labelMedium,
             ),
           ],
           SizedBox(height: tokens.spacing.xl),
-          _positionSlider(state),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Text(
-                _format(state.position),
-                style: tokens.typography.base.labelSmall,
-              ),
-              Text(
-                _format(state.duration ?? Duration.zero),
-                style: tokens.typography.base.labelSmall,
-              ),
-            ],
-          ),
+          _positionRow(tokens, state),
           SizedBox(height: tokens.spacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -206,11 +196,49 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
     );
   }
 
+  /// The seek slider and the two time labels — the only part that follows the ticking position.
+  ///
+  /// Its own [Consumer] watches just `position`, so an engine snapshot rebuilds this row (a few
+  /// text runs and one slider) instead of the page's whole semantics subtree (ADR-0064 §决策 1).
+  Widget _positionRow(M3ETheme tokens, AudioReaderSkeleton skeleton) {
+    final Duration? duration = skeleton.duration;
+
+    return Consumer(
+      builder: (BuildContext context, WidgetRef ref, Widget? _) {
+        final Duration position = ref.watch(
+          audioReaderProvider(widget.book).select(
+            (AsyncValue<AudioReaderState> value) =>
+                value.value?.position ?? Duration.zero,
+          ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _positionSlider(position, duration),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Text(
+                  _format(position),
+                  style: tokens.typography.base.labelSmall,
+                ),
+                Text(
+                  _format(duration ?? Duration.zero),
+                  style: tokens.typography.base.labelSmall,
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   /// The seek slider; dragging only moves the label until the finger lifts.
-  Widget _positionSlider(AudioReaderState state) {
-    final double total = (state.duration ?? Duration.zero).inMilliseconds
-        .toDouble();
-    final double current = state.position.inMilliseconds
+  Widget _positionSlider(Duration position, Duration? duration) {
+    final double total = (duration ?? Duration.zero).inMilliseconds.toDouble();
+    final double current = position.inMilliseconds
         .toDouble()
         .clamp(0, total)
         .toDouble();
@@ -234,12 +262,9 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
   }
 
   /// The failure state: one sentence and a retry that re-reads the chapter.
-  Widget _failure(AppLocalizations l10n) {
+  Widget _failure(AppLocalizations l10n, AudioReaderSkeleton skeleton) {
     final M3ETheme tokens = context.m3e;
-    final AudioReaderState? state = ref
-        .read(audioReaderProvider(widget.book))
-        .value;
-    final bool plainHttp = state?.failure?.rulePath == 'reader.audioPlainHttp';
+    final bool plainHttp = skeleton.failureRulePath == 'reader.audioPlainHttp';
 
     return Center(
       child: Padding(
@@ -297,6 +322,70 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
   };
 }
 
+/// Everything the player page's **structure** depends on, with the ticking position left out.
+///
+/// `AudioReader` republishes `position` on every engine snapshot (~5/s). Watching the whole state
+/// rebuilt the app bar, the tooltips, the speed chips and the slider five times a second; on
+/// Windows the embedder answers that churn with
+/// `Failed to update ui::AXTree … Nodes left pending by the update` on every update
+/// (ADR-0064 §决策 1). The page therefore watches this projection — a value type whose equality
+/// only changes when the layout would — and the position row watches `position` on its own.
+///
+/// Adding a field to `AudioReaderState` means deciding which side it belongs to: **structure**
+/// lives here, anything that changes per snapshot tick does not.
+typedef AudioReaderSkeleton = ({
+  /// Whether there is a track to show the controls for.
+  bool hasTrack,
+
+  /// The `rulePath` of the failure to show, or `null` when playback is fine.
+  String? failureRulePath,
+
+  /// Whether the chapter's tracks are still loading.
+  bool isLoading,
+
+  /// Whether the player is buffering.
+  bool isBuffering,
+
+  /// Whether it is playing (drives the middle button's icon and tooltip).
+  bool isPlaying,
+
+  /// Whether the current track ended (drives the replay icon).
+  bool isCompleted,
+
+  /// The selected speed (drives the chip selection).
+  double speed,
+
+  /// How many tracks the chapter has, and which one plays.
+  int trackCount,
+  int trackIndex,
+
+  /// The track's length; `null` while unknown. It is structure, not a tick: it changes once per
+  /// track, and the position row needs it as the slider's maximum.
+  Duration? duration,
+});
+
+/// The projection the page's `select` watches: the async value with only the structure inside.
+///
+/// Exported so the "a position tick must not rebuild the page" test can subscribe to the very
+/// expression the view uses instead of copying it (ADR-0064 §决策 1).
+AsyncValue<AudioReaderSkeleton> audioReaderPageState(
+  AsyncValue<AudioReaderState> value,
+) => value.whenData(audioReaderSkeleton);
+
+/// Projects [state] onto [AudioReaderSkeleton], dropping the per-snapshot position.
+AudioReaderSkeleton audioReaderSkeleton(AudioReaderState state) => (
+  hasTrack: state.hasTrack,
+  failureRulePath: state.failure?.rulePath,
+  isLoading: state.isLoading,
+  isBuffering: state.isBuffering,
+  isPlaying: state.isPlaying,
+  isCompleted: state.isCompleted,
+  speed: state.speed,
+  trackCount: state.tracks.length,
+  trackIndex: state.trackIndex,
+  duration: state.duration,
+);
+
 /// The playback speeds the player offers (ADR-0054 §决策 4).
 const List<double> audioSpeedSteps = <double>[0.75, 1, 1.25, 1.5, 2];
 
@@ -308,7 +397,7 @@ String _speedLabel(double speed) {
 }
 
 /// The icon of the middle button: pause while playing, replay when the track ended.
-IconData _playIcon(AudioReaderState state) {
+IconData _playIcon(AudioReaderSkeleton state) {
   if (state.isPlaying) {
     return Icons.pause;
   }

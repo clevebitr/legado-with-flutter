@@ -470,6 +470,8 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 云 TTS、语音缓存、定时停止、投屏、Windows 后台播放 | **未做**：云 TTS 立项见 ADR-0063（Proposed，六项待裁决）；其余无用户需求证据 |
 | TTS 句级高亮 | ✅ **已闭环（M24，ADR-0062 §决策 5）**：`splitSpeechSegments` + `speechSentenceAt` + `SpeechSnapshot.spokenRange`，正文按句高亮；无进度回调的平台覆盖整块（≤800 字） |
 | Windows 媒体通知 | ✅ **已闭环（M24，ADR-0062 §决策 4）**：`audio_service_win`（WinRT SMTC），Windows 实测 attach/update/detach；**无时间轴与 seek**（插件缺口，登记） |
+| Windows 播报 `Failed to set thumbnail`（`audio_service_win`） | **不修（ADR-0064 §决策 2）**：我们从不填 `artUri`（拿不到可用封面文件），插件仍尝试设缩略图后自打日志。触发 = 插件提供「无封面跳过」的开关，或我们开始缓存封面文件 |
+| Windows 播报 `Failed to update ui::AXTree … Nodes left pending by the update` | **部分闭环（ADR-0064 §决策 1）**：位置 tick 不再重建整页（每秒五轮整页 → 一行），可控制的一半已削掉；剩余属 Flutter Windows 嵌入层缺陷（flutter/flutter#103808、#193588 同类），与播放功能无关。触发 = 升级 Flutter 后仍复现则按上游 issue 跟进 |
 | 已登记为**有意差异 / 具名拒绝**的一族：`{{…}}` 在列表规则里的语义、模板 JS 返回列表取首值、发现页 `infoMap` 与排名模块、`java.timeFormatUTC`、HTML 实体反转义、同步 `http.*` 形态、列表规则上的 `@js:`、`parse.*` 嵌套与 `parse.getElements` 非 DOM、元素 scope 的 `result` 形态、矩阵 #7 多元素倒置 | **无待办**：行为与触发条件归 `book-source.md` §3 / §4.2 / §6 / §11 与 ADR-0029 / 0035 的注记，本表不再复述 |
 
 ---
