@@ -13,6 +13,7 @@
 lib/
 ├── main.dart                     # 仅 bootstrap：runApp + ProviderScope
 ├── app.dart                      # MaterialApp 装配：主题、路由、l10n
+├── app_shell.dart                # 应用外壳（底部导航 + 四个 tab）；组合根的一部分，唯一允许组合多个 feature 页面的文件
 ├── core/                         # 无业务语义的共享能力，可被任意层依赖
 │   ├── di/                       # 基础设施 Provider（数据库、HttpClient、Logger）
 │   ├── error/                    # ParseResult / ParseFailureKind / ARB 键名助手
@@ -23,10 +24,12 @@ lib/
 │   ├── router/                   # 路由机制（RouteSettings → 页面）与唯一 push 入口；页面表见 §6
 │   ├── storage/                  # Drift 数据库、DAO、键值存储封装
 │   ├── theme/                    # M3ETheme 安装、动态取色接线
-│   └── utils/                    # 纯函数工具（禁止 IO，禁止依赖 Flutter）
+│   ├── utils/                    # 纯函数工具（禁止 IO，禁止依赖 Flutter）
+│   └── widgets/                  # 多个 feature 共用的无业务语义 Widget（ADR-0042）
 ├── features/
-│   └── <feature>/                # book_source（书源 / 搜索 / 发现 / 详情）；Phase 5 新增
-│                                 #   reader / bookshelf / settings（边界见 ADR-0041）
+│   └── <feature>/                # book_source（书源 / 搜索 / 发现 / 详情 / 校验 / 调试）；Phase 5 新增
+│                                 #   reader（阅读会话 / 阅读设置 / 进度端口）/ bookshelf / settings
+│                                 #   （边界见 ADR-0041、ADR-0044）
 │       ├── data/                 # DTO(freezed) + DataSource + RepositoryImpl
 │       ├── domain/               # Entity + Repository 接口 + UseCase
 │       ├── presentation/         # pages / widgets / notifiers（Notifier 与该 feature 的派生 provider 同放 notifiers/）
@@ -63,6 +66,10 @@ features/<f>/presentation ──► features/<f>/domain ──► features/<f>/d
   （返回 `ParseFailure(unsupportedRule)` + warning，不抛）。端口只收发原语与**消费方自己的**实体；
   跨 feature 的实体映射同样只发生在装配根的适配器里（§3 的「Mapper 在 `data/`」针对的是
   feature 内的 DTO ↔ Entity）。
+- **跨 feature 导航是这条规则的第二种形态（ADR-0042）：** `domain/` 端口不能携带 `BuildContext`
+  （C-ARCH-7），所以页面间的跳转声明在 `core/router/app_navigation.dart` 的 `AppNavigation` 上，
+  由装配根 `appProviderOverrides()` 绑定到各 feature 的 `push…Route`；端口只收 `BuildContext` 与原语，
+  默认实现是记一条 warning 的 no-op。多个 feature 共用的无业务语义 Widget 放 `core/widgets/`。
 
 ---
 
@@ -87,6 +94,10 @@ DTO ↔ Entity 转换必须放在 `data/` 的 Mapper 中，禁止在 `presentati
 > 抽象与纯 Dart 依赖；不 import Flutter / 平台 API / `data/`；不承担仓储职责（C-NET-8）。
 > `lib/features/book_source/` 目前没有 `data/` 层，是该例外的直接结果，复审触发条件见
 > ADR-0025 §后果。
+>
+> `lib/features/reader/` 在 5.3 落地时同时有了 `data/`（阅读设置的 `shared_preferences` 仓储）与
+> `domain/` 的三条端口（目录 / 正文 / 进度），端口由装配根绑定到 `book_source` 与 `bookshelf`
+> （ADR-0044 §决策 2）。
 
 ---
 
@@ -162,6 +173,10 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | 路径必填 | `rulePath` 使用「书源字段 + 规则片段」描述，如 `searchRule.list`、`contentRule.content`（C-SRC-8） |
 | 穷尽匹配 | 消费方必须 `switch` 穷尽两个分支，禁止 `is` 判断后回退到 `null` |
 
+> **不新增 kind 的既有裁决：** 书源校验的阶段失败（搜索失败 / 目录为空 / 正文为空 / 超时 / JS 失效）
+> 属于**归类**而不是新的失败类型，因此仍在 `ParseResult<SourceCheckReport>` 的报告内部表达，
+> `ParseFailureKind` 保持这 9 个值（ADR-0043 §决策 4）。需要新 kind 时先改本节并写 ADR。
+
 `ParseResult` 的扩展方法（`whenSuccess`、`dataOrNull`）放在同文件，保持 `core/error/` 自洽。
 
 ---
@@ -186,13 +201,20 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 |---|---|---|---|
 | `BookDetailRoute`、`ExploreRoute` | `BookDetailPage`、`ExplorePage` | `book_source` | 已落地 |
 | `BookSourceListRoute`、`BookSourceImportRoute` | 书源列表页、导入页 | `book_source` | 5.1 |
-| `ReaderRoute` | `ReaderPage` | `reader` | 5.3（从 `book_source` **迁入**） |
-| `BookshelfRoute` | 书架页 | `bookshelf` | 5.4 |
-| `SettingsRoute` | 设置页 | `settings` | 5.6 |
+| `ReaderRoute` | `ReaderPage` | `reader` | ✅ 5.3（2026-10-21，从 `book_source` **迁入**） |
+| `BookshelfRoute` | `BookshelfPage` | `bookshelf` | ✅ 5.4（2026-10-21） |
+| `SettingsRoute` | `SettingsPage` | `settings` | ✅ 5.6（2026-10-21） |
+| `BookSourceCheckRoute` | `BookSourceCheckPage` | `book_source` | ✅ 5.10（2026-10-21） |
+| `BookSourceDebugRoute` | `BookSourceDebugPage` | `book_source` | ✅ 5.10（2026-10-21） |
+| `ShellRoute.about` / `ShellRoute.legalNotices` | `AboutPage` / `LegalNoticesPage` | `shell` | ✅ M18（2026-10-22） |
 
+> 落地页是组合根里的 `AppShell`（ADR-0055）：它组合四个 feature 的页面，因此不进本表；
+> 表内只登记 feature 自己 push 的类型化路由。
+>
 > 页面与路由的**归属**由 **ADR-0041** 裁决（2026-10-14 已接受）：`ReaderRoute` / `ReaderPage` 从
-> `book_source/presentation/` 迁入 `reader/`（5.3），三个新 feature 的路由类型各自落在自己的
-> `presentation/`，四者都只在 `app.dart` 的页面表里登记。
+> `book_source/presentation/` 迁入 `reader/`（5.3，2026-10-21 已迁），三个新 feature 的路由类型各自落在自己的
+> `presentation/`，四者都只在 `app.dart` 的页面表里登记。**打开阅读器**这件事因此走 `AppNavigation`
+> 的 `openReader`（只收原语），`book_source` 与 `bookshelf` 都不 import `features/reader`（ADR-0042 §决策 2）。
 
 > 不引入 `go_router` 是为避免未经评审的依赖（C-DEP-1）；若后续需要深链接与
 > 嵌套路由，必须先写 ADR 再改依赖。

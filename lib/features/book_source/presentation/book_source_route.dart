@@ -21,15 +21,40 @@ sealed class BookSourceRoute with _$BookSourceRoute {
   /// The route that shows the source's discover page.
   const factory BookSourceRoute.explore() = ExploreRoute;
 
-  /// The route that shows the text of one chapter.
-  const factory BookSourceRoute.reader({required Chapter chapter}) =
-      ReaderRoute;
+  /// The route that lists the imported sources (`docs/dev/roadmap.md` 5.1).
+  const factory BookSourceRoute.importedSources() = BookSourceListRoute;
+
+  /// The route that imports sources from pasted text or a URL (`docs/dev/roadmap.md` 5.1).
+  const factory BookSourceRoute.importSources() = BookSourceImportRoute;
+
+  /// The route that runs the batch check over the imported sources (`docs/dev/roadmap.md` 5.10).
+  ///
+  /// [sourceIds] / [group] let the source list hand over a target: its batch bar passes the ticked
+  /// rows, its toolbar passes the group filter that is active (ADR-0057). An empty route (both
+  /// `null`) is what the 「校验」 toolbar entry uses when nothing is filtered.
+  const factory BookSourceRoute.checkSources({
+    Set<int>? sourceIds,
+    String? group,
+  }) = BookSourceCheckRoute;
+
+  /// The route that opens the debug console, optionally pinned to [sourceId]
+  /// (`docs/dev/roadmap.md` 5.10).
+  const factory BookSourceRoute.debugSource({int? sourceId}) =
+      BookSourceDebugRoute;
+
+  /// The route that edits one stored source (`docs/dev/roadmap.md` §3.9-S4, ADR-0050).
+  const factory BookSourceRoute.editSource({required int sourceId}) =
+      BookSourceEditRoute;
 
   /// The path this route is served under.
   String get path => switch (this) {
     ExploreRoute() => _explorePath,
     BookDetailRoute() => _bookDetailPath,
-    ReaderRoute() => _readerPath,
+    BookSourceListRoute() => _sourceListPath,
+    BookSourceImportRoute() => _sourceImportPath,
+    BookSourceCheckRoute() => _sourceCheckPath,
+    BookSourceDebugRoute() => _sourceDebugPath,
+    BookSourceEditRoute() => _sourceEditPath,
   };
 }
 
@@ -39,8 +64,20 @@ const String _explorePath = '/explore';
 /// Path of [BookDetailRoute].
 const String _bookDetailPath = '/book';
 
-/// Path of [ReaderRoute].
-const String _readerPath = '/reader';
+/// Path of [BookSourceListRoute].
+const String _sourceListPath = '/sources';
+
+/// Path of [BookSourceImportRoute].
+const String _sourceImportPath = '/sources/import';
+
+/// Path of [BookSourceCheckRoute].
+const String _sourceCheckPath = '/sources/check';
+
+/// Path of [BookSourceDebugRoute].
+const String _sourceDebugPath = '/sources/debug';
+
+/// Path of [BookSourceEditRoute].
+const String _sourceEditPath = '/sources/edit';
 
 /// Pushes [route] through the app's route table (ADR-0011 §4).
 void pushBookSourceRoute(BuildContext context, BookSourceRoute route) =>

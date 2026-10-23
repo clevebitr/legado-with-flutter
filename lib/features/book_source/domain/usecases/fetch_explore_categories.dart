@@ -68,6 +68,8 @@ final class FetchExploreCategories {
     String script,
     BookSource source,
   ) async {
+    // `header` 写成规则时要先求值（book-source.md §2、M12-A2）。
+    final Map<String, String>? headers = await _pages.headersOf(source);
     final ParseResult<Object?> evaluated = await _engine.evaluateJs(
       script,
       rulePath: 'exploreUrl',
@@ -75,7 +77,7 @@ final class FetchExploreCategories {
         baseUrl: source.url,
         page: 1,
         source: source.jsSourceInfo,
-        headers: source.headers,
+        headers: headers,
       ),
     );
 

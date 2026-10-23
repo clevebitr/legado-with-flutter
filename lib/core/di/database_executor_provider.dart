@@ -18,7 +18,7 @@ part 'database_executor_provider.g.dart';
 /// ```bash
 /// flutter run -d windows   # 首次启动即建库，日志无 DriftRemoteException 即通过
 /// ```
-@riverpod
+@Riverpod(keepAlive: true)
 QueryExecutor databaseExecutor(Ref ref) {
   final Future<String> path = ref.watch(databaseFilePathProvider.future);
 

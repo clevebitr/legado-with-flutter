@@ -1,8 +1,13 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/widgets/cover_image.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../../support/fake_book_source_repository.dart';
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/offline_corpus.dart';
 
@@ -95,6 +100,35 @@ void main() {
       expect(find.text('书名一'), findsOneWidget);
     });
 
+    testWidgets('open_givenABookWithACover_showsTheCover', (
+      WidgetTester tester,
+    ) async {
+      // S1（roadmap §3.9）：发现页是用户点名要看封面的那一页。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/list/c0.html',
+          '<ul class="result-list"><div class="result-item">'
+              '<div class="result-item-pic"><img src="/covers/1.jpg"/></div>'
+              '<div class="result-item-title"><a href="/book/1/">书名一</a></div>'
+              '</div></ul>',
+        );
+
+      await pumpBookSourcePage(
+        tester,
+        page: const ExplorePage(),
+        source: loadCorpusBookSource().copyWith(
+          exploreUrl: _exploreUrl(<String>['玄幻']),
+        ),
+        http: http,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('玄幻'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CoverImage), findsOneWidget);
+    });
+
     testWidgets('open_givenACategoryWithoutUsableBooks_showsItsOwnEmptyState', (
       WidgetTester tester,
     ) async {
@@ -163,6 +197,49 @@ void main() {
       expect(find.text('玄幻'), findsOneWidget);
       expect(find.text('都市'), findsOneWidget);
       expect(find.text(l10n.actionRetry), findsOneWidget);
+    });
+
+    testWidgets('source_whenTheSelectedSourceChanges_reloadsItsCategories', (
+      WidgetTester tester,
+    ) async {
+      // 回归点（ADR-0058）：发现页在 shell 的 IndexedStack 里常驻，用户到书源管理里换源再
+      // 切回来时页面不会重建。旧的「只请求一次」标记让 chip 行永远是上一个源的分类。
+      final FakeBookSourceRepository repository = FakeBookSourceRepository();
+      final StoredBookSource first = repository.add(
+        source: loadCorpusBookSource().copyWith(
+          name: '甲源',
+          url: 'https://a.test',
+          exploreUrl: _exploreUrl(<String>['玄幻']),
+        ),
+      );
+      final StoredBookSource second = repository.add(
+        source: loadCorpusBookSource().copyWith(
+          name: '乙源',
+          url: 'https://b.test',
+          exploreUrl: _exploreUrl(<String>['科幻']),
+        ),
+      );
+
+      final ProviderContainer container = (await pumpBookSourcePage(
+        tester,
+        page: const ExplorePage(),
+        source: null,
+        repository: repository,
+        http: FakeHttpClient(),
+      ))!;
+
+      // 默认选中第一条（列表顺序），分类是它的。
+      expect(container.read(selectedBookSourceProvider).value?.id, first.id);
+      expect(find.text('玄幻'), findsOneWidget);
+      expect(find.text('科幻'), findsNothing);
+
+      await container
+          .read(selectedBookSourceProvider.notifier)
+          .select(second.id);
+      await tester.pumpAndSettle();
+
+      expect(find.text('科幻'), findsOneWidget);
+      expect(find.text('玄幻'), findsNothing);
     });
   });
 }

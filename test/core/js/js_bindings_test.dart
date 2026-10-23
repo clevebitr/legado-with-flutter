@@ -365,6 +365,57 @@ void main() {
       );
     });
 
+    test('applyJsJavaCall_givenABookName_answersItBeforeTheVariables', () {
+      // M12-A5 / ADR-0049：`java.get('bookName')` 是上游的**内置键**，变量表里的同名变量
+      // 不许抢答（`AnalyzeRule.get` 的 `when (key)` 拦截）。
+      expect(
+        applyJsJavaCall(
+          <String, String?>{'bookName': '变量里的书名'},
+          <String, Object?>{'operation': 'get', 'key': 'bookName'},
+          named: <String, String>{'bookName': '真书名'},
+        ),
+        '{"ok":true,"value":"真书名"}',
+      );
+      expect(
+        applyJsJavaCall(
+          <String, String?>{},
+          <String, Object?>{'operation': 'get', 'key': 'title'},
+          named: <String, String>{'title': '第一章'},
+        ),
+        '{"ok":true,"value":"第一章"}',
+      );
+    });
+
+    test('applyJsJavaCall_givenNoNamedContext_fallsThroughToTheVariables', () {
+      // 拿不到上下文的阶段（搜索 / 目录）不能被“内置键”这一层吃掉变量：键名就是普通变量。
+      expect(
+        applyJsJavaCall(
+          <String, String?>{'title': '变量里的章节'},
+          <String, Object?>{'operation': 'get', 'key': 'title'},
+        ),
+        '{"ok":true,"value":"变量里的章节"}',
+      );
+    });
+
+    test('decodeJsNamedContext_givenBlankOrMissingFields_keepsThemAbsent', () {
+      expect(decodeJsNamedContext(const <String, Object?>{}), isEmpty);
+      expect(
+        decodeJsNamedContext(<String, Object?>{
+          'bookName': '',
+          'chapterTitle': '第一章',
+        }),
+        <String, String>{'title': '第一章'},
+      );
+      // 非字符串（畸形信封）同样当作缺失，不让它进 `named`。
+      expect(
+        decodeJsNamedContext(<String, Object?>{
+          'bookName': 1,
+          'chapterTitle': '',
+        }),
+        isEmpty,
+      );
+    });
+
     test('applyJsJavaCall_givenAWriteWithANullValue_clearsTheVariable', () {
       final Map<String, String?> variables = <String, String?>{'token': 'abc'};
 

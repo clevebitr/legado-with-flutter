@@ -106,7 +106,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-NET-6 | 缓存必须设置 TTL；缓存键必须为「书源 ID + 参数摘要」的稳定哈希；禁止无限缓存。 |
 | C-NET-7 | 持久化统一经 `core/storage/` 的仓储实现（Drift 或 `shared_preferences`）；禁止在业务层直接操作文件系统或拼 SQL。 |
 | C-NET-8 | 仓储必须定义在 `domain/`、实现在 `data/`，以便用 mock 单测。 |
-| C-NET-9 | 存储分工固定：结构化数据（书源、章节、阅读进度、缓存）用 Drift；轻量开关（主题模式、字号）用 `shared_preferences`（见 ADR-0003）。 |
+| C-NET-9 | 存储分工固定：结构化数据（书源、章节、阅读进度、缓存）用 Drift；轻量开关（主题模式、字号）用 `shared_preferences`（见 ADR-0003）。Drift 表结构的升级步骤必须**可重入**（重复执行是空操作），不得只看 `from` 版本号就用裸 `addColumn` / `CREATE INDEX`（见 **ADR-0056**）。 |
 
 ---
 
@@ -194,7 +194,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-DEP-4 | 生成命令固定为 `dart run build_runner build`（`--delete-conflicting-outputs` 已在 `build_runner 2.16.2` 中移除并被忽略，见 ADR-0013 §6）。 |
 | C-DEP-5 | 生成文件（`*.g.dart`、`*.freezed.dart`、`*.gr.dart`）禁止手改；冲突必须重新生成。 |
 | C-DEP-6 | `pubspec.yaml` 是依赖的唯一来源；`docs/dev/tech-stack.md` 的说明表必须与其同步，禁止只在其中一处新增依赖。 |
-| C-DEP-7 | 新增依赖必须与 GPL-3.0 兼容：宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；**禁止引入 GPL-2.0-only、无许可证或专有许可的依赖**。核实结果记入 `NOTICE.md` §5。 |
+| C-DEP-7 | 新增依赖必须与 GPL-3.0 兼容：宽松许可（MIT / BSD-2 / BSD-3 / Apache-2.0）可用；**MPL-2.0 只按 `tool/scan_licenses.dart` 的白名单放行**（每加一个都要 ADR，ADR-0048 是第一个）；**禁止引入 GPL-2.0-only、无许可证或专有许可的依赖**。核实结果记入 `NOTICE.md` §5。 |
 
 ---
 

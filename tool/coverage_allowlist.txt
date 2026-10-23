@@ -22,6 +22,38 @@
 # --- 已登记的豁免项（见 docs/dev/adr/0019）---
 lib/core/di/database_executor_provider.dart  # 依赖原生 sqlite3 与 drift_flutter 的后台 isolate；flutter test 里必然报 Channel was closed，只能由 flutter run / integration_test 验证
 lib/core/storage/cache_entries.dart  # drift 表定义是代码生成器的输入，运行时不可达（见 ADR-0019 第三类理由）
+lib/core/storage/book_sources.dart  # 同上：drift 表定义（列 getter 与 uniqueKeys 只在生成期被分析）；正确性由 migration_test.dart（与 drift_schemas/drift_schema_v2.json 逐列比对）与 book_source_dao_test.dart 保证
+lib/core/storage/source_checks.dart  # 同上：drift 表定义（列 getter 与 @TableIndex 只在生成期被分析）；正确性由 migration_test.dart（与 drift_schema_v6.json 逐列比对）与 book_source_dao_test.dart（写入 / 裁剪 / 级联）保证
 lib/features/book_source/domain/entities/book.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形（2026-10-11 修订）：源文件只有重定向工厂声明、方法体由生成器内联，lcov 不收录该文件；行为由 test/features/book_source/domain/entities/book_test.dart 与四个 use case 测试构造并读取全部实体保证
 lib/features/book_source/domain/entities/explore_category.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形（2026-10-11 修订）：源文件只有重定向工厂声明；行为由 test/features/book_source/domain/explore_categories_test.dart（解析）与 test/features/book_source/domain/usecases/fetch_explore_categories_test.dart（构造并读取）保证
 lib/core/js/quickjs_worker.dart  # 依赖 flutter_qjs_next 原生库，flutter test 的宿主 VM 加载不了（ADR-0019 第二类）；队列/预算/重建策略已放在 quickjs_worker_bridge.dart 由单测覆盖，本文件由 integration_test/js_bridge_test.dart 在 Windows / Android 上验证（见 docs/dev/test-environment.md §4）
+lib/features/book_source/domain/repositories/book_source_repository.dart  # 纯接口声明（只有抽象方法签名），属 ADR-0019 §2 的「源文件无可测量行」子情形；契约由 BookSourceRepositoryImpl 与 test/features/book_source/data/book_source_repository_impl_test.dart 行使
+lib/features/book_source/domain/content_cache.dart  # 纯接口声明 + 一个 TTL 常量，同属「无可测量行」子情形；契约由 CacheDaoContentCache 与 test/features/book_source/data/cache_dao_content_cache_test.dart 行使
+lib/core/platform/file_selector_dialog.dart  # ADR-0019 第二类：只在真实平台上可达（file_selector 的原生对话框），宿主 VM 没有平台通道、交互也无法自动化；读字节/体积上限/BOM 在 FileSelectorBookSourceFilePicker 里由单测覆盖，本文件由设备级构建与双端探针验证能编译链接
+lib/features/book_source/domain/entities/stored_book_source.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂声明（StoredBookSource 需要生成 copyWith，BookSourceSaveReport 关掉它）；行为由 test/features/book_source/data/book_source_repository_impl_test.dart 构造并读取两个类型保证
+
+# --- 5.4 书架（bookshelf）与 5.6 设置（settings）新增的豁免项 ---
+lib/core/storage/books.dart  # 同上：drift 表定义（列 getter 与 uniqueKeys 只在生成期被分析）；正确性由 migration_test.dart（与 drift_schemas/drift_schema_v3.json 逐列比对）与 bookshelf_dao_test.dart 保证
+lib/features/bookshelf/domain/entities/shelved_book.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂声明；行为由 test/features/bookshelf/data/bookshelf_repository_impl_test.dart 与 test/core/storage/bookshelf_dao_test.dart 构造并读取保证
+lib/features/bookshelf/domain/repositories/bookshelf_repository.dart  # 纯接口声明（只有抽象方法签名），属「无可测量行」子情形；契约由 BookshelfRepositoryImpl 与其测试行使
+lib/features/settings/domain/repositories/settings_repository.dart  # 纯接口声明（SettingsRepository / CachePurger 两个端口），同属「无可测量行」子情形；契约由 SettingsRepositoryImpl / CacheDaoCachePurger 与它们的测试行使
+
+# --- 5.10 书源测试机制（batch check / debug）新增的豁免项 ---
+lib/features/book_source/domain/entities/source_check.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂与枚举的哑值；行为由 test/features/book_source/domain/usecases/check_book_source_test.dart、source_check_settings_test.dart 与 data/ 的写回测试构造并读取保证
+lib/features/book_source/domain/entities/source_debug.dart  # 同上：freezed 声明式输入（事件与枚举）；行为由 test/features/book_source/domain/usecases/run_source_debug_test.dart 与调试页 Widget 测试构造并读取保证
+
+# --- 5.3 阅读器（reader）新增的豁免项 ---
+lib/features/reader/domain/entities/reader_book.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形；行为由 test/features/reader/presentation/notifiers/reader_session_notifier_test.dart 与阅读器 Widget 测试构造并读取保证
+lib/features/reader/domain/entities/reading_chapter.dart  # 同上：只有重定向工厂声明；由阅读器 Notifier / 页面测试构造并读取
+lib/features/reader/domain/entities/reading_position.dart  # 同上：进度值对象；由 Notifier 测试与 FakeReadingProgressStore 构造并断言
+lib/features/reader/domain/repositories/reader_settings_repository.dart  # 纯接口声明（只有抽象方法签名），属「无可测量行」子情形；契约由 ReaderSettingsRepositoryImpl 与其测试行使
+
+# --- 5.5 书源列表排序/筛选（ADR-0045）新增的豁免项 ---
+lib/features/book_source/domain/repositories/book_source_view_store.dart  # 纯接口声明（只有抽象方法签名），同属「无可测量行」子情形；契约由 BookSourceViewStoreImpl 与其测试行使
+
+# --- 3.8 聚合搜索（ADR-0046）新增的豁免项 ---
+lib/features/book_source/domain/search_match_mode.dart  # 纯枚举声明（无可测量行），属 ADR-0019 §2 的「源文件无可测量行」子情形；行为由 search_result_merger_test.dart 逐桶行使
+lib/features/book_source/domain/repositories/search_scope_store.dart  # 纯接口声明（只有抽象方法签名），同属「无可测量行」子情形；契约由 SearchScopeStoreImpl 与其测试行使
+lib/features/book_source/domain/entities/chapter_request.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂声明；行为由 test/features/book_source/domain/entities/chapter_request_test.dart 与 FetchContent / FetchToc / reader 的上下文接线测试构造并读取保证（ADR-0049）
+lib/features/reader/domain/entities/reading_page.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有重定向工厂声明；行为由 manga_reader_page_test.dart 与 fake_reader_ports.dart 构造并读取保证
+lib/features/reader/domain/entities/reader_source_kind.dart  # 纯枚举声明（无可测量行），行为由 reader_page 的分派测试与 manga_page_source_test.dart 行使

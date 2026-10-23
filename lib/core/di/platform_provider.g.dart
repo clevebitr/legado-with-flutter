@@ -34,7 +34,7 @@ final class PlatformInfoProvider
         argument: null,
         retry: null,
         name: r'platformInfoProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -61,7 +61,7 @@ final class PlatformInfoProvider
   }
 }
 
-String _$platformInfoHash() => r'ac1b6ad7f08ed596944a3dc7d4daea8f0278565a';
+String _$platformInfoHash() => r'cac1cdfd452c2761363bd21226093e0ef4f8783c';
 
 /// Provides the platform dynamic color source, or `null` when the platform has
 /// none (`docs/dev/platform.md` §3).
@@ -115,7 +115,7 @@ final class PlatformDynamicColorProvider
         argument: null,
         retry: null,
         name: r'platformDynamicColorProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -144,4 +144,196 @@ final class PlatformDynamicColorProvider
 }
 
 String _$platformDynamicColorHash() =>
-    r'2e2a1cce18f3fde23676be4d723a6b63a58fe1a2';
+    r'e65a7da4798de930ff708a4e625ff68248e4c2ac';
+
+/// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
+///
+/// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
+/// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
+/// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
+/// plugin (`docs/dev/testing.md` §4).
+
+@ProviderFor(bookSourceFilePicker)
+final bookSourceFilePickerProvider = BookSourceFilePickerProvider._();
+
+/// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
+///
+/// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
+/// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
+/// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
+/// plugin (`docs/dev/testing.md` §4).
+
+final class BookSourceFilePickerProvider
+    extends
+        $FunctionalProvider<
+          BookSourceFilePicker,
+          BookSourceFilePicker,
+          BookSourceFilePicker
+        >
+    with $Provider<BookSourceFilePicker> {
+  /// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
+  ///
+  /// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
+  /// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
+  /// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
+  /// plugin (`docs/dev/testing.md` §4).
+  BookSourceFilePickerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceFilePickerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceFilePickerHash();
+
+  @$internal
+  @override
+  $ProviderElement<BookSourceFilePicker> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BookSourceFilePicker create(Ref ref) {
+    return bookSourceFilePicker(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookSourceFilePicker value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookSourceFilePicker>(value),
+    );
+  }
+}
+
+String _$bookSourceFilePickerHash() =>
+    r'f7d7e3123b6a021aa45663689c93ced0c7b1817a';
+
+/// Provides the platform save dialog used by a single-source export
+/// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+///
+/// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
+/// else gets “not saved”, and a test overrides the port rather than the plugin.
+
+@ProviderFor(bookSourceFileSaver)
+final bookSourceFileSaverProvider = BookSourceFileSaverProvider._();
+
+/// Provides the platform save dialog used by a single-source export
+/// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+///
+/// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
+/// else gets “not saved”, and a test overrides the port rather than the plugin.
+
+final class BookSourceFileSaverProvider
+    extends
+        $FunctionalProvider<
+          BookSourceFileSaver,
+          BookSourceFileSaver,
+          BookSourceFileSaver
+        >
+    with $Provider<BookSourceFileSaver> {
+  /// Provides the platform save dialog used by a single-source export
+  /// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+  ///
+  /// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
+  /// else gets “not saved”, and a test overrides the port rather than the plugin.
+  BookSourceFileSaverProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'bookSourceFileSaverProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$bookSourceFileSaverHash();
+
+  @$internal
+  @override
+  $ProviderElement<BookSourceFileSaver> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BookSourceFileSaver create(Ref ref) {
+    return bookSourceFileSaver(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BookSourceFileSaver value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BookSourceFileSaver>(value),
+    );
+  }
+}
+
+String _$bookSourceFileSaverHash() =>
+    r'324c249ec6b41181bbadd92c67a5496c0926efbf';
+
+/// Provides the long-task marker a batch check holds while it runs
+/// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+///
+/// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
+/// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+
+@ProviderFor(longRunningTask)
+final longRunningTaskProvider = LongRunningTaskProvider._();
+
+/// Provides the long-task marker a batch check holds while it runs
+/// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+///
+/// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
+/// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+
+final class LongRunningTaskProvider
+    extends
+        $FunctionalProvider<LongRunningTask, LongRunningTask, LongRunningTask>
+    with $Provider<LongRunningTask> {
+  /// Provides the long-task marker a batch check holds while it runs
+  /// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+  ///
+  /// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
+  /// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+  LongRunningTaskProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'longRunningTaskProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$longRunningTaskHash();
+
+  @$internal
+  @override
+  $ProviderElement<LongRunningTask> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  LongRunningTask create(Ref ref) {
+    return longRunningTask(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(LongRunningTask value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<LongRunningTask>(value),
+    );
+  }
+}
+
+String _$longRunningTaskHash() => r'c4f24b2ab4e07af40943e68f73e182a163752df6';

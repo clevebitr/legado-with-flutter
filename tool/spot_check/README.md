@@ -1,6 +1,6 @@
 # G2b spot-check：真实站点链路验证
 
-> 本文档是 **G2b（真实链路）的证据记录与复现说明**，对应 `PLAN.md` §3.4 步骤 3（「3.2 之后、
+> 本文档是 **G2b（真实链路）的证据记录与复现说明**，对应 `docs/dev/roadmap.md` §3.4 步骤 3（「3.2 之后、
 > 3.3 之前」）与 §3.7 的登记表。它**不复述**任何规范：规则语义归 `docs/dev/book-source.md`，
 > 失败语义归该文档 §7，裁决归 `docs/dev/adr/`。
 >
@@ -41,6 +41,32 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 
 **证据形态：** stdout 里只出现**截断样本（≤60 字符）与全文 sha256**，不落盘页面正文。
 
+### 2.1 批量探针（M12 起）
+
+单个源回答「这条还能不能跑」；**一条语料里到底坏在哪**要用批量探针：
+
+```bash
+# 整个合集逐源跑四段，输出直方图 + 可选 JSON 报告
+SPOT_CHECK_ARGS="--source=<collection.json> --keyword=剑来 --concurrency=6 --plain-http   --out=build/probe.json"   flutter run -d windows -t tool/spot_check/batch_probe.dart
+```
+
+| 选项 | 含义 |
+|---|---|
+| `--source=` | 合集或单条 JSON（必填） |
+| `--keyword=` | 搜索词，默认「剑来」 |
+| `--concurrency=` | 同时在跑的源数，默认 4（每个源内部仍受 §8 预算约束） |
+| `--limit=` | 只跑前 N 条（冒烟用） |
+| `--plain-http` | 允许 `http://` 源（与 App 设置里的开关同义；**默认拒绝是真的**，语料里却仍有明文站点） |
+| `--out=` | 写 JSON 报告（逐源的 `stage` / `kind` / `rulePath` / 样本哈希） |
+
+它输出三张直方图：`byStage`（每段成功 / 失败条数）、`byReason`（`stage/kind`）、
+`byRulePath`（`stage/rulePath`，即「哪条规则把它们挡住了」）。**样本与哈希只截断、不落正文**（与单源一致）。
+
+> **M12 首轮（2026-10-21）**：128 条语料只有 8 条四段全通；直方图把 54 条指向 `searchUrl`、54 条指向
+> `bookList`、3 条指向导入、2 条指向一次异常。逐条查证后：`searchUrl` 那一批里 50 条是
+> `url,{…}` 后缀被当 URL 发出去，2 条是 `redactUrl` 在 GBK 查询串上抛异常；导入那 3 条是
+> `header` 写成规则。这些就是 ADR-0047 的取材方式——**先量分布，再改引擎**，改完用同一条命令复跑对比。
+
 ## 3. 选源（可复现）
 
 | 项 | 值 |
@@ -48,7 +74,7 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 | 合集 A | `https://raw.githubusercontent.com/Orokapei/BookSource/main/Legado.json`（11 条） |
 | 合集 B | `https://raw.githubusercontent.com/safino9/SourceGo/master/book_source/all.json`（189 条） |
 | 合集 C | `https://legado.aoaostar.com/sources/b778fe6b.json`（3907 条，最近同步 2026-08-15） |
-| 筛选 | `--list` 的判据：`searchUrl` 是 HTTPS GET 且含 `{{key}}`、四段规则非空、不含**尚未实现**的标志（`@xpath:` / `webjs` / `sourceregex` / `@@` / `<js>` / `:正则` / `{"method"…}` 那类对象头）。**判据随已实现语法收放：** `@js:` 自 3.4 起不再是排除项（矩阵 #14），只在**列表规则**（`bookList` / `chapterList`）里排除；`@put:` / `@get:` 与 `{{}}` 内嵌（矩阵 #16 / #18，随 3.4 落地）不再排除。**2026-10-13 修正：** `{{…}}` 开头的规则此前仍被一个「`{` 开头就排除」的旧判据（为 `{"method":"POST"}` 写的）误伤——它把 `{{}}` 也当对象头了，与同一段注释和 `PLAN.md` §3.7 的「`{{}}` 不再排除」互相矛盾。现在只排除**单**花括号开头。搜索 URL 仍保守：只认 `{{key}}` / `{{page}}` / `{{baseUrl}}`，其余 `{…}` 一并排除 |
+| 筛选 | `--list` 的判据：`searchUrl` 是 HTTPS GET 且含 `{{key}}`、四段规则非空、不含**尚未实现**的标志（`@xpath:` / `webjs` / `sourceregex` / `@@` / `<js>` / `:正则` / `{"method"…}` 那类对象头）。**判据随已实现语法收放：** `@js:` 自 3.4 起不再是排除项（矩阵 #14），只在**列表规则**（`bookList` / `chapterList`）里排除；`@put:` / `@get:` 与 `{{}}` 内嵌（矩阵 #16 / #18，随 3.4 落地）不再排除。**2026-10-13 修正：** `{{…}}` 开头的规则此前仍被一个「`{` 开头就排除」的旧判据（为 `{"method":"POST"}` 写的）误伤——它把 `{{}}` 也当对象头了，与同一段注释和 `docs/dev/roadmap.md` §3.7 的「`{{}}` 不再排除」互相矛盾。现在只排除**单**花括号开头。搜索 URL 仍保守：只认 `{{key}}` / `{{page}}` / `{{baseUrl}}`，其余 `{…}` 一并排除 |
 | 结果（2026-10-14，含 `{{…}}` 与 `@@` 两次修正后复算） | 合集 C 中 **409/3907** 条属于「本仓库今天能跑通四段」的集合（M0 + 已落地的 M1 语法）；其中 **296** 条依赖未知类型退化（ADR-0032）、**157** 条用值规则 `@js:` |
 | 探测 | 80 条各 1 次 GET（浏览器 UA，≤12 s）；**40 条返回 200**，其中 13 条搜索页含真实结果链接 |
 
@@ -119,10 +145,10 @@ SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check
 
 > 这组数字由架构师用一份独立复刻脚本在同一份 `build/ao.json` 上复算，**源数 / 字段数 / `JSON.parse`
 > 数与逐字段分布均一致**（85 / 98 / 7）。是否据这些数字改 `book-source.md` §6 的 `result` 绑定，
-> 待架构师裁决（改契约须配新 ADR，见 `PLAN.md` §3.5 的 b7 行）。
+> 待架构师裁决（改契约须配新 ADR，见 `docs/dev/roadmap.md` §3.5 的 b7 行）。
 
 **P5-0 的入库证据（2026-10-14，书源身份与重复导入）：** 同一条 `--list` 命令还会打印合集里的 URL 重复形状，
-供 `PLAN.md` §3.6 5.0 的「主键 / 重复导入」裁决用（判据见 `spot_check.dart` 的
+供 `docs/dev/roadmap.md` §3.6 5.0 的「主键 / 重复导入」裁决用（判据见 `spot_check.dart` 的
 `_printBookSourceIdentityCensus`：书名 + `searchUrl` + `header` + 五个规则对象全部相等才算「同一条」，
 比较前对键排序，所以重新导出导致的键序差异不会被算成差异）：
 
@@ -200,7 +226,7 @@ flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=/tmp/g2b.j
 >
 > **语料里的主流写法仍未证：** 全量 3907 条里 **184** 条用 `java.timeFormat`，主流写法是
 > `{{java.timeFormat(java.getString('$.x')*1000)}}`，需要 `java.getString`（未实现）——
-> 阻塞与数字见 `PLAN.md` §3.7。复跑命令（派生 JSON 需自行生成）：
+> 阻塞与数字见 `docs/dev/roadmap.md` §3.7。复跑命令（派生 JSON 需自行生成）：
 > `flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<derived.json> --keyword=火影`。
 
 **M1-b2（`concurrentRate`）的证据（2026-10-13）：**
@@ -219,7 +245,7 @@ flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=/tmp/g2b.j
 > **派生说明：** 这次**只加/改 `concurrentRate` 一个字段**（A 为 `"1500"`，B 为 `"0"`），
 > searchUrl / header / 四段规则逐字来自真实导出。原因：全量 3907 条里只有 **3 条**声明了
 > `concurrentRate`，且三条都跑不了原样链路（1 条站点已不可达、2 条用未实现的 URL 形态：
-> `<js>` 包装与 `{...}` URL 选项）——这一事实登记在 `PLAN.md` §3.7。
+> `<js>` 包装与 `{...}` URL 选项）——这一事实登记在 `docs/dev/roadmap.md` §3.7。
 > 复跑命令（派生 JSON 需自行生成）：
 > `flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<derived.json> --keyword=火影`。
 
@@ -289,7 +315,7 @@ SPOT_CHECK_ARGS="--list=build/ao.json" flutter run -d windows -t tool/spot_check
 > `java.getStringList("$.data.page[*]image").toArray().map(…)`。`java.getStringList` 的**快路径确实被调用**
 > （失败发生在它求值的**内层规则**上），但 `$.data.page[*]image` 这种「`]` 后直接跟成员名」的 Legado
 > JSONPath 方言被 RFC 9535 解析器（`json_path`）拒掉——同一页真实数据下
-> `$.data.page[*].image` 返回 3 张图、`[*]image` 直接 `parseFailed`。已登记在 `PLAN.md` §3.7。
+> `$.data.page[*].image` 返回 3 张图、`[*]image` 直接 `parseFailed`。已登记在 `docs/dev/roadmap.md` §3.7。
 
 **M1-b5（`{{…}}` 内的 `##` · JSONPath `]name`）的真源复跑（2026-10-13）：**
 
@@ -432,7 +458,7 @@ RUN 4（b6 · ruleBookInfo.init）源：●QB女生<kd♛（第 1463 条），�
 ① kind 的第一个模板是 `{{$.tag_views##\s+##,}}`——**`##` 落在 `{{…}}` 内部**时，`_expandRule`
 先按第一个 `##` 切开整条规则，模板因此被判成不平衡，该字段 `parseFailed`（矩阵 #18 × #9）；
 ② `bookUrl` 的 `…?bookid={{$.docId##.*_}}` 在 **URL** 里写规则头，按 §4 本就按名拒绝。
-两条的现象与复跑细节都记在 `PLAN.md` §3.7，供架构师排期。
+两条的现象与复跑细节都记在 `docs/dev/roadmap.md` §3.7，供架构师排期。
 
 **矩阵 #12（`@css:`）在真实 HTML 上的证据：** 同一站点、同一批页面，把上一条书源的默认规则**逐条改写为等价的 `@css:` 写法**（`class.bookbox` → `@css:.bookbox`、`id.content@textNodes` →
 `@css:#content@textNodes`、`class.bookimg@tag.img.0@src` → `@css:.bookimg img:eq(0)@src` 等，
@@ -462,6 +488,34 @@ Declared charset utf-8 carried illegal bytes; 1 malformed byte replacement(s) in
 | `.searchresult` / `li` / `dd` 等未知类型 → 搜索段即失败 | `ihuaben.com` / `zhulang.com` 等 10 条 | 本仓口径 | **ADR-0032**：未知类型退化为原始 CSS（已实现，`ihuaben.com` 随后搜索段拿到 30 条真实结果） |
 | 声明 `shift-jis` / `euc-jp` 且字节不完整 → 依赖抛 `RangeError`（`Error`）逃出 `ParseResult` 契约；`euc-kr` 则静默丢弃非法字节 | — | 依赖缺陷 + `Error` 不得捕获（ADR-0022） | 登记为已知缺口，见 §6（宽容映射因此只含 `utf-8` / `gbk`，见 `book-source.md` §5.1） |
 | 搜索参数改版（源写 `wd=`，站点现在用 `qd=`）、目录结构改版 | `dushu.com` / `linovel.net` | **源失效**，非本仓缺陷 | 记录即可；矩阵状态列仍由 3.7 的真实回归决定 |
+
+## 4c. M12 复跑（2026-10-21）：同一份语料，改造前后
+
+语料：`4dc410d1.json`（128 条公开合集，导出后站点大量迁移）。
+
+```bash
+SPOT_CHECK_ARGS="--source=<collection.json> --keyword=剑来 --concurrency=6 --plain-http \
+  --out=build/probe3.json" flutter run -d windows -t tool/spot_check/batch_probe.dart
+# -- 8/128 → 10/128 四段全通；导入失败 3 → 0；抛到批外的异常 2 → 0
+```
+
+单源记录（`--plain-http`，与 §4 的格式一致）：
+
+| 字段 | 值 |
+|---|---|
+| 书源 | 阅友小说（`https://sma.yueyouxs.com/`） |
+| 证据点 | `header` 写成 `<js>…</js>`（改造前**导入即失败**）、规则里含 `<js>` 分段 |
+| 结果 | search=5、bookInfo=1、toc=57、content=676 / `sha256=d7e97e3157580991` |
+
+| 字段 | 值 |
+|---|---|
+| 书源 | 飞卢小说💰（`https://b.faloo.com`） |
+| 证据点 | `searchUrl` 带 `{"charset":"gbk"}`（§4.3），目录翻页 291 → 1087 页 |
+| 结果 | search=28、bookInfo=1、toc=1087、content=1156 / `sha256=d208052977d3039c` |
+
+> 剩下 118 条的失败在报告里逐条可见，全部是**站点侧**问题（DNS 不存在、301 到别站、200 + 空体、
+> 需要登录 token）。这组数字是「语料的现实」，不是「规则还能再好」的空间——再往上要换语料，
+> 而不是继续改引擎。
 
 ## 4b. 3.7 真实回归（2026-10-12）：矩阵 M0 行的状态列
 
@@ -513,7 +567,7 @@ Declared charset utf-8 carried illegal bytes; 1 malformed byte replacement(s) in
 | **矩阵 #13：JSONPath 命中一个列表时本仓不展开**（列表规则当一个条目、取值规则给一段 JSON 文本） | 3.7 的真实 @js: 源：`bookList: $.info.Datas` + 逐项 `$.name` → 活站点上只剩 1 条且书名为空；修后同一运行给出 30 条 | 已修（3.7）：列表规则把命中的列表当元素列表读、取值规则逐元素展开，两处都对着上游 `AnalyzeByJSonPath.kt:137` / `:83-87`；单测与语料回放同步，记录见 §4b |
 | `spot_check.dart` 自 3.4 起无法再用 `dart run` 启动（链路需要真实 JS 引擎 ⇒ 静态依赖 Flutter） | 本机实测：`dart run` 在 `flutter/foundation` 的 `dart:ui` 引用上编译失败 | 已修（3.7）：改为设备宿主运行并把选项改由 `SPOT_CHECK_ARGS` 传入（§2 已更新）；`--list` 的判据同时把 `@js:` 从排除项改为「仅列表规则 / URL 模板排除」 |
 
-## 6. 未闭环（已登记，见 `PLAN.md` §3.7）
+## 6. 未闭环（已登记，见 `docs/dev/roadmap.md` §3.7）
 
 - `shift-jis` / `euc-jp` 的字节不完整会让 `charset 2.0.1` 抛 `RangeError`（`Error`），
   该异常会越过 `ParseResult` 契约（C-ERR-1）逃到调用方；按 ADR-0022 不得捕获 `Error`，
@@ -534,9 +588,9 @@ Declared charset utf-8 carried illegal bytes; 1 malformed byte replacement(s) in
   `{{$.tag_views##\s+##,}}` 这类写法会让 `_expandRule` 先按第一个 `##` 切开整条规则（那个
   `##` 在模板里面），模板因此被判成不平衡，字段 `parseFailed`。腾讯搜索系真源
   （`●QB女生<kd♛` / `南极 🐧`）的 `ruleBookInfo.kind` 第一条模板就是它，所以那两条源跑不到
-  主流写法的第二条模板。矩阵 #18 × #9 的交叉，登记在 `PLAN.md` §3.7。
+  主流写法的第二条模板。矩阵 #18 × #9 的交叉，登记在 `docs/dev/roadmap.md` §3.7。
 - **JSONPath 方言：`]` 后直接跟成员名**（新发现，2026-10-13，同一次回归）：
   `$.data.page[*]image` / `$.a[0]b` 是 Legado 接受的写法，而 RFC 9535 解析器（`json_path`）
   只认 `$.data.page[*].image`；两者在真实数据上一个 `parseFailed`、一个返回 3 张图。
   它让 b1b 的派生真源在 content 段失败（`java.getStringList` 的快路径**已被调用**，卡在内层规则），
-  登记在 `PLAN.md` §3.7。
+  登记在 `docs/dev/roadmap.md` §3.7。

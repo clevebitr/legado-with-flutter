@@ -23,6 +23,11 @@ enum BookSourceType {
   /// File content (Legado `bookSourceType` 3).
   @JsonValue(3)
   file,
+
+  /// Video content (Legado `bookSourceType` 4; the fork documents "0 文本，1 音频, 2 图片, 3 文件,
+  /// 4 视频"). Real exports carry it, so an unknown-value rejection would cost whole sources.
+  @JsonValue(4)
+  video,
 }
 
 /// One imported Legado book source: the rule set that drives search, book info,
@@ -34,7 +39,7 @@ enum BookSourceType {
 ///
 /// Only the fields the implemented stages consume are modelled; the display-only
 /// counters (`lastUpdateTime` / `respondTime` / `weight` / `customOrder`) arrive
-/// with Phase 5 (`PLAN.md` 5.4). Everything unmodelled survives in [extra].
+/// with Phase 5 (`docs/dev/roadmap.md` 5.4). Everything unmodelled survives in [extra].
 ///
 /// [exploreUrl] is the discover page's declaration (`book-source.md` §4.2): either a separated
 /// `标题::URL` string or one whole-field script. It stays raw text here — the two forms and every
@@ -66,6 +71,15 @@ abstract class BookSource with _$BookSource {
     @JsonKey(name: 'header')
     @_HeaderJsonConverter()
     Map<String, String>? headers,
+
+    /// The source's `header` when it is a **rule** rather than a JSON object
+    /// (`docs/dev/book-source.md` §2, M12-A2).
+    ///
+    /// Upstream evaluates it before every request and parses its result as a JSON object
+    /// (`BaseSource.getHeaderMap`). The text is kept here rather than dropped, because a
+    /// source that signs its requests cannot be used at all without it; the evaluation itself
+    /// belongs to the fetch (`PageFetchService.headersOf`), which is where the sandbox is.
+    @JsonKey(includeFromJson: false, includeToJson: false) String? headerRule,
     String? searchUrl,
     @JsonKey(name: 'exploreUrl') String? exploreUrl,
     @JsonKey(name: 'ruleSearch') required SearchRule searchRule,
@@ -97,11 +111,20 @@ abstract class BookSource with _$BookSource {
   /// happens once per file, so the repeated parse is irrelevant next to keeping
   /// the retention rule in one obvious place.
   factory BookSource.fromLegadoJson(Map<String, Object?> json) {
-    final BookSource source = _$BookSourceFromJson(json);
+    final String? headerRule = headerRuleOf(json['header']);
+    // 规则形式的 header 不进转换器：它的文本留给 [headerRule]，由取页前求值。
+    // 括号不能省：级联 `..remove` 的优先级比条件表达式**低**，不括起来会作用在
+    // 整个三元表达式上、把调用方传进来的 map 也改掉（实测：payload 里的 header 被删）。
+    final BookSource source = _$BookSourceFromJson(
+      headerRule == null
+          ? json
+          : (Map<String, Object?>.of(json)..remove('header')),
+    );
     final Object? bookInfoJson = json['ruleBookInfo'];
     final Object? exploreJson = json['ruleExplore'];
 
     return source.copyWith(
+      headerRule: headerRule,
       searchRule: SearchRule.fromLegadoJson(_nestedObject(json, 'ruleSearch')),
       exploreRule: exploreJson == null
           ? null
@@ -127,6 +150,11 @@ abstract class BookSource with _$BookSource {
 /// [updateTime] is a **display** string: the rule's result is kept as it was read and never
 /// parsed as a date (`docs/dev/book-source.md` §2); a chapter rule may produce it through
 /// `java.timeFormat` (§6).
+///
+/// [checkKeyWord] is **not a rule**: it is the keyword the check / debug console searches this
+/// source for (`docs/dev/book-source.md` §2, ADR-0043 §决策 2). A value that looks like a rule is
+/// ignored in favour of the caller's default — `resolveCheckKeyword` owns that judgement in one
+/// place — so the raw text is kept here and never evaluated.
 @freezed
 abstract class SearchRule with _$SearchRule {
   /// Creates a search rule set.
@@ -141,6 +169,7 @@ abstract class SearchRule with _$SearchRule {
     String? coverUrl,
     String? bookUrl,
     String? updateTime,
+    String? checkKeyWord,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})
     Map<String, Object?> extra,
@@ -322,6 +351,9 @@ final class _HeaderJsonConverter
   @override
   Map<String, String>? fromJson(Object? json) => switch (json) {
     null => null,
+    // 规则形式的 header（`@js:` / `<js>`）不是 JSON：它由 [BookSource.headerRule] 承载，
+    // 这里回答“没有静态 header”，而不是让整条源导入失败（M12-A2）。
+    final String raw when headerRuleOf(raw) != null => null,
     final String raw => _parseHeaderString(raw),
     final Map<Object?, Object?> raw => _toStringMap(raw),
     _ => throw FormatException(
@@ -335,13 +367,51 @@ final class _HeaderJsonConverter
       object == null ? null : jsonEncode(object);
 }
 
+/// The **rule** a source wrote in its `header` field, or `null` when it is a JSON object.
+///
+/// Upstream's spelling is `@js:…` or `<js>…</js>` (`BaseSource.getHeaderMap`); both are kept
+/// verbatim here so the fetch can evaluate them.
+String? headerRuleOf(Object? header) {
+  if (header is! String) {
+    return null;
+  }
+  final String trimmed = header.trim();
+
+  return trimmed.toLowerCase().startsWith('@js:') ||
+          trimmed.toLowerCase().startsWith('<js>')
+      ? trimmed
+      : null;
+}
+
 /// Parses a `header` JSON string, or returns `null` when it declares nothing.
+/// Decodes the `header` string, with one **narrow** leniency pass for a dialect real exports carry.
+///
+/// Upstream parses this field with GSON, which accepts single-quoted objects; a real 504-source
+/// export contained 11 of them, and rejecting the whole source over a quote style would be a
+/// fidelity bug, not strictness. The fallback applies **only** when the text contains no double
+/// quote at all, so a malformed object that already uses `"` still fails loudly (C-SRC-4).
+///
+/// Everything else — a rule-based header (`@js:` / `<js>`), a truncated object, a bare user agent —
+/// stays a rejection here and is handled by the importer, which drops the field with a warning
+/// (`docs/dev/roadmap.md` §3.7 registers the rule-based header as an unimplemented feature).
+Object? _decodeHeaderObject(String raw) {
+  try {
+    return jsonDecode(raw);
+  } on FormatException {
+    if (raw.contains('"')) {
+      rethrow;
+    }
+
+    return jsonDecode(raw.replaceAll("'", '"'));
+  }
+}
+
 Map<String, String>? _parseHeaderString(String raw) {
   if (raw.trim().isEmpty) {
     return null;
   }
 
-  final Object? decoded = jsonDecode(raw);
+  final Object? decoded = _decodeHeaderObject(raw);
   if (decoded is! Map<Object?, Object?>) {
     throw FormatException(
       'The Legado "header" string must decode to a JSON object, '

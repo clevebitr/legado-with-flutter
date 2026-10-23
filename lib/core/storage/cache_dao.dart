@@ -78,4 +78,10 @@ class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
                 table.expiresAt.isSmallerOrEqualValue(_clock.now()),
           ))
           .go();
+
+  /// Deletes **every** entry and returns how many rows were removed.
+  ///
+  /// Everything in this table is derived data, so a full purge needs no migration and no
+  /// per-source column (`docs/dev/roadmap.md` 5.7 ①); the settings page is the only caller.
+  Future<int> deleteAll() => delete(cacheEntries).go();
 }

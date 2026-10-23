@@ -3,11 +3,13 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:html/parser.dart' as parser;
+import 'package:logger/logger.dart';
 
 import '../../../support/fake_http_client.dart';
 import '../../../support/fake_js_bridge.dart';
@@ -26,6 +28,19 @@ JsPageContext _context() => const JsPageContext(
 /// A DOM page scope with the same context, for the paging tests.
 RuleScope _domPage(String html) =>
     RuleScope.dom(parser.parse(html), body: html, jsContext: _context());
+
+/// A book source with the fields [PageFetchService] reads.
+BookSource _source({Map<String, String>? headers, String? headerRule}) =>
+    BookSource(
+      name: '示例书源',
+      url: 'https://example-novel.test',
+      headers: headers,
+      headerRule: headerRule,
+      searchUrl: 'https://example-novel.test/s?q={{key}}',
+      searchRule: const SearchRule(bookList: 'class.result'),
+      tocRule: const TocRule(chapterList: 'class.c'),
+      contentRule: const ContentRule(content: 'class.body'),
+    );
 
 /// Builds the service under test around [jsBridge].
 ({PageFetchService pages, FakeLogPrinter printer}) _service(
@@ -146,6 +161,257 @@ void main() {
       expect(
         service.printer.events.last.message.toString(),
         contains('field=tocRule.nextTocUrl'),
+      );
+    });
+  });
+
+  group('PageFetchService fetchRule', () {
+    test(
+      'fetchRule_givenAPostSuffix_sendsTheBodyAndMergesTheHeaders',
+      () async {
+        // `url,{…}` 后缀：动词、body、charset 与 headers 全部要落到请求上
+        // （book-source.md §4.3）。没有这条，50/128 条真实书源的搜索根本发不出去。
+        final FakeLogPrinter printer = FakeLogPrinter();
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve('https://example-novel.test/search.php', '<div>ok</div>');
+        final PageFetchService pages = PageFetchService(
+          engine: RuleEngine(
+            logger: AppLogger(level: LogLevel.debug, printer: printer),
+            jsBridge: FakeJsBridge(),
+            variables: JsVariableStore(),
+          ),
+          http: http,
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+        );
+
+        final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+          'https://example-novel.test/search.php,{"method":"POST",'
+          '"body":"searchkey={{key}}&page={{page}}","charset":"gbk",'
+          '"headers":{"Referer":"https://example-novel.test/"}}',
+          rulePath: 'searchUrl',
+          params: <String, String>{'key': '剑来', 'page': '2'},
+          context: _context(),
+          headers: const <String, String>{'User-Agent': 'source-agent'},
+          sourceId: 'https://example-novel.test',
+        );
+
+        expect(fetched, isA<ParseSuccess<FetchedPage>>());
+        expect(http.requestedMethods, <String>['POST']);
+        // GBK 的「剑来」是 %BD%A3%C0%B4：声明了 charset 就要按它编码关键词。
+        expect(http.requestedBodies.single, 'searchkey=%BD%A3%C0%B4&page=2');
+        expect(http.requestedCharsets.single, 'gbk');
+        expect(http.requestedHeaders.single, <String, String>{
+          'User-Agent': 'source-agent',
+          'Referer': 'https://example-novel.test/',
+        });
+      },
+    );
+
+    test('fetchRule_givenAJsonBody_keepsTheKeywordVerbatim', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve('https://example-novel.test/v1/search', '<div>ok</div>');
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/v1/search,{"method":"POST",'
+        '"body":"{\\"keyword\\":\\"{{key}}\\"}"}',
+        rulePath: 'searchUrl',
+        params: <String, String>{'key': '剑来'},
+        context: _context(),
+      );
+
+      // JSON 载荷里关键词不能百分号编码（上游同样跳过表单编码）。
+      expect(http.requestedBodies.single, '{"keyword":"剑来"}');
+    });
+
+    test('fetchRule_givenAnUnreadableSuffix_failsByName', () async {
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge());
+
+      final ParseResult<FetchedPage> result = await service.pages.fetchRule(
+        'https://example-novel.test/s?k={{key}},{oops}',
+        rulePath: 'searchUrl',
+        params: <String, String>{'key': '剑来'},
+        context: _context(),
+      );
+
+      expect(result, isA<ParseFailure<FetchedPage>>());
+      expect(
+        (result as ParseFailure<FetchedPage>).rulePath,
+        'unsupported:url-options',
+      );
+    });
+
+    test('fetchRule_givenABodyWhoseTemplateFails_failsTheRequest', () async {
+      // body 里也有 `{{…}}`：它的求值失败必须让整条规则失败，而不是发一个半截载荷。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = const ParseFailure<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'js:error',
+        );
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(bridge);
+      final FakeHttpClient http = FakeHttpClient();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: service.printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: service.printer),
+      );
+
+      final ParseResult<FetchedPage> result = await pages.fetchRule(
+        'https://example-novel.test/s,{"method":"POST","body":"a={{boom()}}"}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{},
+        context: _context(),
+      );
+
+      expect(result, isA<ParseFailure<FetchedPage>>());
+      expect(http.requestedUrls, isEmpty);
+    });
+
+    test('fetchRule_givenUnsupportedOptions_warnsByOptionName', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?k=%E5%89%91%E6%9D%A5',
+          '<div>ok</div>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/s?k={{key}},{"webView":true}',
+        rulePath: 'searchUrl',
+        params: <String, String>{'key': '剑来'},
+        context: _context(),
+      );
+
+      expect(http.requestedMethods, <String>['GET']);
+      expect(
+        printer.events
+            .map((LogEvent event) => event.message.toString())
+            .any((String message) => message.contains('option=webView')),
+        isTrue,
+      );
+    });
+  });
+
+  group('PageFetchService headersOf', () {
+    test('headersOf_givenAStaticObject_answersItUnchanged', () async {
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge());
+      final BookSource source = _source(
+        headers: const <String, String>{'User-Agent': 'x'},
+      );
+
+      expect(await service.pages.headersOf(source), <String, String>{
+        'User-Agent': 'x',
+      });
+    });
+
+    test('headersOf_givenAHeaderRule_evaluatesItBeforeTheRequest', () async {
+      // M12-A2：`header: "<js>…</js>"` 是**规则**，要在取页之前求值，得到的 JSON 才是实际
+      // header。真实语料的书香之家 / 必看悦读 / 阅友小说都这么写。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = '{"User-Agent": "rule-agent", "Referer": "https://a.test/"}';
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(bridge);
+      final BookSource source = _source(
+        headers: const <String, String>{'Accept': 'x'},
+        headerRule: "<js>JSON.stringify({'User-Agent': 'rule-agent'})</js>",
+      );
+
+      final Map<String, String>? headers = await service.pages.headersOf(
+        source,
+      );
+
+      expect(headers, <String, String>{
+        'Accept': 'x',
+        'User-Agent': 'rule-agent',
+        'Referer': 'https://a.test/',
+      });
+      // 规则本体（不含 `<js>` 包装）才是脚本。
+      expect(
+        bridge.jobs.single.script,
+        contains("JSON.stringify({'User-Agent': 'rule-agent'})"),
+      );
+      expect(bridge.jobs.single.rulePath, 'header');
+    });
+
+    test('headersOf_givenAFailingHeaderRule_keepsTheStaticHeaders', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = const ParseFailure<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'js:error',
+        );
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(bridge);
+      final BookSource source = _source(
+        headers: const <String, String>{'Accept': 'x'},
+        headerRule: '@js:boom()',
+      );
+
+      expect(await service.pages.headersOf(source), <String, String>{
+        'Accept': 'x',
+      });
+      expect(
+        service.printer.events
+            .map((LogEvent event) => event.message)
+            .any(
+              (Object? message) => '$message'.contains('Header rule failed'),
+            ),
+        isTrue,
+      );
+    });
+
+    test('headersOf_givenAHeaderRuleThatAnswersANonJsonValue_warns', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 42;
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(bridge);
+
+      expect(
+        await service.pages.headersOf(_source(headerRule: '@js:42')),
+        isNull,
+      );
+    });
+
+    test('headersOf_givenAHeaderRuleThatIsNotAnObject_warns', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'not json';
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(bridge);
+
+      expect(
+        await service.pages.headersOf(_source(headerRule: '@js:"x"')),
+        isNull,
+      );
+      expect(
+        service.printer.events
+            .map((LogEvent event) => event.message)
+            .any(
+              (Object? message) =>
+                  '$message'.contains('did not produce a JSON object'),
+            ),
+        isTrue,
       );
     });
   });

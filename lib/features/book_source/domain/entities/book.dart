@@ -11,7 +11,7 @@ part 'book.freezed.dart';
 ///
 /// [updateTime] (and [BookInfo.updateTime] / [Chapter.updateTime]) is carried as the source
 /// spelled it: a display string, never a parsed date (`book-source.md` §2). The UI that shows
-/// it arrives with Phase 5, which is where its consumption is registered (`PLAN.md` §3.7).
+/// it arrives with Phase 5, which is where its consumption is registered (`docs/dev/roadmap.md` §3.7).
 @freezed
 abstract class Book with _$Book {
   /// Creates a search hit.

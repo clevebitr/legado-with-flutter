@@ -60,7 +60,7 @@ flutter run -d windows     # 或 -d android / -d ios
 
 | 我想… | 读 |
 |---|---|
-| 开始开发 / 看进度与验收 | [`PLAN.md`](PLAN.md) |
+| 开始开发 / 看路线与验收 | [`docs/dev/roadmap.md`](docs/dev/roadmap.md) |
 | 提 PR / 分支 / Commit | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | 查约束与命名 | [`docs/dev/constraints.md`](docs/dev/constraints.md)、[`docs/dev/naming.md`](docs/dev/naming.md) |
 | 查依赖、许可证、免责声明 | [`docs/dev/tech-stack.md`](docs/dev/tech-stack.md)、[`NOTICE.md`](NOTICE.md) |
@@ -73,7 +73,7 @@ flutter run -d windows     # 或 -d android / -d ios
 | 项 | 状态 |
 |---|---|
 | 文档规范体系 | v2.0+，已按单一来源（SSOT）与事实级归属（`docs/README.md` §2.1）重构 |
-| 实现进度 | 唯一出处：[`PLAN.md`](PLAN.md) §3.1 阶段状态表 |
+| 实现进度 | 路线与验收：[`docs/dev/roadmap.md`](docs/dev/roadmap.md) §3.1 阶段状态表；里程碑级（当前 / goal / 断点）：[`PLAN.md`](PLAN.md) |
 | 书源规格 | 对标原版阅读（Legado）；语法行状态以 [`docs/dev/book-source.md`](docs/dev/book-source.md) §3 矩阵为准 |
 | 覆盖率门禁 | 已可执行（`tool/check_coverage.dart`）；阈值与判定规则见 [`docs/dev/testing.md`](docs/dev/testing.md) §2 |
 | 许可证 | **GNU GPL-3.0**（version 3 only），见 [`LICENSE`](LICENSE) 与 [`NOTICE.md`](NOTICE.md) |

@@ -1,7 +1,7 @@
 // G2b spot-check: run one **real** book source through the production chain against
 // the live site it points at, and print what each stage produced.
 //
-// Why this exists: `PLAN.md` §3.4 step 3 asks for a manual live run **before** the JS
+// Why this exists: `docs/dev/roadmap.md` §3.4 step 3 asks for a manual live run **before** the JS
 // bridge is built, so the selectors this repository implements (`book-source.md` §3
 // matrix, in particular #12 `@css:`) are checked against real HTML rather than only
 // against the offline corpus. `docs/dev/testing.md` §1 forbids the network in tests,
@@ -10,7 +10,7 @@
 //
 // Usage (from the repository root):
 //
-//   flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<file.json> --keyword=剑来
+//   flutter run -d windows -t tool/spot_check/spot_check.dart -- --source=<file.json> --keyword=剑来 [--plain-http]
 //   flutter run -d windows -t tool/spot_check/spot_check.dart -- --list=<collection.json>
 //
 // `dart run` does **not** work here: the chain needs the real JS engine and the Flutter
@@ -45,8 +45,11 @@ import 'package:flutter_reader/core/network/concurrent_rate.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
+import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
+import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
@@ -60,12 +63,12 @@ const int _sampleLength = 60;
 /// Rule flags a later phase of `book-source.md` §3 owns; a source that uses one of
 /// them cannot be checked before that phase lands.
 ///
-/// `@js:` is **not** in the list any more: matrix #14 landed with `PLAN.md` 3.4, so a
+/// `@js:` is **not** in the list any more: matrix #14 landed with `docs/dev/roadmap.md` 3.4, so a
 /// value-rule script is evaluable today. It is handled separately below, because it is
 /// only supported outside **list rules** (`bookList` / `chapterList`, whose「JS 返回一列
 /// 元素」 contract does not exist yet).
 ///
-/// `@put:` / `@get:` left the list with the M1 grammar slice (matrix #16, `PLAN.md` 3.4 / b0),
+/// `@put:` / `@get:` left the list with the M1 grammar slice (matrix #16, `docs/dev/roadmap.md` 3.4 / b0),
 /// `{{…}}` is no longer rejected wholesale below either (matrix #18, same slice), and `@@`
 /// **left the list with G4**: matrix #15 has been implemented since that slice, so only a
 /// **misplaced** `@@` — the engine's `unsupported:@@` — is rejected now
@@ -143,6 +146,26 @@ List<String> _argumentsOf(List<String> arguments) {
       .toList(growable: false);
 }
 
+/// The harness reads every chapter live: a cache would hide the very behaviour it measures, so the
+/// spot-check runs with the port answering “nothing stored” and dropping writes.
+const ContentCache _noContentCache = _NoContentCache();
+
+/// A [ContentCache] that never stores anything (`tool/spot_check` must always hit the network).
+final class _NoContentCache implements ContentCache {
+  const _NoContentCache();
+
+  @override
+  Future<String?> read({required String sourceId, required String url}) async =>
+      null;
+
+  @override
+  Future<void> write({
+    required String sourceId,
+    required String url,
+    required String body,
+  }) async {}
+}
+
 Future<void> main(List<String> arguments) async {
   final Map<String, String> options = _parseOptions(_argumentsOf(arguments));
   final String? collection = options['list'];
@@ -168,7 +191,11 @@ Future<void> main(List<String> arguments) async {
   );
   final String keyword = options['keyword'] ?? '剑来';
   final Stopwatch stopwatch = Stopwatch()..start();
-  final _Report report = await _runChain(source, keyword);
+  final _Report report = await _runChain(
+    source,
+    keyword,
+    allowPlainHttp: options.containsKey('plain-http'),
+  );
   stopwatch.stop();
   report.elapsedMilliseconds = stopwatch.elapsedMilliseconds;
 
@@ -204,15 +231,21 @@ BookSource _loadSource(File file, {String? name}) {
   return BookSource.fromLegadoJson(entry);
 }
 
-/// Runs the four stages of `PLAN.md` §4 against the live site of [source].
-Future<_Report> _runChain(BookSource source, String keyword) async {
+/// Runs the four stages of `docs/dev/roadmap.md` §4 against the live site of [source].
+Future<_Report> _runChain(
+  BookSource source,
+  String keyword, {
+  bool allowPlainHttp = false,
+}) async {
   final AppLogger logger = AppLogger(level: LogLevel.warning);
   // 请求层是唯一的上网入口（C-NET-1）：页面抓取与规则里的 `http.*` 共用同一个客户端，
   // 因此也共用 cookie 与同一份书源并发预算（book-source.md §8）。
   final DioHttpClient http = DioHttpClient(
     cookies: InMemoryCookieManager(),
     logger: logger,
-    policy: const HttpPolicy(),
+    // `--plain-http` 与 App 设置里的开关同义（C-SEC-2）：真实语料里仍有 `http://` 站点，
+    // 而默认策略会直接拒绝它们（默认关闭是对的，探测时才需要显式打开）。
+    policy: HttpPolicy(allowPlainHttp: allowPlainHttp),
   );
   // 引擎与桥共一份变量表：`@put:` / `@get:` 与 `java.put` / `java.get` 是同一份（ADR-0034）。
   final JsVariableStore variables = JsVariableStore();
@@ -314,8 +347,10 @@ Future<_Report> _runChain(BookSource source, String keyword) async {
     return report;
   }
 
-  switch (await FetchContent(pages: pages)
-      .execute(source, chapters.first.url)) {
+  switch (await FetchContent(
+    pages: pages,
+    cache: _noContentCache,
+  ).execute(source, ChapterRequest(url: chapters.first.url))) {
     case ParseSuccess<String>(:final String data):
       report.record(
         'content',
@@ -414,7 +449,7 @@ Map<String, String> _ruleFieldsOf(Map<String, Object?> item) {
 
 /// Prints how many sources use each M1 row, and how many of those are selectable today.
 ///
-/// G4 (`PLAN.md` §4) has to name a real source per row, and the harness is the only place
+/// G4 (`docs/dev/roadmap.md` §4) has to name a real source per row, and the harness is the only place
 /// statistics may come from (`docs/dev/test-environment.md` §6, trap 13: a throwaway script
 /// once produced the unreproducible 58.1%). The patterns therefore live here and the command
 /// is the `--list` run itself.
@@ -494,7 +529,7 @@ void _printM1GrammarCensus(List<Object?> entries) {
 
 /// Prints how many sources have a rule field whose **entire** value is a literal URL.
 ///
-/// Registered in `PLAN.md` §3.7 as “gather evidence first, then schedule”: such a value has no
+/// Registered in `docs/dev/roadmap.md` §3.7 as “gather evidence first, then schedule”: such a value has no
 /// rule head, so it falls into the default type, ADR-0032 degrades it to a CSS selector and the
 /// field fails (b5 bumped into it through a derived `bookUrl`). Only a census over the real
 /// sources can say whether that is worth a fix, hence the count *and* the field distribution.
@@ -542,13 +577,13 @@ void _printLiteralUrlCensus(List<Object?> entries) {
 /// `book-source.md` §6 writes that a JSON scope hands a script the item's **JSON text**
 /// (`_contentOf(JsonScope) = jsonEncode(value)`), while upstream `AnalyzeRule.evalJS(rule, result)`
 /// binds the item **object** - so `result.comic_id` works upstream and is `undefined` here.
-/// `PLAN.md` §3.5 b7 asks for the count and the field distribution **before** the contract is
-/// touched, and this census is that evidence (`PLAN.md` §3.7); a throwaway script may not produce
+/// `docs/dev/roadmap.md` §3.5 b7 asks for the count and the field distribution **before** the contract is
+/// touched, and this census is that evidence (`docs/dev/roadmap.md` §3.7); a throwaway script may not produce
 /// the numbers (`docs/dev/test-environment.md` §6, trap 13).
 ///
 /// Two shapes put a script on a JSON item: a **JSON list rule** (`bookList` / `chapterList`, whose
 /// sibling fields are read once per item) and a **JSON `init`** (`ruleBookInfo.init` makes the later
-/// detail fields read a sub-object, `PLAN.md` §3.5 b6). A whole JSON page is deliberately **not**
+/// detail fields read a sub-object, `docs/dev/roadmap.md` §3.5 b6). A whole JSON page is deliberately **not**
 /// counted: there upstream's `result` is the response String, exactly as here (§6).
 ///
 /// A script that reads the text correctly - `JSON.parse(result)` - is counted separately, because
@@ -685,25 +720,16 @@ String _jsSegmentsOf(String rule) {
 
 /// Prints the duplicate shape of [entries] - evidence for the import-identity ruling (P5-0).
 ///
-/// `PLAN.md` §3.6 5.0 has to decide the `book_sources` primary key and what importing the same
+/// `docs/dev/roadmap.md` §3.6 5.0 has to decide the `book_sources` primary key and what importing the same
 /// source twice does. `bookSourceUrl` is upstream's natural id, but the real corpus also has
 /// “same URL, different rules” instances, so the ruling needs the **shape** rather than an
 /// assumption - and it comes from the harness (`docs/dev/test-environment.md` §6, trap 13).
 ///
-/// Two entries count as the same when every field that makes a source **behave** the same way is
-/// equal (name, `searchUrl`, `header` and the five rule objects); the comparison is order-free, so
-/// a re-export with reordered keys is not reported as a difference.
+/// Two entries count as the same when [bookSourceFingerprint] says so - i.e. when every field
+/// that makes a source **behave** the same way is equal. The rule itself lives in `domain/`
+/// (`lib/features/book_source/domain/book_source_fingerprint.dart`), so the census and the
+/// repository cannot drift apart; this file only groups by URL and counts.
 void _printBookSourceIdentityCensus(List<Object?> entries) {
-  const List<String> behaviorFields = <String>[
-    'bookSourceName',
-    'searchUrl',
-    'header',
-    'ruleSearch',
-    'ruleBookInfo',
-    'ruleToc',
-    'ruleContent',
-    'ruleExplore',
-  ];
   final Map<String, List<String>> byUrl = <String, List<String>>{};
   var total = 0;
   for (final Object? item in entries) {
@@ -713,11 +739,7 @@ void _printBookSourceIdentityCensus(List<Object?> entries) {
     total++;
     byUrl
         .putIfAbsent('${item['bookSourceUrl']}', () => <String>[])
-        .add(
-          _canonicalJson(<String, Object?>{
-            for (final String key in behaviorFields) key: item[key],
-          }),
-        );
+        .add(bookSourceFingerprint(item));
   }
 
   var repeated = 0;
@@ -749,15 +771,6 @@ void _printBookSourceIdentityCensus(List<Object?> entries) {
     'differs.',
   );
 }
-
-/// Serialises [value] with map keys in a stable order, so two equal JSON objects compare equal
-/// even when their key order differs (`jsonEncode` keeps insertion order).
-String _canonicalJson(Object? value) => switch (value) {
-  final Map<String, Object?> map =>
-    '{${(map.keys.toList()..sort()).map((String key) => '${jsonEncode(key)}:${_canonicalJson(map[key])}').join(',')}}',
-  final List<Object?> list => '[${list.map(_canonicalJson).join(',')}]',
-  _ => jsonEncode(value),
-};
 
 /// Prints the `concurrentRate` distribution of [entries] (`book-source.md` §8).
 ///

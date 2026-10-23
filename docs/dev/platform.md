@@ -60,6 +60,7 @@ Please enable Developer Mode in your system settings.
 | `PredictiveBackSupport` | 提供 `PageTransitionsTheme`（支持时用预测性返回，否则回退） | 注入 `app.dart` 的 `theme` |
 | `SystemUiController` | 状态栏透明、edge-to-edge 适配 | 在 `core/theme/` 统一调用 |
 | `HapticsController` | 触感反馈能力探测与降级 | 组件内调用，不判断平台 |
+| `LongRunningTask` | 长任务的前台标记（Android 为 `PARTIAL_WAKE_LOCK`） | 批量书源校验开始 / 结束时 `acquire` / `release`（ADR-0043 §决策 3） |
 
 **契约：** 每个接口在不支持的平台返回 `null` 或 no-op，**禁止抛出异常**；
 调用方必须把 `null` 当作正常分支处理，不得用 `!` 解包（C-TYPE-2）。
@@ -134,6 +135,7 @@ pageTransitionsTheme: const PageTransitionsTheme(
 - [ ] Android 12+ 开启壁纸取色后主题跟随系统色变化
 - [ ] Android 8–11 主题使用种子色且无崩溃
 - [ ] 状态栏/导航栏在 edge-to-edge 下内容不被遮挡
+- [ ] 批量书源校验运行期间 `LongRunningTask.isSupported` 为 true，退出后 wake lock 已释放（`dumpsys power` 无残留 tag）
 
 **iOS**
 

@@ -2,6 +2,7 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'book_queries.g.dart';
@@ -32,4 +33,4 @@ Future<ParseResult<String>> chapterContent(
   Ref ref,
   BookSource source,
   String url,
-) => ref.watch(fetchContentProvider).execute(source, url);
+) => ref.watch(fetchContentProvider).execute(source, ChapterRequest(url: url));

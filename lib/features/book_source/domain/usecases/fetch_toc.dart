@@ -5,9 +5,9 @@ import 'package:flutter_reader/features/book_source/domain/page_fetch_service.da
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
-/// Reads the table of contents of one book (`PLAN.md` 2.4, `ruleToc`).
+/// Reads the table of contents of one book (`docs/dev/roadmap.md` 2.4, `ruleToc`).
 ///
-/// Paging follows the source's `nextTocUrl` rule (`PLAN.md` 3.5): the requested page
+/// Paging follows the source's `nextTocUrl` rule (`docs/dev/roadmap.md` 3.5): the requested page
 /// and every page the rule names are read, in order, bounded by `book-source.md` §9.
 final class FetchToc {
   /// Creates the use case.
@@ -20,18 +20,30 @@ final class FetchToc {
   /// A chapter without a usable URL is skipped with a warning instead of failing the
   /// whole table of contents (`book-source.md` §9); a `chapterList` rule that matched
   /// nothing on the **first** page is [ParseFailureKind.parseFailed] (§7).
+  /// [bookName] answers `java.get('bookName')` on this stage (`book-source.md` §6, ADR-0049):
+  /// a table of contents belongs to one book, but no single chapter, so `java.get('title')`
+  /// stays unbound here and falls through to the source's variables.
   Future<ParseResult<List<Chapter>>> execute(
     BookSource source,
-    String url,
-  ) async {
+    String url, {
+    String bookName = '',
+  }) async {
     // 书源自己的限速要在第一个请求之前进预算（book-source.md §8、ADR-0036）。
     _pages.applySourceRate(source);
+    // `header` 写成规则时要在**第一个请求之前**求值（book-source.md §2、M12-A2）。
+    final Map<String, String>? headers = await _pages.headersOf(source);
     final ParseResult<PageWalk> walk = await _pages.walk(
-      url: url,
+      rule: url,
       rulePath: 'ruleToc',
       nextRule: source.tocRule.nextTocUrl,
       nextRulePath: 'tocRule.nextTocUrl',
-      headers: source.headers,
+      context: JsPageContext(
+        baseUrl: url,
+        source: source.jsSourceInfo,
+        headers: headers,
+        bookName: bookName,
+      ),
+      headers: headers,
       sourceId: source.url,
       source: source.jsSourceInfo,
     );

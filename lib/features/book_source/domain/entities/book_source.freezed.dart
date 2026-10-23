@@ -16,7 +16,14 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$BookSource {
 
-@JsonKey(name: 'bookSourceName') String get name;@JsonKey(name: 'bookSourceUrl') String get url;@JsonKey(name: 'bookSourceGroup') String? get group;@JsonKey(name: 'bookSourceType') BookSourceType get sourceType;@JsonKey(name: 'enabled') bool get isEnabled;@JsonKey(name: 'header')@_HeaderJsonConverter() Map<String, String>? get headers; String? get searchUrl;@JsonKey(name: 'exploreUrl') String? get exploreUrl;@JsonKey(name: 'ruleSearch') SearchRule get searchRule;@JsonKey(name: 'ruleExplore') ExploreRule? get exploreRule;@JsonKey(name: 'concurrentRate') String? get concurrentRate;@JsonKey(name: 'variableComment') String? get variableComment;@JsonKey(name: 'ruleBookInfo') BookInfoRule? get bookInfoRule;@JsonKey(name: 'ruleToc') TocRule get tocRule;@JsonKey(name: 'ruleContent') ContentRule get contentRule;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
+@JsonKey(name: 'bookSourceName') String get name;@JsonKey(name: 'bookSourceUrl') String get url;@JsonKey(name: 'bookSourceGroup') String? get group;@JsonKey(name: 'bookSourceType') BookSourceType get sourceType;@JsonKey(name: 'enabled') bool get isEnabled;@JsonKey(name: 'header')@_HeaderJsonConverter() Map<String, String>? get headers;/// The source's `header` when it is a **rule** rather than a JSON object
+/// (`docs/dev/book-source.md` §2, M12-A2).
+///
+/// Upstream evaluates it before every request and parses its result as a JSON object
+/// (`BaseSource.getHeaderMap`). The text is kept here rather than dropped, because a
+/// source that signs its requests cannot be used at all without it; the evaluation itself
+/// belongs to the fetch (`PageFetchService.headersOf`), which is where the sandbox is.
+@JsonKey(includeFromJson: false, includeToJson: false) String? get headerRule; String? get searchUrl;@JsonKey(name: 'exploreUrl') String? get exploreUrl;@JsonKey(name: 'ruleSearch') SearchRule get searchRule;@JsonKey(name: 'ruleExplore') ExploreRule? get exploreRule;@JsonKey(name: 'concurrentRate') String? get concurrentRate;@JsonKey(name: 'variableComment') String? get variableComment;@JsonKey(name: 'ruleBookInfo') BookInfoRule? get bookInfoRule;@JsonKey(name: 'ruleToc') TocRule get tocRule;@JsonKey(name: 'ruleContent') ContentRule get contentRule;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
 /// Create a copy of BookSource
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -30,20 +37,20 @@ $BookSourceCopyWith<BookSource> get copyWith => _$BookSourceCopyWithImpl<BookSou
 @override
 bool operator ==(Object other) {
   final _this = this as BookSource;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSource&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.url, _this.url) || other.url == _this.url)&&(identical(other.group, _this.group) || other.group == _this.group)&&(identical(other.sourceType, _this.sourceType) || other.sourceType == _this.sourceType)&&(identical(other.isEnabled, _this.isEnabled) || other.isEnabled == _this.isEnabled)&&const DeepCollectionEquality().equals(other.headers, _this.headers)&&(identical(other.searchUrl, _this.searchUrl) || other.searchUrl == _this.searchUrl)&&(identical(other.exploreUrl, _this.exploreUrl) || other.exploreUrl == _this.exploreUrl)&&(identical(other.searchRule, _this.searchRule) || other.searchRule == _this.searchRule)&&(identical(other.exploreRule, _this.exploreRule) || other.exploreRule == _this.exploreRule)&&(identical(other.concurrentRate, _this.concurrentRate) || other.concurrentRate == _this.concurrentRate)&&(identical(other.variableComment, _this.variableComment) || other.variableComment == _this.variableComment)&&(identical(other.bookInfoRule, _this.bookInfoRule) || other.bookInfoRule == _this.bookInfoRule)&&(identical(other.tocRule, _this.tocRule) || other.tocRule == _this.tocRule)&&(identical(other.contentRule, _this.contentRule) || other.contentRule == _this.contentRule)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSource&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.url, _this.url) || other.url == _this.url)&&(identical(other.group, _this.group) || other.group == _this.group)&&(identical(other.sourceType, _this.sourceType) || other.sourceType == _this.sourceType)&&(identical(other.isEnabled, _this.isEnabled) || other.isEnabled == _this.isEnabled)&&const DeepCollectionEquality().equals(other.headers, _this.headers)&&(identical(other.headerRule, _this.headerRule) || other.headerRule == _this.headerRule)&&(identical(other.searchUrl, _this.searchUrl) || other.searchUrl == _this.searchUrl)&&(identical(other.exploreUrl, _this.exploreUrl) || other.exploreUrl == _this.exploreUrl)&&(identical(other.searchRule, _this.searchRule) || other.searchRule == _this.searchRule)&&(identical(other.exploreRule, _this.exploreRule) || other.exploreRule == _this.exploreRule)&&(identical(other.concurrentRate, _this.concurrentRate) || other.concurrentRate == _this.concurrentRate)&&(identical(other.variableComment, _this.variableComment) || other.variableComment == _this.variableComment)&&(identical(other.bookInfoRule, _this.bookInfoRule) || other.bookInfoRule == _this.bookInfoRule)&&(identical(other.tocRule, _this.tocRule) || other.tocRule == _this.tocRule)&&(identical(other.contentRule, _this.contentRule) || other.contentRule == _this.contentRule)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as BookSource;
-  return Object.hash(runtimeType,_this.name,_this.url,_this.group,_this.sourceType,_this.isEnabled,const DeepCollectionEquality().hash(_this.headers),_this.searchUrl,_this.exploreUrl,_this.searchRule,_this.exploreRule,_this.concurrentRate,_this.variableComment,_this.bookInfoRule,_this.tocRule,_this.contentRule,const DeepCollectionEquality().hash(_this.extra));
+  return Object.hash(runtimeType,_this.name,_this.url,_this.group,_this.sourceType,_this.isEnabled,const DeepCollectionEquality().hash(_this.headers),_this.headerRule,_this.searchUrl,_this.exploreUrl,_this.searchRule,_this.exploreRule,_this.concurrentRate,_this.variableComment,_this.bookInfoRule,_this.tocRule,_this.contentRule,const DeepCollectionEquality().hash(_this.extra));
 }
 
 @override
 String toString() {
   final _this = this as BookSource;
-  return 'BookSource(name: ${_this.name}, url: ${_this.url}, group: ${_this.group}, sourceType: ${_this.sourceType}, isEnabled: ${_this.isEnabled}, headers: ${_this.headers}, searchUrl: ${_this.searchUrl}, exploreUrl: ${_this.exploreUrl}, searchRule: ${_this.searchRule}, exploreRule: ${_this.exploreRule}, concurrentRate: ${_this.concurrentRate}, variableComment: ${_this.variableComment}, bookInfoRule: ${_this.bookInfoRule}, tocRule: ${_this.tocRule}, contentRule: ${_this.contentRule}, extra: ${_this.extra})';
+  return 'BookSource(name: ${_this.name}, url: ${_this.url}, group: ${_this.group}, sourceType: ${_this.sourceType}, isEnabled: ${_this.isEnabled}, headers: ${_this.headers}, headerRule: ${_this.headerRule}, searchUrl: ${_this.searchUrl}, exploreUrl: ${_this.exploreUrl}, searchRule: ${_this.searchRule}, exploreRule: ${_this.exploreRule}, concurrentRate: ${_this.concurrentRate}, variableComment: ${_this.variableComment}, bookInfoRule: ${_this.bookInfoRule}, tocRule: ${_this.tocRule}, contentRule: ${_this.contentRule}, extra: ${_this.extra})';
 }
 
 
@@ -54,7 +61,7 @@ abstract mixin class $BookSourceCopyWith<$Res>  {
   factory $BookSourceCopyWith(BookSource value, $Res Function(BookSource) _then) = _$BookSourceCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'bookSourceName') String name,@JsonKey(name: 'bookSourceUrl') String url,@JsonKey(name: 'bookSourceGroup') String? group,@JsonKey(name: 'bookSourceType') BookSourceType sourceType,@JsonKey(name: 'enabled') bool isEnabled,@JsonKey(name: 'header')@_HeaderJsonConverter() Map<String, String>? headers, String? searchUrl,@JsonKey(name: 'exploreUrl') String? exploreUrl,@JsonKey(name: 'ruleSearch') SearchRule searchRule,@JsonKey(name: 'ruleExplore') ExploreRule? exploreRule,@JsonKey(name: 'concurrentRate') String? concurrentRate,@JsonKey(name: 'variableComment') String? variableComment,@JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,@JsonKey(name: 'ruleToc') TocRule tocRule,@JsonKey(name: 'ruleContent') ContentRule contentRule,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+@JsonKey(name: 'bookSourceName') String name,@JsonKey(name: 'bookSourceUrl') String url,@JsonKey(name: 'bookSourceGroup') String? group,@JsonKey(name: 'bookSourceType') BookSourceType sourceType,@JsonKey(name: 'enabled') bool isEnabled,@JsonKey(name: 'header')@_HeaderJsonConverter() Map<String, String>? headers,@JsonKey(includeFromJson: false, includeToJson: false) String? headerRule, String? searchUrl,@JsonKey(name: 'exploreUrl') String? exploreUrl,@JsonKey(name: 'ruleSearch') SearchRule searchRule,@JsonKey(name: 'ruleExplore') ExploreRule? exploreRule,@JsonKey(name: 'concurrentRate') String? concurrentRate,@JsonKey(name: 'variableComment') String? variableComment,@JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,@JsonKey(name: 'ruleToc') TocRule tocRule,@JsonKey(name: 'ruleContent') ContentRule contentRule,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -71,7 +78,7 @@ class _$BookSourceCopyWithImpl<$Res>
 
 /// Create a copy of BookSource
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? url = null,Object? group = freezed,Object? sourceType = null,Object? isEnabled = null,Object? headers = freezed,Object? searchUrl = freezed,Object? exploreUrl = freezed,Object? searchRule = null,Object? exploreRule = freezed,Object? concurrentRate = freezed,Object? variableComment = freezed,Object? bookInfoRule = freezed,Object? tocRule = null,Object? contentRule = null,Object? extra = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? url = null,Object? group = freezed,Object? sourceType = null,Object? isEnabled = null,Object? headers = freezed,Object? headerRule = freezed,Object? searchUrl = freezed,Object? exploreUrl = freezed,Object? searchRule = null,Object? exploreRule = freezed,Object? concurrentRate = freezed,Object? variableComment = freezed,Object? bookInfoRule = freezed,Object? tocRule = null,Object? contentRule = null,Object? extra = null,}) {
   return _then(BookSource(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
@@ -79,7 +86,8 @@ as String,group: freezed == group ? _self.group : group // ignore: cast_nullable
 as String?,sourceType: null == sourceType ? _self.sourceType : sourceType // ignore: cast_nullable_to_non_nullable
 as BookSourceType,isEnabled: null == isEnabled ? _self.isEnabled : isEnabled // ignore: cast_nullable_to_non_nullable
 as bool,headers: freezed == headers ? _self.headers : headers // ignore: cast_nullable_to_non_nullable
-as Map<String, String>?,searchUrl: freezed == searchUrl ? _self.searchUrl : searchUrl // ignore: cast_nullable_to_non_nullable
+as Map<String, String>?,headerRule: freezed == headerRule ? _self.headerRule : headerRule // ignore: cast_nullable_to_non_nullable
+as String?,searchUrl: freezed == searchUrl ? _self.searchUrl : searchUrl // ignore: cast_nullable_to_non_nullable
 as String?,exploreUrl: freezed == exploreUrl ? _self.exploreUrl : exploreUrl // ignore: cast_nullable_to_non_nullable
 as String?,searchRule: null == searchRule ? _self.searchRule : searchRule // ignore: cast_nullable_to_non_nullable
 as SearchRule,exploreRule: freezed == exploreRule ? _self.exploreRule : exploreRule // ignore: cast_nullable_to_non_nullable
@@ -225,10 +233,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'bookSourceName')  String name, @JsonKey(name: 'bookSourceUrl')  String url, @JsonKey(name: 'bookSourceGroup')  String? group, @JsonKey(name: 'bookSourceType')  BookSourceType sourceType, @JsonKey(name: 'enabled')  bool isEnabled, @JsonKey(name: 'header')@_HeaderJsonConverter()  Map<String, String>? headers,  String? searchUrl, @JsonKey(name: 'exploreUrl')  String? exploreUrl, @JsonKey(name: 'ruleSearch')  SearchRule searchRule, @JsonKey(name: 'ruleExplore')  ExploreRule? exploreRule, @JsonKey(name: 'concurrentRate')  String? concurrentRate, @JsonKey(name: 'variableComment')  String? variableComment, @JsonKey(name: 'ruleBookInfo')  BookInfoRule? bookInfoRule, @JsonKey(name: 'ruleToc')  TocRule tocRule, @JsonKey(name: 'ruleContent')  ContentRule contentRule, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'bookSourceName')  String name, @JsonKey(name: 'bookSourceUrl')  String url, @JsonKey(name: 'bookSourceGroup')  String? group, @JsonKey(name: 'bookSourceType')  BookSourceType sourceType, @JsonKey(name: 'enabled')  bool isEnabled, @JsonKey(name: 'header')@_HeaderJsonConverter()  Map<String, String>? headers, @JsonKey(includeFromJson: false, includeToJson: false)  String? headerRule,  String? searchUrl, @JsonKey(name: 'exploreUrl')  String? exploreUrl, @JsonKey(name: 'ruleSearch')  SearchRule searchRule, @JsonKey(name: 'ruleExplore')  ExploreRule? exploreRule, @JsonKey(name: 'concurrentRate')  String? concurrentRate, @JsonKey(name: 'variableComment')  String? variableComment, @JsonKey(name: 'ruleBookInfo')  BookInfoRule? bookInfoRule, @JsonKey(name: 'ruleToc')  TocRule tocRule, @JsonKey(name: 'ruleContent')  ContentRule contentRule, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BookSource() when $default != null:
-return $default(_that.name,_that.url,_that.group,_that.sourceType,_that.isEnabled,_that.headers,_that.searchUrl,_that.exploreUrl,_that.searchRule,_that.exploreRule,_that.concurrentRate,_that.variableComment,_that.bookInfoRule,_that.tocRule,_that.contentRule,_that.extra);case _:
+return $default(_that.name,_that.url,_that.group,_that.sourceType,_that.isEnabled,_that.headers,_that.headerRule,_that.searchUrl,_that.exploreUrl,_that.searchRule,_that.exploreRule,_that.concurrentRate,_that.variableComment,_that.bookInfoRule,_that.tocRule,_that.contentRule,_that.extra);case _:
   return orElse();
 
 }
@@ -246,10 +254,10 @@ return $default(_that.name,_that.url,_that.group,_that.sourceType,_that.isEnable
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'bookSourceName')  String name, @JsonKey(name: 'bookSourceUrl')  String url, @JsonKey(name: 'bookSourceGroup')  String? group, @JsonKey(name: 'bookSourceType')  BookSourceType sourceType, @JsonKey(name: 'enabled')  bool isEnabled, @JsonKey(name: 'header')@_HeaderJsonConverter()  Map<String, String>? headers,  String? searchUrl, @JsonKey(name: 'exploreUrl')  String? exploreUrl, @JsonKey(name: 'ruleSearch')  SearchRule searchRule, @JsonKey(name: 'ruleExplore')  ExploreRule? exploreRule, @JsonKey(name: 'concurrentRate')  String? concurrentRate, @JsonKey(name: 'variableComment')  String? variableComment, @JsonKey(name: 'ruleBookInfo')  BookInfoRule? bookInfoRule, @JsonKey(name: 'ruleToc')  TocRule tocRule, @JsonKey(name: 'ruleContent')  ContentRule contentRule, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'bookSourceName')  String name, @JsonKey(name: 'bookSourceUrl')  String url, @JsonKey(name: 'bookSourceGroup')  String? group, @JsonKey(name: 'bookSourceType')  BookSourceType sourceType, @JsonKey(name: 'enabled')  bool isEnabled, @JsonKey(name: 'header')@_HeaderJsonConverter()  Map<String, String>? headers, @JsonKey(includeFromJson: false, includeToJson: false)  String? headerRule,  String? searchUrl, @JsonKey(name: 'exploreUrl')  String? exploreUrl, @JsonKey(name: 'ruleSearch')  SearchRule searchRule, @JsonKey(name: 'ruleExplore')  ExploreRule? exploreRule, @JsonKey(name: 'concurrentRate')  String? concurrentRate, @JsonKey(name: 'variableComment')  String? variableComment, @JsonKey(name: 'ruleBookInfo')  BookInfoRule? bookInfoRule, @JsonKey(name: 'ruleToc')  TocRule tocRule, @JsonKey(name: 'ruleContent')  ContentRule contentRule, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
 switch (_that) {
 case _BookSource():
-return $default(_that.name,_that.url,_that.group,_that.sourceType,_that.isEnabled,_that.headers,_that.searchUrl,_that.exploreUrl,_that.searchRule,_that.exploreRule,_that.concurrentRate,_that.variableComment,_that.bookInfoRule,_that.tocRule,_that.contentRule,_that.extra);case _:
+return $default(_that.name,_that.url,_that.group,_that.sourceType,_that.isEnabled,_that.headers,_that.headerRule,_that.searchUrl,_that.exploreUrl,_that.searchRule,_that.exploreRule,_that.concurrentRate,_that.variableComment,_that.bookInfoRule,_that.tocRule,_that.contentRule,_that.extra);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -266,10 +274,10 @@ return $default(_that.name,_that.url,_that.group,_that.sourceType,_that.isEnable
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'bookSourceName')  String name, @JsonKey(name: 'bookSourceUrl')  String url, @JsonKey(name: 'bookSourceGroup')  String? group, @JsonKey(name: 'bookSourceType')  BookSourceType sourceType, @JsonKey(name: 'enabled')  bool isEnabled, @JsonKey(name: 'header')@_HeaderJsonConverter()  Map<String, String>? headers,  String? searchUrl, @JsonKey(name: 'exploreUrl')  String? exploreUrl, @JsonKey(name: 'ruleSearch')  SearchRule searchRule, @JsonKey(name: 'ruleExplore')  ExploreRule? exploreRule, @JsonKey(name: 'concurrentRate')  String? concurrentRate, @JsonKey(name: 'variableComment')  String? variableComment, @JsonKey(name: 'ruleBookInfo')  BookInfoRule? bookInfoRule, @JsonKey(name: 'ruleToc')  TocRule tocRule, @JsonKey(name: 'ruleContent')  ContentRule contentRule, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'bookSourceName')  String name, @JsonKey(name: 'bookSourceUrl')  String url, @JsonKey(name: 'bookSourceGroup')  String? group, @JsonKey(name: 'bookSourceType')  BookSourceType sourceType, @JsonKey(name: 'enabled')  bool isEnabled, @JsonKey(name: 'header')@_HeaderJsonConverter()  Map<String, String>? headers, @JsonKey(includeFromJson: false, includeToJson: false)  String? headerRule,  String? searchUrl, @JsonKey(name: 'exploreUrl')  String? exploreUrl, @JsonKey(name: 'ruleSearch')  SearchRule searchRule, @JsonKey(name: 'ruleExplore')  ExploreRule? exploreRule, @JsonKey(name: 'concurrentRate')  String? concurrentRate, @JsonKey(name: 'variableComment')  String? variableComment, @JsonKey(name: 'ruleBookInfo')  BookInfoRule? bookInfoRule, @JsonKey(name: 'ruleToc')  TocRule tocRule, @JsonKey(name: 'ruleContent')  ContentRule contentRule, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
 switch (_that) {
 case _BookSource() when $default != null:
-return $default(_that.name,_that.url,_that.group,_that.sourceType,_that.isEnabled,_that.headers,_that.searchUrl,_that.exploreUrl,_that.searchRule,_that.exploreRule,_that.concurrentRate,_that.variableComment,_that.bookInfoRule,_that.tocRule,_that.contentRule,_that.extra);case _:
+return $default(_that.name,_that.url,_that.group,_that.sourceType,_that.isEnabled,_that.headers,_that.headerRule,_that.searchUrl,_that.exploreUrl,_that.searchRule,_that.exploreRule,_that.concurrentRate,_that.variableComment,_that.bookInfoRule,_that.tocRule,_that.contentRule,_that.extra);case _:
   return null;
 
 }
@@ -281,7 +289,7 @@ return $default(_that.name,_that.url,_that.group,_that.sourceType,_that.isEnable
 @JsonSerializable()
 
 class _BookSource implements BookSource {
-  const _BookSource({@JsonKey(name: 'bookSourceName') required this.name, @JsonKey(name: 'bookSourceUrl') required this.url, @JsonKey(name: 'bookSourceGroup') this.group, @JsonKey(name: 'bookSourceType') this.sourceType = BookSourceType.text, @JsonKey(name: 'enabled') this.isEnabled = true, @JsonKey(name: 'header')@_HeaderJsonConverter()  Map<String, String>? headers, this.searchUrl, @JsonKey(name: 'exploreUrl') this.exploreUrl, @JsonKey(name: 'ruleSearch') required this.searchRule, @JsonKey(name: 'ruleExplore') this.exploreRule, @JsonKey(name: 'concurrentRate') this.concurrentRate, @JsonKey(name: 'variableComment') this.variableComment, @JsonKey(name: 'ruleBookInfo') this.bookInfoRule, @JsonKey(name: 'ruleToc') required this.tocRule, @JsonKey(name: 'ruleContent') required this.contentRule, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _headers = headers,_extra = extra;
+  const _BookSource({@JsonKey(name: 'bookSourceName') required this.name, @JsonKey(name: 'bookSourceUrl') required this.url, @JsonKey(name: 'bookSourceGroup') this.group, @JsonKey(name: 'bookSourceType') this.sourceType = BookSourceType.text, @JsonKey(name: 'enabled') this.isEnabled = true, @JsonKey(name: 'header')@_HeaderJsonConverter()  Map<String, String>? headers, @JsonKey(includeFromJson: false, includeToJson: false) this.headerRule, this.searchUrl, @JsonKey(name: 'exploreUrl') this.exploreUrl, @JsonKey(name: 'ruleSearch') required this.searchRule, @JsonKey(name: 'ruleExplore') this.exploreRule, @JsonKey(name: 'concurrentRate') this.concurrentRate, @JsonKey(name: 'variableComment') this.variableComment, @JsonKey(name: 'ruleBookInfo') this.bookInfoRule, @JsonKey(name: 'ruleToc') required this.tocRule, @JsonKey(name: 'ruleContent') required this.contentRule, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _headers = headers,_extra = extra;
   factory _BookSource.fromJson(Map<String, dynamic> json) => _$BookSourceFromJson(json);
 
 @override@JsonKey(name: 'bookSourceName') final  String name;
@@ -298,6 +306,14 @@ class _BookSource implements BookSource {
   return EqualUnmodifiableMapView(value);
 }
 
+/// The source's `header` when it is a **rule** rather than a JSON object
+/// (`docs/dev/book-source.md` §2, M12-A2).
+///
+/// Upstream evaluates it before every request and parses its result as a JSON object
+/// (`BaseSource.getHeaderMap`). The text is kept here rather than dropped, because a
+/// source that signs its requests cannot be used at all without it; the evaluation itself
+/// belongs to the fetch (`PageFetchService.headersOf`), which is where the sandbox is.
+@override@JsonKey(includeFromJson: false, includeToJson: false) final  String? headerRule;
 @override final  String? searchUrl;
 @override@JsonKey(name: 'exploreUrl') final  String? exploreUrl;
 @override@JsonKey(name: 'ruleSearch') final  SearchRule searchRule;
@@ -328,18 +344,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _BookSource&&(identical(other.name, name) || other.name == name)&&(identical(other.url, url) || other.url == url)&&(identical(other.group, group) || other.group == group)&&(identical(other.sourceType, sourceType) || other.sourceType == sourceType)&&(identical(other.isEnabled, isEnabled) || other.isEnabled == isEnabled)&&const DeepCollectionEquality().equals(other.headers, _headers)&&(identical(other.searchUrl, searchUrl) || other.searchUrl == searchUrl)&&(identical(other.exploreUrl, exploreUrl) || other.exploreUrl == exploreUrl)&&(identical(other.searchRule, searchRule) || other.searchRule == searchRule)&&(identical(other.exploreRule, exploreRule) || other.exploreRule == exploreRule)&&(identical(other.concurrentRate, concurrentRate) || other.concurrentRate == concurrentRate)&&(identical(other.variableComment, variableComment) || other.variableComment == variableComment)&&(identical(other.bookInfoRule, bookInfoRule) || other.bookInfoRule == bookInfoRule)&&(identical(other.tocRule, tocRule) || other.tocRule == tocRule)&&(identical(other.contentRule, contentRule) || other.contentRule == contentRule)&&const DeepCollectionEquality().equals(other.extra, _extra));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _BookSource&&(identical(other.name, name) || other.name == name)&&(identical(other.url, url) || other.url == url)&&(identical(other.group, group) || other.group == group)&&(identical(other.sourceType, sourceType) || other.sourceType == sourceType)&&(identical(other.isEnabled, isEnabled) || other.isEnabled == isEnabled)&&const DeepCollectionEquality().equals(other.headers, _headers)&&(identical(other.headerRule, headerRule) || other.headerRule == headerRule)&&(identical(other.searchUrl, searchUrl) || other.searchUrl == searchUrl)&&(identical(other.exploreUrl, exploreUrl) || other.exploreUrl == exploreUrl)&&(identical(other.searchRule, searchRule) || other.searchRule == searchRule)&&(identical(other.exploreRule, exploreRule) || other.exploreRule == exploreRule)&&(identical(other.concurrentRate, concurrentRate) || other.concurrentRate == concurrentRate)&&(identical(other.variableComment, variableComment) || other.variableComment == variableComment)&&(identical(other.bookInfoRule, bookInfoRule) || other.bookInfoRule == bookInfoRule)&&(identical(other.tocRule, tocRule) || other.tocRule == tocRule)&&(identical(other.contentRule, contentRule) || other.contentRule == contentRule)&&const DeepCollectionEquality().equals(other.extra, _extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,name,url,group,sourceType,isEnabled,const DeepCollectionEquality().hash(_headers),searchUrl,exploreUrl,searchRule,exploreRule,concurrentRate,variableComment,bookInfoRule,tocRule,contentRule,const DeepCollectionEquality().hash(_extra));
+    return Object.hash(runtimeType,name,url,group,sourceType,isEnabled,const DeepCollectionEquality().hash(_headers),headerRule,searchUrl,exploreUrl,searchRule,exploreRule,concurrentRate,variableComment,bookInfoRule,tocRule,contentRule,const DeepCollectionEquality().hash(_extra));
 }
 
 @override
 String toString() {
-    return 'BookSource(name: $name, url: $url, group: $group, sourceType: $sourceType, isEnabled: $isEnabled, headers: $headers, searchUrl: $searchUrl, exploreUrl: $exploreUrl, searchRule: $searchRule, exploreRule: $exploreRule, concurrentRate: $concurrentRate, variableComment: $variableComment, bookInfoRule: $bookInfoRule, tocRule: $tocRule, contentRule: $contentRule, extra: $extra)';
+    return 'BookSource(name: $name, url: $url, group: $group, sourceType: $sourceType, isEnabled: $isEnabled, headers: $headers, headerRule: $headerRule, searchUrl: $searchUrl, exploreUrl: $exploreUrl, searchRule: $searchRule, exploreRule: $exploreRule, concurrentRate: $concurrentRate, variableComment: $variableComment, bookInfoRule: $bookInfoRule, tocRule: $tocRule, contentRule: $contentRule, extra: $extra)';
 }
 
 
@@ -350,7 +366,7 @@ abstract mixin class _$BookSourceCopyWith<$Res> implements $BookSourceCopyWith<$
   factory _$BookSourceCopyWith(_BookSource value, $Res Function(_BookSource) _then) = __$BookSourceCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'bookSourceName') String name,@JsonKey(name: 'bookSourceUrl') String url,@JsonKey(name: 'bookSourceGroup') String? group,@JsonKey(name: 'bookSourceType') BookSourceType sourceType,@JsonKey(name: 'enabled') bool isEnabled,@JsonKey(name: 'header')@_HeaderJsonConverter() Map<String, String>? headers, String? searchUrl,@JsonKey(name: 'exploreUrl') String? exploreUrl,@JsonKey(name: 'ruleSearch') SearchRule searchRule,@JsonKey(name: 'ruleExplore') ExploreRule? exploreRule,@JsonKey(name: 'concurrentRate') String? concurrentRate,@JsonKey(name: 'variableComment') String? variableComment,@JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,@JsonKey(name: 'ruleToc') TocRule tocRule,@JsonKey(name: 'ruleContent') ContentRule contentRule,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+@JsonKey(name: 'bookSourceName') String name,@JsonKey(name: 'bookSourceUrl') String url,@JsonKey(name: 'bookSourceGroup') String? group,@JsonKey(name: 'bookSourceType') BookSourceType sourceType,@JsonKey(name: 'enabled') bool isEnabled,@JsonKey(name: 'header')@_HeaderJsonConverter() Map<String, String>? headers,@JsonKey(includeFromJson: false, includeToJson: false) String? headerRule, String? searchUrl,@JsonKey(name: 'exploreUrl') String? exploreUrl,@JsonKey(name: 'ruleSearch') SearchRule searchRule,@JsonKey(name: 'ruleExplore') ExploreRule? exploreRule,@JsonKey(name: 'concurrentRate') String? concurrentRate,@JsonKey(name: 'variableComment') String? variableComment,@JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,@JsonKey(name: 'ruleToc') TocRule tocRule,@JsonKey(name: 'ruleContent') ContentRule contentRule,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -367,7 +383,7 @@ class __$BookSourceCopyWithImpl<$Res>
 
 /// Create a copy of BookSource
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? url = null,Object? group = freezed,Object? sourceType = null,Object? isEnabled = null,Object? headers = freezed,Object? searchUrl = freezed,Object? exploreUrl = freezed,Object? searchRule = null,Object? exploreRule = freezed,Object? concurrentRate = freezed,Object? variableComment = freezed,Object? bookInfoRule = freezed,Object? tocRule = null,Object? contentRule = null,Object? extra = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? url = null,Object? group = freezed,Object? sourceType = null,Object? isEnabled = null,Object? headers = freezed,Object? headerRule = freezed,Object? searchUrl = freezed,Object? exploreUrl = freezed,Object? searchRule = null,Object? exploreRule = freezed,Object? concurrentRate = freezed,Object? variableComment = freezed,Object? bookInfoRule = freezed,Object? tocRule = null,Object? contentRule = null,Object? extra = null,}) {
   return _then(_BookSource(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
@@ -375,7 +391,8 @@ as String,group: freezed == group ? _self.group : group // ignore: cast_nullable
 as String?,sourceType: null == sourceType ? _self.sourceType : sourceType // ignore: cast_nullable_to_non_nullable
 as BookSourceType,isEnabled: null == isEnabled ? _self.isEnabled : isEnabled // ignore: cast_nullable_to_non_nullable
 as bool,headers: freezed == headers ? _self._headers : headers // ignore: cast_nullable_to_non_nullable
-as Map<String, String>?,searchUrl: freezed == searchUrl ? _self.searchUrl : searchUrl // ignore: cast_nullable_to_non_nullable
+as Map<String, String>?,headerRule: freezed == headerRule ? _self.headerRule : headerRule // ignore: cast_nullable_to_non_nullable
+as String?,searchUrl: freezed == searchUrl ? _self.searchUrl : searchUrl // ignore: cast_nullable_to_non_nullable
 as String?,exploreUrl: freezed == exploreUrl ? _self.exploreUrl : exploreUrl // ignore: cast_nullable_to_non_nullable
 as String?,searchRule: null == searchRule ? _self.searchRule : searchRule // ignore: cast_nullable_to_non_nullable
 as SearchRule,exploreRule: freezed == exploreRule ? _self.exploreRule : exploreRule // ignore: cast_nullable_to_non_nullable
@@ -447,7 +464,7 @@ $ContentRuleCopyWith<$Res> get contentRule {
 /// @nodoc
 mixin _$SearchRule {
 
- String? get bookList; String? get name; String? get author; String? get kind; String? get wordCount; String? get lastChapter; String? get intro; String? get coverUrl; String? get bookUrl; String? get updateTime;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
+ String? get bookList; String? get name; String? get author; String? get kind; String? get wordCount; String? get lastChapter; String? get intro; String? get coverUrl; String? get bookUrl; String? get updateTime; String? get checkKeyWord;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
 /// Create a copy of SearchRule
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -461,20 +478,20 @@ $SearchRuleCopyWith<SearchRule> get copyWith => _$SearchRuleCopyWithImpl<SearchR
 @override
 bool operator ==(Object other) {
   final _this = this as SearchRule;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SearchRule&&(identical(other.bookList, _this.bookList) || other.bookList == _this.bookList)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.wordCount, _this.wordCount) || other.wordCount == _this.wordCount)&&(identical(other.lastChapter, _this.lastChapter) || other.lastChapter == _this.lastChapter)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.coverUrl, _this.coverUrl) || other.coverUrl == _this.coverUrl)&&(identical(other.bookUrl, _this.bookUrl) || other.bookUrl == _this.bookUrl)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SearchRule&&(identical(other.bookList, _this.bookList) || other.bookList == _this.bookList)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.wordCount, _this.wordCount) || other.wordCount == _this.wordCount)&&(identical(other.lastChapter, _this.lastChapter) || other.lastChapter == _this.lastChapter)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.coverUrl, _this.coverUrl) || other.coverUrl == _this.coverUrl)&&(identical(other.bookUrl, _this.bookUrl) || other.bookUrl == _this.bookUrl)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime)&&(identical(other.checkKeyWord, _this.checkKeyWord) || other.checkKeyWord == _this.checkKeyWord)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as SearchRule;
-  return Object.hash(runtimeType,_this.bookList,_this.name,_this.author,_this.kind,_this.wordCount,_this.lastChapter,_this.intro,_this.coverUrl,_this.bookUrl,_this.updateTime,const DeepCollectionEquality().hash(_this.extra));
+  return Object.hash(runtimeType,_this.bookList,_this.name,_this.author,_this.kind,_this.wordCount,_this.lastChapter,_this.intro,_this.coverUrl,_this.bookUrl,_this.updateTime,_this.checkKeyWord,const DeepCollectionEquality().hash(_this.extra));
 }
 
 @override
 String toString() {
   final _this = this as SearchRule;
-  return 'SearchRule(bookList: ${_this.bookList}, name: ${_this.name}, author: ${_this.author}, kind: ${_this.kind}, wordCount: ${_this.wordCount}, lastChapter: ${_this.lastChapter}, intro: ${_this.intro}, coverUrl: ${_this.coverUrl}, bookUrl: ${_this.bookUrl}, updateTime: ${_this.updateTime}, extra: ${_this.extra})';
+  return 'SearchRule(bookList: ${_this.bookList}, name: ${_this.name}, author: ${_this.author}, kind: ${_this.kind}, wordCount: ${_this.wordCount}, lastChapter: ${_this.lastChapter}, intro: ${_this.intro}, coverUrl: ${_this.coverUrl}, bookUrl: ${_this.bookUrl}, updateTime: ${_this.updateTime}, checkKeyWord: ${_this.checkKeyWord}, extra: ${_this.extra})';
 }
 
 
@@ -485,7 +502,7 @@ abstract mixin class $SearchRuleCopyWith<$Res>  {
   factory $SearchRuleCopyWith(SearchRule value, $Res Function(SearchRule) _then) = _$SearchRuleCopyWithImpl;
 @useResult
 $Res call({
- String? bookList, String? name, String? author, String? kind, String? wordCount, String? lastChapter, String? intro, String? coverUrl, String? bookUrl, String? updateTime,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? bookList, String? name, String? author, String? kind, String? wordCount, String? lastChapter, String? intro, String? coverUrl, String? bookUrl, String? updateTime, String? checkKeyWord,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -502,7 +519,7 @@ class _$SearchRuleCopyWithImpl<$Res>
 
 /// Create a copy of SearchRule
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? bookList = freezed,Object? name = freezed,Object? author = freezed,Object? kind = freezed,Object? wordCount = freezed,Object? lastChapter = freezed,Object? intro = freezed,Object? coverUrl = freezed,Object? bookUrl = freezed,Object? updateTime = freezed,Object? extra = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? bookList = freezed,Object? name = freezed,Object? author = freezed,Object? kind = freezed,Object? wordCount = freezed,Object? lastChapter = freezed,Object? intro = freezed,Object? coverUrl = freezed,Object? bookUrl = freezed,Object? updateTime = freezed,Object? checkKeyWord = freezed,Object? extra = null,}) {
   return _then(SearchRule(
 bookList: freezed == bookList ? _self.bookList : bookList // ignore: cast_nullable_to_non_nullable
 as String?,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -514,6 +531,7 @@ as String?,intro: freezed == intro ? _self.intro : intro // ignore: cast_nullabl
 as String?,coverUrl: freezed == coverUrl ? _self.coverUrl : coverUrl // ignore: cast_nullable_to_non_nullable
 as String?,bookUrl: freezed == bookUrl ? _self.bookUrl : bookUrl // ignore: cast_nullable_to_non_nullable
 as String?,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
+as String?,checkKeyWord: freezed == checkKeyWord ? _self.checkKeyWord : checkKeyWord // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self.extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));
@@ -600,10 +618,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime,  String? checkKeyWord, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SearchRule() when $default != null:
-return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.extra);case _:
+return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.checkKeyWord,_that.extra);case _:
   return orElse();
 
 }
@@ -621,10 +639,10 @@ return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCoun
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime,  String? checkKeyWord, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
 switch (_that) {
 case _SearchRule():
-return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.extra);case _:
+return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.checkKeyWord,_that.extra);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -641,10 +659,10 @@ return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCoun
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? bookList,  String? name,  String? author,  String? kind,  String? wordCount,  String? lastChapter,  String? intro,  String? coverUrl,  String? bookUrl,  String? updateTime,  String? checkKeyWord, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
 switch (_that) {
 case _SearchRule() when $default != null:
-return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.extra);case _:
+return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCount,_that.lastChapter,_that.intro,_that.coverUrl,_that.bookUrl,_that.updateTime,_that.checkKeyWord,_that.extra);case _:
   return null;
 
 }
@@ -656,7 +674,7 @@ return $default(_that.bookList,_that.name,_that.author,_that.kind,_that.wordCoun
 @JsonSerializable()
 
 class _SearchRule implements SearchRule {
-  const _SearchRule({this.bookList, this.name, this.author, this.kind, this.wordCount, this.lastChapter, this.intro, this.coverUrl, this.bookUrl, this.updateTime, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
+  const _SearchRule({this.bookList, this.name, this.author, this.kind, this.wordCount, this.lastChapter, this.intro, this.coverUrl, this.bookUrl, this.updateTime, this.checkKeyWord, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
   factory _SearchRule.fromJson(Map<String, dynamic> json) => _$SearchRuleFromJson(json);
 
 @override final  String? bookList;
@@ -669,6 +687,7 @@ class _SearchRule implements SearchRule {
 @override final  String? coverUrl;
 @override final  String? bookUrl;
 @override final  String? updateTime;
+@override final  String? checkKeyWord;
  final  Map<String, Object?> _extra;
 @override@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra {
   if (_extra is EqualUnmodifiableMapView) return _extra;
@@ -690,18 +709,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SearchRule&&(identical(other.bookList, bookList) || other.bookList == bookList)&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.wordCount, wordCount) || other.wordCount == wordCount)&&(identical(other.lastChapter, lastChapter) || other.lastChapter == lastChapter)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.coverUrl, coverUrl) || other.coverUrl == coverUrl)&&(identical(other.bookUrl, bookUrl) || other.bookUrl == bookUrl)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime)&&const DeepCollectionEquality().equals(other.extra, _extra));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _SearchRule&&(identical(other.bookList, bookList) || other.bookList == bookList)&&(identical(other.name, name) || other.name == name)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.wordCount, wordCount) || other.wordCount == wordCount)&&(identical(other.lastChapter, lastChapter) || other.lastChapter == lastChapter)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.coverUrl, coverUrl) || other.coverUrl == coverUrl)&&(identical(other.bookUrl, bookUrl) || other.bookUrl == bookUrl)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime)&&(identical(other.checkKeyWord, checkKeyWord) || other.checkKeyWord == checkKeyWord)&&const DeepCollectionEquality().equals(other.extra, _extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,bookList,name,author,kind,wordCount,lastChapter,intro,coverUrl,bookUrl,updateTime,const DeepCollectionEquality().hash(_extra));
+    return Object.hash(runtimeType,bookList,name,author,kind,wordCount,lastChapter,intro,coverUrl,bookUrl,updateTime,checkKeyWord,const DeepCollectionEquality().hash(_extra));
 }
 
 @override
 String toString() {
-    return 'SearchRule(bookList: $bookList, name: $name, author: $author, kind: $kind, wordCount: $wordCount, lastChapter: $lastChapter, intro: $intro, coverUrl: $coverUrl, bookUrl: $bookUrl, updateTime: $updateTime, extra: $extra)';
+    return 'SearchRule(bookList: $bookList, name: $name, author: $author, kind: $kind, wordCount: $wordCount, lastChapter: $lastChapter, intro: $intro, coverUrl: $coverUrl, bookUrl: $bookUrl, updateTime: $updateTime, checkKeyWord: $checkKeyWord, extra: $extra)';
 }
 
 
@@ -712,7 +731,7 @@ abstract mixin class _$SearchRuleCopyWith<$Res> implements $SearchRuleCopyWith<$
   factory _$SearchRuleCopyWith(_SearchRule value, $Res Function(_SearchRule) _then) = __$SearchRuleCopyWithImpl;
 @override @useResult
 $Res call({
- String? bookList, String? name, String? author, String? kind, String? wordCount, String? lastChapter, String? intro, String? coverUrl, String? bookUrl, String? updateTime,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? bookList, String? name, String? author, String? kind, String? wordCount, String? lastChapter, String? intro, String? coverUrl, String? bookUrl, String? updateTime, String? checkKeyWord,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -729,7 +748,7 @@ class __$SearchRuleCopyWithImpl<$Res>
 
 /// Create a copy of SearchRule
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? bookList = freezed,Object? name = freezed,Object? author = freezed,Object? kind = freezed,Object? wordCount = freezed,Object? lastChapter = freezed,Object? intro = freezed,Object? coverUrl = freezed,Object? bookUrl = freezed,Object? updateTime = freezed,Object? extra = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? bookList = freezed,Object? name = freezed,Object? author = freezed,Object? kind = freezed,Object? wordCount = freezed,Object? lastChapter = freezed,Object? intro = freezed,Object? coverUrl = freezed,Object? bookUrl = freezed,Object? updateTime = freezed,Object? checkKeyWord = freezed,Object? extra = null,}) {
   return _then(_SearchRule(
 bookList: freezed == bookList ? _self.bookList : bookList // ignore: cast_nullable_to_non_nullable
 as String?,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -741,6 +760,7 @@ as String?,intro: freezed == intro ? _self.intro : intro // ignore: cast_nullabl
 as String?,coverUrl: freezed == coverUrl ? _self.coverUrl : coverUrl // ignore: cast_nullable_to_non_nullable
 as String?,bookUrl: freezed == bookUrl ? _self.bookUrl : bookUrl // ignore: cast_nullable_to_non_nullable
 as String?,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
+as String?,checkKeyWord: freezed == checkKeyWord ? _self.checkKeyWord : checkKeyWord // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self._extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));

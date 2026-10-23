@@ -1,9 +1,11 @@
+import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../../support/fake_app_navigation.dart';
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/offline_corpus.dart';
 
@@ -59,12 +61,150 @@ void main() {
       expect(http.requestedUrls, contains(corpusBookUrl));
     });
 
+    testWidgets('build_givenUpdateTimeRules_showsThemOnThePageAndTheChapters', (
+      WidgetTester tester,
+    ) async {
+      // §3.7 的两条展示项之一：详情与目录的 updateTime 都是「规则给就显示」的字符串
+      // （`book-source.md` §2，不做日期解析）。这里用一份最小派生源，让两条规则分别命中
+      // 详情页与目录页上的日期。
+      final BookSource source = loadCorpusBookSource().copyWith(
+        bookInfoRule: const BookInfoRule(
+          name: 'class.name@text',
+          author: 'class.author@text',
+          updateTime: 'class.date@text',
+          tocUrl: 'class.toc@href',
+        ),
+        tocRule: const TocRule(
+          chapterList: 'class.chapter',
+          chapterName: 'tag.a@text',
+          chapterUrl: 'tag.a.0@href',
+          updateTime: 'class.date@text',
+        ),
+      );
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          corpusBookUrl,
+          '<h1 class="name">书名一</h1>'
+          '<span class="author">作者甲</span>'
+          '<span class="date">2026-10-21</span>'
+          '<a class="toc" href="/book/1/toc.html">目录</a>',
+        )
+        ..serve(
+          'https://example-novel.test/book/1/toc.html',
+          '<div class="chapter"><a href="/book/1/1.html">第1章 开端</a>'
+              '<span class="date">2026-10-20</span></div>',
+        );
+
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: source,
+        http: http,
+      );
+
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      // 详情页自己的一行 + 目录项的一行，两处都来自 ARB 的同一句话。
+      expect(
+        find.text(l10n.bookSourceUpdateTimeLine('2026-10-21')),
+        findsOneWidget,
+      );
+      expect(
+        find.text(l10n.bookSourceUpdateTimeLine('2026-10-20')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('build_givenAReadableBook_showsTheCoverAndStartsAtChapterOne', (
+      WidgetTester tester,
+    ) async {
+      // S1/S6（roadmap §3.9）：详情页要显示封面，并给出「开始阅读」的入口 —— 以前只能点
+      // 某一个目录项才进得去阅读器。
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+      final FakeAppNavigation navigation = FakeAppNavigation();
+
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: http,
+        navigation: navigation,
+      );
+
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      expect(find.byType(CoverImage), findsOneWidget);
+      expect(find.text(l10n.bookSourceStartReading), findsOneWidget);
+
+      await tester.tap(find.text(l10n.bookSourceStartReading));
+      await tester.pump();
+
+      // 「开始阅读」= 第一章；「继续阅读」= 不带章节（由阅读器恢复进度）。
+      expect(navigation.readerCalls.single.chapterUrl, isNotNull);
+      expect(navigation.readerCalls.single.bookName, isNotEmpty);
+    });
+
+    testWidgets('build_givenTheContinueAction_resumesWithoutAChapter', (
+      WidgetTester tester,
+    ) async {
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+      final FakeAppNavigation navigation = FakeAppNavigation();
+
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: http,
+        navigation: navigation,
+      );
+
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+      await tester.tap(find.text(l10n.bookSourceContinueReading));
+      await tester.pump();
+
+      expect(navigation.readerCalls.single.chapterUrl, isNull);
+    });
+
+    testWidgets('build_givenAnIntro_collapsesAndExpandsIt', (
+      WidgetTester tester,
+    ) async {
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: http,
+      );
+
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      // 默认折三行；点一下展开，按钮文案随之变化（S6）。
+      expect(find.text(l10n.bookSourceIntroExpand), findsOneWidget);
+      await tester.tap(find.text(l10n.bookSourceIntroExpand));
+      await tester.pump();
+
+      expect(find.text(l10n.bookSourceIntroCollapse), findsOneWidget);
+    });
+
     testWidgets('build_givenAFailingChapterList_keepsTheInformationVisible', (
       WidgetTester tester,
     ) async {
       final BookSource source = loadCorpusBookSource();
       final BookSource unsupportedToc = source.copyWith(
-        tocRule: source.tocRule.copyWith(chapterList: '@js:result'),
+        tocRule: source.tocRule.copyWith(chapterList: '@xpath://a'),
       );
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 

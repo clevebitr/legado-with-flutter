@@ -47,7 +47,22 @@ const Map<String, String> _familyMarkers = <String, String>{
 const String _bsdThirdClause = 'neither the name';
 
 /// Licence families that must never be introduced (C-DEP-7).
-const Set<String> _forbiddenFamilies = <String>{'GPL', 'MPL', 'UNKNOWN'};
+///
+/// **MPL left this set on 2026-10-21** (ADR-0048): MPL-2.0 is GPL-3.0 compatible, and the one
+/// dependency that needs it — `enough_convert`, the only pure-Dart Big5 decoder — is MPL-2.0.
+/// What stays forbidden is unchanged: GPL (a *second* GPL version in the tree confuses the
+/// "which licence is the combined work under" question) and anything unclassified.
+///
+/// The `_mplAllowList` below is what keeps the change from silently widening: **only** the
+/// packages named there may be MPL, so a future MPL dependency fails the scan instead of
+/// slipping in on this precedent.
+const Set<String> _forbiddenFamilies = <String>{'GPL', 'UNKNOWN'};
+
+/// MPL-2.0 packages that ADR-0048 explicitly accepted.
+///
+/// Adding an entry is a decision (write it into the ADR), not a convenience: the whole point of
+/// the allow-list is that MPL stays a one-off, reviewed exception.
+const Set<String> _mplAllowList = <String>{'enough_convert'};
 
 /// One entry of `pubspec.lock`.
 final class _LockedPackage {
@@ -100,8 +115,14 @@ void main(List<String> arguments) {
     }
     final String family = _classify(text);
     counts[family] = (counts[family] ?? 0) + 1;
-    if (_forbiddenFamilies.contains(family)) {
-      risky.add('${package.directoryName}: $family');
+    final bool acceptedMpl =
+        family == 'MPL' && _mplAllowList.contains(package.name);
+    if (_forbiddenFamilies.contains(family) ||
+        (family == 'MPL' && !acceptedMpl)) {
+      risky.add(
+        '${package.directoryName}: $family'
+        '${family == 'MPL' ? ' (not in the ADR-0048 allow-list)' : ''}',
+      );
     }
     lines.add(
       '  ${package.name.padRight(28)} ${package.version.padRight(12)} $family',

@@ -34,7 +34,7 @@ final class AppLoggerProvider
         argument: null,
         retry: null,
         name: r'appLoggerProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -61,4 +61,4 @@ final class AppLoggerProvider
   }
 }
 
-String _$appLoggerHash() => r'3f9551965c51d55bc377cf04fd8695745353150d';
+String _$appLoggerHash() => r'3d6582c2c07f187b0607e00d8b7eeefb78431e54';

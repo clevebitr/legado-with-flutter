@@ -34,6 +34,10 @@ dependencies:
 
   # 编码：betto 只检测标签，解码需要 charset 把标签变成 Encoding（C-NET-3）
   charset: ^2.0.1
+  # Big5 / Big5-HKSCS：`charset` 没有这两个码表，`enough_convert` 补齐（纯 Dart、零依赖）。
+  # 它是 **MPL-2.0**，与 GPL-3.0 兼容（ADR-0048 §决策 1），因此这也是唯一被允许的 MPL 依赖，
+  # `tool/scan_licenses.dart` 的允许族与之配套。
+  enough_convert: ^1.7.1
 
   # 持久化：Drift 为主库，drift_flutter 提供各平台原生 SQLite（ADR-0003）
   # 禁止使用 sqlite3_flutter_libs：上游已 EOL（0.6.0+eol），在新版 Android 工具链上
@@ -52,6 +56,7 @@ dependencies:
   # 代码生成注解
   freezed_annotation: ^3.1.0
   json_annotation: ^4.12.0
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:
@@ -80,3 +85,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   generate: true
+  assets:
+    # GPL-3.0 全文：法律声明页的「查看许可全文」入口（C-UI-9，ADR-0055 §决策 4）。
+    # 来源是根目录 LICENSE，更新许可证时两者必须一起换。
+    - assets/legal/gpl-3.0.txt

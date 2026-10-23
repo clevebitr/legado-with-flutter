@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -41,6 +42,15 @@ final class FakeHttpAdapter implements HttpClientAdapter {
     _queue.add(_QueuedFailure(type, statusCode));
   }
 
+  /// Queues a 200 whose **body stream** fails with [type] after one chunk.
+  ///
+  /// The request itself succeeds and the failure arrives while the body is being read —
+  /// which is where dio reports `receiveTimeout` for a slow site (`C-PERF-5` reads bodies as
+  /// streams). It is a different code path from [enqueueFailure], which fails the request.
+  void enqueueStreamFailure(DioExceptionType type) {
+    _queue.add(_QueuedStreamFailure(type));
+  }
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
@@ -57,6 +67,22 @@ final class FakeHttpAdapter implements HttpClientAdapter {
     final Object next = _queue.isEmpty
         ? ResponseBody.fromBytes(const <int>[], 200)
         : _queue.removeAt(0);
+
+    if (next is _QueuedStreamFailure) {
+      final DioException error = DioException(
+        requestOptions: options,
+        type: next.type,
+      );
+
+      final StreamController<Uint8List> body = StreamController<Uint8List>();
+      body.add(Uint8List.fromList(<int>[0x7B]));
+      scheduleMicrotask(() {
+        body.addError(error);
+        unawaited(body.close());
+      });
+
+      return ResponseBody(body.stream, 200);
+    }
 
     if (next is _QueuedFailure) {
       throw DioException(
@@ -76,6 +102,13 @@ final class FakeHttpAdapter implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) {}
+}
+
+/// A queued failure that only surfaces while the response body is read.
+final class _QueuedStreamFailure {
+  const _QueuedStreamFailure(this.type);
+
+  final DioExceptionType type;
 }
 
 /// A queued adapter failure.

@@ -24,8 +24,8 @@ part 'js_bridge_provider.g.dart';
 /// §8) as the page that carried the rule.
 ///
 /// The provider is autoDispose: the budget dies with the scope, so one operation's
-/// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
-@riverpod
+/// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
+@Riverpod(keepAlive: true)
 JsBridge jsBridge(Ref ref) {
   final JsBridge bridge = QuickJsWorkerBridge(
     logger: ref.watch(appLoggerProvider),
@@ -47,5 +47,5 @@ JsBridge jsBridge(Ref ref) {
 /// (ADR-0034 §决策 1). A scope owns the variables' lifetime, so nothing survives the
 /// operation that created it — which is the registered difference from upstream's
 /// persisted per-book variables (ADR-0034 §决策 2).
-@riverpod
+@Riverpod(keepAlive: true)
 JsVariableStore jsVariableStore(Ref ref) => JsVariableStore();

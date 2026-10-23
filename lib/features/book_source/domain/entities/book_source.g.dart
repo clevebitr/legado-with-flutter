@@ -93,6 +93,7 @@ const _$BookSourceTypeEnumMap = {
   BookSourceType.audio: 1,
   BookSourceType.image: 2,
   BookSourceType.file: 3,
+  BookSourceType.video: 4,
 };
 
 _SearchRule _$SearchRuleFromJson(Map<String, dynamic> json) =>
@@ -108,6 +109,7 @@ _SearchRule _$SearchRuleFromJson(Map<String, dynamic> json) =>
         coverUrl: $checkedConvert('coverUrl', (v) => v as String?),
         bookUrl: $checkedConvert('bookUrl', (v) => v as String?),
         updateTime: $checkedConvert('updateTime', (v) => v as String?),
+        checkKeyWord: $checkedConvert('checkKeyWord', (v) => v as String?),
       );
       return val;
     });
@@ -124,6 +126,7 @@ Map<String, dynamic> _$SearchRuleToJson(_SearchRule instance) =>
       'coverUrl': instance.coverUrl,
       'bookUrl': instance.bookUrl,
       'updateTime': instance.updateTime,
+      'checkKeyWord': instance.checkKeyWord,
     };
 
 _ExploreRule _$ExploreRuleFromJson(Map<String, dynamic> json) =>

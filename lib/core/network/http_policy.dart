@@ -9,7 +9,7 @@ const int defaultMaxRetries = 1;
 /// `User-Agent` sent unless a request overrides it (C-NET-4).
 ///
 /// The version is deliberately absent: `pubspec.yaml` already owns it, and
-/// copying it here would create the second source `PLAN.md` §6 warns about.
+/// copying it here would create the second source `docs/dev/roadmap.md` §6 warns about.
 /// Book sources that need a browser-like agent declare their own headers.
 const String defaultUserAgent = 'flutter_reader';
 

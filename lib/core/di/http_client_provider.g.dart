@@ -34,7 +34,7 @@ final class CookieManagerProvider
         argument: null,
         retry: null,
         name: r'cookieManagerProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -61,13 +61,14 @@ final class CookieManagerProvider
   }
 }
 
-String _$cookieManagerHash() => r'f60491ab9245ef9b1d9fc0489a13982415768039';
+String _$cookieManagerHash() => r'da2c49b0ddfc973f5c6b1cd8270e68cecc1bd200';
 
 /// Provides the network policy: timeout, retry bound, `User-Agent` and the
 /// plaintext-HTTP switch (C-NET-2, C-NET-4, C-SEC-2).
 ///
-/// The settings phase overrides this provider with user-chosen values; nothing
-/// else may construct a policy of its own.
+/// The concurrency budget comes from [concurrencySettingProvider], which the composition root
+/// binds to the settings feature; everything else still comes from the policy defaults, so
+/// nothing else may construct a policy of its own.
 
 @ProviderFor(httpPolicy)
 final httpPolicyProvider = HttpPolicyProvider._();
@@ -75,8 +76,9 @@ final httpPolicyProvider = HttpPolicyProvider._();
 /// Provides the network policy: timeout, retry bound, `User-Agent` and the
 /// plaintext-HTTP switch (C-NET-2, C-NET-4, C-SEC-2).
 ///
-/// The settings phase overrides this provider with user-chosen values; nothing
-/// else may construct a policy of its own.
+/// The concurrency budget comes from [concurrencySettingProvider], which the composition root
+/// binds to the settings feature; everything else still comes from the policy defaults, so
+/// nothing else may construct a policy of its own.
 
 final class HttpPolicyProvider
     extends $FunctionalProvider<HttpPolicy, HttpPolicy, HttpPolicy>
@@ -84,15 +86,16 @@ final class HttpPolicyProvider
   /// Provides the network policy: timeout, retry bound, `User-Agent` and the
   /// plaintext-HTTP switch (C-NET-2, C-NET-4, C-SEC-2).
   ///
-  /// The settings phase overrides this provider with user-chosen values; nothing
-  /// else may construct a policy of its own.
+  /// The concurrency budget comes from [concurrencySettingProvider], which the composition root
+  /// binds to the settings feature; everything else still comes from the policy defaults, so
+  /// nothing else may construct a policy of its own.
   HttpPolicyProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'httpPolicyProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -119,13 +122,76 @@ final class HttpPolicyProvider
   }
 }
 
-String _$httpPolicyHash() => r'c938007d4eea9c35bf25dfc7a041b989882e7d35';
+String _$httpPolicyHash() => r'b6dcc4f5d47468a1d4ccd04e41e8c593dc98a22c';
+
+/// The per-source concurrency budget the user chose, or `null` when nobody chose one.
+///
+/// Declared here so `core/` never imports a feature (C-ARCH-2): the composition root overrides
+/// it with a value read from the settings feature (ADR-0042 的同一条机制）。 `null` is the
+/// normal state before the settings are loaded and in tests that do not care.
+
+@ProviderFor(concurrencySetting)
+final concurrencySettingProvider = ConcurrencySettingProvider._();
+
+/// The per-source concurrency budget the user chose, or `null` when nobody chose one.
+///
+/// Declared here so `core/` never imports a feature (C-ARCH-2): the composition root overrides
+/// it with a value read from the settings feature (ADR-0042 的同一条机制）。 `null` is the
+/// normal state before the settings are loaded and in tests that do not care.
+
+final class ConcurrencySettingProvider
+    extends $FunctionalProvider<int?, int?, int?>
+    with $Provider<int?> {
+  /// The per-source concurrency budget the user chose, or `null` when nobody chose one.
+  ///
+  /// Declared here so `core/` never imports a feature (C-ARCH-2): the composition root overrides
+  /// it with a value read from the settings feature (ADR-0042 的同一条机制）。 `null` is the
+  /// normal state before the settings are loaded and in tests that do not care.
+  ConcurrencySettingProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'concurrencySettingProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$concurrencySettingHash();
+
+  @$internal
+  @override
+  $ProviderElement<int?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  int? create(Ref ref) {
+    return concurrencySetting(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(int? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<int?>(value),
+    );
+  }
+}
+
+String _$concurrencySettingHash() =>
+    r'111cfdbb93c3bd5ae03ab33709aec712e2e6468f';
 
 /// Provides the app-wide HTTP client (C-NET-1).
 ///
 /// The charset cache is wired here because the app is the only place that has both halves:
 /// the request layer that decodes a body and the TTL cache that can remember the result
 /// (`book-source.md` §5). It is the first production consumer of `CacheDao` (C-NET-6).
+///
+/// `keepAlive` is what keeps the concurrency budget meaningful: the budget lives on the
+/// [DioHttpClient] instance, so an auto-disposed client would be rebuilt between two operations
+/// and a batch download would get a fresh budget per batch (`docs/dev/roadmap.md` §3.7)。
 
 @ProviderFor(httpClient)
 final httpClientProvider = HttpClientProvider._();
@@ -135,6 +201,10 @@ final httpClientProvider = HttpClientProvider._();
 /// The charset cache is wired here because the app is the only place that has both halves:
 /// the request layer that decodes a body and the TTL cache that can remember the result
 /// (`book-source.md` §5). It is the first production consumer of `CacheDao` (C-NET-6).
+///
+/// `keepAlive` is what keeps the concurrency budget meaningful: the budget lives on the
+/// [DioHttpClient] instance, so an auto-disposed client would be rebuilt between two operations
+/// and a batch download would get a fresh budget per batch (`docs/dev/roadmap.md` §3.7)。
 
 final class HttpClientProvider
     extends $FunctionalProvider<HttpClient, HttpClient, HttpClient>
@@ -144,13 +214,17 @@ final class HttpClientProvider
   /// The charset cache is wired here because the app is the only place that has both halves:
   /// the request layer that decodes a body and the TTL cache that can remember the result
   /// (`book-source.md` §5). It is the first production consumer of `CacheDao` (C-NET-6).
+  ///
+  /// `keepAlive` is what keeps the concurrency budget meaningful: the budget lives on the
+  /// [DioHttpClient] instance, so an auto-disposed client would be rebuilt between two operations
+  /// and a batch download would get a fresh budget per batch (`docs/dev/roadmap.md` §3.7)。
   HttpClientProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'httpClientProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -177,4 +251,4 @@ final class HttpClientProvider
   }
 }
 
-String _$httpClientHash() => r'71af85b34cc9d0db1354757b4190e71a2b7ce3d0';
+String _$httpClientHash() => r'8a93694eaa9d62d24c2f8e3da6ec48487af69754';

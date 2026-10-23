@@ -1,0 +1,86 @@
+/// The reader's palette and body text style (`docs/dev/roadmap.md` 5.3, ADR-0044 §决策 1).
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reader_settings.dart';
+import 'package:m3e_design/m3e_design.dart';
+
+/// The surface / text pair one [ReaderBackground] paints.
+///
+/// It is a **derived** pair, never a hardcoded colour (C-UI-1): `system` is the theme's own
+/// surface, the two tints blend a theme colour into it at a low alpha, and `dark` uses the theme's
+/// inverse surface — so the reader keeps following the theme and dynamic colour while still
+/// offering the four choices a reader expects.
+({Color background, Color foreground}) readerPalette(
+  M3ETheme tokens,
+  ReaderBackground background,
+) => switch (background) {
+  ReaderBackground.system => (
+    background: tokens.colors.surface,
+    foreground: tokens.colors.onSurface,
+  ),
+  ReaderBackground.paper => (
+    background: Color.alphaBlend(
+      tokens.colors.primary.withValues(alpha: 0.06),
+      tokens.colors.surface,
+    ),
+    foreground: tokens.colors.onSurface,
+  ),
+  ReaderBackground.sepia => (
+    background: Color.alphaBlend(
+      tokens.colors.tertiary.withValues(alpha: 0.12),
+      tokens.colors.surface,
+    ),
+    foreground: tokens.colors.onSurface,
+  ),
+  ReaderBackground.dark => (
+    background: tokens.colors.inverseSurface,
+    foreground: tokens.colors.onInverseSurface,
+  ),
+};
+
+/// The body text style of the reader.
+///
+/// [fontScale] multiplies the theme's body size and [lineHeight] sets its line spacing; the
+/// platform's own accessibility scale is applied on top by the painter and the widget both, so the
+/// two never disagree about what a page is (ADR-0044 §决策 1).
+TextStyle readerTextStyle({
+  required M3ETheme tokens,
+  required double fontScale,
+  required double lineHeight,
+  required Color foreground,
+  ReaderFontFamily family = ReaderFontFamily.theme,
+}) => tokens.typography.base.bodyLarge!.copyWith(
+  fontSize: (tokens.typography.base.bodyLarge!.fontSize ?? 16) * fontScale,
+  height: lineHeight,
+  color: foreground,
+  // 平台通用族名（ADR-0051 §决策 4）：缺字体时 Flutter 回落到系统字体，不会出现豆腐块。
+  fontFamily: readerFontFamilyName(family),
+);
+
+/// The newline character the body layout joins paragraphs with.
+final String _newline = String.fromCharCode(10);
+
+/// The body text as it should be **laid out**: paragraph spacing and first-line indent applied.
+///
+/// The transform happens here rather than in the parser because it is presentation: the same
+/// chapter is readable with and without it, and the cache stores the source's own text
+/// (ADR-0051 §决策 4). Indentation uses the ideographic space, which is exactly one em in a CJK
+/// font — the unit the setting is expressed in — and four spaces for a Latin body.
+String readerBodyText(String body, ReaderSettings settings) {
+  final String indent = _indentUnit(body) * settings.firstLineIndent.round();
+  // 段距 0 → 直接换行；0.5 → 一个空行；1 → 两个空行（0–2 个空行的直观刻度）。
+  final String separator =
+      _newline * (1 + (settings.paragraphSpacing * 2).round());
+  final List<String> paragraphs = <String>[
+    for (final String line in body.split('\n'))
+      // 源站的空行是页面结构，不是段落：丢掉它们，段距由设置决定。
+      if (line.trim().isNotEmpty) '$indent${line.trim()}',
+  ];
+
+  return paragraphs.join(separator);
+}
+
+/// The character one indent step uses: the ideographic space for CJK, four spaces otherwise.
+String _indentUnit(String body) =>
+    body.runes.any((int rune) => rune > 0x2E80) ? '\u3000' : '    ';

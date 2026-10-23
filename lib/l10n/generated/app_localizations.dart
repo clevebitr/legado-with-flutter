@@ -104,6 +104,96 @@ abstract class AppLocalizations {
   /// **'Reader'**
   String get appTitle;
 
+  /// Bottom navigation: the bookshelf tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Shelf'**
+  String get shellTabBookshelf;
+
+  /// Bottom navigation: the discover tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get shellTabExplore;
+
+  /// Bottom navigation: the aggregated search tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get shellTabSearch;
+
+  /// Bottom navigation: the entry-aggregator tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Me'**
+  String get shellTabMy;
+
+  /// Title of the Me page.
+  ///
+  /// In en, this message translates to:
+  /// **'Me'**
+  String get myTitle;
+
+  /// Me page section label for content-related entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Content'**
+  String get mySectionContent;
+
+  /// Me page section label for app-level entries.
+  ///
+  /// In en, this message translates to:
+  /// **'App'**
+  String get mySectionApp;
+
+  /// Me page entry: opens book-source management.
+  ///
+  /// In en, this message translates to:
+  /// **'Book sources'**
+  String get myBookSources;
+
+  /// Me page entry subtitle for book sources.
+  ///
+  /// In en, this message translates to:
+  /// **'Import, check and group'**
+  String get myBookSourcesBody;
+
+  /// Title of the about page.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get aboutTitle;
+
+  /// About page: the app version.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String aboutVersion(String version);
+
+  /// About page entry: opens the legal notices page.
+  ///
+  /// In en, this message translates to:
+  /// **'Licenses and legal notices'**
+  String get aboutLicenses;
+
+  /// About page: where the Corresponding Source is published.
+  ///
+  /// In en, this message translates to:
+  /// **'Source code'**
+  String get aboutSourceCode;
+
+  /// Copies the source-code address.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy address'**
+  String get aboutCopySource;
+
+  /// Confirmation after copying the source-code address.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get aboutCopied;
+
   /// Title of the book source list page.
   ///
   /// In en, this message translates to:
@@ -152,10 +242,10 @@ abstract class AppLocalizations {
   /// **'No book matched this keyword.'**
   String get bookSourceSearchEmpty;
 
-  /// Empty state shown while no book source is available (the Phase 2.5 seam of currentBookSourceProvider).
+  /// No description provided for @bookSourceMissingSource.
   ///
   /// In en, this message translates to:
-  /// **'No book source is selected yet. Importing book sources arrives in a later version.'**
+  /// **'No book source is stored yet. Import one to start reading.'**
   String get bookSourceMissingSource;
 
   /// Title of the book detail page.
@@ -266,6 +356,18 @@ abstract class AppLocalizations {
   /// **'Corresponding source code'**
   String get legalNoticesCorrespondingSource;
 
+  /// Title of the page that shows the bundled GPL-3.0 text.
+  ///
+  /// In en, this message translates to:
+  /// **'GNU GPL-3.0'**
+  String get legalNoticesLicenseTitle;
+
+  /// Shown when the bundled license asset cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'The license text could not be loaded. Reopen this page to try again.'**
+  String get legalNoticesLicenseFailed;
+
   /// Prohibited-use notice shown on the legal notices screen; records the stance of ADR-0023.
   ///
   /// In en, this message translates to:
@@ -314,11 +416,1635 @@ abstract class AppLocalizations {
   /// **'Imported {count} book sources.'**
   String bookSourceImportSucceeded(int count);
 
+  /// Preview summary: how the file splits into new, refresh and rejected entries.
+  ///
+  /// In en, this message translates to:
+  /// **'{newCount} new · {refreshCount} to refresh · {rejected} rejected'**
+  String bookSourceImportPreviewSummary(
+    int newCount,
+    int refreshCount,
+    int rejected,
+  );
+
+  /// Preview entry label: this identity is not stored yet.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get bookSourceImportEntryNew;
+
+  /// Preview entry label: the same identity is stored and only its payload will be refreshed.
+  ///
+  /// In en, this message translates to:
+  /// **'Already imported · will refresh'**
+  String get bookSourceImportEntryRefresh;
+
+  /// Preview entry title when the entry has no readable name.
+  ///
+  /// In en, this message translates to:
+  /// **'Entry {index}'**
+  String bookSourceImportEntryUnknown(int index);
+
+  /// Preview rejection: the entry has no usable bookSourceUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing bookSourceUrl'**
+  String get bookSourceImportRejectionMissingUrl;
+
+  /// Preview rejection: the entry has no usable bookSourceName.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing bookSourceName'**
+  String get bookSourceImportRejectionMissingName;
+
+  /// Preview rejection: a required rule object or another structural field is unreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'This entry cannot be read as a book source'**
+  String get bookSourceImportRejectionUnreadable;
+
+  /// Preview rejection: the element of the file is not a JSON object.
+  ///
+  /// In en, this message translates to:
+  /// **'Not a JSON object'**
+  String get bookSourceImportRejectionNotAnObject;
+
+  /// Preview action: stores the ticked entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Import selected ({count})'**
+  String bookSourceImportCommit(int count);
+
+  /// Preview action: ticks every usable entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get bookSourceImportSelectAll;
+
+  /// Preview action: unticks every entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Deselect all'**
+  String get bookSourceImportDeselectAll;
+
+  /// Preview action: drops the preview without storing anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to the form'**
+  String get bookSourceImportBack;
+
   /// Summary after an import where some entries were skipped; the reasons are logged, never shown per entry.
   ///
   /// In en, this message translates to:
   /// **'Imported {count} book sources; {skipped} entries were skipped as invalid.'**
   String bookSourceImportPartiallySkipped(int count, int skipped);
+
+  /// Label of the button that dismisses a confirmation without acting.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get actionCancel;
+
+  /// Label of the destructive action (a stored book source, a cache entry).
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get actionDelete;
+
+  /// Button of the empty state that opens the book source list.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage book sources'**
+  String get bookSourceMissingSourceAction;
+
+  /// Empty state of the book source list; the import button below it is the way in.
+  ///
+  /// In en, this message translates to:
+  /// **'No book source is stored yet.'**
+  String get bookSourceListEmpty;
+
+  /// Shown when reading the stored book sources failed; the retry button reloads them.
+  ///
+  /// In en, this message translates to:
+  /// **'The stored book sources could not be read.'**
+  String get bookSourceListLoadFailed;
+
+  /// Accessible label of the marker on the row the pages currently use.
+  ///
+  /// In en, this message translates to:
+  /// **'Current book source'**
+  String get bookSourceCurrentLabel;
+
+  /// Subtitle line on a row whose bookSourceUrl is shared by another stored source, so the two rows are not read as duplicates.
+  ///
+  /// In en, this message translates to:
+  /// **'Same site, another rule set'**
+  String get bookSourceVariantLabel;
+
+  /// Title of the confirmation before deleting one stored book source.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this book source?'**
+  String get bookSourceListDeleteTitle;
+
+  /// Body of the delete confirmation; the name is the source name and never a user keyword.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} and its stored rules will be removed.'**
+  String bookSourceListDeleteBody(String name);
+
+  /// Title of the import screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Import book sources'**
+  String get bookSourceImportTitle;
+
+  /// Label of the field that takes a pasted JSON document.
+  ///
+  /// In en, this message translates to:
+  /// **'Book source JSON'**
+  String get bookSourceImportTextLabel;
+
+  /// Hint of the paste field.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste an exported book source file here'**
+  String get bookSourceImportTextHint;
+
+  /// Label of the field that downloads a book source file.
+  ///
+  /// In en, this message translates to:
+  /// **'Or a URL'**
+  String get bookSourceImportUrlLabel;
+
+  /// Hint of the URL field; an example address, not a real source.
+  ///
+  /// In en, this message translates to:
+  /// **'https://example.com/sources.json'**
+  String get bookSourceImportUrlHint;
+
+  /// Label of the button that opens the platform file dialog on the import screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a JSON file'**
+  String get bookSourceImportFileAction;
+
+  /// Title of the bookshelf page, also used as the tooltip of its entry button.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookshelf'**
+  String get shelfTitle;
+
+  /// Empty state of the bookshelf page.
+  ///
+  /// In en, this message translates to:
+  /// **'Your shelf is empty. Open a book\'s details and choose “Add to shelf”.'**
+  String get shelfEmpty;
+
+  /// Shown when reading the shelf from storage failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The shelf could not be loaded.'**
+  String get shelfLoadFailed;
+
+  /// Shelf label for a book the user is still following.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading'**
+  String get shelfStatusTracking;
+
+  /// Shelf label for a book the user has finished.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get shelfStatusRead;
+
+  /// Menu action that pins a shelf entry above the others.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to top'**
+  String get shelfActionPin;
+
+  /// Menu action that removes the pin of a shelf entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin'**
+  String get shelfActionUnpin;
+
+  /// Menu action that moves a shelf entry to the finished group.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as finished'**
+  String get shelfActionMarkRead;
+
+  /// Menu action that moves a shelf entry back to the reading group.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as reading'**
+  String get shelfActionMarkTracking;
+
+  /// Menu action that deletes a shelf entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from shelf'**
+  String get shelfActionRemove;
+
+  /// Title of the confirmation dialog before a shelf entry is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this book?'**
+  String get shelfRemoveTitle;
+
+  /// Body of the confirmation dialog before a shelf entry is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Its reading progress is removed too.'**
+  String get shelfRemoveBody;
+
+  /// Subtitle of a shelf entry that was opened before.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading: {chapter}'**
+  String shelfProgressLine(String chapter);
+
+  /// Label of the button on the book detail page that puts the book on the shelf.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to shelf'**
+  String get shelfAddAction;
+
+  /// Snackbar shown after a book was added to the shelf.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to the shelf.'**
+  String get shelfAddSucceeded;
+
+  /// Shown when writing a book to the shelf failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The book could not be added to the shelf.'**
+  String get shelfAddFailed;
+
+  /// Shown when pinning, re-grouping or removing a shelf entry failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The shelf could not be updated.'**
+  String get shelfWriteFailed;
+
+  /// Tooltip of a stepper button that lowers a numeric setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Decrease'**
+  String get actionDecrease;
+
+  /// Tooltip of a stepper button that raises a numeric setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Increase'**
+  String get actionIncrease;
+
+  /// Title of the settings page, also used as the tooltip of its entry button.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// Shown when reading the stored settings failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The settings could not be loaded.'**
+  String get settingsLoadFailed;
+
+  /// Label of the theme mode setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get settingsThemeMode;
+
+  /// Theme mode that follows the platform.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow system'**
+  String get settingsThemeSystem;
+
+  /// Theme mode that always uses the light scheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get settingsThemeLight;
+
+  /// Theme mode that always uses the dark scheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get settingsThemeDark;
+
+  /// Label of the default text scale setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get settingsFontScale;
+
+  /// Current text scale shown next to its slider.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String settingsFontScaleValue(int percent);
+
+  /// Label of the per-source concurrency budget setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Concurrent requests per source'**
+  String get settingsConcurrency;
+
+  /// Explanation under the concurrency setting, including its allowed range.
+  ///
+  /// In en, this message translates to:
+  /// **'1 to 8. Higher values are faster and less polite to the site.'**
+  String get settingsConcurrencyHint;
+
+  /// Section title of the cache actions.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache'**
+  String get settingsCache;
+
+  /// Action that removes every cached entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear cache'**
+  String get settingsClearCache;
+
+  /// Title of the confirmation dialog before clearing the cache.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the whole cache?'**
+  String get settingsClearCacheTitle;
+
+  /// Body of the confirmation dialog before clearing the cache.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached pages and chapter bodies are downloaded again when needed.'**
+  String get settingsClearCacheBody;
+
+  /// Snackbar shown after the cache was cleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed {count} cached entries.'**
+  String settingsCacheCleared(int count);
+
+  /// Title of the batch book source check page.
+  ///
+  /// In en, this message translates to:
+  /// **'Check book sources'**
+  String get bookSourceCheckTitle;
+
+  /// Description of what the batch check does.
+  ///
+  /// In en, this message translates to:
+  /// **'Each source runs through search, discover, details, chapters and body.'**
+  String get bookSourceCheckIntro;
+
+  /// Label above the stage switches.
+  ///
+  /// In en, this message translates to:
+  /// **'Stages'**
+  String get bookSourceCheckStages;
+
+  /// Label of the search stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get bookSourceCheckStageSearch;
+
+  /// Label of the discover stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get bookSourceCheckStageExplore;
+
+  /// Label of the book detail stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get bookSourceCheckStageInfo;
+
+  /// Label of the chapter list stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get bookSourceCheckStageToc;
+
+  /// Label of the chapter body stage switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Body'**
+  String get bookSourceCheckStageContent;
+
+  /// Label of the keyword field used by the search stage.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyword'**
+  String get bookSourceCheckKeyword;
+
+  /// Hint of the keyword field.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyword sent to every checked source'**
+  String get bookSourceCheckKeywordHint;
+
+  /// Label of the per-source timeout row.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeout per source'**
+  String get bookSourceCheckTimeout;
+
+  /// Label of the button that starts the batch.
+  ///
+  /// In en, this message translates to:
+  /// **'Start check'**
+  String get bookSourceCheckStart;
+
+  /// Label of the button that cancels the batch.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get bookSourceCheckStop;
+
+  /// Empty state of the check page.
+  ///
+  /// In en, this message translates to:
+  /// **'No book source is stored yet. Import one to check it.'**
+  String get bookSourceCheckEmpty;
+
+  /// Shown when the batch starts with nothing selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one book source.'**
+  String get bookSourceCheckSelectionEmpty;
+
+  /// Per-source status while the batch has not reached it.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get bookSourceCheckStatusPending;
+
+  /// Per-source status while its check runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking'**
+  String get bookSourceCheckStatusRunning;
+
+  /// Per-source status after a healthy check.
+  ///
+  /// In en, this message translates to:
+  /// **'Passed'**
+  String get bookSourceCheckStatusSucceeded;
+
+  /// Per-source status after a check that found problems.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get bookSourceCheckStatusFailed;
+
+  /// Per-source status after the user stopped the batch.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get bookSourceCheckStatusCancelled;
+
+  /// Reason shown when the check failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The check found problems.'**
+  String get bookSourceCheckFailureCheckFailed;
+
+  /// Reason shown when the row is gone.
+  ///
+  /// In en, this message translates to:
+  /// **'The source was deleted meanwhile.'**
+  String get bookSourceCheckFailureSourceMissing;
+
+  /// Reason shown when the write-back failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The result could not be saved.'**
+  String get bookSourceCheckFailureSaveFailed;
+
+  /// Line naming the failing rule of a stage.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed at {rulePath}'**
+  String bookSourceCheckFailedAt(String rulePath);
+
+  /// Line showing how long a source's check took.
+  ///
+  /// In en, this message translates to:
+  /// **'Took {millis} ms'**
+  String bookSourceCheckElapsed(int millis);
+
+  /// Tooltip of the action that opens the debug console.
+  ///
+  /// In en, this message translates to:
+  /// **'Debug this source'**
+  String get bookSourceCheckOpenDebug;
+
+  /// Label of the action that selects every listed source.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get bookSourceCheckSelectAll;
+
+  /// Label of the action that clears the selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Select none'**
+  String get bookSourceCheckSelectNone;
+
+  /// Title of the single-source debug console.
+  ///
+  /// In en, this message translates to:
+  /// **'Debug a book source'**
+  String get bookSourceDebugTitle;
+
+  /// Label above the target selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get bookSourceDebugTarget;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get bookSourceDebugTargetSearch;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get bookSourceDebugTargetExplore;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get bookSourceDebugTargetInfo;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get bookSourceDebugTargetToc;
+
+  /// Debug target label.
+  ///
+  /// In en, this message translates to:
+  /// **'Body'**
+  String get bookSourceDebugTargetContent;
+
+  /// Label of the debug query field.
+  ///
+  /// In en, this message translates to:
+  /// **'Query'**
+  String get bookSourceDebugQuery;
+
+  /// Hint of the query field for the search target.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyword to search for'**
+  String get bookSourceDebugQueryKeywordHint;
+
+  /// Hint of the query field for the URL targets.
+  ///
+  /// In en, this message translates to:
+  /// **'Page URL'**
+  String get bookSourceDebugQueryUrlHint;
+
+  /// Label above the example chips.
+  ///
+  /// In en, this message translates to:
+  /// **'Examples'**
+  String get bookSourceDebugExamples;
+
+  /// Label of the button that runs the target.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get bookSourceDebugStart;
+
+  /// Label of the button that cancels the run.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get bookSourceDebugStop;
+
+  /// Label of the button that empties the event list.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get bookSourceDebugClear;
+
+  /// Empty state of the event list.
+  ///
+  /// In en, this message translates to:
+  /// **'No event yet. Run a target to see the chain.'**
+  String get bookSourceDebugEmpty;
+
+  /// Run status while the target is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get bookSourceDebugStatusRunning;
+
+  /// Run status after the target read something.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get bookSourceDebugStatusSucceeded;
+
+  /// Run status after the target failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get bookSourceDebugStatusFailed;
+
+  /// Run status after the user stopped the run.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get bookSourceDebugStatusCancelled;
+
+  /// Label of a message line.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get bookSourceDebugEventMessage;
+
+  /// Label of a source line.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get bookSourceDebugEventSource;
+
+  /// Label of an error line.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get bookSourceDebugEventError;
+
+  /// Shown when the debug route names a source that no longer exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a book source on the source list first.'**
+  String get bookSourceDebugMissingSource;
+
+  /// Run status before anything has been started.
+  ///
+  /// In en, this message translates to:
+  /// **'Not run yet'**
+  String get bookSourceDebugStatusIdle;
+
+  /// Action that opens the chapter list of the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get readerTocAction;
+
+  /// Action that opens the reader settings sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading settings'**
+  String get readerSettingsAction;
+
+  /// Label of the reader font size slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get readerFontSize;
+
+  /// Label of the reader line height slider.
+  ///
+  /// In en, this message translates to:
+  /// **'Line spacing'**
+  String get readerLineHeight;
+
+  /// Label of the reader background choices.
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get readerBackground;
+
+  /// Reader background that follows the theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get readerBackgroundSystem;
+
+  /// Reader background with a warm paper tone.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper'**
+  String get readerBackgroundPaper;
+
+  /// Reader background with a sepia tone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sepia'**
+  String get readerBackgroundSepia;
+
+  /// Reader background for night reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get readerBackgroundDark;
+
+  /// Label of the page mode switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn pages'**
+  String get readerPageMode;
+
+  /// Reader page mode that scrolls the body.
+  ///
+  /// In en, this message translates to:
+  /// **'Scroll'**
+  String get readerPageModeScroll;
+
+  /// Reader page mode that splits the body into pages.
+  ///
+  /// In en, this message translates to:
+  /// **'Pages'**
+  String get readerPageModePaged;
+
+  /// Action that opens the previous chapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous chapter'**
+  String get readerPreviousChapter;
+
+  /// Action that opens the next chapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Next chapter'**
+  String get readerNextChapter;
+
+  /// Shown on the last page of a chapter in paged mode.
+  ///
+  /// In en, this message translates to:
+  /// **'End of this chapter'**
+  String get readerChapterEnd;
+
+  /// Shown when the open chapter is the last one.
+  ///
+  /// In en, this message translates to:
+  /// **'This is the last chapter'**
+  String get readerLastChapter;
+
+  /// Shown when the chapter list came back empty.
+  ///
+  /// In en, this message translates to:
+  /// **'This book has no readable chapter.'**
+  String get readerNoChapter;
+
+  /// Manga reader: which page of the chapter is on screen.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} / {total}'**
+  String mangaPageIndicator(int current, int total);
+
+  /// Manga reader: one image could not be loaded; the tile offers a retry.
+  ///
+  /// In en, this message translates to:
+  /// **'This page failed to load.'**
+  String get mangaImageFailed;
+
+  /// Foot line showing the update time a rule returned.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated: {value}'**
+  String bookSourceUpdateTimeLine(String value);
+
+  /// Tooltip of the sort menu on the source list.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get bookSourceListSortLabel;
+
+  /// Sort key: the manual order a drag writes.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual order'**
+  String get bookSourceListSortDefault;
+
+  /// Sort key: the weight the source declares.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight'**
+  String get bookSourceListSortWeight;
+
+  /// Sort key: the duration of the last check.
+  ///
+  /// In en, this message translates to:
+  /// **'Response time'**
+  String get bookSourceListSortRespondTime;
+
+  /// Sort key: the source name.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get bookSourceListSortName;
+
+  /// Filter chip that shows every group.
+  ///
+  /// In en, this message translates to:
+  /// **'All groups'**
+  String get bookSourceListGroupAll;
+
+  /// Response time of a source, in milliseconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{millis} ms'**
+  String bookSourceListRespondTimeLine(int millis);
+
+  /// Title of the dialog that shows a source note.
+  ///
+  /// In en, this message translates to:
+  /// **'Check note'**
+  String get bookSourceListCommentTitle;
+
+  /// Menu action that opens the source note.
+  ///
+  /// In en, this message translates to:
+  /// **'View note'**
+  String get bookSourceListCommentAction;
+
+  /// Empty state when the group filter hides every source.
+  ///
+  /// In en, this message translates to:
+  /// **'No source matches this group.'**
+  String get bookSourceListNoMatch;
+
+  /// Tooltip of the search scope button.
+  ///
+  /// In en, this message translates to:
+  /// **'Search in'**
+  String get searchScopeLabel;
+
+  /// Scope option: every enabled source.
+  ///
+  /// In en, this message translates to:
+  /// **'All enabled sources'**
+  String get searchScopeAll;
+
+  /// Shown after a search ran because the picked scope (a deleted group or a removed source) named nothing any more.
+  ///
+  /// In en, this message translates to:
+  /// **'That scope no longer exists, so every enabled source was searched.'**
+  String get searchScopeFellBack;
+
+  /// Scope chip label when specific sources are chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen sources'**
+  String get searchScopeNamed;
+
+  /// Tooltip of the search filter button.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get searchFilterLabel;
+
+  /// Label above the source-type check boxes.
+  ///
+  /// In en, this message translates to:
+  /// **'Source types'**
+  String get searchTypeLabel;
+
+  /// Source type: text.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get searchTypeText;
+
+  /// Source type: audio.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio'**
+  String get searchTypeAudio;
+
+  /// Source type: image.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get searchTypeImage;
+
+  /// Source type: file.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get searchTypeFile;
+
+  /// Label above the match mode choices.
+  ///
+  /// In en, this message translates to:
+  /// **'Match'**
+  String get searchMatchLabel;
+
+  /// Match mode: keep everything, exact first.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuzzy'**
+  String get searchMatchDefault;
+
+  /// Match mode: only hits whose name or author equals the keyword.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact name or author'**
+  String get searchMatchExact;
+
+  /// Search progress line.
+  ///
+  /// In en, this message translates to:
+  /// **'{done}/{total} sources'**
+  String searchProgress(int done, int total);
+
+  /// Line shown when some sources failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{failed} sources failed'**
+  String searchPartialFailed(int failed);
+
+  /// Action that pauses the running search.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get searchPause;
+
+  /// Action that resumes a paused search.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get searchResume;
+
+  /// Action that stops the running search.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get searchStop;
+
+  /// Action that asks every page-capable source for the next page.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get searchLoadMore;
+
+  /// How many sources found one book.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} sources'**
+  String searchOriginsLine(int count);
+
+  /// Shown when the scope resolves to no searchable source.
+  ///
+  /// In en, this message translates to:
+  /// **'No source can be searched in this scope.'**
+  String get searchNoSources;
+
+  /// Source type: video.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get searchTypeVideo;
+
+  /// Detail page action: opens the reader at the first chapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Start reading'**
+  String get bookSourceStartReading;
+
+  /// Detail page action: opens the reader at the stored position.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue reading'**
+  String get bookSourceContinueReading;
+
+  /// Expands the truncated introduction on the detail page.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get bookSourceIntroExpand;
+
+  /// Collapses the expanded introduction on the detail page.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get bookSourceIntroCollapse;
+
+  /// Search field on the source list.
+  ///
+  /// In en, this message translates to:
+  /// **'Search name, URL or group'**
+  String get bookSourceListSearchHint;
+
+  /// Selection mode: selects every visible row.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get bookSourceListSelectAll;
+
+  /// Selection mode: inverts the current selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Invert'**
+  String get bookSourceListInvertSelection;
+
+  /// Toolbar action: enters the multi-select mode with nothing ticked yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Select sources'**
+  String get bookSourceListSelectMode;
+
+  /// One-click action next to the failing filter: disables every failing source currently listed.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable failing'**
+  String get bookSourceListInvalidDisable;
+
+  /// One-click action next to the failing filter: deletes every failing source currently listed, after a confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete failing'**
+  String get bookSourceListInvalidDelete;
+
+  /// Feedback after the one-click disable.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled {count} failing sources'**
+  String bookSourceListInvalidDisabled(int count);
+
+  /// Confirmation title of the one-click delete for failing sources.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {count} failing sources?'**
+  String bookSourceListInvalidDeleteTitle(int count);
+
+  /// Group dialog action: switches the list to the group and ticks all of its sources.
+  ///
+  /// In en, this message translates to:
+  /// **'Select every source in this group'**
+  String get bookSourceListGroupSelectSources;
+
+  /// Group dialog action: deletes the sources of the group, not just the group label.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete every source in this group'**
+  String get bookSourceListGroupDeleteSources;
+
+  /// Confirmation title for deleting every source of a group.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the {count} sources in “{group}”?'**
+  String bookSourceListGroupDeleteSourcesTitle(int count, String group);
+
+  /// Selection mode: how many rows are selected.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String bookSourceListSelectedCount(int count);
+
+  /// Batch action: opens the check page with exactly the selected sources ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'Check selected'**
+  String get bookSourceListBatchCheck;
+
+  /// Batch action: enables every selected source.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get bookSourceListBatchEnable;
+
+  /// Batch action: disables every selected source.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable'**
+  String get bookSourceListBatchDisable;
+
+  /// Batch action: deletes every selected source.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get bookSourceListBatchDelete;
+
+  /// Confirmation title for a batch delete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {count} sources?'**
+  String bookSourceListBatchDeleteTitle(int count);
+
+  /// Confirmation body for a batch delete.
+  ///
+  /// In en, this message translates to:
+  /// **'Books you added from them stay on the shelf.'**
+  String get bookSourceListBatchDeleteBody;
+
+  /// Batch action: puts the selection into a group.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get bookSourceListBatchGroup;
+
+  /// Group picker: clears the group.
+  ///
+  /// In en, this message translates to:
+  /// **'No group'**
+  String get bookSourceListGroupNone;
+
+  /// Group picker: asks for a new group name.
+  ///
+  /// In en, this message translates to:
+  /// **'New group…'**
+  String get bookSourceListGroupNew;
+
+  /// Text field hint for a group name.
+  ///
+  /// In en, this message translates to:
+  /// **'Group name'**
+  String get bookSourceListGroupNameHint;
+
+  /// Chip row label for the check-status filter.
+  ///
+  /// In en, this message translates to:
+  /// **'Check status'**
+  String get bookSourceCheckFilterLabel;
+
+  /// Check-status filter: every source.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get bookSourceCheckFilterAll;
+
+  /// Check-status filter: sources with no failure group or note.
+  ///
+  /// In en, this message translates to:
+  /// **'Healthy'**
+  String get bookSourceCheckFilterHealthy;
+
+  /// Check-status filter: sources whose last check failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Has failures'**
+  String get bookSourceCheckFilterFailing;
+
+  /// Status light: the last check found no failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Check passed'**
+  String get bookSourceCheckStatusPassed;
+
+  /// Status light: the last check failed only with a timeout or a broken script.
+  ///
+  /// In en, this message translates to:
+  /// **'Timed out or JS failed'**
+  String get bookSourceCheckStatusDegraded;
+
+  /// Status light: the source has no verdict yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Never checked'**
+  String get bookSourceCheckStatusUnchecked;
+
+  /// Last-check summary: the check finished less than a minute ago.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked just now'**
+  String get bookSourceListLastCheckJustNow;
+
+  /// Last-check summary: minutes since the last verdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {count} min ago'**
+  String bookSourceListLastCheckMinutesAgo(int count);
+
+  /// Last-check summary: hours since the last verdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {count} h ago'**
+  String bookSourceListLastCheckHoursAgo(int count);
+
+  /// Last-check summary: days since the last verdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {count} d ago'**
+  String bookSourceListLastCheckDaysAgo(int count);
+
+  /// Last-check summary: absolute date for a verdict older than a week.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {date}'**
+  String bookSourceListLastCheckOn(String date);
+
+  /// Last-check summary: when it ran and how long it took.
+  ///
+  /// In en, this message translates to:
+  /// **'{when} · {millis} ms'**
+  String bookSourceListLastCheckLine(String when, int millis);
+
+  /// Batch action: moves the selection to the top of the manual order.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to top'**
+  String get bookSourceListBatchMoveTop;
+
+  /// Batch action: moves the selection to the bottom of the manual order.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to bottom'**
+  String get bookSourceListBatchMoveBottom;
+
+  /// Batch action: removes the selection from the current group filter.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from group'**
+  String get bookSourceListBatchRemoveGroup;
+
+  /// Row badge: the source offers its discover page.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover on'**
+  String get bookSourceListExploreOn;
+
+  /// Row badge: the user turned the discover page off.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover off'**
+  String get bookSourceListExploreOff;
+
+  /// Discover page empty state: the user disabled this source's discover page.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover is turned off for this source. Turn it back on in the source list.'**
+  String get bookSourceExploreDisabled;
+
+  /// Row menu: offers the source's discover page again.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn discover on'**
+  String get bookSourceRowExploreEnable;
+
+  /// Row menu: hides the source's discover page without deleting its rules.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn discover off'**
+  String get bookSourceRowExploreDisable;
+
+  /// Sort direction toggle: current direction is ascending.
+  ///
+  /// In en, this message translates to:
+  /// **'Ascending'**
+  String get bookSourceListSortAscending;
+
+  /// Sort direction toggle: current direction is descending.
+  ///
+  /// In en, this message translates to:
+  /// **'Descending'**
+  String get bookSourceListSortDescending;
+
+  /// List view toggle: one section per book source host.
+  ///
+  /// In en, this message translates to:
+  /// **'Group by domain'**
+  String get bookSourceListGroupByDomain;
+
+  /// Tooltip of the list's view-options menu.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get bookSourceListViewOptions;
+
+  /// Tooltip of the batch bar's overflow menu.
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get bookSourceListMoreActions;
+
+  /// Opens the group management dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage groups'**
+  String get bookSourceListGroupManage;
+
+  /// Group management action: rename a group everywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename group'**
+  String get bookSourceListGroupRename;
+
+  /// Group management action: remove the group from every source.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete group'**
+  String get bookSourceListGroupDelete;
+
+  /// Confirms deleting a group everywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Every source leaves “{group}”; the sources themselves stay.'**
+  String bookSourceListGroupDeleteBody(String group);
+
+  /// Batch action: takes the selection out of one group.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from “{group}”'**
+  String bookSourceListGroupRemoveFrom(String group);
+
+  /// Row menu: runs the check on this one source.
+  ///
+  /// In en, this message translates to:
+  /// **'Check this source'**
+  String get bookSourceRowCheck;
+
+  /// Row menu: opens the editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get bookSourceRowEdit;
+
+  /// Row menu: copies / saves the source JSON.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get bookSourceRowExport;
+
+  /// Snack bar after a single check that found nothing wrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Check passed'**
+  String get bookSourceCheckPassed;
+
+  /// Snack bar after a single check, naming the failure groups.
+  ///
+  /// In en, this message translates to:
+  /// **'Check found: {groups}'**
+  String bookSourceCheckFound(String groups);
+
+  /// Snack bar after copying one source.
+  ///
+  /// In en, this message translates to:
+  /// **'Source JSON copied'**
+  String get bookSourceExportCopied;
+
+  /// Snack bar after saving one source to a file.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get bookSourceExportSaved;
+
+  /// Snack bar when the export fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not export this source'**
+  String get bookSourceExportFailed;
+
+  /// Editor page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit source'**
+  String get bookSourceEditTitle;
+
+  /// Snack bar after saving an edit.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get bookSourceEditSaved;
+
+  /// Editor: validation failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Fix the highlighted fields first'**
+  String get bookSourceEditInvalidFields;
+
+  /// Editor: the new identity already exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Another source already has exactly these rules'**
+  String get bookSourceEditIdentityConflict;
+
+  /// Editor hint when the URL differs from the stored one.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing the URL is like switching source: the shelf keeps the old one.'**
+  String get bookSourceEditUrlHint;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get bookSourceFieldName;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Source URL'**
+  String get bookSourceFieldUrl;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get bookSourceFieldGroup;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get bookSourceFieldType;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight'**
+  String get bookSourceFieldWeight;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Header (JSON)'**
+  String get bookSourceFieldHeader;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Search rule'**
+  String get bookSourceFieldSearchRule;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Book info rule'**
+  String get bookSourceFieldBookInfoRule;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters rule'**
+  String get bookSourceFieldTocRule;
+
+  /// Editor field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Content rule'**
+  String get bookSourceFieldContentRule;
+
+  /// Generic save action.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get actionSave;
+
+  /// Snack bar shown while a single-source check runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get bookSourceRowCheckRunning;
+
+  /// Reader setting: which font family the body uses.
+  ///
+  /// In en, this message translates to:
+  /// **'Font'**
+  String get readerFontFamily;
+
+  /// Font family option: the app theme’s own font.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme default'**
+  String get readerFontFamilyTheme;
+
+  /// Font family option: serif.
+  ///
+  /// In en, this message translates to:
+  /// **'Serif'**
+  String get readerFontFamilySerif;
+
+  /// Font family option: sans-serif.
+  ///
+  /// In en, this message translates to:
+  /// **'Sans-serif'**
+  String get readerFontFamilySans;
+
+  /// Font family option: monospace.
+  ///
+  /// In en, this message translates to:
+  /// **'Monospace'**
+  String get readerFontFamilyMono;
+
+  /// Reader setting: space between paragraphs.
+  ///
+  /// In en, this message translates to:
+  /// **'Paragraph spacing'**
+  String get readerParagraphSpacing;
+
+  /// Reader setting: first-line indent.
+  ///
+  /// In en, this message translates to:
+  /// **'First-line indent'**
+  String get readerFirstLineIndent;
+
+  /// Reader setting: page margin preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Page margin'**
+  String get readerPagePadding;
+
+  /// Page margin preset: narrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Narrow'**
+  String get readerPaddingNarrow;
+
+  /// Page margin preset: medium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get readerPaddingMedium;
+
+  /// Page margin preset: wide.
+  ///
+  /// In en, this message translates to:
+  /// **'Wide'**
+  String get readerPaddingWide;
+
+  /// Reader UI text: readerChapterProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{current}/{total} chapters'**
+  String readerChapterProgress(int current, int total);
+
+  /// Reader UI text: readerChapterPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String readerChapterPercent(int percent);
+
+  /// Reader UI text: readerChangeSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Change source'**
+  String get readerChangeSource;
+
+  /// Reader UI text: readerBrightness.
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get readerBrightness;
+
+  /// Reader UI text: readerTocSort.
+  ///
+  /// In en, this message translates to:
+  /// **'Reversed'**
+  String get readerTocSort;
+
+  /// Reader UI text: readerTocSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search chapters'**
+  String get readerTocSearchHint;
+
+  /// Reader UI text: readerSourceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change source'**
+  String get readerSourceTitle;
+
+  /// Reader UI text: readerSourceEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No other source has this book.'**
+  String get readerSourceEmpty;
+
+  /// Reader UI text: readerSourceSearching.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching other sources…'**
+  String get readerSourceSearching;
+
+  /// Reader UI text: readerSourceChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters'**
+  String readerSourceChapters(int count);
+
+  /// Reader UI text: readerSourceFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not switch source'**
+  String get readerSourceFailed;
+
+  /// Reader UI text: readerSourceAligned.
+  ///
+  /// In en, this message translates to:
+  /// **'Aligned to: {chapter}'**
+  String readerSourceAligned(String chapter);
 }
 
 class _AppLocalizationsDelegate

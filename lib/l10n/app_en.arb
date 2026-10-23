@@ -1,6 +1,71 @@
 {
   "@@locale": "en",
   "appTitle": "Reader",
+  "shellTabBookshelf": "Shelf",
+  "@shellTabBookshelf": {
+    "description": "Bottom navigation: the bookshelf tab."
+  },
+  "shellTabExplore": "Discover",
+  "@shellTabExplore": {
+    "description": "Bottom navigation: the discover tab."
+  },
+  "shellTabSearch": "Search",
+  "@shellTabSearch": {
+    "description": "Bottom navigation: the aggregated search tab."
+  },
+  "shellTabMy": "Me",
+  "@shellTabMy": {
+    "description": "Bottom navigation: the entry-aggregator tab."
+  },
+  "myTitle": "Me",
+  "@myTitle": {
+    "description": "Title of the Me page."
+  },
+  "mySectionContent": "Content",
+  "@mySectionContent": {
+    "description": "Me page section label for content-related entries."
+  },
+  "mySectionApp": "App",
+  "@mySectionApp": {
+    "description": "Me page section label for app-level entries."
+  },
+  "myBookSources": "Book sources",
+  "@myBookSources": {
+    "description": "Me page entry: opens book-source management."
+  },
+  "myBookSourcesBody": "Import, check and group",
+  "@myBookSourcesBody": {
+    "description": "Me page entry subtitle for book sources."
+  },
+  "aboutTitle": "About",
+  "@aboutTitle": {
+    "description": "Title of the about page."
+  },
+  "aboutVersion": "Version {version}",
+  "@aboutVersion": {
+    "description": "About page: the app version.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutLicenses": "Licenses and legal notices",
+  "@aboutLicenses": {
+    "description": "About page entry: opens the legal notices page."
+  },
+  "aboutSourceCode": "Source code",
+  "@aboutSourceCode": {
+    "description": "About page: where the Corresponding Source is published."
+  },
+  "aboutCopySource": "Copy address",
+  "@aboutCopySource": {
+    "description": "Copies the source-code address."
+  },
+  "aboutCopied": "Copied",
+  "@aboutCopied": {
+    "description": "Confirmation after copying the source-code address."
+  },
   "@appTitle": {
     "description": "Application name shown in the task switcher and app bar."
   },
@@ -36,10 +101,7 @@
   "@bookSourceSearchEmpty": {
     "description": "Empty state shown when a search returned no results."
   },
-  "bookSourceMissingSource": "No book source is selected yet. Importing book sources arrives in a later version.",
-  "@bookSourceMissingSource": {
-    "description": "Empty state shown while no book source is available (the Phase 2.5 seam of currentBookSourceProvider)."
-  },
+  "bookSourceMissingSource": "No book source is stored yet. Import one to start reading.",
   "bookSourceDetailTitle": "Book details",
   "@bookSourceDetailTitle": {
     "description": "Title of the book detail page."
@@ -124,6 +186,14 @@
     "description": "Action that opens the bundled GPL-3.0 license text."
   },
   "legalNoticesCorrespondingSource": "Corresponding source code",
+  "legalNoticesLicenseTitle": "GNU GPL-3.0",
+  "@legalNoticesLicenseTitle": {
+    "description": "Title of the page that shows the bundled GPL-3.0 text."
+  },
+  "legalNoticesLicenseFailed": "The license text could not be loaded. Reopen this page to try again.",
+  "@legalNoticesLicenseFailed": {
+    "description": "Shown when the bundled license asset cannot be read."
+  },
   "@legalNoticesCorrespondingSource": {
     "description": "Action that opens the source code location required by GPL-3.0 section 6."
   },
@@ -164,6 +234,75 @@
       }
     }
   },
+  "bookSourceImportPreviewSummary": "{newCount} new · {refreshCount} to refresh · {rejected} rejected",
+  "@bookSourceImportPreviewSummary": {
+    "description": "Preview summary: how the file splits into new, refresh and rejected entries.",
+    "placeholders": {
+      "newCount": {
+        "type": "int"
+      },
+      "refreshCount": {
+        "type": "int"
+      },
+      "rejected": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceImportEntryNew": "New",
+  "@bookSourceImportEntryNew": {
+    "description": "Preview entry label: this identity is not stored yet."
+  },
+  "bookSourceImportEntryRefresh": "Already imported · will refresh",
+  "@bookSourceImportEntryRefresh": {
+    "description": "Preview entry label: the same identity is stored and only its payload will be refreshed."
+  },
+  "bookSourceImportEntryUnknown": "Entry {index}",
+  "@bookSourceImportEntryUnknown": {
+    "description": "Preview entry title when the entry has no readable name.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceImportRejectionMissingUrl": "Missing bookSourceUrl",
+  "@bookSourceImportRejectionMissingUrl": {
+    "description": "Preview rejection: the entry has no usable bookSourceUrl."
+  },
+  "bookSourceImportRejectionMissingName": "Missing bookSourceName",
+  "@bookSourceImportRejectionMissingName": {
+    "description": "Preview rejection: the entry has no usable bookSourceName."
+  },
+  "bookSourceImportRejectionUnreadable": "This entry cannot be read as a book source",
+  "@bookSourceImportRejectionUnreadable": {
+    "description": "Preview rejection: a required rule object or another structural field is unreadable."
+  },
+  "bookSourceImportRejectionNotAnObject": "Not a JSON object",
+  "@bookSourceImportRejectionNotAnObject": {
+    "description": "Preview rejection: the element of the file is not a JSON object."
+  },
+  "bookSourceImportCommit": "Import selected ({count})",
+  "@bookSourceImportCommit": {
+    "description": "Preview action: stores the ticked entries.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceImportSelectAll": "Select all",
+  "@bookSourceImportSelectAll": {
+    "description": "Preview action: ticks every usable entry."
+  },
+  "bookSourceImportDeselectAll": "Deselect all",
+  "@bookSourceImportDeselectAll": {
+    "description": "Preview action: unticks every entry."
+  },
+  "bookSourceImportBack": "Back to the form",
+  "@bookSourceImportBack": {
+    "description": "Preview action: drops the preview without storing anything."
+  },
   "bookSourceImportPartiallySkipped": "Imported {count} book sources; {skipped} entries were skipped as invalid.",
   "@bookSourceImportPartiallySkipped": {
     "description": "Summary after an import where some entries were skipped; the reasons are logged, never shown per entry.",
@@ -173,6 +312,1198 @@
       },
       "skipped": {
         "type": "int"
+      }
+    }
+  },
+  "actionCancel": "Cancel",
+  "@actionCancel": {
+    "description": "Label of the button that dismisses a confirmation without acting."
+  },
+  "actionDelete": "Delete",
+  "@actionDelete": {
+    "description": "Label of the destructive action (a stored book source, a cache entry)."
+  },
+  "bookSourceMissingSourceAction": "Manage book sources",
+  "@bookSourceMissingSourceAction": {
+    "description": "Button of the empty state that opens the book source list."
+  },
+  "bookSourceListEmpty": "No book source is stored yet.",
+  "@bookSourceListEmpty": {
+    "description": "Empty state of the book source list; the import button below it is the way in."
+  },
+  "bookSourceListLoadFailed": "The stored book sources could not be read.",
+  "@bookSourceListLoadFailed": {
+    "description": "Shown when reading the stored book sources failed; the retry button reloads them."
+  },
+  "bookSourceCurrentLabel": "Current book source",
+  "@bookSourceCurrentLabel": {
+    "description": "Accessible label of the marker on the row the pages currently use."
+  },
+  "bookSourceVariantLabel": "Same site, another rule set",
+  "@bookSourceVariantLabel": {
+    "description": "Subtitle line on a row whose bookSourceUrl is shared by another stored source, so the two rows are not read as duplicates."
+  },
+  "bookSourceListDeleteTitle": "Delete this book source?",
+  "@bookSourceListDeleteTitle": {
+    "description": "Title of the confirmation before deleting one stored book source."
+  },
+  "bookSourceListDeleteBody": "{name} and its stored rules will be removed.",
+  "@bookSourceListDeleteBody": {
+    "description": "Body of the delete confirmation; the name is the source name and never a user keyword.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceImportTitle": "Import book sources",
+  "@bookSourceImportTitle": {
+    "description": "Title of the import screen."
+  },
+  "bookSourceImportTextLabel": "Book source JSON",
+  "@bookSourceImportTextLabel": {
+    "description": "Label of the field that takes a pasted JSON document."
+  },
+  "bookSourceImportTextHint": "Paste an exported book source file here",
+  "@bookSourceImportTextHint": {
+    "description": "Hint of the paste field."
+  },
+  "bookSourceImportUrlLabel": "Or a URL",
+  "@bookSourceImportUrlLabel": {
+    "description": "Label of the field that downloads a book source file."
+  },
+  "bookSourceImportUrlHint": "https://example.com/sources.json",
+  "@bookSourceImportUrlHint": {
+    "description": "Hint of the URL field; an example address, not a real source."
+  },
+  "bookSourceImportFileAction": "Choose a JSON file",
+  "@bookSourceImportFileAction": {
+    "description": "Label of the button that opens the platform file dialog on the import screen."
+  },
+  "shelfTitle": "Bookshelf",
+  "@shelfTitle": {
+    "description": "Title of the bookshelf page, also used as the tooltip of its entry button."
+  },
+  "shelfEmpty": "Your shelf is empty. Open a book's details and choose “Add to shelf”.",
+  "@shelfEmpty": {
+    "description": "Empty state of the bookshelf page."
+  },
+  "shelfLoadFailed": "The shelf could not be loaded.",
+  "@shelfLoadFailed": {
+    "description": "Shown when reading the shelf from storage failed."
+  },
+  "shelfStatusTracking": "Reading",
+  "@shelfStatusTracking": {
+    "description": "Shelf label for a book the user is still following."
+  },
+  "shelfStatusRead": "Finished",
+  "@shelfStatusRead": {
+    "description": "Shelf label for a book the user has finished."
+  },
+  "shelfActionPin": "Pin to top",
+  "@shelfActionPin": {
+    "description": "Menu action that pins a shelf entry above the others."
+  },
+  "shelfActionUnpin": "Unpin",
+  "@shelfActionUnpin": {
+    "description": "Menu action that removes the pin of a shelf entry."
+  },
+  "shelfActionMarkRead": "Mark as finished",
+  "@shelfActionMarkRead": {
+    "description": "Menu action that moves a shelf entry to the finished group."
+  },
+  "shelfActionMarkTracking": "Mark as reading",
+  "@shelfActionMarkTracking": {
+    "description": "Menu action that moves a shelf entry back to the reading group."
+  },
+  "shelfActionRemove": "Remove from shelf",
+  "@shelfActionRemove": {
+    "description": "Menu action that deletes a shelf entry."
+  },
+  "shelfRemoveTitle": "Remove this book?",
+  "@shelfRemoveTitle": {
+    "description": "Title of the confirmation dialog before a shelf entry is deleted."
+  },
+  "shelfRemoveBody": "Its reading progress is removed too.",
+  "@shelfRemoveBody": {
+    "description": "Body of the confirmation dialog before a shelf entry is deleted."
+  },
+  "shelfProgressLine": "Reading: {chapter}",
+  "@shelfProgressLine": {
+    "description": "Subtitle of a shelf entry that was opened before.",
+    "placeholders": {
+      "chapter": {
+        "type": "String"
+      }
+    }
+  },
+  "shelfAddAction": "Add to shelf",
+  "@shelfAddAction": {
+    "description": "Label of the button on the book detail page that puts the book on the shelf."
+  },
+  "shelfAddSucceeded": "Added to the shelf.",
+  "@shelfAddSucceeded": {
+    "description": "Snackbar shown after a book was added to the shelf."
+  },
+  "shelfAddFailed": "The book could not be added to the shelf.",
+  "@shelfAddFailed": {
+    "description": "Shown when writing a book to the shelf failed."
+  },
+  "shelfWriteFailed": "The shelf could not be updated.",
+  "@shelfWriteFailed": {
+    "description": "Shown when pinning, re-grouping or removing a shelf entry failed."
+  },
+  "actionDecrease": "Decrease",
+  "@actionDecrease": {
+    "description": "Tooltip of a stepper button that lowers a numeric setting."
+  },
+  "actionIncrease": "Increase",
+  "@actionIncrease": {
+    "description": "Tooltip of a stepper button that raises a numeric setting."
+  },
+  "settingsTitle": "Settings",
+  "@settingsTitle": {
+    "description": "Title of the settings page, also used as the tooltip of its entry button."
+  },
+  "settingsLoadFailed": "The settings could not be loaded.",
+  "@settingsLoadFailed": {
+    "description": "Shown when reading the stored settings failed."
+  },
+  "settingsThemeMode": "Theme",
+  "@settingsThemeMode": {
+    "description": "Label of the theme mode setting."
+  },
+  "settingsThemeSystem": "Follow system",
+  "@settingsThemeSystem": {
+    "description": "Theme mode that follows the platform."
+  },
+  "settingsThemeLight": "Light",
+  "@settingsThemeLight": {
+    "description": "Theme mode that always uses the light scheme."
+  },
+  "settingsThemeDark": "Dark",
+  "@settingsThemeDark": {
+    "description": "Theme mode that always uses the dark scheme."
+  },
+  "settingsFontScale": "Text size",
+  "@settingsFontScale": {
+    "description": "Label of the default text scale setting."
+  },
+  "settingsFontScaleValue": "{percent}%",
+  "@settingsFontScaleValue": {
+    "description": "Current text scale shown next to its slider.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsConcurrency": "Concurrent requests per source",
+  "@settingsConcurrency": {
+    "description": "Label of the per-source concurrency budget setting."
+  },
+  "settingsConcurrencyHint": "1 to 8. Higher values are faster and less polite to the site.",
+  "@settingsConcurrencyHint": {
+    "description": "Explanation under the concurrency setting, including its allowed range."
+  },
+  "settingsCache": "Cache",
+  "@settingsCache": {
+    "description": "Section title of the cache actions."
+  },
+  "settingsClearCache": "Clear cache",
+  "@settingsClearCache": {
+    "description": "Action that removes every cached entry."
+  },
+  "settingsClearCacheTitle": "Clear the whole cache?",
+  "@settingsClearCacheTitle": {
+    "description": "Title of the confirmation dialog before clearing the cache."
+  },
+  "settingsClearCacheBody": "Cached pages and chapter bodies are downloaded again when needed.",
+  "@settingsClearCacheBody": {
+    "description": "Body of the confirmation dialog before clearing the cache."
+  },
+  "settingsCacheCleared": "Removed {count} cached entries.",
+  "@settingsCacheCleared": {
+    "description": "Snackbar shown after the cache was cleared.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceCheckTitle": "Check book sources",
+  "@bookSourceCheckTitle": {
+    "description": "Title of the batch book source check page."
+  },
+  "bookSourceCheckIntro": "Each source runs through search, discover, details, chapters and body.",
+  "@bookSourceCheckIntro": {
+    "description": "Description of what the batch check does."
+  },
+  "bookSourceCheckStages": "Stages",
+  "@bookSourceCheckStages": {
+    "description": "Label above the stage switches."
+  },
+  "bookSourceCheckStageSearch": "Search",
+  "@bookSourceCheckStageSearch": {
+    "description": "Label of the search stage switch."
+  },
+  "bookSourceCheckStageExplore": "Discover",
+  "@bookSourceCheckStageExplore": {
+    "description": "Label of the discover stage switch."
+  },
+  "bookSourceCheckStageInfo": "Details",
+  "@bookSourceCheckStageInfo": {
+    "description": "Label of the book detail stage switch."
+  },
+  "bookSourceCheckStageToc": "Chapters",
+  "@bookSourceCheckStageToc": {
+    "description": "Label of the chapter list stage switch."
+  },
+  "bookSourceCheckStageContent": "Body",
+  "@bookSourceCheckStageContent": {
+    "description": "Label of the chapter body stage switch."
+  },
+  "bookSourceCheckKeyword": "Keyword",
+  "@bookSourceCheckKeyword": {
+    "description": "Label of the keyword field used by the search stage."
+  },
+  "bookSourceCheckKeywordHint": "Keyword sent to every checked source",
+  "@bookSourceCheckKeywordHint": {
+    "description": "Hint of the keyword field."
+  },
+  "bookSourceCheckTimeout": "Timeout per source",
+  "@bookSourceCheckTimeout": {
+    "description": "Label of the per-source timeout row."
+  },
+  "bookSourceCheckStart": "Start check",
+  "@bookSourceCheckStart": {
+    "description": "Label of the button that starts the batch."
+  },
+  "bookSourceCheckStop": "Stop",
+  "@bookSourceCheckStop": {
+    "description": "Label of the button that cancels the batch."
+  },
+  "bookSourceCheckEmpty": "No book source is stored yet. Import one to check it.",
+  "@bookSourceCheckEmpty": {
+    "description": "Empty state of the check page."
+  },
+  "bookSourceCheckSelectionEmpty": "Select at least one book source.",
+  "@bookSourceCheckSelectionEmpty": {
+    "description": "Shown when the batch starts with nothing selected."
+  },
+  "bookSourceCheckStatusPending": "Waiting",
+  "@bookSourceCheckStatusPending": {
+    "description": "Per-source status while the batch has not reached it."
+  },
+  "bookSourceCheckStatusRunning": "Checking",
+  "@bookSourceCheckStatusRunning": {
+    "description": "Per-source status while its check runs."
+  },
+  "bookSourceCheckStatusSucceeded": "Passed",
+  "@bookSourceCheckStatusSucceeded": {
+    "description": "Per-source status after a healthy check."
+  },
+  "bookSourceCheckStatusFailed": "Failed",
+  "@bookSourceCheckStatusFailed": {
+    "description": "Per-source status after a check that found problems."
+  },
+  "bookSourceCheckStatusCancelled": "Cancelled",
+  "@bookSourceCheckStatusCancelled": {
+    "description": "Per-source status after the user stopped the batch."
+  },
+  "bookSourceCheckFailureCheckFailed": "The check found problems.",
+  "@bookSourceCheckFailureCheckFailed": {
+    "description": "Reason shown when the check failed."
+  },
+  "bookSourceCheckFailureSourceMissing": "The source was deleted meanwhile.",
+  "@bookSourceCheckFailureSourceMissing": {
+    "description": "Reason shown when the row is gone."
+  },
+  "bookSourceCheckFailureSaveFailed": "The result could not be saved.",
+  "@bookSourceCheckFailureSaveFailed": {
+    "description": "Reason shown when the write-back failed."
+  },
+  "bookSourceCheckFailedAt": "Failed at {rulePath}",
+  "@bookSourceCheckFailedAt": {
+    "description": "Line naming the failing rule of a stage.",
+    "placeholders": {
+      "rulePath": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceCheckElapsed": "Took {millis} ms",
+  "@bookSourceCheckElapsed": {
+    "description": "Line showing how long a source's check took.",
+    "placeholders": {
+      "millis": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceCheckOpenDebug": "Debug this source",
+  "@bookSourceCheckOpenDebug": {
+    "description": "Tooltip of the action that opens the debug console."
+  },
+  "bookSourceCheckSelectAll": "Select all",
+  "@bookSourceCheckSelectAll": {
+    "description": "Label of the action that selects every listed source."
+  },
+  "bookSourceCheckSelectNone": "Select none",
+  "@bookSourceCheckSelectNone": {
+    "description": "Label of the action that clears the selection."
+  },
+  "bookSourceDebugTitle": "Debug a book source",
+  "@bookSourceDebugTitle": {
+    "description": "Title of the single-source debug console."
+  },
+  "bookSourceDebugTarget": "Target",
+  "@bookSourceDebugTarget": {
+    "description": "Label above the target selector."
+  },
+  "bookSourceDebugTargetSearch": "Search",
+  "@bookSourceDebugTargetSearch": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugTargetExplore": "Discover",
+  "@bookSourceDebugTargetExplore": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugTargetInfo": "Details",
+  "@bookSourceDebugTargetInfo": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugTargetToc": "Chapters",
+  "@bookSourceDebugTargetToc": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugTargetContent": "Body",
+  "@bookSourceDebugTargetContent": {
+    "description": "Debug target label."
+  },
+  "bookSourceDebugQuery": "Query",
+  "@bookSourceDebugQuery": {
+    "description": "Label of the debug query field."
+  },
+  "bookSourceDebugQueryKeywordHint": "Keyword to search for",
+  "@bookSourceDebugQueryKeywordHint": {
+    "description": "Hint of the query field for the search target."
+  },
+  "bookSourceDebugQueryUrlHint": "Page URL",
+  "@bookSourceDebugQueryUrlHint": {
+    "description": "Hint of the query field for the URL targets."
+  },
+  "bookSourceDebugExamples": "Examples",
+  "@bookSourceDebugExamples": {
+    "description": "Label above the example chips."
+  },
+  "bookSourceDebugStart": "Run",
+  "@bookSourceDebugStart": {
+    "description": "Label of the button that runs the target."
+  },
+  "bookSourceDebugStop": "Stop",
+  "@bookSourceDebugStop": {
+    "description": "Label of the button that cancels the run."
+  },
+  "bookSourceDebugClear": "Clear",
+  "@bookSourceDebugClear": {
+    "description": "Label of the button that empties the event list."
+  },
+  "bookSourceDebugEmpty": "No event yet. Run a target to see the chain.",
+  "@bookSourceDebugEmpty": {
+    "description": "Empty state of the event list."
+  },
+  "bookSourceDebugStatusRunning": "Running",
+  "@bookSourceDebugStatusRunning": {
+    "description": "Run status while the target is running."
+  },
+  "bookSourceDebugStatusSucceeded": "Done",
+  "@bookSourceDebugStatusSucceeded": {
+    "description": "Run status after the target read something."
+  },
+  "bookSourceDebugStatusFailed": "Failed",
+  "@bookSourceDebugStatusFailed": {
+    "description": "Run status after the target failed."
+  },
+  "bookSourceDebugStatusCancelled": "Cancelled",
+  "@bookSourceDebugStatusCancelled": {
+    "description": "Run status after the user stopped the run."
+  },
+  "bookSourceDebugEventMessage": "Message",
+  "@bookSourceDebugEventMessage": {
+    "description": "Label of a message line."
+  },
+  "bookSourceDebugEventSource": "Source",
+  "@bookSourceDebugEventSource": {
+    "description": "Label of a source line."
+  },
+  "bookSourceDebugEventError": "Error",
+  "@bookSourceDebugEventError": {
+    "description": "Label of an error line."
+  },
+  "bookSourceDebugMissingSource": "Choose a book source on the source list first.",
+  "@bookSourceDebugMissingSource": {
+    "description": "Shown when the debug route names a source that no longer exists."
+  },
+  "bookSourceDebugStatusIdle": "Not run yet",
+  "@bookSourceDebugStatusIdle": {
+    "description": "Run status before anything has been started."
+  },
+  "readerTocAction": "Chapters",
+  "@readerTocAction": {
+    "description": "Action that opens the chapter list of the reader."
+  },
+  "readerSettingsAction": "Reading settings",
+  "@readerSettingsAction": {
+    "description": "Action that opens the reader settings sheet."
+  },
+  "readerFontSize": "Text size",
+  "@readerFontSize": {
+    "description": "Label of the reader font size slider."
+  },
+  "readerLineHeight": "Line spacing",
+  "@readerLineHeight": {
+    "description": "Label of the reader line height slider."
+  },
+  "readerBackground": "Background",
+  "@readerBackground": {
+    "description": "Label of the reader background choices."
+  },
+  "readerBackgroundSystem": "Theme",
+  "@readerBackgroundSystem": {
+    "description": "Reader background that follows the theme."
+  },
+  "readerBackgroundPaper": "Paper",
+  "@readerBackgroundPaper": {
+    "description": "Reader background with a warm paper tone."
+  },
+  "readerBackgroundSepia": "Sepia",
+  "@readerBackgroundSepia": {
+    "description": "Reader background with a sepia tone."
+  },
+  "readerBackgroundDark": "Dark",
+  "@readerBackgroundDark": {
+    "description": "Reader background for night reading."
+  },
+  "readerPageMode": "Turn pages",
+  "@readerPageMode": {
+    "description": "Label of the page mode switch."
+  },
+  "readerPageModeScroll": "Scroll",
+  "@readerPageModeScroll": {
+    "description": "Reader page mode that scrolls the body."
+  },
+  "readerPageModePaged": "Pages",
+  "@readerPageModePaged": {
+    "description": "Reader page mode that splits the body into pages."
+  },
+  "readerPreviousChapter": "Previous chapter",
+  "@readerPreviousChapter": {
+    "description": "Action that opens the previous chapter."
+  },
+  "readerNextChapter": "Next chapter",
+  "@readerNextChapter": {
+    "description": "Action that opens the next chapter."
+  },
+  "readerChapterEnd": "End of this chapter",
+  "@readerChapterEnd": {
+    "description": "Shown on the last page of a chapter in paged mode."
+  },
+  "readerLastChapter": "This is the last chapter",
+  "@readerLastChapter": {
+    "description": "Shown when the open chapter is the last one."
+  },
+  "readerNoChapter": "This book has no readable chapter.",
+  "@readerNoChapter": {
+    "description": "Shown when the chapter list came back empty."
+  },
+  "mangaPageIndicator": "{current} / {total}",
+  "@mangaPageIndicator": {
+    "description": "Manga reader: which page of the chapter is on screen.",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "mangaImageFailed": "This page failed to load.",
+  "@mangaImageFailed": {
+    "description": "Manga reader: one image could not be loaded; the tile offers a retry."
+  },
+  "bookSourceUpdateTimeLine": "Updated: {value}",
+  "@bookSourceUpdateTimeLine": {
+    "description": "Foot line showing the update time a rule returned.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceListSortLabel": "Sort by",
+  "@bookSourceListSortLabel": {
+    "description": "Tooltip of the sort menu on the source list."
+  },
+  "bookSourceListSortDefault": "Manual order",
+  "@bookSourceListSortDefault": {
+    "description": "Sort key: the manual order a drag writes."
+  },
+  "bookSourceListSortWeight": "Weight",
+  "@bookSourceListSortWeight": {
+    "description": "Sort key: the weight the source declares."
+  },
+  "bookSourceListSortRespondTime": "Response time",
+  "@bookSourceListSortRespondTime": {
+    "description": "Sort key: the duration of the last check."
+  },
+  "bookSourceListSortName": "Name",
+  "@bookSourceListSortName": {
+    "description": "Sort key: the source name."
+  },
+  "bookSourceListGroupAll": "All groups",
+  "@bookSourceListGroupAll": {
+    "description": "Filter chip that shows every group."
+  },
+  "bookSourceListRespondTimeLine": "{millis} ms",
+  "@bookSourceListRespondTimeLine": {
+    "description": "Response time of a source, in milliseconds.",
+    "placeholders": {
+      "millis": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListCommentTitle": "Check note",
+  "@bookSourceListCommentTitle": {
+    "description": "Title of the dialog that shows a source note."
+  },
+  "bookSourceListCommentAction": "View note",
+  "@bookSourceListCommentAction": {
+    "description": "Menu action that opens the source note."
+  },
+  "bookSourceListNoMatch": "No source matches this group.",
+  "@bookSourceListNoMatch": {
+    "description": "Empty state when the group filter hides every source."
+  },
+  "searchScopeLabel": "Search in",
+  "@searchScopeLabel": {
+    "description": "Tooltip of the search scope button."
+  },
+  "searchScopeAll": "All enabled sources",
+  "@searchScopeAll": {
+    "description": "Scope option: every enabled source."
+  },
+  "searchScopeFellBack": "That scope no longer exists, so every enabled source was searched.",
+  "@searchScopeFellBack": {
+    "description": "Shown after a search ran because the picked scope (a deleted group or a removed source) named nothing any more."
+  },
+  "searchScopeNamed": "Chosen sources",
+  "@searchScopeNamed": {
+    "description": "Scope chip label when specific sources are chosen."
+  },
+  "searchFilterLabel": "Filters",
+  "@searchFilterLabel": {
+    "description": "Tooltip of the search filter button."
+  },
+  "searchTypeLabel": "Source types",
+  "@searchTypeLabel": {
+    "description": "Label above the source-type check boxes."
+  },
+  "searchTypeText": "Text",
+  "@searchTypeText": {
+    "description": "Source type: text."
+  },
+  "searchTypeAudio": "Audio",
+  "@searchTypeAudio": {
+    "description": "Source type: audio."
+  },
+  "searchTypeImage": "Image",
+  "@searchTypeImage": {
+    "description": "Source type: image."
+  },
+  "searchTypeFile": "File",
+  "@searchTypeFile": {
+    "description": "Source type: file."
+  },
+  "searchMatchLabel": "Match",
+  "@searchMatchLabel": {
+    "description": "Label above the match mode choices."
+  },
+  "searchMatchDefault": "Fuzzy",
+  "@searchMatchDefault": {
+    "description": "Match mode: keep everything, exact first."
+  },
+  "searchMatchExact": "Exact name or author",
+  "@searchMatchExact": {
+    "description": "Match mode: only hits whose name or author equals the keyword."
+  },
+  "searchProgress": "{done}/{total} sources",
+  "@searchProgress": {
+    "description": "Search progress line.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "searchPartialFailed": "{failed} sources failed",
+  "@searchPartialFailed": {
+    "description": "Line shown when some sources failed.",
+    "placeholders": {
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "searchPause": "Pause",
+  "@searchPause": {
+    "description": "Action that pauses the running search."
+  },
+  "searchResume": "Resume",
+  "@searchResume": {
+    "description": "Action that resumes a paused search."
+  },
+  "searchStop": "Stop",
+  "@searchStop": {
+    "description": "Action that stops the running search."
+  },
+  "searchLoadMore": "Load more",
+  "@searchLoadMore": {
+    "description": "Action that asks every page-capable source for the next page."
+  },
+  "searchOriginsLine": "{count} sources",
+  "@searchOriginsLine": {
+    "description": "How many sources found one book.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchNoSources": "No source can be searched in this scope.",
+  "@searchNoSources": {
+    "description": "Shown when the scope resolves to no searchable source."
+  },
+  "searchTypeVideo": "Video",
+  "@searchTypeVideo": {
+    "description": "Source type: video."
+  },
+  "bookSourceStartReading": "Start reading",
+  "@bookSourceStartReading": {
+    "description": "Detail page action: opens the reader at the first chapter."
+  },
+  "bookSourceContinueReading": "Continue reading",
+  "@bookSourceContinueReading": {
+    "description": "Detail page action: opens the reader at the stored position."
+  },
+  "bookSourceIntroExpand": "Show more",
+  "@bookSourceIntroExpand": {
+    "description": "Expands the truncated introduction on the detail page."
+  },
+  "bookSourceIntroCollapse": "Show less",
+  "@bookSourceIntroCollapse": {
+    "description": "Collapses the expanded introduction on the detail page."
+  },
+  "bookSourceListSearchHint": "Search name, URL or group",
+  "@bookSourceListSearchHint": {
+    "description": "Search field on the source list."
+  },
+  "bookSourceListSelectAll": "Select all",
+  "@bookSourceListSelectAll": {
+    "description": "Selection mode: selects every visible row."
+  },
+  "bookSourceListInvertSelection": "Invert",
+  "@bookSourceListInvertSelection": {
+    "description": "Selection mode: inverts the current selection."
+  },
+  "bookSourceListSelectMode": "Select sources",
+  "@bookSourceListSelectMode": {
+    "description": "Toolbar action: enters the multi-select mode with nothing ticked yet."
+  },
+  "bookSourceListInvalidDisable": "Disable failing",
+  "@bookSourceListInvalidDisable": {
+    "description": "One-click action next to the failing filter: disables every failing source currently listed."
+  },
+  "bookSourceListInvalidDelete": "Delete failing",
+  "@bookSourceListInvalidDelete": {
+    "description": "One-click action next to the failing filter: deletes every failing source currently listed, after a confirmation."
+  },
+  "bookSourceListInvalidDisabled": "Disabled {count} failing sources",
+  "@bookSourceListInvalidDisabled": {
+    "description": "Feedback after the one-click disable.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListInvalidDeleteTitle": "Delete {count} failing sources?",
+  "@bookSourceListInvalidDeleteTitle": {
+    "description": "Confirmation title of the one-click delete for failing sources.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListGroupSelectSources": "Select every source in this group",
+  "@bookSourceListGroupSelectSources": {
+    "description": "Group dialog action: switches the list to the group and ticks all of its sources."
+  },
+  "bookSourceListGroupDeleteSources": "Delete every source in this group",
+  "@bookSourceListGroupDeleteSources": {
+    "description": "Group dialog action: deletes the sources of the group, not just the group label."
+  },
+  "bookSourceListGroupDeleteSourcesTitle": "Delete the {count} sources in “{group}”?",
+  "@bookSourceListGroupDeleteSourcesTitle": {
+    "description": "Confirmation title for deleting every source of a group.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceListSelectedCount": "{count} selected",
+  "@bookSourceListSelectedCount": {
+    "description": "Selection mode: how many rows are selected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListBatchCheck": "Check selected",
+  "@bookSourceListBatchCheck": {
+    "description": "Batch action: opens the check page with exactly the selected sources ticked."
+  },
+  "bookSourceListBatchEnable": "Enable",
+  "@bookSourceListBatchEnable": {
+    "description": "Batch action: enables every selected source."
+  },
+  "bookSourceListBatchDisable": "Disable",
+  "@bookSourceListBatchDisable": {
+    "description": "Batch action: disables every selected source."
+  },
+  "bookSourceListBatchDelete": "Delete",
+  "@bookSourceListBatchDelete": {
+    "description": "Batch action: deletes every selected source."
+  },
+  "bookSourceListBatchDeleteTitle": "Delete {count} sources?",
+  "@bookSourceListBatchDeleteTitle": {
+    "description": "Confirmation title for a batch delete.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListBatchDeleteBody": "Books you added from them stay on the shelf.",
+  "@bookSourceListBatchDeleteBody": {
+    "description": "Confirmation body for a batch delete."
+  },
+  "bookSourceListBatchGroup": "Group",
+  "@bookSourceListBatchGroup": {
+    "description": "Batch action: puts the selection into a group."
+  },
+  "bookSourceListGroupNone": "No group",
+  "@bookSourceListGroupNone": {
+    "description": "Group picker: clears the group."
+  },
+  "bookSourceListGroupNew": "New group…",
+  "@bookSourceListGroupNew": {
+    "description": "Group picker: asks for a new group name."
+  },
+  "bookSourceListGroupNameHint": "Group name",
+  "@bookSourceListGroupNameHint": {
+    "description": "Text field hint for a group name."
+  },
+  "bookSourceCheckFilterLabel": "Check status",
+  "@bookSourceCheckFilterLabel": {
+    "description": "Chip row label for the check-status filter."
+  },
+  "bookSourceCheckFilterAll": "All",
+  "@bookSourceCheckFilterAll": {
+    "description": "Check-status filter: every source."
+  },
+  "bookSourceCheckFilterHealthy": "Healthy",
+  "@bookSourceCheckFilterHealthy": {
+    "description": "Check-status filter: sources with no failure group or note."
+  },
+  "bookSourceCheckFilterFailing": "Has failures",
+  "@bookSourceCheckFilterFailing": {
+    "description": "Check-status filter: sources whose last check failed."
+  },
+  "bookSourceCheckStatusPassed": "Check passed",
+  "@bookSourceCheckStatusPassed": {
+    "description": "Status light: the last check found no failure."
+  },
+  "bookSourceCheckStatusDegraded": "Timed out or JS failed",
+  "@bookSourceCheckStatusDegraded": {
+    "description": "Status light: the last check failed only with a timeout or a broken script."
+  },
+  "bookSourceCheckStatusUnchecked": "Never checked",
+  "@bookSourceCheckStatusUnchecked": {
+    "description": "Status light: the source has no verdict yet."
+  },
+  "bookSourceListLastCheckJustNow": "Checked just now",
+  "@bookSourceListLastCheckJustNow": {
+    "description": "Last-check summary: the check finished less than a minute ago."
+  },
+  "bookSourceListLastCheckMinutesAgo": "Checked {count} min ago",
+  "@bookSourceListLastCheckMinutesAgo": {
+    "description": "Last-check summary: minutes since the last verdict.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListLastCheckHoursAgo": "Checked {count} h ago",
+  "@bookSourceListLastCheckHoursAgo": {
+    "description": "Last-check summary: hours since the last verdict.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListLastCheckDaysAgo": "Checked {count} d ago",
+  "@bookSourceListLastCheckDaysAgo": {
+    "description": "Last-check summary: days since the last verdict.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListLastCheckOn": "Checked {date}",
+  "@bookSourceListLastCheckOn": {
+    "description": "Last-check summary: absolute date for a verdict older than a week.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceListLastCheckLine": "{when} · {millis} ms",
+  "@bookSourceListLastCheckLine": {
+    "description": "Last-check summary: when it ran and how long it took.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      },
+      "millis": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceListBatchMoveTop": "Move to top",
+  "@bookSourceListBatchMoveTop": {
+    "description": "Batch action: moves the selection to the top of the manual order."
+  },
+  "bookSourceListBatchMoveBottom": "Move to bottom",
+  "@bookSourceListBatchMoveBottom": {
+    "description": "Batch action: moves the selection to the bottom of the manual order."
+  },
+  "bookSourceListBatchRemoveGroup": "Remove from group",
+  "@bookSourceListBatchRemoveGroup": {
+    "description": "Batch action: removes the selection from the current group filter."
+  },
+  "bookSourceListExploreOn": "Discover on",
+  "@bookSourceListExploreOn": {
+    "description": "Row badge: the source offers its discover page."
+  },
+  "bookSourceListExploreOff": "Discover off",
+  "@bookSourceListExploreOff": {
+    "description": "Row badge: the user turned the discover page off."
+  },
+  "bookSourceExploreDisabled": "Discover is turned off for this source. Turn it back on in the source list.",
+  "@bookSourceExploreDisabled": {
+    "description": "Discover page empty state: the user disabled this source's discover page."
+  },
+  "bookSourceRowExploreEnable": "Turn discover on",
+  "@bookSourceRowExploreEnable": {
+    "description": "Row menu: offers the source's discover page again."
+  },
+  "bookSourceRowExploreDisable": "Turn discover off",
+  "@bookSourceRowExploreDisable": {
+    "description": "Row menu: hides the source's discover page without deleting its rules."
+  },
+  "bookSourceListSortAscending": "Ascending",
+  "@bookSourceListSortAscending": {
+    "description": "Sort direction toggle: current direction is ascending."
+  },
+  "bookSourceListSortDescending": "Descending",
+  "@bookSourceListSortDescending": {
+    "description": "Sort direction toggle: current direction is descending."
+  },
+  "bookSourceListGroupByDomain": "Group by domain",
+  "@bookSourceListGroupByDomain": {
+    "description": "List view toggle: one section per book source host."
+  },
+  "bookSourceListViewOptions": "View",
+  "@bookSourceListViewOptions": {
+    "description": "Tooltip of the list's view-options menu."
+  },
+  "bookSourceListMoreActions": "More actions",
+  "@bookSourceListMoreActions": {
+    "description": "Tooltip of the batch bar's overflow menu."
+  },
+  "bookSourceListGroupManage": "Manage groups",
+  "@bookSourceListGroupManage": {
+    "description": "Opens the group management dialog."
+  },
+  "bookSourceListGroupRename": "Rename group",
+  "@bookSourceListGroupRename": {
+    "description": "Group management action: rename a group everywhere."
+  },
+  "bookSourceListGroupDelete": "Delete group",
+  "@bookSourceListGroupDelete": {
+    "description": "Group management action: remove the group from every source."
+  },
+  "bookSourceListGroupDeleteBody": "Every source leaves “{group}”; the sources themselves stay.",
+  "@bookSourceListGroupDeleteBody": {
+    "description": "Confirms deleting a group everywhere.",
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceListGroupRemoveFrom": "Remove from “{group}”",
+  "@bookSourceListGroupRemoveFrom": {
+    "description": "Batch action: takes the selection out of one group.",
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceRowCheck": "Check this source",
+  "@bookSourceRowCheck": {
+    "description": "Row menu: runs the check on this one source."
+  },
+  "bookSourceRowEdit": "Edit",
+  "@bookSourceRowEdit": {
+    "description": "Row menu: opens the editor."
+  },
+  "bookSourceRowExport": "Export",
+  "@bookSourceRowExport": {
+    "description": "Row menu: copies / saves the source JSON."
+  },
+  "bookSourceCheckPassed": "Check passed",
+  "@bookSourceCheckPassed": {
+    "description": "Snack bar after a single check that found nothing wrong."
+  },
+  "bookSourceCheckFound": "Check found: {groups}",
+  "@bookSourceCheckFound": {
+    "description": "Snack bar after a single check, naming the failure groups.",
+    "placeholders": {
+      "groups": {
+        "type": "String"
+      }
+    }
+  },
+  "bookSourceExportCopied": "Source JSON copied",
+  "@bookSourceExportCopied": {
+    "description": "Snack bar after copying one source."
+  },
+  "bookSourceExportSaved": "Saved",
+  "@bookSourceExportSaved": {
+    "description": "Snack bar after saving one source to a file."
+  },
+  "bookSourceExportFailed": "Could not export this source",
+  "@bookSourceExportFailed": {
+    "description": "Snack bar when the export fails."
+  },
+  "bookSourceEditTitle": "Edit source",
+  "@bookSourceEditTitle": {
+    "description": "Editor page title."
+  },
+  "bookSourceEditSaved": "Saved",
+  "@bookSourceEditSaved": {
+    "description": "Snack bar after saving an edit."
+  },
+  "bookSourceEditInvalidFields": "Fix the highlighted fields first",
+  "@bookSourceEditInvalidFields": {
+    "description": "Editor: validation failed."
+  },
+  "bookSourceEditIdentityConflict": "Another source already has exactly these rules",
+  "@bookSourceEditIdentityConflict": {
+    "description": "Editor: the new identity already exists."
+  },
+  "bookSourceEditUrlHint": "Changing the URL is like switching source: the shelf keeps the old one.",
+  "@bookSourceEditUrlHint": {
+    "description": "Editor hint when the URL differs from the stored one."
+  },
+  "bookSourceFieldName": "Name",
+  "@bookSourceFieldName": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldUrl": "Source URL",
+  "@bookSourceFieldUrl": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldGroup": "Group",
+  "@bookSourceFieldGroup": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldType": "Type",
+  "@bookSourceFieldType": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldWeight": "Weight",
+  "@bookSourceFieldWeight": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldHeader": "Header (JSON)",
+  "@bookSourceFieldHeader": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldSearchRule": "Search rule",
+  "@bookSourceFieldSearchRule": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldBookInfoRule": "Book info rule",
+  "@bookSourceFieldBookInfoRule": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldTocRule": "Chapters rule",
+  "@bookSourceFieldTocRule": {
+    "description": "Editor field label."
+  },
+  "bookSourceFieldContentRule": "Content rule",
+  "@bookSourceFieldContentRule": {
+    "description": "Editor field label."
+  },
+  "actionSave": "Save",
+  "@actionSave": {
+    "description": "Generic save action."
+  },
+  "bookSourceRowCheckRunning": "Checking…",
+  "@bookSourceRowCheckRunning": {
+    "description": "Snack bar shown while a single-source check runs."
+  },
+  "readerFontFamily": "Font",
+  "@readerFontFamily": {
+    "description": "Reader setting: which font family the body uses."
+  },
+  "readerFontFamilyTheme": "Theme default",
+  "@readerFontFamilyTheme": {
+    "description": "Font family option: the app theme’s own font."
+  },
+  "readerFontFamilySerif": "Serif",
+  "@readerFontFamilySerif": {
+    "description": "Font family option: serif."
+  },
+  "readerFontFamilySans": "Sans-serif",
+  "@readerFontFamilySans": {
+    "description": "Font family option: sans-serif."
+  },
+  "readerFontFamilyMono": "Monospace",
+  "@readerFontFamilyMono": {
+    "description": "Font family option: monospace."
+  },
+  "readerParagraphSpacing": "Paragraph spacing",
+  "@readerParagraphSpacing": {
+    "description": "Reader setting: space between paragraphs."
+  },
+  "readerFirstLineIndent": "First-line indent",
+  "@readerFirstLineIndent": {
+    "description": "Reader setting: first-line indent."
+  },
+  "readerPagePadding": "Page margin",
+  "@readerPagePadding": {
+    "description": "Reader setting: page margin preset."
+  },
+  "readerPaddingNarrow": "Narrow",
+  "@readerPaddingNarrow": {
+    "description": "Page margin preset: narrow."
+  },
+  "readerPaddingMedium": "Medium",
+  "@readerPaddingMedium": {
+    "description": "Page margin preset: medium."
+  },
+  "readerPaddingWide": "Wide",
+  "@readerPaddingWide": {
+    "description": "Page margin preset: wide."
+  },
+  "readerChapterProgress": "{current}/{total} chapters",
+  "@readerChapterProgress": {
+    "description": "Reader UI text: readerChapterProgress.",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerChapterPercent": "{percent}%",
+  "@readerChapterPercent": {
+    "description": "Reader UI text: readerChapterPercent.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "readerChangeSource": "Change source",
+  "@readerChangeSource": {
+    "description": "Reader UI text: readerChangeSource."
+  },
+  "readerBrightness": "Brightness",
+  "@readerBrightness": {
+    "description": "Reader UI text: readerBrightness."
+  },
+  "readerTocSort": "Reversed",
+  "@readerTocSort": {
+    "description": "Reader UI text: readerTocSort."
+  },
+  "readerTocSearchHint": "Search chapters",
+  "@readerTocSearchHint": {
+    "description": "Reader UI text: readerTocSearchHint."
+  },
+  "readerSourceTitle": "Change source",
+  "@readerSourceTitle": {
+    "description": "Reader UI text: readerSourceTitle."
+  },
+  "readerSourceEmpty": "No other source has this book.",
+  "@readerSourceEmpty": {
+    "description": "Reader UI text: readerSourceEmpty."
+  },
+  "readerSourceSearching": "Searching other sources…",
+  "@readerSourceSearching": {
+    "description": "Reader UI text: readerSourceSearching."
+  },
+  "readerSourceChapters": "{count} chapters",
+  "@readerSourceChapters": {
+    "description": "Reader UI text: readerSourceChapters.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSourceFailed": "Could not switch source",
+  "@readerSourceFailed": {
+    "description": "Reader UI text: readerSourceFailed."
+  },
+  "readerSourceAligned": "Aligned to: {chapter}",
+  "@readerSourceAligned": {
+    "description": "Reader UI text: readerSourceAligned.",
+    "placeholders": {
+      "chapter": {
+        "type": "String"
       }
     }
   }

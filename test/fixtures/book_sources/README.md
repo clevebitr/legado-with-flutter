@@ -10,7 +10,7 @@
 | 来源 | 公开的「阅读 / Legado」书源合集 `https://raw.githubusercontent.com/Orokapei/BookSource/main/Legado.json`（2026-10-11 取用） |
 | 处理 | **裁剪**：从 11 条中取 1 条（原 `bookSourceName` 为「六零文学」）。**脱敏**：`bookSourceName` 改为中性名，`bookSourceUrl` / `bookUrlPattern` / `loginUrl` 的主机改为保留域 `example-novel.test` |
 | 未改动 | 其余字段与**全部规则串逐字保留**（`@css:` / `{{}}` / `##` / 默认规则 `text`、`href`），因此它保留了真实导出文件的字段构成：27 个顶层键中 16 个当前未建模，正是 `extra` 保留机制的验证对象 |
-| 用途 | Phase 2.1 验收「能用真实书源 JSON 反序列化」（`PLAN.md` 2.1）；未建模键的逐层保留断言 |
+| 用途 | Phase 2.1 验收「能用真实书源 JSON 反序列化」（`docs/dev/roadmap.md` 2.1）；未建模键的逐层保留断言 |
 
 **许可证与免责：** 语料是用户侧的第三方书源**数据**（非上游代码），按 `NOTICE.md` §1 的
 口径不构成本项目代码衍生；本项目不分发、不索引任何书源，此处仅为离线测试夹具，
@@ -23,12 +23,12 @@
 |---|---|
 | 来源 | 公开的「阅读 / Legado」书源合集 `https://raw.githubusercontent.com/safino9/SourceGo/master/book_source/all.json`（2026-10-11 取用；该合集自述 189 条） |
 | 处理 | **裁剪**：取 1 条（原 `bookSourceName` 为「🥈追书网」）。**脱敏**：`bookSourceName` 改为中性名，`bookSourceUrl` / `searchUrl` 主机改为保留域 `example-novel.test`，`bookSourceComment` 置空（其内容为合集自身地址） |
-| 未改动 | 其余字段与**全部规则串逐字保留**：四段规则只用默认规则语法（矩阵 #1/#2/#5/#8/#9），因此它是 `PLAN.md` §4 的 G2 语料 |
+| 未改动 | 其余字段与**全部规则串逐字保留**：四段规则只用默认规则语法（矩阵 #1/#2/#5/#8/#9），因此它是 `docs/dev/roadmap.md` §4 的 G2 语料 |
 | 配套页面 | `../html/search_result.html`、`../html/book_page.html`、`../html/chapter_page.html`（**按其真实选择器构造**，原因与实测证据见 `../html/README.md`） |
 
 ## `legado_g2b_default_rules_source.json` / `legado_g2b_css_rules_source.json`
 
-> 这一对是 **G2b（真实站点链路）的证据语料**（`PLAN.md` §3.4 步骤 3 / §3.7），
+> 这一对是 **G2b（真实站点链路）的证据语料**（`docs/dev/roadmap.md` §3.4 步骤 3 / §3.7），
 > 不是回归语料：它们指向一个**活站点**，而单元测试禁止联网（C-NET-8）。
 
 | 项 | 值（两条相同） |
@@ -80,7 +80,7 @@ dart run tool/spot_check/spot_check.dart --source=/tmp/g2b.json --keyword=剑来
 ## `legado_js_rules_source.json`
 
 > 这是 **3.7（真实书源回归）的证据语料**：矩阵 #14（`@js:`）在本文件入库前**仓内语料为 0 条**，
-> 因此状态列无法翻转（ADR-0029 §后果、`PLAN.md` §3.7）。它同样指向一个**活站点**。
+> 因此状态列无法翻转（ADR-0029 §后果、`docs/dev/roadmap.md` §3.7）。它同样指向一个**活站点**。
 
 | 项 | 值 |
 |---|---|

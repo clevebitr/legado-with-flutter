@@ -86,6 +86,8 @@ final class JsJob {
     this.parseEvaluator,
     this.variables = const <String, String>{},
     this.key,
+    this.bookName,
+    this.chapterTitle,
   });
 
   /// The JavaScript the rule asked for, with the `@js:` flag already removed.
@@ -115,6 +117,19 @@ final class JsJob {
   /// `null` for every other job, so a field rule reading `key` fails with `js:error`
   /// instead of silently seeing an empty string (ADR-0034 §决策 3).
   final String? key;
+
+  /// The book being read, when the stage knows it (`book-source.md` §6, ADR-0049).
+  ///
+  /// It answers `java.get('bookName')` **before** the variable store does, which is upstream's
+  /// order (`AnalyzeRule.get`, `AnalyzeRule.kt:812-821`): a rule that reads the book name gets
+  /// the book, not a variable that happens to share the name.
+  final String? bookName;
+
+  /// The chapter being read, when the stage knows it (§6, ADR-0049).
+  ///
+  /// It answers `java.get('title')`. `null` means "this stage has no single chapter" — a
+  /// search or a table of contents — and the read falls through to the variable store.
+  final String? chapterTitle;
 
   /// The page the rule was read on (the `baseUrl` binding).
   final String baseUrl;
@@ -153,6 +168,8 @@ final class JsJob {
     'result': result,
     'variables': variables,
     'key': key,
+    'bookName': bookName,
+    'chapterTitle': chapterTitle,
   };
 }
 

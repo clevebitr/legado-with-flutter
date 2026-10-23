@@ -1,0 +1,90 @@
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'stored_book_source.freezed.dart';
+
+/// One imported book source as it is stored (`docs/dev/roadmap.md` 5.1, ADR-0040).
+///
+/// It pairs the parsed [source] — what the engine consumes — with the columns the user can
+/// change, so a caller never has to read the user state back out of the payload: `enabled` and
+/// `customOrder` are columns, and an import never overwrites them (ADR-0040 §决策 3).
+///
+/// `@freezed` rather than a hand-written class: C-ARCH-5 asks for "`freezed`, or `final` fields
+/// plus `copyWith`", and the UI will copy this value around when it flips a source on or off
+/// (`docs/dev/roadmap.md` 5.1), so the generated `copyWith` is part of the contract rather than surplus.
+///
+/// The five nullable fields are **column projections**, not a copy of the payload
+/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 1): the batch check writes groups, a note and a
+/// respond time into columns while the payload stays byte-for-byte as imported (ADR-0040 §决策 4),
+/// so the list has to read the columns or it would keep showing the state from before the check.
+@freezed
+abstract class StoredBookSource with _$StoredBookSource {
+  /// Creates a stored source.
+  const factory StoredBookSource({
+    /// The synthetic primary key; stable across re-imports, which is what lets the UI hold on
+    /// to "the current source" (ADR-0040 §决策 1).
+    required int id,
+
+    /// The parsed book source, with [BookSource.isEnabled] already copied onto it and the row's
+    /// own `customOrder` alongside (the model has no such field; `docs/dev/roadmap.md` 5.5 owns its display).
+    required BookSource source,
+
+    /// Whether the source takes part in search and explore.
+    required bool isEnabled,
+
+    /// The manual sort order the user gave it.
+    required int customOrder,
+
+    /// When the row was first imported.
+    required DateTime importedAt,
+
+    /// `bookSourceGroup` as stored, including the tokens the batch check writes (`搜索失效` …).
+    String? groupName,
+
+    /// `lastUpdateTime` as stored, in milliseconds since the epoch.
+    int? lastUpdateTime,
+
+    /// `respondTime` as stored — the last check's duration, or `null` when it was never checked.
+    int? respondTime,
+
+    /// `weight` as stored; the list can sort by it (ADR-0045 §决策 2).
+    int? weight,
+
+    /// Whether the source's discover page is offered (`docs/dev/roadmap.md` §3.10 V2).
+    ///
+    /// User state like [isEnabled]: an import initialises a new row from the payload and a
+    /// re-import never resets it (ADR-0040 §决策 3, ADR-0052 §决策 3).
+    @Default(true) bool isExploreEnabled,
+
+    /// The newest recorded check of this source, or `null` when it has no verdict yet.
+    ///
+    /// A **projection of `source_checks`**, not part of the payload (ADR-0052 §决策 1): the light,
+    /// the "last checked" line and the healthy/failing filter read it, while the check's legacy
+    /// columns stay available for the group axis (ADR-0050 §决策 1).
+    SourceCheckRecord? lastCheck,
+
+    /// `bookSourceComment` as stored, i.e. the user's note plus the check's `// Error: ` block.
+    String? comment,
+  }) = _StoredBookSource;
+}
+
+/// What one `BookSourceRepository.saveAll` call did (ADR-0040 §决策 3).
+///
+/// `inserted + refreshed` is what an import reports as "imported"; the split is kept because a
+/// re-import that only refreshed is not a new source for the user. The *skipped* count belongs to
+/// the import use case, not here: the repository only ever sees entries the caller accepted.
+///
+/// `copyWith` is off for the same reason `ParseResult` turns it off: a report is a result value
+/// nobody derives a variant of, so generating the methods would be unused API (C-BAN-1).
+@Freezed(copyWith: false)
+abstract class BookSourceSaveReport with _$BookSourceSaveReport {
+  /// Creates a save report.
+  const factory BookSourceSaveReport({
+    /// How many entries were new identities.
+    required int inserted,
+
+    /// How many entries were the same identity as a stored row and only refreshed its payload.
+    required int refreshed,
+  }) = _BookSourceSaveReport;
+}

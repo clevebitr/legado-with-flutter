@@ -124,6 +124,19 @@ void main() {
     test('redactUrl_whenUrlCannotBeParsed_returnsAPlaceholder', () {
       expect(redactUrl('http://[bad'), '<unparsable-url>');
     });
+
+    test('redactUrl_whenQueryCannotBeDecoded_stillReturnsAMaskedUrl', () {
+      // 真实书源会把关键词按 GBK 编码写进模板，或由 JS 拼出非法字节：
+      // `queryParameters` 对这类值抛 FormatException，而打日志绝不能成为请求失败的原因。
+      expect(
+        redactUrl('https://example.com/s?q=%FF%FE&page=1'),
+        'https://example.com/s?q=***&page=***',
+      );
+      expect(
+        redactUrl('https://example.com/s?%FF'),
+        'https://example.com/s?***',
+      );
+    });
   });
 
   group('describeKeyword', () {

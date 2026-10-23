@@ -56,13 +56,17 @@ extension BookSourceRoutePatterns on BookSourceRoute {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( BookDetailRoute value)?  bookDetail,TResult Function( ExploreRoute value)?  explore,TResult Function( ReaderRoute value)?  reader,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( BookDetailRoute value)?  bookDetail,TResult Function( ExploreRoute value)?  explore,TResult Function( BookSourceListRoute value)?  importedSources,TResult Function( BookSourceImportRoute value)?  importSources,TResult Function( BookSourceCheckRoute value)?  checkSources,TResult Function( BookSourceDebugRoute value)?  debugSource,TResult Function( BookSourceEditRoute value)?  editSource,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that);case ExploreRoute() when explore != null:
-return explore(_that);case ReaderRoute() when reader != null:
-return reader(_that);case _:
+return explore(_that);case BookSourceListRoute() when importedSources != null:
+return importedSources(_that);case BookSourceImportRoute() when importSources != null:
+return importSources(_that);case BookSourceCheckRoute() when checkSources != null:
+return checkSources(_that);case BookSourceDebugRoute() when debugSource != null:
+return debugSource(_that);case BookSourceEditRoute() when editSource != null:
+return editSource(_that);case _:
   return orElse();
 
 }
@@ -80,13 +84,17 @@ return reader(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( BookDetailRoute value)  bookDetail,required TResult Function( ExploreRoute value)  explore,required TResult Function( ReaderRoute value)  reader,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( BookDetailRoute value)  bookDetail,required TResult Function( ExploreRoute value)  explore,required TResult Function( BookSourceListRoute value)  importedSources,required TResult Function( BookSourceImportRoute value)  importSources,required TResult Function( BookSourceCheckRoute value)  checkSources,required TResult Function( BookSourceDebugRoute value)  debugSource,required TResult Function( BookSourceEditRoute value)  editSource,}){
 final _that = this;
 switch (_that) {
 case BookDetailRoute():
 return bookDetail(_that);case ExploreRoute():
-return explore(_that);case ReaderRoute():
-return reader(_that);}
+return explore(_that);case BookSourceListRoute():
+return importedSources(_that);case BookSourceImportRoute():
+return importSources(_that);case BookSourceCheckRoute():
+return checkSources(_that);case BookSourceDebugRoute():
+return debugSource(_that);case BookSourceEditRoute():
+return editSource(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -100,13 +108,17 @@ return reader(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( BookDetailRoute value)?  bookDetail,TResult? Function( ExploreRoute value)?  explore,TResult? Function( ReaderRoute value)?  reader,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( BookDetailRoute value)?  bookDetail,TResult? Function( ExploreRoute value)?  explore,TResult? Function( BookSourceListRoute value)?  importedSources,TResult? Function( BookSourceImportRoute value)?  importSources,TResult? Function( BookSourceCheckRoute value)?  checkSources,TResult? Function( BookSourceDebugRoute value)?  debugSource,TResult? Function( BookSourceEditRoute value)?  editSource,}){
 final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that);case ExploreRoute() when explore != null:
-return explore(_that);case ReaderRoute() when reader != null:
-return reader(_that);case _:
+return explore(_that);case BookSourceListRoute() when importedSources != null:
+return importedSources(_that);case BookSourceImportRoute() when importSources != null:
+return importSources(_that);case BookSourceCheckRoute() when checkSources != null:
+return checkSources(_that);case BookSourceDebugRoute() when debugSource != null:
+return debugSource(_that);case BookSourceEditRoute() when editSource != null:
+return editSource(_that);case _:
   return null;
 
 }
@@ -123,12 +135,16 @@ return reader(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Book book)?  bookDetail,TResult Function()?  explore,TResult Function( Chapter chapter)?  reader,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Book book)?  bookDetail,TResult Function()?  explore,TResult Function()?  importedSources,TResult Function()?  importSources,TResult Function( Set<int>? sourceIds,  String? group)?  checkSources,TResult Function( int? sourceId)?  debugSource,TResult Function( int sourceId)?  editSource,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that.book);case ExploreRoute() when explore != null:
-return explore();case ReaderRoute() when reader != null:
-return reader(_that.chapter);case _:
+return explore();case BookSourceListRoute() when importedSources != null:
+return importedSources();case BookSourceImportRoute() when importSources != null:
+return importSources();case BookSourceCheckRoute() when checkSources != null:
+return checkSources(_that.sourceIds,_that.group);case BookSourceDebugRoute() when debugSource != null:
+return debugSource(_that.sourceId);case BookSourceEditRoute() when editSource != null:
+return editSource(_that.sourceId);case _:
   return orElse();
 
 }
@@ -146,12 +162,16 @@ return reader(_that.chapter);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Book book)  bookDetail,required TResult Function()  explore,required TResult Function( Chapter chapter)  reader,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Book book)  bookDetail,required TResult Function()  explore,required TResult Function()  importedSources,required TResult Function()  importSources,required TResult Function( Set<int>? sourceIds,  String? group)  checkSources,required TResult Function( int? sourceId)  debugSource,required TResult Function( int sourceId)  editSource,}) {final _that = this;
 switch (_that) {
 case BookDetailRoute():
 return bookDetail(_that.book);case ExploreRoute():
-return explore();case ReaderRoute():
-return reader(_that.chapter);}
+return explore();case BookSourceListRoute():
+return importedSources();case BookSourceImportRoute():
+return importSources();case BookSourceCheckRoute():
+return checkSources(_that.sourceIds,_that.group);case BookSourceDebugRoute():
+return debugSource(_that.sourceId);case BookSourceEditRoute():
+return editSource(_that.sourceId);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -165,12 +185,16 @@ return reader(_that.chapter);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Book book)?  bookDetail,TResult? Function()?  explore,TResult? Function( Chapter chapter)?  reader,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Book book)?  bookDetail,TResult? Function()?  explore,TResult? Function()?  importedSources,TResult? Function()?  importSources,TResult? Function( Set<int>? sourceIds,  String? group)?  checkSources,TResult? Function( int? sourceId)?  debugSource,TResult? Function( int sourceId)?  editSource,}) {final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that.book);case ExploreRoute() when explore != null:
-return explore();case ReaderRoute() when reader != null:
-return reader(_that.chapter);case _:
+return explore();case BookSourceListRoute() when importedSources != null:
+return importedSources();case BookSourceImportRoute() when importSources != null:
+return importSources();case BookSourceCheckRoute() when checkSources != null:
+return checkSources(_that.sourceIds,_that.group);case BookSourceDebugRoute() when debugSource != null:
+return debugSource(_that.sourceId);case BookSourceEditRoute() when editSource != null:
+return editSource(_that.sourceId);case _:
   return null;
 
 }
@@ -290,78 +314,279 @@ String toString() {
 /// @nodoc
 
 
-class ReaderRoute extends BookSourceRoute {
-  const ReaderRoute({required this.chapter}): super._();
+class BookSourceListRoute extends BookSourceRoute {
+  const BookSourceListRoute(): super._();
   
 
- final  Chapter chapter;
 
-/// Create a copy of BookSourceRoute
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$ReaderRouteCopyWith<ReaderRoute> get copyWith => _$ReaderRouteCopyWithImpl<ReaderRoute>(this, _$identity);
+
 
 
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is ReaderRoute&&(identical(other.chapter, chapter) || other.chapter == chapter));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceListRoute);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'BookSourceRoute.importedSources()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class BookSourceImportRoute extends BookSourceRoute {
+  const BookSourceImportRoute(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceImportRoute);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'BookSourceRoute.importSources()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class BookSourceCheckRoute extends BookSourceRoute {
+  const BookSourceCheckRoute({ Set<int>? sourceIds, this.group}): _sourceIds = sourceIds,super._();
+  
+
+ final  Set<int>? _sourceIds;
+ Set<int>? get sourceIds {
+  final value = _sourceIds;
+  if (value == null) return null;
+  if (_sourceIds is EqualUnmodifiableSetView) return _sourceIds;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableSetView(value);
+}
+
+ final  String? group;
+
+/// Create a copy of BookSourceRoute
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$BookSourceCheckRouteCopyWith<BookSourceCheckRoute> get copyWith => _$BookSourceCheckRouteCopyWithImpl<BookSourceCheckRoute>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceCheckRoute&&const DeepCollectionEquality().equals(other.sourceIds, _sourceIds)&&(identical(other.group, group) || other.group == group));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,chapter);
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_sourceIds),group);
 }
 
 @override
 String toString() {
-    return 'BookSourceRoute.reader(chapter: $chapter)';
+    return 'BookSourceRoute.checkSources(sourceIds: $sourceIds, group: $group)';
 }
 
 
 }
 
 /// @nodoc
-abstract mixin class $ReaderRouteCopyWith<$Res> implements $BookSourceRouteCopyWith<$Res> {
-  factory $ReaderRouteCopyWith(ReaderRoute value, $Res Function(ReaderRoute) _then) = _$ReaderRouteCopyWithImpl;
+abstract mixin class $BookSourceCheckRouteCopyWith<$Res> implements $BookSourceRouteCopyWith<$Res> {
+  factory $BookSourceCheckRouteCopyWith(BookSourceCheckRoute value, $Res Function(BookSourceCheckRoute) _then) = _$BookSourceCheckRouteCopyWithImpl;
 @useResult
 $Res call({
- Chapter chapter
+ Set<int>? sourceIds, String? group
 });
 
 
-$ChapterCopyWith<$Res> get chapter;
+
 
 }
 /// @nodoc
-class _$ReaderRouteCopyWithImpl<$Res>
-    implements $ReaderRouteCopyWith<$Res> {
-  _$ReaderRouteCopyWithImpl(this._self, this._then);
+class _$BookSourceCheckRouteCopyWithImpl<$Res>
+    implements $BookSourceCheckRouteCopyWith<$Res> {
+  _$BookSourceCheckRouteCopyWithImpl(this._self, this._then);
 
-  final ReaderRoute _self;
-  final $Res Function(ReaderRoute) _then;
+  final BookSourceCheckRoute _self;
+  final $Res Function(BookSourceCheckRoute) _then;
 
 /// Create a copy of BookSourceRoute
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? chapter = null,}) {
-  return _then(ReaderRoute(
-chapter: null == chapter ? _self.chapter : chapter // ignore: cast_nullable_to_non_nullable
-as Chapter,
+@pragma('vm:prefer-inline') $Res call({Object? sourceIds = freezed,Object? group = freezed,}) {
+  return _then(BookSourceCheckRoute(
+sourceIds: freezed == sourceIds ? _self._sourceIds : sourceIds // ignore: cast_nullable_to_non_nullable
+as Set<int>?,group: freezed == group ? _self.group : group // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
+
+}
+
+/// @nodoc
+
+
+class BookSourceDebugRoute extends BookSourceRoute {
+  const BookSourceDebugRoute({this.sourceId}): super._();
+  
+
+ final  int? sourceId;
+
 /// Create a copy of BookSourceRoute
 /// with the given fields replaced by the non-null parameter values.
-@override
+@JsonKey(includeFromJson: false, includeToJson: false)
 @pragma('vm:prefer-inline')
-$ChapterCopyWith<$Res> get chapter {
-  
-  return $ChapterCopyWith<$Res>(_self.chapter, (value) {
-    return _then(_self.copyWith(chapter: value));
-  });
+$BookSourceDebugRouteCopyWith<BookSourceDebugRoute> get copyWith => _$BookSourceDebugRouteCopyWithImpl<BookSourceDebugRoute>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceDebugRoute&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId));
 }
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,sourceId);
+}
+
+@override
+String toString() {
+    return 'BookSourceRoute.debugSource(sourceId: $sourceId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $BookSourceDebugRouteCopyWith<$Res> implements $BookSourceRouteCopyWith<$Res> {
+  factory $BookSourceDebugRouteCopyWith(BookSourceDebugRoute value, $Res Function(BookSourceDebugRoute) _then) = _$BookSourceDebugRouteCopyWithImpl;
+@useResult
+$Res call({
+ int? sourceId
+});
+
+
+
+
+}
+/// @nodoc
+class _$BookSourceDebugRouteCopyWithImpl<$Res>
+    implements $BookSourceDebugRouteCopyWith<$Res> {
+  _$BookSourceDebugRouteCopyWithImpl(this._self, this._then);
+
+  final BookSourceDebugRoute _self;
+  final $Res Function(BookSourceDebugRoute) _then;
+
+/// Create a copy of BookSourceRoute
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? sourceId = freezed,}) {
+  return _then(BookSourceDebugRoute(
+sourceId: freezed == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
+as int?,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class BookSourceEditRoute extends BookSourceRoute {
+  const BookSourceEditRoute({required this.sourceId}): super._();
+  
+
+ final  int sourceId;
+
+/// Create a copy of BookSourceRoute
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$BookSourceEditRouteCopyWith<BookSourceEditRoute> get copyWith => _$BookSourceEditRouteCopyWithImpl<BookSourceEditRoute>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceEditRoute&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,sourceId);
+}
+
+@override
+String toString() {
+    return 'BookSourceRoute.editSource(sourceId: $sourceId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $BookSourceEditRouteCopyWith<$Res> implements $BookSourceRouteCopyWith<$Res> {
+  factory $BookSourceEditRouteCopyWith(BookSourceEditRoute value, $Res Function(BookSourceEditRoute) _then) = _$BookSourceEditRouteCopyWithImpl;
+@useResult
+$Res call({
+ int sourceId
+});
+
+
+
+
+}
+/// @nodoc
+class _$BookSourceEditRouteCopyWithImpl<$Res>
+    implements $BookSourceEditRouteCopyWith<$Res> {
+  _$BookSourceEditRouteCopyWithImpl(this._self, this._then);
+
+  final BookSourceEditRoute _self;
+  final $Res Function(BookSourceEditRoute) _then;
+
+/// Create a copy of BookSourceRoute
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? sourceId = null,}) {
+  return _then(BookSourceEditRoute(
+sourceId: null == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
 }
 
 // dart format on

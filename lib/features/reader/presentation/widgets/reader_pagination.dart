@@ -1,0 +1,69 @@
+import 'package:flutter/material.dart';
+
+/// Splits [text] into the character offsets its pages start at (`docs/dev/roadmap.md` 5.3).
+///
+/// The split is a **layout measurement, not a guess**: a [TextPainter] lays the remaining text out
+/// at [size]'s width, and the position under the bottom-right corner of the page becomes the next
+/// page's start. Two consequences are deliberate and recorded in ADR-0044 §决策 4:
+///
+/// * when that position is not the start of a line, the page ends a few words early — an
+///   approximation, never an overlap that would hide text;
+/// * the result depends on [style] and [textScaler], which is exactly why it is recomputed when the
+///   reader's typography changes instead of being stored.
+///
+/// The list always starts with `0`; a text that fits on one page answers `[0]`.
+List<int> readerPageStarts({
+  required String text,
+  required TextStyle style,
+  required Size size,
+  required TextScaler textScaler,
+}) {
+  final List<int> starts = <int>[0];
+  final double width = size.width;
+  final double height = size.height;
+  if (text.isEmpty || width <= 0 || height <= 0) {
+    return starts;
+  }
+
+  var start = 0;
+  while (start < text.length) {
+    final TextPainter painter = TextPainter(
+      text: TextSpan(text: text.substring(start), style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: textScaler,
+    )..layout(maxWidth: width);
+    if (painter.height <= height) {
+      // 剩下的正文一页装得下：当前页就是最后一页。
+      break;
+    }
+    final int pageEnd = painter
+        .getPositionForOffset(Offset(width, height))
+        .offset;
+    // 位置算不出来时至少前进一个字符：否则循环不终止（宁可多切一页，也不挂死）。
+    final int next = start + (pageEnd <= 0 ? 1 : pageEnd);
+    if (next >= text.length) {
+      break;
+    }
+    starts.add(next);
+    start = next;
+  }
+
+  return starts;
+}
+
+/// The index of the page that contains [charOffset] (`docs/dev/roadmap.md` 5.3).
+///
+/// Restoration uses it to turn a stored offset back into a page number; an offset past the end
+/// answers the last page rather than throwing.
+int readerPageOf(List<int> starts, int charOffset) {
+  var page = 0;
+  for (var index = 0; index < starts.length; index++) {
+    if (starts[index] <= charOffset) {
+      page = index;
+    } else {
+      break;
+    }
+  }
+
+  return page;
+}

@@ -10,7 +10,7 @@ import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 /// `SearchRule` and `ExploreRule` carry exactly these ten fields because upstream fixes the shape
 /// of a list rule in one interface (`BookListRule.kt:6-18`; the constraint is written down in
 /// `docs/dev/book-source.md` §2). The search and explore stages therefore read them through one
-/// reader ([readBooks]) instead of two copies that could drift apart — the drift `PLAN.md` §6
+/// reader ([readBooks]) instead of two copies that could drift apart — the drift `docs/dev/roadmap.md` §6
 /// warns about, and the reason the two rule types must grow together.
 final class BookListFields {
   /// Creates a field set.

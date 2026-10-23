@@ -1,10 +1,6 @@
-import 'package:drift/drift.dart'
-    show DriftWrappedException, InvalidDataException;
-import 'package:drift/isolate.dart' show DriftRemoteException;
-import 'package:drift/native.dart' show SqliteException;
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
+import 'package:flutter_reader/core/storage/cache_failure_absorber.dart';
 
 /// How long one detection result stays usable (`docs/dev/book-source.md` §5).
 ///
@@ -55,20 +51,10 @@ abstract interface class CharsetCache {
 /// first production consumer of `CacheDao` is also the one that proves the key shape works
 /// for something other than a page payload.
 ///
-/// **The cache's failure surface is absorbed here, and only here.** C-ERR-2 allows an
-/// `on Exception` clause in the `presentation/` Notifiers alone (ADR-0002's revision note),
-/// and the request layer must not have to know what a database can throw, so this class
-/// names the exceptions that losing a cache entry can produce — sqlite's [SqliteException]
-/// and drift's [DriftRemoteException] / [InvalidDataException] / [DriftWrappedException] —
-/// and answers “no cache” for them. `Error` stays uncaught, as ADR-0022 requires: a
-/// programming bug must not be filed under “cache miss”.
-///
-/// **One [Exception] falls through to a last clause, by ruling (ADR-0033).** drift's
-/// `ConnectionClosedException` (“the background isolate was closed”) is not exported by
-/// drift 2.35.2, so it cannot be named, and letting it escape would break C-ERR-1 — a lost
-/// cache entry must never fail a page. ADR-0033 pins that exemption to this one method,
-/// keeps `Error` out of it, and requires it to be deleted the moment drift exports the
-/// type enough to write a named clause instead.
+/// **The failure surface is absorbed by [absorbCacheFailure]**, the app's single absorption
+/// point (ADR-0033, whose revision note moved the exemption there when the chapter cache
+/// arrived): the request layer therefore never has to know what a database can throw, and a
+/// lost entry is a miss instead of an exception (C-ERR-1).
 final class CacheDaoCharsetCache implements CharsetCache {
   /// Creates the cache on top of the app's TTL cache.
   const CacheDaoCharsetCache(this._dao, {required this._logger});
@@ -114,41 +100,14 @@ final class CacheDaoCharsetCache implements CharsetCache {
     }, url: url);
   }
 
-  /// Runs one cache operation and turns the database's failure surface into “no cache”.
-  ///
-  /// A lost entry costs a sniff, never a page, so the failure is recorded at `debug` level
-  /// (with the URL's digest and the error's digest, C-SEC-4) and reported as a miss.
+  /// Runs one cache operation through the shared absorber; a lost entry costs a sniff, not a page.
   Future<T?> _absorb<T>(
     Future<T> Function() operation, {
     required String url,
-  }) async {
-    try {
-      return await operation();
-    } on SqliteException catch (error, stackTrace) {
-      _report(error, stackTrace, url);
-    } on DriftRemoteException catch (error, stackTrace) {
-      _report(error, stackTrace, url);
-    } on DriftWrappedException catch (error, stackTrace) {
-      _report(error, stackTrace, url);
-    } on InvalidDataException catch (error, stackTrace) {
-      _report(error, stackTrace, url);
-    } on Exception catch (error, stackTrace) {
-      // ADR-0033 钉下的唯一豁免：drift 的 `ConnectionClosedException`（后台 isolate 被关闭）
-      // 在 2.35.2 里没有公开导出，点不到名；放它逃出去就会让缓存这条旁路失败变成页面请求抛
-      // 异常（C-ERR-1）。豁免只限本方法、只限 `Exception`（`Error` 仍然原样向上，ADR-0022），
-      // 且 drift 一旦导出该类型就必须换回具名 catch、删掉这一支。
-      _report(error, stackTrace, url);
-    }
-
-    return null;
-  }
-
-  /// Records one absorbed cache failure; never a page body, never a cleartext URL.
-  void _report(Object error, StackTrace stackTrace, String url) {
-    _logger.debug(
-      'Charset cache unavailable: url=${redactUrl(url)}',
-      describeError(error),
-      stackTrace,
-    );
-  }
+  }) => absorbCacheFailure(
+    operation,
+    logger: _logger,
+    scope: 'Charset cache',
+    url: url,
+  );
 }

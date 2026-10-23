@@ -15,6 +15,8 @@ final class JsPageContext {
     this.page = 1,
     JsSourceInfo? source,
     this.headers,
+    this.bookName,
+    this.chapterTitle,
   }) : source = source ?? const JsSourceInfo(name: '', url: '');
 
   /// The URL the page was fetched from (the `baseUrl` binding).
@@ -25,6 +27,15 @@ final class JsPageContext {
 
   /// The sandbox view of the book source (the `source` binding).
   final JsSourceInfo source;
+
+  /// The book being read, when the stage knows it (`book-source.md` §6, ADR-0049).
+  ///
+  /// It is what `java.get('bookName')` answers; the engine copies it onto every job it builds
+  /// from this page, including the per-item scopes derived from it.
+  final String? bookName;
+
+  /// The chapter being read, when the stage knows it (`java.get('title')`, §6, ADR-0049).
+  final String? chapterTitle;
 
   /// The book source's own `header` field, when the fetch used one.
   ///

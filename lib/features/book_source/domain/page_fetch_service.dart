@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
@@ -6,6 +8,7 @@ import 'package:flutter_reader/core/network/http_response.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:html/parser.dart' as parser;
 
@@ -68,7 +71,7 @@ final class FetchedPage {
 /// [stoppedBy] is `null` when the walk ended on its own — the paging rule stopped
 /// naming pages, or every further page had already been read. Otherwise a **later**
 /// page could not be fetched and [pages] holds the prefix that was read; the two
-/// stages of `PLAN.md` 3.5 interpret that differently, because
+/// stages of `docs/dev/roadmap.md` 3.5 interpret that differently, because
 /// `docs/dev/book-source.md` §9 tolerates a missing table-of-contents page but not a
 /// truncated chapter body.
 final class PageWalk {
@@ -84,7 +87,7 @@ final class PageWalk {
 
 /// Fetches one page of a book source and reads rules from it.
 ///
-/// The four use cases of `PLAN.md` 2.4 share this collaborator so that the failure
+/// The four use cases of `docs/dev/roadmap.md` 2.4 share this collaborator so that the failure
 /// rules of `docs/dev/book-source.md` §7 live in exactly one place:
 ///
 /// * a failure is always a [ParseResult], never an exception thrown at the UI
@@ -111,6 +114,145 @@ final class PageFetchService {
   final RuleEngine _engine;
   final HttpClient _http;
   final AppLogger _logger;
+
+  /// Fetches one **URL rule** and parses the body into a page scope
+  /// (`book-source.md` §4.3).
+  ///
+  /// A URL field is not a plain address: real sources write
+  /// `…/search.php,{"method":"POST","body":"searchkey={{key}}","charset":"gbk"}`, and
+  /// sending that comma as part of the address is what made half of a published collection
+  /// fail at the very first request. So this method owns the whole rule:
+  ///
+  /// * [parseUrlRule] splits the address from its `,{…}` suffix;
+  /// * the address and the body are rendered through [RuleEngine.renderUrl], so `{{key}}` /
+  ///   `{{page}}` and matrix #18's JavaScript work in both;
+  /// * the keyword is **escaped only where the site expects an escape**: a form body and a
+  ///   query string carry `%XX` (in the rule's declared `charset`), a JSON body carries it
+  ///   verbatim — upstream draws the same line;
+  /// * the suffix's `charset` also decodes the response (a declaration beats the sniff,
+  ///   `book-source.md` §5);
+  /// * suffix headers are merged **over** the source's own `header`, which is what upstream
+  ///   does and what a site asking for a per-request `Referer` expects.
+  ///
+  /// Option fields this repository cannot honour (`webView`, `webJs`, `retry`, …) are logged
+  /// by name and ignored, so a source degrades instead of disappearing (ADR-0032's stance
+  /// for unknown syntax). [headers] stays the **source-level** table; the caller keeps passing
+  /// the same map it would pass to [fetch].
+  Future<ParseResult<FetchedPage>> fetchRule(
+    String rule, {
+    required String rulePath,
+    required Map<String, String> params,
+    required JsPageContext context,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int page = 1,
+    JsSourceInfo? source,
+  }) async {
+    final ParseResult<UrlRule> parsed = parseUrlRule(rule, rulePath: rulePath);
+    final UrlRule urlRule;
+    switch (parsed) {
+      case ParseFailure<UrlRule>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
+      case ParseSuccess<UrlRule>(:final UrlRule data):
+        urlRule = data;
+    }
+    final UrlRuleOptions options = urlRule.options ?? const UrlRuleOptions();
+    for (final String ignored in options.unsupported) {
+      _logger.warning(
+        'Ignoring an unsupported URL option: rule=$rulePath '
+        'option=$ignored source=${sourceId ?? 'unknown'}',
+      );
+    }
+
+    final ParseResult<String> address = await _engine.renderUrl(
+      urlRule.template,
+      rulePath: rulePath,
+      params: params,
+      context: context,
+      charset: options.charset,
+    );
+    final String rendered;
+    switch (address) {
+      case ParseFailure<String>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
+      case ParseSuccess<String>(:final String data):
+        rendered = data;
+    }
+    final String url = resolveAbsoluteUrl(rendered.trim(), context.baseUrl);
+
+    final Map<String, String> requestHeaders = <String, String>{
+      ...?headers,
+      ...options.headers,
+    };
+
+    String? body;
+    if (options.body != null) {
+      final ParseResult<String> renderedBody = await _engine.renderUrl(
+        options.body!,
+        rulePath: rulePath,
+        params: params,
+        context: context,
+        charset: options.charset,
+        // JSON / XML 载荷里关键词必须原样出现（上游同样跳过表单编码）。
+        encodeKeyword: !_isStructuredBody(options.body!),
+      );
+      switch (renderedBody) {
+        case ParseFailure<String>(
+          :final ParseFailureKind kind,
+          rulePath: final String failedAt,
+        ):
+          return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
+        case ParseSuccess<String>(:final String data):
+          body = data;
+      }
+    }
+
+    final ParseResult<HttpResponse> response =
+        options.method == UrlRequestMethod.post
+        ? await _http.post(
+            url,
+            rulePath: rulePath,
+            body: body,
+            headers: requestHeaders,
+            keyword: keyword,
+            sourceId: sourceId,
+            declaredCharset: options.charset,
+          )
+        : await _http.get(
+            url,
+            rulePath: rulePath,
+            headers: requestHeaders,
+            keyword: keyword,
+            sourceId: sourceId,
+            declaredCharset: options.charset,
+          );
+
+    return _pageOf(
+      response,
+      url: url,
+      headers: requestHeaders,
+      page: page,
+      source: source,
+      bookName: context.bookName,
+      chapterTitle: context.chapterTitle,
+    );
+  }
+
+  /// Whether [body] is a JSON / XML payload rather than a form (`AnalyzeUrl.analyzeFields`).
+  bool _isStructuredBody(String body) {
+    final String trimmed = body.trimLeft();
+
+    return trimmed.startsWith('{') ||
+        trimmed.startsWith('[') ||
+        trimmed.startsWith('<');
+  }
 
   /// Fetches [url] and parses the body into a page scope.
   ///
@@ -144,6 +286,8 @@ final class PageFetchService {
     String? sourceId,
     int page = 1,
     JsSourceInfo? source,
+    String? bookName,
+    String? chapterTitle,
   }) async {
     final ParseResult<HttpResponse> response = await _http.get(
       url,
@@ -153,14 +297,47 @@ final class PageFetchService {
       sourceId: sourceId,
     );
 
-    return switch (response) {
-      ParseFailure<HttpResponse>(
+    final ParseResult<FetchedPage> fetched = _pageOf(
+      response,
+      url: url,
+      headers: headers,
+      page: page,
+      source: source,
+      bookName: bookName,
+      chapterTitle: chapterTitle,
+    );
+
+    return switch (fetched) {
+      ParseFailure<FetchedPage>(
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
         failureAt<RuleScope>(kind: kind, rulePath: failedAt),
-      ParseSuccess<HttpResponse>(:final HttpResponse data) => ParseSuccess(
-        RuleScope.dom(
+      ParseSuccess<FetchedPage>(:final FetchedPage data) => ParseSuccess(
+        data.scope,
+      ),
+    };
+  }
+
+  /// Turns a response into a fetched page (its URL + scope), or carries its failure.
+  ParseResult<FetchedPage> _pageOf(
+    ParseResult<HttpResponse> response, {
+    required String url,
+    required Map<String, String>? headers,
+    required int page,
+    required JsSourceInfo? source,
+    String? bookName,
+    String? chapterTitle,
+  }) => switch (response) {
+    ParseFailure<HttpResponse>(
+      :final ParseFailureKind kind,
+      rulePath: final String failedAt,
+    ) =>
+      failureAt<FetchedPage>(kind: kind, rulePath: failedAt),
+    ParseSuccess<HttpResponse>(:final HttpResponse data) => ParseSuccess(
+      FetchedPage(
+        url: url,
+        scope: RuleScope.dom(
           parser.parse(data.body),
           body: data.body,
           // §6 的 baseUrl / page / source 绑定就来自这里；逐项字段的 `@js:` 靠它继承。
@@ -170,10 +347,117 @@ final class PageFetchService {
             page: page,
             source: source,
             headers: headers,
+            // §6 的 `java.get('bookName' / 'title')`：书与章节是**页面**的属性，所以它必须
+            // 建在页面 scope 上，再由引擎继承到每个条目与每条规则（ADR-0049）。
+            bookName: bookName,
+            chapterTitle: chapterTitle,
           ),
         ),
       ),
+    ),
+  };
+
+  /// The request headers [source] declares, evaluating a **rule** header first
+  /// (`book-source.md` §2, M12-A2).
+  ///
+  /// Upstream evaluates `header` when it starts with `@js:` / `<js>` and parses the script's
+  /// result as a JSON object (`BaseSource.getHeaderMap`); a source that signs its requests
+  /// (`Referer`, a timestamped token) is unusable without it. The evaluation runs **before**
+  /// the request, which is exactly why it cannot be a rule engine field like the others: it
+  /// has no page to read.
+  ///
+  /// A broken header rule is **not** fatal: it is logged and the request goes out with the
+  /// static headers (usually none). The alternative — failing the stage — would turn "this
+  /// source's signature script broke" into "this source has no books", and the request will
+  /// fail loudly on its own if the header really was required (ADR-0026 §决策 2).
+  Future<Map<String, String>?> headersOf(BookSource source) async {
+    final String? rule = source.headerRule;
+    if (rule == null) {
+      return source.headers;
+    }
+
+    final ParseResult<Object?> evaluated = await _engine.evaluateJs(
+      _headerScript(rule),
+      rulePath: 'header',
+      context: JsPageContext(
+        baseUrl: source.url,
+        source: source.jsSourceInfo,
+        headers: source.headers,
+      ),
+    );
+    switch (evaluated) {
+      case ParseFailure<Object?>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        _logger.warning(
+          'Header rule failed, sending the static headers: source=${source.url} '
+          'kind=${kind.name} rule=$failedAt',
+        );
+
+        return source.headers;
+      case ParseSuccess<Object?>(:final Object? data):
+        final Map<String, String>? headers = _headersOfScriptResult(data);
+        if (headers == null) {
+          _logger.warning(
+            'Header rule did not produce a JSON object, sending the static headers: '
+            'source=${source.url}',
+          );
+
+          return source.headers;
+        }
+
+        return <String, String>{...?source.headers, ...headers};
+    }
+  }
+
+  /// The bare script inside a `header` rule.
+  String _headerScript(String rule) {
+    final String trimmed = rule.trim();
+    if (trimmed.toLowerCase().startsWith('<js>')) {
+      final int end = trimmed.toLowerCase().lastIndexOf('</js>');
+
+      return end < 0 ? trimmed.substring(4) : trimmed.substring(4, end);
+    }
+
+    return trimmed.toLowerCase().startsWith('@js:')
+        ? trimmed.substring(4)
+        : trimmed;
+  }
+
+  /// The header map a header script produced: a JSON object, or its text.
+  Map<String, String>? _headersOfScriptResult(Object? data) {
+    final Object? decoded = switch (data) {
+      final String text => _tryDecodeHeaderJson(text),
+      final Map<Object?, Object?> map => map,
+      _ => null,
     };
+    if (decoded is! Map<Object?, Object?>) {
+      return null;
+    }
+
+    return <String, String>{
+      for (final MapEntry<Object?, Object?> entry in decoded.entries)
+        if (entry.key is String && entry.value is String)
+          entry.key! as String: entry.value! as String,
+    };
+  }
+
+  /// Decodes a header rule's JSON text, accepting the single-quoted dialect GSON accepts.
+  Object? _tryDecodeHeaderJson(String text) {
+    final String trimmed = text.trim();
+    try {
+      return jsonDecode(trimmed);
+    } on FormatException {
+      if (trimmed.contains('"')) {
+        return null;
+      }
+      try {
+        return jsonDecode(trimmed.replaceAll("'", '"'));
+      } on FormatException {
+        return null;
+      }
+    }
   }
 
   /// Applies [source]'s own `concurrentRate` to the request budget (`book-source.md` §8).
@@ -254,6 +538,18 @@ final class PageFetchService {
       'kind=${kind.name}',
     );
   }
+
+  /// Returns **every value** of [rule] on [scope] (upstream `getStringList`).
+  ///
+  /// It is the list-shaped sibling of [content]: an image rule
+  /// (`class.page img@src`) matches many nodes, and taking the first value would show a one-page
+  /// chapter (ADR-0053 §决策 2). An empty list is a **success** here; whether "no value" is a
+  /// failure is the stage's decision (`FetchMangaPages` turns it into one).
+  Future<ParseResult<List<String>>> extractAll(
+    String rule,
+    RuleScope scope,
+    String rulePath,
+  ) => _engine.extractAll(rule, scope, rulePath: rulePath);
 
   /// Returns every match of a **top-level list** rule.
   ///
@@ -342,7 +638,11 @@ final class PageFetchService {
     };
   }
 
-  /// Fetches [url] and walks every page [nextRule] names (`book-source.md` §4.1).
+  /// Fetches the page [rule] names and walks every page [nextRule] names
+  /// (`book-source.md` §4.1).
+  ///
+  /// [rule] is the stage's **URL rule**, not a URL: `tocUrl` / the chapter address can carry
+  /// the `,{…}` suffix of §4.3 too, so the first page goes through [fetchRule].
   ///
   /// A **first** page that cannot be fetched is the stage's failure, exactly as before;
   /// a **later** one stops the walk and is reported through [PageWalk.stoppedBy], so
@@ -357,21 +657,53 @@ final class PageFetchService {
   ///
   /// [rulePath] is the stage's field (`ruleToc`, `ruleContent`) and travels into every
   /// request, so a failure stays locatable (C-SRC-8); [nextRulePath] is the paging
-  /// field (`tocRule.nextTocUrl`, `contentRule.nextContentUrl`). [headers], [sourceId] and
-  /// [source] are the book source's own request overrides, id and sandbox view
+  /// field (`tocRule.nextTocUrl`, `contentRule.nextContentUrl`). [context], [headers],
+  /// [sourceId] and [source] are the book source's own request overrides, id and sandbox view
   /// (C-NET-4, C-ERR-8, §6), passed the same way [fetch] takes them.
   Future<ParseResult<PageWalk>> walk({
-    required String url,
+    required String rule,
     required String rulePath,
     required String? nextRule,
     required String nextRulePath,
+    required JsPageContext context,
     Map<String, String>? headers,
     required String sourceId,
     JsSourceInfo? source,
   }) async {
     final List<FetchedPage> pages = <FetchedPage>[];
     final Set<String> visited = <String>{};
-    final List<String> pending = <String>[url];
+    // 第一页是一条 **URL 规则**（可能带 `,{…}` 后缀，`book-source.md` §4.3），后面的页是
+    // 翻页规则渲染出的绝对 URL。
+    final ParseResult<FetchedPage> first = await fetchRule(
+      rule,
+      rulePath: rulePath,
+      params: const <String, String>{},
+      context: context,
+      headers: headers,
+      sourceId: sourceId,
+      source: source,
+    );
+    switch (first) {
+      case ParseFailure<FetchedPage>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        return failureAt<PageWalk>(kind: kind, rulePath: failedAt);
+      case ParseSuccess<FetchedPage>(:final FetchedPage data):
+        visited.add(data.url);
+        pages.add(data);
+    }
+
+    final List<String> pending = <String>[
+      ...await nextPageUrls(
+        nextRule,
+        pages.first.scope,
+        nextRulePath,
+        currentUrl: pages.first.url,
+        page: 2,
+        sourceId: sourceId,
+      ),
+    ];
 
     while (pending.isNotEmpty) {
       if (pages.length >= _maxPagingPages) {
@@ -396,6 +728,8 @@ final class PageFetchService {
         // 正在取的这一页就是 `pages.length + 1`（1-based），与翻页规则里的 `{{page}}` 同口径。
         page: pages.length + 1,
         source: source,
+        bookName: context.bookName,
+        chapterTitle: context.chapterTitle,
       );
 
       switch (page) {
@@ -403,10 +737,6 @@ final class PageFetchService {
           :final ParseFailureKind kind,
           rulePath: final String failedAt,
         ):
-          if (pages.isEmpty) {
-            return failureAt<PageWalk>(kind: kind, rulePath: failedAt);
-          }
-
           return ParseSuccess<PageWalk>(
             PageWalk(
               pages: pages,
@@ -579,6 +909,9 @@ final class PageFetchService {
       page: page,
       source: context?.source,
       headers: context?.headers,
+      // §6 的 `java.get('bookName' / 'title')`：翻页规则与它读到的那一页同属一本书。
+      bookName: context?.bookName,
+      chapterTitle: context?.chapterTitle,
     );
   }
 

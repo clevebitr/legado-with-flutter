@@ -63,3 +63,21 @@
 | [0039](0039-device-probe-per-slice-again.md) | 设备级探针回到**切片级双端**（代价前提已消失；环境阻塞走「写明 + 架构师补跑」） | Accepted（2026-10-13 架构师裁决；取代 0038） | 取代 0038 |
 | [0040](0040-book-source-import-contract.md) | Phase 5 的书源导入契约：合成 `id` 主键 + `(url, 指纹)` 唯一索引、重复导入幂等、32 MiB 体积上限、不扩 `ParseFailureKind`、5.1 不引入新依赖 | Accepted（2026-10-14 架构师裁决） | 本次新增 |
 | [0041](0041-phase5-feature-boundaries.md) | Phase 5 的 feature 边界：`reader` / `bookshelf` / `settings`，跨 feature 一律走「消费方端口 + 装配根绑定」，进度归 `bookshelf` | Accepted（2026-10-14 架构师裁决） | 本次新增 |
+| [0042](0042-cross-feature-navigation-and-shared-widgets.md) | 跨 feature 导航走 presentation 端口（`AppNavigation` 由装配根绑定）；共用的 `StateMessage` / `FailureMessage` 上移 `core/widgets/` | Accepted（2026-10-21，5.4 / 5.6 落地时确立） | 本次新增 |
+| [0043](0043-source-check-mechanism.md) | 书源测试机制：结果写回 `book_sources`（+ `comment` 列）、`checkKeyWord` 建模与「像规则」判据、`LongRunningTask` 平台端口、失败语义不动 `ParseFailureKind` | Accepted（2026-10-21，M10 规格前置，用户裁决四项） | 本次新增 |
+| [0044](0044-reader-session-and-progress.md) | 阅读器会话：自有字号/行距/背景（与全局 textScale 叠乘）、进度端口读写、`books.tocUrl` 列（v5）、两种翻页模式与偏移估算、`canReName` 在加入书架时消费 | Accepted（2026-10-21，M4 规格前置，用户裁决四项） | 本次新增 |
+| [0045](0045-book-source-list-order-and-display.md) | 书源列表以投影列为准、四排序键 + 固定 tie-breaker、拖拽只写归一化 `customOrder`、排序与分组筛选持久化、行内展示与格式 | Accepted（2026-10-21，M6 规格前置，用户裁决四项） | 本次新增 |
+| [0046](0046-aggregate-search-scope-match-and-merge.md) | 聚合搜索：范围三态与回落、类型默认文本、匹配模式=分桶排序（equal/tags/contains/other）、`(name,author)` 去重 + origins、并发/60 s 单源超时/失败语义、暂停取消、分页与 `hasMore`、1000 条上限 | Accepted（2026-10-21，M11 规格前置，范围由 #6 裁决） | 本次新增 |
+| [0047](0047-engine-rule-surface-and-failure-isolation.md) | 引擎兼容面（M12）：URL 后缀 `url,{…}`（含 charset/body/headers）、`<js>` 分段链（#31）、列表 JS、JSON 条目 `result` 绑定、`header` 规则前置求值、`$.[…]` 归一化、三处失败隔离 | Accepted（2026-10-21，M12 规格前置 + 落地；真实语料 128 条度量） | 本次新增 |
+| [0048](0048-mpl-2-0-policy-and-big5-decoding.md) | 许可政策：MPL-2.0 进入允许族但**只按白名单**放行（`enough_convert` 提供 Big5 解码）；只补解码不补检测，HKSCS 部分支持 | Accepted（2026-10-21，M12 规格前置；用户裁决改 C-DEP-7） | 本次新增 |
+| [0049](0049-source-context-and-budget.md) | 规则上下文与单源预算：`ChapterRequest` 替代裸 URL、`java.get('bookName'/'title')` 先于变量表、`SourceBudget` 成为「一个源一份预算」的唯一实现 | Accepted（2026-10-21，M12 规格前置；用户裁决两项） | 本次新增 |
+| [0050](0050-book-source-write-paths.md) | 书源管理的写路径：用户分组（payload）与校验分组（列）分轴、批量操作单事务且只写用户态、编辑按 id 更新同一行（身份冲突显式失败）、单条导出 = payload 原文 | Accepted（2026-10-22，M13 规格前置；范围由 #11 裁决） | 本次新增 |
+| [0051](0051-reader-experience.md) | 阅读体验（M14）：三区点击 + 可隐藏工具条（进度/亮度）、目录居中/正倒序/搜索、换源（候选→重取目录→按名对齐→`migrateIdentity`）、排版四轴（字体族用平台通用名、不打包字体） | Accepted（2026-10-22，M14 规格前置；范围由 #11 裁决） | 本次新增 |
+| [0052](0052-book-source-management-v2.md) | 书源管理二期（M15）：`source_checks` 历史表 + 四态状态灯、探索开关列、置顶/置底与分组重命名/删除/移出、排序方向与域名分节、导入预览/提交两步 | Accepted（2026-10-22，M15 规格前置；范围由 #13 裁决） | 本次新增 |
+| [0053](0053-manga-engine.md) | 漫画引擎（M16）：漫画是 reader 的一个模式（`sourceType = image` 分派）、`ruleContent` 列表语义产出图片页、滚动/翻页两种观影模式 + `InteractiveViewer` 缩放、页号进度与预取 ≤3 页、零新依赖 | Accepted（2026-10-22，M16 规格前置） | 本次新增 |
+| [0055](0055-app-shell-and-about-pages.md) | 应用外壳与关于/法律声明（M18）：`AppShell` 在组合根、四 tab `IndexedStack` 保活、「我的」只做入口聚合、关于页版本常量 + 打包 GPL 全文 + 源码地址（不引 `url_launcher`） | Accepted（2026-10-22，用户裁决「开始补齐 UI」） | 本次新增 |
+| [0054](0054-audio-and-tts-engine.md) | 听书与音频（M17）：音频源播放与系统 TTS 两条独立链路共用章节上下文；依赖选型与三端降级（`just_audio` / `audio_service` / `flutter_tts`，Windows 无媒体通知）；HLS/云 TTS/句级高亮未闭环 | Accepted（2026-10-22，M17 规格前置） | 本次新增 |
+| [0056](0056-idempotent-schema-migrations.md) | 数据库迁移步骤必须可重入：升级前先查 `sqlite_master` / `PRAGMA table_info`，版本号不再当作结构的事实来源；不做迁移事务（决策 2） | Accepted（2026-10-22，用户机器上 `reader.db` 打不开的事故修复） | 本次新增 |
+| [0057](0057-source-check-selection-and-handover.md) | 校验的参测源 = 可见行 ∩ 勾选（chips 是默认选择）；勾选不再派生自上一轮 `entries`；列表页多选 / 工具栏通过 `checkSources(sourceIds/group)` 交接；多选工具栏改横向滚动 | Accepted（2026-10-22，用户报障「多选不能测试 / 不能只测某分组」） | 本次新增 |
+| [0058](0058-source-derived-ui-must-follow-its-input.md) | 选源 / 选范围的界面必须跟随输入：范围 sheet 改 `Consumer` + 写后弹回；回落只在「范围不存在」时发生且必须上屏（修订 ADR-0046 §决策 1）；发现页按源 id 重拉分类 | Accepted（2026-10-22，用户报障「范围筛选失效 / 分类不随换源更新」） | 本次新增 |
+| [0059](0059-book-source-batch-disposal.md) | 书源批量处置：多选模式独立状态 + 工具栏入口、多选期间行内开关/菜单失效、「有失效」筛选行旁一键禁用/删除、分组管理区分「删标签」与「删该组全部书源」 | Accepted（2026-10-22，用户裁决四项） | 本次新增 |

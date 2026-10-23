@@ -22,7 +22,7 @@ part of 'js_bridge_provider.dart';
 /// §8) as the page that carried the rule.
 ///
 /// The provider is autoDispose: the budget dies with the scope, so one operation's
-/// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
+/// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
 
 @ProviderFor(jsBridge)
 final jsBridgeProvider = JsBridgeProvider._();
@@ -41,7 +41,7 @@ final jsBridgeProvider = JsBridgeProvider._();
 /// §8) as the page that carried the rule.
 ///
 /// The provider is autoDispose: the budget dies with the scope, so one operation's
-/// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
+/// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
 
 final class JsBridgeProvider
     extends $FunctionalProvider<JsBridge, JsBridge, JsBridge>
@@ -60,14 +60,14 @@ final class JsBridgeProvider
   /// §8) as the page that carried the rule.
   ///
   /// The provider is autoDispose: the budget dies with the scope, so one operation's
-  /// batch shares one worker (see `PLAN.md` §3.7 for the batch-download follow-up).
+  /// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
   JsBridgeProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'jsBridgeProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -94,7 +94,7 @@ final class JsBridgeProvider
   }
 }
 
-String _$jsBridgeHash() => r'1345804b08bde31f4aebebabbeaeb4da22b9fc5e';
+String _$jsBridgeHash() => r'69f5374c6d7b08f8fbeb9e5234a4554f1159e4b5';
 
 /// Provides the rule variables `@put:` / `@get:` and `java.put` / `java.get` share
 /// (`docs/dev/book-source.md` §4 and §6, matrix #16 / #17).
@@ -138,7 +138,7 @@ final class JsVariableStoreProvider
         argument: null,
         retry: null,
         name: r'jsVariableStoreProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -165,4 +165,4 @@ final class JsVariableStoreProvider
   }
 }
 
-String _$jsVariableStoreHash() => r'2757af5cd35b30cfd6127455a7f867c15cc9c1fd';
+String _$jsVariableStoreHash() => r'c6e15401e66da680841340a4e08b1644de9e2c08';

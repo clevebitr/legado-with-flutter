@@ -28,6 +28,12 @@ final class FakeHttpClient implements HttpClient {
   /// in the page service.
   final List<String?> requestedSourceIds = <String?>[];
 
+  /// The caller's `maxBytes` cap of every request, in order (`null` when the caller set none).
+  ///
+  /// It exists so a test can assert that the import path really asks for a bounded download
+  /// (`docs/dev/roadmap.md` 5.1, ADR-0040 §决策 5) instead of trusting the client.
+  final List<int?> requestedMaxBytes = <int?>[];
+
   /// The HTTP method of every request, in order (`GET` / `POST`).
   ///
   /// `http.post` of `docs/dev/book-source.md` §6 goes through the same seam, so a test
@@ -36,6 +42,10 @@ final class FakeHttpClient implements HttpClient {
 
   /// The request body of every request, in order (`null` for a GET).
   final List<String?> requestedBodies = <String?>[];
+
+  /// The `charset` a URL rule declared for every request, in order
+  /// (`book-source.md` §4.3): `url,{“charset”:“gbk”}` has to reach the decoder.
+  final List<String?> requestedCharsets = <String?>[];
 
   /// Awaited after a request is recorded and before it answers, when set.
   ///
@@ -58,13 +68,22 @@ final class FakeHttpClient implements HttpClient {
 
   final Map<String, String> _bodies = <String, String>{};
   final Map<String, ParseFailureKind> _failures = <String, ParseFailureKind>{};
+  final Map<String, Object?> _causes = <String, Object?>{};
   final Map<String, Exception> _throws = <String, Exception>{};
 
   /// Serves [body] for [url].
   void serve(String url, String body) => _bodies[url] = body;
 
   /// Makes [url] fail with [kind] instead of being served.
-  void failWith(String url, ParseFailureKind kind) => _failures[url] = kind;
+  ///
+  /// [cause] lets a test reproduce a **typed** refusal — the request layer marks an oversized
+  /// body with a `BodyTooLargeException` cause, and the import path has to recognise it.
+  void failWith(String url, ParseFailureKind kind, {Object? cause}) {
+    _failures[url] = kind;
+    if (cause != null) {
+      _causes[url] = cause;
+    }
+  }
 
   /// Makes [url] **throw** [error] instead of answering with a [ParseResult].
   ///
@@ -80,12 +99,16 @@ final class FakeHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    int? maxBytes,
+    String? declaredCharset,
   }) => _serve(
     method: 'GET',
     url: url,
     rulePath: rulePath,
     headers: headers,
     sourceId: sourceId,
+    maxBytes: maxBytes,
+    declaredCharset: declaredCharset,
   );
 
   @override
@@ -96,6 +119,7 @@ final class FakeHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    String? declaredCharset,
   }) => _serve(
     method: 'POST',
     url: url,
@@ -103,6 +127,7 @@ final class FakeHttpClient implements HttpClient {
     body: body,
     headers: headers,
     sourceId: sourceId,
+    declaredCharset: declaredCharset,
   );
 
   /// Records one request and answers from the registered bodies / failures.
@@ -113,6 +138,8 @@ final class FakeHttpClient implements HttpClient {
     String? body,
     Map<String, String>? headers,
     String? sourceId,
+    int? maxBytes,
+    String? declaredCharset,
   }) async {
     requestedUrls.add(url);
     requestedRulePaths.add(rulePath);
@@ -120,6 +147,8 @@ final class FakeHttpClient implements HttpClient {
     requestedSourceIds.add(sourceId);
     requestedMethods.add(method);
     requestedBodies.add(body);
+    requestedMaxBytes.add(maxBytes);
+    requestedCharsets.add(declaredCharset);
 
     final Future<void> Function()? hook = onRequest;
     if (hook != null) {
@@ -133,7 +162,11 @@ final class FakeHttpClient implements HttpClient {
 
     final ParseFailureKind? kind = _failures[url];
     if (kind != null) {
-      return ParseFailure<HttpResponse>(kind: kind, rulePath: rulePath);
+      return ParseFailure<HttpResponse>(
+        kind: kind,
+        rulePath: rulePath,
+        cause: _causes[url],
+      );
     }
 
     final String? served = _bodies[url];

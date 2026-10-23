@@ -17,7 +17,7 @@
 | **实测工具链**（本机与 CI 使用） | Flutter **3.47.7**（stable）· Dart **3.13.5** |
 | 依赖版本写法 | `^` 或精确版本，**禁止 `any`**（C-DEP-2） |
 | 锁文件 | 提交 `pubspec.lock`；升级依赖必须单独 PR |
-| 许可证 | 必须 GPL-3.0 兼容（C-DEP-7）；清单见 `NOTICE.md` §5 |
+| 许可证 | 必须 GPL-3.0 兼容（C-DEP-7）；**MPL-2.0 只按 `tool/scan_licenses.dart` 白名单放行**（首例 ADR-0048）；清单见 `NOTICE.md` §5 |
 | lint 规则名基准 | Dart **3.13.x** 官方清单（`https://dart.dev/tools/linter-rules/all`）。`analysis_options.yaml` 的 47 条规则已逐名机器比对通过 |
 
 **版本号必须同步的四处**（改任一处必须同时改其余三处）：
@@ -141,6 +141,7 @@ m3e.spacing.md;
 | `flutter_qjs_next` | `^1.5.2` | JS 引擎（QuickJS，构建时从 `cxx/` 源码编译） | Android/iOS/Windows/Linux/macOS | MIT | C-SRC-2、C-SRC-3 |
 | `betto_charset_detector` | `^0.1.0` | 字符编码检测（唯一，纯 Dart） | 全平台 | Apache-2.0 | C-NET-3 |
 | `charset` | `^2.0.1` | 字符编码解码（把检测出的标签变成 `Encoding`；支持标签集见 `book-source.md` §5.1） | 全平台 | Apache-2.0 | C-NET-3 |
+| `enough_convert` | `^1.7.1` | 补齐 `charset` 缺失的 **Big5 / Big5-HKSCS** 码表（纯 Dart、零依赖、Dart 3.11+） | 全平台 | **MPL-2.0**（白名单，ADR-0048） | C-NET-3、C-DEP-7 |
 
 > **JS 引擎已实测选定（2026-10-10，ADR-0015）**：9 项探针全通过，无预编译库、无需打补丁；
 > 引擎级 `timeout` 与 `memoryLimit` **真实生效**。配额数值与实测证据分别归
@@ -166,6 +167,14 @@ m3e.spacing.md;
 | `drift_flutter` | `^0.3.1` | 各平台原生 SQLite 与数据库路径 | MIT | C-NET-9 |
 | `shared_preferences` | `^2.5.3` | 仅轻量开关（主题模式、字号） | BSD-3-Clause | C-NET-9 |
 | `path_provider` | `^2.1.6` | 跨平台路径（唯一来源） | BSD-3-Clause | C-PLT-3 |
+| `file_selector` | `^1.1.0` | 书源文件选择（平台对话框；只在 `core/platform/` 内使用） | BSD-3-Clause | C-PLT-1、C-SEC-5、ADR-0040 §决策 9 的修订注记 |
+
+> **关于 `file_selector`（2026-10-14 新增）：** 它是 **Flutter 团队维护的联邦插件**
+> （`file_selector_android` / `_ios` / `_windows` / `_macos` / `_linux` 由 pub 求解器自动带入，
+> 许可证均为 BSD-3-Clause，`NOTICE.md` §5 已重扫）。选它而不是 `file_picker` 的理由：
+> 官方仓库维护 + 三端（Android / iOS / Windows）都有官方实现，符合 §13 第 2 条的平台支持要求。
+> 用法约束：**只允许 `core/platform/` 引用它**（C-PLT-1），页面与用例只看见
+> `BookSourceFilePicker` 端口；体积上限在读取之前按文件大小判（C-SEC-5）。
 
 > **关于 `sqlite3_flutter_libs`：** 不要**直接**声明它。
 > `drift_flutter 0.3.1` 自己会传递依赖 `sqlite3_flutter_libs: ^0.6.0+eol`
@@ -211,6 +220,14 @@ dart run drift_dev schema generate drift_schemas/ test/core/storage/generated_mi
 `drift_schemas/` 与 `test/core/storage/generated_migrations/` 都是**生成物且需提交**
 （C-DEP-5 精神）；后者在 `analysis_options.yaml` 中被排除（它自带的
 `ignore_for_file: type=lint` 挡不住 analyzer 的 `strict-raw-types` 警告）。
+
+**迁移步骤必须可重入（ADR-0056）：** `Migrator.createTable` 自带 `IF NOT EXISTS`，
+但 `addColumn` 与 `@TableIndex` 的 `create` 都是裸 SQL。库的 `user_version` 会落后于实际结构
+（迁移做到一半被杀，或用还没提交的表定义建过库），这类库上重跑升级会抛
+`duplicate column name` / `already exists`，并且**每次打开都失败** —— 前台只有
+「书源加载不出来」「导入失败（`DriftRemoteException`）」这种下游症状。因此升级步骤一律用
+`ReaderDatabase` 里的 `_hasSchemaObject` / `_addColumnIfMissing` 先问「对象在不在」，
+版本门只用于说明「这一步属于哪个 ADR」，不作为结构的事实来源。
 
 ## 9. 开发与测试
 

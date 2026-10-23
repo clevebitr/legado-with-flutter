@@ -7,6 +7,406 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The reader becomes a reader: immersive chrome, chapter sheet, source switching, typography (M14, ADR-0051)
+
+- **Immersive chrome**: the app bar and tool bar are **hidden by default**; tapping the middle third of
+  the text brings them back for 4 s (any interaction restarts the clock). The tool bar carries the
+  chapter progress slider (drag shows the label, release changes chapter — a per-frame change would
+  start a fetch per frame), previous / next chapter, the chapter list, source switching and brightness.
+  The slider is the *book's* position; the percent beside it is the estimate inside the chapter.
+- **Brightness is an app-level overlay**, not the system one: a pointer-transparent black layer at
+  0.2–1.0. Windows has no uniform brightness API and the mobile paths need a platform channel, so the
+  overlay keeps the three targets identical and testable; system brightness is registered as not done.
+- **Chapter sheet**: the current chapter starts centred and highlighted, a **reversed** toggle flips the
+  view without touching the data (tapping a row still opens the chapter it names), and a search field
+  filters by title.
+- **Change source**: the sheet searches every other enabled text source for the book's title (per source,
+  because the merged search keeps only one book URL), then the switch re-reads the detail page and the
+  chapter list and aligns the chapter: same name → contained name → same index. The switch happens **in
+  place** — the reader's `ReaderBook` changes and every provider keyed by it re-reads — and the shelf row
+  is **migrated** to the new `(sourceUrl, bookUrl)` identity instead of being deleted and re-added, so
+  `addedAt`, status and pinning survive (ADR-0051 §decision 3).
+- **Typography**: four new axes — font family (theme / serif / sans / monospace, mapped onto the platform
+  families rather than bundling a 10 MB CJK font), paragraph spacing, first-line indent (ideographic space
+  for CJK, four spaces otherwise) and page margin. The body is laid out by one presentation transform, so
+  the cached chapter text stays the source's own.
+- ADR-0051 records the five decisions; testing covers the alignment order, the candidate search (incl. a
+  failing source that must not sink the list), the chapter sheet's view semantics, the source sheet's
+  three states, and the settings presets.
+- Gates: format 0 changed, analyze clean, **1294** tests, `core` 100%, `domain` 100%, `data` 97.25%.
+
+
+### Book source management can finally write: batch edits, search, groups, an editor, export (M13-S2..S5)
+
+- **Selection mode**: long-press a row, then select all / invert and run **enable / disable / delete /
+  group** over the whole selection — one transaction each, so a half-applied batch cannot happen. The
+  row's “read” marker and the check columns are untouched by batch actions: they only move **user
+  state** (ADR-0050 §decision 2).
+- **Two filter axes instead of one mixed one** (the reason 「全正常的书源分组」 was impossible): the
+  **group** chips read `bookSourceGroup` from the payload, the new **check-status** chips
+  (all / healthy / has-failures) read the check's own columns. A checked source used to show
+  「搜索失效」 where its author's group should be; now both are visible and independent.
+- **Search** filters the visible rows by name / URL / group without touching the store.
+- **Group management**: put the selection into an existing group, a new one, or none — it rewrites
+  the payload's `bookSourceGroup` only (the fingerprint does not include it, so identities are stable).
+- **Editor page** (`/sources/edit`): name / URL / group / type / weight / header and the five rule
+  blocks, seeded from the **stored payload** so unmodelled keys survive; saving validates with
+  `BookSource.fromLegadoJson` and refuses an edit whose new `(url, fingerprint)` already belongs to
+  another row instead of merging two sources (ADR-0050 §decision 3).
+- **Single-source check and export** in the row menu: the check reuses M10's `CheckBookSource` (so a
+  single check and a batch check cannot disagree), and the export copies the **payload bytes** to the
+  clipboard and offers a save dialog — the payload, not `toJson`, is what makes a re-import produce
+  the same source (ADR-0050 §decision 4). New `BookSourceFileSaver` port with the `file_selector`
+  implementation and an “unsupported platform = not saved” fallback (C-PLT-1).
+- Testing: the list page gained selection / search / check-filter / export widget tests, the editor
+  has fill / save / invalid-input / identity-conflict tests, the repository got payload, batch,
+  group and update tests (including “a row with a broken payload is skipped, not fatal”), and the
+  saver's adapter is tested through an injected writer.
+- ADR-0050 records all four decisions; roadmap §3.9 marks S1–S6.
+- Gates: format 0 changed, analyze clean, **1263** tests, `core` 100%, `domain` 100%, `data` 98.72%,
+  license scan `Risky items: none`, generated files in sync.
+
+
+### Covers everywhere, and a detail page that can start reading (M13-S1/S6, `roadmap.md` §3.9)
+
+- **Book covers are shown at last**: `cached_network_image` had been a dependency since the first UI
+  slice and was **never referenced**, so not one cover appeared anywhere. A shared `CoverImage`
+  (placeholder / failure state / decode bounded to the thumbnail / decorative for screen readers) now
+  backs the discover list, the merged search results, the detail page and the shelf. The URL was
+  already resolved to an absolute one by the domain (`Book` / `SearchBook` / `BookInfo` / `ShelvedBook`),
+  so this is a pure UI slice.
+- **The detail page can start reading**: it had no way in except tapping one chapter row, which only
+  works if the reader already knows where to go. It now offers 「开始阅读」(first chapter) and
+  「继续阅读」(no chapter URL — the reader restores the stored position, ADR-0044 §decision 4), both
+  through the `AppNavigation` port so `book_source` still does not import `reader` (ADR-0042).
+- **The introduction collapses to three lines** with a show-more toggle: a thousand-chapter table of
+  contents used to be pushed off-screen by one long blurb.
+- The shelf keeps its “read” marker as a badge on the cover, because the cover replaced the icon slot.
+- Testing: `CoverImage` takes an `ImageProvider` seam, so the loaded and failed branches are reachable
+  in a widget test with a 1×1 PNG and with undecodable bytes — no network stack, no cache-manager
+  mock. New `FakeAppNavigation` lets a page test assert *what* it asked to open (`chapterUrl == null`
+  for “continue”).
+- Gates: format 0 changed, analyze clean, **1234** tests, `core` 100%, `domain` 100%, `data` 98.47%.
+
+
+### Book context reaches the rules, one budget for one source, and Big5 decodes (M12, second slice)
+
+- **`java.get('bookName')` / `java.get('title')` work** (the last rule-surface item of M12): both are
+  upstream **built-in** keys, answered *before* the source's variables, so `java.put('title', …)` cannot
+  hijack them. `FetchContent` now takes a `ChapterRequest{url, title, bookName}` instead of a bare URL —
+  a `@js:` rule can only read what the caller knows, and the reader is the one caller that knows both
+  names. The reader's two ports gained optional parameters, so nothing else had to change (ADR-0049).
+- **One `SourceBudget` instead of two `.timeout(...)` wrappers**: "this source has had its turn" is now
+  one collaborator (limit + remaining + `run`), used by the aggregate search (60 s, ADR-0046) and the
+  source check (180 s, ADR-0043) — a third batch caller no longer has to write a third copy. The budget
+  only decides *how long we wait*, never *whether it worked*, and it never cancels an in-flight request
+  (the HTTP layer has no cancellation primitive, the same reason pause/cancel are cooperative).
+- **Big5 / Big5-HKSCS decode now, detect still does not.** `charset` ships no Big5 codec and no permissive
+  alternative existed, so the licence policy changed instead: MPL-2.0 is GPL-3.0 compatible, and
+  `enough_convert` (pure Dart, zero dependencies) is admitted **through a one-entry allow-list** in
+  `tool/scan_licenses.dart` — a second MPL dependency fails the scan until someone writes another ADR
+  (ADR-0048). The URL-declared charset (§4.3) and `Content-Type` / `<meta>` declarations all reach it;
+  an undeclared Big5 page is still not guessed, and HKSCS' extension区 decodes to U+FFFD.
+- `shift-jis` / `euc-jp`'s `RangeError` stays registered: `enough_convert` has no Japanese tables, and a
+  byte pre-validation layer would be unverifiable with zero Japanese sources in the corpus.
+- ADR-0048 / ADR-0049 record the decisions and the four evidence sets; `NOTICE.md` §5/§6, C-DEP-7 and
+  `tech-stack.md` §5 now state the allow-list rule instead of "MPL is forbidden".
+- Gates: format 0 changed, analyze clean, **1223** tests, `core` 100%, `domain` 100%, `data` 98.47%,
+  license scan `Risky items: none` (166 packages, MPL 1 = the allow-listed one), generated files in sync;
+  device probes on Windows and Android, `js_bridge` **25/25** on both (the new built-in-key probe included).
+
+
+### Real sources actually run: URL rules, `<js>`, and one broken source no longer sinks the batch (M12, first slice)
+
+Measured, not guessed: a new `tool/spot_check/batch_probe.dart` runs a whole collection through the four stages and
+prints a `stage/kind/rulePath` histogram. On the 128-source collection this was checked against, **8 of 128 completed**
+before this slice and **10** after — and the 118 that still fail are dead sites (DNS gone, 301 to another domain, empty
+body, login token required), not rules this repository cannot read. The distribution is in ADR-0047.
+
+- **`searchUrl` is a rule, not an address.** 50 of the 128 sources write `…/search.php,{"method":"POST",
+  "body":"searchkey={{key}}"}` or append `{"charset":"gbk"}`. Sending that comma as part of the URL is why so many
+  answered 404. `domain/url_rule.dart` now splits the `,{…}` suffix with a tolerant scanner (single quotes, unquoted
+  keys, `{{…}}` inside values), and `PageFetchService.fetchRule` owns the whole rule: POST bodies, per-request headers,
+  a `charset` that decides both how `{{key}}` is escaped **and** how the response is decoded, and a keyword that stays
+  verbatim inside a JSON payload while being percent-encoded in a form (`book-source.md` §4.3).
+- **`<js>…</js>` anywhere in a rule** (matrix #31, 50 sources): segments are evaluated in order and each one receives
+  the previous one's output as `result`, which is what makes `<js>…</js>https://…/{{result}}.html` produce an address.
+  A trailing `@js:` keeps its old single-segment semantics — the chain only runs when `<js>` is really there.
+- **List rules accept JavaScript**: `bookList` / `chapterList` written as `@js:` or `<js>` return the element list
+  (a string becomes a DOM fragment, an object a JSON item), replacing the old `unsupported:@js:list` refusal.
+- **A JSON item's `result` is the item**, not its JSON text (`book-source.md` §6): `@js:result.Name` works on a
+  `bookList` entry now, while a fetched page still hands the script its body.
+- **`header` written as a rule is evaluated before the first request** (3 sources used to fail at *import*): the text
+  lands in `BookSource.headerRule`, `PageFetchService.headersOf` turns it into a header map, and a broken header script
+  keeps the static headers with a warning instead of costing the source.
+- **`$.[*]`** (a Legado JSONPath spelling RFC 9535 rejects) is normalised, which turned one source's search from
+  `parseFailed` into real hits.
+- **Two "investigate first, then decide" registrations ended as *no change***: reading default/`@@` rules as JSON on a
+  JSON page, and the `page` binding of field rules. Upstream's jayway JsonPath also needs the `$` prefix and field rules
+  never consume `page`, so switching the analyser would only move where wrong rules fail (ADR-0047 §decision 6).
+- **One broken source can no longer blank the screen**: three separate leaks are closed. `redactUrl` no longer throws on
+  a query that is not valid percent-encoded UTF-8 (a GBK keyword does exactly that — and logging must never be what
+  fails a request); a `receiveTimeout` that arrives while the body is *read* is mapped to a `ParseFailureKind` instead
+  of escaping `HttpClient`; and the aggregate search counts a throwing source as one failed source, keeps the hits it
+  already published, and the page only shows the failure message when there is nothing to show.
+- ADR-0047 records the decisions, the three "no change" verdicts and the evidence table; `book-source.md` gained §4.3,
+  a new `header` row, the `#14`/`#31` matrix statuses and a §10 evidence block.
+- Gates: format 0 changed, analyze clean, **1204** tests, `core` 100%, `domain` 100%, `data` 98.47%, generated files in
+  sync.
+
+
+### Aggregate search reaches the screen: scopes, filters, progress and one merged list (M11, second half)
+
+- **The search page searches a scope, not "the selected source"** — a behaviour change worth naming: the default
+  scope is every enabled text source, so pressing search on a fresh install queries all of them. The scope chip opens
+  one sheet with the radio part (all / a group) and the check-box part (specific sources), and the choice is stored
+  (ADR-0046 §decision 1).
+- **Filters sheet**: source types (default text only) and the match mode, both applied to the next run
+  (ADR-0046 §decision 2/3).
+- **One merged list**: a hit shows its author, its update time and how many sources found it; tapping it selects the
+  first origin and opens the detail page **through that source**, which is what makes "the same book in six sources"
+  behave like one row (ADR-0046 §decision 4).
+- **Progress, pause, resume, stop, load more**: the progress line stays visible after a run that had failures ("n
+  sources failed"), because results that silently shrink are worse than a visible count (ADR-0046 §decision 5/6).
+  When every source fails, the failure keeps the first source's kind instead of a blanket network error.
+- **The check page gained the same two axes**: group and type chips narrow which sources are listed; the tick boxes
+  still decide what runs, so narrowing never silently changes a selection. That is the 「书源测试分类」the milestone
+  asked for, and it shares one meaning of "these sources" with the search page.
+- **ADR-0046** records the seven decisions; roadmap §3.8 closes M11 and registers the two deliberate gaps (results are
+  not persisted, non-text sources have no reader).
+- Gates: format 0 changed, analyze clean, **1155** tests, `core` 1245/1245, `domain` 2458/2458, `data` 98.47%.
+
+### Aggregate search engine: scopes, type filters, match buckets and merging (M11, first half)
+
+- **Search scope** (`BookSearchScope`: all / groups / named sources) with upstream's JSON payload, and the fallback
+  rule: a scope that names something gone falls back to "every enabled source" instead of searching nothing
+  (ADR-0046 §decision 1).
+- **Source-type filter, defaulting to text only.** The app reads text chapters, so pulling audio / image / file
+  sources into results would offer rows that cannot be opened — a deliberate difference from upstream, which has
+  players for them (ADR-0046 §decision 2).
+- **Match modes are bucket ordering, not filtering**, ported from upstream: `equal` / `tags` / `contains` / `other`,
+  and `exact` keeps only `equal` — the part that surprises is written out as a table so it cannot be misread
+  (ADR-0046 §decision 3).
+- **Merging** de-duplicates by `(name, author)` and records every source URL as an origin, which is what the
+  "N sources" marker will count; inside a bucket the rows sort by origin count, the cap is 1000, and eviction follows
+  upstream's order (ADR-0046 §decision 4/7).
+- **One source cannot sink the batch**: per-source 60 s timeout (injected for tests), failures only counted, and an
+  all-failed batch is the only failure. "The list rule matched nothing" is read as *no results*, not as an error —
+  otherwise a keyword nobody has would be reported as every source being broken (ADR-0046 §decision 5).
+- **Pause, resume and cancel** are cooperative and land between sources, and a cancelled batch keeps what it found
+  (ADR-0046 §decision 6). Paging skips sources that declare no `page` support instead of asking them for the same
+  page again (ADR-0046 §decision 7).
+- **`resolveSearchSources`** is the one place that answers "which sources take part", so search and the 5.10 consoles
+  will share it instead of growing two selection implementations.
+- Not in this slice: the search page's scope / type / match UI and the merged result list (registered in
+  `docs/dev/roadmap.md` §3.8 as the remaining half of M11).
+- Gates: format 0 changed, analyze clean, **1150** tests, `core` 1245/1245, `domain` 2456/2456, `data` 98.47%.
+
+### The source list can be sorted, filtered and dragged (5.5)
+
+- **Four sort keys with a fixed tie-breaker.** Manual order (the default), weight descending, response time
+  ascending and name ascending; every key is followed by enabled-first, then the manual order, then the row id — so
+  the same data always comes back in the same order (ADR-0045 §decision 2). A source that was never checked has no
+  response time, so it sorts **after** the measured ones instead of looking like `0 ms`.
+- **Group filter and drag-to-reorder.** The list filters by the group tokens the rows carry (including the
+  `搜索失效` ones the batch check writes), and in the manual order the rows are draggable: dropping renumbers
+  `customOrder` as `0..n-1` in one transaction, because swapping neighbours has no defined result when two rows share
+  a value (ADR-0045 §decision 3). Other keys disable dragging instead of letting a drop jump back.
+- **The list reads the columns, not the payload.** `StoredBookSource` now carries the five column projections
+  (`groupName`, `lastUpdateTime`, `respondTime`, `weight`, `comment`); 5.10's check writes those columns while the
+  payload stays byte-for-byte, so without this the list would keep showing the state from before the check
+  (ADR-0045 §decision 1).
+- **Sort key and group filter are remembered** in `book_source/data/` (keys private to that file). A stored group
+  that no longer exists falls back to "all groups" while rendering rather than writing a correction from a build.
+- Row actions moved into a menu (debug / view note / delete) instead of four trailing icons; the note itself shows
+  its first line inline and the whole `// Error:` block in a dialog.
+- **ADR-0045** records the four decisions; roadmap §5.5 is closed.
+- Gates: format 0 changed, analyze clean, **1083** tests, `core`/`domain` 100%, `data` >= 80%, generated files in
+  sync; Windows and Android device-level tests re-run.
+
+### The reader lands: its own typography, both page modes and remembered positions (2026-10-21)
+
+- **New `reader` feature (5.3).** `ReaderPage` / `ReaderRoute` moved out of `book_source`; the page shows one chapter
+  with the chapter list, the reading settings and previous / next around it, and it opens from a detail page's chapter
+  row (at that chapter) or from a shelf row (where the reader stopped).
+- **Reading settings are the reader's own**: text size, line spacing, background and page mode, stored in
+  `shared_preferences` and **multiplied on top of** the app-wide text scale instead of sharing one knob. Backgrounds
+  are derived from theme colours (system / paper / sepia / dark), so the reader still follows the theme and dynamic
+  colour (ADR-0044 §decision 1).
+- **Both page modes** (user decision): a scrolling body and pages split by a real `TextPainter` measurement, with an
+  end-of-chapter page that offers the next chapter. The character offset is a documented **estimate**
+  (fraction read x body length), which is what survives a font change (ADR-0044 §decision 4).
+- **Progress is read and written through one port.** ADR-0041 listed only a writer; restoring a position needs a
+  reader, so `ReadingProgressStore` is read + write and the composition root binds it to the shelf, which owns the
+  table. A cancelled/absent binding degrades to "start at the first chapter" plus a warning (ADR-0044 §decision 2).
+- **`books.tocUrl`** (schemaVersion 4 -> 5, dumped schema, migration tests, a real write in `on_disk_database_test`)
+  so opening from the shelf does not have to guess where a source keeps its chapters (ADR-0044 §decision 3).
+- **Two registered items are closed:** `updateTime` is shown in the hit list, the detail block and the chapter rows
+  (empty means no line, never "unknown"), and `canReName` found its consumer: adding an already-stored book only
+  overwrites its title and author when the source declares the rule (ADR-0044 §decision 5).
+- **ADR-0044** records the four decisions this slice had to make; the new open items (exact character anchors, page
+  break approximation, cross-chapter paging, golden baselines) are registered in `docs/dev/roadmap.md` §3.7 with
+  their triggers.
+- Gates: format 0 changed, analyze clean, **1050** tests, `core` 1225/1225, `domain` 2198/2198, `data` 98.2%,
+  generated files in sync; Windows and Android device-level tests re-run.
+
+### The book-source check mechanism lands: batch verdicts and a single-source console (2026-10-21)
+
+- **Batch check (5.10).** `CheckBookSource` walks search -> detail -> chapters -> body (explore the same way) on one
+  source and answers with a pure `SourceCheckReport`; `SourceCheck` (the notifier) runs a batch with the user's
+  per-source concurrency, holds the long-task marker, and writes each verdict back through `BookSourceRepository`.
+- **The verdict lands in columns, not in the payload.** `book_sources` gains a `comment` column (schemaVersion 3 -> 4,
+  dumped schema + migration tests + a real write in `on_disk_database_test`); `groupName` takes the upstream tokens
+  (`搜索失效` / `搜索目录失效` / ... / `校验超时` / `js失效` / `网站失效`), `respondTime` takes the elapsed time, and the
+  previous run's invalid groups and `// Error: ` note are cleared first, so a fixed source becomes healthy again.
+  `payload` is untouched: it stays the export source of 5.8 (ADR-0040 §decisions 4).
+- **`checkKeyWord` is modelled** (`SearchRule.checkKeyWord`) and its "looks like a rule" predicate is spelled out
+  (`resolveCheckKeyword`: `http` / `://` / `::` / `++` / `--` / `##` / `{{`, or a leading `@` / `$`), closing the
+  `docs/dev/roadmap.md` §3.7 registration. The fallback keyword is data, not UI copy, so it stays out of ARB.
+- **Single-source console (5.10).** `RunSourceDebug` runs one target (search / explore / detail / chapters / body) and
+  streams typed events (message / source / error, each with an elapsed time); the page shows them with one-tap examples
+  taken from the source itself. A body's text never reaches the console - only `chars=<n>`.
+- **Cancellation is `Cancelled`, never `Failed`.** Both runs share a cooperative `TaskCancellation` checked between
+  stages; a stopped batch writes nothing back. Upstream's `Incomplete` has no counterpart here (ADR-0043 §consequences).
+- **`ParseFailureKind` is unchanged.** Stage failures live in `SourceCheckStageOutcome`; "a script broke" is read from
+  the existing `:js:error` / `:js:timeout` rule-path markers, in exactly one place (`checkGroupForFailure`).
+- **New platform port `LongRunningTask`** (`core/platform/`): Android holds a `PARTIAL_WAKE_LOCK` (channel + permission,
+  no new dependency), Windows / iOS get the no-op. A **foreground service** is registered as open with its trigger.
+- **ADR-0043** records the four decisions M10 had to make before any code was written.
+- Reproductions of the five judgeable failures (empty search / empty chapters / empty body / timeout / broken script)
+  are recorded in `tool/spot_check/source_check_records.md`.
+- Gates: format 0 changed, analyze clean, **1003** tests, `core` 1219/1219, `domain` 2168/2168, `data` 142/142,
+  generated files in sync; Windows and Android device-level tests re-run for the `core/platform/` change.
+
+### The shelf and the settings page land; the book-source check mechanism is planned (2026-10-21)
+
+- **Shelf (5.4).** `books` + `reading_progress` (schemaVersion 2 -> 3, dumped schema + migration tests + a real
+  write in `on_disk_database_test`), `BookshelfDao` / `BookshelfRepository` / `Bookshelf` notifier / `BookshelfPage`.
+  The identity is `(sourceUrl, bookUrl)` - the source is referenced by URL, not by `book_sources.id`, because that id
+  belongs to one imported row. Re-adding is a snapshot refresh that keeps the user state (`status` / `isPinned`).
+  The detail page's "add to shelf" goes through a `BookshelfWriter` port bound at the composition root (ADR-0041).
+- **Settings (5.6).** `AppSettings` (clamped in the factory, **not** asserted), `SettingsRepository` over
+  `shared_preferences` with keys private to `settings/data/`, and the page (theme, text scale, concurrency, cache).
+  Theme and text scale are wired in `app.dart` - the stored scale stacks on top of the platform accessibility scale -
+  and the concurrency budget reaches `HttpPolicy` through `concurrencySettingProvider`, which the root binds.
+  Cache clearing (5.7 (1)) landed with it: `CacheDao.deleteAll` + a `CachePurger` port.
+- **Two registered items are closed:** the `assert`-only concurrency guard (now `budgetOrDefault`, which also runs in
+  release: a value `<= 0` falls back to the default and logs) and the auto-disposed HTTP budget
+  (`httpClientProvider` is `keepAlive`, so a batch shares one budget instead of getting a fresh one per batch).
+- **Four deferred, written down instead of silently skipped:** `java.get('bookName')` (needs Book/Chapter bound into
+  the JS variable table), `downloadUrls` / `relatedBooks` (rule-face, no corpus evidence), the "About" entry (it
+  belongs to 5.9's legal page - a menu row opening nothing is a dead end) and per-source cache purge (5.7 (2)).
+  All four in `docs/dev/roadmap.md` §3.7 with their triggers.
+- **ADR-0042:** cross-feature navigation goes through a presentation port (`AppNavigation`, bound by
+  `appProviderOverrides()`) because a `domain/` port cannot carry a `BuildContext`; `StateMessage` /
+  `FailureMessage` moved to `core/widgets/` since three features now share them.
+- **M10 is planned, not built.** `docs/dev/roadmap.md` §5.10 writes down both mechanisms of the upstream repository
+  (`BookSourceCheckRepository` batch check + `ui/book/source/debug` single-source console) and the four decisions that
+  must be made before implementation starts.
+- Gates: format 0 changed, analyze clean, **897** tests, `core` 1184/1184, `domain` 1892/1892, `data` 130/130,
+  generated files in sync.
+
+### PLAN.md is the plan plugin's state file now; the roadmap moved to `docs/dev/roadmap.md` (2026-10-21)
+
+- **Why the split.** The `plan` extension only knows its own format (`<!-- plan-bridge:state -->` + `## Milestones`
+  + `## Current`) and refuses to overwrite a foreign PLAN.md, while the roadmap's `5.x` acceptance, `G1`-`G7`
+  and 17 traps are referenced from ~90 places. So the root `PLAN.md` now holds **only milestone-level state**
+  (current milestone / goal / breakpoint, written through the `plan` tool) and everything a human reads moved to
+  `docs/dev/roadmap.md` **with the section numbers unchanged**, so existing references keep resolving.
+- **Milestones map 1:1 onto the roadmap's steps:** M1-M3 done (5.0 specs, 5.1 book source entry, 5.2 body cache),
+  M4-M9 open (5.3 reader … 5.9 platform + legal notice); M4 is current, one-line goal and breakpoint set.
+- **~90 references repointed** - `docs/README.md` (entry table, ownership matrix), `AGENTS.md` section 2,
+  `README.md`, `book-source.md`, `test-environment.md`, `tool/spot_check/`, and the doc comments in `lib/`,
+  `test/`, `integration_test/` (generated files came back through `build_runner`, never hand-edited).
+  **ADRs and CHANGELOG keep their historical `PLAN.md` section references**: they are immutable records, and
+  `roadmap.md`'s header states that `PLAN.md` §X means `docs/dev/roadmap.md` §X.
+- **`DECISIONS.md` is new** - the plugin's append-only `#N` log, for execution-time findings; formal decisions
+  still belong in `docs/dev/adr/`. Entry #1 records this split plus the migration trap: `git mv` left the
+  extension's own 16-line skeleton at the destination, so copy to `build/` first next time.
+- Gates: format 0 changed, analyze clean, **788** tests, `core` 1032/1032, `domain` 1857/1857, `data` 64/64,
+  generated files in sync.
+
+### PLAN.md keeps only what is still open (2026-10-14)
+
+- **The finished phases are one line each.** Phase 0-4 (section 3.2-3.5) collapsed from step tables plus dated
+  status prose into one line per phase that names its steps and its evidence. The section anchors were kept
+  deliberately: ~40 cross-references in `README.md`, `docs/`, the ADRs and code comments name 3.2-3.6, so they
+  still resolve. The status table in 3.1 is three rows and delegates the detail here.
+- **Section 3.7 shrank from 59 rows to 17.** Everything closed or withdrawn (the concurrency budget, M1 #15-#19,
+  rule variables not persisted, `ruleBookInfo.init`, b1b's rework and its real-source run, `{{…}}` + `##`,
+  JSONPath `]name`, the charset cache, `bookSourceType` 4, the `java.*` compat surface) is now only in this
+  file's history. The deliberately-left-alone differences stay as **one** row pointing at the notes in
+  `book-source.md` 3/4.2/6/11 and ADR-0029/0035, and every open row keeps one line: where it goes (5.3-5.8, b7)
+  or what would reopen it.
+- **The gate table folds G2b/G3/G4 into one achieved row** and the "which gate belongs to which phase" note is
+  two lines instead of a paragraph. No acceptance criterion was dropped; PLAN.md is 511 -> 283 lines.
+
+### File import for book sources, and the two gaps a real export exposed (2026-10-14)
+
+- **A file can be picked directly.** The user asked for it, so ADR-0040 decision 9's file half moved
+  forward from 5.8: `BookSourceFilePicker` lives in `core/platform/` (C-PLT-1) with a `file_selector`
+  implementation - the Flutter team's federated plugin, BSD-3-Clause, official Android/iOS/Windows
+  implementations - and a fallback for platforms without a dialog that answers "nothing picked"
+  instead of throwing. `pubspec.yaml`, `tech-stack.md` section 6 and `NOTICE.md` section 5 were
+  updated as one batch (C-DEP-6); the licence rescan is 165 packages, no risky items. The size cap is
+  checked on the file's **size before it is read**, so an oversized file never enters memory.
+- **A real 504-source export drove two fixes** (evidence in ADR-0040's revision note):
+  - `bookSourceType` 4 is now modelled as **video** (upstream documents 0-4), which alone recovered
+    8 entries; an *unknown* value still skips the entry, because silently presenting an audio source
+    as text is worse than a visible failure (ADR-0022 section 5).
+  - `header` became the **one degradable single-entry field**: a rule-based (`@js:` / `<js>`) or
+    malformed header is dropped with a warning and the source still imports - losing a source over
+    its user agent is the worse outcome. The lenient single-quote dialect upstream's GSON accepts is
+    handled by the field itself (strict JSON first; the fallback applies only when the text carries
+    no double quote at all).
+  - Result on that file: **503 imported, 1 skipped** (its `ruleToc` is missing, which decision 6
+    skips on purpose), 36 headers degraded with warnings - against 457/47 before.
+- Gates: **788** cases, `core` 1032/1032, `domain` 1857/1857, `data` 64/64; device probes
+  **Windows 93 s** and **Android 158 s** (three files each) - re-run because a native plugin changes
+  both builds (ADR-0039). The import screen carries a third action next to paste and URL.
+
+### P5-2 lands: the chapter body cache (2026-10-14)
+
+- **`ContentCache`** (a `domain/` port) + `CacheDaoContentCache`: the finished chapter body - paging
+  already joined and `replaceRegex` already applied - is stored in the existing `cache_entries` table
+  under the DAO's stable key (`ruleField=content`, `page=1`, keyed by book source too), with
+  `chapterCacheTtl` (half a day) as the one TTL definition. No column, no table, no schema change.
+- **`FetchContent` consults it first**: a hit skips the whole engine and sends no request at all
+  (not even entering the source's rate budget), and only a successful body is written, so a failure
+  is never cached as content.
+- **The absorption became one function:** `absorbCacheFailure` in `core/storage/` is now the app's
+  single `on Exception` point, shared by the charset cache and the chapter cache; ADR-0033 gained a
+  revision note moving its exemption anchor from `CacheDaoCharsetCache._absorb` to that function
+  (one auditable clause, `Error` still uncaught, named clauses first).
+- Gates: **773** cases, `core` 1017/1017, `domain` 1840/1840, `data` 64/64; the harness overrides the
+  cache with an in-memory double, so the page tests keep running without a database.
+
+### P5-1 lands: the book source entry (2026-10-14)
+
+- **The feature's first `data/` consumer.** `book_sources` (`schemaVersion` 1 -> 2) stores every
+  imported source under ADR-0040's identity - a synthetic `id` plus `UNIQUE (url, fingerprint)` -
+  with the raw payload column that 5.8 exports from, and with `enabled` / `customOrder` as user
+  state an import never overwrites. `BookSourceDao` owns the row shape and the row order
+  (enabled -> `customOrder` -> `id`); `BookSourceRepositoryImpl` owns "what the same source is" via
+  `bookSourceFingerprint`, which `tool/spot_check` now imports instead of keeping its own copy, so
+  the census and the repository cannot drift apart.
+- **Import** (`ImportBookSources`) takes pasted JSON or a URL. The 32 MiB cap is enforced in UTF-8
+  bytes *before* parsing for text, and **while downloading** for a URL: the request layer streams
+  the body and abandons it the moment the cap is passed (`BodyTooLargeException`, C-PERF-5) rather
+  than buffering it, and the import rewrites that marker into `import.sizeLimit`. File-level
+  rejections are `import.notJson` / `import.noEntries`; single entries are skipped, counted and
+  logged with their index, failing field and URL - never their body (C-ERR-8).
+- **The selection is real:** `SelectedBookSource` (`keepAlive`) resolves ADR-0040's default order
+  and falls back to it when the selected row is deleted, while `currentBookSourceProvider` stays a
+  synchronous projection so the four parsing pages keep reading a `BookSource?` unchanged.
+- **UI:** the source list (current marker, enable switch, delete with confirmation, and a marker on
+  rows that share a URL with another source) and the import screen (paste / URL, plus the
+  "imported / skipped" summary), reachable from the search page's app bar and from its empty state -
+  which no longer claims that imports arrive in a later version.
+- Gates: **763** cases, `core` 1014/1014, `domain` 1837/1837, `data` 54/54; device probes
+  **Windows 99 s** and **Android 169 s** (three files each, `js_bridge` 24/24), including a new
+  `on_disk_database` case that writes a `book_sources` row and reads it back across connections.
+
 ### P5-0 is drafted: the Phase 5 specs, as four Proposed ADRs (2026-10-14)
 
 - **What landed.** The Phase 5 prerequisite (`PLAN.md` section 3.6, 5.0) is written out: the import

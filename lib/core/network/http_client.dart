@@ -1,4 +1,5 @@
 import 'dart:io' show HttpHeaders;
+import 'dart:typed_data' show BytesBuilder, Uint8List;
 
 import 'package:dio/dio.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
@@ -33,12 +34,23 @@ abstract interface class HttpClient {
   /// Pass [sourceId] (the book source URL) so a warning that belongs to a book
   /// source can name it without the client having to know the source model
   /// (C-ERR-8): the tolerant-decode warning of ADR-0031 §决策 2 needs it.
+  ///
+  /// Pass [maxBytes] to bound the response **while it is read** (`docs/dev/roadmap.md` 5.1,
+  /// ADR-0040 §决策 5): the import path must abandon an oversized download instead of
+  /// buffering it (C-PERF-5). A body over the cap is a [ParseFailure] of kind
+  /// [ParseFailureKind.invalidBookSource] whose `cause` is a [BodyTooLargeException] — the
+  /// request layer owns no "too large" kind, and it does not know what the caller wanted the
+  /// bytes for, so the caller rewrites the failure into its own `rulePath`
+  /// (`ImportBookSources` maps it to `import.sizeLimit`). `null` means “no caller cap”, which
+  /// is what every rule-driven request wants.
   Future<ParseResult<HttpResponse>> get(
     String url, {
     required String rulePath,
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    int? maxBytes,
+    String? declaredCharset,
   });
 
   /// Sends a POST request to [url], carrying [body] as the request payload.
@@ -51,6 +63,9 @@ abstract interface class HttpClient {
   /// [headers] — the client does not guess one. It exists because the JS whitelist of
   /// `docs/dev/book-source.md` §6 binds `http.post`, and the request layer must stay the
   /// single door to the network (C-NET-1).
+  ///
+  /// There is no `maxBytes` here: the cap exists for a caller that downloads a **file**
+  /// (the import path), and a rule-driven POST is read whole by definition.
   Future<ParseResult<HttpResponse>> post(
     String url, {
     required String rulePath,
@@ -58,6 +73,7 @@ abstract interface class HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    String? declaredCharset,
   });
 
   /// Applies the `concurrentRate` [sourceId] declares to that source's budget
@@ -74,6 +90,24 @@ abstract interface class HttpClient {
   /// the default concurrency budget (ADR-0036 §决策 2). Registering the same declaration twice
   /// is harmless and never resets the window.
   void applySourceRate(String sourceId, String? concurrentRate);
+}
+
+/// Raised inside the request layer when a response body passes the caller's `maxBytes` cap.
+///
+/// It never escapes as an exception: [DioHttpClient] catches it, cancels the download and answers
+/// with a [ParseFailure] whose `cause` is this object, so the caller can recognise *why* the
+/// request was refused (`ImportBookSources` rewrites it into `import.sizeLimit`).
+///
+/// It carries the limit, never the bytes that were read (C-SEC-4).
+final class BodyTooLargeException implements Exception {
+  /// Creates the marker for a body that passed [limitBytes].
+  const BodyTooLargeException(this.limitBytes);
+
+  /// The cap the caller asked for, in bytes.
+  final int limitBytes;
+
+  @override
+  String toString() => 'Response body exceeded $limitBytes bytes';
 }
 
 /// [HttpClient] backed by `dio` (C-NET-1).
@@ -156,6 +190,8 @@ final class DioHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    int? maxBytes,
+    String? declaredCharset,
   }) => _request(
     method: 'GET',
     url: url,
@@ -163,6 +199,8 @@ final class DioHttpClient implements HttpClient {
     headers: headers,
     keyword: keyword,
     sourceId: sourceId,
+    maxBytes: maxBytes,
+    declaredCharset: declaredCharset,
   );
 
   @override
@@ -173,6 +211,7 @@ final class DioHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    String? declaredCharset,
   }) => _request(
     method: 'POST',
     url: url,
@@ -181,6 +220,7 @@ final class DioHttpClient implements HttpClient {
     headers: headers,
     keyword: keyword,
     sourceId: sourceId,
+    declaredCharset: declaredCharset,
   );
 
   /// Sends one request of [method] with the shared policy, budget and retry loop.
@@ -195,6 +235,8 @@ final class DioHttpClient implements HttpClient {
     Map<String, String>? headers,
     String? keyword,
     String? sourceId,
+    int? maxBytes,
+    String? declaredCharset,
   }) async {
     final Uri? uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
@@ -237,6 +279,8 @@ final class DioHttpClient implements HttpClient {
           headers: headers,
           keyword: keyword,
           sourceId: sourceId,
+          maxBytes: maxBytes,
+          declaredCharset: declaredCharset,
         ),
       );
 
@@ -258,6 +302,11 @@ final class DioHttpClient implements HttpClient {
   }
 
   /// Performs one request and maps every outcome onto a [ParseResult].
+  ///
+  /// The body always arrives as a stream and is read by [_readBytes], so the `maxBytes` cap
+  /// applies to the *download* rather than to the decoded text: an oversized body is abandoned
+  /// mid-flight (C-PERF-5). Without a cap the accumulated bytes are exactly what the previous
+  /// `bytes` response type produced.
   Future<ParseResult<HttpResponse>> _send(
     String url, {
     required String method,
@@ -266,13 +315,19 @@ final class DioHttpClient implements HttpClient {
     required String? keyword,
     required String? sourceId,
     String? body,
+    int? maxBytes,
+    String? declaredCharset,
   }) async {
-    final Response<List<int>> response;
+    final Response<ResponseBody> response;
     try {
-      response = await _dio.request<List<int>>(
+      response = await _dio.request<ResponseBody>(
         url,
         data: body,
-        options: Options(method: method, headers: headers),
+        options: Options(
+          method: method,
+          headers: headers,
+          responseType: ResponseType.stream,
+        ),
       );
     } on DioException catch (error, stackTrace) {
       // 只有 dio 自己的异常到这里：URL 已在 [_request] 里校验，解码在 _decode 里单独处理。
@@ -289,24 +344,92 @@ final class DioHttpClient implements HttpClient {
     }
 
     final int status = response.statusCode ?? 0;
+    // dio 把「没有正文可给」表达成 null；对调用方那就是空正文，所以这里补一个空流，
+    // 后面的读取与丢弃两条路径都不必再判空。
+    final ResponseBody responseBody =
+        response.data ?? ResponseBody.fromBytes(const <int>[], status);
     final ParseFailureKind? statusKind = _failureKindForStatus(status);
 
     if (statusKind != null) {
       _logger.warning(
         'HTTP $status for rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
       );
+      await _discard(responseBody);
 
       return ParseFailure<HttpResponse>(kind: statusKind, rulePath: rulePath);
     }
 
+    final List<int> bytes;
+    try {
+      bytes = await _readBytes(responseBody, maxBytes: maxBytes);
+    } on BodyTooLargeException catch (error, stackTrace) {
+      _logger.warning(
+        'Response body passed the caller limit: rule=$rulePath '
+        'limit=${error.limitBytes} url=${redactUrl(url, keyword: keyword)}',
+        describeError(error),
+        stackTrace,
+      );
+
+      return ParseFailure<HttpResponse>(
+        kind: ParseFailureKind.invalidBookSource,
+        rulePath: rulePath,
+        cause: error,
+      );
+    } on Exception catch (error, stackTrace) {
+      // 正文是**流式**读的（C-PERF-5），所以读的过程中也会超时 / 断连，而 dio 的
+      // `receiveTimeout` 在那里表现为一个 `DioException`。它在 `_dio.request` 的
+      // try 之外抛出，不接住就会穿过 `HttpClient` 契约（C-ERR-1），把一个「读超时」
+      // 变成上一层的整批失败（真实案例：一个源把整次聚合搜索打成了失败）。
+      final ParseFailureKind kind = error is DioException
+          ? _failureKindForDioError(error)
+          : ParseFailureKind.networkFailed;
+      _logger.warning(
+        'Response body could not be read: rule=$rulePath kind=${kind.name} '
+        'url=${redactUrl(url, keyword: keyword)}',
+        describeError(error),
+        stackTrace,
+      );
+
+      return ParseFailure<HttpResponse>(kind: kind, rulePath: rulePath);
+    }
+
     return _decode(
-      response,
       status: status,
+      headers: response.headers,
+      bytes: bytes,
       rulePath: rulePath,
       keyword: keyword,
       url: url,
       sourceId: sourceId,
+      declaredCharset: declaredCharset,
     );
+  }
+
+  /// Reads the whole [body], or abandons it the moment it passes `maxBytes`.
+  ///
+  /// Throwing inside the `await for` cancels the subscription, which is what stops the download
+  /// instead of letting it finish in the background (C-PERF-5).
+  Future<List<int>> _readBytes(
+    ResponseBody body, {
+    required int? maxBytes,
+  }) async {
+    final BytesBuilder builder = BytesBuilder(copy: false);
+    await for (final Uint8List chunk in body.stream) {
+      builder.add(chunk);
+      if (maxBytes != null && builder.length > maxBytes) {
+        throw BodyTooLargeException(maxBytes);
+      }
+    }
+
+    return builder.takeBytes();
+  }
+
+  /// Releases a response body this client deliberately does not read.
+  ///
+  /// A 4xx/5xx body stays held by dio until its subscription is consumed or cancelled; cancelling
+  /// returns the connection to the pool instead of leaving it dangling.
+  Future<void> _discard(ResponseBody body) async {
+    await body.stream.listen(null).cancel();
   }
 
   /// Decodes a 2xx body; the only place a [FormatException] is expected.
@@ -316,21 +439,24 @@ final class DioHttpClient implements HttpClient {
   /// the detector never runs twice for the same page. Only a **detected** label is stored
   /// (a declared one is read from the response itself every time and always wins); a cache
   /// that cannot answer is a miss, because the port is total (C-ERR-2).
-  Future<ParseResult<HttpResponse>> _decode(
-    Response<List<int>> response, {
+  Future<ParseResult<HttpResponse>> _decode({
     required int status,
+    required Headers headers,
+    required List<int> bytes,
     required String rulePath,
     required String? keyword,
     required String url,
     required String? sourceId,
+    String? declaredCharset,
   }) async {
     final String? sniffedCharset = await _readCachedCharset(sourceId, url);
 
     try {
       final DecodedBody decoded = decodeBody(
-        response.data ?? const <int>[],
-        contentType: response.headers.value(HttpHeaders.contentTypeHeader),
+        bytes,
+        contentType: headers.value(HttpHeaders.contentTypeHeader),
         sniffedCharset: sniffedCharset,
+        declaredCharset: declaredCharset,
       );
       if (decoded.isDetected && sniffedCharset == null) {
         // 命中的标签不需要重写（DAO 已把它当成未过期才会返回）；只有**这次刚嗅探出来**的才写。
@@ -350,7 +476,7 @@ final class DioHttpClient implements HttpClient {
       return ParseSuccess<HttpResponse>(
         HttpResponse(
           statusCode: status,
-          headers: response.headers.map,
+          headers: headers.map,
           body: decoded.text,
         ),
       );
