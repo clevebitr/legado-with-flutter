@@ -82,7 +82,11 @@ PageFetchService pageFetchService(Ref ref) => PageFetchService(
 /// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
 /// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
 /// failing the source.
-@riverpod
+///
+/// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
+/// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
+/// provider (ADR-0010).
+@Riverpod(keepAlive: true)
 WebPageFetcher webPageFetcher(Ref ref) => const UnsupportedWebPageFetcher();
 
 /// Provides the search use case.

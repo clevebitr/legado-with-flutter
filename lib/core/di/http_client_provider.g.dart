@@ -188,6 +188,10 @@ String _$concurrencySettingHash() =>
 /// Declared here for the same reason as [concurrencySetting]: `core/` must not import
 /// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
 /// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+///
+/// `keepAlive` like the rest of the app-wide services: `httpPolicy` is itself keepAlive and
+/// watches it, and an auto-dispose dependency under a kept-alive provider is what
+/// `riverpod_lint`'s `only_use_keep_alive_inside_keep_alive` rejects (ADR-0010).
 
 @ProviderFor(plainHttpSetting)
 final plainHttpSettingProvider = PlainHttpSettingProvider._();
@@ -197,6 +201,10 @@ final plainHttpSettingProvider = PlainHttpSettingProvider._();
 /// Declared here for the same reason as [concurrencySetting]: `core/` must not import
 /// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
 /// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+///
+/// `keepAlive` like the rest of the app-wide services: `httpPolicy` is itself keepAlive and
+/// watches it, and an auto-dispose dependency under a kept-alive provider is what
+/// `riverpod_lint`'s `only_use_keep_alive_inside_keep_alive` rejects (ADR-0010).
 
 final class PlainHttpSettingProvider
     extends $FunctionalProvider<bool, bool, bool>
@@ -206,13 +214,17 @@ final class PlainHttpSettingProvider
   /// Declared here for the same reason as [concurrencySetting]: `core/` must not import
   /// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
   /// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+  ///
+  /// `keepAlive` like the rest of the app-wide services: `httpPolicy` is itself keepAlive and
+  /// watches it, and an auto-dispose dependency under a kept-alive provider is what
+  /// `riverpod_lint`'s `only_use_keep_alive_inside_keep_alive` rejects (ADR-0010).
   PlainHttpSettingProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'plainHttpSettingProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -239,7 +251,7 @@ final class PlainHttpSettingProvider
   }
 }
 
-String _$plainHttpSettingHash() => r'a12aafa30d3d9762de85a4e142e6fed1a4cc0e12';
+String _$plainHttpSettingHash() => r'bde3225d0d3cd9cd13b18d93093e2cc39c08c479';
 
 /// Provides the app-wide HTTP client (C-NET-1).
 ///

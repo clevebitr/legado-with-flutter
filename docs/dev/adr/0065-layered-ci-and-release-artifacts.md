@@ -6,6 +6,12 @@
   `docs/dev/testing.md` §7（CI 顺序）、`docs/dev/platform.md` §8.2/§8.3、
   CONTRIBUTING.md §5.4（`verify` 是 `main` 规则集要求的 status check）
 
+> **2026-10-23 修订注记（ADR-0067）：** 本 ADR 的 §决策 1（同文件三层的 job 形态）与 §决策 4 的
+> 具体实现已被 ADR-0067 取代 —— 打包与发布从 `ci.yml` 拆到 `build-artifacts.yml` + `release.yml` /
+> `beta.yml` / `debug.yml` 三条独立通道，版本号也按通道区分（正式版 / beta / debug）。仍然有效的是：
+> 门禁 `verify` 只在一处实现、PR 不打包、产物形态与签名局限（§决策 3）、签名材料不进 CI（§决策 5）、
+> macOS 本轮不做。
+
 ## 背景
 
 原来的 `.github/workflows/ci.yml` 只有一件事：在 `ubuntu-latest` 上跑门禁（`verify`）。

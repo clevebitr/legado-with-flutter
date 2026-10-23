@@ -45,7 +45,11 @@ int? concurrencySetting(Ref ref) => null;
 /// Declared here for the same reason as [concurrencySetting]: `core/` must not import
 /// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
 /// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
-@riverpod
+///
+/// `keepAlive` like the rest of the app-wide services: `httpPolicy` is itself keepAlive and
+/// watches it, and an auto-dispose dependency under a kept-alive provider is what
+/// `riverpod_lint`'s `only_use_keep_alive_inside_keep_alive` rejects (ADR-0010).
+@Riverpod(keepAlive: true)
 bool plainHttpSetting(Ref ref) => false;
 
 /// Maps a user-chosen budget to a value [RequestLimiter] can accept.

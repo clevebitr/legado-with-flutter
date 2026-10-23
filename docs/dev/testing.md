@@ -165,23 +165,35 @@ await tester.pumpAndSettle();
 | 7 | `dart run tool/check_coverage.dart` | 阈值 + 未测量源文件（§2、ADR-0019） |
 
 
-### 7.1 分层与触发
+### 7.1 分层与三条发布通道
 
-`.github/workflows/ci.yml` 现在有三层（判据与取舍见 ADR-0065）：
+`.github/workflows/` 现在是「一个门禁 + 一个可复用构建 + 三条通道」（判据见 ADR-0065、ADR-0067）：
 
-| 层 | job | 触发 | 说明 |
-|---|---|---|---|
-| L1 门禁 | `verify` | 每个 PR / push main / tag / 手动 | 上面的 1–7 步；**job 名是 `main` 规则集的 status check，不许改名** |
-| L2 构建 | `build-windows` / `build-android` / `build-ios` | `push` main、`v*` tag、`workflow_dispatch`；`needs: verify` | `--release` 打包并 upload-artifact；PR 上不跑（`if: github.event_name != 'pull_request'`） |
-| L3 发布 | `release` | 仅 `v*` tag；`needs:` 三个构建 | `gh release create/upload` 把产物挂到同名 Release（`contents: write`） |
+| 文件 | 角色 | 触发 |
+|---|---|---|
+| `ci.yml` | **L1 门禁**：上面的 1–7 步，job 名 `verify`（`main` 规则集的 status check，不许改名） | PR、push main、push `v*` tag、手动 |
+| `build-artifacts.yml` | **可复用构建**（`workflow_call`）：Windows / Android / iOS | 只被三条通道调用 |
+| `release.yml` | **正式版**：tag 必须等于 `v<pubspec 版本>` → 等门禁绿 → 构建 → 正式 Release | push `v*` tag、手动（给 tag） |
+| `beta.yml` | **beta**：等门禁绿 → 构建 → 预发布 Release | 仅手动 dispatch（可选 ref 与说明） |
+| `debug.yml` | **debug**：等门禁绿 → 构建 → 预发布 Release | push main、手动 |
 
-产物与局限（未签名 iOS、debug 签名的 APK）见 ADR-0065 §决策 3；签名材料不进 CI（同 ADR §决策 5）。
+跨 workflow 的「先门禁后打包」由 `.github/actions/wait-for-verify` 轮询该 commit 的 `ci.yml` 运行实现
+（`needs` 跨不了 workflow）；门禁命令本身仍只在 `ci.yml` 里写一次。
 
-要点：
+### 7.2 版本号与产物名
 
-- 第 3 步的路径集比 `AGENTS.md` §4 多包含 `'**/*.gr.dart'`（Drift 生成物），CI 以 CI 侧为准。
-- Golden 测试在 CI 中必须固定平台（`runs-on: ubuntu-latest`），
-  禁止在有字体差异的多个平台上跑同一套基线。
+版本号组合只有一处实现：`.github/actions/version`（ADR-0067 §决策 2）。
+
+| 通道 | 版本号 | 产物名 |
+|---|---|---|
+| 正式版 | `0.1.0`（= `pubspec.yaml`，tag 必须 `v0.1.0`） | `flutter-reader-0.1.0-…` |
+| beta | `0.1.0-beta.<sha7>` | `flutter-reader-0.1.0-beta.a1b2c3d-…` |
+| debug | `0.1.0-debug.<sha7>.<UTC yyyyMMddHHmm>` | `flutter-reader-0.1.0-debug.a1b2c3d.202610231540-…` |
+
+每个版本出四个文件：`-windows-x64.zip`、`-android.apk`、`-android.aab`、`-ios-unsigned.xcarchive.zip`。
+`--build-number` 用工作流运行号；**iOS 的 `build-name` 只用数字版本**（`CFBundleShortVersionString`
+不允许后缀），通道信息走 `--dart-define=APP_VERSION` 与文件名。产物局限与 iOS 签名步骤见
+`docs/dev/platform.md` §8.3。
 
 ---
 

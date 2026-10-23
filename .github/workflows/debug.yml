@@ -1,0 +1,99 @@
+# Debug：`main` 每前进一次（或手动 dispatch）就出一个可安装的调试版本 → **预发布** Release。
+#
+# 版本号 = `<pubspec 版本>-debug.<commit sha7>.<UTC 时间 yyyyMMddHHmm>`（ADR-0067 §决策 2）：
+# 时间戳是故意的 —— 同一个提交可能被重跑（重试 / 补发），时间戳让每次产物都能对上「哪一次构建」。
+#
+# 这条通道是**迭代用**：产物齐全（Windows zip / APK / AAB / 未签名 iOS 归档），永远 pre-release，
+# 不进任何商店。验收过的迭代走 `beta.yml`，正式发版走 `release.yml`。
+name: Debug
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit / branch to publish as debug (empty = the dispatched ref)'
+        required: false
+        type: string
+
+concurrency:
+  group: debug-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      manifest: ${{ steps.version.outputs.manifest }}
+      tag: ${{ steps.tag.outputs.tag }}
+      sha: ${{ steps.tag.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Compose the version
+        id: version
+        uses: ./.github/actions/version
+        with:
+          channel: debug
+
+      - name: Tag and commit
+        id: tag
+        shell: bash
+        run: |
+          echo "tag=v${{ steps.version.outputs.version }}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout that commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+
+      - name: Wait for CI to be green on that commit
+        uses: ./.github/actions/wait-for-verify
+        with:
+          sha: ${{ needs.meta.outputs.sha }}
+
+  build:
+    needs: [meta, gate]
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      channel: debug
+      version: ${{ needs.meta.outputs.version }}
+      manifest: ${{ needs.meta.outputs.manifest }}
+      ref: ${{ needs.meta.outputs.sha }}
+
+  publish:
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download every artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish as a pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.meta.outputs.tag }}
+          SHA: ${{ needs.meta.outputs.sha }}
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$SHA" \
+            --title "Debug $VERSION" --prerelease \
+            --notes "Debug build of ${SHA:0:7}. Not for distribution: the APK is debug-signed and the iOS archive is unsigned."
+          gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber

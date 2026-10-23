@@ -199,13 +199,15 @@ pageTransitionsTheme: const PageTransitionsTheme(
 
 ### 8.3 CI 构建产物与 iOS 签名
 
-`.github/workflows/ci.yml` 的 L2 在每次合并到 `main`、推 `v*` tag 或手动 dispatch 时产出（ADR-0065）：
+`三条发布通道（`release.yml` / `beta.yml` / `debug.yml`，构建体在 `build-artifacts.yml`）按各自版本号
+产出同样的四个文件（ADR-0067 §决策 2；`<版本>` 分别是 `0.1.0` / `0.1.0-beta.<sha7>` /
+`0.1.0-debug.<sha7>.<时间>`）：
 
 | 产物 | 文件 | 能不能直接用 |
 |---|---|---|
 | Windows | `flutter-reader-<版本>-windows-x64.zip` | 解压即用；目标机需 VS 2022 运行库 |
 | Android | `…-android.apk`（通用）与 `…-android.aab` | APK 可装（debug 签名）；AAB 仅占位，上架前必须换 keystore 与 `applicationId` |
-| iOS | `…-ios-unsigned.xcarchive.zip` | **不能装**：只是「能编译能归档」的证明 |
+| iOS | `…-ios-unsigned.xcarchive.zip` | **不能装**：只是「能编译能归档」的证明（Xcode 的短版本号必须是点分数字，所以 iOS 的 `build-name` 只取数字版本，通道信息在 `APP_VERSION` 与文件名里） |
 
 **iOS 签名怎么拿（回答「没有签名怎么办」）：** 签名只能来自 Apple 的开发者体系，代码层面拿不到：
 

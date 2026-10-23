@@ -1,0 +1,106 @@
+# 正式版：tag `v*`（或手动指定 tag）→ 等门禁绿 → 三平台构建 → 正式 Release。
+#
+# 版本号 = `pubspec.yaml` 的 `version:`（去掉 `+build`），且 **tag 必须等于 `v<版本>`** —— 打错 tag
+# 就直接失败，绝不发布一个版本号与内容不符的正式版。
+# 方案与理由见 ADR-0067；产物与签名局限见 ADR-0065 §决策 3、`docs/dev/platform.md` §8.3。
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (e.g. v0.1.0)'
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      manifest: ${{ steps.version.outputs.manifest }}
+      tag: ${{ steps.tag.outputs.tag }}
+      sha: ${{ steps.tag.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Compose the version
+        id: version
+        uses: ./.github/actions/version
+        with:
+          channel: release
+
+      - name: The tag must match pubspec.yaml
+        id: tag
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          expected="v${{ steps.version.outputs.manifest }}"
+          if [ "$TAG" != "$expected" ]; then
+            echo "::error::tag '$TAG' does not match pubspec.yaml ('$expected')"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "releasing $TAG"
+
+  gate:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the commit being released
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+
+      - name: Wait for CI to be green on that commit
+        uses: ./.github/actions/wait-for-verify
+        with:
+          sha: ${{ needs.meta.outputs.sha }}
+
+  build:
+    needs: [meta, gate]
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      channel: release
+      version: ${{ needs.meta.outputs.version }}
+      manifest: ${{ needs.meta.outputs.manifest }}
+      ref: ${{ needs.meta.outputs.sha }}
+
+  publish:
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download every artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Attach them to the formal release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+                 --title "$TAG" --generate-notes --verify-tag
+          # 正式版：明确把 pre-release 关掉（beta / debug 才会打开）。
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false
+          gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber

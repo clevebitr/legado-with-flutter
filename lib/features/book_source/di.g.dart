@@ -283,6 +283,10 @@ String _$pageFetchServiceHash() => r'468d712869d464c9328f014cebea12126c981668';
 /// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
 /// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
 /// failing the source.
+///
+/// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
+/// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
+/// provider (ADR-0010).
 
 @ProviderFor(webPageFetcher)
 final webPageFetcherProvider = WebPageFetcherProvider._();
@@ -292,6 +296,10 @@ final webPageFetcherProvider = WebPageFetcherProvider._();
 /// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
 /// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
 /// failing the source.
+///
+/// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
+/// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
+/// provider (ADR-0010).
 
 final class WebPageFetcherProvider
     extends $FunctionalProvider<WebPageFetcher, WebPageFetcher, WebPageFetcher>
@@ -301,13 +309,17 @@ final class WebPageFetcherProvider
   /// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
   /// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
   /// failing the source.
+  ///
+  /// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
+  /// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
+  /// provider (ADR-0010).
   WebPageFetcherProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'webPageFetcherProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -334,7 +346,7 @@ final class WebPageFetcherProvider
   }
 }
 
-String _$webPageFetcherHash() => r'4be83e008ee67f3bbf57ec2c27db20cbc8490129';
+String _$webPageFetcherHash() => r'e258afa898dc2d848748bdf28feb5fe1fe8478d9';
 
 /// Provides the search use case.
 

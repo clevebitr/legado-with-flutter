@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Release artifacts come out of CI, in three layers (ADR-0065)
+### Three release channels come out of CI (ADR-0065, ADR-0067)
 
-- **L1 门禁**（`AGENTS.md` §4 的全部命令）仍然是每个 PR 的门；**L2** 在合并到 `main`、推 `v*` tag 或手动
-  dispatch 时构建 Windows（zip）、Android（通用 APK + AAB）与 iOS（未签名 xcarchive）；**L3** 在 tag 上把
-  这些产物挂到同名 GitHub Release（`gh`，无第三方 release action）。
-- 无签名 iOS 归档只能证明「能编译能归档」；真机安装 / TestFlight 需要 Apple Developer Program 的证书与
+- **正式版**（`release.yml`）：推 `v<版本>` tag 时构建并发布正式 Release；tag 与 `pubspec.yaml` 的版本
+  不一致就直接失败。**beta**（`beta.yml`，手动）在一批迭代验收后定格成 `0.1.0-beta.<sha7>`；
+  **debug**（`debug.yml`）每次 `main` 前进都出一个 `0.1.0-debug.<sha7>.<时间>`，两者都是 pre-release。
+- 三个通道共用同一个构建体（`build-artifacts.yml`）：Windows zip、通用 APK + AAB、未签名 iOS 归档；
+  打包前会等 `ci.yml` 的 `verify` 变绿（`.github/actions/wait-for-verify`），门禁命令仍只写一处。
+- 无签名 iOS 归档只能证明「能编译能归档」；真机 / TestFlight 需要 Apple Developer Program 的证书与
   描述文件，接入步骤写在 `docs/dev/platform.md` §8.3，现在**故意不接**。
 - macOS 不在本轮：仓库仍没有 `macos/` 平台工程。
 
