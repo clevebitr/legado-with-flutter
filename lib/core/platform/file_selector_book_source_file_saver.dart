@@ -4,17 +4,10 @@ import 'package:flutter_reader/core/platform/file_selector_dialog.dart';
 
 /// [BookSourceFileSaver] backed by the `file_selector` plugin.
 ///
-/// It contains no platform channel and no plugin type: the single plugin call stays in
-/// [fileSelectorSaveJsonFile], which is the one file ADR-0019 exempts. Cancelling and “saved” are
-/// the two answers the port promises, and a write failure travels as a [ParseFailure] of kind
-/// [ParseFailureKind.invalidBookSource] — the export's own `rulePath` tells the caller which
-/// source it was.
+/// A cancelled dialog answers `false`; a write failure travels as a [ParseFailure] of kind
+/// [ParseFailureKind.invalidBookSource].
 final class FileSelectorBookSourceFileSaver implements BookSourceFileSaver {
-  /// Creates the saver.
-  ///
-  /// [write] defaults to the real `file_selector` dialog; a test injects a fake so the adapter's
-  /// own logic (cancel → `false`, write failure → `ParseFailure`) is covered without a platform
-  /// channel (`docs/dev/testing.md` §4). The plugin call itself stays in the exempt file.
+  /// Creates the saver; [write] defaults to the real save dialog.
   const FileSelectorBookSourceFileSaver({BookSourceFileWriter? write})
     : _write = write ?? fileSelectorSaveJsonFile;
 

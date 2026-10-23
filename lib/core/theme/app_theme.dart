@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:m3e_design/m3e_design.dart';
 
-/// Seed color used to generate design tokens when the platform does not
-/// provide a dynamic color scheme.
+/// Seed color used when the platform provides no dynamic color scheme.
 ///
-/// This is the **only** color literal allowed in the project. Every other color
-/// must be read from the design tokens via `context.m3e` (C-UI-1, ADR-0004).
+/// This is the only color literal allowed in the project; everything else must
+/// come from the design tokens.
 const Color defaultSeedColor = Color(0xFF6750A4);
 
 /// Builds a Material 3 Expressive theme from [scheme].
 ///
-/// Installs the [M3ETheme] extension so widgets can read tokens through
-/// `Theme.of(context).m3e` or `context.m3e`.
+/// Installs the `M3ETheme` extension, readable as `context.m3e`.
 ThemeData buildReaderTheme(ColorScheme scheme) => scheme.toM3EThemeData();
 
 /// Returns the light color scheme used when dynamic color is unavailable.

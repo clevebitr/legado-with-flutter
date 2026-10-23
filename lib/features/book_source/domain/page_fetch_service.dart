@@ -13,30 +13,16 @@ import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:html/parser.dart' as parser;
 
-/// The paging bound of `docs/dev/book-source.md` §9.
-///
-/// It is shared by the table of contents and the chapter body: once a walk has read
-/// this many pages it stops and logs a warning, so a site whose paging rule keeps
-/// naming pages cannot pull an unbounded number of requests.
+// 翻页遍历的页数上限：到顶就停止并记录一条警告。
 const int _maxPagingPages = 50;
 
-/// The URL variables a **paging** rule may use as a template (`book-source.md` §4).
-///
-/// `{{key}}` belongs to `searchUrl` only, and every other name is matrix #18's inner
-/// rule / JS, which is M1 — a paging rule carrying one stays with the engine, which
-/// rejects it as unsupported rather than rendering it to an empty URL.
+// 翻页模板允许的 URL 变量。
 const Set<String> _pagingTemplateVariables = <String>{'page', 'baseUrl'};
 
 /// Matches one `{{name}}` placeholder of a paging URL template.
 final RegExp _templatePlaceholder = RegExp(r'\{\{([^{}]*)\}\}');
 
-/// Whether [rule] is a **URL template** rather than a selector rule (§4/§4.1).
-///
-/// A paging field carries a template when the whole text is a URL: it holds at least
-/// one `{{...}}` placeholder, every placeholder names an M0 URL variable, and there is
-/// no `@` segment (which would make it a selector rule). `toc_{{page}}.html` therefore
-/// pages by template, `@css:a#next @href` is evaluated as a rule, and `{{result}}`
-/// stays with the engine (matrix #18 is M1).
+// 整段是 URL、只用已知变量且不含 `@` 时才是模板，否则交给规则引擎。
 bool _isPagingTemplate(String rule) {
   if (rule.contains('@')) {
     return false;
@@ -51,11 +37,10 @@ bool _isPagingTemplate(String rule) {
       );
 }
 
-/// One page of a [PageWalk]: the URL it was fetched from and its parsed scope.
+/// One fetched page: its absolute URL and the parsed scope of its body.
 ///
-/// The URL travels with the scope because a rule on that page may name a **relative**
-/// target, and only the page it was read on can resolve it into an absolute URL
-/// (`docs/dev/book-source.md` §4).
+/// The URL travels with the scope because a relative target on that page can only be
+/// resolved against it.
 final class FetchedPage {
   /// Creates a fetched page.
   const FetchedPage({required this.url, required this.scope});
@@ -63,18 +48,11 @@ final class FetchedPage {
   /// The absolute URL the page was fetched from.
   final String url;
 
-  /// The page, parsed into a scope its rules can read.
+  /// The page parsed into a scope its rules can read.
   final RuleScope scope;
 }
 
 /// The pages one paging walk reached, and why it stopped.
-///
-/// [stoppedBy] is `null` when the walk ended on its own — the paging rule stopped
-/// naming pages, or every further page had already been read. Otherwise a **later**
-/// page could not be fetched and [pages] holds the prefix that was read; the two
-/// stages of `docs/dev/roadmap.md` 3.5 interpret that differently, because
-/// `docs/dev/book-source.md` §9 tolerates a missing table-of-contents page but not a
-/// truncated chapter body.
 final class PageWalk {
   /// Creates a walk result.
   const PageWalk({required this.pages, this.stoppedBy});
@@ -86,24 +64,10 @@ final class PageWalk {
   final ParseFailure<Never>? stoppedBy;
 }
 
-/// Fetches one page of a book source and reads rules from it.
+/// Fetches pages of a book source and reads rules from them.
 ///
-/// The four use cases of `docs/dev/roadmap.md` 2.4 share this collaborator so that the failure
-/// rules of `docs/dev/book-source.md` §7 live in exactly one place:
-///
-/// * a failure is always a [ParseResult], never an exception thrown at the UI
-///   (C-ERR-1);
-/// * a **top-level** list rule (`bookList`, `chapterList`) or the content rule that
-///   matched nothing is [ParseFailureKind.parseFailed], because that is what "the
-///   rules no longer fit the page" looks like;
-/// * an empty value of any other field is a **success** with no value, so an absent
-///   cover or intro stays non-fatal;
-/// * a rejected rule keeps travelling as [ParseFailureKind.unsupportedRule]
-///   (C-SRC-4) instead of being swallowed;
-/// * a non-top-level field whose rule was **rejected or malformed** degrades to "no
-///   value" plus a warning ([field]), and so do the paging rules ([nextPageUrls]) and
-///   the content replacement rule ([replaceContent]) — ADR-0026 §决策 2, applied in
-///   this one place.
+/// Failures are always [ParseResult]s. Optional fields degrade to "no value" with a
+/// warning, while a top-level list or content rule that matches nothing fails the stage.
 final class PageFetchService {
   /// Creates the service.
   PageFetchService({

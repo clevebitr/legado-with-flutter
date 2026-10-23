@@ -8,18 +8,12 @@ part of 'di.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the persistence of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
-///
-/// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
-/// consumes the `domain/` model directly instead of a DTO.
+/// Provides persistence for the imported book sources.
 
 @ProviderFor(bookSourceRepository)
 final bookSourceRepositoryProvider = BookSourceRepositoryProvider._();
 
-/// Provides the persistence of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
-///
-/// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
-/// consumes the `domain/` model directly instead of a DTO.
+/// Provides persistence for the imported book sources.
 
 final class BookSourceRepositoryProvider
     extends
@@ -29,10 +23,7 @@ final class BookSourceRepositoryProvider
           BookSourceRepository
         >
     with $Provider<BookSourceRepository> {
-  /// Provides the persistence of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
-  ///
-  /// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
-  /// consumes the `domain/` model directly instead of a DTO.
+  /// Provides persistence for the imported book sources.
   BookSourceRepositoryProvider._()
     : super(
         from: null,
@@ -70,12 +61,12 @@ final class BookSourceRepositoryProvider
 String _$bookSourceRepositoryHash() =>
     r'3ecd37d01f723401a48df8ed049d7f0bb3d20900';
 
-/// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
+/// Provides the import use case (pasted text or a URL).
 
 @ProviderFor(importBookSources)
 final importBookSourcesProvider = ImportBookSourcesProvider._();
 
-/// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
+/// Provides the import use case (pasted text or a URL).
 
 final class ImportBookSourcesProvider
     extends
@@ -85,7 +76,7 @@ final class ImportBookSourcesProvider
           ImportBookSources
         >
     with $Provider<ImportBookSources> {
-  /// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
+  /// Provides the import use case (pasted text or a URL).
   ImportBookSourcesProvider._()
     : super(
         from: null,
@@ -122,30 +113,18 @@ final class ImportBookSourcesProvider
 
 String _$importBookSourcesHash() => r'df8a22019b3996ae60946c6ccb241c8f33e1756e';
 
-/// Provides the shelf writer the detail page uses (`docs/dev/roadmap.md` 5.4)。
-///
-/// The default is the **unbound** port: the composition root overrides it with the shelf's real
-/// writer (ADR-0041 §决策 2), which is why this feature names no shelf type at all — 「加入书架」
-/// 是一个端口，而不是一次 `features/bookshelf` 的 import（C-ARCH-2）。
+/// Provides the shelf writer the detail page uses; defaults to an unbound port.
 
 @ProviderFor(bookshelfWriter)
 final bookshelfWriterProvider = BookshelfWriterProvider._();
 
-/// Provides the shelf writer the detail page uses (`docs/dev/roadmap.md` 5.4)。
-///
-/// The default is the **unbound** port: the composition root overrides it with the shelf's real
-/// writer (ADR-0041 §决策 2), which is why this feature names no shelf type at all — 「加入书架」
-/// 是一个端口，而不是一次 `features/bookshelf` 的 import（C-ARCH-2）。
+/// Provides the shelf writer the detail page uses; defaults to an unbound port.
 
 final class BookshelfWriterProvider
     extends
         $FunctionalProvider<BookshelfWriter, BookshelfWriter, BookshelfWriter>
     with $Provider<BookshelfWriter> {
-  /// Provides the shelf writer the detail page uses (`docs/dev/roadmap.md` 5.4)。
-  ///
-  /// The default is the **unbound** port: the composition root overrides it with the shelf's real
-  /// writer (ADR-0041 §决策 2), which is why this feature names no shelf type at all — 「加入书架」
-  /// 是一个端口，而不是一次 `features/bookshelf` 的 import（C-ARCH-2）。
+  /// Provides the shelf writer the detail page uses; defaults to an unbound port.
   BookshelfWriterProvider._()
     : super(
         from: null,
@@ -278,41 +257,23 @@ final class PageFetchServiceProvider
 
 String _$pageFetchServiceHash() => r'468d712869d464c9328f014cebea12126c981668';
 
-/// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+/// Provides WebView support for `,{webView:…}` rules; unsupported by default.
 ///
-/// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
-/// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
-/// failing the source.
-///
-/// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
-/// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
-/// provider (ADR-0010).
+/// Kept alive because the services that watch it are kept alive too.
 
 @ProviderFor(webPageFetcher)
 final webPageFetcherProvider = WebPageFetcherProvider._();
 
-/// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+/// Provides WebView support for `,{webView:…}` rules; unsupported by default.
 ///
-/// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
-/// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
-/// failing the source.
-///
-/// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
-/// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
-/// provider (ADR-0010).
+/// Kept alive because the services that watch it are kept alive too.
 
 final class WebPageFetcherProvider
     extends $FunctionalProvider<WebPageFetcher, WebPageFetcher, WebPageFetcher>
     with $Provider<WebPageFetcher> {
-  /// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+  /// Provides WebView support for `,{webView:…}` rules; unsupported by default.
   ///
-  /// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
-  /// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
-  /// failing the source.
-  ///
-  /// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
-  /// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
-  /// provider (ADR-0010).
+  /// Kept alive because the services that watch it are kept alive too.
   WebPageFetcherProvider._()
     : super(
         from: null,
@@ -486,26 +447,17 @@ final class FetchTocProvider
 
 String _$fetchTocHash() => r'd725d39896df190f4073285f957df865f3acf86e';
 
-/// Provides the chapter body cache (`docs/dev/roadmap.md` 5.2, C-NET-6).
-///
-/// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
-/// the expiry column were already there, so 5.2 adds no column and no table.
+/// Provides the chapter body cache over the shared cache table.
 
 @ProviderFor(contentCache)
 final contentCacheProvider = ContentCacheProvider._();
 
-/// Provides the chapter body cache (`docs/dev/roadmap.md` 5.2, C-NET-6).
-///
-/// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
-/// the expiry column were already there, so 5.2 adds no column and no table.
+/// Provides the chapter body cache over the shared cache table.
 
 final class ContentCacheProvider
     extends $FunctionalProvider<ContentCache, ContentCache, ContentCache>
     with $Provider<ContentCache> {
-  /// Provides the chapter body cache (`docs/dev/roadmap.md` 5.2, C-NET-6).
-  ///
-  /// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
-  /// the expiry column were already there, so 5.2 adds no column and no table.
+  /// Provides the chapter body cache over the shared cache table.
   ContentCacheProvider._()
     : super(
         from: null,
@@ -587,21 +539,18 @@ final class FetchContentProvider
 
 String _$fetchContentHash() => r'ff2400b9199601c795ec64f858569ad2bb2ec8af';
 
-/// Provides the use case that reads a manga chapter's image list
-/// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
+/// Provides the use case that reads a manga chapter's image list.
 
 @ProviderFor(fetchMangaPages)
 final fetchMangaPagesProvider = FetchMangaPagesProvider._();
 
-/// Provides the use case that reads a manga chapter's image list
-/// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
+/// Provides the use case that reads a manga chapter's image list.
 
 final class FetchMangaPagesProvider
     extends
         $FunctionalProvider<FetchMangaPages, FetchMangaPages, FetchMangaPages>
     with $Provider<FetchMangaPages> {
-  /// Provides the use case that reads a manga chapter's image list
-  /// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
+  /// Provides the use case that reads a manga chapter's image list.
   FetchMangaPagesProvider._()
     : super(
         from: null,
@@ -637,12 +586,12 @@ final class FetchMangaPagesProvider
 
 String _$fetchMangaPagesHash() => r'e6f3da185aacb0be6493fb63af1e906fb74a9609';
 
-/// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+/// Provides the audio-track reader.
 
 @ProviderFor(fetchAudioTracks)
 final fetchAudioTracksProvider = FetchAudioTracksProvider._();
 
-/// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+/// Provides the audio-track reader.
 
 final class FetchAudioTracksProvider
     extends
@@ -652,7 +601,7 @@ final class FetchAudioTracksProvider
           FetchAudioTracks
         >
     with $Provider<FetchAudioTracks> {
-  /// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+  /// Provides the audio-track reader.
   FetchAudioTracksProvider._()
     : super(
         from: null,
@@ -787,30 +736,18 @@ final class ExploreBooksProvider
 
 String _$exploreBooksHash() => r'928c380bf90c3f429c82108f9953173894512931';
 
-/// Provides the batch check of `docs/dev/roadmap.md` §5.10.
-///
-/// It composes the same five use cases the pages use, so a check can never disagree with what
-/// "search" or "read the body" means — the only new thing here is the order and the group
-/// vocabulary (ADR-0043).
+/// Provides the batch check, composed from the same use cases the pages use.
 
 @ProviderFor(checkBookSource)
 final checkBookSourceProvider = CheckBookSourceProvider._();
 
-/// Provides the batch check of `docs/dev/roadmap.md` §5.10.
-///
-/// It composes the same five use cases the pages use, so a check can never disagree with what
-/// "search" or "read the body" means — the only new thing here is the order and the group
-/// vocabulary (ADR-0043).
+/// Provides the batch check, composed from the same use cases the pages use.
 
 final class CheckBookSourceProvider
     extends
         $FunctionalProvider<CheckBookSource, CheckBookSource, CheckBookSource>
     with $Provider<CheckBookSource> {
-  /// Provides the batch check of `docs/dev/roadmap.md` §5.10.
-  ///
-  /// It composes the same five use cases the pages use, so a check can never disagree with what
-  /// "search" or "read the body" means — the only new thing here is the order and the group
-  /// vocabulary (ADR-0043).
+  /// Provides the batch check, composed from the same use cases the pages use.
   CheckBookSourceProvider._()
     : super(
         from: null,
@@ -846,17 +783,17 @@ final class CheckBookSourceProvider
 
 String _$checkBookSourceHash() => r'ab69116e6f88a184bb4f4b8ef353c2b95c9d62ed';
 
-/// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
+/// Provides the single-source debug console.
 
 @ProviderFor(runSourceDebug)
 final runSourceDebugProvider = RunSourceDebugProvider._();
 
-/// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
+/// Provides the single-source debug console.
 
 final class RunSourceDebugProvider
     extends $FunctionalProvider<RunSourceDebug, RunSourceDebug, RunSourceDebug>
     with $Provider<RunSourceDebug> {
-  /// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
+  /// Provides the single-source debug console.
   RunSourceDebugProvider._()
     : super(
         from: null,
@@ -892,12 +829,12 @@ final class RunSourceDebugProvider
 
 String _$runSourceDebugHash() => r'f8316970316911069d632a7f15cae460d02865ed';
 
-/// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
+/// Provides the source switch of the reader.
 
 @ProviderFor(switchBookSource)
 final switchBookSourceProvider = SwitchBookSourceProvider._();
 
-/// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
+/// Provides the source switch of the reader.
 
 final class SwitchBookSourceProvider
     extends
@@ -907,7 +844,7 @@ final class SwitchBookSourceProvider
           SwitchBookSource
         >
     with $Provider<SwitchBookSource> {
-  /// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
+  /// Provides the source switch of the reader.
   SwitchBookSourceProvider._()
     : super(
         from: null,
@@ -943,12 +880,12 @@ final class SwitchBookSourceProvider
 
 String _$switchBookSourceHash() => r'bebcfcdb713f5f02695867ce8f9b4547ae7a1058';
 
-/// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+/// Provides the list's view state store (sort key and group filter).
 
 @ProviderFor(bookSourceViewStore)
 final bookSourceViewStoreProvider = BookSourceViewStoreProvider._();
 
-/// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+/// Provides the list's view state store (sort key and group filter).
 
 final class BookSourceViewStoreProvider
     extends
@@ -960,7 +897,7 @@ final class BookSourceViewStoreProvider
     with
         $FutureModifier<BookSourceViewStore>,
         $FutureProvider<BookSourceViewStore> {
-  /// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+  /// Provides the list's view state store (sort key and group filter).
   BookSourceViewStoreProvider._()
     : super(
         from: null,
@@ -990,12 +927,12 @@ final class BookSourceViewStoreProvider
 String _$bookSourceViewStoreHash() =>
     r'2b592e47dbd9797292135d1f24ec8df01d570519';
 
-/// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
+/// Provides the aggregate search.
 
 @ProviderFor(aggregateSearchBooks)
 final aggregateSearchBooksProvider = AggregateSearchBooksProvider._();
 
-/// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
+/// Provides the aggregate search.
 
 final class AggregateSearchBooksProvider
     extends
@@ -1005,7 +942,7 @@ final class AggregateSearchBooksProvider
           AggregateSearchBooks
         >
     with $Provider<AggregateSearchBooks> {
-  /// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
+  /// Provides the aggregate search.
   AggregateSearchBooksProvider._()
     : super(
         from: null,
@@ -1043,12 +980,12 @@ final class AggregateSearchBooksProvider
 String _$aggregateSearchBooksHash() =>
     r'6b6c637600f3cc09acdf5d63f9613523622699ce';
 
-/// Provides the stored search scope (ADR-0046 §决策 1).
+/// Provides the stored search scope.
 
 @ProviderFor(searchScopeStore)
 final searchScopeStoreProvider = SearchScopeStoreProvider._();
 
-/// Provides the stored search scope (ADR-0046 §决策 1).
+/// Provides the stored search scope.
 
 final class SearchScopeStoreProvider
     extends
@@ -1058,7 +995,7 @@ final class SearchScopeStoreProvider
           FutureOr<SearchScopeStore>
         >
     with $FutureModifier<SearchScopeStore>, $FutureProvider<SearchScopeStore> {
-  /// Provides the stored search scope (ADR-0046 §决策 1).
+  /// Provides the stored search scope.
   SearchScopeStoreProvider._()
     : super(
         from: null,

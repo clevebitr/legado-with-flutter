@@ -8,55 +8,29 @@ part 'book_source.g.dart';
 
 /// Kind of content a Legado book source serves (`bookSourceType`).
 enum BookSourceType {
-  /// Text content (Legado `bookSourceType` 0).
+  /// Text content.
   @JsonValue(0)
   text,
 
-  /// Audio content (Legado `bookSourceType` 1).
+  /// Audio content.
   @JsonValue(1)
   audio,
 
-  /// Image content (Legado `bookSourceType` 2).
+  /// Image content.
   @JsonValue(2)
   image,
 
-  /// File content (Legado `bookSourceType` 3).
+  /// File content.
   @JsonValue(3)
   file,
 
-  /// Video content (Legado `bookSourceType` 4; the fork documents "0 文本，1 音频, 2 图片, 3 文件,
-  /// 4 视频"). Real exports carry it, so an unknown-value rejection would cost whole sources.
+  /// Video content (Legado value 4).
   @JsonValue(4)
   video,
 }
 
-/// One imported Legado book source: the rule set that drives search, book info,
-/// table of contents and content parsing (C-SRC-7).
-///
-/// Field names follow `docs/dev/book-source.md` §2; `@JsonKey` maps them back to
-/// the original Legado keys (`bookSourceName`, `ruleSearch`, ...), so an imported
-/// file round-trips without a translation table.
-///
-/// Only the fields the implemented stages consume are modelled; the display-only
-/// counters (`lastUpdateTime` / `respondTime` / `weight` / `customOrder`) arrive
-/// with Phase 5 (`docs/dev/roadmap.md` 5.4). Everything unmodelled survives in [extra].
-///
-/// [exploreUrl] is the discover page's declaration (`book-source.md` §4.2): either a separated
-/// `标题::URL` string or one whole-field script. It stays raw text here — the two forms and every
-/// entry rule live in the explore use cases (ADR-0035) — and a source without one is a normal
-/// source whose discover page is simply empty.
-///
-/// [concurrentRate] is the source's own rate declaration (`book-source.md` §8). It stays the
-/// raw text here: the request layer parses it where the budget is spent, because the rate gate
-/// is keyed by the source URL and has to cover the `http.*` calls of `@js:` rules too
-/// (ADR-0036 §决策 5).
-///
-/// [variableComment] is the variable documentation a source author writes for other authors.
-/// It is **display only**: nothing in the engine reads it (upstream only concatenates it into
-/// its validation output, `BookSource.kt:245-252`, `book-source.md` §2).
-///
-/// Import user-supplied files with [BookSource.fromLegadoJson]: it is the only
-/// entry point that keeps unrecognised keys, so a later export cannot lose data.
+/// One imported Legado book source: the rules that drive search, book info, TOC and content parsing.
+/// `@JsonKey` maps fields to the original Legado keys, and everything unmodelled survives in [extra].
 @freezed
 abstract class BookSource with _$BookSource {
   /// Creates a book source.
@@ -72,13 +46,8 @@ abstract class BookSource with _$BookSource {
     @_HeaderJsonConverter()
     Map<String, String>? headers,
 
-    /// The source's `header` when it is a **rule** rather than a JSON object
-    /// (`docs/dev/book-source.md` §2, M12-A2).
-    ///
-    /// Upstream evaluates it before every request and parses its result as a JSON object
-    /// (`BaseSource.getHeaderMap`). The text is kept here rather than dropped, because a
-    /// source that signs its requests cannot be used at all without it; the evaluation itself
-    /// belongs to the fetch (`PageFetchService.headersOf`), which is where the sandbox is.
+    /// The source's `header` when it holds a rule rather than a JSON object; evaluated before
+    /// each request and parsed as a JSON object.
     @JsonKey(includeFromJson: false, includeToJson: false) String? headerRule,
     String? searchUrl,
     @JsonKey(name: 'exploreUrl') String? exploreUrl,
@@ -95,26 +64,15 @@ abstract class BookSource with _$BookSource {
   }) = _BookSource;
 
   /// Parses one book source object, dropping keys the model does not know.
-  ///
-  /// Prefer [BookSource.fromLegadoJson] for imported files; this factory exists
-  /// because C-SRC-7 requires the generated mapping to stay the single
-  /// implementation of the field mapping.
   factory BookSource.fromJson(Map<String, Object?> json) =>
       _$BookSourceFromJson(json);
 
   /// Parses one book source object and keeps every unrecognised key in [extra].
-  ///
-  /// The nested rule objects are parsed a second time through their own
-  /// `fromLegadoJson`: the generated mapping would parse them with their plain
-  /// `fromJson` and drop *their* unrecognised keys. The first parse still owns
-  /// validation (a malformed or missing rule object throws there), and importing
-  /// happens once per file, so the repeated parse is irrelevant next to keeping
-  /// the retention rule in one obvious place.
+  /// Nested rule objects are re-parsed so their unknown keys survive too.
   factory BookSource.fromLegadoJson(Map<String, Object?> json) {
     final String? headerRule = headerRuleOf(json['header']);
-    // 规则形式的 header 不进转换器：它的文本留给 [headerRule]，由取页前求值。
-    // 括号不能省：级联 `..remove` 的优先级比条件表达式**低**，不括起来会作用在
-    // 整个三元表达式上、把调用方传进来的 map 也改掉（实测：payload 里的 header 被删）。
+    // 规则形式的 header 由 [headerRule] 承载，不进转换器。
+    // 括号不能省：级联 `..remove` 的优先级低于条件表达式，否则会改掉调用方传入的 map。
     final BookSource source = _$BookSourceFromJson(
       headerRule == null
           ? json
@@ -141,20 +99,9 @@ abstract class BookSource with _$BookSource {
   }
 }
 
-/// Rules that parse one search result page (`ruleSearch`).
-///
-/// Every field holds the raw Legado rule text; the `RuleEngine` compiles it
-/// (`docs/dev/book-source.md` §3). `null` means the source does not declare that
-/// field, which is different from declaring an empty rule.
-///
-/// [updateTime] is a **display** string: the rule's result is kept as it was read and never
-/// parsed as a date (`docs/dev/book-source.md` §2); a chapter rule may produce it through
-/// `java.timeFormat` (§6).
-///
-/// [checkKeyWord] is **not a rule**: it is the keyword the check / debug console searches this
-/// source for (`docs/dev/book-source.md` §2, ADR-0043 §决策 2). A value that looks like a rule is
-/// ignored in favour of the caller's default — `resolveCheckKeyword` owns that judgement in one
-/// place — so the raw text is kept here and never evaluated.
+/// Rules that parse one search result page (`ruleSearch`); every field is raw rule text,
+/// and `null` means the source does not declare that field.
+/// [updateTime] is display text only; [checkKeyWord] is a keyword, not a rule, and is never evaluated.
 @freezed
 abstract class SearchRule with _$SearchRule {
   /// Creates a search rule set.
@@ -188,16 +135,7 @@ abstract class SearchRule with _$SearchRule {
 }
 
 /// Rules that parse one explore (discover) result page (`ruleExplore`).
-///
-/// Upstream fixes the shape of a list rule in its `BookListRule` interface
-/// (`BookListRule.kt:6-18`), so this object carries exactly the fields [SearchRule] carries
-/// for the nine list fields — the two must grow and shrink in the same batch
-/// (`docs/dev/book-source.md` §2, ADR-0035 §决策 1). There is no `checkKeyWord` here:
-/// upstream declares that one on the search rule alone.
-///
-/// A source may omit the object, or declare it with a blank `bookList`: the explore stage then
-/// falls back to the **whole** [BookSource.searchRule] (ADR-0035 §决策 2, `book-source.md`
-/// §4.2). The fallback itself belongs to the explore use case, not to this model.
+/// A missing object or a blank `bookList` makes the explore stage fall back to [BookSource.searchRule].
 @freezed
 abstract class ExploreRule with _$ExploreRule {
   /// Creates an explore rule set.
@@ -229,16 +167,9 @@ abstract class ExploreRule with _$ExploreRule {
   }
 }
 
-/// Rules that parse the book detail page (`ruleBookInfo`).
-///
-/// Legado allows the whole object to be absent: the search page then supplies
-/// the fields it already returned (`docs/dev/book-source.md` §2).
-///
-/// [canReName] is **not a rule that is evaluated**: upstream only checks whether this field is
-/// non-blank and lets a caller switch decide whether a book may be renamed (`BookInfo.kt:65`,
-/// caller at `WebBook.kt:235-238`; `book-source.md` §2). The model therefore keeps the raw text
-/// and the book info use case passes “the source declares one” on as a boolean; the consumer
-/// (the bookshelf that renames a book) arrives with Phase 5.
+/// Rules that parse the book detail page (`ruleBookInfo`); the whole object may be absent,
+/// in which case the search page supplies the fields it already returned.
+/// [canReName] is only checked for being non-blank and is never evaluated as a rule.
 @freezed
 abstract class BookInfoRule with _$BookInfoRule {
   /// Creates a book info rule set.
@@ -273,10 +204,7 @@ abstract class BookInfoRule with _$BookInfoRule {
 }
 
 /// Rules that parse the table of contents (`ruleToc`).
-///
-/// [isVip] marks the chapters a source sells, and [nextTocUrl] names the page(s)
-/// that continue the list; both are rule text, evaluated by the use case
-/// (`docs/dev/book-source.md` §4.1).
+/// [isVip] marks paid chapters; [nextTocUrl] names the page(s) that continue the list.
 @freezed
 abstract class TocRule with _$TocRule {
   /// Creates a table of contents rule set.
@@ -305,10 +233,8 @@ abstract class TocRule with _$TocRule {
 }
 
 /// Rules that parse the chapter body (`ruleContent`).
-///
-/// [nextContentUrl] names the page(s) that continue one chapter's body, and
-/// [replaceRegex] is a **standalone** `##regex##replacement` rule applied to the
-/// joined text after every page has been read (`docs/dev/book-source.md` §4.1).
+/// [nextContentUrl] continues the body; [replaceRegex] is a standalone `##regex##replacement`
+/// applied to the joined text after every page has been read.
 @freezed
 abstract class ContentRule with _$ContentRule {
   /// Creates a content rule set.
@@ -333,17 +259,7 @@ abstract class ContentRule with _$ContentRule {
   }
 }
 
-/// Converts the Legado `header` field into a request-header map.
-///
-/// Legado stores headers as a **JSON string** (`"{\"User-Agent\":\"...\"}"`), and
-/// some sources already ship an object; an empty string and an absent key both
-/// mean "no extra headers", which is why the result stays nullable instead of
-/// defaulting to an empty map.
-///
-/// Anything that is neither an object nor a JSON string of one, and any entry
-/// whose key or value is not a string, throws [FormatException] instead of being
-/// silently dropped: the import layer maps that onto
-/// `ParseFailureKind.invalidBookSource` (`docs/dev/book-source.md` §7).
+// 把 Legado 的 header 字段（JSON 字符串或对象）转成请求头 map；空字符串与缺失都算「无额外头」。
 final class _HeaderJsonConverter
     implements JsonConverter<Map<String, String>?, Object?> {
   const _HeaderJsonConverter();
@@ -351,8 +267,7 @@ final class _HeaderJsonConverter
   @override
   Map<String, String>? fromJson(Object? json) => switch (json) {
     null => null,
-    // 规则形式的 header（`@js:` / `<js>`）不是 JSON：它由 [BookSource.headerRule] 承载，
-    // 这里回答“没有静态 header”，而不是让整条源导入失败（M12-A2）。
+    // 规则形式的 header（`@js:` / `<js>`）不是 JSON，由 [BookSource.headerRule] 承载。
     final String raw when headerRuleOf(raw) != null => null,
     final String raw => _parseHeaderString(raw),
     final Map<Object?, Object?> raw => _toStringMap(raw),
@@ -367,10 +282,7 @@ final class _HeaderJsonConverter
       object == null ? null : jsonEncode(object);
 }
 
-/// The **rule** a source wrote in its `header` field, or `null` when it is a JSON object.
-///
-/// Upstream's spelling is `@js:…` or `<js>…</js>` (`BaseSource.getHeaderMap`); both are kept
-/// verbatim here so the fetch can evaluate them.
+/// The rule a source wrote in its `header` field, or `null` when it is a JSON object.
 String? headerRuleOf(Object? header) {
   if (header is! String) {
     return null;
@@ -383,17 +295,7 @@ String? headerRuleOf(Object? header) {
       : null;
 }
 
-/// Parses a `header` JSON string, or returns `null` when it declares nothing.
-/// Decodes the `header` string, with one **narrow** leniency pass for a dialect real exports carry.
-///
-/// Upstream parses this field with GSON, which accepts single-quoted objects; a real 504-source
-/// export contained 11 of them, and rejecting the whole source over a quote style would be a
-/// fidelity bug, not strictness. The fallback applies **only** when the text contains no double
-/// quote at all, so a malformed object that already uses `"` still fails loudly (C-SRC-4).
-///
-/// Everything else — a rule-based header (`@js:` / `<js>`), a truncated object, a bare user agent —
-/// stays a rejection here and is handled by the importer, which drops the field with a warning
-/// (`docs/dev/roadmap.md` §3.7 registers the rule-based header as an unimplemented feature).
+// 解码 header 字符串；仅在文本完全没有双引号时容忍单引号对象，其余格式错误照常抛出。
 Object? _decodeHeaderObject(String raw) {
   try {
     return jsonDecode(raw);
@@ -422,7 +324,6 @@ Map<String, String>? _parseHeaderString(String raw) {
   return _toStringMap(decoded);
 }
 
-/// Copies [raw] into a `Map<String, String>`, rejecting non-string entries.
 Map<String, String> _toStringMap(Map<Object?, Object?> raw) {
   final Map<String, String> headers = <String, String>{};
 
@@ -441,21 +342,14 @@ Map<String, String> _toStringMap(Map<Object?, Object?> raw) {
   return headers;
 }
 
-/// The sandbox view of a book source (`docs/dev/book-source.md` §6).
-///
-/// The whitelist exposes `name` / `url` / `group` only, so the mapping lives next to the model
-/// instead of being rebuilt by every use case that has to fill a [JsJob].
+/// The sandbox view of a book source; only `name`, `url` and `group` are exposed.
 extension BookSourceJsView on BookSource {
   /// The read-only object the sandbox receives as `source`.
   JsSourceInfo get jsSourceInfo =>
       JsSourceInfo(name: name, url: url, group: group);
 }
 
-/// Returns the entries of [json] that [known] does not describe.
-///
-/// The comparison uses the **serialised** keys (`bookSourceName` and friends)
-/// rather than the Dart field names, because only `toJson` reproduces the keys of
-/// a Legado file (`docs/dev/book-source.md` §2).
+// 用序列化后的 Legado 键名比对，才能正确判断哪些键未被建模。
 Map<String, Object?> _unrecognisedKeys(
   Map<String, Object?> json,
   Map<String, Object?> known,
@@ -464,11 +358,6 @@ Map<String, Object?> _unrecognisedKeys(
     if (!known.containsKey(entry.key)) entry.key: entry.value,
 };
 
-/// Returns the nested JSON object stored under [key] of a book source file.
-///
-/// Every call site sits behind `_$BookSourceFromJson`, which has already
-/// validated that [key] exists and holds an object, so the explicit conversion
-/// cannot fail; it is written as `as` instead of `!` because C-TYPE-2 forbids the
-/// null-assertion operator.
+// 调用方已校验该键存在且是对象，故用 as 而非 !（禁止空断言）。
 Map<String, Object?> _nestedObject(Map<String, Object?> json, String key) =>
     Map<String, Object?>.from(json[key] as Map<Object?, Object?>);

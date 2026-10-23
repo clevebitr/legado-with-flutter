@@ -1,10 +1,10 @@
 import 'dart:io';
 
-/// File name of the on-disk database (`docs/dev/platform.md` §5).
+/// File name of the on-disk database.
 const String databaseFileName = 'reader.db';
 
-/// Returns the database path inside [directory] (`docs/dev/platform.md` §5).
+/// Returns the database path inside [directory].
 ///
-/// 用 `Uri` 解析而不是字符串拼接：`platform.md` §5 禁止手写平台分隔符。
+/// 用 `Uri` 解析而不是字符串拼接，避免手写平台分隔符。
 String databasePathIn(Directory directory) =>
     directory.uri.resolve(databaseFileName).toFilePath();

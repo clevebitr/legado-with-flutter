@@ -11,11 +11,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'book_source_import_notifier.freezed.dart';
 part 'book_source_import_notifier.g.dart';
 
-/// What the import form currently shows (`docs/dev/roadmap.md` 5.1).
-///
-/// A state machine instead of an `AsyncValue`: "nothing submitted yet" and "submitted, nothing
-/// usable inside" are both non-errors the form has to tell apart, and the report of a successful
-/// import is not an error object to unwrap either.
+/// What the import form currently shows.
 @freezed
 sealed class BookSourceImportState with _$BookSourceImportState {
   /// Nothing was submitted yet in this screen.
@@ -24,8 +20,7 @@ sealed class BookSourceImportState with _$BookSourceImportState {
   /// A submission is in flight (the file is being read and checked).
   const factory BookSourceImportState.importing() = BookSourceImporting;
 
-  /// The file was read; nothing is stored until the user commits
-  /// (`docs/dev/roadmap.md` §3.10 V5).
+  /// The file was read; nothing is stored until the user commits.
   const factory BookSourceImportState.preview(BookSourceImportPreview preview) =
       BookSourceImportPreviewing;
 
@@ -36,7 +31,7 @@ sealed class BookSourceImportState with _$BookSourceImportState {
   const factory BookSourceImportState.done(BookSourceImportReport report) =
       BookSourceImportDone;
 
-  /// The whole file was refused; [kind] is the message the UI shows (C-ERR-7).
+  /// The whole file was refused; [kind] is the message the UI shows.
   const factory BookSourceImportState.failed(ParseFailureKind kind) =
       BookSourceImportFailed;
 }
@@ -47,13 +42,7 @@ class BookSourceImportNotifier extends _$BookSourceImportNotifier {
   @override
   BookSourceImportState build() => const BookSourceImportState.idle();
 
-  /// Asks the platform for a file and imports it.
-  ///
-  /// A cancelled dialog (or a platform without one) changes **nothing**: `ParseSuccess(null)` is not
-  /// an outcome the reader has to explain, so the form simply stays as it was. An oversized file is
-  /// [ParseFailureKind.invalidBookSource] with `rulePath: import.sizeLimit` — the same verdict the
-  /// paste path gives — and the picked text then goes through the ordinary import path, so the cap
-  /// and the entry-level rules are one implementation.
+  /// Asks the platform for a file and imports it; a cancelled dialog changes nothing.
   Future<void> pickFile() async {
     final ParseResult<String?> picked = await ref
         .read(bookSourceFilePickerProvider)
@@ -70,14 +59,7 @@ class BookSourceImportNotifier extends _$BookSourceImportNotifier {
     }
   }
 
-  /// Reads [input] and publishes the preview: **nothing is stored yet**
-  /// (`docs/dev/roadmap.md` §3.10 V5, ADR-0052 §决策 5).
-  ///
-  /// The use case answers with a `ParseResult` (C-ERR-1), so the file-level outcomes are values.
-  /// A collaborator that breaks that contract with an [Exception] is degraded to
-  /// [ParseFailureKind.parseFailed] with a log line — the storage layer is the only thing that can
-  /// throw here, and a stuck form is worse than a message. An [Error] is deliberately not caught
-  /// (C-ERR-2).
+  /// Reads [input] and publishes the preview; nothing is stored yet.
   Future<void> submit(BookSourceImportInput input) async {
     state = const BookSourceImportState.importing();
 
@@ -104,10 +86,6 @@ class BookSourceImportNotifier extends _$BookSourceImportNotifier {
   }
 
   /// Stores the previewed entries whose `entry.index` is in [selected].
-  ///
-  /// Called from the preview list: it is the only place that writes, which is what makes the
-  /// per-entry ticks meaningful (ADR-0052 §决策 5). A state without a preview is a caller mistake;
-  /// it is ignored instead of throwing, because the page's own state decides when the button exists.
   Future<void> commit(Set<int> selected) async {
     final BookSourceImportState current = state;
     if (current is! BookSourceImportPreviewing) {

@@ -9,17 +9,12 @@ part 'book_queries.g.dart';
 
 /// Reads the detail page of [book] from [source].
 ///
-/// Fetch-on-build on purpose: the page watches the provider, so leaving the page
-/// disposes the request instead of a detached continuation writing into a dead
-/// notifier.
+/// Fetch-on-build: leaving the page disposes the request.
 @riverpod
 Future<ParseResult<BookInfo>> bookInfo(Ref ref, BookSource source, Book book) =>
     ref.watch(fetchBookInfoProvider).execute(source, book.url);
 
 /// Reads the chapter list that lives at [url] of [source].
-///
-/// [url] is the catalogue address the detail stage resolved (`BookInfo.tocUrl`),
-/// which is the book page itself when the source declares no `tocUrl` rule.
 @riverpod
 Future<ParseResult<List<Chapter>>> toc(
   Ref ref,

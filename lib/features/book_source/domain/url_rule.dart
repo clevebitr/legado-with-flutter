@@ -1,7 +1,7 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
-/// The verb a URL rule asks for (`book-source.md` §4.3).
+/// The HTTP verb a URL rule asks for.
 enum UrlRequestMethod {
   /// A plain GET, which is what a bare URL template means.
   get,
@@ -10,12 +10,10 @@ enum UrlRequestMethod {
   post,
 }
 
-/// The options a Legado URL rule may append after its URL, `url,{…}`
-/// (`book-source.md` §4.3).
+/// The options a Legado URL rule may append after its URL, `url,{…}`.
 ///
 /// Only the fields this repository can honour are modelled; the rest are recorded in
-/// [unsupported] so a run can warn about them instead of pretending the rule was fully
-/// understood (C-SRC-4).
+/// [unsupported] so a caller can warn about them.
 final class UrlRuleOptions {
   /// Creates an option set.
   const UrlRuleOptions({
@@ -29,32 +27,22 @@ final class UrlRuleOptions {
   /// The verb the rule asks for.
   final UrlRequestMethod method;
 
-  /// The **raw** request body, with its `{{…}}` templates still in place.
-  ///
-  /// It stays raw because the replacement depends on what the body is: a form value is
-  /// percent-encoded, a JSON body carries the keyword verbatim — the same split upstream
-  /// makes (`AnalyzeUrl.analyzeFields` is skipped when the body is JSON/XML).
+  /// The raw request body, with its `{{…}}` templates still in place.
   final String? body;
 
-  /// The `charset` the source declares for **this request**, e.g. `gbk`.
+  /// The charset declared for this request, e.g. `gbk`.
   ///
-  /// It applies twice: the keyword is percent-encoded with it, and the response is decoded
-  /// with it (a declared label always wins, `book-source.md` §5).
+  /// It applies both to keyword encoding and to response decoding.
   final String? charset;
 
   /// Headers the option adds to this request on top of the source's own `header`.
   final Map<String, String> headers;
 
   /// Option fields this repository cannot honour, e.g. `webJs` / `retry`.
-  ///
-  /// They travel to the caller so it can warn by name: a silently dropped `webJs` would look like a
-  /// rule that stopped matching. `webView` is listed here too, but the caller **consumes** it (it
-  /// routes the request through `WebPageFetcher`, ADR-0062 §决策 1) and therefore does not warn.
   final List<String> unsupported;
 }
 
-/// One parsed URL rule: the URL template plus its optional suffix
-/// (`book-source.md` §4.3).
+/// One parsed URL rule: the URL template plus its optional suffix.
 final class UrlRule {
   /// Creates a parsed rule.
   const UrlRule({required this.template, this.options});
@@ -66,17 +54,13 @@ final class UrlRule {
   final UrlRuleOptions? options;
 }
 
-/// Matches the separator of a URL rule's option suffix, `,{` (`AnalyzeUrl.paramPattern`).
-///
-/// It is not enough to look for the first `{`: `searchUrl` may hold `{{key}}`, and `url,{…}`
-/// is the only place a comma is followed by an object.
+/// Matches the separator of a URL rule's option suffix, `,{`.
 final RegExp _optionSeparator = RegExp(r'\s*,\s*(?=\{)');
 
 /// The index in [rule] where the URL ends and the `,{…}` suffix begins, or `-1`.
 ///
-/// A candidate is only accepted when what follows it is a **balanced object that ends the
-/// rule**, so `search?q={{key}}` and a stray comma inside an address are not mistaken for
-/// options.
+/// A candidate is only accepted when a balanced object ends the rule, so a comma inside the
+/// address is not mistaken for options.
 int _optionSplitOf(String rule) {
   for (final RegExpMatch match in _optionSeparator.allMatches(rule)) {
     final int brace = rule.indexOf('{', match.start);
@@ -96,17 +80,9 @@ int _optionSplitOf(String rule) {
 
 /// Splits [rule] into its URL part and its option suffix, and parses the suffix.
 ///
-/// The suffix is what makes real sources work: 50 of the 128 published sources this
-/// repository was checked against spell their search as
-/// `…/search.php,{"method":"POST","body":"searchkey={{key}}"}` or append
-/// `{"charset":"gbk"}` to a GET. Sending that comma as part of the address produces a 404,
-/// which is what made those sources look broken.
-///
-/// The JSON in the suffix is **not** strict in the wild: single quotes, unquoted keys and a
-/// trailing comma are common, and `{{…}}` templates sit inside values
-/// (`{"body":{"keyword":{{key}}}}`). A tolerant scanner reads it, so one dialect does not
-/// cost the whole source; anything it still cannot read is reported as an
-/// `unsupportedRule` failure instead of being silently truncated.
+/// The suffix dialect is not strict JSON: single quotes, unquoted keys, trailing commas and
+/// `{{…}}` templates are all accepted. An unreadable suffix is reported as
+/// [ParseFailureKind.unsupportedRule] rather than silently truncated.
 ParseResult<UrlRule> parseUrlRule(String rule, {required String rulePath}) {
   final int split = _optionSplitOf(rule);
   if (split < 0) {
@@ -114,7 +90,7 @@ ParseResult<UrlRule> parseUrlRule(String rule, {required String rulePath}) {
   }
 
   final String template = rule.substring(0, split).trimRight();
-  // `_optionSplitOf` 只在后面跟着一个以 `}` 收尾的对象时才报位置，所以这里从 `{` 开始读即可。
+  // `_optionSplitOf` 只在后面跟着一个以 `}` 收尾的对象时才报位置。
   final String suffix = rule.substring(rule.indexOf('{', split)).trim();
 
   final _OptionScanner scanner = _OptionScanner(suffix);
@@ -183,7 +159,7 @@ UrlRuleOptions _optionsOf(_OptionNode node) {
     }
   }
   if (body != null && method == UrlRequestMethod.get) {
-    // 上游也只在 POST 时用 body（GET 时 body 会被丢掉）。
+    // 上游也只在 POST 时用 body，GET 时丢掉。
     unsupported.add('body');
   }
 
@@ -197,9 +173,6 @@ UrlRuleOptions _optionsOf(_OptionNode node) {
 }
 
 /// The body a POST sends: a quoted string as written, a JSON object as its source text.
-///
-/// The object form keeps the raw source because it is what the site expects minus the
-/// template replacement (`{"keyword":{{key}}}` is not JSON until the template is rendered).
 String? _bodyTextOf(_OptionNode? node) {
   if (node == null) {
     return null;
@@ -215,7 +188,7 @@ final class _OptionNode {
   /// The source text of the value, exactly as written.
   final String raw;
 
-  /// The decoded value when it is a scalar that has one (a quoted string, a bare token).
+  /// The decoded value when it is a scalar that has one.
   final String? text;
 
   /// The members of an object value.
@@ -224,8 +197,8 @@ final class _OptionNode {
 
 /// Reads [text] as a loose option object, or answers `null` when it is not one.
 ///
-/// `headers` is written both as an object and as a **string holding** an object
-/// (`"{os:'pc'}"`) in real exports, so the string form has to be understood as well.
+/// `headers` is written both as an object and as a string holding one in real exports, so
+/// both forms are understood.
 Map<String, _OptionNode>? _parseLooseObjectOrNull(String? text) {
   final String source = text?.trim() ?? '';
   if (!source.startsWith('{')) {
@@ -238,11 +211,10 @@ Map<String, _OptionNode>? _parseLooseObjectOrNull(String? text) {
   }
 }
 
-/// A tolerant scanner for the option suffix (`book-source.md` §4.3).
+/// A tolerant scanner for the option suffix.
 ///
-/// It accepts what GSON's lenient mode accepts and the strict parser rejects: single quotes,
-/// unquoted keys and values, trailing commas — plus this repository's own addition, a
-/// `{{…}}` template kept as a raw token so a body like `{"keyword":{{key}}}` survives.
+/// Besides what GSON's lenient mode accepts, it keeps a `{{…}}` template as a raw token so a
+/// body like `{"keyword":{{key}}}` survives.
 final class _OptionScanner {
   _OptionScanner(this._source);
 
@@ -367,7 +339,7 @@ final class _OptionScanner {
     }
   }
 
-  /// Keeps `{{…}}` intact: it is a template, not JSON.
+  // `{{…}}` 是模板不是 JSON，原样保留。
   _OptionNode _parseTemplate() {
     final int start = _index;
     final int end = _source.indexOf('}}', _index);
@@ -441,11 +413,8 @@ final class _OptionScanner {
 
 /// Resolves the URL part of [rule] against [baseUrl], keeping any `,{…}` suffix verbatim.
 ///
-/// Upstream splits the option suffix **before** `NetworkUtils.getAbsoluteURL`
-/// (`AnalyzeUrl.kt:190-224`); resolving first percent-encodes the braces (`{` → `%7B`), so the
-/// suffix stops being an option and becomes part of the request path. Real sources hit this:
-/// a chapter URL such as `…/1258-1,{webView:“true”}` was requested as
-/// `…/1258-1,%7BwebView:%E2%80%9Ctrue%E2%80%9D%7D` and answered 404 (M17 audio-source census).
+/// Resolving the whole rule would percent-encode the braces and turn the suffix into part of
+/// the request path.
 String resolveUrlRule(String rule, String baseUrl) {
   final int split = _optionSplitOf(rule);
   if (split < 0) {
@@ -458,10 +427,6 @@ String resolveUrlRule(String rule, String baseUrl) {
 }
 
 /// The URL part of [rule] when its option suffix cannot be read, or [rule] unchanged.
-///
-/// Upstream drops an unreadable option object and keeps the URL (`AnalyzeUrl.kt`: `urlOption ==
-/// null` is a log line, not a failure). The rendered result of an `@js:` URL rule can be
-/// malformed this way, and requesting the option text as part of the path is never useful.
 String stripUnreadableUrlOptions(String rule) {
   final int split = _optionSplitOf(rule);
 

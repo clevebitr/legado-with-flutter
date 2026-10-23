@@ -9,29 +9,23 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'book_source_list_notifier.g.dart';
 
-/// Every stored book source, in the order the list and the default pick share
-/// (`BookSourceDao.findAll`: enabled first, then `customOrder`, then `id`).
+/// Every stored book source, in the order the list and the default pick share.
 ///
-/// `keepAlive` on purpose: the selection below watches it, so the list must not be re-read
-/// (and the selection must not be lost) when the user walks from the reader back to the list.
-/// Mutations invalidate it explicitly, so "fresh" is a decision rather than a side effect.
+/// Kept alive so the selection below survives page navigation.
 @Riverpod(keepAlive: true)
 Future<List<StoredBookSource>> bookSourceList(Ref ref) =>
     ref.watch(bookSourceRepositoryProvider).getAll();
 
-/// Which stored source the pages work with, and the only place that changes it.
+/// The stored source the pages work with; the only place that changes it.
 ///
-/// The selection is a plain id in a private field, so a reload of the list (after an import, a
-/// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
-/// gone the notifier falls back to the default source, because a dangling selection would leave
-/// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
+/// When the selected row disappears, the selection falls back to the default source.
 @Riverpod(keepAlive: true)
 class SelectedBookSource extends _$SelectedBookSource {
   int? _selectedId;
 
   @override
   Future<StoredBookSource?> build() async {
-    // `ref.watch` 而不是 `read`：列表一变（导入 / 删除 / 开关）就按当前选择重算。
+    // watch 而非 read：列表一变（导入 / 删除 / 开关）就按当前选择重算。
     final List<StoredBookSource> all = await ref.watch(
       bookSourceListProvider.future,
     );
@@ -68,7 +62,7 @@ class SelectedBookSource extends _$SelectedBookSource {
     state = AsyncData<StoredBookSource?>(_resolve(await _reload()));
   }
 
-  /// Enables or disables every id in [ids] in one write (ADR-0050 §决策 2).
+  /// Enables or disables every id in [ids] in one write.
   Future<void> setEnabledFor(Set<int> ids, {required bool isEnabled}) async {
     if (ids.isEmpty) {
       return;
@@ -79,10 +73,7 @@ class SelectedBookSource extends _$SelectedBookSource {
     await _refreshAfterBatch();
   }
 
-  /// Deletes every id in [ids] in one write (ADR-0050 §决策 2).
-  ///
-  /// The selection is re-resolved through the same path a single delete uses, so deleting the
-  /// current source inside a batch falls back exactly like deleting it alone.
+  /// Deletes every id in [ids] in one write.
   Future<void> deleteMany(Set<int> ids) async {
     if (ids.isEmpty) {
       return;
@@ -93,7 +84,7 @@ class SelectedBookSource extends _$SelectedBookSource {
     await _refreshAfterBatch();
   }
 
-  /// Enables or disables the discover page of every id in [ids] (ADR-0052 §决策 3).
+  /// Enables or disables the discover page of every id in [ids].
   Future<void> setExploreEnabledFor(
     Set<int> ids, {
     required bool isExploreEnabled,
@@ -110,7 +101,7 @@ class SelectedBookSource extends _$SelectedBookSource {
     await _refreshAfterBatch();
   }
 
-  /// Moves every id in [ids] to the top or bottom of the manual order (ADR-0052 §决策 4).
+  /// Moves every id in [ids] to the top or bottom of the manual order.
   Future<void> moveToEdge(Set<int> ids, {required bool toTop}) async {
     if (ids.isEmpty) {
       return;
@@ -121,19 +112,19 @@ class SelectedBookSource extends _$SelectedBookSource {
     await _refreshAfterBatch();
   }
 
-  /// Renames [from] to [to] everywhere (ADR-0052 §决策 4).
+  /// Renames [from] to [to] everywhere.
   Future<void> renameGroup(String from, String to) async {
     await ref.read(bookSourceRepositoryProvider).renameGroup(from, to);
     await _refreshAfterBatch();
   }
 
-  /// Drops [group] everywhere (ADR-0052 §决策 4).
+  /// Drops [group] everywhere.
   Future<void> deleteGroup(String group) async {
     await ref.read(bookSourceRepositoryProvider).deleteGroup(group);
     await _refreshAfterBatch();
   }
 
-  /// Removes [group] from the selected sources only (ADR-0052 §决策 4).
+  /// Removes [group] from the selected sources only.
   Future<void> removeFromGroup(Set<int> ids, String group) async {
     if (ids.isEmpty) {
       return;
@@ -146,8 +137,7 @@ class SelectedBookSource extends _$SelectedBookSource {
 
   /// Puts every id in [ids] into [group], or clears the group when [group] is `null`.
   ///
-  /// It writes the **payload's** `bookSourceGroup` (ADR-0050 §决策 1): the check columns keep
-  /// describing what the last check found.
+  /// Writes the payload's `bookSourceGroup`; the check columns keep the last check's result.
   Future<void> setGroupFor(Set<int> ids, String? group) async {
     if (ids.isEmpty) {
       return;
@@ -158,23 +148,18 @@ class SelectedBookSource extends _$SelectedBookSource {
     await _refreshAfterBatch();
   }
 
-  /// Re-reads the list after a batch write and re-resolves the selection.
   Future<void> _refreshAfterBatch() async {
     ref.invalidate(bookSourceListDataProvider);
     state = AsyncData<StoredBookSource?>(_resolve(await _reload()));
   }
 
-  /// Reads a fresh list and publishes nothing; the callers decide what state to set.
   Future<List<StoredBookSource>> _reload() async {
     ref.invalidate(bookSourceListProvider);
 
     return ref.read(bookSourceListProvider.future);
   }
 
-  /// The source the selection should point at: the remembered one, or the default.
-  ///
-  /// Falling back here (rather than in each page) is what makes "the selected source was
-  /// deleted" a contract instead of a per-screen accident.
+  // 选中行消失时回退到默认源，保证页面不会指向一个已删除的源。
   StoredBookSource? _resolve(List<StoredBookSource> all) {
     final int? id = _selectedId;
     if (id != null) {
@@ -191,7 +176,6 @@ class SelectedBookSource extends _$SelectedBookSource {
     return fallback;
   }
 
-  /// The default source: the first **enabled** row, or none (ADR-0040 §决策 3).
   StoredBookSource? _defaultOf(List<StoredBookSource> all) {
     for (final StoredBookSource source in all) {
       if (source.isEnabled) {
@@ -202,7 +186,6 @@ class SelectedBookSource extends _$SelectedBookSource {
     return null;
   }
 
-  /// The row with [id], or `null`.
   StoredBookSource? _find(List<StoredBookSource> all, int id) {
     for (final StoredBookSource source in all) {
       if (source.id == id) {
@@ -214,21 +197,12 @@ class SelectedBookSource extends _$SelectedBookSource {
   }
 }
 
-/// The book source the parsing pages work with (`docs/dev/roadmap.md` 2.5's seam, now filled by 5.1).
-///
-/// It stays a **synchronous** projection of [SelectedBookSource] so the four parsing pages keep
-/// reading a `BookSource?`; only the pages that manage sources look at the load state.
-/// `null` means "no usable source", which is what makes every page show its empty state instead
-/// of requesting pages with an empty rule set.
+/// The book source the parsing pages work with; `null` when none is usable.
 @riverpod
 BookSource? currentBookSource(Ref ref) =>
     ref.watch(selectedBookSourceProvider).value?.source;
 
-/// The list's own view state — sort key and group filter — and the only place that changes it
-/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
-///
-/// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
-/// back, and the store write happens once per change rather than once per visit.
+/// The list's sort key and group filter; the only place that changes them.
 @Riverpod(keepAlive: true)
 class BookSourceView extends _$BookSourceView {
   @override
@@ -241,12 +215,12 @@ class BookSourceView extends _$BookSourceView {
         view.copyWith(order: order, ascending: order.defaultAscending),
   );
 
-  /// Flips the sort direction and stores the choice (ADR-0052 §决策 4).
+  /// Flips the sort direction and stores the choice.
   Future<void> toggleAscending() => _apply(
     (BookSourceListView view) => view.copyWith(ascending: !view.ascending),
   );
 
-  /// Turns the one-section-per-host rendering on or off (ADR-0052 §决策 4).
+  /// Turns the one-section-per-host rendering on or off.
   Future<void> setGroupByDomain(bool groupByDomain) => _apply(
     (BookSourceListView view) => view.copyWith(groupByDomain: groupByDomain),
   );
@@ -258,7 +232,7 @@ class BookSourceView extends _$BookSourceView {
         : view.copyWith(group: group),
   );
 
-  /// Writes the manual order following [orderedIds] and refreshes the list (ADR-0045 §决策 3).
+  /// Writes the manual order following [orderedIds] and refreshes the list.
   Future<void> reorder(List<int> orderedIds) async {
     await ref.read(bookSourceRepositoryProvider).reorder(orderedIds);
     // 手动序同时是默认排序键与「第一条源」的依据，所以两个列表都要重新读。
@@ -266,7 +240,6 @@ class BookSourceView extends _$BookSourceView {
     ref.invalidate(bookSourceListDataProvider);
   }
 
-  /// Applies [change], stores it and publishes it.
   Future<void> _apply(
     BookSourceListView Function(BookSourceListView view) change,
   ) async {
@@ -278,12 +251,9 @@ class BookSourceView extends _$BookSourceView {
   }
 }
 
-/// What the list page renders: the rows after the filter, the groups they carry, and the view.
+/// What the list page renders: the rows after filtering, the groups and the view.
 ///
-/// The group fallback lives **here** rather than in the store: whether a group still exists depends
-/// on the rows, which the store cannot see. A stored filter that names a group nobody carries is
-/// therefore dropped while rendering instead of being written back from a `build`
-/// (ADR-0045 §决策 4).
+/// A stored group filter that no longer exists is dropped while rendering, not written back.
 @riverpod
 Future<BookSourceListData> bookSourceListData(Ref ref) async {
   final BookSourceListView view = await ref.watch(
@@ -306,7 +276,7 @@ Future<BookSourceListData> bookSourceListData(Ref ref) async {
           (StoredBookSource source) =>
               splitGroups(_groupOf(source)).contains(group),
         );
-  // 两个轴互相独立（ADR-0050 §决策 1）：分组是用户写的，校验状态是上一次校验写的。
+  // 两个轴互相独立：分组是用户写的，校验状态是上一次校验写的。
   final List<StoredBookSource> rows = byGroup
       .where(checkFilter.accepts)
       .toList(growable: false);
@@ -318,7 +288,7 @@ Future<BookSourceListData> bookSourceListData(Ref ref) async {
   );
 }
 
-/// Which side of the last check the list shows (ADR-0050 §决策 1).
+/// Which side of the last check the list shows.
 enum BookSourceCheckFilter {
   /// Every source, checked or not.
   all,
@@ -337,11 +307,7 @@ enum BookSourceCheckFilter {
   };
 }
 
-/// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
-///
-/// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
-/// right now" (usually "show me what broke"), and a stored value would silently hide sources on
-/// the next launch.
+/// The check-status axis of the list filter; session state, not persisted.
 @Riverpod(keepAlive: true)
 class BookSourceCheckFilterSelection extends _$BookSourceCheckFilterSelection {
   @override
@@ -358,7 +324,6 @@ typedef BookSourceListData = ({
   BookSourceListView view,
 });
 
-/// Every group token the loaded rows carry, sorted, de-duplicated.
 List<String> _groupsOf(List<StoredBookSource> sources) {
   final Set<String> groups = <String>{
     for (final StoredBookSource source in sources)
@@ -369,8 +334,5 @@ List<String> _groupsOf(List<StoredBookSource> sources) {
   return sorted;
 }
 
-/// The **user's** group of [source], read from the payload (ADR-0050 §决策 1).
-///
-/// It deliberately does not fall back to `groupName`: that column is the check's output, and
-/// mixing the two is what made a checked source look like it had been regrouped.
+// 不回退到 groupName：那是校验输出，混用会让源看起来像被重新分组。
 String? _groupOf(StoredBookSource source) => source.source.group;

@@ -7,19 +7,14 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'shelf_add_notifier.g.dart';
 
 /// The failure reported when the shelf could not store the book.
-///
-/// No user-visible text (C-ERR-7); `rulePath` names the port so the log points at the write.
 const ParseFailure<void> shelfAddFailure = ParseFailure<void>(
   kind: ParseFailureKind.parseFailed,
   rulePath: 'shelf.write',
 );
 
-/// The 「加入书架」 action of the detail page (`docs/dev/roadmap.md` 5.4)。
+/// Adds a book to the shelf from the detail page.
 ///
-/// It exists as a Notifier rather than a call inside the page because C-STATE-4 keeps business
-/// calls out of widgets; the loading state is what disables the button while a write is in
-/// flight. The **port** does the cross-feature part: nothing here knows what a shelf is
-/// (ADR-0041 §决策 2).
+/// The write goes through the shelf port, so this feature knows no shelf type.
 @riverpod
 class ShelfAdd extends _$ShelfAdd {
   @override
@@ -36,8 +31,7 @@ class ShelfAdd extends _$ShelfAdd {
 
       return result;
     } on Exception catch (error, stackTrace) {
-      // 未绑定的端口不会抛（它返回失败）；会抛的是仓储的意外存储错误，归 presentation 兜底
-      // （C-ERR-2）：记一条、回到空闲态，并交给页面显示失败文案。
+      // 未绑定的端口返回失败；会抛的是仓储存储错误，这里兜底记录并回到空闲。
       ref
           .read(appLoggerProvider)
           .warning('Adding a book to the shelf failed.', error, stackTrace);

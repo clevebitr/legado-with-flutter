@@ -8,15 +8,15 @@ part of 'aggregate_search_notifier.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// The stored scope and the only place that changes it (`docs/dev/roadmap.md` 3.8, ADR-0046 §决策 1).
+/// The stored search scope; the only place that changes it.
 
 @ProviderFor(SearchScopeSelection)
 final searchScopeSelectionProvider = SearchScopeSelectionProvider._();
 
-/// The stored scope and the only place that changes it (`docs/dev/roadmap.md` 3.8, ADR-0046 §决策 1).
+/// The stored search scope; the only place that changes it.
 final class SearchScopeSelectionProvider
     extends $AsyncNotifierProvider<SearchScopeSelection, BookSearchScope> {
-  /// The stored scope and the only place that changes it (`docs/dev/roadmap.md` 3.8, ADR-0046 §决策 1).
+  /// The stored search scope; the only place that changes it.
   SearchScopeSelectionProvider._()
     : super(
         from: null,
@@ -39,7 +39,7 @@ final class SearchScopeSelectionProvider
 String _$searchScopeSelectionHash() =>
     r'5ca37913d5a246e30ab236984b94c5f8140719e1';
 
-/// The stored scope and the only place that changes it (`docs/dev/roadmap.md` 3.8, ADR-0046 §决策 1).
+/// The stored search scope; the only place that changes it.
 
 abstract class _$SearchScopeSelection extends $AsyncNotifier<BookSearchScope> {
   FutureOr<BookSearchScope> build();
@@ -59,51 +59,21 @@ abstract class _$SearchScopeSelection extends $AsyncNotifier<BookSearchScope> {
   }
 }
 
-/// Runs the aggregate search and publishes its progress (`docs/dev/roadmap.md` 3.8).
+/// Runs the aggregate search and publishes its progress.
 ///
-/// It owns three things the domain does not:
-///
-/// * **the scope → sources step**: `resolveSearchSources` over the loaded rows, so the page only
-///   hands in "what the list knows" and the answer is the same one the check page will use;
-/// * **the pause latch and the cancellation token**: both are rebuilt per run, and pausing only
-///   takes effect between sources (ADR-0046 §决策 6);
-/// * **paging**: [loadMore] runs the same use case one page further and keeps the merged list, so
-///   the page never merges two different result shapes itself.
-///
-/// It is `keepAlive`: a search of a hundred sources is minutes of work and must survive walking to a
-/// book and back.
+/// Kept alive so a long run survives leaving the page and coming back.
 
 @ProviderFor(AggregateSearch)
 final aggregateSearchProvider = AggregateSearchProvider._();
 
-/// Runs the aggregate search and publishes its progress (`docs/dev/roadmap.md` 3.8).
+/// Runs the aggregate search and publishes its progress.
 ///
-/// It owns three things the domain does not:
-///
-/// * **the scope → sources step**: `resolveSearchSources` over the loaded rows, so the page only
-///   hands in "what the list knows" and the answer is the same one the check page will use;
-/// * **the pause latch and the cancellation token**: both are rebuilt per run, and pausing only
-///   takes effect between sources (ADR-0046 §决策 6);
-/// * **paging**: [loadMore] runs the same use case one page further and keeps the merged list, so
-///   the page never merges two different result shapes itself.
-///
-/// It is `keepAlive`: a search of a hundred sources is minutes of work and must survive walking to a
-/// book and back.
+/// Kept alive so a long run survives leaving the page and coming back.
 final class AggregateSearchProvider
     extends $NotifierProvider<AggregateSearch, AggregateSearchState> {
-  /// Runs the aggregate search and publishes its progress (`docs/dev/roadmap.md` 3.8).
+  /// Runs the aggregate search and publishes its progress.
   ///
-  /// It owns three things the domain does not:
-  ///
-  /// * **the scope → sources step**: `resolveSearchSources` over the loaded rows, so the page only
-  ///   hands in "what the list knows" and the answer is the same one the check page will use;
-  /// * **the pause latch and the cancellation token**: both are rebuilt per run, and pausing only
-  ///   takes effect between sources (ADR-0046 §决策 6);
-  /// * **paging**: [loadMore] runs the same use case one page further and keeps the merged list, so
-  ///   the page never merges two different result shapes itself.
-  ///
-  /// It is `keepAlive`: a search of a hundred sources is minutes of work and must survive walking to a
-  /// book and back.
+  /// Kept alive so a long run survives leaving the page and coming back.
   AggregateSearchProvider._()
     : super(
         from: null,
@@ -133,19 +103,9 @@ final class AggregateSearchProvider
 
 String _$aggregateSearchHash() => r'2dea239f1ef8489e3e90c914f7fef46cea572d89';
 
-/// Runs the aggregate search and publishes its progress (`docs/dev/roadmap.md` 3.8).
+/// Runs the aggregate search and publishes its progress.
 ///
-/// It owns three things the domain does not:
-///
-/// * **the scope → sources step**: `resolveSearchSources` over the loaded rows, so the page only
-///   hands in "what the list knows" and the answer is the same one the check page will use;
-/// * **the pause latch and the cancellation token**: both are rebuilt per run, and pausing only
-///   takes effect between sources (ADR-0046 §决策 6);
-/// * **paging**: [loadMore] runs the same use case one page further and keeps the merged list, so
-///   the page never merges two different result shapes itself.
-///
-/// It is `keepAlive`: a search of a hundred sources is minutes of work and must survive walking to a
-/// book and back.
+/// Kept alive so a long run survives leaving the page and coming back.
 
 abstract class _$AggregateSearch extends $Notifier<AggregateSearchState> {
   AggregateSearchState build();

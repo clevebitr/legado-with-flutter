@@ -15,15 +15,11 @@ const Duration webViewTimeout = Duration(seconds: 20);
 /// How long the page gets to run its own scripts after `onLoadStop`.
 const Duration webViewSettle = Duration(milliseconds: 400);
 
-/// [WebPageFetcher] backed by `flutter_inappwebview` (ADR-0061).
+/// [WebPageFetcher] backed by `flutter_inappwebview`.
 ///
-/// A **headless** WebView is created per request: it needs no widget, runs on the UI isolate and
-/// is disposed as soon as the HTML is read. The page's scripts are given a short settle window
-/// after `onLoadStop`, because sources such as `ting55` write the audio address from JavaScript.
-///
-/// Errors, timeouts and a missing WebView runtime all come back as [ParseResult] failures; the
-/// caller falls back to a plain GET, so a platform without WebView2 (or a page that fails to
-/// render) degrades instead of breaking the book source.
+/// A headless WebView is created per request and disposed once the HTML is read; errors, timeouts
+/// and a missing WebView runtime all come back as [ParseResult] failures so the caller can fall
+/// back to a plain GET.
 final class InAppWebViewPageFetcher implements WebPageFetcher {
   /// Creates the fetcher.
   const InAppWebViewPageFetcher({required this._logger});
@@ -64,8 +60,7 @@ final class InAppWebViewPageFetcher implements WebPageFetcher {
     headless = HeadlessInAppWebView(
       initialUrlRequest: URLRequest(
         url: WebUri(url),
-        // POST 型 `webView` 把渲染后的 body 一起交给页面本身（ADR-0062 §决策 1）：
-        // 这类站点的结果页只在表单提交后才存在，先 GET 一次再谈渲染是没有意义的。
+        // POST 型 `webView` 要把 body 一起交给页面：结果页只在表单提交后才存在。
         method: method == WebPageRequestMethod.post ? 'POST' : 'GET',
         body: method == WebPageRequestMethod.post && body != null
             ? Uint8List.fromList(utf8.encode(body))

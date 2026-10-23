@@ -5,7 +5,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 
-/// Searches one book source for a keyword (`docs/dev/roadmap.md` 2.4, `searchUrl`).
+/// Searches one book source for a keyword through `searchUrl`.
 final class SearchBooks {
   /// Creates the use case.
   const SearchBooks({required this._pages});
@@ -14,13 +14,7 @@ final class SearchBooks {
 
   /// Searches [source] for [keyword] and returns the matching books.
   ///
-  /// The keyword is rendered into `searchUrl` by `renderUrlTemplate`, which
-  /// form-encodes it exactly once (C-SRC-5, `book-source.md` §4).
-  ///
-  /// Failures come back as a [ParseResult] instead of reaching the UI as an
-  /// exception (C-ERR-1). An empty result list is a **success** — the source
-  /// answered and found nothing — while a `bookList` rule that matched nothing is
-  /// [ParseFailureKind.parseFailed] (`book-source.md` §7).
+  /// An empty list is a success; a `bookList` rule that matched nothing is a parse failure.
   Future<ParseResult<List<Book>>> execute(
     BookSource source,
     String keyword, {
@@ -36,9 +30,9 @@ final class SearchBooks {
       );
     }
 
-    // 书源自己的限速要在第一个请求之前进预算（book-source.md §8、ADR-0036）。
+    // 书源自己的限速要在第一个请求之前进预算。
     _pages.applySourceRate(source);
-    // `header` 写成规则时要在**第一个请求之前**求值（book-source.md §2、M12-A2）。
+    // `header` 写成规则时也要在第一个请求之前求值。
     final Map<String, String>? headers = await _pages.headersOf(source);
 
     final ParseResult<FetchedPage> response = await _pages.fetchRule(
@@ -49,8 +43,7 @@ final class SearchBooks {
         'page': '$page',
         'baseUrl': source.url,
       },
-      // 搜索 URL 还没有页面可读，所以 `baseUrl` 用书源自己的地址（上游 `AnalyzeUrl` 也
-      // 以书源为基准）；`source` / `header` 随上下文带上，规则里的 `http.*` 要用它（C-NET-4）。
+      // 搜索 URL 还没有页面可读，`baseUrl` 用书源自己的地址；`source` / `header` 供规则里的 `http.*` 使用。
       context: JsPageContext(
         baseUrl: source.url,
         page: page,
@@ -78,11 +71,7 @@ final class SearchBooks {
     };
   }
 
-  /// Reads every search hit out of [scope] through the shared list reader.
-  ///
-  /// The nine list fields and `updateTime` are read by [readBooks], which the explore stage uses
-  /// too: `SearchRule` and `ExploreRule` carry the same shape by upstream's `BookListRule`
-  /// interface (`book-source.md` §2), so one reader keeps them from drifting apart.
+  // 与发现页共用同一个列表读取器，避免两套字段解析漂移。
   Future<ParseResult<List<Book>>> _read(
     BookSource source,
     String baseUrl,

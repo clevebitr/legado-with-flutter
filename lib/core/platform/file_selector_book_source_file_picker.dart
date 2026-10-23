@@ -4,16 +4,12 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_dialog.dart';
 
-/// [BookSourceFilePicker] backed by `file_selector` (the Flutter team's federated plugin).
+/// [BookSourceFilePicker] backed by `file_selector`.
 ///
-/// The platform call is injected through `opener` so the read, the cap and the BOM handling are
-/// ordinary, testable Dart: only `fileSelectorOpenJsonFile` touches a platform channel, and that is
-/// the one file the coverage gate exempts (ADR-0019's second category).
+/// The dialog call is injected through `opener`, so reading, the size cap and BOM handling are
+/// ordinary testable Dart.
 final class FileSelectorBookSourceFilePicker implements BookSourceFilePicker {
-  /// Creates the picker.
-  ///
-  /// `opener` defaults to the real dialog; a test passes its own to exercise the logic without a
-  /// channel.
+  /// Creates the picker; `opener` defaults to the real dialog.
   const FileSelectorBookSourceFilePicker({
     this._opener = fileSelectorOpenJsonFile,
   });
@@ -28,7 +24,6 @@ final class FileSelectorBookSourceFilePicker implements BookSourceFilePicker {
       return const ParseSuccess<String?>(null);
     }
 
-    // 先看体积再读字节：超限的文件**根本不会**进内存（C-SEC-5、C-PERF-5）。
     if (file.bytes.length > maxBytes) {
       return failureAt<String?>(
         kind: ParseFailureKind.invalidBookSource,
@@ -39,10 +34,7 @@ final class FileSelectorBookSourceFilePicker implements BookSourceFilePicker {
     return ParseSuccess<String?>(_decode(file.bytes));
   }
 
-  /// Decodes the file as UTF-8 and strips a byte-order mark.
-  ///
-  /// Legado writes its exports as UTF-8, and some editors leave a BOM in front; `jsonDecode` would
-  /// fail on it, so it is removed here rather than reported as a malformed file.
+  // 按 UTF-8 解码并去掉 BOM，否则 jsonDecode 会把带 BOM 的文件判为格式错误。
   String _decode(List<int> bytes) {
     final String text = utf8.decode(bytes, allowMalformed: true);
 

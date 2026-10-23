@@ -8,7 +8,7 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_i
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
 
-/// One other source that has the book being read (`docs/dev/roadmap.md` §3.9-R3).
+/// Another source that has the book being read.
 final class SourceCandidate {
   /// Creates a candidate.
   const SourceCandidate({
@@ -25,7 +25,7 @@ final class SourceCandidate {
   /// The candidate source's display name.
   final String sourceName;
 
-  /// The book's detail URL **inside that source**.
+  /// The book's detail URL inside that source.
   final String bookUrl;
 
   /// The author as that source spelled it, when it declared one.
@@ -35,7 +35,7 @@ final class SourceCandidate {
   final String? lastChapter;
 }
 
-/// What one source switch produced (ADR-0051 §决策 3).
+/// The outcome of switching to another source.
 final class SourceSwitchResult {
   /// Creates the result.
   const SourceSwitchResult({
@@ -86,19 +86,9 @@ final class SourceSwitchResult {
   final String? lastChapter;
 }
 
-/// Finds other sources for the book being read, and switches to one of them
-/// (`docs/dev/roadmap.md` §3.9-R3, ADR-0051 §决策 3).
+/// Finds other sources for the book being read and switches to one of them.
 ///
-/// The two halves are one use case because they share the only non-obvious rule: **alignment**. A
-/// candidate is only useful if the switch can land on “the same chapter”, and that decision needs
-/// the chapter names of both sources — which neither the reader (it has no rules) nor the engine
-/// (it has no book) can make.
-///
-/// It searches **per source** rather than through `AggregateSearchBooks`, because the merger keeps
-/// one book URL per merged row (ADR-0046 §决策 4) and a switch needs the URL *inside the candidate
-/// source*. The concurrency, the per-source budget and the “a source that found nothing is not a
-/// failure” rule are the same as the aggregate search (ADR-0049/ADR-0046), only the result shape
-/// differs.
+/// Searches per source, because a switch needs the book URL inside each candidate source.
 final class SwitchBookSource {
   /// Creates the use case.
   const SwitchBookSource({
@@ -113,16 +103,15 @@ final class SwitchBookSource {
   final FetchBookInfo _bookInfo;
   final FetchToc _toc;
 
-  /// How many sources search at once; the candidate list is a side glance, not a full run.
+  /// How many sources search at once.
   final int concurrency;
 
-  /// The per-source budget of the candidate search (ADR-0049).
+  /// The per-source search budget.
   final Duration budget;
 
-  /// Every **other** enabled source that has a book called [bookName].
+  /// Every other enabled source that has a book called [bookName].
   ///
-  /// Exact title matches come first, then titles that contain the name; the current source is
-  /// excluded. At most [limit] candidates come back.
+  /// Exact title matches come first; the current source is excluded and at most [limit] are returned.
   Future<ParseResult<List<SourceCandidate>>> candidates({
     required String bookName,
     required List<BookSource> sources,
@@ -155,7 +144,7 @@ final class SwitchBookSource {
               hits.add(BookingHit(source: source, book: hit));
             }
           case ParseFailure<List<Book>>():
-            // 这个源没搜到 / 挂了：换源面板少一条候选，不是整次要失败。
+            // 这个源没搜到或出错：少一条候选，不影响整次换源。
             break;
         }
       }
@@ -189,7 +178,6 @@ final class SwitchBookSource {
     );
   }
 
-  /// The hit of [data] closest to [name], or `null` when none is close enough.
   Book? _bestMatch(List<Book> data, String name) {
     final String wanted = name.toLowerCase();
     Book? exact;
@@ -208,9 +196,7 @@ final class SwitchBookSource {
 
   /// Switches to [candidate] and answers where the reader should continue.
   ///
-  /// The alignment order is ADR-0051 §决策 3: an exactly equal chapter name, then a name that
-  /// contains the old one (or is contained by it), then the **same index** clamped into the new
-  /// list — a source that renumbered everything still opens a plausible chapter instead of failing.
+  /// Aligns by exact chapter name, then by a contained name, then by the same clamped index.
   Future<ParseResult<SourceSwitchResult>> switchTo({
     required BookSource target,
     required SourceCandidate candidate,
@@ -278,7 +264,7 @@ final class SwitchBookSource {
     );
   }
 
-  /// The index of the chapter of [chapters] that corresponds to [name] (ADR-0051 §决策 3).
+  /// The index of the chapter matching [name], or [fallbackIndex] clamped into [chapters].
   int alignChapterIndex(
     List<Chapter> chapters,
     String name, {
@@ -303,7 +289,7 @@ final class SwitchBookSource {
   }
 }
 
-/// One source's best hit, kept together with the source it came from.
+/// One source's best hit, kept with the source it came from.
 final class BookingHit {
   /// Creates a hit.
   const BookingHit({required this.source, required this.book});

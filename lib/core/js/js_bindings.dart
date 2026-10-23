@@ -4,16 +4,9 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 
-/// Applies one `crypto.*` binding call from the sandbox (`docs/dev/book-source.md` §6).
+/// Applies one `crypto.*` binding call from the sandbox.
 ///
-/// The four operations are pure computation, which is why §6 lists them as **sync**
-/// bindings: the worker answers them inside its own isolate and JavaScript never
-/// waits for the UI isolate. [operation] is the name used on the JS side; the result
-/// is the value JavaScript receives.
-///
-/// `null` means “no value”: an unknown operation, or base64 that cannot be decoded or
-/// is not UTF-8 afterwards. The prelude turns that into a JS `Error` instead of a
-/// silently wrong string, which is what C-SRC-4 asks for at a binding boundary.
+/// Returns `null` for an unknown operation or input that cannot be decoded.
 String? applyCryptoOperation(String operation, String value) =>
     switch (operation) {
       'md5' => md5.convert(utf8.encode(value)).toString(),
@@ -23,11 +16,7 @@ String? applyCryptoOperation(String operation, String value) =>
       _ => null,
     };
 
-/// Decodes base64 to text, or `null` when the input is not valid base64 / UTF-8.
-///
-/// Upstream (`java`-backed `crypto.base64Decode`) throws on malformed input; here the
-/// throw happens on the JS side (see [applyCryptoOperation]) so the engine behaviour
-/// stays out of it.
+// 畸形输入在这里返回 null，由 JS 侧抛出；调用方只需处理"没有值"。
 String? _decodeBase64(String value) {
   try {
     return utf8.decode(base64Decode(value));
@@ -36,31 +25,19 @@ String? _decodeBase64(String value) {
   }
 }
 
-/// The binding name of `http.*` in a [JsHostCall] (`docs/dev/book-source.md` §6).
+/// The binding name of `http.*` in a [JsHostCall].
 const String jsHttpBinding = 'http';
 
-/// The binding name of `parse.*` in a [JsHostCall] (`docs/dev/book-source.md` §6).
+/// The binding name of `parse.*` in a [JsHostCall].
 const String jsParseBinding = 'parse';
 
-/// The binding name of `java.*` (`docs/dev/book-source.md` §6).
-///
-/// Unlike [jsHttpBinding] and [jsParseBinding] it is **not** a [JsHostCall]: the worker
-/// answers `java.put` / `java.get` inside its own isolate — that is what keeps them
-/// synchronous (§6) and keeps the runtime's state out of `globalThis` (ADR-0030 §决策 4).
-/// The name lives here so the prelude and the worker cannot drift apart.
+/// The binding name of `java.*`, which the worker answers inside its own isolate.
 const String jsJavaBinding = 'java';
 
-/// One binding call the worker forwards to the host isolate (§6).
+/// One binding call the worker forwards to the host isolate.
 ///
-/// `http.*` and `parse.*` are the two bindings a rule **must** `await` (ADR-0029
-/// §决策 3), because neither can be answered inside the worker: the request layer and the
-/// rule engine both live on the host. The worker therefore forwards the call as this
-/// envelope and leaves the script's Promise pending until a [JsHostReply] names the same
-/// [callId] back.
-///
-/// [args] is what the sandbox passed, exactly as the prelude serialised it: the bridge is
-/// the one that validates it (see [decodeJsHttpRequest] / [decodeJsParseRequest]), so the
-/// worker stays a transport.
+/// The script's Promise stays pending until a [JsHostReply] names the same
+/// [callId].
 final class JsHostCall {
   /// Creates a host call.
   const JsHostCall({
@@ -98,15 +75,10 @@ final class JsHostCall {
   }
 }
 
-/// The host's answer to one [JsHostCall] (§6).
+/// The host's answer to one [JsHostCall].
 ///
-/// A **success** resolves the script's Promise with [value]. A **rejection**
-/// ([JsHostReply.rejected]) rejects it with [message] and leaves the job's outcome to the
-/// script, which is what a transport failure is: a rule may catch it and try the next
-/// mirror. A **fatal** failure ([JsHostReply.fatal]) is one the job cannot survive — the
-/// `parse.*` boundaries §6 registers, or the per-rule call quota — so the bridge fails the
-/// job with [kind] / [rulePath] instead of letting the script turn it into a value
-/// (C-SRC-4, ADR-0029 §决策 5).
+/// A success resolves the script's Promise, a rejection rejects it, and a fatal
+/// failure fails the whole job.
 final class JsHostReply {
   /// Creates a successful answer.
   const JsHostReply.success(this.callId, this.value)
@@ -124,7 +96,7 @@ final class JsHostReply {
       kind = null,
       rulePath = null;
 
-  /// Creates an answer that fails the whole job (`js:parse-scope`, `js:quota`).
+  /// Creates an answer that fails the whole job.
   const JsHostReply.fatal({
     required this.callId,
     required this.kind,
@@ -146,10 +118,10 @@ final class JsHostReply {
   /// Whether the failure has to fail the job, not just the script's Promise.
   final bool fatal;
 
-  /// The failure kind a [fatal] answer fails the job with; `null` otherwise.
+  /// The failure kind of a [fatal] answer; `null` otherwise.
   final ParseFailureKind? kind;
 
-  /// The failing `rulePath` (field plus §6's marker) of a [fatal] answer.
+  /// The failing `rulePath` of a [fatal] answer.
   final String? rulePath;
 
   /// The JS-facing error text of a failure.
@@ -169,8 +141,7 @@ final class JsHostReply {
 
   /// Reads an envelope the bridge sent, or `null` when it is malformed.
   ///
-  /// A `fatal` envelope without a usable [kind] is treated as malformed rather than
-  /// guessed: the worker never invents a failure kind.
+  /// A `fatal` envelope without a usable kind is malformed, never guessed.
   static JsHostReply? fromJson(Map<String, Object?> message) {
     final Object? callId = message['callId'];
     if (callId is! int) {
@@ -203,10 +174,9 @@ final class JsHostReply {
   }
 }
 
-/// The verbs `http.*` binds (§6).
+/// The verbs `http.*` binds.
 ///
-/// §6 fixes a separate binding per verb, so `options.method` is not read: the binding a
-/// rule called is the verb it gets.
+/// There is a separate binding per verb, so `options.method` is not read.
 enum JsHttpMethod {
   /// `http.get(url, options)`.
   get,
@@ -215,11 +185,9 @@ enum JsHttpMethod {
   post,
 }
 
-/// One validated `http.*` call (§6).
+/// One validated `http.*` call.
 ///
-/// `options` only carries `headers` and — for [JsHttpMethod.post] — `body`; every other
-/// key is rejected by the prelude before the call is made, because silently dropping e.g.
-/// `webView` would answer a different question than the rule asked.
+/// `options` only carries `headers` and, for [JsHttpMethod.post], `body`.
 final class JsHttpRequest {
   /// Creates a request.
   const JsHttpRequest({
@@ -242,12 +210,9 @@ final class JsHttpRequest {
   final Map<String, String> headers;
 }
 
-/// Reads one `http.*` call's arguments, or `null` when they are unusable (§6).
+/// Reads one `http.*` call's arguments, or `null` when they are unusable.
 ///
-/// The arguments are the prelude's, so they are JSON: `{operation, url, options}`. A verb
-/// or a URL that is not there, mid-type arguments, or headers that are not a flat string
-/// map are all “malformed”, which the bridge answers with a rejected Promise rather than a
-/// silent empty body.
+/// The arguments are JSON: `{operation, url, options}`.
 JsHttpRequest? decodeJsHttpRequest(Object? args) {
   final Map<String, Object?>? call = _jsonObjectOf(args);
   if (call == null) {
@@ -282,10 +247,7 @@ JsHttpRequest? decodeJsHttpRequest(Object? args) {
   return JsHttpRequest(method: method, url: url, body: body, headers: headers);
 }
 
-/// The verbs `java.*` binds (`docs/dev/book-source.md` §6, matrix #17).
-///
-/// An unknown verb is answered with `ok:false` and the prelude turns that into a JS `Error`,
-/// which is the explicit boundary C-SRC-4 asks for at a binding boundary.
+/// The verbs `java.*` binds.
 enum JsJavaOperation {
   /// `java.put(key, value)`: writes the source's variable.
   put,
@@ -293,19 +255,16 @@ enum JsJavaOperation {
   /// `java.get(key)`: reads the source's variable.
   get,
 
-  /// `java.timeFormat(time)`: formats a **milliseconds** timestamp (`book-source.md` §6).
+  /// `java.timeFormat(time)`: formats a milliseconds timestamp.
   timeFormat,
 
-  /// `java.encodeURI(str)`: Java's `URLEncoder.encode(str, "UTF-8")` (`book-source.md` §6).
+  /// `java.encodeURI(str)`: Java's `URLEncoder.encode(str, "UTF-8")`.
   ///
-  /// It is **not** JavaScript's `encodeURI`: a space becomes `+` and the reserved set is the
-  /// form-encoder's, which is what upstream's `JsExtensions.encodeURI` calls
-  /// (`JsExtensions.kt:683-689`). Mapping it onto the JS builtin would silently produce different
-  /// URLs for signing and query rules (ADR-0037 §决策 2).
+  /// Unlike JavaScript's `encodeURI`, a space becomes `+`.
   encodeUri,
 }
 
-/// One validated `java.*` call, decoded in the worker isolate (§6).
+/// One validated `java.*` call, decoded in the worker isolate.
 final class JsJavaRequest {
   /// Creates a request.
   const JsJavaRequest({required this.operation, this.key, this.value});
@@ -316,25 +275,13 @@ final class JsJavaRequest {
   /// The variable name of a [JsJavaOperation.put] / [JsJavaOperation.get].
   final String? key;
 
-  /// The argument the rule passed.
-  ///
-  /// For a [JsJavaOperation.put] it is the value to write (`null` clears the variable); for
-  /// [JsJavaOperation.timeFormat] it is the timestamp the rule asked to format, **not**
-  /// coerced here, because a number and a numeric string are both legal and the type itself
-  /// decides whether the call can be answered (`book-source.md` §6).
-  ///
-  /// It stays `Object?` — the JS bridge boundary C-TYPE-1 allows — and every reader narrows
-  /// it before use.
+  /// The argument the rule passed; `null` clears the variable on a write.
   final Object? value;
 }
 
-/// Reads one `java.*` call's arguments, or `null` when they are unusable (§6).
+/// Reads one `java.*` call's arguments, or `null` when they are unusable.
 ///
-/// The arguments are the prelude's, so they are JSON: `{operation, key, value}`. A missing or
-/// non-string key on `put` / `get` and an unknown verb are "malformed", which the prelude
-/// answers with a JS `Error` rather than a silent `undefined`. `timeFormat`'s argument is
-/// deliberately **not** type-checked here: an unusable timestamp is a failed *call*, not a
-/// malformed envelope, and [applyJsJavaCall] turns it into the same `ok:false`.
+/// The arguments are JSON: `{operation, key, value}`.
 JsJavaRequest? decodeJsJavaRequest(Object? args) {
   final Map<String, Object?>? call = _jsonObjectOf(args);
   if (call == null) {
@@ -377,26 +324,10 @@ JsJavaRequest? decodeJsJavaRequest(Object? args) {
   }
 }
 
-/// Applies one `java.*` call to a job's variable snapshot (`docs/dev/book-source.md` §6,
-/// matrix #17) and answers the envelope the prelude reads.
+/// Applies one `java.*` call and returns a JSON envelope.
 ///
-/// The answer is **JSON text**, never a bare value: `java.put` has no value to return (§6
-/// lists it as `void`), so `null` cannot mean “failed” the way it does for
-/// [applyCryptoOperation]. The envelope says so explicitly — `{"ok":true,"value":…}` for a
-/// read, `{"ok":true}` for a write, `{"ok":false}` for a malformed call — and the prelude
-/// turns `ok:false` into a JS `Error` (C-SRC-4 at a binding boundary).
-///
-/// A `null` [JsJavaRequest.value] on a write **clears** the variable (upstream's
-/// `putVariable(key, null)`, `RuleDataInterface.kt:8-14`); a read of a variable that was never
-/// written answers an empty string, exactly like upstream's `AnalyzeRule.get`
-/// (`AnalyzeRule.kt:812-825`), so a rule can concatenate it.
-///
-/// The engine answers this inside the worker, so it stays synchronous ([javaEncodeUri], the
-/// `timeFormat` formatter and the variable map) — nothing here crosses an isolate (ADR-0037
-/// §决策 2).
-/// [named] answers the two **built-in** keys upstream intercepts before its variable lookup
-/// (`AnalyzeRule.get`, `AnalyzeRule.kt:812-821`): `bookName` and `title`. It is empty for a
-/// stage that knows neither, so the variable store keeps deciding then.
+/// A `null` value on a write clears the variable; a read of an unwritten variable
+/// answers an empty string.
 String applyJsJavaCall(
   Map<String, String?> variables,
   Object? args, {
@@ -409,8 +340,7 @@ String applyJsJavaCall(
 
   switch (call.operation) {
     case JsJavaOperation.get:
-      // 解码器保证 `get` 带 String 键；这里再窄一次，是为了不把「契约被破坏」
-      // 静默变成「读空串」（C-SRC-4：读不出来的调用就是失败）。
+      // 解码器保证 `get` 带 String 键；这里再窄一次，避免把契约破损静默变成读空串。
       final String? readKey = call.key;
       if (readKey == null) {
         return '{"ok":false}';
@@ -418,7 +348,7 @@ String applyJsJavaCall(
 
       return jsonEncode(<String, Object?>{
         'ok': true,
-        // 上游的优先序：内置键（bookName / title）先答，再查变量表。
+        // 上游优先序：内置键（bookName / title）先答，再查变量表。
         'value': named[readKey] ?? variables[readKey] ?? '',
       });
     case JsJavaOperation.put:
@@ -444,11 +374,9 @@ String applyJsJavaCall(
   }
 }
 
-/// Reads the book / chapter names a job carries (`book-source.md` §6, ADR-0049).
+/// Reads the `bookName` and `title` built-in keys a job carries.
 ///
-/// The worker keeps them apart from the variable snapshot on purpose: `java.put('title', …)`
-/// must not be able to hijack the built-in `java.get('title')`, which is what upstream's
-/// `when (key)` interception means. A field that is missing or blank is simply absent.
+/// They stay apart from the variable snapshot so `java.put` cannot hijack them.
 Map<String, String> decodeJsNamedContext(Map<String, Object?> fields) {
   final Map<String, String> named = <String, String>{};
   _putName(named, 'bookName', fields['bookName']);
@@ -457,23 +385,15 @@ Map<String, String> decodeJsNamedContext(Map<String, Object?> fields) {
   return named;
 }
 
-/// Adds `key: value` to [named] when [value] is a non-empty string (§6, ADR-0049).
 void _putName(Map<String, String> named, String key, Object? value) {
   if (value is String && value.isNotEmpty) {
     named[key] = value;
   }
 }
 
-/// Encodes [value] the way upstream's `java.encodeURI` does (`docs/dev/book-source.md` §6).
+/// Encodes [value] the way Java's `URLEncoder.encode(value, "UTF-8")` does.
 ///
-/// It is Java's `URLEncoder.encode(value, "UTF-8")` (`JsExtensions.kt:683-689`): `A-Za-z0-9` and
-/// `-`, `_`, `.`, `*` stay as they are, a space becomes `+`, and every other character is written
-/// as the upper-case `%XX` of its UTF-8 bytes. The JS builtin of a similar name is **not** the
-/// same function (it keeps `~`, `!` and friends and writes a space as `%20`), so a rule that signs
-/// a query would silently produce a different URL if this were mapped onto it.
-///
-/// Unlike the URL-template encoder of `url_template.dart` there is **no** already-encoded check:
-/// upstream always encodes, and a second `%` is therefore encoded again (`%` → `%25`).
+/// `A-Za-z0-9` and `-_.*` stay, a space becomes `+`, everything else `%XX`.
 String javaEncodeUri(String value) {
   final StringBuffer buffer = StringBuffer();
 
@@ -490,7 +410,7 @@ String javaEncodeUri(String value) {
   return buffer.toString();
 }
 
-/// The UTF-8 bytes Java's form encoder leaves alone: `A-Za-z0-9` plus `-`, `_`, `.`, `*`.
+// Java 表单编码不转义的字节：A-Za-z0-9 加上 -_.*。
 final Set<int> _formSafeBytes = <int>{
   for (int code = 0x30; code <= 0x39; code++) code,
   for (int code = 0x41; code <= 0x5A; code++) code,
@@ -501,26 +421,15 @@ final Set<int> _formSafeBytes = <int>{
   0x5F, // _
 };
 
-/// Formats the timestamp one `java.timeFormat` call passed (`docs/dev/book-source.md` §6,
-/// matrix #17), or `null` when the argument cannot be read as one.
+/// Formats the timestamp of one `java.timeFormat` call, or `null` when unreadable.
 ///
-/// The specification is upstream's `JsExtensions.timeFormat` (`:678`) plus
-/// `AppConst.dateFormat` (`:40`): the argument is a **milliseconds** timestamp — a JS number
-/// or a string that reads as one — the output is always `yyyy/MM/dd HH:mm`, and the zone is
-/// the **device's local** one (`DateTime.fromMillisecondsSinceEpoch` is local by default,
-/// like `FastDateFormat` reading the JVM default zone).
-///
-/// `null` means "this call cannot be answered": a missing / non-numeric / non-finite
-/// argument, or a value outside Dart's own `DateTime` range. The caller turns that into
-/// `ok:false`, which the prelude raises as a JS `Error` — the same loud boundary
-/// [applyCryptoOperation] uses for base64 it cannot decode. A fractional number is truncated
-/// towards zero, which is what a Java `(long)` conversion of a JS number does; a timestamp in
-/// milliseconds never carries a fraction, so the choice cannot hide a wrong number.
+/// The argument is a milliseconds timestamp; the output is `yyyy/MM/dd HH:mm` in
+/// the device's local zone.
 String? formatJsTimestamp(Object? value) {
   final num? number = switch (value) {
     final int millis => millis,
     final double millis => millis,
-    // JS 传字符串时前奏原样送过来（数字则保持数字），所以两种都要认。
+    // JS 传字符串时前奏原样送来，数字则保持数字，所以两种都要认。
     final String text => num.tryParse(text.trim()),
     _ => null,
   };
@@ -537,10 +446,7 @@ String? formatJsTimestamp(Object? value) {
   return formatTimestamp(DateTime.fromMillisecondsSinceEpoch(rounded.toInt()));
 }
 
-/// Formats [instant] as `yyyy/MM/dd HH:mm`, the fixed pattern of `docs/dev/book-source.md` §6.
-///
-/// The zone is whatever [instant] carries: this is the pure half of the binding, so the
-/// pattern can be pinned by a test without depending on the machine's locale or timezone.
+/// Formats [instant] as `yyyy/MM/dd HH:mm`.
 String formatTimestamp(DateTime instant) {
   final String month = '${instant.month}'.padLeft(2, '0');
   final String day = '${instant.day}'.padLeft(2, '0');
@@ -550,24 +456,12 @@ String formatTimestamp(DateTime instant) {
   return '${instant.year}/$month/$day $hour:$minute';
 }
 
-/// Dart's `DateTime` range in milliseconds, i.e. ±100 000 000 days around the epoch.
-///
-/// It is checked before the conversion because `DateTime.fromMillisecondsSinceEpoch` reports
-/// an out-of-range value as an `Error` (`RangeError`), which neither ADR-0022 nor C-ERR-2
-/// allows this layer to catch — and an unanswerable timestamp is a failed call, not a crash.
+// DateTime.fromMillisecondsSinceEpoch 超出自身范围会抛 RangeError，先挡住。
 const int _maxDateTimeMilliseconds = 8640000000000000;
 
-/// Reads the variable table a job or a result carries, ignoring anything unusable (§6,
-/// matrix #16 / #17).
+/// Reads the variable table a job or a result carries, ignoring unusable entries.
 ///
-/// Both directions use the same shape: the host seeds a job with a snapshot and the worker
-/// reports its table back ([applyJsJavaCall] fills it), so one reader serves both ends and
-/// the two can never disagree about what a `null` means. A `null` **value** is kept —
-/// `java.put(key, null)` is how a script clears a variable, and turning it into `''` would
-/// make “cleared” and “written empty” indistinguishable (ADR-0034 §决策 1). A key that is
-/// not a string or a value that is neither a string nor `null` is dropped rather than
-/// coerced: the store only ever holds strings, and a stringified `null` would be
-/// indistinguishable from a rule that wrote the text "null".
+/// A `null` value is kept: that is how a script clears a variable.
 Map<String, String?> decodeJsVariables(Object? value) {
   if (value is! Map) {
     return <String, String?>{};
@@ -584,12 +478,10 @@ Map<String, String?> decodeJsVariables(Object? value) {
   return variables;
 }
 
-/// Reads one `parse.*` call's arguments, or `null` when they are unusable (§6).
+/// Reads one `parse.*` call's arguments, or `null` when they are unusable.
 ///
-/// `parse.getString` and `parse.getElements` differ only in whether the caller wants every
-/// match or the first value ([JsParseRequest.wantsList]); `doc` is passed through
-/// unvalidated, because what counts as a page-level document is the engine's decision
-/// (`js:parse-scope`).
+/// `parse.getString` and `parse.getElements` differ only in
+/// [JsParseRequest.wantsList].
 JsParseRequest? decodeJsParseRequest(Object? args) {
   final Map<String, Object?>? call = _jsonObjectOf(args);
   if (call == null) {
@@ -612,20 +504,13 @@ JsParseRequest? decodeJsParseRequest(Object? args) {
   return JsParseRequest(rule: rule, wantsList: wantsList, doc: doc);
 }
 
-/// Merges the book source's own headers under the rule's own (`book-source.md` §2).
-///
-/// Upstream builds a JS request from the source (`AnalyzeUrl`), so a source that declares
-/// a `Referer` expects it there too; a header the rule named itself wins (C-NET-4).
+/// Merges the book source's own headers under the rule's own.
 Map<String, String> mergeJsHttpHeaders(
   Map<String, String>? sourceHeaders,
   Map<String, String> ruleHeaders,
 ) => <String, String>{...?sourceHeaders, ...ruleHeaders};
 
-/// Reads a JSON object with string keys, or `null` when [value] is not one.
-///
-/// The sandbox hands its arguments over as decoded JSON, so every level is either a
-/// `String`-keyed map or not an object at all; reading them through this helper keeps the
-/// decoders free of raw-map indexing (and of `dynamic` calls).
+// 沙箱参数是解码后的 JSON，这里统一拒绝非字符串键的层级。
 Map<String, Object?>? _jsonObjectOf(Object? value) {
   if (value is! Map) {
     return null;
@@ -642,7 +527,6 @@ Map<String, Object?>? _jsonObjectOf(Object? value) {
   return fields;
 }
 
-/// Reads a flat string map, or `null` when [value] is not one.
 Map<String, String>? _headersOf(Object? value) {
   if (value == null) {
     return const <String, String>{};
@@ -663,7 +547,6 @@ Map<String, String>? _headersOf(Object? value) {
   return headers;
 }
 
-/// Reads a `ParseFailureKind` by name, or `null` when the name is not one.
 ParseFailureKind? _kindByName(String name) {
   for (final ParseFailureKind kind in ParseFailureKind.values) {
     if (kind.name == name) {
@@ -674,7 +557,6 @@ ParseFailureKind? _kindByName(String name) {
   return null;
 }
 
-/// Reads a `String` field of an envelope, ignoring a value of another type.
 String? _stringField(Map<String, Object?> message, String key) {
   final Object? value = message[key];
 

@@ -3,22 +3,14 @@ import 'dart:convert';
 import 'package:flutter_reader/features/book_source/domain/entities/explore_category.dart';
 
 /// The categories one `exploreUrl` declaration yields, plus the entries it had to reject.
-///
-/// Both halves travel together on purpose: `docs/dev/book-source.md` §4.2 keeps the good entries
-/// **and** requires every rejected one to be recorded (C-SRC-4 — a dropped category must never be
-/// silent). The reasons are short, non-sensitive summaries; the caller adds the book source and
-/// the field path when it logs them (C-ERR-8).
 typedef ExploreCategoryParse = ({
   List<ExploreCategory> categories,
   List<String> rejected,
 });
 
-/// Parses what a whole-field `exploreUrl` expression produced (`book-source.md` §4.2).
+/// Parses a whole-field `exploreUrl` expression.
 ///
-/// Upstream accepts **both** shapes from the same script (`BookSourceExtensions.kt:82-92`): a JSON
-/// array of category objects, or the separated `标题::URL` string. An array wins when the text
-/// decodes to one; anything else is read as the separated form, which is also what a plain
-/// (non-script) `exploreUrl` is.
+/// A JSON array of category objects wins; anything else is read as the separated form.
 ExploreCategoryParse parseExploreSource(String source) {
   final Object? decoded = _tryDecode(source);
   if (decoded is List<Object?>) {
@@ -30,10 +22,7 @@ ExploreCategoryParse parseExploreSource(String source) {
 
 /// Parses the separated `标题::URL` form, i.e. what a plain `exploreUrl` carries.
 ///
-/// Entries are split on runs of `&&` or newlines — upstream's `(&&|\n)+` regex
-/// (`BookSourceExtensions.kt:90`), which keeps a single `&` inside a URL intact. Each entry is
-/// split at its **first** `::`; a blank title or a missing URL is a rejection rather than a
-/// category, and the remaining entries are still returned (ADR-0035 §决策 3).
+/// A blank title or a missing URL rejects that entry only; the rest are still returned.
 ExploreCategoryParse parseExploreString(String source) {
   final List<ExploreCategory> categories = <ExploreCategory>[];
   final List<String> rejected = <String>[];
@@ -65,11 +54,9 @@ ExploreCategoryParse parseExploreString(String source) {
   return (categories: categories, rejected: rejected);
 }
 
-/// Parses the JSON-array form a whole-field script may return (`book-source.md` §4.2).
+/// Parses the JSON-array form a whole-field script may return.
 ///
-/// An element must be an object with a non-blank `title`, a non-blank `url`, and either no `type`
-/// or `type == "url"`. Everything else is rejected by name — in particular a form category
-/// (`text` / `button` / `toggle` / `select`), which is out of M1's scope (ADR-0035 §决策 4/6).
+/// An element needs a non-blank `title` and `url`, and either no `type` or `type == "url"`.
 ExploreCategoryParse _parseJsonCategories(List<Object?> entries) {
   final List<ExploreCategory> categories = <ExploreCategory>[];
   final List<String> rejected = <String>[];
@@ -82,6 +69,7 @@ ExploreCategoryParse _parseJsonCategories(List<Object?> entries) {
     }
 
     final Object? type = entry['type'];
+    // 表单类分类（text / button / toggle / select）暂不支持，按名拒绝。
     if (type != null && type != 'url') {
       rejected.add('form category (type=$type)');
 
@@ -102,10 +90,7 @@ ExploreCategoryParse _parseJsonCategories(List<Object?> entries) {
   return (categories: categories, rejected: rejected);
 }
 
-/// Decodes [source] as JSON, or answers `null` when it is not JSON at all.
-///
-/// A plain `exploreUrl` is usually a separated string, so failing to decode is the ordinary path,
-/// not an error: that is why this is a private probe rather than a `try`/`catch` at every caller.
+// 普通 exploreUrl 不是 JSON，解码失败是常态而不是错误。
 Object? _tryDecode(String source) {
   final String text = source.trim();
   if (!text.startsWith('[') && !text.startsWith('{')) {

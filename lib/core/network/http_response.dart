@@ -1,8 +1,6 @@
 /// A successful (2xx) HTTP response.
 ///
-/// Only 2xx responses become an [HttpResponse]: every other status is mapped to
-/// a `ParseFailureKind` by the client, so callers never have to inspect a status
-/// code to know whether the request worked (`docs/dev/book-source.md` §7).
+/// Every other status is already mapped to a `ParseFailureKind`.
 final class HttpResponse {
   /// Creates a response.
   const HttpResponse({
@@ -17,6 +15,6 @@ final class HttpResponse {
   /// Response headers keyed by lower-case name.
   final Map<String, List<String>> headers;
 
-  /// Response body, decoded with the detected charset (C-NET-3).
+  /// Response body, decoded with the detected charset.
   final String body;
 }

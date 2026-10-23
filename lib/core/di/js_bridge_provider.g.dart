@@ -8,59 +8,26 @@ part of 'js_bridge_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the `@js:` sandbox every rule evaluation shares (C-SRC-2, C-SRC-3).
+/// Provides the shared `@js:` sandbox for rule evaluation.
 ///
-/// The worker is created **lazily** by the bridge on the first `@js:` rule and released
-/// with this provider (ADR-0030 §决策 6), so an app that never meets a JS rule never
-/// pays for an isolate or a QuickJS runtime. Everything the bridge needs — the isolate,
-/// the engine and the JS prelude — stays behind the launcher, which is why `domain/`
-/// only ever sees [JsBridge] (ADR-0029 §决策 2).
-///
-/// The bridge also gets the app-wide HTTP client, because §6 binds `http.*` to the rule
-/// sandbox and C-NET-1 makes that client the only door to the network: a rule's request
-/// shares the same cookies and the same per-source concurrency budget (`book-source.md`
-/// §8) as the page that carried the rule.
-///
-/// The provider is autoDispose: the budget dies with the scope, so one operation's
-/// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
+/// The worker is created on first use, and scripts share the app HTTP client's
+/// cookies and per-source concurrency budget.
 
 @ProviderFor(jsBridge)
 final jsBridgeProvider = JsBridgeProvider._();
 
-/// Provides the `@js:` sandbox every rule evaluation shares (C-SRC-2, C-SRC-3).
+/// Provides the shared `@js:` sandbox for rule evaluation.
 ///
-/// The worker is created **lazily** by the bridge on the first `@js:` rule and released
-/// with this provider (ADR-0030 §决策 6), so an app that never meets a JS rule never
-/// pays for an isolate or a QuickJS runtime. Everything the bridge needs — the isolate,
-/// the engine and the JS prelude — stays behind the launcher, which is why `domain/`
-/// only ever sees [JsBridge] (ADR-0029 §决策 2).
-///
-/// The bridge also gets the app-wide HTTP client, because §6 binds `http.*` to the rule
-/// sandbox and C-NET-1 makes that client the only door to the network: a rule's request
-/// shares the same cookies and the same per-source concurrency budget (`book-source.md`
-/// §8) as the page that carried the rule.
-///
-/// The provider is autoDispose: the budget dies with the scope, so one operation's
-/// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
+/// The worker is created on first use, and scripts share the app HTTP client's
+/// cookies and per-source concurrency budget.
 
 final class JsBridgeProvider
     extends $FunctionalProvider<JsBridge, JsBridge, JsBridge>
     with $Provider<JsBridge> {
-  /// Provides the `@js:` sandbox every rule evaluation shares (C-SRC-2, C-SRC-3).
+  /// Provides the shared `@js:` sandbox for rule evaluation.
   ///
-  /// The worker is created **lazily** by the bridge on the first `@js:` rule and released
-  /// with this provider (ADR-0030 §决策 6), so an app that never meets a JS rule never
-  /// pays for an isolate or a QuickJS runtime. Everything the bridge needs — the isolate,
-  /// the engine and the JS prelude — stays behind the launcher, which is why `domain/`
-  /// only ever sees [JsBridge] (ADR-0029 §决策 2).
-  ///
-  /// The bridge also gets the app-wide HTTP client, because §6 binds `http.*` to the rule
-  /// sandbox and C-NET-1 makes that client the only door to the network: a rule's request
-  /// shares the same cookies and the same per-source concurrency budget (`book-source.md`
-  /// §8) as the page that carried the rule.
-  ///
-  /// The provider is autoDispose: the budget dies with the scope, so one operation's
-  /// batch shares one worker (see `docs/dev/roadmap.md` §3.7 for the batch-download follow-up).
+  /// The worker is created on first use, and scripts share the app HTTP client's
+  /// cookies and per-source concurrency budget.
   JsBridgeProvider._()
     : super(
         from: null,
@@ -96,42 +63,27 @@ final class JsBridgeProvider
 
 String _$jsBridgeHash() => r'69f5374c6d7b08f8fbeb9e5234a4554f1159e4b5';
 
-/// Provides the rule variables `@put:` / `@get:` and `java.put` / `java.get` share
-/// (`docs/dev/book-source.md` §4 and §6, matrix #16 / #17).
+/// Provides the rule variables shared by `@put:` / `@get:` and `java.put` /
+/// `java.get`.
 ///
-/// It is one instance per provider scope, keyed by book source inside, and it is watched by
-/// both the engine and the bridge because the two are the two ends of one contract: the
-/// engine reads and writes it while parsing, the bridge applies what a script wrote
-/// (ADR-0034 §决策 1). A scope owns the variables' lifetime, so nothing survives the
-/// operation that created it — which is the registered difference from upstream's
-/// persisted per-book variables (ADR-0034 §决策 2).
+/// One store per provider scope; nothing survives the operation that created it.
 
 @ProviderFor(jsVariableStore)
 final jsVariableStoreProvider = JsVariableStoreProvider._();
 
-/// Provides the rule variables `@put:` / `@get:` and `java.put` / `java.get` share
-/// (`docs/dev/book-source.md` §4 and §6, matrix #16 / #17).
+/// Provides the rule variables shared by `@put:` / `@get:` and `java.put` /
+/// `java.get`.
 ///
-/// It is one instance per provider scope, keyed by book source inside, and it is watched by
-/// both the engine and the bridge because the two are the two ends of one contract: the
-/// engine reads and writes it while parsing, the bridge applies what a script wrote
-/// (ADR-0034 §决策 1). A scope owns the variables' lifetime, so nothing survives the
-/// operation that created it — which is the registered difference from upstream's
-/// persisted per-book variables (ADR-0034 §决策 2).
+/// One store per provider scope; nothing survives the operation that created it.
 
 final class JsVariableStoreProvider
     extends
         $FunctionalProvider<JsVariableStore, JsVariableStore, JsVariableStore>
     with $Provider<JsVariableStore> {
-  /// Provides the rule variables `@put:` / `@get:` and `java.put` / `java.get` share
-  /// (`docs/dev/book-source.md` §4 and §6, matrix #16 / #17).
+  /// Provides the rule variables shared by `@put:` / `@get:` and `java.put` /
+  /// `java.get`.
   ///
-  /// It is one instance per provider scope, keyed by book source inside, and it is watched by
-  /// both the engine and the bridge because the two are the two ends of one contract: the
-  /// engine reads and writes it while parsing, the bridge applies what a script wrote
-  /// (ADR-0034 §决策 1). A scope owns the variables' lifetime, so nothing survives the
-  /// operation that created it — which is the registered difference from upstream's
-  /// persisted per-book variables (ADR-0034 §决策 2).
+  /// One store per provider scope; nothing survives the operation that created it.
   JsVariableStoreProvider._()
     : super(
         from: null,
