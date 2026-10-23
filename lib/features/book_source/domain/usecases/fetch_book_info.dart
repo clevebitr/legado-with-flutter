@@ -3,6 +3,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
 /// Reads the detail page of one book (`docs/dev/roadmap.md` 2.4, `ruleBookInfo`).
@@ -130,7 +131,8 @@ final class FetchBookInfo {
         name: name.dataOrNull ?? '',
         url: url,
         // 上游：`tocUrl` 规则缺失时目录就在书籍页本身，因此回落到书籍 URL。
-        tocUrl: resolveAbsoluteUrl(toc == null || toc.isEmpty ? url : toc, url),
+        // 目录地址也可能带 `,{…}`：先切选项再绝对化（与章节地址同一口径）。
+        tocUrl: resolveUrlRule(toc == null || toc.isEmpty ? url : toc, url),
         author: author.dataOrNull,
         kind: kind.dataOrNull,
         coverUrl: resolveAbsoluteUrlOrNull(coverUrl.dataOrNull, url),

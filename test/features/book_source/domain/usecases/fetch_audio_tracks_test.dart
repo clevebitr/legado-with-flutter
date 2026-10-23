@@ -67,6 +67,42 @@ T _data<T>(ParseResult<T> result) => switch (result) {
 
 void main() {
   group('FetchAudioTracks', () {
+    test(
+      'execute_givenAnHtmlPageAsTheValue_failsInsteadOfFakingAUrl',
+      () async {
+        // webView 源的 content 规则可能把整页 HTML 当结果：不能拼成假 URL 交给播放器。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            _chapterUrl,
+            '{"data":{"urls":["<!DOCTYPE html><html><body>no media</body></html>"]}}',
+          );
+
+        final ParseFailure<Never> failure = _failure(
+          await FetchAudioTracks(pages: _service(http))
+              .execute(_source(), const ChapterRequest(url: _chapterUrl)),
+        );
+
+        expect(failure.kind, ParseFailureKind.parseFailed);
+        expect(failure.rulePath, 'contentRule.content');
+      },
+    );
+
+    test('execute_givenAChapterUrlWithOptions_requestsTheCleanUrl', () async {
+      // 与正文同一口径：章节地址的 `,{webView:…}` 在取页时切掉，不进入请求路径。
+      const String withOptions =
+          'https://audio.test/chapter/1,{webView:“true”}';
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, '{"data":{"urls":["https://cdn.test/a.mp3"]}}');
+
+      final List<AudioTrack> tracks = _data(
+        await FetchAudioTracks(pages: _service(http))
+            .execute(_source(), const ChapterRequest(url: withOptions)),
+      );
+
+      expect(tracks.single.url, 'https://cdn.test/a.mp3');
+      expect(http.requestedUrls, <String>[_chapterUrl]);
+    });
+
     test('execute_givenAListRule_returnsOneTrackPerHttpValue', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(

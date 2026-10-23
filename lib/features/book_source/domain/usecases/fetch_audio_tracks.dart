@@ -105,7 +105,13 @@ final class FetchAudioTracks {
         case ParseSuccess<List<String>>(:final List<String> data):
           for (final String raw in data) {
             final String value = raw.trim();
-            if (value.isEmpty) {
+            if (!_looksLikeAddress(value)) {
+              // 真实源里 content 规则可能返回整页 HTML（`<js>result</js>` + webView 源）：
+              // 那不是地址，交给播放器只会得到一条假 URL，甚至在 Windows 上崩掉原生插件。
+              _pages.warn(
+                'Audio value skipped (not a URL): source=${source.url} '
+                'field=contentRule.content',
+              );
               continue;
             }
             // 相对地址按**读到它的那一页**解析（与封面、目录同一条规则，book-source.md §2）。
@@ -128,6 +134,23 @@ final class FetchAudioTracks {
     return ParseSuccess<List<AudioTrack>>(tracks);
   }
 }
+
+/// The longest single audio address accepted, in characters.
+///
+/// A real media URL (including a signed CDN query) is far shorter; a longer value is a page or
+/// an error document that the source's `content` rule returned by mistake.
+const int _maxMediaUrlLength = 4096;
+
+/// Whether [value] is shaped like an address at all, before relative resolution.
+///
+/// The check runs **before** `resolveAbsoluteUrl`: a page body such as `<!DOCTYPE html>…` would
+/// otherwise resolve into a syntactically valid `https://…` URL and pass the scheme check, and the
+/// player would receive a page instead of media.
+bool _looksLikeAddress(String value) =>
+    value.isNotEmpty &&
+    value.length <= _maxMediaUrlLength &&
+    !value.contains(RegExp(r'[\s<>]')) &&
+    !value.toLowerCase().startsWith('data:');
 
 /// Whether [url] can be handed to the player.
 ///

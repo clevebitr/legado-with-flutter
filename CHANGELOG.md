@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Align the rule dialect with upstream: templates inside scripts and URL options (ADR-0055)
+
+- **`{{…}}` / `@get:` inside `@js:` and `<js>…</js>` scripts are expanded before the script runs**
+  (upstream `SourceRule.makeUpRule`). A real audio source's `chapterUrl` builds its address with
+  `movieId={{$.id}}`; the literal braces used to reach the site and every chapter looked missing.
+  A backslash-escaped `\}` is not a template, so script literals such as `/{{\}\}/` stay untouched.
+- **URL options are split off before the URL is made absolute.** `FetchToc`, `FetchBookInfo`, the
+  search/explore list fields and paging values now go through `resolveUrlRule`, and `fetchRule`
+  parses the option suffix of the **rendered** result as well. Previously `,{webView:“true”}`
+  became `,%7BwebView…%7D` and was requested as part of the path (404 on real audio sources).
+- **Audio track values must look like addresses.** `FetchAudioTracks` rejects values containing
+  whitespace or `<>`, and values over 4096 characters, before resolving them. A `content` rule of
+  `<js>result</js>` (webView sources) returned a whole HTML page, which used to become a fake
+  `https://host/<!DOCTYPE…>` track and could crash the native player on Windows.
+- Evidence: a 632-source census (15 audio sources) showed 96 sources with templates inside scripts
+  and 49 with `webView`; after the fix the “🔊书音M” source completes
+  `search → bookInfo → toc → audioTracks` and 恋听网 reaches the track stage (its HTML body is now
+  rejected instead of faked). Remaining gaps are registered in `docs/dev/roadmap.md` §3.7.
+
 ### Listen to audio sources and read chapters aloud (M17, ADR-0054)
 
 - **Audio book sources finally play.** `ruleContent` of a `bookSourceType = 1` source yields direct

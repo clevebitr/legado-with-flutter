@@ -160,20 +160,15 @@ final class PageFetchService {
       case ParseSuccess<UrlRule>(:final UrlRule data):
         urlRule = data;
     }
-    final UrlRuleOptions options = urlRule.options ?? const UrlRuleOptions();
-    for (final String ignored in options.unsupported) {
-      _logger.warning(
-        'Ignoring an unsupported URL option: rule=$rulePath '
-        'option=$ignored source=${sourceId ?? 'unknown'}',
-      );
-    }
+    final UrlRuleOptions textOptions =
+        urlRule.options ?? const UrlRuleOptions();
 
     final ParseResult<String> address = await _engine.renderUrl(
       urlRule.template,
       rulePath: rulePath,
       params: params,
       context: context,
-      charset: options.charset,
+      charset: textOptions.charset,
     );
     final String rendered;
     switch (address) {
@@ -185,7 +180,29 @@ final class PageFetchService {
       case ParseSuccess<String>(:final String data):
         rendered = data;
     }
-    final String url = resolveAbsoluteUrl(rendered.trim(), context.baseUrl);
+
+    // 渲染后的地址可能自带 `,{…}`（`@js:` 规则返回「URL + 选项」是真实语料的常见写法）。
+    // 必须在绝对化之前再切一次，否则 `{` 会被 `Uri.resolve` 编码成 `%7B`，选项就变成路径了。
+    final UrlRule renderedRule = switch (parseUrlRule(
+      rendered,
+      rulePath: rulePath,
+    )) {
+      ParseSuccess<UrlRule>(:final UrlRule data) => data,
+      ParseFailure<UrlRule>() => UrlRule(
+        template: stripUnreadableUrlOptions(rendered),
+      ),
+    };
+    final UrlRuleOptions options = renderedRule.options ?? textOptions;
+    for (final String ignored in options.unsupported) {
+      _logger.warning(
+        'Ignoring an unsupported URL option: rule=$rulePath '
+        'option=$ignored source=${sourceId ?? 'unknown'}',
+      );
+    }
+    final String url = resolveAbsoluteUrl(
+      renderedRule.template.trim(),
+      context.baseUrl,
+    );
 
     final Map<String, String> requestHeaders = <String, String>{
       ...?headers,
@@ -895,7 +912,8 @@ final class PageFetchService {
         continue;
       }
 
-      final String url = resolveAbsoluteUrl(url0, currentUrl);
+      // 翻页值也可能带 `,{…}`：与章节地址同一口径（先切选项再绝对化）。
+      final String url = resolveUrlRule(url0, currentUrl);
       if (url == currentUrl || urls.contains(url)) {
         continue;
       }

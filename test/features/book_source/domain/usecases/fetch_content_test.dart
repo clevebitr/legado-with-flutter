@@ -105,6 +105,24 @@ T _data<T>(ParseResult<T> result) => switch (result) {
 
 void main() {
   group('FetchContent', () {
+    test('execute_givenAChapterUrlWithOptions_requestsTheCleanUrl', () async {
+      // 章节地址带 `,{webView:…}` 时，取页必须先切选项：整串请求会 404（M17 真源普查）。
+      const String withOptions =
+          'https://example-novel.test/book/1/1.html,{webView:“true”}';
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, _page('chapter_page.html'));
+
+      final String content = _data(
+        await FetchContent(
+          pages: _service(http),
+          cache: FakeContentCache(),
+        ).execute(_source(), const ChapterRequest(url: withOptions)),
+      );
+
+      expect(http.requestedUrls, <String>[_chapterUrl]);
+      expect(content, isNotEmpty);
+    });
+
     test('execute_givenChapterPage_returnsThePlainTextBody', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_chapterUrl, _page('chapter_page.html'));

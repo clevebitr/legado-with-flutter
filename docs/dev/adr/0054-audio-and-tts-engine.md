@@ -114,3 +114,5 @@
   在 Windows / Android 用本地 WAV 实播验证。真源还暴露并修掉了一个引擎 bug：JSON 条目上的 `@js:`
   字段丢失页面 `baseUrl`（`_jsContextOf(JsonScope)`），已补单测。
 
+> **2026-10-22 补记（ADR-0055）：** 真源解析阻塞已修复——脚本内 `{{…}}` 展开、URL 选项先切后绝对化、音频地址形态校验之后，书音M 跑到 `audioTracks ok(1)`；剩余 `book` 绑定、`webView`、远端流播放与明文媒体策略仍按 §后果 / `roadmap.md` §3.7 未闭环。
+

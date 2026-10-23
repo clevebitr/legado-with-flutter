@@ -484,6 +484,107 @@ void main() {
       expect(bridge.jobs.single.script, 'result.data.items');
     });
 
+    test('extractFirst_givenATemplateInsideAScript_expandsIt', () async {
+      // 上游 makeUpRule 在执行脚本前展开整条规则里的 `{{…}}`（AnalyzeRule.kt:666-768）：
+      // 真实音频源的 `movieId={{$.id}}` 依赖它（M17 真源普查）。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = 'https://m.test/x?movieId=7';
+      final RuleScope scope = RuleScope.json(
+        <String, Object?>{'id': 7},
+        jsContext: const JsPageContext(baseUrl: 'https://m.test/toc?bookId=9'),
+      );
+
+      await _engine(null, bridge).extractFirst(
+        r'@js:"https://m.test/x?movieId={{$.id}}"',
+        scope,
+        rulePath: 'tocRule.chapterUrl',
+      );
+
+      expect(bridge.jobs.single.script, '"https://m.test/x?movieId=7"');
+      expect(bridge.jobs.single.baseUrl, 'https://m.test/toc?bookId=9');
+    });
+
+    test('extractFirst_givenAGetInsideAScript_expandsIt', () async {
+      final JsVariableStore variables = JsVariableStore()
+        ..write('https://m.test', 'v', '7');
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'x7';
+      final RuleScope scope = RuleScope.json(
+        <String, Object?>{},
+        jsContext: const JsPageContext(
+          baseUrl: 'https://m.test/',
+          source: JsSourceInfo(name: 's', url: 'https://m.test'),
+        ),
+      );
+
+      await _engine(null, bridge, variables).extractFirst(
+        r"@js:'x'+@get:{v}",
+        scope,
+        rulePath: 'contentRule.content',
+      );
+
+      expect(bridge.jobs.single.script, "'x'+7");
+    });
+
+    test('extractFirst_givenATemplateInsideAJsBlock_expandsIt', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = '1';
+      final RuleScope scope = RuleScope.json(<String, Object?>{
+        'id': 7,
+      }, jsContext: const JsPageContext(baseUrl: 'https://m.test/'));
+
+      await _engine(null, bridge).extractFirst(
+        r'<js>String({{$.id}})</js>',
+        scope,
+        rulePath: 'tocRule.chapterUrl',
+      );
+
+      expect(bridge.jobs.single.script, 'String(7)');
+    });
+
+    test(
+      'extractFirst_givenARejectedTemplateInsideAScript_failsTheRule',
+      () async {
+        final ParseResult<String?> result = await _engine().extractFirst(
+          r'@js:{{@xpath://div}}',
+          _scope(_document('<p>x</p>')),
+          rulePath: 'contentRule.content',
+        );
+
+        expect(
+          (result as ParseFailure<String?>).kind,
+          ParseFailureKind.unsupportedRule,
+        );
+      },
+    );
+
+    test(
+      'extractFirst_givenARejectedTemplateInsideAJsBlock_failsTheRule',
+      () async {
+        final ParseResult<String?> result = await _engine().extractFirst(
+          '<js>{{@xpath://div}}</js>',
+          _scope(_document('<p>x</p>')),
+          rulePath: 'contentRule.content',
+        );
+
+        expect(
+          (result as ParseFailure<String?>).kind,
+          ParseFailureKind.unsupportedRule,
+        );
+      },
+    );
+
+    test('extractFirst_givenABraceLiteralInsideAScript_keepsIt', () async {
+      // 脚本里的 `{{}\}` 不是模板（`{{` 后没有匹配的 `}}`）：不能被展开器吃掉。
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+
+      await _engine(null, bridge).extractFirst(
+        r'@js:if(result.match(/{{}\}/)){result}else{""}',
+        _scope(_document('<p>x</p>')),
+        rulePath: 'contentRule.content',
+      );
+
+      expect(bridge.jobs.single.script, contains(r'/{{}\}/'));
+    });
+
     test('selectAll_givenAScriptThenASelector_readsEachItem', () async {
       // `<js>` 之后还能跟选择器段：脚本产出的 HTML 片段成为条目，下一段在**每个条目**上跑
       // 一次，结果按条目顺序拼接。
@@ -3660,8 +3761,11 @@ void main() {
       expect(values, isEmpty);
     });
 
-    test('extractAll_givenATemplateInsideAScript_isLeftToTheScript', () async {
-      final FakeJsBridge bridge = FakeJsBridge()..result = 'ran';
+    test('extractAll_givenATemplateInsideAScript_expandsItFirst', () async {
+      // 对齐上游 makeUpRule：脚本里的 `{{…}}` 先按当前 scope 求值，再把结果文本交给脚本
+      // （ADR-0055；真实音频源 `movieId={{$.id}}` 依赖它）。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..results.addAll(<Object?>['7', 'ran']);
 
       final List<String> values = await _values(
         _engine(null, bridge).extractAll(
@@ -3671,9 +3775,9 @@ void main() {
         ),
       );
 
-      // `@js:` 贪婪吞掉剩余部分（矩阵 #14）：脚本里的 `{{…}}` 是脚本文本，不是模板。
       expect(values, <String>['ran']);
-      expect(bridge.jobs.single.script, "result.replace(/x/, '{{y}}')");
+      expect(bridge.jobs, hasLength(2));
+      expect(bridge.jobs.last.script, "result.replace(/x/, '7')");
     });
 
     test('extractAll_givenReplacementMarkersInsideATemplate_keepsThemInTheTemplate', () async {

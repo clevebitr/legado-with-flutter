@@ -985,8 +985,23 @@ final class RuleEngine {
           : _resultOf(scope);
       final ParseResult<List<String>> evaluated;
       if (segment.isScript) {
-        evaluated = await _runJs(
+        // `<js>…</js>` 里的 `{{…}}` / `@get:` 同样在脚本执行前展开（上游 makeUpRule 对
+        // 所有规则段一视同仁；脚本里的 `result` 绑定仍是上一段的值）。
+        final _Parsed<_Expansion> expanded = await _expandText(
           segment.text,
+          scope,
+          rulePath: rulePath,
+          allowJs: allowJs,
+          depth: depth,
+          chainedResult: previous,
+        );
+        if (expanded case _ParsedFailure<_Expansion>(
+          :final _RuleRejection rejection,
+        )) {
+          return _fail<List<String>>(rejection, field: rulePath);
+        }
+        evaluated = await _runJs(
+          (expanded as _ParsedValue<_Expansion>).value.text,
           previous,
           scope,
           field: rulePath,
@@ -1230,9 +1245,32 @@ final class RuleEngine {
     }
     final _Expansion before = (expandedBody as _ParsedValue<_Expansion>).value;
 
+    // 上游 `SourceRule.makeUpRule` 在**执行 JS 之前**就把整条规则里的 `{{…}}` / `@get:`
+    // 展开（AnalyzeRule.kt:666-768），脚本里的模板因此拿到的是条目/页面的值。
+    // 本仓过去把脚本当不透明文本（矩阵 #14），真实音频源 `movieId={{$.id}}` 因此把大括号
+    // 原样送进了 URL（M17 真源普查）。
+    final _Parsed<_Expansion> expandedScript = jsAt < 0
+        ? const _ParsedValue<_Expansion>(
+            _Expansion(text: '', substituted: false),
+          )
+        : await _expandText(
+            script,
+            scope,
+            rulePath: rulePath,
+            allowJs: allowJs,
+            depth: depth,
+            chainedResult: chainedResult,
+          );
+    if (expandedScript case _ParsedFailure<_Expansion>(
+      :final _RuleRejection rejection,
+    )) {
+      return _ParsedFailure<_Expansion>(rejection);
+    }
+    final _Expansion after = (expandedScript as _ParsedValue<_Expansion>).value;
+
     final StringBuffer text = StringBuffer()
       ..write(before.text)
-      ..write(script);
+      ..write(after.text);
     if (headEnd >= 0) {
       final _Parsed<_Expansion> expandedTail = await _expandText(
         withoutPuts.substring(headEnd),
@@ -1251,7 +1289,11 @@ final class RuleEngine {
     }
 
     return _ParsedValue<_Expansion>(
-      _Expansion(text: text.toString(), substituted: before.substituted),
+      _Expansion(
+        text: text.toString(),
+        // 只有**规则体**里的替换会影响「正则模式」判定；脚本内的替换不改变 body 的解析方式。
+        substituted: before.substituted,
+      ),
     );
   }
 
@@ -1676,6 +1718,12 @@ final class RuleEngine {
 
     for (var index = start; index < text.length; index++) {
       final String character = text[index];
+      // 反斜杠转义的字符不参与括号计数：`/{{\}\}/` 这类脚本字面量不是模板
+      // （上游 `\{\{[\w\W]*?\}\}` 也匹配不到它），必须原样留给脚本。
+      if (character.codeUnitAt(0) == 0x5C) {
+        index++;
+        continue;
+      }
       if (quote != null) {
         if (character == quote) {
           quote = null;

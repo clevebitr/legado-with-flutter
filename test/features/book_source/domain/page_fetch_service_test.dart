@@ -207,6 +207,40 @@ void main() {
       },
     );
 
+    test(
+      'fetchRule_givenARenderedMalformedOption_stripsItAndFetchesTheUrl',
+      () async {
+        // `@js:` 规则返回「URL + 坏掉的选项」：上游丢选项继续（AnalyzeUrl），不能把
+        // `,{a:}}` 当路径发出去。
+        final FakeLogPrinter printer = FakeLogPrinter();
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..result = 'https://example-novel.test/rendered,{a:}}';
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve('https://example-novel.test/rendered', '<div>ok</div>');
+        final PageFetchService pages = PageFetchService(
+          engine: RuleEngine(
+            logger: AppLogger(level: LogLevel.debug, printer: printer),
+            jsBridge: bridge,
+            variables: JsVariableStore(),
+          ),
+          http: http,
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+        );
+
+        final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+          '{{url}}',
+          rulePath: 'searchUrl',
+          params: const <String, String>{},
+          context: _context(),
+        );
+
+        expect(fetched, isA<ParseSuccess<FetchedPage>>());
+        expect(http.requestedUrls, <String>[
+          'https://example-novel.test/rendered',
+        ]);
+      },
+    );
+
     test('fetchRule_givenAJsonBody_keepsTheKeywordVerbatim', () async {
       final FakeLogPrinter printer = FakeLogPrinter();
       final FakeHttpClient http = FakeHttpClient()

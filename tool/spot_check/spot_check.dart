@@ -244,6 +244,7 @@ Future<_Report> _runChain(
   String keyword, {
   bool allowPlainHttp = false,
   bool audio = false,
+  bool play = false,
 }) async {
   final AppLogger logger = AppLogger(level: LogLevel.warning);
   // 请求层是唯一的上网入口（C-NET-1）：页面抓取与规则里的 `http.*` 共用同一个客户端，
@@ -273,12 +274,12 @@ Future<_Report> _runChain(
   );
   final _Report report = _Report(source: source, keyword: keyword);
   if (audio) {
-    report.requiredStages = const <String>[
+    report.requiredStages = <String>[
       'search',
       'bookInfo',
       'toc',
       'audioTracks',
-      'playback',
+      if (play) 'playback',
     ];
   }
 
@@ -370,6 +371,7 @@ Future<_Report> _runChain(
       chapters.first,
       FetchAudioTracks(pages: pages),
       report,
+      play: play,
     );
 
     return report;
@@ -403,8 +405,9 @@ Future<void> _runAudio(
   BookSource source,
   Chapter chapter,
   FetchAudioTracks fetch,
-  _Report report,
-) async {
+  _Report report, {
+  required bool play,
+}) async {
   final ParseResult<List<AudioTrack>> tracks = await fetch.execute(
     source,
     ChapterRequest(url: chapter.url, title: chapter.name),
@@ -425,7 +428,7 @@ Future<void> _runAudio(
             '${_sample(track.url)} headers=${track.headers.length}',
         ]),
       );
-      if (data.isEmpty) {
+      if (data.isEmpty || !play) {
         return;
       }
       await _playFirstTrack(data.first, report);
@@ -1226,12 +1229,7 @@ final class _Report {
     stdout.writeln(
       'rate   : ${source.concurrentRate?.trim().isNotEmpty ?? false ? source.concurrentRate : 'none declared'}',
     );
-    for (final String stage in const <String>[
-      'search',
-      'bookInfo',
-      'toc',
-      'content',
-    ]) {
+    for (final String stage in requiredStages) {
       final ({int count, List<String> samples})? ok = _stages[stage];
       final ({ParseFailureKind kind, String rulePath})? failure =
           _failures[stage];

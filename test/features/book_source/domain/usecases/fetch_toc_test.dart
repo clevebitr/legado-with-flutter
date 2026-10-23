@@ -106,6 +106,26 @@ T _data<T>(ParseResult<T> result) => switch (result) {
 
 void main() {
   group('FetchToc', () {
+    test('execute_givenAChapterUrlWithOptions_keepsThemVerbatim', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _tocUrl,
+          '<div id="list"><dl><dd>'
+          '<a href="/1.html,{webView:“true”}">第1章</a>'
+          '</dd></dl></div>',
+        );
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages).execute(_source(), _tocUrl),
+      );
+
+      // 选项留在 URL 原文里，由取页时切掉；现在绝对化会把 `{` 编码成 `%7B`。
+      expect(
+        chapters.single.url,
+        'https://example-novel.test/1.html,{webView:“true”}',
+      );
+    });
+
     test('execute_givenTocPage_returnsEveryChapterWithAbsoluteUrls', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_tocUrl, _page('book_page.html'));

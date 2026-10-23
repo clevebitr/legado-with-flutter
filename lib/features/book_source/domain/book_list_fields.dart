@@ -3,6 +3,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
 /// The fields one **result page** yields, whichever rule set produced it.
@@ -187,7 +188,8 @@ Future<ParseResult<List<Book>>> readBooks(
     books.add(
       Book(
         name: name.dataOrNull ?? '',
-        url: resolveAbsoluteUrl(url, baseUrl),
+        // 书籍地址同样可能带 `,{webView:…}`（真实语料常见）：保留选项原文。
+        url: resolveUrlRule(url, baseUrl),
         author: author.dataOrNull,
         kind: kind.dataOrNull,
         coverUrl: resolveAbsoluteUrlOrNull(coverUrl.dataOrNull, baseUrl),

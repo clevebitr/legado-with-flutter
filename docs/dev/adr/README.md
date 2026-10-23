@@ -76,3 +76,5 @@
 | [0052](0052-book-source-management-v2.md) | 书源管理二期（M15）：`source_checks` 历史表 + 四态状态灯、探索开关列、置顶/置底与分组重命名/删除/移出、排序方向与域名分节、导入预览/提交两步 | Accepted（2026-10-22，M15 规格前置；范围由 #13 裁决） | 本次新增 |
 | [0053](0053-manga-engine.md) | 漫画引擎（M16）：漫画是 reader 的一个模式（`sourceType = image` 分派）、`ruleContent` 列表语义产出图片页、滚动/翻页两种观影模式 + `InteractiveViewer` 缩放、页号进度与预取 ≤3 页、零新依赖 | Accepted（2026-10-22，M16 规格前置） | 本次新增 |
 | [0054](0054-audio-and-tts-engine.md) | 听书与音频（M17）：音频源播放与系统 TTS 两条独立链路共用章节上下文；依赖选型与三端降级（`just_audio` / `audio_service` / `flutter_tts`，Windows 无媒体通知）；HLS/云 TTS/句级高亮未闭环 | Accepted（2026-10-22，M17 规格前置） | 本次新增 |
+| [0055](0055-rule-dialect-alignment.md) | 规则方言对齐（M17 真源触发）：`@js:`/`<js>` 脚本内 `{{…}}`/`@get:` 先展开、规则产出的 URL 先切 `,{…}` 再绝对化、音频地址形态校验 | Accepted（2026-10-22，用户指令「开始修复引擎缺口」；632 源普查） | 本次新增 |
+

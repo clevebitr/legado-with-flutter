@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
 /// The verb a URL rule asks for (`book-source.md` §4.3).
 enum UrlRequestMethod {
@@ -435,4 +436,33 @@ final class _OptionScanner {
     't' => '\t',
     _ => char,
   };
+}
+
+/// Resolves the URL part of [rule] against [baseUrl], keeping any `,{…}` suffix verbatim.
+///
+/// Upstream splits the option suffix **before** `NetworkUtils.getAbsoluteURL`
+/// (`AnalyzeUrl.kt:190-224`); resolving first percent-encodes the braces (`{` → `%7B`), so the
+/// suffix stops being an option and becomes part of the request path. Real sources hit this:
+/// a chapter URL such as `…/1258-1,{webView:“true”}` was requested as
+/// `…/1258-1,%7BwebView:%E2%80%9Ctrue%E2%80%9D%7D` and answered 404 (M17 audio-source census).
+String resolveUrlRule(String rule, String baseUrl) {
+  final int split = _optionSplitOf(rule);
+  if (split < 0) {
+    return resolveAbsoluteUrl(rule, baseUrl);
+  }
+  final String template = rule.substring(0, split).trimRight();
+  final String suffix = rule.substring(split);
+
+  return '${resolveAbsoluteUrl(template, baseUrl)}$suffix';
+}
+
+/// The URL part of [rule] when its option suffix cannot be read, or [rule] unchanged.
+///
+/// Upstream drops an unreadable option object and keeps the URL (`AnalyzeUrl.kt`: `urlOption ==
+/// null` is a log line, not a failure). The rendered result of an `@js:` URL rule can be
+/// malformed this way, and requesting the option text as part of the path is never useful.
+String stripUnreadableUrlOptions(String rule) {
+  final int split = _optionSplitOf(rule);
+
+  return split < 0 ? rule : rule.substring(0, split).trimRight();
 }

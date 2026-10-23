@@ -3,7 +3,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
-import 'package:flutter_reader/features/book_source/domain/url_template.dart';
+import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 
 /// Reads the table of contents of one book (`docs/dev/roadmap.md` 2.4, `ruleToc`).
 ///
@@ -185,7 +185,8 @@ final class FetchToc {
       chapters.add(
         Chapter(
           name: name.dataOrNull ?? '',
-          url: resolveAbsoluteUrl(chapterUrl, baseUrl),
+          // 选项（`,{webView:…}`）必须留在 URL 之外解析：先绝对化会把 `{` 编码成 `%7B`。
+          url: resolveUrlRule(chapterUrl, baseUrl),
           isVip: _isVip(vip.dataOrNull),
           // 展示用字符串：规则结果原文（`java.timeFormat` 已在脚本里跑过），
           // 这里不做日期解析（book-source.md §2）。
