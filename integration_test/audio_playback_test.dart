@@ -7,9 +7,11 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/audio_service_playback_notification.dart';
+import 'package:flutter_reader/core/platform/playback_backend.dart';
 import 'package:flutter_reader/core/platform/playback_notification.dart';
 import 'package:flutter_reader/features/reader/data/flutter_tts_speech_synthesizer.dart';
 import 'package:flutter_reader/features/reader/data/just_audio_playback_engine.dart';
+import 'package:flutter_reader/features/reader/data/media_kit_playback_engine.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/audio_playback_engine.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/speech_synthesizer.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -75,6 +77,50 @@ void main() {
     );
     expect(snapshots.last.duration, isNotNull);
 
+    await engine.pause();
+    await engine.dispose();
+  });
+
+  testWidgets('mediaKitProbe_whenOnWindows_playsTheLocalWav', (
+    WidgetTester tester,
+  ) async {
+    if (!usesMediaKitPlayback) {
+      return;
+    }
+    final Directory directory = await getApplicationSupportDirectory();
+    final File file = File('${directory.path}/m17_media_kit_probe.wav');
+    await file.writeAsBytes(_probeWav(seconds: 1));
+
+    final MediaKitPlaybackEngine engine = MediaKitPlaybackEngine(
+      logger: logger,
+    );
+    addTearDown(engine.dispose);
+    final List<AudioPlaybackSnapshot> snapshots = <AudioPlaybackSnapshot>[];
+    final StreamSubscription<AudioPlaybackSnapshot> subscription = engine
+        .snapshots
+        .listen(snapshots.add);
+    addTearDown(subscription.cancel);
+
+    final ParseResult<void> load = await engine.load(
+      url: Uri.file(file.path).toString(),
+    );
+    expect(load, isA<ParseSuccess<void>>());
+    await engine.play();
+    for (var attempt = 0; attempt < 40; attempt++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (snapshots.any(
+        (AudioPlaybackSnapshot snapshot) => snapshot.position > Duration.zero,
+      )) {
+        break;
+      }
+    }
+    expect(
+      snapshots.any(
+        (AudioPlaybackSnapshot snapshot) => snapshot.position > Duration.zero,
+      ),
+      isTrue,
+      reason: 'media_kit must advance the position on Windows',
+    );
     await engine.pause();
     await engine.dispose();
   });

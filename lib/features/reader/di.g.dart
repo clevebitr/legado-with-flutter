@@ -297,7 +297,7 @@ final class AudioPlaybackEngineProvider
 }
 
 String _$audioPlaybackEngineHash() =>
-    r'60cceec4fe17a9cdb3d98827acd387157aae82ab';
+    r'05687c435e71d76e2081792c5f98d47ff162efa6';
 
 /// Provides the system TTS engine (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 5).
 

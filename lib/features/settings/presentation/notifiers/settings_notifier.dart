@@ -39,6 +39,10 @@ class Settings extends _$Settings {
     (AppSettings current) => current.copyWith(maxConcurrentPerSource: budget),
   );
 
+  /// Turns the plaintext-HTTP opt-in on or off (C-SEC-2).
+  Future<void> setAllowPlainHttp(bool allow) =>
+      _update((AppSettings current) => current.copyWith(allowPlainHttp: allow));
+
   /// Empties the cache tables and answers how many entries went away.
   Future<ParseResult<int>> clearCache() async {
     try {

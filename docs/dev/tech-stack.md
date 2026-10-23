@@ -71,6 +71,15 @@
 （C++/WinRT 包），`just_audio_windows` 在中文代码页下需要 `/utf-8` 编译选项；`windows/CMakeLists.txt`
 的 `APPLY_STANDARD_SETTINGS` 已加后者。
 
+| 依赖 | 版本 | 用途 | 平台 | 许可证 | 关联约束 |
+|---|---|---|---|---|---|
+| `media_kit` | `^1.2.6` | Windows 音频播放（mpv） | Windows（Dart 包全平台可解析） | MIT | ADR-0056 §决策 1 |
+| `media_kit_libs_windows_audio` | `^1.0.9` | 上面的原生库；随包 libmpv / FFmpeg 为 **LGPL-2.1+**（唯一 LGPL 白名单） | Windows | MIT 包 / LGPL-2.1+ 二进制 | C-DEP-7、ADR-0056 §决策 2 |
+| `flutter_inappwebview` | `^6.1.5` | `,{webView:…}` 的 headless WebView（Android / iOS / Windows） | 三端 | Apache-2.0 | ADR-0056 §决策 4 |
+
+Windows 另需 **WebView2 Evergreen 运行时**（Win11 自带；Win10 装 Edge 即有），`flutter_tts` /
+`flutter_inappwebview_windows` 需要 `nuget.exe`，`just_audio_windows` 需要 `/utf-8`（见 `platform.md` §1.2）。
+
 ## 3. UI 与主题
 
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |

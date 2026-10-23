@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Play real streams on Windows, opt into plain HTTP, and render webView pages (ADR-0056)
+
+- **Windows playback moved to `media_kit` (mpv).** `just_audio_windows` stalled at 0:00 for a real
+  m4a stream and could crash the native plugin when a load failed; the same stream now reports
+  `position=0.109s` and its 32:34 duration. A six-second stall watchdog turns a silent 0:00 player
+  into a retryable failure. Android / iOS keep `just_audio`; the platform choice lives in
+  `core/platform/playback_backend.dart`.
+- **Plaintext HTTP became an explicit opt-in.** `AppSettings.allowPlainHttp` (settings switch,
+  default off) gates both `HttpPolicy` and audio tracks; a blocked `http://` track shows a dedicated
+  message. Android now declares `usesCleartextTraffic` and the release manifest also gained the
+  missing `INTERNET` permission.
+- **`webView` sources are rendered for real.** A `WebPageFetcher` port backed by a headless
+  `flutter_inappwebview` WebView loads the page, waits for its scripts, and returns the rendered
+  HTML; failures or platforms without WebView2 fall back to a plain GET. POST/body `webView` rules
+  still fall back.
+- **The sandbox gained the `book` object** (`name` / `author` / `bookUrl` / `tocUrl` / `intro` /
+  `kind`), fed by the table-of-contents and chapter requests, so the 87/632 sources that read
+  `book.*` see their context. The mutating `book` methods stay unimplemented and registered.
+- Licence note: `media_kit_libs_windows_audio`'s package is MIT, but the bundled libmpv / FFmpeg
+  dylibs are LGPL-2.1+; this is the single LGPL whitelist entry (ADR-0056 §decision 2) and is
+  recorded manually in `NOTICE.md` §5.
+
 ### Align the rule dialect with upstream: templates inside scripts and URL options (ADR-0055)
 
 - **`{{…}}` / `@get:` inside `@js:` and `<js>…</js>` scripts are expanded before the script runs**

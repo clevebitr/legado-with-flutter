@@ -5,9 +5,11 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   dynamic_color
   file_selector_windows
+  flutter_inappwebview_windows
   flutter_qjs_next
   flutter_tts
   just_audio_windows
+  media_kit_libs_windows_audio
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

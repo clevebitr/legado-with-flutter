@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/di/clock_provider.dart';
+import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
@@ -43,7 +44,11 @@ typedef _Fixture = ({
 });
 
 /// Builds a container around the reader ports and the audio doubles.
-_Fixture _fixture({bool twoTracks = false}) {
+_Fixture _fixture({
+  bool twoTracks = false,
+  bool plainHttpTrack = false,
+  bool allowPlainHttp = false,
+}) {
   final FakeChapterListProvider chapters = FakeChapterListProvider()
     ..chapters = _chapters;
   final FakeChapterContentProvider content = FakeChapterContentProvider()
@@ -52,7 +57,11 @@ _Fixture _fixture({bool twoTracks = false}) {
   final FakeReadingProgressStore progress = FakeReadingProgressStore();
   final FakeAudioTrackProvider tracks = FakeAudioTrackProvider()
     ..tracks['https://source.test/1.html'] = <ReaderAudioTrack>[
-      const ReaderAudioTrack(url: 'https://cdn.test/1.mp3'),
+      ReaderAudioTrack(
+        url: plainHttpTrack
+            ? 'http://cdn.test/1.mp3'
+            : 'https://cdn.test/1.mp3',
+      ),
       if (twoTracks) const ReaderAudioTrack(url: 'https://cdn.test/1b.mp3'),
     ]
     ..tracks['https://source.test/2.html'] = <ReaderAudioTrack>[
@@ -71,6 +80,7 @@ _Fixture _fixture({bool twoTracks = false}) {
         const NoopPlaybackNotification(),
       ),
       clockProvider.overrideWithValue(clock),
+      plainHttpSettingProvider.overrideWithValue(allowPlainHttp),
       appLoggerProvider.overrideWithValue(
         AppLogger(level: LogLevel.debug, printer: FakeLogPrinter()),
       ),
@@ -284,6 +294,27 @@ void main() {
 
       expect(_state(fixture).failure?.kind, ParseFailureKind.networkFailed);
       expect(_state(fixture).failure?.rulePath, 'reader.audioPlayer');
+    });
+
+    test('build_givenAPlainHttpTrack_blocksUntilTheUserOptsIn', () async {
+      final _Fixture fixture = _fixture(plainHttpTrack: true);
+
+      await _open(fixture);
+
+      expect(fixture.engine.loadedUrls, isEmpty);
+      expect(_state(fixture).failure?.rulePath, 'reader.audioPlainHttp');
+    });
+
+    test('build_givenAPlainHttpTrackAndTheSwitchOn_loadsIt', () async {
+      final _Fixture fixture = _fixture(
+        plainHttpTrack: true,
+        allowPlainHttp: true,
+      );
+
+      await _open(fixture);
+
+      expect(fixture.engine.loadedUrls, <String>['http://cdn.test/1.mp3']);
+      expect(_state(fixture).failure, isNull);
     });
 
     test('build_givenATrackFailure_showsIt', () async {

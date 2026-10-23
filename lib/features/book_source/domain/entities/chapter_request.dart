@@ -25,5 +25,20 @@ abstract class ChapterRequest with _$ChapterRequest {
 
     /// The book title, when the caller knows it (`java.get('bookName')`).
     @Default('') String bookName,
+
+    /// The book's detail URL, when the caller knows it (`book.bookUrl`, ADR-0055 P2).
+    @Default('') String bookUrl,
+
+    /// The book's table-of-contents URL (`book.tocUrl`, ADR-0055 P2).
+    @Default('') String tocUrl,
+
+    /// The author, when the caller knows it (`book.author`, ADR-0055 P2).
+    @Default('') String author,
+
+    /// The category, when the caller knows it (`book.kind`, ADR-0055 P2).
+    @Default('') String kind,
+
+    /// The introduction, when the caller knows it (`book.intro`, ADR-0055 P2).
+    @Default('') String intro,
   }) = _ChapterRequest;
 }

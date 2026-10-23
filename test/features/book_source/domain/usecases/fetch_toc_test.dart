@@ -106,6 +106,31 @@ T _data<T>(ParseResult<T> result) => switch (result) {
 
 void main() {
   group('FetchToc', () {
+    test('execute_givenAChapterUrlRule_exposesTheBookBinding', () async {
+      // ADR-0055 P2：`book.tocUrl` / `book.name` 在目录阶段可读（书源用它拼章节地址）。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = 'https://example-novel.test/c9.html';
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_tocUrl, _page('book_page.html'));
+      final BookSource source = _source().copyWith(
+        tocRule: _source().tocRule.copyWith(chapterUrl: '@js:book.tocUrl'),
+      );
+
+      await FetchToc(pages: _service(http, jsBridge: bridge).pages).execute(
+        source,
+        _tocUrl,
+        bookName: '剑来',
+        bookUrl: 'https://example-novel.test/book/1/',
+      );
+
+      expect(bridge.jobs.first.book?.name, '剑来');
+      expect(bridge.jobs.first.book?.tocUrl, _tocUrl);
+      expect(
+        bridge.jobs.first.book?.bookUrl,
+        'https://example-novel.test/book/1/',
+      );
+    });
+
     test('execute_givenAChapterUrlWithOptions_keepsThemVerbatim', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(

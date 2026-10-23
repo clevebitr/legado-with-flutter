@@ -236,6 +236,10 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
   /// The failure state: one sentence and a retry that re-reads the chapter.
   Widget _failure(AppLocalizations l10n) {
     final M3ETheme tokens = context.m3e;
+    final AudioReaderState? state = ref
+        .read(audioReaderProvider(widget.book))
+        .value;
+    final bool plainHttp = state?.failure?.rulePath == 'reader.audioPlainHttp';
 
     return Center(
       child: Padding(
@@ -244,7 +248,7 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Text(
-              l10n.readerAudioFailed,
+              plainHttp ? l10n.readerAudioPlainHttp : l10n.readerAudioFailed,
               textAlign: TextAlign.center,
               style: tokens.typography.base.bodyLarge,
             ),

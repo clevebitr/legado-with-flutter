@@ -276,7 +276,65 @@ final class PageFetchServiceProvider
   }
 }
 
-String _$pageFetchServiceHash() => r'4b4736bb50ab5cb4aacc106f78e388157905a807';
+String _$pageFetchServiceHash() => r'6fac987cb02c32e287e2d86036f57c2506e8072e';
+
+/// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+///
+/// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
+/// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
+/// failing the source.
+
+@ProviderFor(webPageFetcher)
+final webPageFetcherProvider = WebPageFetcherProvider._();
+
+/// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+///
+/// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
+/// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
+/// failing the source.
+
+final class WebPageFetcherProvider
+    extends $FunctionalProvider<WebPageFetcher, WebPageFetcher, WebPageFetcher>
+    with $Provider<WebPageFetcher> {
+  /// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+  ///
+  /// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
+  /// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
+  /// failing the source.
+  WebPageFetcherProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'webPageFetcherProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$webPageFetcherHash();
+
+  @$internal
+  @override
+  $ProviderElement<WebPageFetcher> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  WebPageFetcher create(Ref ref) {
+    return webPageFetcher(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(WebPageFetcher value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<WebPageFetcher>(value),
+    );
+  }
+}
+
+String _$webPageFetcherHash() => r'4be83e008ee67f3bbf57ec2c27db20cbc8490129';
 
 /// Provides the search use case.
 

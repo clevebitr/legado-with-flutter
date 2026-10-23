@@ -1031,4 +1031,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String readerAudioTrackCount(int index, int total) {
     return '第 $index 段，共 $total 段';
   }
+
+  @override
+  String get settingsNetwork => '网络';
+
+  @override
+  String get settingsPlainHttp => '允许明文 HTTP';
+
+  @override
+  String get settingsPlainHttpHint => '部分书源与音频流只提供 http:// 地址；页面请求也遵循此开关。';
+
+  @override
+  String get readerAudioPlainHttp => '这条音轨使用明文 HTTP。请在设置中开启「允许明文 HTTP」后播放。';
 }

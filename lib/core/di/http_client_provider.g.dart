@@ -122,7 +122,7 @@ final class HttpPolicyProvider
   }
 }
 
-String _$httpPolicyHash() => r'dcebbb011fa440f63070b79a39f09cee25cd72c3';
+String _$httpPolicyHash() => r'f300167381deca5c5350323d32d23966a9b3af9e';
 
 /// The per-source concurrency budget the user chose, or `null` when nobody chose one.
 ///
@@ -182,6 +182,64 @@ final class ConcurrencySettingProvider
 
 String _$concurrencySettingHash() =>
     r'f4c32706b9acf2b9196d4f5751df8d3a6fed3d59';
+
+/// Whether the user opted into plaintext `http://` (C-SEC-2).
+///
+/// Declared here for the same reason as [concurrencySetting]: `core/` must not import
+/// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
+/// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+
+@ProviderFor(plainHttpSetting)
+final plainHttpSettingProvider = PlainHttpSettingProvider._();
+
+/// Whether the user opted into plaintext `http://` (C-SEC-2).
+///
+/// Declared here for the same reason as [concurrencySetting]: `core/` must not import
+/// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
+/// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+
+final class PlainHttpSettingProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Whether the user opted into plaintext `http://` (C-SEC-2).
+  ///
+  /// Declared here for the same reason as [concurrencySetting]: `core/` must not import
+  /// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
+  /// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+  PlainHttpSettingProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'plainHttpSettingProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$plainHttpSettingHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return plainHttpSetting(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$plainHttpSettingHash() => r'a12aafa30d3d9762de85a4e142e6fed1a4cc0e12';
 
 /// Provides the app-wide HTTP client (C-NET-1).
 ///

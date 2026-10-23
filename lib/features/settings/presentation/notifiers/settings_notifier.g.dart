@@ -45,7 +45,7 @@ final class SettingsProvider
   Settings create() => Settings();
 }
 
-String _$settingsHash() => r'c5d6a85a0f9f1916d7d00ffcd9e6a31e1265575b';
+String _$settingsHash() => r'2b3834cf607b013868a8639b3e75f245916880fc';
 
 /// The user's settings and the only place that writes them (`docs/dev/roadmap.md` 5.6)。
 ///

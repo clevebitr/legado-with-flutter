@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/preference_store_provider.dart';
+import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/platform/audio_service_playback_notification.dart';
+import 'package:flutter_reader/core/platform/playback_backend.dart';
 import 'package:flutter_reader/core/platform/playback_notification.dart';
 import 'package:flutter_reader/features/reader/data/flutter_tts_speech_synthesizer.dart';
 import 'package:flutter_reader/features/reader/data/just_audio_playback_engine.dart';
+import 'package:flutter_reader/features/reader/data/media_kit_playback_engine.dart';
 import 'package:flutter_reader/features/reader/data/reader_settings_repository_impl.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_media_kind.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/audio_playback_engine.dart';
@@ -55,9 +58,11 @@ ReadingProgressStore readerProgressStore(Ref ref) =>
 /// player once the page stops watching it.
 @riverpod
 AudioPlaybackEngine audioPlaybackEngine(Ref ref) {
-  final AudioPlaybackEngine engine = JustAudioPlaybackEngine(
-    logger: ref.watch(appLoggerProvider),
-  );
+  final AppLogger logger = ref.watch(appLoggerProvider);
+  // Windows 用 media_kit（mpv）；Android / iOS 继续 just_audio（ADR-0056）。
+  final AudioPlaybackEngine engine = usesMediaKitPlayback
+      ? MediaKitPlaybackEngine(logger: logger)
+      : JustAudioPlaybackEngine(logger: logger);
   ref.onDispose(() => unawaited(engine.dispose()));
 
   return engine;

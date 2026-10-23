@@ -360,6 +360,10 @@ String _evaluationSource(Map<String, Object?> fields) {
     ..writeln('var result = ${jsonEncode(fields['result'])};')
     ..writeln('var page = ${jsonEncode(fields['page'])};')
     ..writeln('var source = Object.freeze(${jsonEncode(fields['source'])});');
+  final Object? book = fields['book'];
+  buffer.writeln(
+    'var book = ${book == null ? 'null' : 'Object.freeze(${jsonEncode(book)})'};',
+  );
   // `key` 只有 URL 规则才有（上游 `AnalyzeUrl.evalJS`，AnalyzeUrl.kt:377）。缺席时用
   // `globalThis` 删掉而不是 `var` 声明，因为 `var` 建的属性删不掉，上一个 job 的词就会漏进来。
   if (key != null) {

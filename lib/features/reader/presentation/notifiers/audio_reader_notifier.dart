@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_reader/core/di/clock_provider.dart';
+import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/platform/playback_notification.dart';
@@ -85,6 +86,8 @@ Future<ParseResult<List<ReaderAudioTrack>>> readerAudioTracks(
       chapterUrl: request.$2.url,
       bookName: request.$1.name,
       chapterTitle: request.$2.title,
+      bookUrl: request.$1.bookUrl,
+      tocUrl: request.$1.tocUrl,
     );
 
 /// Plays the current chapter of [book] (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 4).
@@ -110,6 +113,7 @@ class AudioReader extends _$AudioReader {
   bool _restored = false;
   PlaybackNotification? _notification;
   PlaybackNotificationHandle? _handle;
+  bool _allowPlainHttp = false;
 
   @override
   Future<AudioReaderState> build(ReaderBook book) async {
@@ -117,6 +121,7 @@ class AudioReader extends _$AudioReader {
     _built = false;
     _pending = null;
     _notification = ref.watch(playbackNotificationProvider);
+    _allowPlainHttp = ref.watch(plainHttpSettingProvider);
     final ParseResult<List<ReadingChapter>> chaptersResult = await ref.watch(
       readerChaptersProvider(book).future,
     );
@@ -160,6 +165,14 @@ class AudioReader extends _$AudioReader {
         :final List<ReaderAudioTrack> data,
       ):
         tracks = data;
+    }
+
+    final ParseFailure<Never>? plainHttp = _plainHttpFailureFor(
+      tracks.first.url,
+      _allowPlainHttp,
+    );
+    if (plainHttp != null) {
+      return AudioReaderState(tracks: tracks, failure: plainHttp);
     }
 
     final AudioPlaybackEngine engine = ref.watch(audioPlaybackEngineProvider);
@@ -406,6 +419,17 @@ class AudioReader extends _$AudioReader {
       return;
     }
     final ReaderAudioTrack track = current.tracks[index];
+    final ParseFailure<Never>? plainHttp = _plainHttpFailureFor(
+      track.url,
+      _allowPlainHttp,
+    );
+    if (plainHttp != null) {
+      state = AsyncData<AudioReaderState>(
+        current.copyWith(failure: plainHttp, isLoading: false),
+      );
+
+      return;
+    }
     state = AsyncData<AudioReaderState>(
       current.copyWith(
         trackIndex: index,
@@ -563,4 +587,22 @@ class AudioReader extends _$AudioReader {
       current.copyWith(failure: failure, isLoading: false, isPlaying: false),
     );
   }
+}
+
+/// Rejects a plaintext track unless the user opted in (C-SEC-2, ADR-0056).
+///
+/// Android also blocks cleartext in the manifest; the switch is what changes the user-visible
+/// answer from “this track cannot play” to “turn on plaintext HTTP deliberately”.
+ParseFailure<Never>? _plainHttpFailureFor(String url, bool allow) {
+  if (allow) {
+    return null;
+  }
+  final Uri? uri = Uri.tryParse(url);
+
+  return uri?.scheme == 'http'
+      ? const ParseFailure<Never>(
+          kind: ParseFailureKind.unsupportedRule,
+          rulePath: 'reader.audioPlainHttp',
+        )
+      : null;
 }

@@ -1062,4 +1062,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String readerAudioTrackCount(int index, int total) {
     return 'Part $index of $total';
   }
+
+  @override
+  String get settingsNetwork => 'Network';
+
+  @override
+  String get settingsPlainHttp => 'Allow plaintext HTTP';
+
+  @override
+  String get settingsPlainHttpHint =>
+      'Some book sources and audio streams only provide http:// addresses. Page requests follow this switch too.';
+
+  @override
+  String get readerAudioPlainHttp =>
+      'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.';
 }

@@ -268,6 +268,7 @@ final class RuleEngine {
         variables: _variables.snapshot(context.source.url),
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
+        book: context.book,
       ),
     );
   }
@@ -915,6 +916,7 @@ final class RuleEngine {
         variables: _variables.snapshot(context.source.url),
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
+        book: context.book,
       ),
     );
 

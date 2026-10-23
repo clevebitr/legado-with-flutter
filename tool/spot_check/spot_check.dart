@@ -46,6 +46,7 @@ import 'package:flutter_reader/core/network/concurrent_rate.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
+import 'package:flutter_reader/core/platform/in_app_web_view_page_fetcher.dart';
 import 'package:flutter_reader/features/book_source/domain/book_source_fingerprint.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/audio_track.dart';
@@ -271,6 +272,8 @@ Future<_Report> _runChain(
     ),
     http: http,
     logger: logger,
+    // 真源里的 `,{webView:…}` 用真实 headless WebView（ADR-0056）。
+    webPages: InAppWebViewPageFetcher(logger: logger),
   );
   final _Report report = _Report(source: source, keyword: keyword);
   if (audio) {

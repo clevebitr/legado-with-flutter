@@ -17,6 +17,7 @@ final class JsPageContext {
     this.headers,
     this.bookName,
     this.chapterTitle,
+    this.book,
   }) : source = source ?? const JsSourceInfo(name: '', url: '');
 
   /// The URL the page was fetched from (the `baseUrl` binding).
@@ -36,6 +37,9 @@ final class JsPageContext {
 
   /// The chapter being read, when the stage knows it (`java.get('title')`, §6, ADR-0049).
   final String? chapterTitle;
+
+  /// The book being read, when the stage knows it (the `book` binding, ADR-0055 P2).
+  final JsBookInfo? book;
 
   /// The book source's own `header` field, when the fetch used one.
   ///

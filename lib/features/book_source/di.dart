@@ -4,6 +4,7 @@ import 'package:flutter_reader/core/di/js_bridge_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/preference_store_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
+import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_view_store_impl.dart';
 import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
@@ -71,7 +72,16 @@ PageFetchService pageFetchService(Ref ref) => PageFetchService(
   engine: ref.watch(ruleEngineProvider),
   http: ref.watch(httpClientProvider),
   logger: ref.watch(appLoggerProvider),
+  webPages: ref.watch(webPageFetcherProvider),
 );
+
+/// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+///
+/// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
+/// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
+/// failing the source.
+@riverpod
+WebPageFetcher webPageFetcher(Ref ref) => const UnsupportedWebPageFetcher();
 
 /// Provides the search use case.
 @riverpod

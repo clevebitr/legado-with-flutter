@@ -484,6 +484,33 @@ void main() {
       expect(bridge.jobs.single.script, 'result.data.items');
     });
 
+    test('extractFirst_givenABookContext_passesItToTheJob', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = '剑来';
+      final RuleScope scope = RuleScope.dom(
+        parser.parse('<p>x</p>'),
+        jsContext: const JsPageContext(
+          baseUrl: 'https://m.test/',
+          book: JsBookInfo(
+            name: '剑来',
+            author: '烽火戏诸侯',
+            bookUrl: 'https://m.test/book/1',
+            tocUrl: 'https://m.test/book/1/toc',
+            intro: '简介',
+            kind: '玄幻',
+          ),
+        ),
+      );
+
+      await _engine(
+        null,
+        bridge,
+      ).extractFirst('@js:book.name', scope, rulePath: 'tocRule.chapterUrl');
+
+      expect(bridge.jobs.single.book?.name, '剑来');
+      expect(bridge.jobs.single.book?.author, '烽火戏诸侯');
+      expect(bridge.jobs.single.book?.tocUrl, 'https://m.test/book/1/toc');
+    });
+
     test('extractFirst_givenATemplateInsideAScript_expandsIt', () async {
       // 上游 makeUpRule 在执行脚本前展开整条规则里的 `{{…}}`（AnalyzeRule.kt:666-768）：
       // 真实音频源的 `movieId={{$.id}}` 依赖它（M17 真源普查）。

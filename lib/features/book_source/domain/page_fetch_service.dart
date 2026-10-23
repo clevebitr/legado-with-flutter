@@ -5,6 +5,7 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
@@ -109,11 +110,13 @@ final class PageFetchService {
     required this._engine,
     required this._http,
     required this._logger,
+    this._webPages,
   });
 
   final RuleEngine _engine;
   final HttpClient _http;
   final AppLogger _logger;
+  final WebPageFetcher? _webPages;
 
   /// Fetches one **URL rule** and parses the body into a page scope
   /// (`book-source.md` §4.3).
@@ -193,7 +196,16 @@ final class PageFetchService {
       ),
     };
     final UrlRuleOptions options = renderedRule.options ?? textOptions;
+    // `webView` 有真正的实现时不要再报「忽略」；只有平台没有 WebView / 请求带 body 才回落。
+    final bool canWebView =
+        options.unsupported.contains('webView') &&
+        options.method == UrlRequestMethod.get &&
+        options.body == null &&
+        (_webPages?.isSupported ?? false);
     for (final String ignored in options.unsupported) {
+      if (canWebView && ignored == 'webView') {
+        continue;
+      }
       _logger.warning(
         'Ignoring an unsupported URL option: rule=$rulePath '
         'option=$ignored source=${sourceId ?? 'unknown'}',
@@ -208,6 +220,39 @@ final class PageFetchService {
       ...?headers,
       ...options.headers,
     };
+
+    if (canWebView) {
+      final ParseResult<FetchedWebPage> rendered = await _requireWebPages()
+          .fetch(url: url, headers: requestHeaders, rulePath: rulePath);
+      switch (rendered) {
+        case ParseSuccess<FetchedWebPage>(:final FetchedWebPage data):
+          return _pageOf(
+            ParseSuccess<HttpResponse>(
+              HttpResponse(
+                statusCode: 200,
+                headers: const <String, List<String>>{},
+                body: data.body,
+              ),
+            ),
+            url: data.url,
+            headers: requestHeaders,
+            page: page,
+            source: source,
+            bookName: context.bookName,
+            chapterTitle: context.chapterTitle,
+            book: context.book,
+          );
+        case ParseFailure<FetchedWebPage>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ):
+          // WebView 失败时回落到普通 GET：有的站点只在部分页面需要 JS，能取到就用。
+          _logger.warning(
+            'WebView fetch failed, falling back to HTTP: rule=$rulePath '
+            'kind=${kind.name} source=${sourceId ?? 'unknown'}',
+          );
+      }
+    }
 
     String? body;
     if (options.body != null) {
@@ -259,8 +304,12 @@ final class PageFetchService {
       source: source,
       bookName: context.bookName,
       chapterTitle: context.chapterTitle,
+      book: context.book,
     );
   }
+
+  /// The WebView port, which is non-null whenever the `webView` branch was taken.
+  WebPageFetcher _requireWebPages() => _webPages!;
 
   /// Whether [body] is a JSON / XML payload rather than a form (`AnalyzeUrl.analyzeFields`).
   bool _isStructuredBody(String body) {
@@ -305,6 +354,7 @@ final class PageFetchService {
     JsSourceInfo? source,
     String? bookName,
     String? chapterTitle,
+    JsBookInfo? book,
   }) async {
     final ParseResult<HttpResponse> response = await _http.get(
       url,
@@ -322,6 +372,7 @@ final class PageFetchService {
       source: source,
       bookName: bookName,
       chapterTitle: chapterTitle,
+      book: book,
     );
 
     return switch (fetched) {
@@ -345,6 +396,7 @@ final class PageFetchService {
     required JsSourceInfo? source,
     String? bookName,
     String? chapterTitle,
+    JsBookInfo? book,
   }) => switch (response) {
     ParseFailure<HttpResponse>(
       :final ParseFailureKind kind,
@@ -368,6 +420,7 @@ final class PageFetchService {
             // 建在页面 scope 上，再由引擎继承到每个条目与每条规则（ADR-0049）。
             bookName: bookName,
             chapterTitle: chapterTitle,
+            book: book,
           ),
         ),
       ),
@@ -764,6 +817,7 @@ final class PageFetchService {
         source: source,
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
+        book: context.book,
       );
 
       switch (page) {
@@ -947,6 +1001,7 @@ final class PageFetchService {
       // §6 的 `java.get('bookName' / 'title')`：翻页规则与它读到的那一页同属一本书。
       bookName: context?.bookName,
       chapterTitle: context?.chapterTitle,
+      book: context?.book,
     );
   }
 

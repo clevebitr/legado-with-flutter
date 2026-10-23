@@ -534,6 +534,28 @@ void main() {
     }, 'searchRule.name:js:error');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_whenAJobCarriesABook_exposesItsFields', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0055 P2：`book` 对象由 worker 绑定（上游 AnalyzeUrl.kt:373 的同一形状）。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(
+            script: "book.name + '|' + book.author + '|' + book.tocUrl",
+            book: const JsBookInfo(
+              name: '剑来',
+              author: '烽火戏诸侯',
+              bookUrl: 'https://example-novel.test/book/1',
+              tocUrl: 'https://example-novel.test/book/1/toc',
+            ),
+          ),
+        ),
+      ),
+      '剑来|烽火戏诸侯|https://example-novel.test/book/1/toc',
+    );
+  });
+
   testWidgets('jsBridge_whenAJobCarriesBookNames_javaGetAnswersThemFirst', (
     WidgetTester tester,
   ) async {
@@ -703,6 +725,7 @@ JsJob _job({
   ),
   String? bookName,
   String? chapterTitle,
+  JsBookInfo? book,
 }) => JsJob(
   script: script,
   rulePath: 'searchRule.name',
@@ -714,6 +737,7 @@ JsJob _job({
   variables: variables,
   bookName: bookName,
   chapterTitle: chapterTitle,
+  book: book,
 );
 
 /// The value of a successful evaluation, failing the test otherwise.

@@ -26,6 +26,53 @@ final class JsSourceInfo {
   };
 }
 
+/// The sandbox view of the **book being read** (`book-source.md` §6, ADR-0055 P2).
+///
+/// Upstream binds its `Book` entity as `book` (`AnalyzeUrl.kt:373`), and real sources read
+/// `book.name` / `book.author` / `book.bookUrl` / `book.tocUrl` / `book.intro` from URL and
+/// chapter rules. Only data fields are exposed: the mutating methods (`setType`,
+/// `putVariable`, …) stay unimplemented and are registered as such.
+final class JsBookInfo {
+  /// Creates the sandbox view of a book.
+  const JsBookInfo({
+    this.name = '',
+    this.author = '',
+    this.bookUrl = '',
+    this.tocUrl = '',
+    this.intro = '',
+    this.kind = '',
+  });
+
+  /// The book title (`book.name`).
+  final String name;
+
+  /// The author (`book.author`).
+  final String author;
+
+  /// The book's detail URL (`book.bookUrl`).
+  final String bookUrl;
+
+  /// The table-of-contents URL (`book.tocUrl`).
+  final String tocUrl;
+
+  /// The introduction (`book.intro`).
+  final String intro;
+
+  /// The category (`book.kind`).
+  final String kind;
+
+  /// The JSON object the sandbox receives as `book`.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'name': name,
+    'author': author,
+    'bookUrl': bookUrl,
+    'tocUrl': tocUrl,
+    'intro': intro,
+    'kind': kind,
+  };
+}
+
+/// One `parse.*` call from a running rule (`docs/dev/book-source.md` §6).
 /// One `parse.*` call from a running rule (`docs/dev/book-source.md` §6).
 ///
 /// The engine owns the rule language, so `parse.getString` / `parse.getElements` cannot be
@@ -88,6 +135,7 @@ final class JsJob {
     this.key,
     this.bookName,
     this.chapterTitle,
+    this.book,
   });
 
   /// The JavaScript the rule asked for, with the `@js:` flag already removed.
@@ -131,6 +179,12 @@ final class JsJob {
   /// search or a table of contents — and the read falls through to the variable store.
   final String? chapterTitle;
 
+  /// The book being read, when the stage knows it (ADR-0055 P2).
+  ///
+  /// It becomes the `book` binding. `null` when the stage has no book (search / explore), and
+  /// the worker then binds `book` to `null`, so a source's `typeof book` guard still works.
+  final JsBookInfo? book;
+
   /// The page the rule was read on (the `baseUrl` binding).
   final String baseUrl;
 
@@ -170,6 +224,7 @@ final class JsJob {
     'key': key,
     'bookName': bookName,
     'chapterTitle': chapterTitle,
+    'book': book?.toJson(),
   };
 }
 

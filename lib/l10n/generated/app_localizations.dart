@@ -1991,6 +1991,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Part {index} of {total}'**
   String readerAudioTrackCount(int index, int total);
+
+  /// Settings section heading for network behaviour.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get settingsNetwork;
+
+  /// Switch that opts into http:// for pages and media.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow plaintext HTTP'**
+  String get settingsPlainHttp;
+
+  /// Explanation under the plaintext-HTTP switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Some book sources and audio streams only provide http:// addresses. Page requests follow this switch too.'**
+  String get settingsPlainHttpHint;
+
+  /// Shown when an audio track is http and the user has not opted in.
+  ///
+  /// In en, this message translates to:
+  /// **'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.'**
+  String get readerAudioPlainHttp;
 }
 
 class _AppLocalizationsDelegate

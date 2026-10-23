@@ -488,7 +488,8 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 | `body` | POST 载荷，可含 `{{…}}` | ✅ 是**规则**：URL / 表单里 `{{key}}` 按 `charset` 百分号编码，**JSON / XML 载荷里原样** |
 | `charset` | 该请求的编码 | ✅ 双向：请求侧编码 `{{key}}`，响应侧作为 §5 的**最高优先级声明** |
 | `headers` | 该请求额外 header（对象，或**字符串形式的对象**） | ✅ 合并到书源 `header` **之上** |
-| `webView` / `webJs` / `retry` / `origin` / `type` / `js` | 浏览器 / 重试 / 源类型等 | ❌ 记 `unsupported` 并按名 warning（ADR-0032 的降级口径） |
+| `webView` | 用真实 WebView 渲染页面（GET、无 body；平台无 WebView2 / 取页失败回落普通 GET，ADR-0056 §决策 4） | ✅ 走 `WebPageFetcher` 端口 |
+| `webJs` / `retry` / `origin` / `type` / `js` | 重试 / 源类型等 | ❌ 记 `unsupported` 并按名 warning（ADR-0032 的降级口径） |
 
 约定：
 
@@ -630,6 +631,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `result` | `String?` \| `List` | 当前页 responseBody（原版同名变量） | M0 |
 | `page` | `int` | 当前页码 | M0 |
 | `source` | 只读对象 | 仅 `name`、`url`、`group`，其余不可见 | M0 |
+| `book` | 只读对象 | `name` / `author` / `bookUrl` / `tocUrl` / `intro` / `kind`；阶段不知道时为 `null`（ADR-0056 §决策 5） | M17 |
 | `http.get(url, options)` | `String` | 经 `core/network/HttpClient` 代理，受超时与重试策略约束 | M0 |
 | `http.post(url, options)` | `String` | 同上 | M0 |
 | `parse.getString(rule, doc)` | `String` | 复用规则引擎，可递归 | M0 |

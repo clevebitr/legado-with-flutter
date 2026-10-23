@@ -18,6 +18,8 @@ abstract interface class AudioTrackProvider {
     required String chapterUrl,
     String bookName = '',
     String chapterTitle = '',
+    String bookUrl = '',
+    String tocUrl = '',
   });
 }
 
@@ -37,6 +39,8 @@ final class UnboundAudioTrackProvider implements AudioTrackProvider {
     required String chapterUrl,
     String bookName = '',
     String chapterTitle = '',
+    String bookUrl = '',
+    String tocUrl = '',
   }) async {
     _logger.warning(
       'No AudioTrackProvider is bound: the reader cannot play an audio chapter.',

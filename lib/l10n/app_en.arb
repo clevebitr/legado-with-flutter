@@ -1464,5 +1464,21 @@
         "type": "int"
       }
     }
+  },
+  "settingsNetwork": "Network",
+  "@settingsNetwork": {
+    "description": "Settings section heading for network behaviour."
+  },
+  "settingsPlainHttp": "Allow plaintext HTTP",
+  "@settingsPlainHttp": {
+    "description": "Switch that opts into http:// for pages and media."
+  },
+  "settingsPlainHttpHint": "Some book sources and audio streams only provide http:// addresses. Page requests follow this switch too.",
+  "@settingsPlainHttpHint": {
+    "description": "Explanation under the plaintext-HTTP switch."
+  },
+  "readerAudioPlainHttp": "This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.",
+  "@readerAudioPlainHttp": {
+    "description": "Shown when an audio track is http and the user has not opted in."
   }
 }

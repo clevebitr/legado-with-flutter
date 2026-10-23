@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
@@ -27,6 +28,10 @@ final class FetchToc {
     BookSource source,
     String url, {
     String bookName = '',
+    String bookUrl = '',
+    String author = '',
+    String kind = '',
+    String intro = '',
   }) async {
     // 书源自己的限速要在第一个请求之前进预算（book-source.md §8、ADR-0036）。
     _pages.applySourceRate(source);
@@ -42,6 +47,14 @@ final class FetchToc {
         source: source.jsSourceInfo,
         headers: headers,
         bookName: bookName,
+        book: JsBookInfo(
+          name: bookName,
+          author: author,
+          bookUrl: bookUrl,
+          tocUrl: url,
+          intro: intro,
+          kind: kind,
+        ),
       ),
       headers: headers,
       sourceId: source.url,

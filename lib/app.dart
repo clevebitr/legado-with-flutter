@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
+import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
+import 'package:flutter_reader/core/platform/in_app_web_view_page_fetcher.dart';
 import 'package:flutter_reader/core/router/app_navigation.dart';
 import 'package:flutter_reader/core/router/app_router.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
@@ -71,6 +73,13 @@ List<Override> appProviderOverrides() => <Override>[
       ),
     ),
   ),
+  plainHttpSettingProvider.overrideWith(
+    (Ref ref) => ref.watch(
+      settingsProvider.select(
+        (AsyncValue<AppSettings> value) => value.value?.allowPlainHttp ?? false,
+      ),
+    ),
+  ),
   // 阅读器的三个端口（ADR-0041 §决策 2、ADR-0044 §决策 2）：`reader` 声明、这里绑定到
   // `book_source` 的规则链路与 `bookshelf` 的进度表，两个 feature 之间零 import。
   readerChapterListProvider.overrideWith(_ChapterListSource.new),
@@ -79,6 +88,11 @@ List<Override> appProviderOverrides() => <Override>[
   // 音频链路（ADR-0054 §决策 1/2）：同样由装配根绑定，reader 仍然不认识 book_source。
   readerAudioTrackProvider.overrideWith(_AudioTrackSource.new),
   readerSourceKindProvider.overrideWith(_SourceKind.new),
+  // `,{webView:…}` 的真实现（ADR-0056）：headless WebView 在 UI isolate 上跑，
+  // 平台没有 WebView2 时退回普通 GET。
+  webPageFetcherProvider.overrideWith(
+    (Ref ref) => InAppWebViewPageFetcher(logger: ref.watch(appLoggerProvider)),
+  ),
 ];
 
 /// Root widget: wires theming, localization and the route table.
@@ -266,6 +280,7 @@ final class _ChapterListSource implements ChapterListProvider {
     required String sourceUrl,
     required String tocUrl,
     String bookName = '',
+    String bookUrl = '',
   }) async {
     final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
     if (source == null) {
@@ -277,7 +292,7 @@ final class _ChapterListSource implements ChapterListProvider {
 
     final ParseResult<List<Chapter>> result = await _ref
         .read(fetchTocProvider)
-        .execute(source, tocUrl, bookName: bookName);
+        .execute(source, tocUrl, bookName: bookName, bookUrl: bookUrl);
 
     return switch (result) {
       ParseSuccess<List<Chapter>>(:final List<Chapter> data) =>
@@ -309,6 +324,8 @@ final class _ChapterContentSource implements ChapterContentProvider {
     required String chapterUrl,
     String bookName = '',
     String chapterTitle = '',
+    String bookUrl = '',
+    String tocUrl = '',
   }) async {
     final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
     if (source == null) {
@@ -326,6 +343,8 @@ final class _ChapterContentSource implements ChapterContentProvider {
             url: chapterUrl,
             title: chapterTitle,
             bookName: bookName,
+            bookUrl: bookUrl,
+            tocUrl: tocUrl,
           ),
         );
   }
@@ -343,6 +362,8 @@ final class _AudioTrackSource implements AudioTrackProvider {
     required String chapterUrl,
     String bookName = '',
     String chapterTitle = '',
+    String bookUrl = '',
+    String tocUrl = '',
   }) async {
     final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
     if (source == null) {
@@ -360,6 +381,8 @@ final class _AudioTrackSource implements AudioTrackProvider {
             url: chapterUrl,
             title: chapterTitle,
             bookName: bookName,
+            bookUrl: bookUrl,
+            tocUrl: tocUrl,
           ),
         );
 

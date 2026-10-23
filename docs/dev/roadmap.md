@@ -355,10 +355,11 @@ Phase 6    发布前                          清单见 §5
 > **真源抽查（用户提供的「🔊书音M」）**：首轮止于目录（`movieId={{$.id}}` 原样进 URL）。按用户指令做了
 > 632 源普查并修复引擎方言（**ADR-0055**）：`@js:`/`<js>` 脚本内 `{{…}}` 展开、规则产出 URL 先切
 > `,{…}` 再绝对化、音频地址形态校验。复测：该书源 `search → bookInfo → toc → audioTracks` **complete**
-> （`movieId=1`，音轨 1 条）；恋听网同样走到音轨阶段（其整页 HTML 产物现在被显式拒绝）。**播放**仍未
-> 通过：该书源媒体是 `http` 直链，Windows 的 `just_audio_windows` 对这条 m4a 位置停在 0，对另一条流
-> 甚至原生崩溃（不是 Dart 异常）。播放器本身的本地 WAV 双端实播已在
-> `integration_test/audio_playback_test.dart` 通过。剩余缺口见 §3.7。
+> （`movieId=1`，音轨 1 条）；恋听网同样走到音轨阶段（其整页 HTML 产物现在被显式拒绝）。
+> **播放**也已通过（ADR-0056）：Windows 改用 `media_kit`（mpv），同一条 m4a 实测
+> `position=0.109s` / `duration=32:34`，不再崩溃；明文 HTTP 变为设置页的独立开关；`,{webView:…}`
+> 走 headless WebView（Windows / Android 集成用例通过）；沙箱补了 `book` 对象。剩余缺口
+> （`webView` 的 POST/body、`book` 的可变方法、HLS/云 TTS 等）见 §3.7 / ADR-0056 §后果。
 
 > **M15 落地记录（2026-10-22）：** schema v5 → v6（`source_checks` 表 + `is_explore_enabled` 列 + dump
 > 与迁移测试）；状态灯四态与「上次校验」摘要、探索徽标/批量开关、置顶/置底、分组重命名/删除/移出、
@@ -408,7 +409,7 @@ Phase 6    发布前                          清单见 §5
 | 页面字段规则的 `page` 绑定与「已取到的那一页」不一致（搜得 / 发现阶段不传 `page`） | ✅ **取证后不改（M12，ADR-0047 §决策 6）**：字段规则本身不消费 `page`（只有 URL 模板与 `@js:` 绑定消费），语料无反例 |
 | `<js>…</js>` 分段链（矩阵 #31）与 `url,{…}` 后缀（§4.3） | ✅ **已闭环（M12，2026-10-21，ADR-0047 §决策 1/2）**：真实语料里各覆盖 50 条源；列表规则上的 `@js:` 与 JSON 条目 `result` 一并落地 |
 | 统一「单源预算」（超时 / 重试）抽成公共件 | ✅ **已闭环（M12，2026-10-21）**：`domain/source_budget.dart` 是「一个源一份预算」的唯一实现，聚合搜索 60 s / 校验 180 s 都改用它（ADR-0049 §决策 3）；单章正文仍靠 `HttpPolicy` 的逐请求超时 |
-| `webView` / `webJs` / `retry` 等 URL 选项字段 | **未做（M12 登记，ADR-0047 §决策 1）**：无浏览器 DOM，按名记 `unsupported` + warning（不静默丢弃） |
+| `webView` / `webJs` / `retry` 等 URL 选项字段 | **部分闭环（M17，ADR-0056 §决策 4）**：`webView` 走 headless WebView（GET、无 body），失败 / 平台无 WebView2 回落普通 GET；`webJs` / `retry` 等仍按名记 `unsupported` |
 | `concurrentRate` 的真源只有 3 条且都跑不了原样链路 | 已登记（b2 用派生源 A/B 取证）；触发 = 其中任一条变得可跑 |
 | 「关于」页入口（设置页的菜单行） | **5.9**：与法律声明页一起落地；一个打开空页的菜单行是死链（C-BAN-2），所以 5.6 没有加它 |
 | Big5 / Big5-HKSCS 的解码 | ✅ **已闭环（M12，2026-10-21）**：`enough_convert`（MPL-2.0，白名单 + ADR-0048）的 `Big5Codec` 补解码；`book-source.md` §5.1 已更新 |
@@ -418,9 +419,9 @@ Phase 6    发布前                          清单见 §5
 | `@js:` 规则**文本内**的 `{{…}}` 未按内层规则展开（真实听书源 `chapterUrl` 依赖它拼 `movieId`） | ✅ **已闭环（M17，2026-10-22，ADR-0055 §决策 1）**：`@js:`/`<js>` 脚本执行前展开 `{{…}}` / `@get:`；632 源普查命中 96 条，真源书音M 复测通过 |
 | 规则产出的章节/目录/书籍地址带 `,{…}` 选项时，先绝对化会编码 `{`，取页请求变成 `…,%7BwebView…%7D` | ✅ **已闭环（M17，2026-10-22，ADR-0055 §决策 2）**：`resolveUrlRule` 先切选项再绝对化；`fetchRule` 对渲染后的结果再解析一次选项 |
 | 音频 `content` 规则返回整页 HTML（webView 源）时被拼成假音轨 URL | ✅ **已闭环（M17，2026-10-22，ADR-0055 §决策 3）**：`FetchAudioTracks` 先做地址形态校验（无空白 / `<>` / 长度上限），不像地址就跳过并 warning |
-| `just_audio_windows` 对部分远端流（书音M 的 m4a）位置停在 0；对加载失败的流会**原生崩溃**，Dart 端口接不住 | **未做（M17 真源复测发现）**：需要播放器前置探测或换实现（media_kit 系列要单独许可/ADR）；触发 = 真机上出现可用音频源但无法播放。本地 WAV 双端实播已通过 |
-| 音频直链是 `http://` 时，C-SEC-2 的明文策略没有面向媒体播放的开关（Android 默认拒绝明文） | **未做（ADR-0054 §后果）**：需要产品裁决「媒体播放允许明文」的独立设置与 Android cleartext 配置；触发 = 用户提供只走 http 的可用音频源 |
-| JS 沙箱只有 `bookName` / `chapterTitle`，没有上游的 `book` 对象（`Book` 字段绑定） | **未做（M17 真源抽查发现）**：源可用 `typeof book` 守卫回落到 `baseUrl`，但依赖 `book.tocUrl` / `book.name` 的 `chapterUrl` 会走错分支；触发 = 同上，需与 `book-source.md` §6 的绑定白名单一起裁决 |
+| `just_audio_windows` 对部分远端流（书音M 的 m4a）位置停在 0；对加载失败的流会**原生崩溃** | ✅ **已闭环（M17，2026-10-22，ADR-0056 §决策 1）**：Windows 改用 media_kit（mpv），同一 m4a 实测 `position=0.109s` / 32:34，不再崩溃；6 秒停滞看门狗兜底 |
+| 音频直链是 `http://` 时，C-SEC-2 的明文策略没有面向媒体播放的开关（Android 默认拒绝明文） | ✅ **已闭环（M17，2026-10-22，ADR-0056 §决策 3）**：`AppSettings.allowPlainHttp` 独立开关（页面 `HttpPolicy` 与媒体共用）、Android cleartext + `INTERNET` 权限、专用失败文案 |
+| JS 沙箱只有 `bookName` / `chapterTitle`，没有上游的 `book` 对象 | ✅ **已闭环（M17，2026-10-22，ADR-0056 §决策 5 / ADR-0055 P2）**：`book{name,author,bookUrl,tocUrl,intro,kind}` 绑定；可变方法（`setType` 等）仍未实现 |
 | HLS / m3u8、云 TTS、语音缓存、句级高亮、定时停止、投屏、Windows 后台播放 | **未做（ADR-0054 §后果）**：本轮只支持直链音频 + 系统 TTS；HLS 需要播放器能力与真源证据，其余无用户需求证据 |
 | 已登记为**有意差异 / 具名拒绝**的一族：`{{…}}` 在列表规则里的语义、模板 JS 返回列表取首值、发现页 `infoMap` 与排名模块、`java.timeFormatUTC`、HTML 实体反转义、同步 `http.*` 形态、列表规则上的 `@js:`、`parse.*` 嵌套与 `parse.getElements` 非 DOM、元素 scope 的 `result` 形态、矩阵 #7 多元素倒置 | **无待办**：行为与触发条件归 `book-source.md` §3 / §4.2 / §6 / §11 与 ADR-0029 / 0035 的注记，本表不再复述 |
 

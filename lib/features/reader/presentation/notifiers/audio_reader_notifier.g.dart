@@ -79,7 +79,7 @@ final class ReaderAudioTracksProvider
   }
 }
 
-String _$readerAudioTracksHash() => r'e4d5d84902e21f879f513484824b430548e50587';
+String _$readerAudioTracksHash() => r'8f3dde16a26b2b9f2f343ed8b0bf05a657a52906';
 
 /// Reads one chapter's audio tracks for the player (`docs/dev/roadmap.md` §3.10).
 ///
@@ -179,7 +179,7 @@ final class AudioReaderProvider
   }
 }
 
-String _$audioReaderHash() => r'a4cd33d6f33018f1fd3d6c6f8eb93fc445520ef6';
+String _$audioReaderHash() => r'd987435ca0b400cae77f08f128a2f6767bf18e17';
 
 /// Plays the current chapter of [book] (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 4).
 ///

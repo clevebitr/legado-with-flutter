@@ -24,6 +24,8 @@ final class FakeAudioTrackProvider implements AudioTrackProvider {
     required String chapterUrl,
     String bookName = '',
     String chapterTitle = '',
+    String bookUrl = '',
+    String tocUrl = '',
   }) async {
     requests.add(chapterUrl);
     final ParseFailureKind? kind = failures[chapterUrl];

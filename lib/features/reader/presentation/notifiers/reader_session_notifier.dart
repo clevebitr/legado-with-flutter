@@ -41,8 +41,9 @@ Future<ParseResult<List<ReadingChapter>>> readerChapters(
     .fetch(
       sourceUrl: book.sourceUrl,
       tocUrl: book.tocUrl,
-      // 书名是规则可见的上下文（`java.get('bookName')`，ADR-0049）。
+      // 书名 / 书籍地址是规则可见的上下文（`java.get('bookName')` / `book.*`，ADR-0049/0055）。
       bookName: book.name,
+      bookUrl: book.bookUrl,
     );
 
 /// Reads the body of one chapter (`docs/dev/roadmap.md` 5.3).
@@ -62,6 +63,8 @@ Future<ParseResult<String>> readerContent(
       bookName: request.$1.name,
       // 章节名来自目录：阅读器手里就有，顺手喂给 `java.get('title')`。
       chapterTitle: _chapterTitleOf(ref, request.$1, request.$2),
+      bookUrl: request.$1.bookUrl,
+      tocUrl: request.$1.tocUrl,
     );
 
 /// The title the chapter list gave [chapterUrl], or empty when the list has not loaded yet.

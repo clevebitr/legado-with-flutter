@@ -25,6 +25,7 @@ final class FakeChapterListProvider implements ChapterListProvider {
     required String sourceUrl,
     required String tocUrl,
     String bookName = '',
+    String bookUrl = '',
   }) async {
     requests.add((sourceUrl, tocUrl));
     bookNames.add(bookName);
@@ -53,6 +54,8 @@ final class FakeChapterContentProvider implements ChapterContentProvider {
     required String chapterUrl,
     String bookName = '',
     String chapterTitle = '',
+    String bookUrl = '',
+    String tocUrl = '',
   }) async {
     requests.add(chapterUrl);
     contexts.add((bookName, chapterTitle));
