@@ -18,7 +18,12 @@ import 'package:flutter/material.dart';
 /// `Map<String, Object?>` (ADR-0011 §2).
 final class AppRouter {
   /// Creates the router.
-  const AppRouter();
+  ///
+  /// 行级豁免：`const AppRouter()` 只作为编译期常量使用（`lib/app.dart` 与测试都是
+  /// `const`），常量实例会被折叠，这一行在并发采集下**没有任何执行点**，于是 lcov 里
+  /// 它时而命中时而缺失（CI 上 core 层因此卡在 99.93%，见 ADR-0019 的「无可测量行」
+  /// 判据）。构造器本身没有行为，豁免掉它是如实记录，而不是给未测试代码开口子。
+  const AppRouter(); // coverage:ignore-line
 
   /// Path of the landing route, i.e. the name that carries no typed arguments.
   static const String homePath = '/';
