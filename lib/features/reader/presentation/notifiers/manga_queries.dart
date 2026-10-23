@@ -9,11 +9,12 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'manga_queries.g.dart';
 
-/// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16).
+/// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16/M17).
 ///
-/// It is the async seam `ReaderPage` waits on before building either body: the answer decides
-/// whether a text request or an image request is the right one, so guessing "text" while the port
-/// loads would fetch a chapter body nobody shows.
+/// It is the async seam `ReaderPage` waits on before building any body: the answer decides whether
+/// a text, image or audio request is the right one, so guessing "text" while the port loads would
+/// fetch a chapter body nobody shows. The file is named after manga because M16 introduced it; the
+/// audio body (M17) dispatches on the same answer instead of asking the source twice.
 @riverpod
 Future<ParseResult<ReaderSourceKind>> readerSourceKind(
   Ref ref,

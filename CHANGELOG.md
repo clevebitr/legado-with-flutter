@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Read a book aloud: form WebViews, `book` methods, SMTC on Windows, sentence highlight (ADR-0062)
+
+- **`webView` rules may POST.** The `WebPageFetcher` port carries `method` / `body`, so a rule like
+  `…/search,{"method":"POST","body":"k={{key}}","webView":true}` submits the form **inside** the
+  WebView instead of falling back to a GET that the site answers with an empty page. A missing
+  `Content-Type` is filled from the payload's shape; falling back to plain HTTP now only happens
+  when the platform has no WebView or the WebView itself fails.
+- **The sandbox `book` object has its methods.** `putVariable` / `getVariable` share the rule
+  variable table (`java.put` / `java.get`, as upstream's `AnalyzeUrl` does), and
+  `setType` / `getType` / `setReverseToc` / `getReverseToc` answer within the job. They do **not**
+  change the host's chapter order or media type — that gap is registered in ADR-0062 §decision 2.
+- **Windows shows a media notification.** `audio_service_win` implements `audio_service`'s platform
+  interface with WinRT `SystemMediaTransportControls`; `createPlaybackNotification` now covers
+  Windows, and the device probe attached, updated and detached a real session. The plugin has no
+  timeline or seek support, so the Windows panel shows no progress — recorded, not hidden.
+- **Read-aloud highlights the sentence being spoken.** Chapters are spoken from the *laid-out* body
+  (the same text the reader paints), every chunk keeps its source range, and the engine's progress
+  callback is mapped to the sentence it falls in. A separate keep-alive provider publishes the
+  range, so the reader body never has to build the speech engine to ask. Platforms without a
+  progress callback highlight the whole chunk.
+- **HLS is a player capability, not a parsing one.** A real `.m3u8` probe passes on Android
+  (ExoPlayer) and fails on Windows: the bundled `libmpv` has no HLS demuxer. The old "HLS not
+  supported" entry is narrowed to Windows with that evidence and a trigger condition.
+- Cloud TTS is scoped, not built: ADR-0063 (Proposed) lists the six decisions it needs first.
+- Licence note: `audio_service_win` 0.0.3 is MIT (193 packages, Risky items: none); `smtc_windows`
+  was evaluated and rejected for needing a Rust toolchain and a second notification port.
+### Play real streams on Windows, opt into plain HTTP, and render webView pages (ADR-0061)
+
+- **Windows playback moved to `media_kit` (mpv).** `just_audio_windows` stalled at 0:00 for a real
+  m4a stream and could crash the native plugin when a load failed; the same stream now reports
+  `position=0.109s` and its 32:34 duration. A six-second stall watchdog turns a silent 0:00 player
+  into a retryable failure. Android / iOS keep `just_audio`; the platform choice lives in
+  `core/platform/playback_backend.dart`.
+- **Plaintext HTTP became an explicit opt-in.** `AppSettings.allowPlainHttp` (settings switch,
+  default off) gates both `HttpPolicy` and audio tracks; a blocked `http://` track shows a dedicated
+  message. Android now declares `usesCleartextTraffic` and the release manifest also gained the
+  missing `INTERNET` permission.
+- **`webView` sources are rendered for real.** A `WebPageFetcher` port backed by a headless
+  `flutter_inappwebview` WebView loads the page, waits for its scripts, and returns the rendered
+  HTML; failures or platforms without WebView2 fall back to a plain GET. POST/body `webView` rules
+  still fall back.
+- **The sandbox gained the `book` object** (`name` / `author` / `bookUrl` / `tocUrl` / `intro` /
+  `kind`), fed by the table-of-contents and chapter requests, so the 87/632 sources that read
+  `book.*` see their context. The mutating `book` methods stay unimplemented and registered.
+- Licence note: `media_kit_libs_windows_audio`'s package is MIT, but the bundled libmpv / FFmpeg
+  dylibs are LGPL-2.1+; this is the single LGPL whitelist entry (ADR-0061 §decision 2) and is
+  recorded manually in `NOTICE.md` §5.
+
+### Align the rule dialect with upstream: templates inside scripts and URL options (ADR-0060)
+
+- **`{{…}}` / `@get:` inside `@js:` and `<js>…</js>` scripts are expanded before the script runs**
+  (upstream `SourceRule.makeUpRule`). A real audio source's `chapterUrl` builds its address with
+  `movieId={{$.id}}`; the literal braces used to reach the site and every chapter looked missing.
+  A backslash-escaped `\}` is not a template, so script literals such as `/{{\}\}/` stay untouched.
+- **URL options are split off before the URL is made absolute.** `FetchToc`, `FetchBookInfo`, the
+  search/explore list fields and paging values now go through `resolveUrlRule`, and `fetchRule`
+  parses the option suffix of the **rendered** result as well. Previously `,{webView:“true”}`
+  became `,%7BwebView…%7D` and was requested as part of the path (404 on real audio sources).
+- **Audio track values must look like addresses.** `FetchAudioTracks` rejects values containing
+  whitespace or `<>`, and values over 4096 characters, before resolving them. A `content` rule of
+  `<js>result</js>` (webView sources) returned a whole HTML page, which used to become a fake
+  `https://host/<!DOCTYPE…>` track and could crash the native player on Windows.
+- Evidence: a 632-source census (15 audio sources) showed 96 sources with templates inside scripts
+  and 49 with `webView`; after the fix the “🔊书音M” source completes
+  `search → bookInfo → toc → audioTracks` and 恋听网 reaches the track stage (its HTML body is now
+  rejected instead of faked). Remaining gaps are registered in `docs/dev/roadmap.md` §3.7.
+
+### Listen to audio sources and read chapters aloud (M17, ADR-0054)
+
+- **Audio book sources finally play.** `ruleContent` of a `bookSourceType = 1` source yields direct
+  audio addresses; one matched value is one track. The chapter URL goes through the same walk as a
+  text body (rate budget, rule-based `header`, `nextContentUrl` paging), relative addresses resolve
+  against the page they were read on, duplicates collapse, and a chapter with no playable address
+  fails instead of showing an empty player.
+- **A player in the reader.** `ReaderPage` dispatches on the source type to `AudioReaderView`:
+  play / pause, seek, 0.75×–2× speed, previous / next chapter, automatic continuation within a
+  multi-track chapter and into the next chapter, retry after a failure. Progress is written to
+  `reading_progress` in **milliseconds** every five seconds while playing and on pause / exit.
+- **Read aloud with the system TTS engine.** The text reader's toolbar opens `ReaderTtsSheet`
+  (rate, pitch, voice, keep-reading-on-exit); chapters are split into utterance-sized chunks so
+  Android's input limit cannot truncate them, and the last chunk advances to the next chapter.
+- **Background playback and media notification.** A `PlaybackNotification` port in
+  `core/platform/` is bound to `audio_service` on Android / iOS (foreground service, media
+  notification, lock-screen controls, `POST_NOTIFICATIONS` request) and deliberately degrades to a
+  no-op on Windows. `MainActivity` now extends `AudioServiceActivity`.
+- **Windows build prerequisites changed**: `flutter_tts` needs `nuget.exe` on `PATH` and
+  `just_audio_windows` needs MSVC `/utf-8`; both are documented in `docs/dev/platform.md` §1.2 and
+  the compile option is set in `windows/CMakeLists.txt`.
+- **Engine fix found by the real-source check**: a `@js:` field on a JSON item lost the page's
+  `baseUrl`; JSON item scopes now keep their page context, which JSON-API sources need to build
+  chapter addresses.
+- The real audio source used for the acceptance check could not be played end to end: it relies on
+  `{{…}}` expansion inside `@js:` rule text and on the upstream `book` JS binding, neither of which
+  this repository implements. Both are registered in `docs/dev/roadmap.md` §3.7 and the check is
+  recorded as “implemented, not verified”.
 ### The reader becomes a reader: immersive chrome, chapter sheet, source switching, typography (M14, ADR-0051)
 
 - **Immersive chrome**: the app bar and tool bar are **hidden by default**; tapping the middle third of

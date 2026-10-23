@@ -44,8 +44,20 @@ Please enable Developer Mode in your system settings.
 或执行 `start ms-settings:developers`。
 
 > 本项目依赖多个带原生代码的插件（`drift_flutter`、`path_provider`、`shared_preferences`、
-> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`），因此该开关是 Windows 开发的
-> **硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
+> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`、`just_audio_windows`、`flutter_tts`），
+> 因此该开关是 Windows 开发的**硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
+
+**M17 / M24 起新增的 Windows 构建与能力前提（ADR-0054 A-0、ADR-0062 实测）：**
+
+| 前提 | 谁需要 | 不满足时的表现 |
+|---|---|---|
+| `nuget.exe` 在 `PATH` 上（本机放在 `C:/Users/<user>/tools/nuget.exe`） | `flutter_tts` 与 `audio_service_win` 的 Windows 实现（C++/WinRT，`nuget install Microsoft.Windows.CppWinRT`） | `CMake Error at …/windows/CMakeLists.txt: nuget.exe not found` |
+| MSVC `/utf-8`（已在 `windows/CMakeLists.txt` 的 `APPLY_STANDARD_SETTINGS` 统一加） | `just_audio_windows` 的 UTF-8 源码；代码页 936 下 C4819 被 `/WX` 放大成构建失败 | `error C2220: 以下警告被视为错误` + `warning C4819` |
+| **WebView2 Evergreen 运行时** | `flutter_inappwebview_windows`（`,{webView:…}` 与 WebView 集成用例）；Win11 自带，Win10 装 Edge 即有；`flutter_inappwebview_windows` 构建也会经 NuGet 拉 WebView2 SDK | WebView 取页失败 → `WebPageFetcher` 回落普通 GET（不崩） |
+
+> **能力前提（不是构建前提）：** 媒体通知由 `audio_service_win` 的 WinRT `SystemMediaTransportControls` 提供，
+> 无需额外运行时（Windows 10+ 自带）；它**不显示进度、通知栏 seek 不生效**（ADR-0062 §决策 4）。
+> 同理，随包 `libmpv` 没有 HLS demuxer，`.m3u8` 在 Windows 上播放会失败（同一 ADR §决策 3）。
 
 ---
 
@@ -61,6 +73,9 @@ Please enable Developer Mode in your system settings.
 | `SystemUiController` | 状态栏透明、edge-to-edge 适配 | 在 `core/theme/` 统一调用 |
 | `HapticsController` | 触感反馈能力探测与降级 | 组件内调用，不判断平台 |
 | `LongRunningTask` | 长任务的前台标记（Android 为 `PARTIAL_WAKE_LOCK`） | 批量书源校验开始 / 结束时 `acquire` / `release`（ADR-0043 §决策 3） |
+| `PlaybackNotification` | 媒体通知 / 锁屏控制（Android / iOS 由 `audio_service` 实现；Windows 返回 no-op 的 `null` 句柄） | 音频播放器在播放状态变化时 `attach` / `update` / `detach`；**UI 不判断平台**（ADR-0054 §决策 3/4） |
+| `WebPageFetcher` | `,{webView:…}` 的 headless WebView（三端）；不支持的平台 `isSupported == false`，调用方回落普通 GET | `PageFetchService` 在 `webView` + GET + 无 body 时调用（ADR-0061 §决策 4） |
+| `usesMediaKitPlayback` | 播放后端的平台选择：Windows 用 media_kit，Android / iOS 用 just_audio | `reader/di.dart` 选适配器；**业务层不判断平台**（ADR-0061 §决策 1） |
 
 **契约：** 每个接口在不支持的平台返回 `null` 或 no-op，**禁止抛出异常**；
 调用方必须把 `null` 当作正常分支处理，不得用 `!` 解包（C-TYPE-2）。
@@ -168,6 +183,7 @@ pageTransitionsTheme: const PageTransitionsTheme(
 | 位置 | 设置 | 原因 |
 |---|---|---|
 | `android/gradle.properties` | `kotlin.incremental=false` | Kotlin 2.4 的增量编译缓存在 Windows 上偶发文件锁定，报 `Could not close incremental caches` 并中断构建（最近复现于 `dynamic_color` 模块）。**这是工具链问题，与任何插件无关，不要因更换插件而删除。** |
+| `android/gradle.properties` | `android.r8.proguardAndroidTxt.disallowed=false` | `flutter_inappwebview_android 1.1.3` 仍调用 `getDefaultProguardFile('proguard-android.txt')`，AGP 9 默认拒绝（`-dontoptimize`）。插件改用 `proguard-android-optimize.txt` 后删除该行（ADR-0061）。 |
 
 > 另一条曾经的变通 `kotlin.jvm.target.validation.mode=warning` **已删除**：它只为已移除的
 > `flutter_js_plus`（固定 `kotlin 1.7.20` / `jvmTarget 1.8`，与 AGP 9 默认的 Java 11 不一致）而加。

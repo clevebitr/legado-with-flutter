@@ -534,6 +534,68 @@ void main() {
     }, 'searchRule.name:js:error');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_whenAJobCarriesABook_exposesItsFields', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0060 P2：`book` 对象由 worker 绑定（上游 AnalyzeUrl.kt:373 的同一形状）。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(
+            script: "book.name + '|' + book.author + '|' + book.tocUrl",
+            book: const JsBookInfo(
+              name: '剑来',
+              author: '烽火戏诸侯',
+              bookUrl: 'https://example-novel.test/book/1',
+              tocUrl: 'https://example-novel.test/book/1/toc',
+            ),
+          ),
+        ),
+      ),
+      '剑来|烽火戏诸侯|https://example-novel.test/book/1/toc',
+    );
+  });
+
+  testWidgets('jsBridge_whenAScriptUsesBookMethods_readsAndWritesVariables', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0062 §决策 2：`book.putVariable` / `getVariable` 就是 `java.put` / `java.get` 那张表
+    // （上游 AnalyzeUrl.javaPut 先写 book 的 variableMap，AnalyzeUrl.kt:390-406）。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(
+            script:
+                "book.putVariable('token', 'abc'); "
+                "book.getVariable('token') + '|' + java.get('token')",
+            book: const JsBookInfo(name: '剑来'),
+          ),
+        ),
+      ),
+      'abc|abc',
+    );
+  });
+
+  testWidgets('jsBridge_whenAScriptCallsTheBookStateSetters_readsThemBack', (
+    WidgetTester tester,
+  ) async {
+    // `setType` / `setReverseToc` 在本 job 内可读回；它们**不改**宿主的章节顺序或书籍类型，
+    // 这条差异登记在 ADR-0062 §决策 2，所以这里只验「可调用、不静默崩」。
+    expect(
+      _value(
+        await bridge.evaluate(
+          _job(
+            script:
+                'book.setType(1); book.setReverseToc(true); '
+                "book.getType() + '|' + book.getReverseToc() + '|' + book.type",
+            book: const JsBookInfo(name: '剑来'),
+          ),
+        ),
+      ),
+      '1|true|1',
+    );
+  });
+
   testWidgets('jsBridge_whenAJobCarriesBookNames_javaGetAnswersThemFirst', (
     WidgetTester tester,
   ) async {
@@ -703,6 +765,7 @@ JsJob _job({
   ),
   String? bookName,
   String? chapterTitle,
+  JsBookInfo? book,
 }) => JsJob(
   script: script,
   rulePath: 'searchRule.name',
@@ -714,6 +777,7 @@ JsJob _job({
   variables: variables,
   bookName: bookName,
   chapterTitle: chapterTitle,
+  book: book,
 );
 
 /// The value of a successful evaluation, failing the test otherwise.

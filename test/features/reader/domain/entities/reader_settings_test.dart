@@ -48,6 +48,49 @@ void main() {
       expect(settings.pageMode, ReaderPageMode.scroll);
     });
 
+    test('ReaderSettings_whenDefault_hasNormalSpeechAxes', () {
+      const ReaderSettings settings = ReaderSettings.defaults;
+
+      expect(settings.ttsRate, 1);
+      expect(settings.ttsPitch, 1);
+      expect(settings.ttsVoiceName, isNull);
+      expect(settings.ttsVoiceLocale, isNull);
+      expect(settings.stopTtsOnExit, isTrue);
+    });
+
+    test('ReaderSettings_givenOutOfRangeSpeechAxes_clampsThem', () {
+      final ReaderSettings high = ReaderSettings(ttsRate: 9, ttsPitch: 9);
+      final ReaderSettings low = ReaderSettings(ttsRate: 0.1, ttsPitch: 0.1);
+
+      expect(high.ttsRate, maxTtsRate);
+      expect(high.ttsPitch, maxTtsPitch);
+      expect(low.ttsRate, minTtsRate);
+      expect(low.ttsPitch, minTtsPitch);
+    });
+
+    test('copyWith_givenClearTtsVoice_dropsTheStoredVoice', () {
+      final ReaderSettings withVoice = ReaderSettings(
+        ttsVoiceName: 'Microsoft Huihui',
+        ttsVoiceLocale: 'zh-CN',
+      );
+
+      final ReaderSettings cleared = withVoice.copyWith(clearTtsVoice: true);
+
+      expect(cleared.ttsVoiceName, isNull);
+      expect(cleared.ttsVoiceLocale, isNull);
+    });
+
+    test('ReaderSettings_whenOnlyTtsAxesDiffer_areNotEqual', () {
+      expect(
+        ReaderSettings.defaults,
+        isNot(ReaderSettings.defaults.copyWith(ttsRate: 1.5)),
+      );
+      expect(
+        ReaderSettings.defaults,
+        isNot(ReaderSettings.defaults.copyWith(stopTtsOnExit: false)),
+      );
+    });
+
     test('ReaderSettings_givenOutOfRangeNumbers_clampsThem', () {
       // 工厂钳制而不是断言：release 会剥掉 assert，手改的存储不能让正文不可读。
       final ReaderSettings high = ReaderSettings(fontScale: 5, lineHeight: 9);

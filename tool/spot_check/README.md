@@ -41,6 +41,18 @@ SPOT_CHECK_ARGS="--list=<collection.json>" \
 
 **证据形态：** stdout 里只出现**截断样本（≤60 字符）与全文 sha256**，不落盘页面正文。
 
+### 2.05 音频链路（M17 起，ADR-0054 / ADR-0060）
+
+```bash
+# 音频源：搜索 → 详情 → 目录 → 音轨（`--play` 再真的播放第一条 3 秒）
+SPOT_CHECK_ARGS="--source=<audio.json> --keyword=全 --audio"   flutter run -d windows -t tool/spot_check/spot_check.dart
+SPOT_CHECK_ARGS="--source=<audio.json> --keyword=全 --audio --play"   flutter run -d windows -t tool/spot_check/spot_check.dart
+```
+
+`--audio` 只验证**解析链**（`audioTracks` 阶段）；`--play` 会把第一条音轨交给 `just_audio` 播 3 秒并记录
+位置。Windows 的 `just_audio_windows` 对部分远端流会停在 0 或直接原生崩溃（不是 Dart 异常），
+所以默认不播放；播放器的本地 WAV 实播由 `integration_test/audio_playback_test.dart` 覆盖。
+
 ### 2.1 批量探针（M12 起）
 
 单个源回答「这条还能不能跑」；**一条语料里到底坏在哪**要用批量探针：

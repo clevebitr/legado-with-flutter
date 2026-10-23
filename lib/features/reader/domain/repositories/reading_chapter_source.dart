@@ -11,13 +11,14 @@ import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.d
 abstract interface class ChapterListProvider {
   /// Reads the chapters of [sourceUrl] that live at [tocUrl].
   ///
-  /// [bookName] is context, not a rule: it answers `java.get('bookName')` for the source's
-  /// `@js:` rules (`docs/dev/book-source.md` §6, ADR-0049). It is empty when the caller does not
-  /// know it, and the read then falls through to the source's variables.
+  /// [bookName] / [bookUrl] are context, not rules: they answer `java.get('bookName')` and the
+  /// sandbox's `book` binding for the source's `@js:` rules (`docs/dev/book-source.md` §6,
+  /// ADR-0049, ADR-0060). They are empty when the caller does not know them.
   Future<ParseResult<List<ReadingChapter>>> fetch({
     required String sourceUrl,
     required String tocUrl,
     String bookName = '',
+    String bookUrl = '',
   });
 }
 
@@ -36,6 +37,8 @@ abstract interface class ChapterContentProvider {
     required String chapterUrl,
     String bookName = '',
     String chapterTitle = '',
+    String bookUrl = '',
+    String tocUrl = '',
   });
 }
 
@@ -55,6 +58,7 @@ final class UnboundChapterListProvider implements ChapterListProvider {
     required String sourceUrl,
     required String tocUrl,
     String bookName = '',
+    String bookUrl = '',
   }) async {
     _logger.warning(
       'No ChapterListProvider is bound: the reader cannot read a table of contents.',
@@ -80,6 +84,8 @@ final class UnboundChapterContentProvider implements ChapterContentProvider {
     required String chapterUrl,
     String bookName = '',
     String chapterTitle = '',
+    String bookUrl = '',
+    String tocUrl = '',
   }) async {
     _logger.warning(
       'No ChapterContentProvider is bound: the reader cannot read a chapter body.',

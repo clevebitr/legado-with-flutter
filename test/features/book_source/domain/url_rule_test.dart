@@ -10,6 +10,33 @@ UrlRule _parse(String rule) {
 }
 
 void main() {
+  group('resolveUrlRule', () {
+    test('resolveUrlRule_givenAnOptionSuffix_keepsItOutsideTheUrl', () {
+      // 先绝对化会把 `{` 编码成 `%7B`，选项就变成路径的一部分（M17 真源普查的 404）。
+      expect(
+        resolveUrlRule('/book/1258-1,{webView:“true”}', 'https://ting55.com/'),
+        'https://ting55.com/book/1258-1,{webView:“true”}',
+      );
+    });
+
+    test('resolveUrlRule_givenAPlainRelativeUrl_resolvesIt', () {
+      expect(
+        resolveUrlRule('c1.html', 'https://a.test/book/1/'),
+        'https://a.test/book/1/c1.html',
+      );
+    });
+
+    test('resolveUrlRule_givenAnAbsoluteUrlWithOptions_keepsThem', () {
+      expect(
+        resolveUrlRule(
+          'https://a.test/1.html,{"method":"GET"}',
+          'https://ignored.test/',
+        ),
+        'https://a.test/1.html,{"method":"GET"}',
+      );
+    });
+  });
+
   group('parseUrlRule', () {
     test('parseUrlRule_givenAPlainTemplate_hasNoOptions', () {
       final UrlRule rule = _parse('https://a.test/s?q={{key}}&p={{page}}');

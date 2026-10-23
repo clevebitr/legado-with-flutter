@@ -1,8 +1,10 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
 /// Reads the detail page of one book (`docs/dev/roadmap.md` 2.4, `ruleBookInfo`).
@@ -33,6 +35,9 @@ final class FetchBookInfo {
         baseUrl: url,
         source: source.jsSourceInfo,
         headers: headers,
+        // 详情阶段还不知道书名 / 作者（它们和 tocUrl 在同一次读取里），先把两个 URL 给规则：
+        // `book.tocUrl` / `book.bookUrl` 在这一阶段指向书籍页本身（上游的回落口径）。
+        book: JsBookInfo(bookUrl: url, tocUrl: url),
       ),
       headers: headers,
       sourceId: source.url,
@@ -130,7 +135,8 @@ final class FetchBookInfo {
         name: name.dataOrNull ?? '',
         url: url,
         // 上游：`tocUrl` 规则缺失时目录就在书籍页本身，因此回落到书籍 URL。
-        tocUrl: resolveAbsoluteUrl(toc == null || toc.isEmpty ? url : toc, url),
+        // 目录地址也可能带 `,{…}`：先切选项再绝对化（与章节地址同一口径）。
+        tocUrl: resolveUrlRule(toc == null || toc.isEmpty ? url : toc, url),
         author: author.dataOrNull,
         kind: kind.dataOrNull,
         coverUrl: resolveAbsoluteUrlOrNull(coverUrl.dataOrNull, url),

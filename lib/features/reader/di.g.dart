@@ -406,3 +406,234 @@ final class BookSourceSwitcherProvider
 
 String _$bookSourceSwitcherHash() =>
     r'ec6fd4eace21025a8fa2dd41e1fee987e9a3f449';
+
+/// Provides the audio player, **unbound** to a platform until it is really needed.
+///
+/// The adapter creates a native player in its constructor, so this provider is only instantiated
+/// when an audio book is opened (or a test overrides it). Its own disposal releases the native
+/// player once the page stops watching it.
+
+@ProviderFor(audioPlaybackEngine)
+final audioPlaybackEngineProvider = AudioPlaybackEngineProvider._();
+
+/// Provides the audio player, **unbound** to a platform until it is really needed.
+///
+/// The adapter creates a native player in its constructor, so this provider is only instantiated
+/// when an audio book is opened (or a test overrides it). Its own disposal releases the native
+/// player once the page stops watching it.
+
+final class AudioPlaybackEngineProvider
+    extends
+        $FunctionalProvider<
+          AudioPlaybackEngine,
+          AudioPlaybackEngine,
+          AudioPlaybackEngine
+        >
+    with $Provider<AudioPlaybackEngine> {
+  /// Provides the audio player, **unbound** to a platform until it is really needed.
+  ///
+  /// The adapter creates a native player in its constructor, so this provider is only instantiated
+  /// when an audio book is opened (or a test overrides it). Its own disposal releases the native
+  /// player once the page stops watching it.
+  AudioPlaybackEngineProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'audioPlaybackEngineProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$audioPlaybackEngineHash();
+
+  @$internal
+  @override
+  $ProviderElement<AudioPlaybackEngine> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  AudioPlaybackEngine create(Ref ref) {
+    return audioPlaybackEngine(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(AudioPlaybackEngine value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<AudioPlaybackEngine>(value),
+    );
+  }
+}
+
+String _$audioPlaybackEngineHash() =>
+    r'05687c435e71d76e2081792c5f98d47ff162efa6';
+
+/// Provides the system TTS engine (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 5).
+
+@ProviderFor(speechSynthesizer)
+final speechSynthesizerProvider = SpeechSynthesizerProvider._();
+
+/// Provides the system TTS engine (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 5).
+
+final class SpeechSynthesizerProvider
+    extends
+        $FunctionalProvider<
+          SpeechSynthesizer,
+          SpeechSynthesizer,
+          SpeechSynthesizer
+        >
+    with $Provider<SpeechSynthesizer> {
+  /// Provides the system TTS engine (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 5).
+  SpeechSynthesizerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'speechSynthesizerProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$speechSynthesizerHash();
+
+  @$internal
+  @override
+  $ProviderElement<SpeechSynthesizer> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SpeechSynthesizer create(Ref ref) {
+    return speechSynthesizer(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SpeechSynthesizer value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SpeechSynthesizer>(value),
+    );
+  }
+}
+
+String _$speechSynthesizerHash() => r'736b1e84895f98f7e0d43a6fb9b6960ac11beacb';
+
+/// Provides the audio-track port, **unbound** by default.
+///
+/// The composition root binds it to `book_source`'s `FetchAudioTracks` (ADR-0041 §决策 2).
+
+@ProviderFor(readerAudioTrack)
+final readerAudioTrackProvider = ReaderAudioTrackProvider._();
+
+/// Provides the audio-track port, **unbound** by default.
+///
+/// The composition root binds it to `book_source`'s `FetchAudioTracks` (ADR-0041 §决策 2).
+
+final class ReaderAudioTrackProvider
+    extends
+        $FunctionalProvider<
+          AudioTrackProvider,
+          AudioTrackProvider,
+          AudioTrackProvider
+        >
+    with $Provider<AudioTrackProvider> {
+  /// Provides the audio-track port, **unbound** by default.
+  ///
+  /// The composition root binds it to `book_source`'s `FetchAudioTracks` (ADR-0041 §决策 2).
+  ReaderAudioTrackProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'readerAudioTrackProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$readerAudioTrackHash();
+
+  @$internal
+  @override
+  $ProviderElement<AudioTrackProvider> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  AudioTrackProvider create(Ref ref) {
+    return readerAudioTrack(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(AudioTrackProvider value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<AudioTrackProvider>(value),
+    );
+  }
+}
+
+String _$readerAudioTrackHash() => r'302ea06f6920d7d0ea3896e5e77b0a89dd82e46d';
+
+/// Provides the media-notification binding for this platform
+/// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 3/4).
+
+@ProviderFor(playbackNotification)
+final playbackNotificationProvider = PlaybackNotificationProvider._();
+
+/// Provides the media-notification binding for this platform
+/// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 3/4).
+
+final class PlaybackNotificationProvider
+    extends
+        $FunctionalProvider<
+          PlaybackNotification,
+          PlaybackNotification,
+          PlaybackNotification
+        >
+    with $Provider<PlaybackNotification> {
+  /// Provides the media-notification binding for this platform
+  /// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 3/4).
+  PlaybackNotificationProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'playbackNotificationProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$playbackNotificationHash();
+
+  @$internal
+  @override
+  $ProviderElement<PlaybackNotification> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  PlaybackNotification create(Ref ref) {
+    return playbackNotification(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(PlaybackNotification value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<PlaybackNotification>(value),
+    );
+  }
+}
+
+String _$playbackNotificationHash() =>
+    r'44d8091be3ca7e4ceaa879a1f7398333d2d6608b';

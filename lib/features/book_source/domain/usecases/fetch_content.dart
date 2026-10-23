@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
@@ -53,6 +54,14 @@ final class FetchContent {
         headers: headers,
         bookName: request.bookName,
         chapterTitle: request.title,
+        book: JsBookInfo(
+          name: request.bookName,
+          author: request.author,
+          bookUrl: request.bookUrl,
+          tocUrl: request.tocUrl,
+          intro: request.intro,
+          kind: request.kind,
+        ),
       ),
       headers: headers,
       sourceId: source.url,

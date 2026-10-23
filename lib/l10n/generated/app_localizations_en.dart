@@ -1096,4 +1096,85 @@ class AppLocalizationsEn extends AppLocalizations {
   String readerSourceAligned(String chapter) {
     return 'Aligned to: $chapter';
   }
+
+  @override
+  String get readerTtsAction => 'Read aloud';
+
+  @override
+  String get readerTtsTitle => 'Read aloud';
+
+  @override
+  String get readerTtsStart => 'Start reading';
+
+  @override
+  String get readerTtsPause => 'Pause';
+
+  @override
+  String get readerTtsResume => 'Resume';
+
+  @override
+  String get readerTtsStop => 'Stop';
+
+  @override
+  String get readerTtsRate => 'Speed';
+
+  @override
+  String get readerTtsPitch => 'Pitch';
+
+  @override
+  String get readerTtsVoice => 'Voice';
+
+  @override
+  String readerTtsVoiceLabel(String name, String locale) {
+    return '$name ($locale)';
+  }
+
+  @override
+  String get readerTtsSystemVoice => 'System default';
+
+  @override
+  String get readerTtsKeepOnExit => 'Keep reading after leaving the reader';
+
+  @override
+  String get readerTtsFailed =>
+      'The system speech engine could not read this chapter.';
+
+  @override
+  String get readerAudioFailed => 'This track could not be played.';
+
+  @override
+  String get readerAudioPlay => 'Play';
+
+  @override
+  String get readerAudioPause => 'Pause';
+
+  @override
+  String get readerAudioReplay => 'Play again';
+
+  @override
+  String get readerAudioSpeed => 'Speed';
+
+  @override
+  String readerAudioSpeedValue(String speed) {
+    return '$speed×';
+  }
+
+  @override
+  String readerAudioTrackCount(int index, int total) {
+    return 'Part $index of $total';
+  }
+
+  @override
+  String get settingsNetwork => 'Network';
+
+  @override
+  String get settingsPlainHttp => 'Allow plaintext HTTP';
+
+  @override
+  String get settingsPlainHttpHint =>
+      'Some book sources and audio streams only provide http:// addresses. Page requests follow this switch too.';
+
+  @override
+  String get readerAudioPlainHttp =>
+      'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.';
 }

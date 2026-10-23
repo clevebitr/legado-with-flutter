@@ -1062,4 +1062,82 @@ class AppLocalizationsZh extends AppLocalizations {
   String readerSourceAligned(String chapter) {
     return '对齐到：$chapter';
   }
+
+  @override
+  String get readerTtsAction => '朗读';
+
+  @override
+  String get readerTtsTitle => '朗读';
+
+  @override
+  String get readerTtsStart => '开始朗读';
+
+  @override
+  String get readerTtsPause => '暂停';
+
+  @override
+  String get readerTtsResume => '继续';
+
+  @override
+  String get readerTtsStop => '停止';
+
+  @override
+  String get readerTtsRate => '语速';
+
+  @override
+  String get readerTtsPitch => '音高';
+
+  @override
+  String get readerTtsVoice => '音色';
+
+  @override
+  String readerTtsVoiceLabel(String name, String locale) {
+    return '$name（$locale）';
+  }
+
+  @override
+  String get readerTtsSystemVoice => '系统默认';
+
+  @override
+  String get readerTtsKeepOnExit => '离开阅读器后继续朗读';
+
+  @override
+  String get readerTtsFailed => '系统朗读引擎无法朗读本章。';
+
+  @override
+  String get readerAudioFailed => '这条音轨无法播放。';
+
+  @override
+  String get readerAudioPlay => '播放';
+
+  @override
+  String get readerAudioPause => '暂停';
+
+  @override
+  String get readerAudioReplay => '重新播放';
+
+  @override
+  String get readerAudioSpeed => '倍速';
+
+  @override
+  String readerAudioSpeedValue(String speed) {
+    return '$speed×';
+  }
+
+  @override
+  String readerAudioTrackCount(int index, int total) {
+    return '第 $index 段，共 $total 段';
+  }
+
+  @override
+  String get settingsNetwork => '网络';
+
+  @override
+  String get settingsPlainHttp => '允许明文 HTTP';
+
+  @override
+  String get settingsPlainHttpHint => '部分书源与音频流只提供 http:// 地址；页面请求也遵循此开关。';
+
+  @override
+  String get readerAudioPlainHttp => '这条音轨使用明文 HTTP。请在设置中开启「允许明文 HTTP」后播放。';
 }

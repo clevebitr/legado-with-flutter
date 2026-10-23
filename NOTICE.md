@@ -142,6 +142,31 @@ MPL-2.0 §3.3 的 Secondary License 允许并入 GPL 作品），但它仍是**�
 > 分类本身不影响 C-DEP-7 的结论（两者都是宽松许可），但清单必须准确。
 > 现由 `tool/scan_licenses.dart` 可重复执行，不再依赖肉眼判断。
 
+**2026-10-22 增量（听书与音频，M17/ADR-0054）：** `dependencies` 新增 `just_audio ^0.10.6`、
+`just_audio_windows ^0.2.3`、`audio_service ^0.18.19`、`flutter_tts ^4.2.5`，全部 **MIT**，并带入
+10 个传递依赖（`audio_session` 等，均 MIT / BSD）。`dart run tool/scan_licenses.dart` 复算：
+**176 包 / BSD-3 105 / MIT 46 / Apache 10 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**。
+GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_convert`。
+
+**2026-10-23 增量（听书二期，ADR-0062）：** `dependencies` 新增 `audio_service_win ^0.0.3`
+（Windows 的 SMTC 平台实现，**MIT**）。`dart run tool/scan_licenses.dart` 复算：
+**193 包 / BSD-3 105 / MIT 55 / Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**。
+GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_convert`。
+**评估后未采用：** `smtc_windows`（同样 MIT，但走 flutter_rust_bridge，构建需要 Rust 工具链，
+且要另起一套通知端口实现）；`audio_service_win` 复用已有 `audio_service` 接线，代价更小。
+
+**2026-10-22 增量（播放后端与 WebView，ADR-0061）：** `dependencies` 新增
+`media_kit ^1.2.6`（MIT）、`media_kit_libs_windows_audio ^1.0.9`（包 LICENSE 为 MIT；
+Windows 构建随包的 **libmpv / FFmpeg 动态库为 LGPL-2.1+**，见下方手工登记）、
+`flutter_inappwebview ^6.1.5`（Apache-2.0）。`dart run tool/scan_licenses.dart` 复算：
+**192 包 / BSD-3 105 / MIT 54 / Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**。
+GPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_convert`。
+
+> **手工登记（扫描脚本看不到二进制许可证）：** `media_kit_libs_windows_audio` 在 Windows
+> 构建时下载并随包分发 **libmpv / FFmpeg 的 LGPL-2.1+ 动态库**（media-kit 的 audio-only
+> 构建）。它们与 GPL-3.0 兼容（FSF 认定，动态链接），本项目只允许这一处 LGPL（ADR-0061
+> §决策 2）；用户可用同版本动态库替换，符合 LGPL-2.1 §6 的可替换要求。
+
 **直接依赖明细：**
 
 | 依赖 | 版本 | 许可证 |
@@ -173,6 +198,14 @@ MPL-2.0 §3.3 的 Secondary License 允许并入 GPL 作品），但它仍是**�
 | `json_serializable`（dev） | 6.14.1 | BSD-3-Clause |
 | `riverpod_generator`（dev） | 4.0.9 | MIT |
 | `drift_dev`（dev） | 2.35.1 | MIT |
+| `just_audio` | 0.10.6 | MIT |
+| `just_audio_windows` | 0.2.3 | MIT |
+| `audio_service` | 0.18.19 | MIT |
+| `audio_service_win` | 0.0.3 | MIT |
+| `flutter_tts` | 4.2.5 | MIT |
+| `media_kit` | 1.2.6 | MIT |
+| `media_kit_libs_windows_audio` | 1.0.9 | MIT（随包 libmpv / FFmpeg 动态库：LGPL-2.1+，手工登记） |
+| `flutter_inappwebview` | 6.1.5 | Apache-2.0 |
 | `mocktail`（dev） | 1.0.5 | MIT |
 | `flutter` / `flutter_localizations` / `flutter_test` / `integration_test`（SDK） | 3.47.7 | BSD-3-Clause（Flutter SDK） |
 

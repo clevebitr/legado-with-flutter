@@ -16,6 +16,9 @@ const String _fontScaleKey = 'settings.fontScale';
 /// `shared_preferences` key of the per-source concurrency budget.
 const String _concurrencyKey = 'settings.maxConcurrentPerSource';
 
+/// `shared_preferences` key of the plaintext-HTTP opt-in.
+const String _plainHttpKey = 'settings.allowPlainHttp';
+
 /// [SettingsRepository] on top of [PreferenceStore] (`docs/dev/roadmap.md` 5.6, C-NET-9).
 ///
 /// Every read is defensive: a value written by an older build, a hand-edited store or a wrong
@@ -32,6 +35,7 @@ final class SettingsRepositoryImpl implements SettingsRepository {
     final int? storedTheme = _store.readInt(_themeModeKey);
     final double? storedFontScale = _store.readDouble(_fontScaleKey);
     final int? storedConcurrency = _store.readInt(_concurrencyKey);
+    final bool? storedPlainHttp = _store.readBool(_plainHttpKey);
 
     return AppSettings(
       themeMode: storedTheme == null
@@ -40,6 +44,7 @@ final class SettingsRepositoryImpl implements SettingsRepository {
       fontScale: storedFontScale ?? 1,
       maxConcurrentPerSource:
           storedConcurrency ?? defaultMaxConcurrentRequestsPerSource,
+      allowPlainHttp: storedPlainHttp ?? false,
     );
   }
 
@@ -49,5 +54,6 @@ final class SettingsRepositoryImpl implements SettingsRepository {
     await _store.writeInt(_themeModeKey, settings.themeMode.storageValue);
     await _store.writeDouble(_fontScaleKey, settings.fontScale);
     await _store.writeInt(_concurrencyKey, settings.maxConcurrentPerSource);
+    await _store.writeBool(_plainHttpKey, settings.allowPlainHttp);
   }
 }

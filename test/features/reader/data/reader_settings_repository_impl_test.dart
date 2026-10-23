@@ -37,6 +37,37 @@ void main() {
       expect(await repository.load(), settings);
     });
 
+    test('save_thenLoad_roundTripsTheSpeechAxes', () async {
+      final ReaderSettingsRepositoryImpl repository = await _repository();
+      final ReaderSettings settings = ReaderSettings(
+        ttsRate: 1.5,
+        ttsPitch: 0.75,
+        ttsVoiceName: 'Microsoft Huihui',
+        ttsVoiceLocale: 'zh-CN',
+        stopTtsOnExit: false,
+      );
+
+      await repository.save(settings);
+
+      final ReaderSettings loaded = await repository.load();
+      expect(loaded.ttsRate, 1.5);
+      expect(loaded.ttsPitch, 0.75);
+      expect(loaded.ttsVoiceName, 'Microsoft Huihui');
+      expect(loaded.ttsVoiceLocale, 'zh-CN');
+      expect(loaded.stopTtsOnExit, isFalse);
+    });
+
+    test('save_givenNoVoice_storesTheSystemDefaultAsNull', () async {
+      // 「系统默认」= 没选：存空串，读回来仍是 null（PreferenceStore 没有删除）。
+      final ReaderSettingsRepositoryImpl repository = await _repository();
+      await repository.save(ReaderSettings.defaults);
+
+      final ReaderSettings loaded = await repository.load();
+
+      expect(loaded.ttsVoiceName, isNull);
+      expect(loaded.ttsVoiceLocale, isNull);
+    });
+
     test('load_givenOutOfRangeValues_clampsThem', () async {
       // 手改过的存储不能让正文变得不可读：钳制在实体工厂里，读回来就是 UI 能表示的范围。
       final ReaderSettingsRepositoryImpl repository = await _repository(

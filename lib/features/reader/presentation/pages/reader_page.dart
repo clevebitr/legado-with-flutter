@@ -14,12 +14,16 @@ import 'package:flutter_reader/features/reader/domain/repositories/book_source_s
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/manga_queries.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/manga_reader_page.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_source_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_toc_sheet.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_tts_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -70,6 +74,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// Whether the chapter the route asked for was already opened.
   bool _appliedStartChapter = false;
+
+  /// The read-aloud notifier, captured when its sheet is opened.
+  ///
+  /// The sheet disposes when it closes, but speech may continue; keeping the notifier here lets
+  /// `dispose` apply the “stop when leaving the reader” rule (ADR-0054 §决策 5).
+  ReaderTts? _tts;
 
   /// The last position the page saw, used by the `dispose` write.
   int _lastIndex = 0;
@@ -126,6 +136,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ),
       );
     }
+    _tts?.onReaderClosed();
     _chromeTimer?.cancel();
     _scroll.dispose();
     super.dispose();
@@ -161,8 +172,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
-  /// Decides which body the book needs and builds it
-  /// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053 §决策 1).
+  /// Decides which body the book needs and builds it: text, manga or audio
+  /// (`docs/dev/roadmap.md` §3.10 M16/M17, ADR-0053 §决策 1, ADR-0054 §决策 1).
   ///
   /// The kind is awaited before either body is built: guessing "text" while the port loads would
   /// fetch a chapter body nobody shows, and an image source would pay for it on every open.
@@ -179,6 +190,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         switch (value) {
           ParseSuccess<ReaderSourceKind>(data: ReaderSourceKind.image) =>
             MangaReaderPage(book: widget.book, chapterUrl: widget.chapterUrl),
+          ParseSuccess<ReaderSourceKind>(data: ReaderSourceKind.audio) =>
+            AudioReaderView(book: widget.book),
           _ => _textReader(context),
         },
       // 端口不该失败（失败在适配器里被吸收成 text），真抛了也不能把书挡住。
@@ -345,6 +358,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   icon: const Icon(Icons.brightness_6_outlined),
                   tooltip: l10n.readerBrightness,
                   onPressed: () => _keepAlive(() => _openBrightness(tokens)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.volume_up),
+                  tooltip: l10n.readerTtsAction,
+                  onPressed: _openTts,
                 ),
                 IconButton(
                   icon: const Icon(Icons.skip_next),
@@ -575,6 +593,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final AsyncValue<ParseResult<String>> content = ref.watch(
       readerContentProvider((_book, chapter.url)),
     );
+    // ADR-0062 §决策 5：读出声时把那句话画出来。这个 provider 只在读声时才有值，
+    // 所以没开 TTS 的读者只多一次空读，不会因此拉起语音引擎。
+    final ReaderTtsHighlight? spoken = ref.watch(readerTtsHighlighterProvider);
+    final ({int start, int end})? spokenRange =
+        spoken != null && spoken.chapterUrl == chapter.url
+        ? (start: spoken.start, end: spoken.end)
+        : null;
 
     // 三区点击（ADR-0051 §决策 1）：中间 ⅓ 唤出菜单，左右各 ⅓ 唤出菜单前先收起它。
     return _tapZones(
@@ -591,6 +616,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       session.charOffset,
                       palette,
                       _paddingOf(settings),
+                      spokenRange,
                     )
                   : _pagedBody(
                       chapter,
@@ -601,6 +627,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       session.chapterIndex,
                       palette,
                       _paddingOf(settings),
+                      spokenRange,
                     ),
             ParseFailure<String>(:final ParseFailureKind kind) =>
               FailureMessage(
@@ -654,6 +681,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     int initialOffset,
     ({Color background, Color foreground}) palette,
     double padding,
+    ({int start, int end})? spokenRange,
   ) => NotificationListener<ScrollEndNotification>(
     onNotification: (ScrollEndNotification notification) {
       // 滚动停下时记一次：按比例换算成字符偏移（ADR-0044 §决策 4）。
@@ -671,7 +699,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     child: SingleChildScrollView(
       controller: _scroll,
       padding: EdgeInsets.all(padding),
-      child: _restoredScrollText(chapter, body, style, initialOffset),
+      child: _restoredScrollText(
+        chapter,
+        body,
+        style,
+        initialOffset,
+        spokenRange,
+      ),
     ),
   );
 
@@ -681,6 +715,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     String body,
     TextStyle style,
     int initialOffset,
+    ({int start, int end})? spokenRange,
   ) {
     if (_restoredChapterUrl != chapter.url) {
       _restoredChapterUrl = chapter.url;
@@ -696,7 +731,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       });
     }
 
-    return Text(body, style: style);
+    return readingText(
+      body: body,
+      style: style,
+      highlightStyle: spokenSentenceStyle(context, style),
+      highlight: spokenRange,
+    );
   }
 
   /// The paged body: pages measured by [readerPageStarts], turned horizontally.
@@ -709,6 +749,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     int chapterIndex,
     ({Color background, Color foreground}) palette,
     double padding,
+    ({int start, int end})? spokenRange,
   ) {
     return Padding(
       padding: EdgeInsets.all(padding),
@@ -721,6 +762,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         initialOffset: initialOffset,
         foreground: palette.foreground,
         isLastChapter: chapterIndex == chapterCount - 1,
+        spokenRange: spokenRange,
         onOffsetChanged: _rememberOffset,
         onNextChapter: () => unawaited(
           ref.read(readerSessionProvider(_book).notifier).nextChapter(),
@@ -771,6 +813,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       readerPagePaddingOf(settings.pagePadding);
 
   /// Opens the chapter list and jumps to the chosen chapter (ADR-0051 §决策 2).
+  /// Opens the read-aloud sheet and remembers its notifier for the exit rule.
+  void _openTts() {
+    _tts = ref.read(readerTtsProvider(widget.book).notifier);
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (BuildContext context) => ReaderTtsSheet(book: widget.book),
+      ),
+    );
+  }
+
   void _openToc(List<ReadingChapter> chapters) {
     if (chapters.isEmpty) {
       return;
@@ -829,6 +883,7 @@ class _PagedBody extends StatefulWidget {
     required this.initialOffset,
     required this.foreground,
     required this.isLastChapter,
+    required this.spokenRange,
     required this.onOffsetChanged,
     required this.onNextChapter,
     super.key,
@@ -839,6 +894,10 @@ class _PagedBody extends StatefulWidget {
   final int initialOffset;
   final Color foreground;
   final bool isLastChapter;
+
+  /// The sentence being read aloud, as an offset range of [text] (ADR-0062 §决策 5).
+  final ({int start, int end})? spokenRange;
+
   final ValueChanged<int> onOffsetChanged;
   final VoidCallback onNextChapter;
 
@@ -893,9 +952,13 @@ class _PagedBodyState extends State<_PagedBody> {
 
             return SingleChildScrollView(
               physics: const NeverScrollableScrollPhysics(),
-              child: Text(
-                widget.text.substring(start, end),
+              child: readingText(
+                body: widget.text,
+                start: start,
+                end: end,
                 style: widget.style,
+                highlightStyle: spokenSentenceStyle(context, widget.style),
+                highlight: widget.spokenRange,
               ),
             );
           },

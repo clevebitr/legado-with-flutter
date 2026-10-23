@@ -29,6 +29,7 @@ HttpPolicy httpPolicy(Ref ref) => HttpPolicy(
     ref.watch(concurrencySettingProvider),
     ref.watch(appLoggerProvider),
   ),
+  allowPlainHttp: ref.watch(plainHttpSettingProvider),
 );
 
 /// The per-source concurrency budget the user chose, or `null` when nobody chose one.
@@ -38,6 +39,14 @@ HttpPolicy httpPolicy(Ref ref) => HttpPolicy(
 /// normal state before the settings are loaded and in tests that do not care.
 @Riverpod(keepAlive: true)
 int? concurrencySetting(Ref ref) => null;
+
+/// Whether the user opted into plaintext `http://` (C-SEC-2).
+///
+/// Declared here for the same reason as [concurrencySetting]: `core/` must not import
+/// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
+/// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
+@riverpod
+bool plainHttpSetting(Ref ref) => false;
 
 /// Maps a user-chosen budget to a value [RequestLimiter] can accept.
 ///

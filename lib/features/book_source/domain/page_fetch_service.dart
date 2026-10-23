@@ -5,6 +5,7 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
@@ -109,11 +110,13 @@ final class PageFetchService {
     required this._engine,
     required this._http,
     required this._logger,
+    this._webPages,
   });
 
   final RuleEngine _engine;
   final HttpClient _http;
   final AppLogger _logger;
+  final WebPageFetcher? _webPages;
 
   /// Fetches one **URL rule** and parses the body into a page scope
   /// (`book-source.md` §4.3).
@@ -134,10 +137,12 @@ final class PageFetchService {
   /// * suffix headers are merged **over** the source's own `header`, which is what upstream
   ///   does and what a site asking for a per-request `Referer` expects.
   ///
-  /// Option fields this repository cannot honour (`webView`, `webJs`, `retry`, …) are logged
-  /// by name and ignored, so a source degrades instead of disappearing (ADR-0032's stance
-  /// for unknown syntax). [headers] stays the **source-level** table; the caller keeps passing
-  /// the same map it would pass to [fetch].
+  /// Option fields this repository cannot honour (`webJs`, `retry`, …) are logged by name and
+  /// ignored, so a source degrades instead of disappearing (ADR-0032's stance for unknown syntax).
+  /// `webView` is **not** ignored: a GET or POST request is routed through the [WebPageFetcher]
+  /// port and rendered, and only a platform without a WebView falls back to plain HTTP
+  /// (ADR-0062 §决策 1). [headers] stays the **source-level** table; the caller keeps passing the
+  /// same map it would pass to [fetch].
   Future<ParseResult<FetchedPage>> fetchRule(
     String rule, {
     required String rulePath,
@@ -160,20 +165,15 @@ final class PageFetchService {
       case ParseSuccess<UrlRule>(:final UrlRule data):
         urlRule = data;
     }
-    final UrlRuleOptions options = urlRule.options ?? const UrlRuleOptions();
-    for (final String ignored in options.unsupported) {
-      _logger.warning(
-        'Ignoring an unsupported URL option: rule=$rulePath '
-        'option=$ignored source=${sourceId ?? 'unknown'}',
-      );
-    }
+    final UrlRuleOptions textOptions =
+        urlRule.options ?? const UrlRuleOptions();
 
     final ParseResult<String> address = await _engine.renderUrl(
       urlRule.template,
       rulePath: rulePath,
       params: params,
       context: context,
-      charset: options.charset,
+      charset: textOptions.charset,
     );
     final String rendered;
     switch (address) {
@@ -185,7 +185,37 @@ final class PageFetchService {
       case ParseSuccess<String>(:final String data):
         rendered = data;
     }
-    final String url = resolveAbsoluteUrl(rendered.trim(), context.baseUrl);
+
+    // 渲染后的地址可能自带 `,{…}`（`@js:` 规则返回「URL + 选项」是真实语料的常见写法）。
+    // 必须在绝对化之前再切一次，否则 `{` 会被 `Uri.resolve` 编码成 `%7B`，选项就变成路径了。
+    final UrlRule renderedRule = switch (parseUrlRule(
+      rendered,
+      rulePath: rulePath,
+    )) {
+      ParseSuccess<UrlRule>(:final UrlRule data) => data,
+      ParseFailure<UrlRule>() => UrlRule(
+        template: stripUnreadableUrlOptions(rendered),
+      ),
+    };
+    final UrlRuleOptions options = renderedRule.options ?? textOptions;
+    // `webView` 有真正的实现时不要再报「忽略」；只有平台没有 WebView 才回落。
+    // POST/body 不再排除在外：表单型站点（ADR-0062 §决策 1）只有提交之后才有结果页。
+    final bool canWebView =
+        options.unsupported.contains('webView') &&
+        (_webPages?.isSupported ?? false);
+    for (final String ignored in options.unsupported) {
+      if (canWebView && ignored == 'webView') {
+        continue;
+      }
+      _logger.warning(
+        'Ignoring an unsupported URL option: rule=$rulePath '
+        'option=$ignored source=${sourceId ?? 'unknown'}',
+      );
+    }
+    final String url = resolveAbsoluteUrl(
+      renderedRule.template.trim(),
+      context.baseUrl,
+    );
 
     final Map<String, String> requestHeaders = <String, String>{
       ...?headers,
@@ -211,6 +241,53 @@ final class PageFetchService {
           return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
         case ParseSuccess<String>(:final String data):
           body = data;
+      }
+    }
+
+    if (canWebView) {
+      final bool post = options.method == UrlRequestMethod.post;
+      if (post) {
+        // 页面自己带的脚本会按这个头解析 body；规则没写就按载荷形状定（ADR-0062 §决策 1）。
+        requestHeaders.putIfAbsent(
+          'Content-Type',
+          () => _contentTypeOf(body ?? ''),
+        );
+      }
+      final ParseResult<FetchedWebPage> rendered = await _requireWebPages()
+          .fetch(
+            url: url,
+            headers: requestHeaders,
+            rulePath: rulePath,
+            method: post ? WebPageRequestMethod.post : WebPageRequestMethod.get,
+            body: post ? body : null,
+          );
+      switch (rendered) {
+        case ParseSuccess<FetchedWebPage>(:final FetchedWebPage data):
+          return _pageOf(
+            ParseSuccess<HttpResponse>(
+              HttpResponse(
+                statusCode: 200,
+                headers: const <String, List<String>>{},
+                body: data.body,
+              ),
+            ),
+            url: data.url,
+            headers: requestHeaders,
+            page: page,
+            source: source,
+            bookName: context.bookName,
+            chapterTitle: context.chapterTitle,
+            book: context.book,
+          );
+        case ParseFailure<FetchedWebPage>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ):
+          // WebView 失败时回落到普通 GET：有的站点只在部分页面需要 JS，能取到就用。
+          _logger.warning(
+            'WebView fetch failed, falling back to HTTP: rule=$rulePath '
+            'kind=${kind.name} source=${sourceId ?? 'unknown'}',
+          );
       }
     }
 
@@ -242,8 +319,12 @@ final class PageFetchService {
       source: source,
       bookName: context.bookName,
       chapterTitle: context.chapterTitle,
+      book: context.book,
     );
   }
+
+  /// The WebView port, which is non-null whenever the `webView` branch was taken.
+  WebPageFetcher _requireWebPages() => _webPages!;
 
   /// Whether [body] is a JSON / XML payload rather than a form (`AnalyzeUrl.analyzeFields`).
   bool _isStructuredBody(String body) {
@@ -252,6 +333,23 @@ final class PageFetchService {
     return trimmed.startsWith('{') ||
         trimmed.startsWith('[') ||
         trimmed.startsWith('<');
+  }
+
+  /// The `Content-Type` a WebView POST declares when the rule declares none.
+  ///
+  /// Upstream sends the same three shapes through a WebView, and a page whose script reads
+  /// `request.getParameter` needs the form type to be present: a body sent as
+  /// `text/plain` reaches the site but parses to nothing (ADR-0062 §决策 1).
+  String _contentTypeOf(String body) {
+    final String trimmed = body.trimLeft();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      return 'application/json';
+    }
+    if (trimmed.startsWith('<')) {
+      return 'application/xml';
+    }
+
+    return 'application/x-www-form-urlencoded';
   }
 
   /// Fetches [url] and parses the body into a page scope.
@@ -288,6 +386,7 @@ final class PageFetchService {
     JsSourceInfo? source,
     String? bookName,
     String? chapterTitle,
+    JsBookInfo? book,
   }) async {
     final ParseResult<HttpResponse> response = await _http.get(
       url,
@@ -305,6 +404,7 @@ final class PageFetchService {
       source: source,
       bookName: bookName,
       chapterTitle: chapterTitle,
+      book: book,
     );
 
     return switch (fetched) {
@@ -328,6 +428,7 @@ final class PageFetchService {
     required JsSourceInfo? source,
     String? bookName,
     String? chapterTitle,
+    JsBookInfo? book,
   }) => switch (response) {
     ParseFailure<HttpResponse>(
       :final ParseFailureKind kind,
@@ -351,6 +452,7 @@ final class PageFetchService {
             // 建在页面 scope 上，再由引擎继承到每个条目与每条规则（ADR-0049）。
             bookName: bookName,
             chapterTitle: chapterTitle,
+            book: book,
           ),
         ),
       ),
@@ -638,6 +740,35 @@ final class PageFetchService {
     };
   }
 
+  /// Returns every value a **top-level list** rule produces on [scope].
+  ///
+  /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7), the same
+  /// rule [content] follows: a top-level rule that no longer fits its page is the stage's
+  /// failure, not an empty result. Used by the image and audio stages, where one matched
+  /// value is one page / one track (ADR-0053 §决策 2, ADR-0054 §决策 2).
+  ///
+  /// A rejected rule stays [ParseFailureKind.unsupportedRule] (C-SRC-4); unlike [field]
+  /// it is not degraded, because the whole stage depends on this list.
+  Future<ParseResult<List<String>>> valueList(
+    String? rule,
+    RuleScope scope,
+    String rulePath,
+  ) async {
+    final ParseResult<List<String>> parsed = await _engine.extractAll(
+      rule ?? '',
+      scope,
+      rulePath: rulePath,
+    );
+
+    return switch (parsed) {
+      ParseSuccess<List<String>>(:final List<String> data)
+          when data.isNotEmpty =>
+        ParseSuccess<List<String>>(data),
+      ParseSuccess<List<String>>() => _noMatch<List<String>>(rulePath),
+      ParseFailure<List<String>>() => parsed,
+    };
+  }
+
   /// Fetches the page [rule] names and walks every page [nextRule] names
   /// (`book-source.md` §4.1).
   ///
@@ -730,6 +861,7 @@ final class PageFetchService {
         source: source,
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
+        book: context.book,
       );
 
       switch (page) {
@@ -878,7 +1010,8 @@ final class PageFetchService {
         continue;
       }
 
-      final String url = resolveAbsoluteUrl(url0, currentUrl);
+      // 翻页值也可能带 `,{…}`：与章节地址同一口径（先切选项再绝对化）。
+      final String url = resolveUrlRule(url0, currentUrl);
       if (url == currentUrl || urls.contains(url)) {
         continue;
       }
@@ -912,6 +1045,7 @@ final class PageFetchService {
       // §6 的 `java.get('bookName' / 'title')`：翻页规则与它读到的那一页同属一本书。
       bookName: context?.bookName,
       chapterTitle: context?.chapterTitle,
+      book: context?.book,
     );
   }
 

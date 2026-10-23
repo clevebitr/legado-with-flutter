@@ -4,6 +4,7 @@ import 'package:flutter_reader/core/di/js_bridge_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/preference_store_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
+import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_view_store_impl.dart';
 import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
@@ -18,6 +19,7 @@ import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engi
 import 'package:flutter_reader/features/book_source/domain/usecases/aggregate_search_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/check_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/explore_books.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/fetch_audio_tracks.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_explore_categories.dart';
@@ -72,7 +74,16 @@ PageFetchService pageFetchService(Ref ref) => PageFetchService(
   engine: ref.watch(ruleEngineProvider),
   http: ref.watch(httpClientProvider),
   logger: ref.watch(appLoggerProvider),
+  webPages: ref.watch(webPageFetcherProvider),
 );
+
+/// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
+///
+/// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
+/// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
+/// failing the source.
+@riverpod
+WebPageFetcher webPageFetcher(Ref ref) => const UnsupportedWebPageFetcher();
 
 /// Provides the search use case.
 @Riverpod(keepAlive: true)
@@ -113,6 +124,11 @@ FetchMangaPages fetchMangaPages(Ref ref) => FetchMangaPages(
   pages: ref.watch(pageFetchServiceProvider),
   logger: ref.watch(appLoggerProvider),
 );
+
+/// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+@riverpod
+FetchAudioTracks fetchAudioTracks(Ref ref) =>
+    FetchAudioTracks(pages: ref.watch(pageFetchServiceProvider));
 
 /// Provides the use case that reads a source's discover-page categories.
 @Riverpod(keepAlive: true)

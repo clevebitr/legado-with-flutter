@@ -8,20 +8,22 @@ part of 'manga_queries.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16).
+/// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16/M17).
 ///
-/// It is the async seam `ReaderPage` waits on before building either body: the answer decides
-/// whether a text request or an image request is the right one, so guessing "text" while the port
-/// loads would fetch a chapter body nobody shows.
+/// It is the async seam `ReaderPage` waits on before building any body: the answer decides whether
+/// a text, image or audio request is the right one, so guessing "text" while the port loads would
+/// fetch a chapter body nobody shows. The file is named after manga because M16 introduced it; the
+/// audio body (M17) dispatches on the same answer instead of asking the source twice.
 
 @ProviderFor(readerSourceKind)
 final readerSourceKindProvider = ReaderSourceKindFamily._();
 
-/// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16).
+/// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16/M17).
 ///
-/// It is the async seam `ReaderPage` waits on before building either body: the answer decides
-/// whether a text request or an image request is the right one, so guessing "text" while the port
-/// loads would fetch a chapter body nobody shows.
+/// It is the async seam `ReaderPage` waits on before building any body: the answer decides whether
+/// a text, image or audio request is the right one, so guessing "text" while the port loads would
+/// fetch a chapter body nobody shows. The file is named after manga because M16 introduced it; the
+/// audio body (M17) dispatches on the same answer instead of asking the source twice.
 
 final class ReaderSourceKindProvider
     extends
@@ -33,11 +35,12 @@ final class ReaderSourceKindProvider
     with
         $FutureModifier<ParseResult<ReaderSourceKind>>,
         $FutureProvider<ParseResult<ReaderSourceKind>> {
-  /// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16).
+  /// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16/M17).
   ///
-  /// It is the async seam `ReaderPage` waits on before building either body: the answer decides
-  /// whether a text request or an image request is the right one, so guessing "text" while the port
-  /// loads would fetch a chapter body nobody shows.
+  /// It is the async seam `ReaderPage` waits on before building any body: the answer decides whether
+  /// a text, image or audio request is the right one, so guessing "text" while the port loads would
+  /// fetch a chapter body nobody shows. The file is named after manga because M16 introduced it; the
+  /// audio body (M17) dispatches on the same answer instead of asking the source twice.
   ReaderSourceKindProvider._({
     required ReaderSourceKindFamily super.from,
     required String super.argument,
@@ -84,11 +87,12 @@ final class ReaderSourceKindProvider
 
 String _$readerSourceKindHash() => r'6719125f6795e19e65b9a4aaa28859d38d3f657a';
 
-/// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16).
+/// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16/M17).
 ///
-/// It is the async seam `ReaderPage` waits on before building either body: the answer decides
-/// whether a text request or an image request is the right one, so guessing "text" while the port
-/// loads would fetch a chapter body nobody shows.
+/// It is the async seam `ReaderPage` waits on before building any body: the answer decides whether
+/// a text, image or audio request is the right one, so guessing "text" while the port loads would
+/// fetch a chapter body nobody shows. The file is named after manga because M16 introduced it; the
+/// audio body (M17) dispatches on the same answer instead of asking the source twice.
 
 final class ReaderSourceKindFamily extends $Family
     with
@@ -105,11 +109,12 @@ final class ReaderSourceKindFamily extends $Family
         isAutoDispose: true,
       );
 
-  /// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16).
+  /// Which reader page opens `sourceUrl` (`docs/dev/roadmap.md` §3.10 M16/M17).
   ///
-  /// It is the async seam `ReaderPage` waits on before building either body: the answer decides
-  /// whether a text request or an image request is the right one, so guessing "text" while the port
-  /// loads would fetch a chapter body nobody shows.
+  /// It is the async seam `ReaderPage` waits on before building any body: the answer decides whether
+  /// a text, image or audio request is the right one, so guessing "text" while the port loads would
+  /// fetch a chapter body nobody shows. The file is named after manga because M16 introduced it; the
+  /// audio body (M17) dispatches on the same answer instead of asking the source twice.
 
   ReaderSourceKindProvider call(String sourceUrl) =>
       ReaderSourceKindProvider._(argument: sourceUrl, from: this);

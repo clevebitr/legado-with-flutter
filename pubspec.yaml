@@ -47,6 +47,15 @@ dependencies:
   shared_preferences: ^2.5.3
   path_provider: ^2.1.6
 
+  # 听书与音频（ADR-0054）：播放、Windows 实现、后台通知、系统朗读。
+  # `just_audio_windows` 不是联邦插件的 endorsed 实现，必须单独声明（C-BAN-4）。
+  just_audio: ^0.10.6
+  just_audio_windows: ^0.2.3
+  audio_service: ^0.18.19
+  # Windows 的 SMTC 走 audio_service 的平台接口实现（MIT，0.0.3）；见 ADR-0062 §决策 4。
+  audio_service_win: ^0.0.3
+  flutter_tts: ^4.2.5
+
   # 观测：业务侧只允许经 core/logging 使用（C-ERR-5、ADR-0006）
   logger: ^2.8.0
   # 日志脱敏摘要（sha256）与 `@js:` 沙箱的 crypto.* 绑定：仅 core/logging/redaction.dart
@@ -57,6 +66,13 @@ dependencies:
   freezed_annotation: ^3.1.0
   json_annotation: ^4.12.0
   file_selector: ^1.1.0
+
+  # 播放后端与 WebView（ADR-0061）：
+  # Windows 用 media_kit（libmpv，随包二进制 LGPL-2.1+ 白名单）；Android / iOS 仍用 just_audio。
+  # flutter_inappwebview 提供 `,{webView:…}` 的 headless WebView（Apache-2.0）。
+  media_kit: ^1.2.6
+  media_kit_libs_windows_audio: ^1.0.9
+  flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
   flutter_test:
