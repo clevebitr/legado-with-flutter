@@ -34,5 +34,5 @@ auto-breakpoint: false
 
 ## Current: M20 — 书内全文搜索 + 规则管理 UI（净化/目录/字典/高亮）（ui-gap §4）
 
-goal: M21a 已收尾；M20 需求与 ADR 待拆（详见 #20）
-breakpoint: 下一步：M20 先定规格（规则存储位置 + 搜索取消语义）
+goal: M20-a 已落地（ADR-0070 + rules 表 v9）；剩仓储/UI/搜索
+breakpoint: 下一步：M20-b 规则仓储 + 净化规则接线

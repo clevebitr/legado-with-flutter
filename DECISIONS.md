@@ -307,3 +307,19 @@ M21a 第三刀按 ADR-0068 决策 9 的评估执行：零新依赖、自研解�
 连带修：G8 让「目录里有条目但没有 URL」不再是「成功且为空」，`switch_book_source` 里那条 `data.isEmpty` 分支变成不可达（删掉并注明），`check_book_source` 的 `emptyGroup` 分支改由「搜索列表命中但每条都没 bookUrl」这条真实路径覆盖。
 
 验证：1830 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；设备级 `js_bridge` 新增 `list.size` 探针（真引擎）。
+
+## 2026-10-24 — ADR-0069/0070：兼容性六项修复落地；M20 规格定案（rules 单表 v9 + 顺序预取搜索）
+
+先说兼容性取证，再做 M20-a。
+
+**兼容性（ADR-0069）**：用户给的 5 条「上游可用、本仓不可用」源全是 `bookSourceType: 2`。我逐条导入并把每个字段送进 `extractFirst`/`extractAll`/`selectAll`/`renderUrl`，只区分「语法被拒」与「没命中」，再把每条对到本机 `legado-upstream` 的实现点，得到 G1–G9。用户裁决「G1–G5+G7+G8 全做，G6 登记」，已全部落地（详见 DECISIONS #21 / ADR-0069）。
+
+**M20-a（ADR-0070）**：用户裁决「Drift 单表 + kind 列」「顺序预取 + 可停止」。落地内容：
+
+1. **ADR-0070** 定两件事：四类规则共用一张 `rules` 表（`kind` + JSON `payload`，payload 形状由 ADR 拥有，未知键保留、坏 payload 标坏不丢），以及书内搜索的语义（从当前章起顺序预取、并发 2、受速率门与 `SourceBudget`、`cancel()` 停新请求但保留已取正文、命中带 `(chapterIndex, title, url, offset, excerpt)`）。还写死了接线范围：**只有净化规则**承诺影响阅读（接在 `replaceRegex` 之后），字典/高亮/目录规则 M20 只做列表+编辑+启停，因为分别缺选词入口、富文本渲染、本地 txt 导入。
+2. **schema v8 → v9**：`rules` 表 + `(kind, sort_order)` 索引；迁移只做结构（内置规则由仓储首次使用时播种，`hasAny` 区分「从没初始化」与「用户清空了」）；`drift_schema_v9.json` + `generated_migrations/schema_v9.dart` 一并提交，迁移测试补 v8→v9、v1→v9 与「版本落后于结构」三条。
+3. **`RuleDao`**：`ofKind` / `enabledOfKind` / `insert`（缺省追加到该 kind 末尾）/ `updateRow` / `deleteById` / `deleteKind` / `hasAny` / `_nextSortOrder`，11 条单测。
+
+坑：`build_runner --build-filter` 会删掉不匹配的生成物（4000+ analyze 错），改实体一律全量 build。另外迁移测试里几条 `fromV?ToV8` 的名字在目标版本升到 9 后一并改名，避免「名字说 8、断言跑 9」。
+
+验证：1842 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等、schema dump 与生成迁移同步；Windows 5 文件全过（含 on-disk v9）。
