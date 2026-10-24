@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fonts that lie: the third M21a cut reads a site's own TrueType tables (ADR-0068, M21a third cut)
+
+- **`java.queryTTF` / `java.queryBase64TTF` / `java.replaceFont` are implemented**, with no new
+  dependency: a small reader for a font's `sfnt` directory, its `cmap` (formats 0 / 4 / 6 / 12,
+  Unicode subtables only, with a fallback when the preferred one maps nothing) and its `post`
+  format 2.0 glyph names.
+- **Glyph names first, glyph ids second.** A site usually sends a *subset* font, which renumbers
+  glyphs but keeps their `uniXXXX` names; matching by id alone would silently swap the wrong
+  characters on real sources. Ids remain the fallback for fonts that keep no names.
+- **A font never enters the script.** `queryTTF` answers an opaque `{__ttf, id}` handle and
+  `replaceFont` hands it back; the real data stays in the worker's per-job registry, so a chapter
+  costs one small envelope instead of a JSON copy of every glyph. A stale handle says "unknown
+  font" instead of reading someone else's font.
+- **A byte door for fonts.** `java.queryTTF(url)` fetches through a new `getBytes` verb on the JS
+  http channel (base64 across the boundary), because the text door decodes binary bodies into
+  garbage — the same reason the captcha needed it. Because the network is async here, that form
+  returns a Promise (`await java.queryTTF(url)`); `queryBase64TTF` and `replaceFont` stay sync.
+- **`java.getFontGlyph` is deliberately absent:** the earlier ADR listed it, but upstream's
+  `JsExtensions.kt` has no such member, and inventing one would make a wrong spelling look legal.
+- A font that cannot be read fails *that call* (`java.queryTTF failed`), not the job: the
+  un-replaced body is still readable.
+
 ### A session that vanished can be repaired, and a shell page can be cut open (ADR-0068, M21a second cut)
 
 - **`loginCheckJs` is a response interceptor, not a yes/no check.** After every fetched page the

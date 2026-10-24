@@ -270,3 +270,20 @@ M21a 按用户裁决拆成「验证 + 引擎」与「原 U8–U15」两条线（
 4. **两个新 `js_bridge` 探针**（`loginCheckJs` 的 `result` 响应对象：属性 + 方法 + 返回值往返）当场抓到一个真 bug：`JsResponseView.toJson()` 发的是 `code` / `headers`，而 prelude 读的是 `__code` / `__headers`，于是设备上 `result.code()` 恒为 0、`headers()` 恒空——单测（用 JSON 直比对）看不出来，只有真引擎跑一遍才暴露。教训：**沙箱前奏与宿主序列化的键名必须由同一条设备级用例钉住**，别只测宿主一侧。
 
 最终门禁：format 0、analyze 干净、1761 用例全过、core 100% / domain 100% / data 97.94%、codegen 幂等。
+
+## 2026-10-24 — M21a 第三刀：字体反爬零依赖落地（cmap + post，字形名优先、id 兜底），并砍掉不存在的 getFontGlyph
+
+M21a 第三刀按 ADR-0068 决策 9 的评估执行：零新依赖、自研解析。落地过程中有两处必须改口径：
+
+1. **字形名优先，字形 id 兜底（原评估写的是「只用 id」）。** 站点发的多半是**子集字体**：子集化会重排字形 id，但 `post` 表里的 `uniXXXX` 名字还在。只按 id 对会在真实语料上静默换错字，而且错得看不出来（换出来的是另一个真字）。所以 `TtfFont` 同时读 `cmap`（format 0/4/6/12，Unicode 平台优先、format 12 优于 4，首选子表映射为空时回退到下一张）与 `post` 2.0 自定义名（索引 <258 的标准 Macintosh 名不内置，这些字形退回按 id）。
+2. **`getFontGlyph` 不实现。** ADR 早期登记里有这个名字，但上游 master 的 `JsExtensions.kt` 只有 `queryTTF` / `queryBase64TTF` / `replaceFont`。凭空造一个只会让语料里的假拼写看起来合法。
+
+实现形状：
+- `lib/core/font/ttf_font.dart`：纯 Dart 解析 + `replaceFontText`。**不做逐字段边界检查**——字体是不可信输入，`parse` 用一个 `try` 把 `RangeError` 翻成 `FormatException`（一处可达分支换掉二十处守卫；`avoid_catching_errors` 已按理由 ignore）。
+- `lib/core/js/js_fonts.dart`：`JsFontRegistry`，字体以不透明句柄 `{__ttf, id}` 进脚本，真实字体留在 worker 里，随 job 清空、id 不复用（跨 job 存句柄会「找不到」而不是读到别人的字体）。一次正文替换只花一个小信封，而不是几万个字形的 JSON。
+- **字节门**：`java.queryTTF(url)` 需要字体字节，走 `http` 通道新加的 `getBytes` 动词（base64 过界）。文本门会把二进制体解码坏——与验证码图片同一个理由。网络在本仓一律异步，所以这个形态返回 Promise（`await java.queryTTF(url)`），`queryBase64TTF` / `replaceFont` 同步。
+- 失败面：不是字体 / base64 坏了 / 句柄失效都只让**这次调用**抛错，不判整条 job 死——没换成功的正文仍然可读。
+
+测试：`test/support/synthetic_ttf.dart` 现拼 sfnt 字节（表目录 + cmap + post），所以「截断文件 / 表撒谎 / 空子表 / 坏分组 / 3.0 post」都能逐字节复现，不必提交二进制字体基线。真引擎上补了三条 `integration_test/js_bridge_test.dart` 探针（base64 往返、url 字节门、非字体报错）。
+
+验证：1810 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 5 文件全过（js_bridge 33/33）、Android js_bridge 33/33。

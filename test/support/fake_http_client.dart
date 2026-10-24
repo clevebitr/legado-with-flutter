@@ -76,6 +76,7 @@ final class FakeHttpClient implements HttpClient {
   }
 
   final Map<String, String> _bodies = <String, String>{};
+  final Map<String, Uint8List> _byteBodies = <String, Uint8List>{};
   final Map<String, Map<String, List<String>>> _responseHeaders =
       <String, Map<String, List<String>>>{};
   final Map<String, ParseFailureKind> _failures = <String, ParseFailureKind>{};
@@ -92,10 +93,13 @@ final class FakeHttpClient implements HttpClient {
     _responseHeaders[url] = headers;
   }
 
+  /// Serves [bytes] to `getBytes` (the font byte door) instead of the text body.
+  void serveBytes(String url, Uint8List bytes) {
+    _bodies[url] = '';
+    _byteBodies[url] = bytes;
+  }
+
   /// Makes [url] fail with [kind] instead of being served.
-  ///
-  /// [cause] lets a test reproduce a **typed** refusal — the request layer marks an oversized
-  /// body with a `BodyTooLargeException` cause, and the import path has to recognise it.
   void failWith(String url, ParseFailureKind kind, {Object? cause}) {
     _failures[url] = kind;
     if (cause != null) {
@@ -158,7 +162,9 @@ final class FakeHttpClient implements HttpClient {
 
     return switch (result) {
       ParseSuccess<HttpResponse>(:final HttpResponse data) =>
-        ParseSuccess<Uint8List>(Uint8List.fromList(utf8.encode(data.body))),
+        ParseSuccess<Uint8List>(
+          _byteBodies[url] ?? Uint8List.fromList(utf8.encode(data.body)),
+        ),
       ParseFailure<HttpResponse>(
         :final ParseFailureKind kind,
         :final String rulePath,

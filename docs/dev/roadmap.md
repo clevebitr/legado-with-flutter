@@ -455,7 +455,7 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 统一「单源预算」（超时 / 重试）抽成公共件 | ✅ **已闭环（M12，2026-10-21）**：`domain/source_budget.dart` 是「一个源一份预算」的唯一实现，聚合搜索 60 s / 校验 180 s 都改用它（ADR-0049 §决策 3）；单章正文仍靠 `HttpPolicy` 的逐请求超时 |
 | `webView` / `webJs` / `retry` 等 URL 选项字段 | ✅ **已闭环（M21a，ADR-0068 §决策 6/8）**：`webView`（GET/POST）+ `webViewDelayTime` + `webJs` + `overrideUrlRegex` + `retry`（≤3）+ `readTimeout`（≤120 s）；`proxy` / `dnsIp` / `callTimeout` / `HEAD` / `encodedForm` 仍按名记 `unsupported`（§决策 8 登记） |
 | 过人机验证（可见 WebView、图片验证码、`loginCheckJs`） | ✅ **已闭环（M21a 第二刀，2026-10-24）**：可见 WebView 页 + 图片验证码 + `java.startBrowser*` / `getVerificationCode` / `webView*` + Cookie v8 持久化与双向同步 + 三个登录源字段 + `loginCheckJs` **响应拦截器** + 书源管理的「登录 / 过验证」入口 + `sourceRegex` / `bodyJs`（ADR-0068 及其增补）。**未做**：原生 `loginUi` 表单（归 M21b/U15）、字体反爬（见下一行） |
-| 字体反爬 `queryBase64TTF` / `replaceFont` / `getFontGlyph` | **评估已定案、实现未做（M21a 第三刀）**：不引依赖（候选包许可与语义均不合格），自研 TTF `cmap` format 4/12 解析 + 合成字体单测；返回表示定为 `code → glyphId`（不解析 `post` 表）。命中仍报 `unsupportedRule`；触发 = 出现「正文是私有字形、文本层全是乱码」的真实源 |
+| 字体反爬 `queryTTF` / `queryBase64TTF` / `replaceFont` | ✅ **已闭环（M21a 第三刀，2026-10-24）**：零新依赖，自研 `cmap`（format 0/4/6/12）+ `post` 2.0 解析，字形名优先、字形 id 兜底，字体以不透明句柄随 job 存活；`queryTTF(url)` 走新加的字节门并返回 Promise。`getFontGlyph` 上游并不存在，未实现（ADR-0068 增补决策 9） |
 | `concurrentRate` 的真源只有 3 条且都跑不了原样链路 | 已登记（b2 用派生源 A/B 取证）；触发 = 其中任一条变得可跑 |
 | 「关于」页入口（设置页的菜单行） | **5.9**：与法律声明页一起落地；一个打开空页的菜单行是死链（C-BAN-2），所以 5.6 没有加它 |
 | Big5 / Big5-HKSCS 的解码 | ✅ **已闭环（M12，2026-10-21）**：`enough_convert`（MPL-2.0，白名单 + ADR-0048）的 `Big5Codec` 补解码；`book-source.md` §5.1 已更新 |

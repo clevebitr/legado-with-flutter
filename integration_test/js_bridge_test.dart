@@ -18,6 +18,8 @@ import 'package:html/parser.dart' as parser;
 import 'package:integration_test/integration_test.dart';
 import 'package:logger/logger.dart';
 
+import '../test/support/synthetic_ttf.dart';
+
 /// 设备级验证：真实 QuickJS 引擎 + 真实 worker isolate 上跑通 `JsBridge` 的 3.3 契约。
 ///
 /// `lib/core/js/quickjs_worker.dart` 依赖 `flutter_qjs_next` 的原生库，`flutter test`
@@ -116,6 +118,99 @@ void main() {
       '__code': 200,
       '__headers': <String, Object?>{},
     });
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_givenABase64Font_replacesTheObfuscatedText', (
+    WidgetTester tester,
+  ) async {
+    // 字体反解（ADR-0068 增补决策 9）：两套字体都带 `uniXXXX` 字形名，脚本只把句柄交回来。
+    // 这条探针在真引擎上跑 `java.queryBase64TTF` / `java.replaceFont`，也钉住「字体不进脚本」。
+    final String errorFont = base64Encode(
+      buildSyntheticFont(
+        cmapOverride: buildSyntheticCmap(
+          codes: <int, int>{0xE001: 1, 0xE002: 2},
+        ),
+        includePost: true,
+        postOverride: buildSyntheticPost(
+          numGlyphs: 3,
+          names: <int, String>{1: 'uni5251', 2: 'uni5BA2'},
+        ),
+      ),
+    );
+    final String correctFont = base64Encode(
+      buildSyntheticFont(
+        cmapOverride: buildSyntheticCmap(
+          codes: <int, int>{0x5251: 1, 0x5BA2: 2},
+        ),
+        includePost: true,
+        postOverride: buildSyntheticPost(
+          numGlyphs: 3,
+          names: <int, String>{1: 'uni5251', 2: 'uni5BA2'},
+        ),
+      ),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var errorFont = java.queryBase64TTF('$errorFont');"
+            "var correctFont = java.queryBase64TTF('$correctFont');"
+            r"java.replaceFont('前面后面', errorFont, correctFont)",
+      ),
+    );
+
+    expect(_value(result), '前面剑客后面');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_givenAFontUrl_fetchesTheBytesAndReplaces', (
+    WidgetTester tester,
+  ) async {
+    // `java.queryTTF(url)` 走字节门再解析；本仓网络一律异步，所以规则要 `await`（登记差异）。
+    final Uint8List correctFont = buildSyntheticFont(
+      cmapOverride: buildSyntheticCmap(codes: <int, int>{0x5251: 1}),
+      includePost: true,
+      postOverride: buildSyntheticPost(
+        numGlyphs: 2,
+        names: <int, String>{1: 'uni5251'},
+      ),
+    );
+    http.bytes = correctFont;
+    final String errorFont = base64Encode(
+      buildSyntheticFont(
+        cmapOverride: buildSyntheticCmap(codes: <int, int>{0xE001: 1}),
+        includePost: true,
+        postOverride: buildSyntheticPost(
+          numGlyphs: 2,
+          names: <int, String>{1: 'uni5251'},
+        ),
+      ),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            '(async function () {'
+            " var errorFont = java.queryBase64TTF('$errorFont');"
+            " var correctFont = await java.queryTTF('https://mirror.test/f.ttf');"
+            r" return java.replaceFont('', errorFont, correctFont); })()",
+      ),
+    );
+
+    expect(_value(result), '剑');
+    expect(http.requestedUrls, contains('https://mirror.test/f.ttf'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_givenBytesThatAreNotAFont_failsTheScriptReadably', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "java.queryBase64TTF('bm90IGEgZm9udA==')"),
+    );
+
+    expect(switch (result) {
+      ParseFailure<Object?>(:final String rulePath) => rulePath,
+      ParseSuccess<Object?>() => fail('Expected a failure.'),
+    }, contains('js:error'));
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('jsBridge_whenTheRuleReturnsAnArray_reportsAList', (
@@ -873,6 +968,9 @@ final class _ProbeHttpClient implements HttpClient {
   /// The body served for every request.
   String body = '';
 
+  /// The bytes served to `getBytes` (the font byte door); falls back to [body] when unset.
+  Uint8List? bytes;
+
   /// The headers of the last request.
   Map<String, String>? lastHeaders;
 
@@ -922,13 +1020,15 @@ final class _ProbeHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
   }) async {
-    // 探针不取二进制体：它只验证 worker 发出的调用；真字节走 `http_client_test`。
+    // 字节门：字体过文本解码就坏了，所以这条通道回 base64（真字节由 http_client_test 覆盖）。
     requestedUrls.add(url);
     requestedMethods.add('GET');
     lastHeaders = headers;
     lastSourceId = sourceId;
 
-    return ParseSuccess<Uint8List>(Uint8List.fromList(utf8.encode(body)));
+    return ParseSuccess<Uint8List>(
+      bytes ?? Uint8List.fromList(utf8.encode(body)),
+    );
   }
 
   @override

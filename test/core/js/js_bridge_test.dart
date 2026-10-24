@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
@@ -684,6 +686,67 @@ void main() {
       expect(await call, isA<ParseSuccess<Object?>>());
     });
 
+    test('evaluate_givenAnHttpGetBytes_answersBase64', () async {
+      // `java.queryTTF(url)` 的字节门：字体过文本解码就坏了，所以这条通道回 base64
+      // （ADR-0068 增补决策 9）。
+      final _Fixture fixture = _buildBridge();
+      fixture.http.serveBytes('https://mirror.test/font.ttf', _fontBytes());
+
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsHttpBinding, <String, Object?>{
+          'operation': 'getBytes',
+          'url': 'https://mirror.test/font.ttf',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(fixture.http.requestedUrls, <String>[
+        'https://mirror.test/font.ttf',
+      ]);
+      expect(_replies(worker).single['value'], base64Encode(_fontBytes()));
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+    });
+
+    test('evaluate_givenAnHttpGetBytesThatFails_rejectsThePromise', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.http
+        ..serveBytes('https://mirror.test/font.ttf', _fontBytes())
+        ..failWith('https://mirror.test/font.ttf', ParseFailureKind.notFound);
+
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsHttpBinding, <String, Object?>{
+          'operation': 'getBytes',
+          'url': 'https://mirror.test/font.ttf',
+        }),
+      );
+      await pumpEventQueue();
+
+      // 传输失败只拒绝这条 Promise（规则可以换镜像），不判整个 job 死。
+      expect(_replies(worker).single['ok'], isFalse);
+      expect(_replies(worker).single['fatal'], isFalse);
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+    });
+
     test('evaluate_givenAnHttpPost_sendsTheBodyAndMethod', () async {
       final _Fixture fixture = _buildBridge();
       fixture.http.serve('https://mirror.test/api', 'posted');
@@ -801,6 +864,40 @@ void main() {
       expect(fixture.http.requestedUrls, hasLength(1));
 
       // 请求还在飞，job 已经结束（结果先到）：答复无处可去，也不得算到下一个 job 头上。
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+
+      gate.complete();
+      await pumpEventQueue();
+
+      expect(_replies(worker), isEmpty);
+    });
+
+    test('evaluate_givenAByteCallAfterTheJobEnded_answersNothing', () async {
+      // 与 GET 同一条规矩：请求还在飞时 job 已经结束，答复无处可去。
+      final _Fixture fixture = _buildBridge();
+      final Completer<void> gate = Completer<void>();
+      fixture.http.onRequest = () => gate.future;
+      fixture.http.serveBytes('https://mirror.test/font.ttf', _fontBytes());
+
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsHttpBinding, <String, Object?>{
+          'operation': 'getBytes',
+          'url': 'https://mirror.test/font.ttf',
+        }),
+      );
+      await pumpEventQueue();
+      expect(fixture.http.requestedUrls, hasLength(1));
+
       worker.emit(<String, Object?>{
         'type': 'result',
         'ok': true,
@@ -1009,6 +1106,50 @@ void main() {
       );
       expect(fixture.http.requestedUrls, isEmpty);
     });
+
+    test(
+      'evaluate_givenAByteCallLandingAfterAFatalFailure_rejectsIt',
+      () async {
+        final _Fixture fixture = _buildBridge(maxBindingCalls: 3);
+        final Completer<void> gate = Completer<void>();
+        fixture.http.onRequest = () => gate.future;
+        fixture.http.serveBytes('https://mirror.test/font.ttf', _fontBytes());
+
+        final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+          _job(script: 'hold'),
+        );
+        await pumpEventQueue();
+        final FakeJsWorkerHandle worker = fixture.workers.single;
+        worker.emit(
+          _hostCall(1, jsHttpBinding, <String, Object?>{
+            'operation': 'getBytes',
+            'url': 'https://mirror.test/font.ttf',
+          }),
+        );
+        await pumpEventQueue();
+        for (final String message in <String>['a', 'b', 'c']) {
+          worker.emit(<String, Object?>{
+            'type': 'log',
+            'level': 'info',
+            'message': message,
+          });
+        }
+        await pumpEventQueue();
+        expect(_replies(worker), isEmpty);
+
+        // 字节回来时 job 已经定了：同样不得回答一个已经失败的 job。
+        gate.complete();
+        await pumpEventQueue();
+        expect(_replies(worker).single['message'], 'the job already failed');
+
+        worker.emit(<String, Object?>{
+          'type': 'result',
+          'ok': false,
+          'error': 'js:quota',
+        });
+        await call;
+      },
+    );
 
     test(
       'evaluate_givenAnHttpCallLandingAfterAFatalFailure_rejectsIt',
@@ -1615,3 +1756,35 @@ void main() {
     });
   });
 }
+
+/// A synthetic font's bytes, for the byte-door tests.
+Uint8List _fontBytes() => Uint8List.fromList(<int>[
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x63,
+  0x6D,
+  0x61,
+  0x70,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x1C,
+  0x00,
+  0x00,
+  0x00,
+  0x04,
+]);

@@ -4,7 +4,9 @@
 
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
@@ -610,21 +612,47 @@ final class _WorkerSession {
       request.headers,
     );
     final String sourceId = job.source.url;
-    final ParseResult<HttpResponse> response = switch (request.method) {
-      JsHttpMethod.get => await _http.get(
+    // 字节门（字体文件）：正文按 base64 交给脚本，绝不走文本解码。
+    if (request.method == JsHttpMethod.getBytes) {
+      final ParseResult<Uint8List> bytes = await _http.getBytes(
         request.url,
         rulePath: job.rulePath,
         headers: headers,
         sourceId: sourceId.isEmpty ? null : sourceId,
-      ),
-      JsHttpMethod.post => await _http.post(
-        request.url,
-        rulePath: job.rulePath,
-        body: request.body,
-        headers: headers,
-        sourceId: sourceId.isEmpty ? null : sourceId,
-      ),
-    };
+      );
+      if (_inFlightJob != job) {
+        return;
+      }
+      if (_fatalFailure != null) {
+        _reply(JsHostReply.rejected(call.callId, 'the job already failed'));
+
+        return;
+      }
+      switch (bytes) {
+        case ParseSuccess<Uint8List>(:final Uint8List data):
+          _reply(JsHostReply.success(call.callId, base64Encode(data)));
+        case ParseFailure<Uint8List>(:final ParseFailureKind kind):
+          _reply(JsHostReply.rejected(call.callId, kind.name));
+      }
+
+      return;
+    }
+    // `getBytes` 已在上面提前返回；剩下的两种动词就是 POST 与 GET。
+    final ParseResult<HttpResponse> response =
+        request.method == JsHttpMethod.post
+        ? await _http.post(
+            request.url,
+            rulePath: job.rulePath,
+            body: request.body,
+            headers: headers,
+            sourceId: sourceId.isEmpty ? null : sourceId,
+          )
+        : await _http.get(
+            request.url,
+            rulePath: job.rulePath,
+            headers: headers,
+            sourceId: sourceId.isEmpty ? null : sourceId,
+          );
 
     if (_inFlightJob != job) {
       // 请求回来时 job 已经结束：答复无处可去。

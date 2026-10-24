@@ -271,6 +271,12 @@ WebView 验证页 + 图片验证码页、`SourceVerification` / `WebViewCookieBr
 
 ### 决策 9 评估结论：字体反爬**不引依赖**，实现排在第三刀
 
+> **2026-10-24 第三刀注记（实现已落地）：** 结论照原样执行——零新依赖、自研解析。落地时把表示
+> 从「`code → glyphId`」**改成「字形名优先、字形 id 兜底」**，理由写在下面第 3 条：
+> 站点发来的多半是**子集字体**，它会重排字形 id，但 `post` 表里的 `uniXXXX` 名字还在；只按 id
+> 对会在真实语料上静默换错字。`getFontGlyph` **不实现**：ADR 早期登记里写了它，但上游 master 的
+> `JsExtensions.kt` 没有这个成员，凭空造一个只会让语料里的假拼写看起来合法。
+
 - **候选包**：`glyph_path`（纯 Dart、零依赖，含 cmap 解析，但面向「文字转路径」，许可与字形身份语义都要再核）、
   `ttf`（Dart 3 不兼容）、`dart-ttf-parser`（license 为 Other）、`flutter_ttf_parser`（license 为 Other）。
   按 C-DEP 的许可口径，前三个中的后三个**直接排除**；`glyph_path` 需要一次许可复核，而且它不提供
@@ -283,3 +289,24 @@ WebView 验证页 + 图片验证码页、`SourceVerification` / `WebViewCookieBr
   `replaceFont` 内部用 glyphId 反查目标字体；`getFontGlyph` 是同一张表的单点查询。
   这是与上游的**表示差异**，要在 `book-source.md` §6 写清楚，规则里不要自己索引返回对象。
 - **状态**：三个名字仍报 `unsupportedRule`；触发 = M21a 第三刀（`queryBase64TTF` → `replaceFont` → `getFontGlyph`，同一刀）。
+
+### 决策 9 落地（2026-10-24）：`cmap` + `post` 解析、字体句柄、`replaceFont` 的字形身份
+
+1. **解析面**：`lib/core/font/ttf_font.dart` 读 `sfnt` 表目录、`cmap`（format 0 / 4 / 6 / 12，按
+   「Unicode 优先、format 12 优于 4、符号/legacy 平台跳过」排序并允许回退到下一张子表）与 `post`
+   format 2.0 的字形名（索引 ≥258 的自定义名；<258 的标准 Macintosh 名不内置——CJK 混淆字体用的
+   都是自定义名）。**所有读取都不做逐字段边界检查**：字体是不可信输入，`parse` 把 `RangeError`
+   统一翻成 `FormatException`（一处 `try` 换掉二十处守卫，且这一条分支测试可达）。
+2. **表示**：字体对象是一个**不透明句柄** `{__ttf: true, id}`，真实字体留在 worker 的
+   `JsFontRegistry` 里，随 job 清空、id 不复用。这样一次正文替换只花一个小信封，而不是几万个
+   字形的 JSON；跨 job 存句柄的脚本会拿到「找不到」而不是别人的字体。字体**字节门**
+   （`http` 通道的 `getBytes` 动词）是为 `queryTTF(url)` 加的，与验证码图片同一理由：文本门会把
+   二进制体解码坏。
+3. **映射**：`replaceFontText` 对每个字符先取 `errorFont` 的字形名、在 `correctFont` 里按名找码位，
+   找不到再按字形 id 对（同源字体、未子集化时成立）。`start`/`end` 是旧语料
+   `(text, f1, f2, start, end)` 形态的码位区间；第 4 参是布尔时按上游的「缓存开关」忽略（本仓不缓存）。
+4. **同步/异步**：`queryBase64TTF` 与 `replaceFont` 同步（纯计算在 worker 内完成）；`queryTTF(url)`
+   返回 Promise —— 网络一律异步，与 `http.*` 同规矩（`docs/dev/book-source.md` §6）。
+5. **失败语义**：不是字体（认不出 `cmap`）、base64 坏了、句柄失效都只让**这次调用**抛错
+   （`java.queryTTF failed`），脚本可以 catch 后保留原文；不判整条 job 死，因为「字体没换成功」
+   的正文仍然可读。

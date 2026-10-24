@@ -148,7 +148,7 @@
 | 21 | `@xpath:` XPath（以 `//` 开头时可省略标志） | `@xpath://div[@id='a']/text()` | 所有字段 | **M2** | 不支持 |
 | 22 | `@webJs` 网页 JS | — | 正文规则 | **M2** | 不支持 |
 | 23 | `sourceRegex` 源码正则 | `sourceRegex`（`ruleContent`） | 正文规则 | **M21a** | 已确认（先截取再建 scope，不命中即 `parseFailed`；见 §4.3 与 ADR-0068） |
-| 24 | 字体反爬字形映射 | `queryBase64TTF` / `replaceFont` / `getFontGlyph` | 正文替换规则 | **M2**（评估已定案，见 ADR-0068 增补） | 不支持（仍报 `unsupportedRule`） |
+| 24 | 字体反爬字形映射 | `queryTTF` / `queryBase64TTF` / `replaceFont` | 正文替换规则 | **M21a** | 已确认（自研 `cmap` + `post` 解析；字形名优先、id 兜底，见 §6） |
 | 25 | `##match##replace###`：只取**第一个匹配**并在其内部替换（矩阵 #9 的补充语义） | `##match##replace###`（上游注释原文） | 所有字段 | **M0**（Phase 2.2 已实现） | 已确认 |
 | 26 | `[]` 索引列表：`[-1, 3:-2:-10, 2]`、`[-1:0]` 可在任意位置反向（与 #5 / #6 同组） | `tag.div[-1, 3:-2:-10, 2]` | 所有字段 | **M0** → Phase 3.1 | 已确认 |
 | 27 | `%%` 并行交叉合并（与 `\|\|`、`&&` 同级的选择器连接符） | — | 所有字段 | **M0** → Phase 3.2（与 #10 / #11 同族，复用同一套连接符切分） | 已确认 |
@@ -648,6 +648,9 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])` | `Promise<{url, body}>` | 同上但等用户按「完成」，成功后按需用新 cookie 重取；**本仓返回 Promise，规则里要 `await`**（上游是同步，差异见注记） | M21a |
 | `java.getVerificationCode(imageUrl)` | `Promise<String>` | 图片验证码对话框，返回用户输入的字符串；**需 `await`** | M21a |
 | `java.webView(url[, js])` / `webViewGetString(url[, js])` | `Promise<String>` | 隐藏 WebView 渲染（可执行 `js`），结果是 body | M21a |
+| `java.queryTTF(data)` | 句柄对象 | 字体反解（见下方注记）：`data` 认 **base64**（含 `data:…;base64,` 前缀与换行）与 **url**；url 走字节门并返回 Promise，规则要 `await` | M21a |
+| `java.queryBase64TTF(data)` | 句柄对象 | 同上的 base64 专用形态（上游已弃用，真实语料仍在用） | M21a |
+| `java.replaceFont(text, errorFont, correctFont[, start, end])` | `String` | 把混淆字换回真字；`start`/`end` 限定码位区间，第 4 参是布尔时按「缓存开关」忽略 | M21a |
 | `java.timeFormat(timestamp)` | `String` | `yyyy/MM/dd HH:mm` | M1 |
 | `key` | `String` | 搜索关键词，**只在 URL 规则的 JS 里**存在（ADR-0034 §决策 3） | M1 |
 | `log.debug/info/warn/error(msg)` | `void` | 转发到 `core/logging`，自动附加 `rulePath` | M0 |
@@ -669,6 +672,29 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 不支持——上游是 `body` 属性，命中会显式报 `result.body is not a function`；③
 `java.getStrResponse()` / `java.initUrl()` / `java.getHeaderMap()`（只在登录检查 JS 里有效的
 `AnalyzeUrl` 方法）仍具名拒绝。
+
+**字体反解（M21a，ADR-0068 §决策 9）：** 站点把正文写成私有区码位（如 ``），再用一套
+`cmap` 被重映射的字体把它们画成真字。三个 `java.*` 成员按上表使用，典型写法：
+
+```js
+var errorFont = java.queryBase64TTF(String(result).match(/ttf;base64,([^)]+)/)[1]);
+var correctFont = await java.queryTTF('https://a.test/font.woff2.ttf');   // url 要 await
+java.replaceFont(result, errorFont, correctFont);
+```
+
+四条必须知道的事：
+
+1. **字体对象是不透明句柄**（`{__ttf: true, id}`）：字体不进脚本，所以不要索引它；查询来的东西
+   原样交回 `replaceFont` 即可。句柄随 job 失效（脚本存在 `globalThis` 里跨 job 用会拿到
+   `java.replaceFont failed`，而不是别人的字体）。
+2. **先按字形名对，再按字形 id 兜底。** 子集化会把字形 id 重排，但 `post` 表里的 `uniXXXX`
+   名字还在——上游也是这么做的。`post` 索引 < 258 的标准 Macintosh 名本仓不内置（CJK 混淆字体
+   用的都是自定义名），这些字形退回按 id 对。
+3. **`queryTTF(url)` 返回 Promise**：网络一律异步（§6 的总规矩）。`queryBase64TTF` 与
+   `replaceFont` 同步返回。
+4. **`java.getFontGlyph` 不存在**：ADR-0068 早期登记里提到过它，但上游 master 的
+   `JsExtensions.kt` 没有这个成员（只有 `queryTTF` / `queryBase64TTF` / `replaceFont`），
+   所以本仓也不提供。
 
 **`java.*` 兼容面（ADR-0037；本节是它的唯一出处）：**
 
@@ -997,8 +1023,6 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 
 - `@xpath:` XPath 规则（需要引入 XPath 依赖，须先开 ADR）
 - `:` 正则规则（仅书籍列表与目录列表）
-- 字体反爬字形映射（`java.queryBase64TTF` / `replaceFont` / `getFontGlyph`；评估结论见 ADR-0068 增补：
-  不引依赖、自研 `cmap` 解析，实现排在 M21a 第三刀）
 - 原生登录表单（`loginUi` 的 text / password / button / select / toggle + `action` JS、
   `source.getLoginInfoMap()`、`java.upLoginData`）：三个登录字段本身已建模，`loginCheckJs` 拦截器与
   「登录 / 过验证」入口已可用；表单渲染与登录信息存储归 M21b 的登录 / Cookie 管理 UI（U15）

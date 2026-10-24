@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/font/ttf_font.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_fonts.dart';
 
 /// Applies one `crypto.*` binding call from the sandbox.
 ///
@@ -277,6 +280,12 @@ enum JsHttpMethod {
 
   /// `http.post(url, options)`.
   post,
+
+  /// The byte door `java.queryTTF(url)` uses: the body as base64, never decoded as text.
+  ///
+  /// It is a channel verb and not a public `http.*` binding, because the only consumer is the font
+  /// lookup — a rule that wants text already has `http.get` (ADR-0068 增补决策 9).
+  getBytes,
 }
 
 /// One validated `http.*` call.
@@ -315,6 +324,7 @@ JsHttpRequest? decodeJsHttpRequest(Object? args) {
   final JsHttpMethod? method = switch (call['operation']) {
     'get' => JsHttpMethod.get,
     'post' => JsHttpMethod.post,
+    'getBytes' => JsHttpMethod.getBytes,
     _ => null,
   };
   final Object? url = call['url'];
@@ -356,12 +366,23 @@ enum JsJavaOperation {
   ///
   /// Unlike JavaScript's `encodeURI`, a space becomes `+`.
   encodeUri,
+
+  /// `java.queryTTF(data)` / `java.queryBase64TTF(data)`: reads a font and answers its handle.
+  queryTtf,
+
+  /// `java.replaceFont(text, errorFont, correctFont[, start, end])`.
+  replaceFont,
 }
 
 /// One validated `java.*` call, decoded in the worker isolate.
 final class JsJavaRequest {
   /// Creates a request.
-  const JsJavaRequest({required this.operation, this.key, this.value});
+  const JsJavaRequest({
+    required this.operation,
+    this.key,
+    this.value,
+    this.fontReplace,
+  });
 
   /// The verb the rule called.
   final JsJavaOperation operation;
@@ -371,6 +392,36 @@ final class JsJavaRequest {
 
   /// The argument the rule passed; `null` clears the variable on a write.
   final Object? value;
+
+  /// The decoded arguments of a [JsJavaOperation.replaceFont] call.
+  final JsFontReplaceRequest? fontReplace;
+}
+
+/// The arguments of one `java.replaceFont(text, errorFont, correctFont[, start, end])` call.
+final class JsFontReplaceRequest {
+  /// Creates a request.
+  const JsFontReplaceRequest({
+    required this.text,
+    this.errorFontId,
+    this.correctFontId,
+    this.firstCode,
+    this.lastCode,
+  });
+
+  /// The chapter text to de-obfuscate.
+  final String text;
+
+  /// The handle of the font the site drew the text with (its `cmap` is remapped).
+  final int? errorFontId;
+
+  /// The handle of the font that draws the real characters.
+  final int? correctFontId;
+
+  /// The first code point to replace, for the legacy `(text, f1, f2, start, end)` form.
+  final int? firstCode;
+
+  /// The last code point to replace, for the legacy `(text, f1, f2, start, end)` form.
+  final int? lastCode;
 }
 
 /// Reads one `java.*` call's arguments, or `null` when they are unusable.
@@ -386,6 +437,8 @@ JsJavaRequest? decodeJsJavaRequest(Object? args) {
     'get' => JsJavaOperation.get,
     'timeFormat' => JsJavaOperation.timeFormat,
     'encodeUri' => JsJavaOperation.encodeUri,
+    'queryTtf' => JsJavaOperation.queryTtf,
+    'replaceFont' => JsJavaOperation.replaceFont,
     _ => null,
   };
   if (operation == null) {
@@ -415,7 +468,48 @@ JsJavaRequest? decodeJsJavaRequest(Object? args) {
       }
 
       return JsJavaRequest(operation: operation, key: key, value: value);
+    case JsJavaOperation.queryTtf:
+      if (value is! String || value.trim().isEmpty) {
+        return null;
+      }
+
+      return JsJavaRequest(operation: operation, value: value);
+    case JsJavaOperation.replaceFont:
+      final JsFontReplaceRequest? replace = _fontReplaceOf(value);
+      if (replace == null) {
+        return null;
+      }
+
+      return JsJavaRequest(operation: operation, fontReplace: replace);
   }
+}
+
+/// Reads the payload of a `java.replaceFont` call, or `null` when it is unusable.
+JsFontReplaceRequest? _fontReplaceOf(Object? value) {
+  final Map<String, Object?>? payload = _jsonObjectOf(value);
+  if (payload == null) {
+    return null;
+  }
+  final Object? text = payload['text'];
+  final Object? errorFontId = payload['from'];
+  final Object? correctFontId = payload['to'];
+  final Object? firstCode = payload['start'];
+  final Object? lastCode = payload['end'];
+  if (text is! String ||
+      errorFontId is! int? ||
+      correctFontId is! int? ||
+      firstCode is! int? ||
+      lastCode is! int?) {
+    return null;
+  }
+
+  return JsFontReplaceRequest(
+    text: text,
+    errorFontId: errorFontId,
+    correctFontId: correctFontId,
+    firstCode: firstCode,
+    lastCode: lastCode,
+  );
 }
 
 /// Applies one `java.*` call and returns a JSON envelope.
@@ -426,6 +520,7 @@ String applyJsJavaCall(
   Map<String, String?> variables,
   Object? args, {
   Map<String, String> named = const <String, String>{},
+  JsFontRegistry? fonts,
 }) {
   final JsJavaRequest? call = decodeJsJavaRequest(args);
   if (call == null) {
@@ -465,6 +560,83 @@ String applyJsJavaCall(
         'ok': true,
         'value': javaEncodeUri(call.value as String),
       });
+    case JsJavaOperation.queryTtf:
+      return _applyQueryTtf(call, fonts);
+    case JsJavaOperation.replaceFont:
+      return _applyReplaceFont(call, fonts);
+  }
+}
+
+// 字体族（ADR-0068 2026-10-24 增补决策 9）：字体不进脚本，句柄换成注册表里的 id。
+String _applyQueryTtf(JsJavaRequest call, JsFontRegistry? fonts) {
+  final Object? data = call.value;
+  if (fonts == null || data is! String) {
+    return '{"ok":false}';
+  }
+  final Uint8List? bytes = decodeFontBase64(data);
+  if (bytes == null) {
+    return '{"ok":false}';
+  }
+  final TtfFont font;
+  try {
+    font = TtfFont.parse(bytes);
+  } on FormatException {
+    // 不是字体（或认不出 cmap）时只回答「拿不到」：规则会退回原正文，不该整条 job 死。
+    return '{"ok":false}';
+  }
+
+  return jsonEncode(<String, Object?>{
+    'ok': true,
+    'value': <String, Object?>{jsFontHandleFlag: true, 'id': fonts.add(font)},
+  });
+}
+
+String _applyReplaceFont(JsJavaRequest call, JsFontRegistry? fonts) {
+  final JsFontReplaceRequest? request = call.fontReplace;
+  if (fonts == null || request == null) {
+    return '{"ok":false}';
+  }
+  final TtfFont? errorFont = fonts.resolve(request.errorFontId);
+  final TtfFont? correctFont = fonts.resolve(request.correctFontId);
+  if (errorFont == null || correctFont == null) {
+    return '{"ok":false}';
+  }
+
+  return jsonEncode(<String, Object?>{
+    'ok': true,
+    'value': replaceFontText(
+      request.text,
+      errorFont: errorFont,
+      correctFont: correctFont,
+      firstCode: request.firstCode,
+      lastCode: request.lastCode,
+    ),
+  });
+}
+
+/// The flag that marks a sandbox object as a font handle (`{__ttf: true, id}`).
+const String jsFontHandleFlag = '__ttf';
+
+/// Decodes the base64 payload of a font, tolerating a `data:…;base64,` prefix and line wrapping.
+///
+/// `null` when the text is not base64 at all; the caller turns that into a readable failure.
+Uint8List? decodeFontBase64(String data) {
+  String text = data.trim();
+  final int comma = text.indexOf(',');
+  // `data:font/ttf;base64,AAAA…` 是页面里最常见的写法：冒号前缀不是载荷。
+  if (comma >= 0 &&
+      text.startsWith('data:', 0) &&
+      text.substring(0, comma).contains(';base64')) {
+    text = text.substring(comma + 1);
+  }
+  text = text.replaceAll(RegExp(r'\s'), '');
+  if (text.isEmpty) {
+    return null;
+  }
+  try {
+    return base64Decode(text);
+  } on FormatException {
+    return null;
   }
 }
 

@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:flutter_qjs_next/flutter_qjs.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_fonts.dart';
 
 /// Starts the real worker: one isolate owning one reused QuickJS runtime.
 ///
@@ -145,6 +146,10 @@ final class _Worker {
   // bookName / title 的内置值；阶段不知道时为空。
   Map<String, String> _named = const <String, String>{};
 
+  // 本 job 查询过的字体（`java.queryTTF` 的句柄表，ADR-0068 增补决策 9）。
+  // 字体不进脚本、也不跨 job：一个 job 结束时清空，句柄 id 不复用。
+  final JsFontRegistry _fonts = JsFontRegistry();
+
   // sync 绑定在本隔离体内直接答复；http / parse 返回 Future，由引擎转成 Promise。
   void installBindings() {
     _runtime.onMessage('crypto', (Object? args) {
@@ -190,12 +195,13 @@ final class _Worker {
   }
 
   Object? _applyJava(Object? args) =>
-      applyJsJavaCall(_variables, args, named: _named);
+      applyJsJavaCall(_variables, args, named: _named, fonts: _fonts);
 
   Future<void> evaluate(Object? job) async {
     // 上一个 job 未答复的调用不再有意义，桥也已经不再认它。
     _pending.clear();
     _variables = <String, String?>{};
+    _fonts.clear();
     if (job is! Map) {
       _toBridge.send(<String, Object?>{
         'type': 'result',
@@ -429,6 +435,20 @@ globalThis.__java = function (call) {
     ? '' : String(envelope.value);
 };
 
+// 与 __java 同一通道，但**不**把回答串成字符串：字体句柄之类的对象要原样交给脚本。
+globalThis.__javaObject = function (call) {
+  var envelope = null;
+  try {
+    envelope = JSON.parse(String(sendMessage('java', JSON.stringify(call))));
+  } catch (error) {
+    envelope = null;
+  }
+  if (!envelope || envelope.ok !== true) {
+    throw new Error('java.' + call.operation + ' failed');
+  }
+  return (envelope.value === undefined) ? null : envelope.value;
+};
+
 // 具名拒绝族（ADR-0037 §决策 5）：命中即给可读错误，不落到 `undefined is not a function`。
 globalThis.__javaRejected = function (name) {
   return function () {
@@ -577,6 +597,11 @@ globalThis.__verify = function (operation, url, title, refetchAfterSuccess, html
   return sendMessage('verify', JSON.stringify(payload));
 };
 
+// 查询一个字体并拿回句柄；不是字体/认不出 cmap 时抛错（规则可以 catch 后保留原文）。
+globalThis.__queryTtf = function (data) {
+  return __javaObject({ operation: 'queryTtf', value: String(data) });
+};
+
 globalThis.java = (function () {
   var surface = {
     put: function (key, value) {
@@ -669,6 +694,34 @@ globalThis.java = (function () {
     },
     webViewGetString: function (url, js) {
       return __verify('webView', url, null, null, null, js);
+    },
+    // 字体反解族（ADR-0068 增补决策 9）：`QueryTTF` 在本仓是不透明句柄 `{__ttf:true,id}`，
+    // 规则只要把它的返回值交回 `replaceFont`。字体不跨进脚本，所以一次正文替换只花一个
+    // 小信封，而不是几万个字形的 JSON。
+    queryBase64TTF: function (data) {
+      return __queryTtf(data);
+    },
+    queryTTF: function (data) {
+      var text = String(data);
+      // 上游自动判断 url / 本地文件 / base64；本仓只多认 url（网络必须异步，与 http.* 同规矩）。
+      if (/^https?:\/\//i.test(text)) {
+        return __hostCall('http', { operation: 'getBytes', url: text })
+          .then(function (base64) { return __queryTtf(base64); });
+      }
+      return __queryTtf(text);
+    },
+    replaceFont: function (text, errorFont, correctFont, start, end) {
+      var payload = { text: String(text) };
+      if (errorFont && errorFont.__ttf === true) {
+        payload.from = errorFont.id;
+      }
+      if (correctFont && correctFont.__ttf === true) {
+        payload.to = correctFont.id;
+      }
+      // 旧语料的 (text, f1, f2, start, end) 形态：只替换给定码位区间。
+      if (typeof start === 'number') { payload.start = start; }
+      if (typeof end === 'number') { payload.end = end; }
+      return __java({ operation: 'replaceFont', value: payload });
     }
   };
   for (var rejectedIndex = 0; rejectedIndex < __javaRejectedNames.length; rejectedIndex++) {
