@@ -6,6 +6,7 @@ import 'package:flutter_reader/core/storage/books.dart';
 import 'package:flutter_reader/core/storage/cache_entries.dart';
 import 'package:flutter_reader/core/storage/cookies.dart';
 import 'package:flutter_reader/core/storage/read_records.dart';
+import 'package:flutter_reader/core/storage/rules.dart';
 import 'package:flutter_reader/core/storage/source_checks.dart';
 
 part 'database.g.dart';
@@ -22,6 +23,7 @@ part 'database.g.dart';
     Bookmarks,
     ReadRecords,
     Cookies,
+    Rules,
   ],
 )
 class ReaderDatabase extends _$ReaderDatabase {
@@ -29,7 +31,7 @@ class ReaderDatabase extends _$ReaderDatabase {
   ReaderDatabase(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -92,6 +94,14 @@ class ReaderDatabase extends _$ReaderDatabase {
         await m.createTable(cookies);
         if (!await _hasSchemaObject(cookiesDomain.entityName)) {
           await m.create(cookiesDomain);
+        }
+      }
+      // v9 新增规则表与「kind + 顺序」索引（ADR-0070 §决策 4）。内置规则不在迁移里插入：
+      // 迁移只做结构变更，默认数据由仓储在首次使用时写入。
+      if (from < 9) {
+        await m.createTable(rules);
+        if (!await _hasSchemaObject(rulesKindOrder.entityName)) {
+          await m.create(rulesKindOrder);
         }
       }
     },
