@@ -248,10 +248,19 @@ final class RuleEngine {
   /// The variables of `@put:` / `@get:` / `java.*` are the source's, exactly as everywhere else
   /// (ADR-0034). A script error, a timeout or a quota overrun come back as
   /// [ParseFailureKind.parseFailed] with the bridge's marker, never as a thrown exception.
+  ///
+  /// [response] replaces the `result` binding with a response object. It is how a `loginCheckJs`
+  /// interceptor sees the page it may replace (`book-source.md` §6, ADR-0068 addendum): upstream
+  /// hands that script a `StrResponse`, not the page text.
+  ///
+  /// [result] is the ordinary `result` binding of a script that follows some text — the response
+  /// body for a `bodyJs` URL option (ADR-0068 §决策 7). [response] wins when both are passed.
   Future<ParseResult<Object?>> evaluateJs(
     String script, {
     required String rulePath,
     required JsPageContext context,
+    Object? result,
+    JsResponseView? response,
   }) async {
     if (script.trim().isEmpty) {
       return const ParseSuccess<Object?>(null);
@@ -269,6 +278,8 @@ final class RuleEngine {
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
         book: context.book,
+        result: result,
+        response: response,
       ),
     );
   }

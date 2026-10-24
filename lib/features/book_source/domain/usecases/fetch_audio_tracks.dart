@@ -5,6 +5,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
 /// Reads the audio addresses of one chapter (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
@@ -61,6 +62,7 @@ final class FetchAudioTracks {
       headers: headers,
       sourceId: source.url,
       source: source.jsSourceInfo,
+      login: source.loginGuard,
     );
 
     return switch (walk) {

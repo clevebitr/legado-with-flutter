@@ -1291,6 +1291,22 @@
   "@bookSourceRowCheck": {
     "description": "Row menu: runs the check on this one source."
   },
+  "bookSourceRowSignIn": "Sign in / pass check",
+  "@bookSourceRowSignIn": {
+    "description": "Row menu: opens the source's login page in the visible WebView."
+  },
+  "bookSourceSignInDone": "The site's cookies are saved; the source can be checked again.",
+  "@bookSourceSignInDone": {
+    "description": "Snackbar after the login / verification page finished."
+  },
+  "bookSourceSignInFailed": "The sign-in / verification did not finish.",
+  "@bookSourceSignInFailed": {
+    "description": "Snackbar when the login page failed for a reason other than the user closing it."
+  },
+  "bookSourceSignInUnsupported": "This platform has no WebView; finish the check in the system browser first.",
+  "@bookSourceSignInUnsupported": {
+    "description": "Snackbar when the platform cannot show a verification page."
+  },
   "bookSourceRowEdit": "Edit",
   "@bookSourceRowEdit": {
     "description": "Row menu: opens the editor."

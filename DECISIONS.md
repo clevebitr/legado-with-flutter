@@ -244,3 +244,29 @@ M21a 按用户裁决拆成「验证 + 引擎」与「原 U8–U15」两条线（
 4. **验证码图片不能走文本门。** `HttpClient.get` 会把正文按检测到的编码解码成 String，图片过一遍就坏了；新增 `getBytes`（共享同一套 URL 校验 / 预算 / 重试 / cookie），这也是将来字体反爬（TTF 字节）必需的门。
 
 未做（ADR-0068 落地注记里逐项写了原因与触发条件）：`loginUrl`/`loginUi`/`loginCheckJs` 三个源字段、`ContentRule.sourceRegex`、字体反爬 C 簇、`proxy`/`dnsIp`/`callTimeout`/`HEAD`/`encodedForm`。验证：1719 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 双用例（真实 `main()` 启动 + 文件库 v8 cookie）通过；Android 待跑。
+
+## 2026-10-24 — M21a 第二刀：loginCheckJs 是响应拦截器，不是布尔检查；sourceRegex/bodyJs 落地；字体与 D 簇定案
+
+取证后改写了 ADR-0068 决策 3 的口径，并交付第二刀：
+
+1. **`loginCheckJs` = 响应拦截器（上游语义）**，不是「返回 true/false」。上游 `AnalyzeUrl.evalJS(jsStr, result)` 把 `StrResponse` 绑成 `result`，调用方 `res = analyzeUrl.evalJS(checkJs, res) as StrResponse` 用返回值替换响应；真实语料就是 `var src = result.body; if (…) java.startBrowserAwait(result.url(), '登录')`。本仓在 `PageFetchService` 每次取页成功后跑它：`result` 是 `JsResponseView`（`body` 属性 + `url()`/`code()`/`headers()`/`header()`/`cookie()`/`contentType()`/`isSuccessful()`），`null` 沿用、`{body[,url]}` 替换、裸字符串只换正文、其余在「源声明了 loginUrl/loginUi」时给 `loginRequired`。陷阱：**上游 `body` 是属性**（`getStrResponse().body`），Readori 文档与少量语料写 `result.body()` —— 不能两头讨好，选上游属性形态并把方法形态显式报错登记。
+2. **沙箱表示**：响应对象走 `JsResponseView.toJson()` 的 `__strResponse` 标记 + `__url`/`__code`/`__headers`，因为 `url`/`code`/`headers` 是上游的**方法名**，不能同时当数据键；方法用不可枚举 defineProperty，`return result` 时 JSON 只带回数据。prelude 用 `__sandboxValue` 分流，普通 `@js:` 的 `result` 语义不变。
+3. **三个登录字段建模 + 书源管理「登录 / 过验证」入口**（走同一个 `SourceVerification` 端口打开可见 WebView；`loginUrl` 是 URL 规则，后缀丢掉；脚本形态则打开源地址）。原生 `loginUi` 表单留在 M21b/U15。
+4. **`sourceRegex`**：每次取页后、建 scope 前截取（有捕获组取 group(1)，否则整个匹配），片段就是页面（DOM 与 `$.` 都从它读，拦截器也看它）；不命中/正则非法 → `parseFailed(contentRule.sourceRegex)`；`nextContentUrl` 每页各自截取。**`bodyJs`**（URL 选项）先跑、`sourceRegex` 后跑；`bodyJs` 非字符串 → `parseFailed(bodyJs)`。
+5. **字体反爬只做评估**：候选包 `glyph_path` / `ttf` / `dart-ttf-parser` / `flutter_ttf_parser` 均不合格（许可 Other 或 Dart 3 不兼容、且都不给「字形↔字符」反查面）；结论是自研 `cmap` format 4/12（150–200 行）+ 合成字体单测，**不引依赖**；开工前只需定一件事：返回表示用 `code → glyphId`（上游用 `post` 字形名对齐），排在 M21a 第三刀，命中仍 `unsupportedRule`。
+6. **D 簇五项裁决「不做」并写死重开条件**（proxy / dnsIp / callTimeout / HEAD / encodedForm），不再以「收益未取证」长期挂着。
+
+覆盖率的两个小坑：`const` 构造的 `SourceLoginGuard.none()` 会被编译期折叠、统计不到（改成运行时构造 + ignore lint）；`_interceptLogin` 里「按 scope 取上下文」的分支永远走不到（`_pageOf` 只造 DomScope），改成由调用方把 `JsPageContext` 与当前 body 传进去，顺带删掉不可达分支。
+
+验证：1761 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等。
+
+## 2026-10-24 — M19/M21a 设备级实跑补齐：双端全绿，并补上 WebView↔cookie 双向探针（抓到键名不一致的真 bug）
+
+双端设备级实跑补上了（这也是 M19 的唯一挂账项），并新增一条 cookie 互操作探针：
+
+1. **Windows 5 文件全过**：`app_boot` 1、`audio_playback` 5、`js_bridge` 30、`on_disk_database` 5、`web_view` 3。
+2. **Android（`Medium_Phone`，API 37 模拟器）4 文件全过**：`app_boot`、`on_disk_database`（含 v8 cookie jar 跨连接读回）、`js_bridge` 30、`web_view` 3。M19 因此可以标完成。
+3. **新增 `webViewCookieBridge_sharesCookiesWithTheWebView`**（`integration_test/web_view_test.dart`）：本地 HttpServer 上验证**双向**互操作——桥 `setCookie` 写进去的 cookie 页面 `document.cookie` 读得到，页面自己种的 cookie 桥 `getCookies` 读得回。这是 ADR-0068 §决策 4 之前只有单测、没有设备证据的一环。
+4. **两个新 `js_bridge` 探针**（`loginCheckJs` 的 `result` 响应对象：属性 + 方法 + 返回值往返）当场抓到一个真 bug：`JsResponseView.toJson()` 发的是 `code` / `headers`，而 prelude 读的是 `__code` / `__headers`，于是设备上 `result.code()` 恒为 0、`headers()` 恒空——单测（用 JSON 直比对）看不出来，只有真引擎跑一遍才暴露。教训：**沙箱前奏与宿主序列化的键名必须由同一条设备级用例钉住**，别只测宿主一侧。
+
+最终门禁：format 0、analyze 干净、1761 用例全过、core 100% / domain 100% / data 97.94%、codegen 幂等。

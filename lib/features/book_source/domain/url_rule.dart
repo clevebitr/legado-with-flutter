@@ -24,6 +24,7 @@ final class UrlRuleOptions {
     this.webView = false,
     this.webViewDelayTime,
     this.webJs,
+    this.bodyJs,
     this.overrideUrlRegex,
     this.retry,
     this.readTimeout,
@@ -55,6 +56,13 @@ final class UrlRuleOptions {
 
   /// A script evaluated **inside** the rendered page; its result is the page body (`webJs`).
   final String? webJs;
+
+  /// A script run over the plain-HTTP response body; its result replaces the body (`bodyJs`).
+  ///
+  /// It is the post-processing sibling of [webJs]: the request is a normal one, and the site's
+  /// payload has to be assembled (decrypted, concatenated) before the rules can read it
+  /// (ADR-0068 §决策 7).
+  final String? bodyJs;
 
   /// A regex whose match stops the WebView load and becomes the result URL (`overrideUrlRegex`).
   final String? overrideUrlRegex;
@@ -175,6 +183,7 @@ UrlRuleOptions _optionsOf(_OptionNode node) {
 
   final bool webView = _flagOf(members['webView']);
   final String? webJs = _stringOf(members['webJs']);
+  final String? bodyJs = _stringOf(members['bodyJs']);
   final String? overrideUrlRegex = _stringOf(members['overrideUrlRegex']);
   final Duration? webViewDelayTime = _durationOf(
     members['webViewDelayTime'],
@@ -194,6 +203,7 @@ UrlRuleOptions _optionsOf(_OptionNode node) {
       'headers',
       'webView',
       'webJs',
+      'bodyJs',
       'overrideUrlRegex',
       'webViewDelayTime',
       'retry',
@@ -217,6 +227,7 @@ UrlRuleOptions _optionsOf(_OptionNode node) {
     webView: webView,
     webViewDelayTime: webViewDelayTime,
     webJs: webJs,
+    bodyJs: bodyJs,
     overrideUrlRegex: overrideUrlRegex,
     retry: retry,
     readTimeout: readTimeout,

@@ -9,6 +9,8 @@ import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
+import 'package:flutter_reader/features/book_source/domain/source_regex.dart';
 import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:html/parser.dart' as parser;
@@ -107,6 +109,13 @@ final class PageFetchService {
   /// port and rendered, and only a platform without a WebView falls back to plain HTTP
   /// (ADR-0062 §决策 1). [headers] stays the **source-level** table; the caller keeps passing the
   /// same map it would pass to [fetch].
+  ///
+  /// [login] carries the source's login fields: a non-blank `loginCheckJs` runs as a response
+  /// interceptor over the page this call produced (`book-source.md` §6, ADR-0068 addendum).
+  ///
+  /// [sourceRegex] is `ruleContent.sourceRegex`: the body is cut to its first match **before** the
+  /// scope exists, so every rule on the page (and the login interceptor) sees the fragment
+  /// (`source_regex.dart`, ADR-0068 §决策 7).
   Future<ParseResult<FetchedPage>> fetchRule(
     String rule, {
     required String rulePath,
@@ -117,6 +126,8 @@ final class PageFetchService {
     String? sourceId,
     int page = 1,
     JsSourceInfo? source,
+    SourceLoginGuard? login,
+    String? sourceRegex,
   }) async {
     final ParseResult<UrlRule> parsed = parseUrlRule(rule, rulePath: rulePath);
     final UrlRule urlRule;
@@ -242,6 +253,9 @@ final class PageFetchService {
             bookName: context.bookName,
             chapterTitle: context.chapterTitle,
             book: context.book,
+            rulePath: rulePath,
+            login: login,
+            sourceRegex: sourceRegex,
           );
         case ParseFailure<FetchedWebPage>(
           :final ParseFailureKind kind,
@@ -279,8 +293,24 @@ final class PageFetchService {
             receiveTimeout: options.readTimeout,
           );
 
-    return _pageOf(
+    // `bodyJs`（URL 选项）：对响应体跑脚本，返回值就是新的 body（ADR-0068 §决策 7）。它先于
+    // `sourceRegex`，所以「用脚本拼出真实正文，再按正则截一刀」的两段式规则也对得上。
+    final ParseResult<HttpResponse> shaped = await _applyBodyJs(
       response,
+      options.bodyJs,
+      context: JsPageContext(
+        baseUrl: url,
+        page: page,
+        source: source,
+        headers: requestHeaders,
+        bookName: context.bookName,
+        chapterTitle: context.chapterTitle,
+        book: context.book,
+      ),
+    );
+
+    return _pageOf(
+      shaped,
       url: url,
       headers: requestHeaders,
       page: page,
@@ -288,6 +318,9 @@ final class PageFetchService {
       bookName: context.bookName,
       chapterTitle: context.chapterTitle,
       book: context.book,
+      rulePath: rulePath,
+      login: login,
+      sourceRegex: sourceRegex,
     );
   }
 
@@ -384,7 +417,8 @@ final class PageFetchService {
   ///
   /// [page] and [source] fill the `page` / `source` bindings a `@js:` rule sees
   /// (`book-source.md` §6); they default to the first page and an empty source so a caller
-  /// that has no book source context still gets a valid context.
+  /// that has no book source context still gets a valid context. [login] carries the source's
+  /// login fields, which run over this page exactly as they do in [fetchRule].
   Future<ParseResult<RuleScope>> fetch(
     String url, {
     required String rulePath,
@@ -396,6 +430,8 @@ final class PageFetchService {
     String? bookName,
     String? chapterTitle,
     JsBookInfo? book,
+    SourceLoginGuard? login,
+    String? sourceRegex,
   }) async {
     final ParseResult<HttpResponse> response = await _http.get(
       url,
@@ -405,7 +441,7 @@ final class PageFetchService {
       sourceId: sourceId,
     );
 
-    final ParseResult<FetchedPage> fetched = _pageOf(
+    final ParseResult<FetchedPage> fetched = await _pageOf(
       response,
       url: url,
       headers: headers,
@@ -414,6 +450,9 @@ final class PageFetchService {
       bookName: bookName,
       chapterTitle: chapterTitle,
       book: book,
+      rulePath: rulePath,
+      login: login,
+      sourceRegex: sourceRegex,
     );
 
     return switch (fetched) {
@@ -428,45 +467,253 @@ final class PageFetchService {
     };
   }
 
-  /// Turns a response into a fetched page (its URL + scope), or carries its failure.
-  ParseResult<FetchedPage> _pageOf(
+  /// Turns a response into a fetched page (its URL + scope) and runs the source's
+  /// `loginCheckJs` interceptor over it, or carries the failure.
+  Future<ParseResult<FetchedPage>> _pageOf(
     ParseResult<HttpResponse> response, {
     required String url,
     required Map<String, String>? headers,
     required int page,
     required JsSourceInfo? source,
+    required String rulePath,
     String? bookName,
     String? chapterTitle,
     JsBookInfo? book,
-  }) => switch (response) {
-    ParseFailure<HttpResponse>(
-      :final ParseFailureKind kind,
-      rulePath: final String failedAt,
-    ) =>
-      failureAt<FetchedPage>(kind: kind, rulePath: failedAt),
-    ParseSuccess<HttpResponse>(:final HttpResponse data) => ParseSuccess(
+    SourceLoginGuard? login,
+    String? sourceRegex,
+  }) async {
+    switch (response) {
+      case ParseFailure<HttpResponse>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
+      case ParseSuccess<HttpResponse>(:final HttpResponse data):
+        final ParseResult<String> cut = _cutBody(data, sourceRegex);
+        final String body;
+        switch (cut) {
+          case ParseFailure<String>(
+            :final ParseFailureKind kind,
+            rulePath: final String failedAt,
+          ):
+            return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
+          case ParseSuccess<String>(:final String data):
+            body = data;
+        }
+        final JsPageContext context = JsPageContext(
+          baseUrl: url,
+          page: page,
+          source: source,
+          headers: headers,
+          // §6 的 `java.get('bookName' / 'title')`：书与章节是**页面**的属性，所以它必须
+          // 建在页面 scope 上，再由引擎继承到每个条目与每条规则（ADR-0049）。
+          bookName: bookName,
+          chapterTitle: chapterTitle,
+          book: book,
+        );
+        final FetchedPage pageScope = FetchedPage(
+          url: url,
+          scope: RuleScope.dom(
+            parser.parse(body),
+            body: body,
+            jsContext: context,
+          ),
+        );
+
+        return _interceptLogin(
+          pageScope,
+          HttpResponse(
+            statusCode: data.statusCode,
+            headers: data.headers,
+            body: body,
+          ),
+          context: context,
+          body: body,
+          rulePath: rulePath,
+          login: login,
+        );
+    }
+  }
+
+  /// Runs the source's `loginCheckJs` over one fetched page (ADR-0068 addendum).
+  ///
+  /// Upstream hands this script the **response**, not the page text (`AnalyzeUrl.evalJS(... result =
+  /// StrResponse)`), and replaces the response with whatever the script returns. So:
+  ///
+  /// * `null` / `undefined` → the page stays as it is (the common `if (…) ` without an `else`);
+  /// * a response-shaped object → its body (and URL) become the page the rules read;
+  /// * a bare string → replaces the body (tolerance, `readLoginCheckResult`);
+  /// * anything else, when the source declares `loginUrl` / `loginUi`, is
+  ///   [ParseFailureKind.loginRequired]: the script could not fix the session, and the one
+  ///   actionable answer the UI can offer is 「去登录」. Without those fields it stays a
+  ///   [ParseFailureKind.parseFailed], because there is nothing to sign in with.
+  ///
+  /// A failing **job** (script error, timeout, or a verification the user cancelled) is carried
+  /// through unchanged: the interceptor is the source's own answer to a blocked page, and
+  /// swallowing it would parse a body nobody vouched for.
+  Future<ParseResult<FetchedPage>> _interceptLogin(
+    FetchedPage page,
+    HttpResponse response, {
+    required JsPageContext context,
+    required String body,
+    required String rulePath,
+    required SourceLoginGuard? login,
+  }) async {
+    final String? script = login?.checkScript;
+    if (script == null || script.trim().isEmpty) {
+      return ParseSuccess<FetchedPage>(page);
+    }
+
+    final ParseResult<Object?> evaluated = await _engine.evaluateJs(
+      script,
+      rulePath: 'loginCheckJs',
+      context: context,
+      response: JsResponseView(
+        url: page.url,
+        body: response.body,
+        code: response.statusCode,
+        headers: _flatHeaders(response.headers),
+      ),
+    );
+    switch (evaluated) {
+      case ParseFailure<Object?>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
+      case ParseSuccess<Object?>(:final Object? data):
+        final ParseResult<LoginReplacement?> replacement = readLoginCheckResult(
+          data,
+        );
+        switch (replacement) {
+          case ParseSuccess<LoginReplacement?>(:final LoginReplacement? data):
+            return _replaced(page, data, context: context, currentBody: body);
+          case ParseFailure<LoginReplacement?>():
+            final bool canSignIn = login?.canSignIn ?? false;
+            _logger.warning(
+              'loginCheckJs did not return a response: field=$rulePath '
+              'canSignIn=$canSignIn',
+            );
+
+            return failureAt<FetchedPage>(
+              kind: canSignIn
+                  ? ParseFailureKind.loginRequired
+                  : ParseFailureKind.parseFailed,
+              rulePath: 'loginCheckJs',
+            );
+        }
+    }
+  }
+
+  /// The page a `loginCheckJs` replacement describes, or [page] itself when nothing changed.
+  ParseResult<FetchedPage> _replaced(
+    FetchedPage page,
+    LoginReplacement? replacement, {
+    required JsPageContext context,
+    required String currentBody,
+  }) {
+    if (replacement == null) {
+      return ParseSuccess<FetchedPage>(page);
+    }
+    final String url = replacement.url ?? page.url;
+    final String body = replacement.body;
+    if (url == page.url && body == currentBody) {
+      // 脚本做了判断但没改响应（`return result` 是最常见的写法）：不重建 DOM。
+      return ParseSuccess<FetchedPage>(page);
+    }
+
+    return ParseSuccess<FetchedPage>(
       FetchedPage(
         url: url,
         scope: RuleScope.dom(
-          parser.parse(data.body),
-          body: data.body,
-          // §6 的 baseUrl / page / source 绑定就来自这里；逐项字段的 `@js:` 靠它继承。
-          // 书源自带的 `header` 同时带上：规则里的 `http.*` 也要用它（C-NET-4）。
+          parser.parse(body),
+          body: body,
           jsContext: JsPageContext(
             baseUrl: url,
-            page: page,
-            source: source,
-            headers: headers,
-            // §6 的 `java.get('bookName' / 'title')`：书与章节是**页面**的属性，所以它必须
-            // 建在页面 scope 上，再由引擎继承到每个条目与每条规则（ADR-0049）。
-            bookName: bookName,
-            chapterTitle: chapterTitle,
-            book: book,
+            page: context.page,
+            source: context.source,
+            headers: context.headers,
+            bookName: context.bookName,
+            chapterTitle: context.chapterTitle,
+            book: context.book,
           ),
         ),
       ),
-    ),
-  };
+    );
+  }
+
+  /// The body the page scope is built from: `sourceRegex`'s first match, or the response body.
+  ///
+  /// The cut runs **before** the scope exists, so the DOM, the `@json:`/`$` rules and the login
+  /// interceptor all read the same fragment (`source_regex.dart`).
+  ParseResult<String> _cutBody(HttpResponse data, String? sourceRegex) {
+    final String? pattern = sourceRegex;
+    if (pattern == null || pattern.trim().isEmpty) {
+      return ParseSuccess<String>(data.body);
+    }
+
+    return cutBySourceRegex(
+      pattern,
+      data.body,
+      rulePath: 'contentRule.sourceRegex',
+    );
+  }
+
+  /// Replaces the response body with what a `bodyJs` URL option computed (`book-source.md` §4.3).
+  ///
+  /// The script sees the body as `result` (a plain string, like any `@js:` rule that follows a
+  /// page) and must answer a string; anything else is [ParseFailureKind.parseFailed], because a
+  /// body nobody produced cannot be parsed. A blank option, or a response that already failed,
+  /// passes through untouched.
+  Future<ParseResult<HttpResponse>> _applyBodyJs(
+    ParseResult<HttpResponse> response,
+    String? script, {
+    required JsPageContext context,
+  }) async {
+    if (script == null || script.trim().isEmpty) {
+      return response;
+    }
+    switch (response) {
+      case ParseFailure<HttpResponse>():
+        return response;
+      case ParseSuccess<HttpResponse>(:final HttpResponse data):
+        final ParseResult<Object?> evaluated = await _engine.evaluateJs(
+          script,
+          rulePath: 'bodyJs',
+          context: context,
+          result: data.body,
+        );
+        switch (evaluated) {
+          case ParseFailure<Object?>(
+            :final ParseFailureKind kind,
+            rulePath: final String failedAt,
+          ):
+            return failureAt<HttpResponse>(kind: kind, rulePath: failedAt);
+          case ParseSuccess<Object?>(data: final Object? value):
+            if (value is! String) {
+              return failureAt<HttpResponse>(
+                kind: ParseFailureKind.parseFailed,
+                rulePath: 'bodyJs',
+              );
+            }
+
+            return ParseSuccess<HttpResponse>(
+              HttpResponse(
+                statusCode: data.statusCode,
+                headers: data.headers,
+                body: value,
+              ),
+            );
+        }
+    }
+  }
+
+  /// Flattens response headers for the sandbox's `result.headers()` view.
+  static Map<String, String> _flatHeaders(Map<String, List<String>> headers) =>
+      <String, String>{
+        for (final MapEntry<String, List<String>> entry in headers.entries)
+          entry.key: entry.value.join(', '),
+      };
 
   /// The request headers [source] declares, evaluating a **rule** header first
   /// (`book-source.md` §2, M12-A2).
@@ -809,6 +1056,8 @@ final class PageFetchService {
     Map<String, String>? headers,
     required String sourceId,
     JsSourceInfo? source,
+    SourceLoginGuard? login,
+    String? sourceRegex,
   }) async {
     final List<FetchedPage> pages = <FetchedPage>[];
     final Set<String> visited = <String>{};
@@ -822,6 +1071,8 @@ final class PageFetchService {
       headers: headers,
       sourceId: sourceId,
       source: source,
+      login: login,
+      sourceRegex: sourceRegex,
     );
     switch (first) {
       case ParseFailure<FetchedPage>(
@@ -871,6 +1122,8 @@ final class PageFetchService {
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
         book: context.book,
+        login: login,
+        sourceRegex: sourceRegex,
       );
 
       switch (page) {

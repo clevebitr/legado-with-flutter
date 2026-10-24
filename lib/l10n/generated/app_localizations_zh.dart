@@ -913,6 +913,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bookSourceRowCheck => '校验该书源';
 
   @override
+  String get bookSourceRowSignIn => '登录 / 过验证';
+
+  @override
+  String get bookSourceSignInDone => '已保存该站的 Cookie，可以重新校验了。';
+
+  @override
+  String get bookSourceSignInFailed => '登录 / 验证未完成。';
+
+  @override
+  String get bookSourceSignInUnsupported => '该平台没有可用的 WebView，请先在系统浏览器里完成验证。';
+
+  @override
   String get bookSourceRowEdit => '编辑';
 
   @override

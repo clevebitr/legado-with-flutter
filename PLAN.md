@@ -27,12 +27,12 @@ auto-breakpoint: false
 - [x] M16 — M16：漫画引擎（图片源链路 + 漫画阅读器）
 - [x] M17 — M17：听书与音频引擎（音频源播放 + TTS 朗读）
 - [x] M18 — 应用外壳与我的页：底部导航 + 关于/法律声明（ui-gap §4）
-- [ ] M19 — 书架分组与管理页、详情增强、书签/阅读记录（ui-gap §4）
+- [x] M19 — 书架分组与管理页、详情增强、书签/阅读记录（ui-gap §4）
 - [ ] M20 — 书内全文搜索 + 规则管理 UI（净化/目录/字典/高亮）（ui-gap §4）
 - [ ] M21 — M21a — WebView 验证 + Cookie 持久化 + 引擎兼容（ADR-0068）
 - [ ] M22 — M21b — 按源缓存/主题/备份/本地导入/二维码/登录表单
 
 ## Current: M21 — M21a — WebView 验证 + Cookie 持久化 + 引擎兼容（ADR-0068）
 
-goal: M21a Cookie + 可见 WebView 验证页已落地
-breakpoint: 下一步：JS 验证族接线（#11）
+goal: M21a 二刀已落地（登录拦截器/取页后处理）；剩字体反爬
+breakpoint: 下一步：M21a 第三刀 字体反爬（cmap→replaceFont）

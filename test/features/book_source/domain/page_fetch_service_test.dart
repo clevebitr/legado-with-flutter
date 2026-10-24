@@ -8,6 +8,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:html/parser.dart' as parser;
 import 'package:logger/logger.dart';
@@ -824,6 +825,471 @@ void main() {
       );
 
       expect(_failure(body).kind, ParseFailureKind.unsupportedRule);
+    });
+  });
+
+  group('PageFetchService loginCheckJs', () {
+    // `loginCheckJs` 是**响应拦截器**，不是布尔检查（ADR-0068 增补）：宿主把响应交给脚本，
+    // 脚本的返回值替换本次响应。
+    test('loginCheckJs_givenNoScript_runsNoJob', () async {
+      final FakeJsBridge bridge = FakeJsBridge();
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(bridge);
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=x',
+          '<div class="result">ok</div>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: service.printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: service.printer),
+      );
+
+      // 运行时构造：`const` 会在编译期折叠，覆盖率统计不到这个构造（testing.md §2）。
+      // ignore: prefer_const_constructors
+      final SourceLoginGuard noLogin = SourceLoginGuard.none();
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/s?q={{key}}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{'key': 'x'},
+        context: _context(),
+        login: noLogin,
+      );
+
+      expect(fetched, isA<ParseSuccess<FetchedPage>>());
+      expect(
+        bridge.jobs.where((JsJob job) => job.rulePath == 'loginCheckJs'),
+        isEmpty,
+      );
+    });
+
+    test('loginCheckJs_givenAScript_handsItTheResponseObject', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = null;
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=x',
+          '<div class="result">ok</div>',
+          headers: const <String, List<String>>{
+            'content-type': <String>['text/html', 'charset=utf-8'],
+            'set-cookie': <String>['a=1'],
+          },
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/s?q={{key}}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{'key': 'x'},
+        context: _context(),
+        login: const SourceLoginGuard(checkScript: 'result'),
+      );
+
+      final JsJob job = bridge.jobs.singleWhere(
+        (JsJob job) => job.rulePath == 'loginCheckJs',
+      );
+      expect(job.response?.url, 'https://example-novel.test/s?q=x');
+      expect(job.response?.body, contains('result'));
+      expect(job.response?.code, 200);
+      // 多值头按 `, ` 拼起来，脚本里的 `result.headers()` 才有东西可读。
+      expect(job.response?.headers['content-type'], 'text/html, charset=utf-8');
+      expect(job.response?.headers['set-cookie'], 'a=1');
+      expect(job.script, 'result');
+      // 脚本没改响应（`null`）：页面原样留下。
+      expect(_data(fetched).url, 'https://example-novel.test/s?q=x');
+    });
+
+    test('loginCheckJs_givenAReplacement_rebuildsThePageScope', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = <String, Object?>{
+          'body': '<div class="result">after-login</div>',
+          '__url': 'https://example-novel.test/s?q=after',
+        };
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=x',
+          '<div class="result">need-login</div>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final FetchedPage page = _data(
+        await pages.fetchRule(
+          'https://example-novel.test/s?q={{key}}',
+          rulePath: 'searchUrl',
+          params: const <String, String>{'key': 'x'},
+          context: _context(),
+          login: const SourceLoginGuard(checkScript: 'result'),
+        ),
+      );
+
+      expect(page.url, 'https://example-novel.test/s?q=after');
+      expect(
+        (page.scope as DomScope).body,
+        '<div class="result">after-login</div>',
+      );
+      final ParseResult<String?> name = await pages.field(
+        'class.result@text',
+        page.scope,
+        'searchRule.name',
+        sourceId: 'https://example-novel.test',
+      );
+      expect(_data(name), 'after-login');
+    });
+
+    test('loginCheckJs_givenTheSameBody_keepsTheOriginalScope', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = <String, Object?>{'body': '<div class="result">ok</div>'};
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=x',
+          '<div class="result">ok</div>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final FetchedPage page = _data(
+        await pages.fetchRule(
+          'https://example-novel.test/s?q={{key}}',
+          rulePath: 'searchUrl',
+          params: const <String, String>{'key': 'x'},
+          context: _context(),
+          login: const SourceLoginGuard(checkScript: 'result'),
+        ),
+      );
+
+      expect((page.scope as DomScope).body, '<div class="result">ok</div>');
+      // 返回 `result` 是最常见的写法：内容没变就不要重建成第二份 DOM。
+      expect(page.scope, isA<DomScope>());
+    });
+
+    test('loginCheckJs_givenJunkAndNoLoginField_failsTheStage', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = true;
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=x',
+          '<div class="result">ok</div>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/s?q={{key}}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{'key': 'x'},
+        context: _context(),
+        login: const SourceLoginGuard(checkScript: 'result'),
+      );
+
+      expect(_failure(fetched).kind, ParseFailureKind.parseFailed);
+      expect(_failure(fetched).rulePath, 'loginCheckJs');
+      expect(
+        printer.events.last.message.toString(),
+        contains('loginCheckJs did not return a response'),
+      );
+    });
+
+    test('loginCheckJs_givenJunkAndALoginPage_saysLoginRequired', () async {
+      // 源声明了 loginUrl，所以“脚本没能修好会话”的唯一可行动答案就是「去登录」。
+      final FakeJsBridge bridge = FakeJsBridge()..result = 42;
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=x',
+          '<div class="result">ok</div>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/s?q={{key}}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{'key': 'x'},
+        context: _context(),
+        login: const SourceLoginGuard(
+          checkScript: 'result',
+          loginUrl: 'https://example-novel.test/login',
+        ),
+      );
+
+      expect(_failure(fetched).kind, ParseFailureKind.loginRequired);
+    });
+
+    test('loginCheckJs_givenAFailingJob_carriesTheFailureThrough', () async {
+      // 用户在验证页上取消：拦截器等的是人，脚本吞不掉这个答案（ADR-0068 §决策 10）。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = failureAt<Never>(
+          kind: ParseFailureKind.cancelled,
+          rulePath: 'java.startBrowserAwait',
+        );
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=x',
+          '<div class="result">ok</div>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/s?q={{key}}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{'key': 'x'},
+        context: _context(),
+        login: const SourceLoginGuard(checkScript: 'result'),
+      );
+
+      expect(_failure(fetched).kind, ParseFailureKind.cancelled);
+    });
+
+    test('walk_givenAPagedRead_interceptsEveryPage', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = null;
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/book/1/ch1.html',
+          '<div class="body">第一页</div><a id="next" href="ch1_2.html">下一章</a>',
+        )
+        ..serve(
+          'https://example-novel.test/book/1/ch1_2.html',
+          '<div class="body">第二页</div>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final PageWalk walk = _data(
+        await pages.walk(
+          rule: 'https://example-novel.test/book/1/ch1.html',
+          rulePath: 'ruleContent',
+          nextRule: '@css:a#next @href',
+          nextRulePath: 'contentRule.nextContentUrl',
+          context: _context(),
+          sourceId: 'https://example-novel.test',
+          login: const SourceLoginGuard(checkScript: 'result'),
+        ),
+      );
+
+      expect(walk.pages, hasLength(2));
+      expect(
+        bridge.jobs.where((JsJob job) => job.rulePath == 'loginCheckJs'),
+        hasLength(2),
+      );
+    });
+  });
+
+  group('PageFetchService post-processing', () {
+    // ADR-0068 §决策 7：`sourceRegex` 先截取再建 scope，`bodyJs` 对响应体跑脚本。
+    test('sourceRegex_givenAMatch_buildsTheScopeFromTheFragment', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/book/1/ch1.html',
+          '<html><body><script>var shell = 1;</script>'
+              '<div class="payload">{"data":{"body":"正文片段"}}</div>'
+              '</body></html>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final FetchedPage page = _data(
+        await pages.fetchRule(
+          'https://example-novel.test/book/1/ch1.html',
+          rulePath: 'ruleContent',
+          params: const <String, String>{},
+          context: _context(),
+          sourceRegex: r'<div class="payload">([\s\S]*?)</div>',
+        ),
+      );
+
+      // 片段就是页面：DOM 与 `$` 规则都从它读，壳里的其它东西不再存在。
+      expect((page.scope as DomScope).body, '{"data":{"body":"正文片段"}}');
+      final ParseResult<String?> text = await pages.field(
+        r'$.data.body',
+        page.scope,
+        'contentRule.content',
+        sourceId: 'https://example-novel.test',
+      );
+      expect(_data(text), '正文片段');
+    });
+
+    test('sourceRegex_givenNoMatch_failsTheStage', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/book/1/ch1.html',
+          '<div>登录后可见</div>',
+        );
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/book/1/ch1.html',
+        rulePath: 'ruleContent',
+        params: const <String, String>{},
+        context: _context(),
+        sourceRegex: r'<div class="body">([\s\S]*?)</div>',
+      );
+
+      expect(_failure(fetched).kind, ParseFailureKind.parseFailed);
+      expect(_failure(fetched).rulePath, 'contentRule.sourceRegex');
+    });
+
+    test('bodyJs_givenAScript_replacesTheBody', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = '<div class="body">脚本拼的</div>';
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve('https://example-novel.test/book/1/ch1.html', 'raw-payload');
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final FetchedPage page = _data(
+        await pages.fetchRule(
+          'https://example-novel.test/book/1/ch1.html,{"bodyJs":"decode(result)"}',
+          rulePath: 'ruleContent',
+          params: const <String, String>{},
+          context: _context(),
+        ),
+      );
+
+      expect(bridge.jobs.single.rulePath, 'bodyJs');
+      expect(bridge.jobs.single.result, 'raw-payload');
+      expect((page.scope as DomScope).body, '<div class="body">脚本拼的</div>');
+    });
+
+    test('bodyJs_givenANonStringAnswer_failsTheStage', () async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 42;
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve('https://example-novel.test/book/1/ch1.html', 'raw-payload');
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/book/1/ch1.html,{"bodyJs":"1"}',
+        rulePath: 'ruleContent',
+        params: const <String, String>{},
+        context: _context(),
+      );
+
+      expect(_failure(fetched).kind, ParseFailureKind.parseFailed);
+      expect(_failure(fetched).rulePath, 'bodyJs');
+    });
+
+    test('bodyJs_givenAFailingScript_carriesTheFailure', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = failureAt<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'bodyJs:js:error',
+        );
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve('https://example-novel.test/book/1/ch1.html', 'raw-payload');
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/book/1/ch1.html,{"bodyJs":"boom()"}',
+        rulePath: 'ruleContent',
+        params: const <String, String>{},
+        context: _context(),
+      );
+
+      expect(_failure(fetched).rulePath, 'bodyJs:js:error');
     });
   });
 }

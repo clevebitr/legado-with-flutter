@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
@@ -13,6 +15,9 @@ import 'package:flutter_reader/features/book_source/domain/entities/source_check
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_light.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
+import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
+import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -1131,6 +1136,13 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
                       : l10n.bookSourceRowExploreEnable,
                 ),
               ),
+              // 只有声明了登录能力的源才给这个入口：否则它只是一个会打开首页的菜单项
+              // （ADR-0068 增补）。
+              if (source.source.loginGuard.isDeclared)
+                PopupMenuItem<_RowAction>(
+                  value: _RowAction.signIn,
+                  child: Text(l10n.bookSourceRowSignIn),
+                ),
               PopupMenuItem<_RowAction>(
                 value: _RowAction.debug,
                 child: Text(l10n.bookSourceCheckOpenDebug),
@@ -1180,6 +1192,8 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
             isExploreEnabled: !source.isExploreEnabled,
           ),
         );
+      case _RowAction.signIn:
+        unawaited(_signIn(context, ref, l10n, source));
       case _RowAction.debug:
         pushBookSourceRoute(
           context,
@@ -1199,6 +1213,85 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
       case _RowAction.delete:
         unawaited(_confirmDelete(context, ref, l10n, source));
     }
+  }
+
+  /// Opens the source's login page in the visible WebView (`loginUrl`, else the source URL).
+  ///
+  /// Cookies the page earns land in the v8 jar (`PersistentCookieManager`) and the next request
+  /// carries them, so this is the actionable half of `ParseFailureKind.loginRequired`
+  /// (ADR-0068 §决策 3/4 and its 2026-10-24 addendum). The native `loginUi` form is the M21b
+  /// login/Cookie management UI (`docs/dev/ui-gap.md` U15), not this entry.
+  ///
+  /// Reuses the same [SourceVerification] port the JS family pushes, so a source's own
+  /// `java.startBrowser` and this menu entry cannot behave differently.
+  Future<void> _signIn(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    StoredBookSource source,
+  ) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final SourceVerification verification = ref.read(
+      sourceVerificationProvider,
+    );
+    if (!verification.isSupported) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.bookSourceSignInUnsupported)),
+      );
+
+      return;
+    }
+
+    final ParseResult<SourceVerificationOutcome> outcome = await verification
+        .verify(
+          SourceVerificationRequest(
+            sourceUrl: source.source.url,
+            sourceName: source.source.name,
+            url: _signInUrl(source.source),
+            title: source.source.name,
+            headers: source.source.headers,
+          ),
+        );
+    if (!context.mounted) {
+      return;
+    }
+
+    switch (outcome) {
+      case ParseSuccess<SourceVerificationOutcome>():
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.bookSourceSignInDone)),
+        );
+      case ParseFailure<SourceVerificationOutcome>(
+        :final ParseFailureKind kind,
+      ):
+        // 用户自己关掉页面时什么都不说：那是「算了」，不是失败。
+        if (kind == ParseFailureKind.cancelled) {
+          return;
+        }
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.bookSourceSignInFailed)),
+        );
+    }
+  }
+
+  /// The address the login entry opens: `loginUrl` when it is an address, else the source URL.
+  ///
+  /// `loginUrl` is a **URL rule**, so it may carry the `,{…}` suffix of `book-source.md` §4.3
+  /// (the suffix is dropped here: the page does its own requests) or be a `@js:` script defining
+  /// `login()`; a script has no address to open, so the source's own page is shown instead — that
+  /// is where the human check usually lives.
+  String _signInUrl(BookSource source) {
+    final String? loginUrl = source.loginUrl;
+    if (loginUrl == null || loginUrl.trim().isEmpty) {
+      return source.url;
+    }
+
+    return switch (parseUrlRule(loginUrl, rulePath: 'loginUrl')) {
+      ParseSuccess<UrlRule>(:final UrlRule data)
+          when data.template.trim().toLowerCase().startsWith('http') =>
+        resolveAbsoluteUrl(data.template.trim(), source.url),
+      ParseFailure<UrlRule>() || ParseSuccess<UrlRule>() => source.url,
+    };
   }
 
   /// Runs the check on **one** source and reports what it found (ADR-0050 §决策 2's neighbour).
@@ -1465,7 +1558,16 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
 }
 
 /// The actions a row's menu offers.
-enum _RowAction { toggleExplore, debug, check, edit, export, comment, delete }
+enum _RowAction {
+  toggleExplore,
+  signIn,
+  debug,
+  check,
+  edit,
+  export,
+  comment,
+  delete,
+}
 
 /// The view-menu actions (`docs/dev/roadmap.md` §3.10 V4).
 enum _ViewAction { groupByDomain, manageGroups }

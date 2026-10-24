@@ -5,6 +5,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/chapter_requ
 import 'package:flutter_reader/features/book_source/domain/entities/manga_pages.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:html/dom.dart' as html_dom;
 import 'package:html/parser.dart' as html_parser;
@@ -45,6 +46,7 @@ final class FetchMangaPages {
       headers: headers,
       sourceId: source.url,
       source: source.jsSourceInfo,
+      login: source.loginGuard,
     );
 
     switch (walk) {

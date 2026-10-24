@@ -4,6 +4,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
 import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 
 /// Reads the table of contents of one book through `ruleToc`.
@@ -53,6 +54,7 @@ final class FetchToc {
       headers: headers,
       sourceId: source.url,
       source: source.jsSourceInfo,
+      login: source.loginGuard,
     );
 
     return switch (walk) {

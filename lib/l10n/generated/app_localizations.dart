@@ -1764,6 +1764,30 @@ abstract class AppLocalizations {
   /// **'Check this source'**
   String get bookSourceRowCheck;
 
+  /// Row menu: opens the source's login page in the visible WebView.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in / pass check'**
+  String get bookSourceRowSignIn;
+
+  /// Snackbar after the login / verification page finished.
+  ///
+  /// In en, this message translates to:
+  /// **'The site\'s cookies are saved; the source can be checked again.'**
+  String get bookSourceSignInDone;
+
+  /// Snackbar when the login page failed for a reason other than the user closing it.
+  ///
+  /// In en, this message translates to:
+  /// **'The sign-in / verification did not finish.'**
+  String get bookSourceSignInFailed;
+
+  /// Snackbar when the platform cannot show a verification page.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no WebView; finish the check in the system browser first.'**
+  String get bookSourceSignInUnsupported;
+
   /// Row menu: opens the editor.
   ///
   /// In en, this message translates to:

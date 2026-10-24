@@ -5,6 +5,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
 import 'package:html/parser.dart' as html_parser;
 
 /// Reads the body of one chapter (`docs/dev/roadmap.md` 2.4, `ruleContent`).
@@ -75,6 +76,9 @@ final class FetchContent {
       headers: headers,
       sourceId: source.url,
       source: source.jsSourceInfo,
+      login: source.loginGuard,
+      // `ruleContent.sourceRegex`：截取后的片段才是规则读的页面（ADR-0068 §决策 7）。
+      sourceRegex: source.contentRule.sourceRegex,
     );
 
     return switch (walk) {

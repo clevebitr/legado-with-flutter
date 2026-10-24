@@ -91,6 +91,55 @@ const String jsParseScopeMarker = 'js:parse-scope';
 /// The `rulePath` marker of a `parse.*` rule that would need a nested `@js:`.
 const String jsParseRecursionMarker = 'js:parse-recursion';
 
+/// The JSON marker that turns a plain object into the sandbox's response view.
+///
+/// It travels through the job envelope so the prelude can tell a response from an ordinary
+/// `result` value; scripts never need to know it.
+const String jsResponseMarker = '__strResponse';
+
+/// A response as a `loginCheckJs` interceptor sees it: the sandbox `result` object.
+///
+/// Upstream hands the interceptor a `StrResponse` and replaces the page with whatever the script
+/// returns, so `result` is not the body — it is a small object the script reads (`body` property,
+/// `url()` / `code()` / `headers()` methods) and returns (`book-source.md` §6, ADR-0068 addendum).
+///
+/// The URL travels as `__url` because `url` itself is the method name upstream exposes; the body
+/// stays a plain `body` property, which is the form upstream's own JS helpers use
+/// (`getStrResponse().body`).
+final class JsResponseView {
+  /// Creates the response view of one fetched page.
+  const JsResponseView({
+    required this.url,
+    required this.body,
+    this.code = 200,
+    this.headers = const <String, String>{},
+  });
+
+  /// The page's final URL (after redirects).
+  final String url;
+
+  /// The page body.
+  final String body;
+
+  /// The HTTP status code.
+  final int code;
+
+  /// The response headers, lower-cased for lookup.
+  final Map<String, String> headers;
+
+  /// The JSON object the prelude turns into the sandbox `result`.
+  ///
+  /// The status and the headers travel as `__code` / `__headers` for the same reason as
+  /// [url]: `code()` and `headers()` are method names upstream, so the data cannot sit on them.
+  Map<String, Object?> toJson() => <String, Object?>{
+    jsResponseMarker: true,
+    'body': body,
+    '__url': url,
+    '__code': code,
+    '__headers': headers,
+  };
+}
+
 /// Evaluates a nested rule for `parse.*` against the page a job runs on.
 typedef JsParseEvaluator = Future<ParseResult<Object?>> Function(
   JsParseRequest request,
@@ -106,6 +155,7 @@ final class JsJob {
     required this.page,
     required this.source,
     this.result,
+    this.response,
     this.sourceHeaders,
     this.parseEvaluator,
     this.variables = const <String, String>{},
@@ -150,6 +200,12 @@ final class JsJob {
   /// The value the rule produced so far (the `result` binding), when there is one.
   final Object? result;
 
+  /// The response a `loginCheckJs` interceptor reads as `result`, when this job is one.
+  ///
+  /// When set it **wins over** [result]: the interceptor's `result` is a response object, not the
+  /// page text (ADR-0068 addendum).
+  final JsResponseView? response;
+
   /// The book source's own `header` field, the default for its `http.*` calls.
   ///
   /// Host-side only: [toJson] does not send it.
@@ -168,6 +224,7 @@ final class JsJob {
     'page': page,
     'source': source.toJson(),
     'result': result,
+    'response': response?.toJson(),
     'variables': variables,
     'key': key,
     'bookName': bookName,

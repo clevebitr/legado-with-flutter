@@ -297,10 +297,12 @@ final class _Worker {
 // 沙箱每个 job 都重跑：运行时复用且 globalThis 共享，规则的重绑定会漏给下一个 job。
 String _evaluationSource(Map<String, Object?> fields) {
   final Object? key = fields['key'];
+  // 响应对象优先于普通 `result`：登录拦截器的 `result` 是响应，不是页面正文（ADR-0068 增补）。
+  final Object? result = fields['response'] ?? fields['result'];
   final StringBuffer buffer = StringBuffer()
     ..writeln(_prelude)
     ..writeln('var baseUrl = ${jsonEncode(fields['baseUrl'])};')
-    ..writeln('var result = ${jsonEncode(fields['result'])};')
+    ..writeln('var result = __sandboxValue(${jsonEncode(result)});')
     ..writeln('var page = ${jsonEncode(fields['page'])};')
     ..writeln('var source = Object.freeze(${jsonEncode(fields['source'])});');
   final Object? book = fields['book'];
@@ -442,6 +444,56 @@ globalThis.__javaRejected = function (name) {
 // * `setType` / `setReverseToc` 在本仓没有对应的书籍状态：它们在本 job 内可读回，但**不影响**
 //   宿主（章节顺序 / 书籍类型不变），差异登记在 ADR-0062 §决策 2。
 // 每次 job 重建，所以这里不再 `Object.freeze`：规则自己的写入不会漏到下一份规则。
+// 登录拦截器的响应对象（ADR-0068 增补）：`loginCheckJs` 的 `result` 不是页面正文，而是上游
+// `StrResponse` 那一层——`body` 是属性（上游自己的 JS 助手就写 `getStrResponse().body`），
+// `url()` / `code()` / `headers()` 是方法。Readori 风格的 `result.body()` 本仓不支持，命中会显式
+// 报 `result.body is not a function`（差异登记在 book-source.md §6）。
+//
+// 方法不可枚举：脚本原样 `return result` 时，JSON 只带回 body / 状态码 / 头，宿主就能把它当作
+// 替换后的响应。
+globalThis.__sandboxStrResponse = function (data) {
+  var url = (data.__url === undefined || data.__url === null) ? '' : String(data.__url);
+  var body = (data.body === undefined || data.body === null) ? '' : String(data.body);
+  var code = Number(data.__code) || 0;
+  var headers = (data.__headers && typeof data.__headers === 'object') ? data.__headers : {};
+  var response = {
+    __strResponse: true,
+    body: body,
+    __url: url,
+    __code: code,
+    __headers: headers
+  };
+  var define = function (name, fn) {
+    Object.defineProperty(response, name, { value: fn, enumerable: false });
+  };
+  define('url', function () { return url; });
+  define('code', function () { return code; });
+  define('headers', function () { return headers; });
+  define('header', function (name) {
+    var wanted = String(name).toLowerCase();
+    for (var key in headers) {
+      if (Object.prototype.hasOwnProperty.call(headers, key) &&
+          key.toLowerCase() === wanted) {
+        return headers[key];
+      }
+    }
+    return null;
+  });
+  define('cookie', function () { return headers.cookie || ''; });
+  define('contentType', function () { return headers['content-type'] || ''; });
+  define('isSuccessful', function () { return code >= 200 && code < 300; });
+  define('toString', function () { return body; });
+  return response;
+};
+
+// 只有带标记的对象才是响应；其余（字符串 / 数组 / JSON 值）原样交给规则，`@js:` 的 result 语义不变。
+globalThis.__sandboxValue = function (value) {
+  if (value !== null && typeof value === 'object' && value.__strResponse === true) {
+    return __sandboxStrResponse(value);
+  }
+  return value;
+};
+
 globalThis.__sandboxBook = function (data) {
   if (data === null || data === undefined) {
     return null;

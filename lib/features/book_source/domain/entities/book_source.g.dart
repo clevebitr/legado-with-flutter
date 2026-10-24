@@ -38,6 +38,9 @@ _BookSource _$BookSourceFromJson(Map<String, dynamic> json) => $checkedCreate(
       ),
       concurrentRate: $checkedConvert('concurrentRate', (v) => v as String?),
       variableComment: $checkedConvert('variableComment', (v) => v as String?),
+      loginUrl: $checkedConvert('loginUrl', (v) => v as String?),
+      loginUi: $checkedConvert('loginUi', (v) => v as String?),
+      loginCheckJs: $checkedConvert('loginCheckJs', (v) => v as String?),
       bookInfoRule: $checkedConvert(
         'ruleBookInfo',
         (v) =>
@@ -83,6 +86,9 @@ Map<String, dynamic> _$BookSourceToJson(_BookSource instance) =>
       'ruleExplore': instance.exploreRule,
       'concurrentRate': instance.concurrentRate,
       'variableComment': instance.variableComment,
+      'loginUrl': instance.loginUrl,
+      'loginUi': instance.loginUi,
+      'loginCheckJs': instance.loginCheckJs,
       'ruleBookInfo': instance.bookInfoRule,
       'ruleToc': instance.tocRule,
       'ruleContent': instance.contentRule,

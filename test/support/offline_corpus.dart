@@ -12,6 +12,7 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
 import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
+import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
@@ -199,6 +200,7 @@ Future<void> pumpSourceManagementPage(
   FakeBookSourceViewStore? viewStore,
   BookSourceFileSaver? saver,
   Clock? clock,
+  SourceVerification? verification,
   void Function(Object? arguments)? onPush,
 }) async {
   _fixViewSize(tester);
@@ -224,6 +226,9 @@ Future<void> pumpSourceManagementPage(
         ),
         // 列表里的「上次校验 2 分钟前」由注入时钟换算（testing.md §4）。
         if (clock != null) clockProvider.overrideWithValue(clock),
+        // 可见 WebView 验证页是平台通道：需要断言「打开了哪个地址」的测试覆盖端口。
+        if (verification != null)
+          sourceVerificationProvider.overrideWithValue(verification),
       ],
       child: MaterialApp(
         locale: const Locale('en'),

@@ -68,6 +68,56 @@ void main() {
     );
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_givenALoginCheckJob_exposesTheResponseObject', (
+    WidgetTester tester,
+  ) async {
+    // `loginCheckJs` 的 `result` 是响应对象，不是页面正文（ADR-0068 增补）：属性 `body` 是上游
+    // `StrResponse` 的写法，`url()` / `code()` / `header()` 是方法。这条探针在真引擎上验证
+    // 前奏里的 `__sandboxStrResponse` 真的这么长。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "result.body + '|' + result.url() + '|' + result.code() + '|' "
+            "+ result.header('Content-Type') + '|' + result.isSuccessful()",
+        response: const JsResponseView(
+          url: 'https://example-novel.test/book/1',
+          body: 'need-login',
+          code: 200,
+          headers: <String, String>{'content-type': 'text/html'},
+        ),
+      ),
+    );
+
+    expect(
+      _value(result),
+      'need-login|https://example-novel.test/book/1|200|text/html|true',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_givenALoginCheckJob_roundTripsTheResponseItReturns', (
+    WidgetTester tester,
+  ) async {
+    // 脚本原样/改写返回响应对象时，宿主拿到的是可读的 `{body, __url}`，`readLoginCheckResult`
+    // 才认得出它是替换后的响应。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "result.body = 'after-login'; result",
+        response: const JsResponseView(
+          url: 'https://example-novel.test/book/1',
+          body: 'need-login',
+        ),
+      ),
+    );
+
+    expect(_value(result), <String, Object?>{
+      '__strResponse': true,
+      'body': 'after-login',
+      '__url': 'https://example-novel.test/book/1',
+      '__code': 200,
+      '__headers': <String, Object?>{},
+    });
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('jsBridge_whenTheRuleReturnsAnArray_reportsAList', (
     WidgetTester tester,
   ) async {
@@ -767,6 +817,7 @@ JsJob _job({
   String? bookName,
   String? chapterTitle,
   JsBookInfo? book,
+  JsResponseView? response,
 }) => JsJob(
   script: script,
   rulePath: 'searchRule.name',
@@ -774,6 +825,7 @@ JsJob _job({
   page: 2,
   source: source,
   result: 'raw',
+  response: response,
   sourceHeaders: sourceHeaders,
   variables: variables,
   bookName: bookName,

@@ -134,6 +134,16 @@ void main() {
       expect(rule.options?.unsupported, isEmpty);
     });
 
+    test('parseUrlRule_givenBodyJs_modelsIt', () {
+      // bodyJs 是对响应体的后处理脚本（ADR-0068 决策 7），不再按未知选项报 unsupported。
+      final UrlRule rule = _parse(
+        'https://a.test/c/1,{"bodyJs":"result.trim()"}',
+      );
+
+      expect(rule.options?.bodyJs, 'result.trim()');
+      expect(rule.options?.unsupported, isEmpty);
+    });
+
     test('parseUrlRule_givenRetryAndReadTimeout_capsThem', () {
       // 上限在这里就钳住：`retry` ≤ 3（C-NET-2），`readTimeout` ≤ 120 s（ADR-0068 §决策 8）。
       final UrlRule rule = _parse(

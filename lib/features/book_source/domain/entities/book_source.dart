@@ -55,6 +55,27 @@ abstract class BookSource with _$BookSource {
     @JsonKey(name: 'ruleExplore') ExploreRule? exploreRule,
     @JsonKey(name: 'concurrentRate') String? concurrentRate,
     @JsonKey(name: 'variableComment') String? variableComment,
+
+    /// The address (or a script defining `login()`) a source signs in at (`loginUrl`).
+    ///
+    /// It is a **URL rule**, so it may carry the `,{…}` suffix of `book-source.md` §4.3, and it is
+    /// opened in the visible WebView by hand (ADR-0068 §决策 3, addendum of 2026-10-24); its cookies
+    /// land in the v8 cookie jar like a verification page's.
+    String? loginUrl,
+
+    /// The login form description (`loginUi`), kept verbatim.
+    ///
+    /// Upstream renders it as a native form (a JSON array of field descriptors). This repository
+    /// models it so an import/export round trip does not lose it, and the form itself belongs to the
+    /// login/Cookie management UI of M21b (`docs/dev/ui-gap.md` U15, ADR-0068 §决策 1).
+    String? loginUi,
+
+    /// The **response interceptor** a source runs after every page request (`loginCheckJs`).
+    ///
+    /// It is not a `true`/`false` check: upstream hands the script a `result` response object and
+    /// replaces the response with whatever the script returns (see `book-source.md` §6 and the
+    /// ADR-0068 addendum). Blank means "no interceptor".
+    String? loginCheckJs,
     @JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,
     @JsonKey(name: 'ruleToc') required TocRule tocRule,
     @JsonKey(name: 'ruleContent') required ContentRule contentRule,

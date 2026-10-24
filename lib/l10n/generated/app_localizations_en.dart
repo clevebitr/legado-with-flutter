@@ -945,6 +945,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookSourceRowCheck => 'Check this source';
 
   @override
+  String get bookSourceRowSignIn => 'Sign in / pass check';
+
+  @override
+  String get bookSourceSignInDone =>
+      'The site\'s cookies are saved; the source can be checked again.';
+
+  @override
+  String get bookSourceSignInFailed =>
+      'The sign-in / verification did not finish.';
+
+  @override
+  String get bookSourceSignInUnsupported =>
+      'This platform has no WebView; finish the check in the system browser first.';
+
+  @override
   String get bookSourceRowEdit => 'Edit';
 
   @override

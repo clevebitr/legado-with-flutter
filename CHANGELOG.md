@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A session that vanished can be repaired, and a shell page can be cut open (ADR-0068, M21a second cut)
+
+- **`loginCheckJs` is a response interceptor, not a yes/no check.** After every fetched page the
+  source's script gets a `result` response object (`body` property plus `url()` / `code()` /
+  `headers()` / `header(name)` / `cookie()` / `isSuccessful()`) and its return value replaces the
+  page — which is how the real corpus sends the user to a login page and retries
+  (`java.startBrowserAwait(result.url(), '登录')`). Returning `null` keeps the response; returning
+  something that is not a response says `loginRequired` **when** the source declares `loginUrl` /
+  `loginUi`, and `parseFailed` otherwise.
+- **The three login fields are modelled** (`loginUrl` / `loginUi` / `loginCheckJs`), so an import no
+  longer parks them in `extra`, and the source list grew a 「登录 / 过验证」 row action that opens
+  `loginUrl` (or the source's own page) in the visible WebView; the cookies it earns are already in
+  the v8 jar. The native `loginUi` form is M21b's login/Cookie UI.
+- **`ruleContent.sourceRegex`** cuts the payload out of a shell page before the rules see it —
+  per page, including every `nextContentUrl` page — and **the `bodyJs` URL option** lets a script
+  assemble the body of a plain HTTP response. A cut that matches nothing is a failure, not an empty
+  chapter.
+- **Registered dialect differences** (`docs/dev/book-source.md` §6): the interceptor only sees 2xx
+  responses, `result.body()` (the method form some forks document) is not supported, and the
+  login-check-only `java.getStrResponse()` / `java.initUrl()` / `java.getHeaderMap()` stay named
+  rejections.
+- **Font anti-scraping is deliberately still unsupported.** The ADR now records the dependency and
+  licence evaluation (no third-party package qualifies; a ~150–200-line `cmap` reader is the plan)
+  and the one semantic decision left (the map is `code → glyphId`, not upstream's glyph *names*).
+- **`proxy` / `dnsIp` / `callTimeout` / `method: HEAD` / `encodedForm` are decided as *not done***,
+  each with the condition that would reopen it, instead of a standing 「收益未取证」.
+
 ### Pass a site's human check, and keep the cookies (ADR-0068, M21a)
 
 - **A visible WebView for 「人机验证」.** `java.startBrowser(url, title)` opens the page and returns,

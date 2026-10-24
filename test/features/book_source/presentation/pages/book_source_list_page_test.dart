@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_list_view.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
@@ -10,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_book_source_repository.dart';
 import '../../../../support/fake_book_source_view_store.dart';
+import '../../../../support/fake_source_verification.dart';
 import '../../../../support/offline_corpus.dart';
 
 /// A stored source with a distinct [name] and URL.
@@ -348,6 +351,181 @@ void main() {
         find.widgetWithText(FilledButton, l10n.actionRetry),
         findsOneWidget,
       );
+    });
+  });
+
+  group('BookSourceListPage sign-in', () {
+    // M21a 第二刀（ADR-0068 增补）：`loginRequired` 的可操作出口就是这个菜单项。
+    BookSource withLogin(String name, {String? loginUrl, String? loginUi}) =>
+        _source(name).copyWith(loginUrl: loginUrl, loginUi: loginUi);
+
+    Future<void> openRowMenu(WidgetTester tester) async {
+      await tester.tap(find.byIcon(Icons.more_vert).first);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('rowMenu_givenNoLoginField_hidesTheEntry', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(
+          source: withLogin('plain')
+              .copyWith(loginUrl: '', loginUi: '', loginCheckJs: ''),
+        );
+
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await openRowMenu(tester);
+
+      expect(find.text(l10n.bookSourceRowSignIn), findsNothing);
+    });
+
+    testWidgets('signIn_givenLoginUrl_opensItAndReportsSuccess', (
+      WidgetTester tester,
+    ) async {
+      final FakeSourceVerification verification = FakeSourceVerification();
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(
+          source: withLogin(
+            'login',
+            loginUrl: 'https://example-novel.test/login,{"webView":true}',
+          ),
+        );
+
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+        verification: verification,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await openRowMenu(tester);
+      await tester.tap(find.text(l10n.bookSourceRowSignIn));
+      await tester.pumpAndSettle();
+
+      // URL 规则的后缀在这里被丢掉：页面自己去请求（§4.3）。
+      expect(
+        verification.requests.single.url,
+        'https://example-novel.test/login',
+      );
+      expect(verification.requests.single.sourceName, 'login');
+      expect(find.text(l10n.bookSourceSignInDone), findsOneWidget);
+    });
+
+    testWidgets('signIn_givenALoginScript_opensTheSourceUrl', (
+      WidgetTester tester,
+    ) async {
+      final FakeSourceVerification verification = FakeSourceVerification();
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(
+          source: withLogin(
+            'script',
+            loginUrl: '@js:function login(){ return 1 }',
+          ),
+        );
+
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+        verification: verification,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await openRowMenu(tester);
+      await tester.tap(find.text(l10n.bookSourceRowSignIn));
+      await tester.pumpAndSettle();
+
+      // 脚本没有可打开的地址：人工验证通常在源自己的页面上。
+      expect(verification.requests.single.url, 'https://script.test');
+    });
+
+    testWidgets('signIn_givenUnsupportedPlatform_opensNothing', (
+      WidgetTester tester,
+    ) async {
+      final FakeSourceVerification verification = FakeSourceVerification()
+        ..supported = false;
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(source: withLogin('noshield', loginUi: '[]'));
+
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+        verification: verification,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await openRowMenu(tester);
+      await tester.tap(find.text(l10n.bookSourceRowSignIn));
+      await tester.pumpAndSettle();
+
+      expect(verification.verifyCount, 0);
+      expect(find.text(l10n.bookSourceSignInUnsupported), findsOneWidget);
+    });
+
+    testWidgets('signIn_givenCancelled_staysSilent', (
+      WidgetTester tester,
+    ) async {
+      final FakeSourceVerification verification = FakeSourceVerification()
+        ..outcome = failureAt<SourceVerificationOutcome>(
+          kind: ParseFailureKind.cancelled,
+          rulePath: 'login',
+        );
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(
+          source: withLogin('cancel', loginUrl: 'https://cancel.test/login'),
+        );
+
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+        verification: verification,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await openRowMenu(tester);
+      await tester.tap(find.text(l10n.bookSourceRowSignIn));
+      await tester.pumpAndSettle();
+
+      // 用户自己关掉页面是「算了」，不该弹「失败」。
+      expect(find.text(l10n.bookSourceSignInFailed), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('signIn_givenAFailure_saysItDidNotFinish', (
+      WidgetTester tester,
+    ) async {
+      final FakeSourceVerification verification = FakeSourceVerification()
+        ..outcome = failureAt<SourceVerificationOutcome>(
+          kind: ParseFailureKind.unsupportedRule,
+          rulePath: 'login',
+        );
+      final FakeBookSourceRepository repository = FakeBookSourceRepository()
+        ..add(
+          source: withLogin('broken', loginUrl: 'https://broken.test/login'),
+        );
+
+      await pumpSourceManagementPage(
+        tester,
+        page: const BookSourceListPage(),
+        repository: repository,
+        verification: verification,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await openRowMenu(tester);
+      await tester.tap(find.text(l10n.bookSourceRowSignIn));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.bookSourceSignInFailed), findsOneWidget);
     });
   });
 }

@@ -48,7 +48,7 @@
 | `ruleContent` | `contentRule` | `ContentRule` | M0 | 必填 |
 | `concurrentRate` | `concurrentRate` | `String?` | **M1** | 并发限速；语法、毫秒单位与「速率门 → 并发门」的合成归 §8（ADR-0036） |
 | `variableComment` | `variableComment` | `String?` | **M1** | 书源变量说明；**纯展示**，引擎不读（上游 `BookSource.kt:245-252` 只与校验注释拼接显示） |
-| `loginUrl` / `loginUi` / `loginCheckJs` | — | — | **M2** | 登录相关，暂不实现 |
+| `loginUrl` / `loginUi` / `loginCheckJs` | 同名 | `String?` ×3 | **M21a** | 三个字段都建模（导入/导出保真）。`loginCheckJs` 是**每次取页后运行的响应拦截器**（不是 true/false 检查），绑定与返回值见 §6；`loginUrl` 是登录入口打开的地址（URL 规则，后缀丢掉），`loginUi` 只保留原文（原生表单归 M21b/U15）。口径与三条登记差异见 ADR-0068（2026-10-24 增补） |
 | `lastUpdateTime` / `respondTime` / `weight` / `customOrder` | 同名 | `int?` | M0 | 仅用于展示与排序 |
 
 **子规则字段**（原版字段名 → Dart，全部 camelCase）：
@@ -60,7 +60,7 @@
 | `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName`、`updateTime` | M0（`canReName`、`updateTime` 为 M1） |
 | `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
-| `ContentRule` | `webJs`（✅ M21a：渲染后执行脚本，见 §4.3）、`sourceRegex`、`imageStyle`（**未做**，登记在 ADR-0068） | M2 |
+| `ContentRule` | `webJs`（✅ M21a：渲染后执行脚本，见 §4.3）、`sourceRegex`（✅ M21a：先截取再建 scope，见 §4.3）、`imageStyle`（**未做**，登记在 ADR-0068） | M21a |
 
 模型必须使用 `freezed` + `json_serializable`（C-SRC-7）。未知字段必须**保留而非丢弃**：
 在 `extra` 中承载，以便导出时不丢信息。
@@ -147,8 +147,8 @@
 | 20 | `:正则规则`（不可省略标志；**仅书籍列表与目录列表**） | 待按原版实现确认 | 仅书籍列表、目录列表 | **M2** | 待验证 |
 | 21 | `@xpath:` XPath（以 `//` 开头时可省略标志） | `@xpath://div[@id='a']/text()` | 所有字段 | **M2** | 不支持 |
 | 22 | `@webJs` 网页 JS | — | 正文规则 | **M2** | 不支持 |
-| 23 | `sourceRegex` 源码正则 | — | 正文规则 | **M2** | 不支持 |
-| 24 | 字体反爬字形映射 | — | 正文替换规则 | **M2** | 不支持 |
+| 23 | `sourceRegex` 源码正则 | `sourceRegex`（`ruleContent`） | 正文规则 | **M21a** | 已确认（先截取再建 scope，不命中即 `parseFailed`；见 §4.3 与 ADR-0068） |
+| 24 | 字体反爬字形映射 | `queryBase64TTF` / `replaceFont` / `getFontGlyph` | 正文替换规则 | **M2**（评估已定案，见 ADR-0068 增补） | 不支持（仍报 `unsupportedRule`） |
 | 25 | `##match##replace###`：只取**第一个匹配**并在其内部替换（矩阵 #9 的补充语义） | `##match##replace###`（上游注释原文） | 所有字段 | **M0**（Phase 2.2 已实现） | 已确认 |
 | 26 | `[]` 索引列表：`[-1, 3:-2:-10, 2]`、`[-1:0]` 可在任意位置反向（与 #5 / #6 同组） | `tag.div[-1, 3:-2:-10, 2]` | 所有字段 | **M0** → Phase 3.1 | 已确认 |
 | 27 | `%%` 并行交叉合并（与 `\|\|`、`&&` 同级的选择器连接符） | — | 所有字段 | **M0** → Phase 3.2（与 #10 / #11 同族，复用同一套连接符切分） | 已确认 |
@@ -491,11 +491,11 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 | `webView` | 用真实 WebView 渲染页面（`webView: true`）；**GET 与 POST + body 都支持**（POST 的表单由 WebView 自己提交，见下方约定），平台无 WebView2 / 取页失败回落普通 HTTP（ADR-0061 §决策 4、ADR-0062 §决策 1） | ✅ 走 `WebPageFetcher` 端口 |
 | `webViewDelayTime` | `onLoadStop` 之后再等这么多毫秒才取 HTML（上限 30 s），给站点自己的脚本时间（ADR-0068 §决策 6） | ✅ M21a |
 | `webJs` | 在渲染后的页面里执行脚本，返回字符串即 body | ✅ M21a（同时是 `ContentRule.webJs` 的实现） |
+| `bodyJs` | 对**普通 HTTP** 响应体执行脚本，返回字符串即 body（渲染路径用 `webJs`）；先于 `sourceRegex` | ✅ M21a |
 | `overrideUrlRegex` | 命中则把该 URL 当结果页，停止加载 | ✅ M21a |
 | `retry` | 这一条请求的重试次数（规则侧上限 3） | ✅ M21a |
 | `readTimeout` | 这一条请求的响应超时（上限 120 s） | ✅ M21a |
-| `origin` / `type` / `js` / `dnsIp` / `proxy` / `callTimeout` | 本仓没有对应实现，按名记 `unsupported` 并 warning | ❌ 登记未做（ADR-0068 §决策 8） |
-| `webJs` / `retry` / `origin` / `type` / `js` | 重试 / 源类型等 | ❌ 记 `unsupported` 并按名 warning（ADR-0032 的降级口径） |
+| `origin` / `type` / `js` / `dnsIp` / `proxy` / `callTimeout` / `HEAD` / `encodedForm` | 本仓没有对应实现，按名记 `unsupported` 并 warning | ❌ **裁决不做**（ADR-0068 2026-10-24 增补：理由与重开触发条件逐项写死） |
 
 约定：
 
@@ -634,7 +634,8 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | 绑定 | 形态 | 说明 | 分期 |
 |---|---|---|---|
 | `baseUrl` | `String` | 当前页 URL（原版同名变量） | M0 |
-| `result` | `String?` \| `List` | 当前页 responseBody（原版同名变量） | M0 |
+| `result` | `String?` \| `List` \| 响应对象 | 当前页 responseBody（原版同名变量） | M0 |
+| `result`（**仅 `loginCheckJs`**） | 响应对象 | `body` 属性 + `url()` / `code()` / `headers()` / `header(name)` / `cookie()` / `contentType()` / `isSuccessful()` / `String(result)`——上游 `StrResponse` 的形状。拦截器的返回值决定页面（见下方「`loginCheckJs` 的返回值」） | M21a |
 | `page` | `int` | 当前页码 | M0 |
 | `source` | 只读对象 | 仅 `name`、`url`、`group`，其余不可见 | M0 |
 | `book` | 对象（字段 + 方法） | 字段 `name` / `author` / `bookUrl` / `tocUrl` / `intro` / `kind`；阶段不知道时为 `null`。方法：`putVariable(k,v)` / `getVariable(k)`（= `java.put` / `java.get` 的规则变量表）、`setType` / `getType` / `setReverseToc` / `getReverseToc`（job 内可读回，**不影响宿主**）、`type` 字段。ADR-0061 §决策 5、ADR-0062 §决策 2 | M17 / M24 |
@@ -651,6 +652,23 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `key` | `String` | 搜索关键词，**只在 URL 规则的 JS 里**存在（ADR-0034 §决策 3） | M1 |
 | `log.debug/info/warn/error(msg)` | `void` | 转发到 `core/logging`，自动附加 `rulePath` | M0 |
 | `crypto.md5/sha1/base64Encode/base64Decode` | `String` | 纯计算 | M0 |
+
+**`loginCheckJs`（响应拦截器，M21a）：** 源声明了非空的 `loginCheckJs` 时，**每一次取页成功后**
+都会在页面 scope 上运行它，`rulePath = loginCheckJs`，`result` 就是上表的响应对象。返回值语义
+（上游 `res = analyzeUrl.evalJS(checkJs, res) as StrResponse`，ADR-0068 2026-10-24 增补）：
+
+| 返回值 | 本仓行为 |
+|---|---|
+| `null` / `undefined`（含只做判断不返回的写法） | 沿用本次响应 |
+| 带 `body` 字符串的对象（沙箱响应对象本身，或 `java.startBrowserAwait(...)` 的 `{url, body}`） | 用它的 `body`（和 `url`）重建页面，后续规则读新页面 |
+| 裸字符串 | 只替换正文（宽容方言；上游会报「did not return StrResponse」） |
+| 其余（布尔 / 数字 / 数组 …） | 源声明了 `loginUrl` / `loginUi` → `loginRequired`（UI 显示「去登录」）；否则 `parseFailed` |
+| 脚本抛错 / 超时 / 用户取消验证 | 原样上抛（`js:error` / `js:timeout` / `cancelled` / `unsupportedRule`） |
+
+三条登记差异：① 只对 **2xx** 响应运行（非 2xx 在请求层已是失败）；② `result.body()`（方法形态）
+不支持——上游是 `body` 属性，命中会显式报 `result.body is not a function`；③
+`java.getStrResponse()` / `java.initUrl()` / `java.getHeaderMap()`（只在登录检查 JS 里有效的
+`AnalyzeUrl` 方法）仍具名拒绝。
 
 **`java.*` 兼容面（ADR-0037；本节是它的唯一出处）：**
 
@@ -979,8 +997,11 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 
 - `@xpath:` XPath 规则（需要引入 XPath 依赖，须先开 ADR）
 - `:` 正则规则（仅书籍列表与目录列表）
-- `webJs`、`sourceRegex`、字体反爬字形映射
-- 原版的登录脚本、登录 UI、登录检查 JS（`loginUrl` / `loginUi` / `loginCheckJs` 仍未建模；M21a 只做了"过验证"这一半，见 ADR-0068）
+- 字体反爬字形映射（`java.queryBase64TTF` / `replaceFont` / `getFontGlyph`；评估结论见 ADR-0068 增补：
+  不引依赖、自研 `cmap` 解析，实现排在 M21a 第三刀）
+- 原生登录表单（`loginUi` 的 text / password / button / select / toggle + `action` JS、
+  `source.getLoginInfoMap()`、`java.upLoginData`）：三个登录字段本身已建模，`loginCheckJs` 拦截器与
+  「登录 / 过验证」入口已可用；表单渲染与登录信息存储归 M21b 的登录 / Cookie 管理 UI（U15）
 - RSS / 订阅源、朗读规则
 - 需要浏览器 DOM/BOM 的网页 JS、依赖 Android WebView 行为的规则
 - 提取段里的嵌套规则（矩阵 #30：末段本身是一条规则，如 `class.a@css:.b`；命中报 `unsupported:nested-rule`）

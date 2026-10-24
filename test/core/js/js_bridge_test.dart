@@ -234,6 +234,36 @@ final class _FakeWebPages implements WebPageFetcher {
 }
 
 void main() {
+  test('JsResponseView_toJson_marksTheSandboxResponse', () {
+    const JsResponseView view = JsResponseView(
+      url: 'https://example-novel.test/book/1',
+      body: '<div>正文</div>',
+      code: 203,
+      headers: <String, String>{'content-type': 'text/html'},
+    );
+
+    expect(view.toJson(), <String, Object?>{
+      jsResponseMarker: true,
+      'body': '<div>正文</div>',
+      '__url': 'https://example-novel.test/book/1',
+      '__code': 203,
+      '__headers': <String, String>{'content-type': 'text/html'},
+    });
+    // 注意：`url` / `code` / `headers` 是沙箱的方法名（上游 StrResponse），数据因此走 `__` 前缀。
+    expect(const JsResponseView(url: 'u', body: 'b').toJson()['__code'], 200);
+    expect(
+      const JsJob(
+        script: 'result',
+        rulePath: 'loginCheckJs',
+        baseUrl: 'https://example-novel.test/',
+        page: 1,
+        source: JsSourceInfo(name: 's', url: 'https://example-novel.test'),
+        response: view,
+      ).toJson()['response'],
+      view.toJson(),
+    );
+  });
+
   test('JsBookInfo_toJson_keepsEveryField', () {
     const JsBookInfo book = JsBookInfo(
       name: '剑来',

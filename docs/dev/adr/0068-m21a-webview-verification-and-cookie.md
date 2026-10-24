@@ -198,3 +198,88 @@ WebView 验证页 + 图片验证码页、`SourceVerification` / `WebViewCookieBr
 | 字体反爬 `queryBase64TTF` / `replaceFont` / `getFontGlyph` | 评估结论：需要 TTF `cmap` 解析（约 200–300 行纯 Dart，或引一个第三方包并做许可评估）。本批**不引依赖**，命中仍报 `unsupportedRule`；作为 C 簇的下一刀 |
 | `loginUrl` / `loginUi` / `loginCheckJs` 三个源字段 | 「过验证」这一半已通；「登录表单 + 失效检测」需要 UI 表单与脚本判定两件事，排在 M21a 第二刀 |
 | 每书源 cookie 隔离 | 用户裁决为「持久化 + 双向同步」，不隔离（与上游 Android 的全局 jar 一致） |
+
+---
+
+## 2026-10-24 增补：第二刀（登录拦截器、取页后处理、字体评估、D 簇裁决）
+
+**已落地：** `loginUrl` / `loginUi` / `loginCheckJs` 三个源字段建模（导出保真）、
+`loginCheckJs` 响应拦截器 + 沙箱响应对象、书源管理行菜单的「登录 / 过验证」入口、
+`ContentRule.sourceRegex`（逐页截取）、URL 选项 `bodyJs`。
+
+### 决策 3 修正：`loginCheckJs` 是**响应拦截器**，不是 `true`/`false` 检查
+
+本文 2026-10-23 的决策 3 把 `loginCheckJs` 写成「判定失效 → `loginRequired`」。取证后该口径**错误**：
+
+- 上游 `AnalyzeUrl.evalJS(jsStr, result)` 把 `result` 绑成 `StrResponse`，调用方是
+  `res = analyzeUrl.evalJS(checkJs, res) as StrResponse`（`WebBook` / `Rss` 同形），**脚本返回值替换响应**；
+- `StrResponse` 的 `body` 是**属性**（上游自己的 JS 助手写 `getStrResponse().body`），
+  `url()` / `code()` / `headers()` 是方法；
+- 真实语料（yckceo 源仓库）就是这么写的：`var src = result.body; if (src 命中登录页) java.startBrowserAwait(result.url(), '登录')`。
+
+本仓实现（`book-source.md` §6 是绑定与返回值的唯一出处）：
+
+| 环节 | 语义 |
+|---|---|
+| 运行时机 | **每次取页成功后**（搜索 / 发现 / 详情 / 目录 / 正文，含 `nextContentUrl` 的每一页），`rulePath = loginCheckJs` |
+| `result` | `JsResponseView`：`body` 属性 + `url()` / `code()` / `headers()` / `header(name)` / `cookie()` / `contentType()` / `isSuccessful()` / `String(result)` |
+| 返回值 | `null`/`undefined` → 沿用本次响应；`{body[, url]}`（含沙箱对象与 `startBrowserAwait` 的 `{url, body}`）→ 替换页面的正文与地址；**裸字符串** → 只替换正文（宽容方言）；其余 → 见下 |
+| 取不到可用响应 | 源声明了 `loginUrl` / `loginUi` → `ParseFailureKind.loginRequired`（UI 唯一可行动的答案是「去登录」）；否则 `parseFailed` |
+| 脚本本身失败 | 原样上抛（`js:error` / `js:timeout` / `cancelled` / `unsupportedRule`）：拦截器是源对被拦页面的回答，吞掉它只会解析一份没人担保的正文 |
+
+**登记差异（三条）：**
+
+1. **只对 2xx 响应运行**：非 2xx 在 `HttpClient` 层已成 `ParseFailure`（403 → `networkForbidden`），
+   拦截器看不到它们。被盾拦的源仍走 `,{webView:true}` 或 `java.startBrowser*`。
+2. **`result.body()`（方法形态）不支持**：上游是 `body` 属性；Readori 文档与少量语料写成
+   `result.body()`，命中会显式报 `result.body is not a function`（不是静默给空）。
+3. **登录检查 JS 专属的 `java.getStrResponse()` / `java.initUrl()` / `java.getHeaderMap()` 仍具名拒绝**：
+   它们要重新发起「当前这条规则」的请求，语义与 `http.get` 有重叠但没有真实语料证明必要性
+   （触发 = 出现只靠这条路径才能过验证的源）。
+
+### `loginUrl` / `loginUi`：建模 + WebView 登录入口，原生表单归 M21b
+
+- 三字段都进 `BookSource`（原始键名），导入/导出保真；`loginUi` **只保留原文**。
+- 「登录 / 过验证」是书源列表行菜单的一项（仅当源声明了 `loginUrl` / `loginUi` / `loginCheckJs` 时出现）：
+  它用**同一个** `SourceVerification` 端口打开可见 WebView——`loginUrl` 是地址（URL 规则，后缀丢掉）就打开它，
+  是脚本（`@js:` 定义 `login()`）或为空就打开源地址；用户关闭后 cookie 已在 v8 jar 里。
+- 原生 `loginUi` 表单（text / password / button / select / toggle + `action` JS、`source.getLoginInfoMap()`、
+  `java.upLoginData`）仍属 M21b 的登录 / Cookie 管理 UI（`docs/dev/ui-gap.md` U15，本文决策 1）。
+
+### 决策 7 落地：`sourceRegex` 与 `bodyJs` 的边界
+
+| 项 | 语义 |
+|---|---|
+| `ContentRule.sourceRegex` | 每次取页**成功后、建 scope 之前**对正文做正则截取；有捕获组取 group(1)，否则取整个匹配。截取后的片段就是页面：DOM 规则与 `$.` / `@json:` 都从它读，登录拦截器看到的也是它 |
+| 截不到 / 正则非法 | `parseFailed`，`rulePath = contentRule.sourceRegex`（顶层规则不降级，ADR-0026 §决策 1） |
+| 与 `nextContentUrl` 翻页 | **每页各自截取**：翻页规则从截取后的片段里读，下一页同样先截再解析 |
+| `bodyJs`（URL 选项） | 对**普通 HTTP 响应**的正文跑脚本，`result` = 正文，返回值**必须是字符串**否则 `parseFailed(bodyJs)` |
+| 两者的顺序 | `bodyJs` 先、`sourceRegex` 后：脚本拼出真实正文，再按正则切一刀 |
+| `webView` 分支 | 不用 `bodyJs`（渲染路径的对应物是 `webJs`） |
+
+### 决策 8 裁决：D 簇五项**不做**（本次定案，不再以「收益未取证」挂着）
+
+| 项 | 结论与理由 | 重开触发条件 |
+|---|---|---|
+| `proxy` | 不做。要按源建独立 `Dio` 实例（连接池、重试、超时、限速全部按源复制一份），而真实语料里带 `proxy` 的源为 0 条 | 出现「只能走代理才能取页」的可复现源，且用户明确需要在应用内配代理 |
+| `dnsIp` | 不做（本文决策 8 原文）。Dio 没有稳定 DNS 注入点，Windows 还要额外原生依赖 | 同上 |
+| `callTimeout` | 不做。`readTimeout` 已覆盖「响应慢」的主因；`callTimeout` 只在「连接建立慢」时有别，而 `connectTimeout` 已在策略里 | 出现可复现的「连接阶段超时，读阶段正常」源 |
+| `method: HEAD` | 不做。语料 0 条；`HEAD` 只用于探活，而本仓的探活是整页抓取 | 出现只回 `HEAD` 才给元数据的源 |
+| `encodedForm` | 不做。表单 POST 已由 `body` + `application/x-www-form-urlencoded` 覆盖（ADR-0062 §决策 1）；`encodedForm` 的差别只是「上游用它免掉关键词二次编码」，本仓的 `encodeKeyword` 已按 `charset` 处理 | 出现「表单字段必须原样不编码」的真实源 |
+
+以上五项命中时仍按名记 `unsupported` + warning（ADR-0032 的降级口径），行为不变；本表只把「何时重开」写死。
+
+### 决策 9 评估结论：字体反爬**不引依赖**，实现排在第三刀
+
+- **候选包**：`glyph_path`（纯 Dart、零依赖，含 cmap 解析，但面向「文字转路径」，许可与字形身份语义都要再核）、
+  `ttf`（Dart 3 不兼容）、`dart-ttf-parser`（license 为 Other）、`flutter_ttf_parser`（license 为 Other）。
+  按 C-DEP 的许可口径，前三个中的后三个**直接排除**；`glyph_path` 需要一次许可复核，而且它不提供
+  「字形 ID ↔ 字符」的反查面。
+- **结论：自己解析 `cmap`，不引依赖。** 只需要两张子表——format 4（BMP，segment 数组）与 format 12
+  （分组），约 150–200 行纯 Dart + 用**合成字体**（测试里手工拼 sfnt 头 + cmap 表）做单测，
+  不碰 `post` / `glyf` / `name`，没有许可风险，也没有平台依赖。
+- **开工前要先定的唯一语义**：`java.queryBase64TTF` 返回什么。上游 `replaceFont(text, ttf1, ttf2)`
+  靠**字形名**（`post` 表）对齐，本仓不解析 `post`，因此采用 `code → glyphId` 两张表、
+  `replaceFont` 内部用 glyphId 反查目标字体；`getFontGlyph` 是同一张表的单点查询。
+  这是与上游的**表示差异**，要在 `book-source.md` §6 写清楚，规则里不要自己索引返回对象。
+- **状态**：三个名字仍报 `unsupportedRule`；触发 = M21a 第三刀（`queryBase64TTF` → `replaceFont` → `getFontGlyph`，同一刀）。

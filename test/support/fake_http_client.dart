@@ -76,12 +76,21 @@ final class FakeHttpClient implements HttpClient {
   }
 
   final Map<String, String> _bodies = <String, String>{};
+  final Map<String, Map<String, List<String>>> _responseHeaders =
+      <String, Map<String, List<String>>>{};
   final Map<String, ParseFailureKind> _failures = <String, ParseFailureKind>{};
   final Map<String, Object?> _causes = <String, Object?>{};
   final Map<String, Exception> _throws = <String, Exception>{};
 
   /// Serves [body] for [url].
-  void serve(String url, String body) => _bodies[url] = body;
+  void serve(
+    String url,
+    String body, {
+    Map<String, List<String>> headers = const <String, List<String>>{},
+  }) {
+    _bodies[url] = body;
+    _responseHeaders[url] = headers;
+  }
 
   /// Makes [url] fail with [kind] instead of being served.
   ///
@@ -236,7 +245,7 @@ final class FakeHttpClient implements HttpClient {
     return ParseSuccess<HttpResponse>(
       HttpResponse(
         statusCode: 200,
-        headers: const <String, List<String>>{},
+        headers: _responseHeaders[url] ?? const <String, List<String>>{},
         body: served,
       ),
     );

@@ -281,9 +281,6 @@ void main() {
           'enabledExplore',
           'enabledReview',
           'lastUpdateTime',
-          'loginCheckJs',
-          'loginUi',
-          'loginUrl',
           'respondTime',
           'ruleReview',
           'weight',
@@ -292,6 +289,10 @@ void main() {
       expect(source.extra['customOrder'], 60);
       expect(source.extra['lastUpdateTime'], 1676448109528);
       expect(source.extra['enabledReview'], isFalse);
+      // `loginUrl` / `loginUi` / `loginCheckJs` 自 M21a 第二刀起是建模字段（ADR-0068 增补）。
+      expect(source.loginUrl, 'https://example-novel.test/');
+      expect(source.loginUi, '');
+      expect(source.loginCheckJs, '');
 
       // `concurrentRate` 自 M1-b2 起是建模字段（原文保留，解析在请求层），
       // `ruleExplore` 自 M1-b1 起是建模字段，两者都不再落进 extra。
@@ -581,7 +582,10 @@ void main() {
       expect(source.extra, isNotEmpty);
       expect(encoded.containsKey('extra'), isFalse);
       expect(encoded.containsKey('bookSourceComment'), isFalse);
-      expect(encoded.containsKey('loginUrl'), isFalse);
+      // 三个登录字段已经是建模字段，所以它们**会**出现在 toJson 里（导出保真）。
+      expect(encoded['loginUrl'], source.loginUrl);
+      expect(encoded['loginUi'], source.loginUi);
+      expect(encoded['loginCheckJs'], source.loginCheckJs);
     });
   });
 }
