@@ -51,13 +51,20 @@ void main() {
       expect(parsed.categories.single.title, '玄幻');
     });
 
-    test('parseExploreString_givenAMissingUrl_rejectsThatEntryOnly', () {
+    test('parseExploreString_givenAMissingUrl_keepsItAsASectionHeader', () {
+      // 分组标题（`══ 推荐 ══` 一类）在语料里就是「只有标题、没有地址」：上游保留成
+      // `ExploreKind(title, "")`，本仓保留成 `url == null` 的标题行（ADR-0069）。
       final ExploreCategoryParse parsed = parseExploreString(
         '玄幻::&&都市::https://a.test/y',
       );
 
-      expect(parsed.rejected, <String>['missing url (title=玄幻)']);
-      expect(parsed.categories.single.title, '都市');
+      expect(parsed.rejected, isEmpty);
+      expect(parsed.categories.map((ExploreCategory c) => c.title), <String>[
+        '玄幻',
+        '都市',
+      ]);
+      expect(parsed.categories.first.url, isNull);
+      expect(parsed.categories.last.url, 'https://a.test/y');
     });
 
     test('parseExploreString_givenNoSeparatorAtAll_rejectsTheEntry', () {
@@ -81,13 +88,15 @@ void main() {
     });
 
     test('parseExploreSource_givenAJsonArrayWithoutType_acceptsIt', () {
-      // `type` 缺省与 `type == "url"` 都是 M1 支持的分类（ADR-0035 §决策 4）。
+      // `type` 缺省与 `type == "url"` 都是 M1 支持的分类（ADR-0035 §决策 4）；
+      // 没有 `url` 的元素是分组标题（ADR-0069）。
       final ExploreCategoryParse parsed = parseExploreSource(
         '[{"title":"玄幻"}]',
       );
 
-      expect(parsed.rejected, <String>['missing url (title=玄幻)']);
-      expect(parsed.categories, isEmpty);
+      expect(parsed.rejected, isEmpty);
+      expect(parsed.categories.single.title, '玄幻');
+      expect(parsed.categories.single.url, isNull);
 
       final ExploreCategoryParse urlOnly = parseExploreSource(
         '[{"title":"玄幻","url":"https://a.test/x"}]',
@@ -96,6 +105,16 @@ void main() {
         urlOnly.categories.single,
         const ExploreCategory(title: '玄幻', url: 'https://a.test/x'),
       );
+    });
+
+    test('parseExploreSource_givenANonStringUrl_rejectsThatEntry', () {
+      // `url` 是数字/对象时读不出地址：按坏条目拒绝并记录，而不是猜一个。
+      final ExploreCategoryParse parsed = parseExploreSource(
+        '[{"title":"玄幻","url":1},{"title":"都市","url":"/list/1"}]',
+      );
+
+      expect(parsed.rejected, <String>['unreadable url (title=玄幻)']);
+      expect(parsed.categories.single.title, '都市');
     });
 
     test('parseExploreSource_givenFormCategories_rejectsThemByName', () {
@@ -116,12 +135,13 @@ void main() {
         '{"title":"玄幻","url":""}]',
       );
 
-      expect(parsed.categories, isEmpty);
+      // 空 `url` 的元素不再是「坏条目」而是分组标题，所以只剩三条拒绝 + 一条标题。
+      expect(parsed.categories.single.title, '玄幻');
+      expect(parsed.categories.single.url, isNull);
       expect(parsed.rejected, <String>[
         'not an object (int)',
         'not an object (String)',
         'blank title',
-        'missing url (title=玄幻)',
       ]);
     });
 

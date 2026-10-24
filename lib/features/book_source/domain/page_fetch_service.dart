@@ -895,18 +895,6 @@ final class PageFetchService {
     );
   }
 
-  /// Returns **every value** of [rule] on [scope] (upstream `getStringList`).
-  ///
-  /// It is the list-shaped sibling of [content]: an image rule
-  /// (`class.page img@src`) matches many nodes, and taking the first value would show a one-page
-  /// chapter (ADR-0053 §决策 2). An empty list is a **success** here; whether "no value" is a
-  /// failure is the stage's decision (`FetchMangaPages` turns it into one).
-  Future<ParseResult<List<String>>> extractAll(
-    String rule,
-    RuleScope scope,
-    String rulePath,
-  ) => _engine.extractAll(rule, scope, rulePath: rulePath);
-
   /// Returns every match of a **top-level list** rule.
   ///
   /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7).
@@ -993,6 +981,19 @@ final class PageFetchService {
         data == null || data.isEmpty ? _noMatch(rulePath) : ParseSuccess(data),
     };
   }
+
+  /// Returns the **whole content** [rule] matches as one newline-joined string (upstream
+  /// `getString`).
+  ///
+  /// `ruleContent.content` is read this way for **every** book type upstream, so an image source
+  /// whose rule is `$.data[*].image` plus a `@js:` tail gets one joined string as `result`
+  /// (ADR-0069 G9). A rejected rule stays a failure; matching nothing answers an empty string and
+  /// the caller decides whether that is a failure.
+  Future<ParseResult<String>> joined(
+    String rule,
+    RuleScope scope,
+    String rulePath,
+  ) => _engine.extractJoined(rule, scope, rulePath: rulePath);
 
   /// Returns every value a **top-level list** rule produces on [scope].
   ///

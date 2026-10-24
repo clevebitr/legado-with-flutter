@@ -152,16 +152,31 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
             spacing: context.m3e.spacing.sm,
             children: <Widget>[
               for (final ExploreCategory category in categories)
-                ChoiceChip(
-                  label: Text(category.title),
-                  selected: category == selected,
-                  // 已选中的分类再点一次只是重新加载它，不会取消选择（没有「无分类」这个视图）。
-                  onSelected: (_) => unawaited(
-                    ref
-                        .read(exploreProvider.notifier)
-                        .openCategory(source, category),
+                // `url == null` 是分组标题（真实 `exploreUrl` 用 `══ 推荐 ══` 这类标签分组）：
+                // 画成不可点的标签，而不是一个点了会拿空地址去请求的 chip（ADR-0069）。
+                if (category.url == null)
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: context.m3e.spacing.sm,
+                    ),
+                    child: Center(
+                      child: Text(
+                        category.title,
+                        style: context.m3e.typography.base.labelMedium,
+                      ),
+                    ),
+                  )
+                else
+                  ChoiceChip(
+                    label: Text(category.title),
+                    selected: category == selected,
+                    // 已选中的分类再点一次只是重新加载它，不会取消选择（没有「无分类」这个视图）。
+                    onSelected: (_) => unawaited(
+                      ref
+                          .read(exploreProvider.notifier)
+                          .openCategory(source, category),
+                    ),
                   ),
-                ),
             ],
           ),
         ),

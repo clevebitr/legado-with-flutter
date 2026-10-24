@@ -81,3 +81,61 @@
 - 代价：`java.encodeURI` 的未知 charset、封面选项被裁掉都会记 warning，但不会让整条源失败。
 - 未做：G2 / G6 / G9 / 封面的 per-URL header / `imageStyle` 的对齐分支，全部登记在
   `docs/dev/roadmap.md` §3.7，并带上重开触发条件。
+
+---
+
+## 2026-10-24 增补：真实日志取证（G9 关闭 + 三个新缺口 G10–G12）
+
+用户在设备上跑那 5 条源，日志给出了四类信号，逐条对到根因：
+
+| 日志信号 | 根因 | 处置 |
+|---|---|---|
+| `JS rule failed: field=contentRule.content error=<String: 14 chars>` | 14 字符正是 `not a function`：`$.data[*].image` + `@js:result.split("\n")` 里，漫画链路用 `extractAll` 读，`result` 被绑成 **List**，`split` 不存在 | **G9 已修** |
+| `Explore category rejected: … missing url (title=══ 推荐 ══)` | 真实 `exploreUrl` 脚本用「只有标题、没有地址」的条目做**分组标题**，上游保留成 `ExploreKind(title, "")`，本仓按坏条目丢了 | **G11 已修** |
+| `Request failed for rule=ruleToc/ruleBookInfo/exploreUrl … <DioException: N chars, sha256=…>` | 两层：① 默认 UA 是 `flutter_reader`，一批站点在规则跑之前就 403；② 日志把 dio 异常脱敏成 `sha256`，看不到状态码，403 与超时长得一样 | **G10 已修**、日志可诊断性修好 |
+
+### G9（关闭）：`ruleContent.content` 是**单值**读取，多匹配要用 `\n` 拼接
+
+上游 `BookContent.kt:234` 对所有书型都调 `analyzeRule.getString(contentRule.content, unescape=false)`，
+而 `AnalyzeRule.getString` 对多匹配是 `joinToString("\n")`。所以 `$.data[*].image` 后面接
+`@js:result.split("\n")` 时，脚本拿到的是**字符串**。
+
+本仓的漫画链路走的是「列表」读取（`extractAll`）——那是 ADR-0053 为「一条规则产出多张图」选的
+形状，代价是与上游的单值语义不一致。修法：
+
+- `RuleEngine.extractJoined`（= 上游 `getString`）：跑同一套管线，返回**全部匹配用 `\n` 拼接**的
+  字符串；脚本段的 `result` 也改成拼接后的字符串（原来是 `values.first`，即「只给第一个匹配」）。
+- `FetchMangaPages` 改用 `_pages.joined(...)`，再把结果按行切开（每行再走 `,{…}` 选项与 `<img>`
+  解析）。`class.page@tag.img@src` 这类「列表规则」在拼好之后仍是 N 个地址，行为不变。
+
+**这条改动同时把「单值字段的 `result`」对齐到上游**：`extractFirst` 的**返回值**仍是首个匹配
+（matrix #8 的既有口径），但交给脚本的 `result` 现在是拼好的字符串。真实语料里
+`result.split(...)` / `result.replace(...)` 的写法从此成立。
+
+### G10（关闭）：默认 UA 对齐上游（桌面 Chrome）
+
+上游 `FeatureSettingsRepositories.kt:157-162` 的默认 UA 是桌面 Chrome；
+`AnalyzeUrl.getUserAgent()` 让源自己的 `header` 优先。本仓原来发 `flutter_reader`，一批站点
+（这次的 `xiaojiejie.me`、`m.ku1373.cc`）在规则跑之前就 403。现在
+`HttpPolicy.defaultUserAgent` 是同一形态的桌面 Chrome UA，源的 `header` 仍然覆盖它（C-NET-4）。
+
+### G11（关闭）：`exploreUrl` 的**分组标题**（`url` 为空）必须保留
+
+上游 `BookSourceExtensions.exploreKinds()` 把 JSON 数组直接映射成 `ExploreKind(title, url)`，
+**不校验 url 非空**；语料就用「只有标题」的条目给 chip 分组。本仓原来按 `missing url` 丢弃，
+于是 `══ 推荐 ══` 这些标题消失（日志里那串 warning 就是它）。现在：
+
+- `ExploreCategory.url` 可空，`url == null` = 分组标题；`parseExploreString` / JSON 两条路径都保留；
+- 发现页把标题画成**不可点的标签**，`openCategory` 遇到 `url == null` 直接返回（不发请求、
+  不改状态）；`ExploreBooks` 防御性返回空列表。
+
+### G12（关闭）：HTTP 失败日志必须能看出「为什么」
+
+`DioHttpClient` 原来把 `describeError(error)` 记成 `<DioException: N chars, sha256=…>`——脱敏对
+正文是对的，对**状态码**是灾难：403 / 超时 / DNS 在日志里完全一样。现在失败行带
+`type=<DioExceptionType> status=<code>`，URL 仍走 `redactUrl`（关键词不外泄）。
+
+### 仍未做（不变）
+
+G2（URL 规则里的非 JS `{{…}}`）、G6（同步 `java.post` 响应对象）、封面的 per-URL header、
+`imageStyle` 的 `left`/`right`/居中分支——触发条件见上文表格。

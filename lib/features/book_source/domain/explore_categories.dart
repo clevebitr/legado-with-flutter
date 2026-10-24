@@ -22,7 +22,8 @@ ExploreCategoryParse parseExploreSource(String source) {
 
 /// Parses the separated `标题::URL` form, i.e. what a plain `exploreUrl` carries.
 ///
-/// A blank title or a missing URL rejects that entry only; the rest are still returned.
+/// A blank title rejects that entry only; the rest are still returned. An empty URL is a
+/// **section header** and is kept with a `null` url (ADR-0069), not rejected.
 ExploreCategoryParse parseExploreString(String source) {
   final List<ExploreCategory> categories = <ExploreCategory>[];
   final List<String> rejected = <String>[];
@@ -44,10 +45,10 @@ ExploreCategoryParse parseExploreString(String source) {
     final String url = text.substring(split + 2).trim();
     if (title.isEmpty) {
       rejected.add('blank title');
-    } else if (url.isEmpty) {
-      rejected.add('missing url (title=$title)');
     } else {
-      categories.add(ExploreCategory(title: title, url: url));
+      categories.add(
+        ExploreCategory(title: title, url: url.isEmpty ? null : url),
+      );
     }
   }
 
@@ -56,7 +57,8 @@ ExploreCategoryParse parseExploreString(String source) {
 
 /// Parses the JSON-array form a whole-field script may return.
 ///
-/// An element needs a non-blank `title` and `url`, and either no `type` or `type == "url"`.
+/// An element needs a non-blank `title` and either no `type` or `type == "url"`. A blank `url` is a
+/// **section header** (`null`), which the row shows as a label instead of a chip.
 ExploreCategoryParse _parseJsonCategories(List<Object?> entries) {
   final List<ExploreCategory> categories = <ExploreCategory>[];
   final List<String> rejected = <String>[];
@@ -80,10 +82,16 @@ ExploreCategoryParse _parseJsonCategories(List<Object?> entries) {
     final Object? url = entry['url'];
     if (title is! String || title.trim().isEmpty) {
       rejected.add('blank title');
-    } else if (url is! String || url.trim().isEmpty) {
-      rejected.add('missing url (title=${title.trim()})');
+    } else if (url is! String?) {
+      rejected.add('unreadable url (title=${title.trim()})');
     } else {
-      categories.add(ExploreCategory(title: title.trim(), url: url.trim()));
+      final String trimmed = url?.trim() ?? '';
+      categories.add(
+        ExploreCategory(
+          title: title.trim(),
+          url: trimmed.isEmpty ? null : trimmed,
+        ),
+      );
     }
   }
 

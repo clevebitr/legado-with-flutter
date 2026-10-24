@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ExploreCategory {
 
- String get title; String get url;
+ String get title; String? get url;
 /// Create a copy of ExploreCategory
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -51,7 +51,7 @@ abstract mixin class $ExploreCategoryCopyWith<$Res>  {
   factory $ExploreCategoryCopyWith(ExploreCategory value, $Res Function(ExploreCategory) _then) = _$ExploreCategoryCopyWithImpl;
 @useResult
 $Res call({
- String title, String url
+ String title, String? url
 });
 
 
@@ -68,11 +68,11 @@ class _$ExploreCategoryCopyWithImpl<$Res>
 
 /// Create a copy of ExploreCategory
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? title = null,Object? url = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? title = null,Object? url = freezed,}) {
   return _then(ExploreCategory(
 title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
-as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,
+as String,url: freezed == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -157,7 +157,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String title,  String url)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String title,  String? url)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ExploreCategory() when $default != null:
 return $default(_that.title,_that.url);case _:
@@ -178,7 +178,7 @@ return $default(_that.title,_that.url);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String title,  String url)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String title,  String? url)  $default,) {final _that = this;
 switch (_that) {
 case _ExploreCategory():
 return $default(_that.title,_that.url);case _:
@@ -198,7 +198,7 @@ return $default(_that.title,_that.url);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String title,  String url)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String title,  String? url)?  $default,) {final _that = this;
 switch (_that) {
 case _ExploreCategory() when $default != null:
 return $default(_that.title,_that.url);case _:
@@ -213,11 +213,11 @@ return $default(_that.title,_that.url);case _:
 
 
 class _ExploreCategory implements ExploreCategory {
-  const _ExploreCategory({required this.title, required this.url});
+  const _ExploreCategory({required this.title, this.url});
   
 
 @override final  String title;
-@override final  String url;
+@override final  String? url;
 
 /// Create a copy of ExploreCategory
 /// with the given fields replaced by the non-null parameter values.
@@ -251,7 +251,7 @@ abstract mixin class _$ExploreCategoryCopyWith<$Res> implements $ExploreCategory
   factory _$ExploreCategoryCopyWith(_ExploreCategory value, $Res Function(_ExploreCategory) _then) = __$ExploreCategoryCopyWithImpl;
 @override @useResult
 $Res call({
- String title, String url
+ String title, String? url
 });
 
 
@@ -268,11 +268,11 @@ class __$ExploreCategoryCopyWithImpl<$Res>
 
 /// Create a copy of ExploreCategory
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? title = null,Object? url = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? title = null,Object? url = freezed,}) {
   return _then(_ExploreCategory(
 title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
-as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,
+as String,url: freezed == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

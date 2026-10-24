@@ -62,6 +62,9 @@
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
 | `ContentRule` | `webJs`（✅ M21a：渲染后执行脚本，见 §4.3）、`sourceRegex`（✅ M21a：先截取再建 scope，见 §4.3）、`imageStyle`（✅ M21a：`single`/`full` 生效，`left`/`right` 的对齐分支未实现）、`imageDecode`（建模保留，**非空即显式 `unsupportedRule`**——沙箱执行不了图片字节解密，ADR-0069 G5） | M21a |
 
+**默认请求头：** 源没写 `header` 时，请求带一个**桌面 Chrome** 的 `User-Agent`（与上游默认一致，
+ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前就 403；源自己的 `header` 仍然覆盖它（C-NET-4）。
+
 模型必须使用 `freezed` + `json_serializable`（C-SRC-7）。未知字段必须**保留而非丢弃**：
 在 `extra` 中承载，以便导出时不丢信息。
 
@@ -513,7 +516,7 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 
 | 形态 | 写法 | 语义 |
 |---|---|---|
-| 分类串 | `玄幻::https://a.test/list/{{page}}.html&&都市::https://b.test/...` | `&&` 或换行分隔（上游正则 `(&&\|\n)+`）；条目 `标题::URL`。**空标题**或**缺少 URL** 的条目报 `unsupportedRule` 并记录，**其余条目照常** |
+| 分类串 | `玄幻::https://a.test/list/{{page}}.html&&都市::https://b.test/...` | `&&` 或换行分隔（上游正则 `(&&\|\n)+`）；条目 `标题::URL`。**空标题**的条目报 `unsupportedRule` 并记录（**URL 为空是分组标题**，保留成不可点标签，ADR-0069 G11），其余条目照常 |
 | 整字段 JS | `@js:…` 或 `<js>…</js>`（大小写不敏感） | `<js>` 形态**必须**以 `</js>` 收尾，否则该字段 `parseFailed`；返回值认 **JSON 数组**（元素含 `title`，可选 `url`）**或**上面的分隔串 |
 
 - **整字段 JS 的绑定：** `baseUrl` = **书源 URL**、`source`、`java.*`（与 `@put:` / `@get:` 同一份变量表，ADR-0034，`sourceId` = 书源 URL）；**不绑 `key`**（字段里写 `key` 即 `js:error`），`page` 固定为 `1`，**无 `infoMap`**（命中即 `js:error`，不静默给 undefined）。
@@ -759,6 +762,11 @@ java.replaceFont(result, errorFont, correctFont);
 > - **独立 `@js:` 的 `result`：** 整页 scope 给 responseBody；**元素 scope**（逐项字段，如
 >   `searchRule.name`）给它自己的 `outerHtml`——沙箱里没有 DOM 句柄可交（ADR-0029 §决策 5），
 >   但规则总得看见它所属的那一项；JSON 条目 scope 给该条目的 JSON 文本。
+> - **单值字段的 `result` 是「全部匹配用换行拼接后的字符串」**（上游 `AnalyzeRule.getString`
+>   → `joinToString("
+")`，ADR-0069 G9）：所以 `result.split("
+")` / `result.replace(...)`
+>   这类写法成立。列表规则的 `result` 仍是列表（§4.1 的 URL 数组靠它）。
 >
 > **JS 绑定的操作面（2026-10-12，3.4 落地；上表是白名单，本段是每一项的行为）：**
 >

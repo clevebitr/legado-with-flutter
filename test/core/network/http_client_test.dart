@@ -501,10 +501,12 @@ void main() {
 
       await fixture.client.get('https://example.com/a', rulePath: 'searchUrl');
 
+      // 默认 UA 是桌面 Chrome（对齐上游）：裸 `flutter_reader` 会让一批站点在规则跑之前就 403。
       expect(
         fixture.adapter.requests.single.headers['user-agent'],
-        'flutter_reader',
+        defaultUserAgent,
       );
+      expect(defaultUserAgent, contains('Mozilla/5.0'));
     });
 
     test('get_whenHeadersAreGiven_overridesTheDefaults', () async {

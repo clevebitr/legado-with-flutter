@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The device log said "not a function"; it was four different bugs (ADR-0069 addendum)
+
+Running the same five sources on a device produced four kinds of warning, and each one traced to a
+different mistake:
+
+- **`contentRule.content` is a *value* read, not a list read.** Upstream calls `getString` for every
+  book type and joins multiple matches with a newline, so `$.data[*].image` + `@js:result.split("
+")`
+  receives a String. The manga path read the same rule as a list, so `result` was a List and the
+  script died with `not a function`. `RuleEngine.extractJoined` now implements `getString`
+  semantics, the manga stage uses it, and the sandbox's `result` for single-value rules is the
+  joined string (the field's own value is still the first match).
+- **`exploreUrl` section headers were being dropped.** Real scripts emit `══ 推荐 ══` entries with an
+  empty url to group the chips; upstream keeps them, we rejected them as "missing url". They are now
+  `url == null` categories rendered as non-clickable labels, and opening one touches no network.
+- **The default `User-Agent` was `flutter_reader`.** Several sites answer 403 before any rule runs.
+  The default is now upstream's desktop Chrome UA; a source's own `header` still wins.
+- **HTTP failures were undebuggable.** The `DioException` was logged through the redactor, so 403 and
+  a timeout looked identical. The failure line now carries `type=` and `status=` (the URL stays
+  redacted).
+
 ### Close the syntax gaps a real "works upstream, not here" export exposed (ADR-0069)
 
 Five image sources that work in the reference implementation were fed through the engine one rule

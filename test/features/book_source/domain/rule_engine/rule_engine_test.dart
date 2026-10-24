@@ -1621,6 +1621,67 @@ void main() {
     );
   });
 
+  group('RuleEngine extractJoined (ADR-0069 G9)', () {
+    const String pageHtml =
+        '<html><body><div class="p"><img src="a.jpg"></div>'
+        '<div class="p"><img src="b.jpg"></div></body></html>';
+    // 换行在 Dart 源码里写成转义；测试里用一个常量，省得到处转义。
+    const String nl = '\n';
+
+    test('extractJoined_givenSeveralMatches_joinsThemWithNewlines', () async {
+      // 上游 `getString`：多匹配用换行拼成一个字符串（`AnalyzeRule.getString`）。
+      final String joined = await _text(
+        _engine().extractJoined(
+          'class.p@tag.img@src',
+          _scope(_document(pageHtml)),
+          rulePath: 'contentRule.content',
+        ),
+      );
+
+      expect(joined, 'a.jpg${nl}b.jpg');
+    });
+
+    test('extractJoined_givenAJsTail_handsItTheJoinedString', () async {
+      // 那份导出里 `$.data[*].image` + `@js:result.split(...)` 的真实形状：脚本拿到的是
+      // **字符串**而不是列表，`split` 才不会 `not a function`。
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+
+      await _engine(null, bridge).extractJoined(
+        'class.p@tag.img@src<js>result.split("\\n").length</js>',
+        _scope(_document(pageHtml)),
+        rulePath: 'contentRule.content',
+      );
+
+      expect(bridge.jobs.single.result, 'a.jpg${nl}b.jpg');
+    });
+
+    test('extractJoined_givenNoMatch_answersAnEmptyString', () async {
+      expect(
+        await _text(
+          _engine().extractJoined(
+            'class.absent@text',
+            _scope(_document(pageHtml)),
+            rulePath: 'contentRule.content',
+          ),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('extractJoined_givenARejectedRule_carriesTheFailure', () async {
+      expect(
+        (await _failure(
+          _engine().extractJoined(
+            '@xpath://div',
+            _scope(_document(pageHtml)),
+            rulePath: 'contentRule.content',
+          ),
+        )).kind,
+        ParseFailureKind.unsupportedRule,
+      );
+    });
+  });
+
   group('RuleEngine dot index on a plain selector (ADR-0069 G3)', () {
     const String html =
         '<html><body><div id="image_div"><img src="a.jpg">'
@@ -2768,8 +2829,9 @@ void main() {
       );
 
       expect(value, 'done');
-      // 选择器段的产出就是脚本的 `result`（单值字段传第一个值，§4.1）。
-      expect(bridge.jobs.single.result, 'One');
+      // 选择器段的产出就是脚本的 `result`：**单值字段按上游 `getString` 用换行拼接全部匹配**
+      // （`AnalyzeRule.getString` → `joinToString("\n")`），不是只给第一个（ADR-0069 G9）。
+      expect(bridge.jobs.single.result, 'One\nTwo\nThree');
     });
 
     test('extractFirst_givenAFailingScript_failsTheWholeRule', () async {

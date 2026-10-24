@@ -97,20 +97,23 @@ final class FetchMangaPages {
 
     for (var index = 0; index < walk.pages.length; index++) {
       final FetchedPage page = walk.pages[index];
-      final ParseResult<List<String>> values = await _pages.extractAll(
+      // 上游把 `ruleContent.content` 当**一个字符串**读（`getString`，无论书是文本还是图片），
+      // 所以多匹配要用换行拼起来再交给 `@js:`，脚本的 `result.split("\n")` 才成立
+      // （ADR-0069 G9）。
+      final ParseResult<String> content = await _pages.joined(
         source.contentRule.content ?? '',
         page.scope,
         'contentRule.content',
       );
 
-      switch (values) {
-        case ParseFailure<List<String>>(
+      switch (content) {
+        case ParseFailure<String>(
           :final ParseFailureKind kind,
           rulePath: final String failedAt,
         ):
           return failureAt<MangaPages>(kind: kind, rulePath: failedAt);
-        case ParseSuccess<List<String>>(:final List<String> data):
-          for (final String value in data) {
+        case ParseSuccess<String>(:final String data):
+          for (final String value in _linesOf(data)) {
             for (final String rawAddress in _addressesOf(value)) {
               final String address = _withoutOptions(
                 rawAddress,
@@ -151,6 +154,15 @@ final class FetchMangaPages {
       ),
     );
   }
+
+  /// The non-blank lines of a joined content value.
+  ///
+  /// One image source writes its addresses one per line (`$.data[*].image` joined with a
+  /// newline), another hands over an `<img>` HTML block; both go through [_addressesOf].
+  Iterable<String> _linesOf(String content) => content
+      .split(RegExp(r'\r?\n'))
+      .map((String line) => line.trim())
+      .where((String line) => line.isNotEmpty);
 
   /// [address] without its `,{…}` options, whose headers are merged into [into].
   ///

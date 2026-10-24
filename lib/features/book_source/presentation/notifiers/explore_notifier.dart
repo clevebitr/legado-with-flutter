@@ -94,6 +94,12 @@ class ExploreNotifier extends _$ExploreNotifier {
     ExploreCategory category, {
     int page = 1,
   }) async {
+    // 分组标题（`url == null`）不是可打开的页面：点它什么都不做，而不是拿空地址去请求
+    // （ADR-0069）。
+    if (category.url == null) {
+      return;
+    }
+
     state = ExploreState.loadingBooks(_categories, category);
 
     try {

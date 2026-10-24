@@ -7,7 +7,13 @@ const Duration defaultHttpTimeout = Duration(seconds: 15);
 const int defaultMaxRetries = 1;
 
 /// `User-Agent` sent unless a request overrides it.
-const String defaultUserAgent = 'flutter_reader';
+///
+/// A **desktop Chrome** string, matching upstream: a bare `flutter_reader` UA is what makes a
+/// number of real sites answer 403 before the rules ever run (ADR-0069). A source that needs its
+/// own UA declares it in `header` (C-NET-4), which still wins.
+const String defaultUserAgent =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 /// Network policy shared by every request.
 final class HttpPolicy {

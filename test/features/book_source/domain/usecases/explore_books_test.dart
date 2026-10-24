@@ -278,5 +278,19 @@ void main() {
       expect(failure.kind, ParseFailureKind.notFound);
       expect(failure.rulePath, 'exploreUrl');
     });
+    test('execute_givenASectionHeader_touchesNoNetwork', () async {
+      // 分组标题没有地址（`url == null`）：既不是请求也不是失败，页面拿空列表（ADR-0069）。
+      final FakeHttpClient http = FakeHttpClient();
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(http);
+
+      final List<Book> books = _data(
+        await ExploreBooks(pages: service.pages)
+            .execute(_source(), const ExploreCategory(title: '══ 推荐 ══')),
+      );
+
+      expect(books, isEmpty);
+      expect(http.requestedUrls, isEmpty);
+    });
   });
 }

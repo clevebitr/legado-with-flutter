@@ -397,8 +397,11 @@ final class DioHttpClient implements HttpClient {
       );
     } on DioException catch (error, stackTrace) {
       // 只有 dio 自己的异常到这里；URL 已在 _perform 校验。
+      // 日志里要能看出**为什么**失败：dio 的异常对象会被脱敏成 `sha256`，403 与超时长得一样。
       _logger.warning(
-        'Request failed for rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
+        'Request failed for rule=$rulePath '
+        'type=${error.type.name} status=${error.response?.statusCode} '
+        'url=${redactUrl(url, keyword: keyword)}',
         describeError(error),
         stackTrace,
       );

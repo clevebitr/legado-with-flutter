@@ -350,6 +350,70 @@ void main() {
       );
     });
 
+    test(
+      'execute_givenAListJsonPathAndJsTail_handsTheScriptTheJoinedString',
+      () async {
+        // 那份导出的正文规则：`$.data[*].image` + `@js:result.split("\n")`。上游把多匹配拼成
+        // **一个字符串**交给脚本，所以 `split` 成立；脚本产出 `<img>` HTML（ADR-0069 G9）。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            _chapterUrl,
+            '{"data":[{"image":"https://img.test/1.jpg"},'
+            '{"image":"https://img.test/2.jpg"}]}',
+          );
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..result =
+              '<img src="https://img.test/1.jpg">'
+              '<img src="https://img.test/2.jpg">';
+        final ({FetchMangaPages useCase, FakeLogPrinter printer}) fixture =
+            _useCase(http, bridge);
+
+        final MangaPages pages = _data(
+          await fixture.useCase.execute(
+            _source(
+              contentRule:
+                  '\$.data[*].image\n'
+                  '@js:result.split("\n").map(x=>\'<img src="\'+x+\'">\').join("\n")',
+            ),
+            const ChapterRequest(url: _chapterUrl),
+          ),
+        );
+
+        expect(
+          bridge.jobs.single.result,
+          'https://img.test/1.jpg\nhttps://img.test/2.jpg',
+        );
+        expect(pages.urls, <String>[
+          'https://img.test/1.jpg',
+          'https://img.test/2.jpg',
+        ]);
+      },
+    );
+
+    test('execute_givenContentThatIsAPlainUrlList_splitsItIntoPages', () async {
+      // 没有 `<img>` 的形态：内容是多行地址（`getString` 拼接的结果）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _chapterUrl,
+          '<div class="page"><img src="/img/1.jpg"></div>'
+          '<div class="page"><img src="/img/2.jpg"></div>',
+        );
+      final ({FetchMangaPages useCase, FakeLogPrinter printer}) fixture =
+          _useCase(http);
+
+      final MangaPages pages = _data(
+        await fixture.useCase.execute(
+          _source(),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(pages.urls, <String>[
+        'https://example-novel.test/img/1.jpg',
+        'https://example-novel.test/img/2.jpg',
+      ]);
+    });
+
     test('execute_givenAnImageDecodeScript_failsLoudly', () async {
       // `imageDecode` 要在沙箱里解图片字节，本仓做不到：显式 unsupported，而不是把加密图
       // 直接摆给用户（ADR-0069 G5）。

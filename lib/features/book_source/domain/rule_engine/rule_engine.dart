@@ -46,6 +46,13 @@ final RegExp _putFlag = RegExp(r'@put:\{([^{}]*)\}', caseSensitive: false);
 /// The `@get:{key}` flag of matrix #16, lower-cased for a case-insensitive scan.
 const String _getFlag = '@get:{';
 
+/// How several matches of one **value** rule are joined (upstream `getString`).
+///
+/// `book-source.md` §6: a single-value field joins its matches with a newline, which is what makes
+/// `result.split("\n")` work on an image source's `$.data[*].image` rule
+/// (ADR-0069 G9).
+const String _valueSeparator = '\n';
+
 /// The trailing `.N` / `.-N` index a degraded segment may carry (matrix #28's dot form).
 final RegExp _dotIndex = RegExp(r'^-?\d+$');
 
@@ -715,6 +722,37 @@ final class RuleEngine {
     };
   }
 
+  /// Returns **every** value of [rule] joined with `\n`, i.e. upstream `getString`.
+  ///
+  /// It exists for fields upstream reads as one string even when the rule matches several
+  /// elements: `ruleContent.content` is read with `getString` for **every** book type, so an image
+  /// source whose rule is `$.data[*].image` plus a `@js:` tail gets one newline-joined string as
+  /// `result` — not a list (ADR-0069 G9). Taking the first match instead would drop pages.
+  ///
+  /// A rejected rule stays a failure; an empty match answers an empty string.
+  Future<ParseResult<String>> extractJoined(
+    String rule,
+    RuleScope scope, {
+    required String rulePath,
+  }) async {
+    final ParseResult<List<String>> values = await _evaluate(
+      rule,
+      scope,
+      rulePath: rulePath,
+      single: true,
+    );
+
+    return switch (values) {
+      ParseFailure<List<String>>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ) =>
+        failureAt<String>(kind: kind, rulePath: failedAt),
+      ParseSuccess<List<String>>(:final List<String> data) =>
+        ParseSuccess<String>(data.join(_valueSeparator)),
+    };
+  }
+
   /// Runs the shared pipeline of a **value** rule: candidates, branches, the optional
   /// terminal `@js:`, then the `-` reverse and the `##` replacements.
   ///
@@ -823,9 +861,15 @@ final class RuleEngine {
       script,
       // 独立 `@js:` 的 `result` 是这一层的内容（§6）；有选择器时才是上游 `getString` /
       // `getStringList` 的形态：单值字段给字符串，多值字段给列表（§4.1 的 URL 数组靠它）。
+      // 上游 `getString` 把多个匹配用 `\n` 拼成一个字符串再交给脚本
+      // （`AnalyzeRule.getString` → `joinToString("\n")`），所以 `result.split("\n")`
+      // 这类写法在单值字段上是成立的；只给第一个匹配会让这类正文规则直接
+      // `not a function`（ADR-0069 G9）。
       parsed.isBareJs
           ? _resultOf(scope)
-          : (single ? (merged.isEmpty ? null : merged.first) : merged),
+          : (single
+                ? (merged.isEmpty ? null : merged.join(_valueSeparator))
+                : merged),
       scope,
       field: rulePath,
       allowJs: allowJs,
@@ -997,7 +1041,9 @@ final class RuleEngine {
 
     for (final _RuleSegment segment in _jsSegmentsOf(rule)) {
       final Object? previous = hasResult
-          ? (single ? (values.isEmpty ? null : values.first) : values)
+          ? (single
+                ? (values.isEmpty ? null : values.join(_valueSeparator))
+                : values)
           : _resultOf(scope);
       final ParseResult<List<String>> evaluated;
       if (segment.isScript) {
