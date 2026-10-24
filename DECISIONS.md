@@ -336,3 +336,17 @@ M21a 第三刀按 ADR-0068 决策 9 的评估执行：零新依赖、自研解�
 转义又踩了两次坑（python 里写 `\n` 进 Dart 源码变成真换行）：以后这种多行/带反斜杠的测试片段改用 write 工具写进临时文件再 splice，别在 heredoc 里拼。
 
 验证：1851 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 5 文件全过（js_bridge 34/34）。
+
+## 2026-10-24 — G13/G14：`class.a b c` 全类命中、`java.getStringList` 求值、`size`/`size()` 双形态
+
+用户又给了同一批源（美图网 / 美女图片网 / 小姐姐写真）要"继续修"。这次把每条源的每条规则过了一遍引擎，只剩两个纯引擎缺口（第三十条源是 G6）：
+
+1. **G13：`class.a b c` 是「这几个类都要有」。** 上游 `AnalyzeByJSoup.ElementsSingle` 对 `class` 用 `temp.getElementsByClass(rules[1])`，jsoup 的语义是「元素必须同时带这些类」；本仓把整串当一个类名（`.${escapeCssIdent('a b c')}`），于是 `📷🔞美图网` 的**每一条**规则都返回空：`bookList`、`ruleBookInfo`（`class.container pt-3@tag.a.3@text`）、正文（`class.mb-4 container-inner-fix-m@html`）、目录。修法：`_classSelector` 按空白切分拼成 `.a.b.c`，单类行为不变。
+2. **G14：`java.getStringList` 求值，`parse.getElements` 求元素。** 美女图片网正文 `java.getStringList("@css:.ArticleImageBox img@src")` 上次在设备上拿到空数组：上游 `AnalyzeRule.getStringList` 会跑**提取段**并回 `List<String>`，而我们把 `getStringList` 与 `getElements` 混成一条通道（都答元素文档），末尾 `@src` 被当选择器。ADR-0037 §决策 3 当初就把两者写成一件。现在 `JsParseRequest.wantsValues` 分流：`getStringList` → 抽取值并串化（与上游 `List<String>` 一致），`getElements` → 元素文档（类型保真）；字面量内联与宿主求值器两条路径同口径。
+3. **G14 附带：`list.size` 与 `list.size()` 都要成立。** 同一份导出两条脚本各用一种。上一轮加的是属性 getter，`size()` 直接 `not a function`。改成「取回来的是可调用对象」：调用 → 长度，参与算术/比较 → `valueOf()` → 长度。只有严格相等（`list.size === 3`）不成立，语料没有这种写法。
+
+连带：`java.getString` 的多匹配在半内联路径上也要换行拼接（上一轮改了沙箱的 `result`，内联路径漏了）。
+
+**G6 仍是`📷🔞小姐姐写真`的唯一死结**：正文只有 `java.post(...).body()` 一条路，沙箱阻塞不了宿主。两条出路：登记（现状），或做**确定性重放**（同步网络调用抛哨兵 → 宿主执行 → 记忆表重跑脚本，直到无待办）。后者能覆盖 `java.post/get/head/ajax/connect` 整族，但脚本会被跑多次（`java.put`/`log` 重复）、`js:quota` 计数要重新定义，属于一轮独立设计，已在 ADR-0069 增补里写明，等用户裁决。
+
+验证：1859 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 5 文件全过（js_bridge 34/34）、Android js_bridge 34/34（含新的 `size()` 探针）。
