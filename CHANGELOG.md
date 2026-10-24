@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Close the syntax gaps a real "works upstream, not here" export exposed (ADR-0069)
+
+Five image sources that work in the reference implementation were fed through the engine one rule
+at a time, and every rejection was traced to its upstream implementation. Six of the nine gaps are
+closed:
+
+- **`java.encodeURI(str, charset)`** — the two-argument form real sources use to send a GBK keyword
+  to an old PHP search page. `charsetBytes` moved to `core/text/` and is now the one place that turns
+  text into declared-charset bytes (the URL template's keyword encoding uses it too).
+- **A trailing `.N` index on *any* segment** — `#image_div img.0@src` used to be read as the class
+  `0`. Plain CSS segments now peel a numeric tail as an index, like upstream's `ElementsSingle`.
+- **`,{…}` options on image and cover addresses** — gallery URLs that carry per-image headers no
+  longer become `c.jpg,{"headers":…}`: the manga stage merges the headers into the chapter's image
+  requests, and a cover's options are dropped with a warning (the cover loader cannot carry them yet).
+- **`imageStyle` / `imageDecode` are modelled.** `imageDecode` (per-image byte decryption) cannot run
+  in the sandbox, so a non-blank value now fails loudly as `unsupportedRule` instead of showing
+  encrypted bytes; `imageStyle: single` makes the reader fit one image per screen.
+- **Java `List.size`** — a prelude shim, because real content scripts loop with `list.size`. Without
+  it the loop silently ran zero times and the chapter came out empty.
+- **A chapter with no `chapterUrl` now reuses the toc page** instead of being dropped, which is what
+  upstream does and what a single-chapter image book needs.
+
+Registered instead of guessed (ADR-0069): synchronous `java.post/get/ajax` response objects (a
+sandbox cannot block its host), a non-JS `{{…}}` inside a *URL* rule, the `result` shape of a
+list-JSONPath + `@js:` content rule (needs the real response), per-URL cover headers and the
+`left`/`right` image-style alignment.
+
 ### Fonts that lie: the third M21a cut reads a site's own TrueType tables (ADR-0068, M21a third cut)
 
 - **`java.queryTTF` / `java.queryBase64TTF` / `java.replaceFont` are implemented**, with no new

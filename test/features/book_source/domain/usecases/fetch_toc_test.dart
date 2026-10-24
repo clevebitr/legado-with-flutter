@@ -191,7 +191,9 @@ void main() {
       expect(failure.rulePath, 'tocRule.chapterList');
     });
 
-    test('execute_givenChapterWithoutUrl_skipsItAndWarns', () async {
+    test('execute_givenChapterWithoutUrl_reusesTheTocPageAndWarns', () async {
+      // 图片源的目录常常只有一行「美女欣赏」且 `chapterUrl` 为空：真实章节就是目录页本身。
+      // 上游 `BookChapterList` 用 `baseUrl` 顶替，丢掉这一章会让整本书没有目录（ADR-0069 G8）。
       final FakeHttpClient http = FakeHttpClient()
         ..serve(
           _tocUrl,
@@ -207,9 +209,13 @@ void main() {
         await FetchToc(pages: service.pages).execute(_source(), _tocUrl),
       );
 
-      expect(chapters, hasLength(1));
-      expect(chapters.single.name, '第1章');
-      expect(service.printer.events, hasLength(1));
+      expect(chapters, hasLength(2));
+      expect(chapters.last.name, '没有链接');
+      expect(chapters.last.url, _tocUrl);
+      expect(
+        service.printer.events.single.message.toString(),
+        contains('reuses the toc page'),
+      );
     });
 
     test(

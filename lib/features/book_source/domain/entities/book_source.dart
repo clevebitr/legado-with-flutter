@@ -271,6 +271,21 @@ abstract class ContentRule with _$ContentRule {
     /// A script evaluated **inside a WebView** after the page loaded; its result is the body
     /// (`webJs`, ADR-0068 §决策 6/7).
     String? webJs,
+
+    /// How an image source lays its pages out (`imageStyle`): `full` / `single` / `left` /
+    /// `right`, case-insensitive, blank meaning 「居中」.
+    ///
+    /// Upstream keeps it on the **source** and copies it onto the book (`ContentRule.kt:20`);
+    /// the reader honours `full` and `single` today (ADR-0069 G5).
+    String? imageStyle,
+
+    /// A script that decrypts an image's bytes (`imageDecode`, upstream `ContentRule.kt:21`).
+    ///
+    /// Kept verbatim so an import/export round trip does not lose it. **Executing it is not
+    /// supported** (the sandbox has no byte arrays); a source that declares a non-blank value
+    /// fails the image stage with `unsupportedRule` instead of showing encrypted bytes
+    /// (ADR-0069 G5).
+    String? imageDecode,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})
     Map<String, Object?> extra,

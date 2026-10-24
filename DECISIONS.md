@@ -287,3 +287,23 @@ M21a 第三刀按 ADR-0068 决策 9 的评估执行：零新依赖、自研解�
 测试：`test/support/synthetic_ttf.dart` 现拼 sfnt 字节（表目录 + cmap + post），所以「截断文件 / 表撒谎 / 空子表 / 坏分组 / 3.0 post」都能逐字节复现，不必提交二进制字体基线。真引擎上补了三条 `integration_test/js_bridge_test.dart` 探针（base64 往返、url 字节门、非字体报错）。
 
 验证：1810 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 5 文件全过（js_bridge 33/33）、Android js_bridge 33/33。
+
+## 2026-10-24 — ADR-0069：用真实导出定位 9 个引擎差距，修 G1/G3/G4/G5/G7/G8，登记 G2/G6/G9
+
+用户给了一份「上游可用、本仓不可用」的 5 条图片源导出，并要求对照本机上游仓库（`legado-upstream`）定位差距。取证方法：逐条导入 + 把每个规则字段送进 `extractFirst`/`extractAll`/`selectAll`/`renderUrl`，只区分「语法被拒」与「没命中」，再把每条结论对到上游源码实现点。结论写进 **ADR-0069**（G1–G9 表 + 登记差异 + 触发条件）。
+
+用户裁决：G1–G5 + G7 + G8 全做，G6 登记。已修六项：
+1. **G1 `java.encodeURI(str, charset)`**：两参形态（GBK 关键词）以前按名拒绝。新增 `lib/core/text/charset_encoding.dart` 的 `charsetBytes` 作为「文本→声明编码字节」的唯一实现，`url_template` 的关键词编码与 JS 绑定共用；未知标签退 UTF-8（上游抛错返回 `""`，退 UTF-8 更有用）。
+2. **G3 任意段末尾 `.N` 索引**：`#image_div img.0@src` 被 cascadia 当「类名 0」。degraded 段现在剥「纯数字（可带负号）」的尾巴当索引；`div.item` / `.result-item` 不受影响。落地时确认了 `.-1` / `!0` / `tag.img.0` 本来就支持，只有「裸 CSS 段」缺这一刀。
+3. **G4 图片/封面的 `,{…}` 选项**：以前整段 JSON 进了地址。漫画页把选项里的 `headers` 并进该章图片请求头（章节内通常同一套），地址只留 URL；封面地址裁掉选项 + warning（封面加载器还带不了 header，登记）。`stripUnreadableUrlOptions` 顺势更名 `stripUrlOptions`（同一个「切掉 `,{…}`」现在有两个正当用途）。
+4. **G5 `imageStyle` / `imageDecode`**：两字段建模（不再落 `extra`）。`imageDecode` 非空 → 显式 `unsupportedRule(contentRule.imageDecode)`——静默降级会把加密字节当图片摆给用户，比失败更坏；`imageStyle` 打通 `MangaPages → ReadingPage.style → 阅读器`，`single` = 一图一屏（`BoxFit.contain` + 视口高），`left`/`right`/居中的对齐分支登记未做。
+5. **G7 `Array.prototype.size`**：真实正文 JS 用 `list.size` 遍历 `java.getStringList(...)`；没这条垫片循环一次都不跑，正文**静默变空**。与既有 `toArray()` 垫片同族，只加 getter（属性与方法不能同名）。
+6. **G8 目录项空 `chapterUrl`**：以前直接跳过该章 → 美图网这种单章图片书整本没目录。现在回落到目录页地址（上游 `BookChapterList.kt:246-258` 同口径）+ warning。
+
+登记不做（ADR-0069）：**G6** 同步 `java.post/get/ajax` 响应对象（沙箱是独立 isolate，阻塞不了宿主；规则须写 `await http.post`）、**G2** URL 规则里的非 JS `{{…}}`（本批 5 条源走的是值规则，已支持；URL 规则要先把 scope 传进 `renderUrl`，影响面未取证）、**G9** 列表 JSONPath + `@js:` 的 `result` 形状（要该站真实响应体才能定论）、封面 per-URL header、`imageStyle` 对齐分支。
+
+坑一条：`build_runner build --build-filter=…` 会把不匹配的生成物**删掉**（一跑 `flutter analyze` 报 4000+ 错），恢复办法是全量 `dart run build_runner build --delete-conflicting-outputs`；以后改实体别用 filter。
+
+连带修：G8 让「目录里有条目但没有 URL」不再是「成功且为空」，`switch_book_source` 里那条 `data.isEmpty` 分支变成不可达（删掉并注明），`check_book_source` 的 `emptyGroup` 分支改由「搜索列表命中但每条都没 bookUrl」这条真实路径覆盖。
+
+验证：1830 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；设备级 `js_bridge` 新增 `list.size` 探针（真引擎）。

@@ -639,11 +639,17 @@ globalThis.java = (function () {
       }
       return __crypto('base64Decode', value);
     },
-    encodeURI: function (value) {
-      if (arguments.length > 1) {
-        throw new Error('java.encodeURI(str) takes one argument');
+    // 上游两个重载：`encodeURI(str)` 与 `encodeURI(str, enc)`。真实语料用后者给老 PHP 站点
+    // 编 GBK 关键词（美女图片网的 searchUrl），所以第二个参数是**字符集**，不是 flags。
+    encodeURI: function (value, charset) {
+      if (arguments.length > 2) {
+        throw new Error('java.encodeURI(str[, charset]) takes at most two arguments');
       }
-      return __java({ operation: 'encodeUri', value: String(value) });
+      var call = { operation: 'encodeUri', value: String(value) };
+      if (charset !== undefined && charset !== null) {
+        call.charset = String(charset);
+      }
+      return __java(call);
     },
     log: function (message) {
       sendMessage('log', JSON.stringify({ level: 'info', message: String(message) }));
@@ -745,6 +751,17 @@ if (Array.prototype.toArray === undefined) {
     value: function () { return this; },
     enumerable: false,
     writable: true,
+    configurable: true
+  });
+}
+
+// 上游返回的是 Java `List`，真实语料写 `list.size`（美女图片网的正文 JS 用它遍历
+// `java.getStringList(...)` 的结果）。本仓给的是 JS Array，没有 `size` —— 不加这条垫片，
+// 那个循环会一次都不跑，正文静默变成空串。只加属性，不加 `size()` 方法（属性与方法同名）。
+if (Object.getOwnPropertyDescriptor(Array.prototype, 'size') === undefined) {
+  Object.defineProperty(Array.prototype, 'size', {
+    get: function () { return this.length; },
+    enumerable: false,
     configurable: true
   });
 }

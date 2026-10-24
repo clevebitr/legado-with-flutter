@@ -6,6 +6,7 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/font/ttf_font.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_fonts.dart';
+import 'package:flutter_reader/core/text/charset_encoding.dart';
 
 /// Applies one `crypto.*` binding call from the sandbox.
 ///
@@ -362,9 +363,10 @@ enum JsJavaOperation {
   /// `java.timeFormat(time)`: formats a milliseconds timestamp.
   timeFormat,
 
-  /// `java.encodeURI(str)`: Java's `URLEncoder.encode(str, "UTF-8")`.
+  /// `java.encodeURI(str[, charset])`: Java's `URLEncoder.encode`.
   ///
-  /// Unlike JavaScript's `encodeURI`, a space becomes `+`.
+  /// Unlike JavaScript's `encodeURI`, a space becomes `+`, and the two-argument form encodes the
+  /// text in the declared charset (real corpus: `java.encodeURI(key, "GBK")`).
   encodeUri,
 
   /// `java.queryTTF(data)` / `java.queryBase64TTF(data)`: reads a font and answers its handle.
@@ -381,6 +383,7 @@ final class JsJavaRequest {
     required this.operation,
     this.key,
     this.value,
+    this.charset,
     this.fontReplace,
   });
 
@@ -392,6 +395,9 @@ final class JsJavaRequest {
 
   /// The argument the rule passed; `null` clears the variable on a write.
   final Object? value;
+
+  /// The charset of an [JsJavaOperation.encodeUri] call, when the rule declared one.
+  final String? charset;
 
   /// The decoded arguments of a [JsJavaOperation.replaceFont] call.
   final JsFontReplaceRequest? fontReplace;
@@ -454,8 +460,16 @@ JsJavaRequest? decodeJsJavaRequest(Object? args) {
       if (value is! String) {
         return null;
       }
+      final Object? charset = call['charset'];
+      if (charset is! String?) {
+        return null;
+      }
 
-      return JsJavaRequest(operation: operation, value: value);
+      return JsJavaRequest(
+        operation: operation,
+        value: value,
+        charset: charset,
+      );
     case JsJavaOperation.get:
       if (key is! String) {
         return null;
@@ -558,7 +572,7 @@ String applyJsJavaCall(
     case JsJavaOperation.encodeUri:
       return jsonEncode(<String, Object?>{
         'ok': true,
-        'value': javaEncodeUri(call.value as String),
+        'value': javaEncodeUri(call.value as String, charset: call.charset),
       });
     case JsJavaOperation.queryTtf:
       return _applyQueryTtf(call, fonts);
@@ -657,13 +671,14 @@ void _putName(Map<String, String> named, String key, Object? value) {
   }
 }
 
-/// Encodes [value] the way Java's `URLEncoder.encode(value, "UTF-8")` does.
+/// Encodes [value] the way Java's `URLEncoder.encode(value, charset)` does.
 ///
-/// `A-Za-z0-9` and `-_.*` stay, a space becomes `+`, everything else `%XX`.
-String javaEncodeUri(String value) {
+/// `A-Za-z0-9` and `-_.*` stay, a space becomes `+`, everything else is escaped from its
+/// [charset] bytes (UTF-8 when the label is absent or unknown).
+String javaEncodeUri(String value, {String? charset}) {
   final StringBuffer buffer = StringBuffer();
 
-  for (final int byte in utf8.encode(value)) {
+  for (final int byte in charsetBytes(value, charset: charset)) {
     if (byte == 0x20) {
       buffer.write('+');
     } else if (_formSafeBytes.contains(byte)) {

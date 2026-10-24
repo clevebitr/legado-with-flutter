@@ -529,7 +529,7 @@ String resolveUrlRule(String rule, String baseUrl) {
 }
 
 /// The URL part of [rule] when its option suffix cannot be read, or [rule] unchanged.
-String stripUnreadableUrlOptions(String rule) {
+String stripUrlOptions(String rule) {
   final int split = _optionSplitOf(rule);
 
   return split < 0 ? rule : rule.substring(0, split).trimRight();

@@ -1621,6 +1621,32 @@ void main() {
     );
   });
 
+  group('RuleEngine dot index on a plain selector (ADR-0069 G3)', () {
+    const String html =
+        '<html><body><div id="image_div"><img src="a.jpg">'
+        '<img src="b.jpg"></div><p class="item">x</p></body></html>';
+
+    Future<String?> textOf(String rule) async => switch (await _engine()
+        .extractFirst(rule, _scope(_document(html)), rulePath: 'coverUrl')) {
+      ParseSuccess<String?>(:final String? data) => data,
+      ParseFailure<String?>() => null,
+    };
+
+    test('extractFirst_givenATrailingDotIndex_picksThatElement', () async {
+      // 上游把**任何**段末尾的 `.N` 当索引（`ElementsSingle`）：小姐姐写真的
+      // `#image_div img.0@src` 取的是第一张图，不是「类名 0」。
+      expect(await textOf('#image_div img.0@src'), 'a.jpg');
+      expect(await textOf('#image_div img.1@src'), 'b.jpg');
+      expect(await textOf('#image_div img.-1@src'), 'b.jpg');
+    });
+
+    test('extractFirst_givenADotThatNamesAClass_keepsTheCss', () async {
+      // `.item` 不是数字，仍是类选择器：这条不能因为 G3 的补丁被读成「索引」。
+      expect(await textOf('p.item@text'), 'x');
+      expect(await textOf('#image_div@tag.img.0@src'), 'a.jpg');
+    });
+  });
+
   group('RuleEngine connectors (#10 || / #11 && / #27 %%)', () {
     test(
       'extractAll_givenDoublePipe_takesTheFirstCandidateWithValues',

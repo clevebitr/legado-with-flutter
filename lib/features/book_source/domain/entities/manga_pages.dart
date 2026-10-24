@@ -10,13 +10,24 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 /// adapter copies the two fields across the feature boundary once (C-ARCH-5 allows final fields).
 final class MangaPages {
   /// Creates one chapter's image list.
-  const MangaPages({required this.urls, required this.headers});
+  const MangaPages({
+    required this.urls,
+    required this.headers,
+    this.imageStyle,
+  });
 
   /// The image URLs, in reading order.
   final List<String> urls;
 
   /// Headers every image request must carry, or `null` when the source declares none.
   final Map<String, String>? headers;
+
+  /// The source's `ruleContent.imageStyle` verbatim (`full` / `single` / `left` / `right`),
+  /// or `null` when it declares none (`docs/dev/book-source.md` §2, ADR-0069 G5).
+  ///
+  /// Reading the value is a presentation decision, so it stays a string here and the reader
+  /// adapter turns it into its own enum.
+  final String? imageStyle;
 }
 
 /// The failure rule path for the image list, used by every failure this use case reports.

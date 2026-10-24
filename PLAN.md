@@ -3,7 +3,7 @@
 > 由 `plan` 工具维护，请勿直接编辑。步骤级进度以 `todo` 工具为准；决策与踩坑写入 DECISIONS.md。
 
 <!-- plan-bridge:state -->
-current: M21
+current: M20
 auto-breakpoint: false
 <!-- /plan-bridge:state -->
 
@@ -29,10 +29,10 @@ auto-breakpoint: false
 - [x] M18 — 应用外壳与我的页：底部导航 + 关于/法律声明（ui-gap §4）
 - [x] M19 — 书架分组与管理页、详情增强、书签/阅读记录（ui-gap §4）
 - [ ] M20 — 书内全文搜索 + 规则管理 UI（净化/目录/字典/高亮）（ui-gap §4）
-- [ ] M21 — M21a — WebView 验证 + Cookie 持久化 + 引擎兼容（ADR-0068）
+- [x] M21 — M21a — WebView 验证 + Cookie 持久化 + 引擎兼容（ADR-0068）
 - [ ] M22 — M21b — 按源缓存/主题/备份/本地导入/二维码/登录表单
 
-## Current: M21 — M21a — WebView 验证 + Cookie 持久化 + 引擎兼容（ADR-0068）
+## Current: M20 — 书内全文搜索 + 规则管理 UI（净化/目录/字典/高亮）（ui-gap §4）
 
-goal: M21a 二刀已落地（登录拦截器/取页后处理）；剩字体反爬
-breakpoint: 下一步：M21a 第三刀 字体反爬（cmap→replaceFont）
+goal: M21a 已收尾；M20 需求与 ADR 待拆（详见 #20）
+breakpoint: 下一步：M20 先定规格（规则存储位置 + 搜索取消语义）

@@ -261,4 +261,36 @@ void main() {
       expect(find.byType(MangaReaderPage), findsOneWidget);
     });
   });
+  testWidgets('build_givenSingleStyle_fitsEachPageInsideTheScreen', (
+    WidgetTester tester,
+  ) async {
+    // 上游 `imageStyle: SINGLE` 是「一张图占一屏」：按视口高度约束、等比缩放
+    // （ADR-0069 G5）。默认（centered/full）仍是整宽顺排。
+    final FakeMangaPageProvider pages = FakeMangaPageProvider()
+      ..pages['https://source.test/1.html'] = <ReadingPage>[
+        const ReadingPage(
+          url: 'https://img.test/1.jpg',
+          style: MangaImageStyle.single,
+        ),
+      ];
+    final _Fixture fixture = _fixture(manga: pages);
+
+    await _pump(tester, fixture, chapterUrl: 'https://source.test/1.html');
+
+    final Image image = tester.widget<Image>(find.byType(Image).first);
+    expect(image.fit, BoxFit.contain);
+    expect(image.height, isNotNull);
+  });
+
+  testWidgets('build_givenNoStyle_normallyKeepsTheFullWidthLayout', (
+    WidgetTester tester,
+  ) async {
+    final _Fixture fixture = _fixture();
+
+    await _pump(tester, fixture, chapterUrl: 'https://source.test/1.html');
+
+    final Image image = tester.widget<Image>(find.byType(Image).first);
+    expect(image.fit, BoxFit.fitWidth);
+    expect(image.height, isNull);
+  });
 }

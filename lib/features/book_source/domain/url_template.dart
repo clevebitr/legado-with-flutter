@@ -1,7 +1,5 @@
-import 'dart:convert';
-
-import 'package:charset/charset.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/text/charset_encoding.dart';
 
 /// Characters upstream's `URLEncoder` leaves alone.
 final RegExp _formSafe = RegExp(r'[A-Za-z0-9*._-]');
@@ -90,21 +88,12 @@ String _encodeFormValue(String value, [String? charset]) {
       continue;
     }
     // 逐字符编码：一个字符在声明编码里可能是 1–4 字节。
-    for (final int byte in _encodeWith(character, charset)) {
+    for (final int byte in charsetBytes(character, charset: charset)) {
       buffer.write('%${byte.toRadixString(16).toUpperCase().padLeft(2, '0')}');
     }
   }
 
   return buffer.toString();
-}
-
-/// The bytes of [text] in [charset], or UTF-8 when the label is absent or unknown.
-List<int> _encodeWith(String text, String? charset) {
-  final Encoding? encoding = charset == null || charset.isEmpty
-      ? null
-      : Charset.getByName(charset);
-
-  return (encoding ?? utf8).encode(text);
 }
 
 /// Whether [value] is already form-encoded.

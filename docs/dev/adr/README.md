@@ -90,3 +90,4 @@
 | [0066](0066-shelf-groups-bookmarks-and-read-records.md) | 书架分组（独立 `book_groups` 表 + `books.groupId`）、书签（位置唯一键的 toggle）、阅读记录（每会话一行、≥60 s）、自定义封面与按书缓存 `scope_key`；schema v6→v7 一次迁移，交付分两批 | Accepted（2026-10-23，M19 规格前置，用户裁决四项） | 本次新增 |
 | [0067](0067-three-release-channels.md) | 三条发布通道各自一个 workflow：`release.yml`（tag ↔ 版本强校验、正式 Release）、`beta.yml`（`-beta.<sha7>`、预发布）、`debug.yml`（`-debug.<sha7>.<时间>`、预发布）；构建抽成可复用 `build-artifacts.yml`，跨 workflow 用 `wait-for-verify` 等门禁绿 | Accepted（2026-10-23，用户要求拆分三条通道与各自版本号） | 本次修订 0065 |
 | [0068](0068-m21a-webview-verification-and-cookie.md) | M21a：应用内可见 WebView 过人机验证 + Cookie 持久化（v8）与 WebView 双向同步 + 引擎兼容 A/B/C/D 四簇；新增 `ParseFailureKind.loginRequired` | Accepted（2026-10-23，M21a 规格前置；用户裁决四项） | 本次新增 |
+| [0069](0069-engine-compatibility-gap-from-a-real-export.md) | 用一份「上游可用、本仓不可用」的真实导出定位引擎语法差距（G1–G9）：修 G1/G3/G4/G5/G7/G8，登记 G2/G6/G9 与封面 per-URL header | Accepted（2026-10-24，用户裁决「G1–G5+G7+G8 全做完，G6 登记」） | 本次新增 |

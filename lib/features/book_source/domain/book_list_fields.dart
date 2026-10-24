@@ -181,7 +181,10 @@ Future<ParseResult<List<Book>>> readBooks(
         url: resolveUrlRule(url, baseUrl),
         author: author.dataOrNull,
         kind: kind.dataOrNull,
-        coverUrl: resolveAbsoluteUrlOrNull(coverUrl.dataOrNull, baseUrl),
+        coverUrl: resolveAbsoluteUrlOrNull(
+          _coverOf(coverUrl.dataOrNull, pages, baseUrl),
+          baseUrl,
+        ),
         intro: intro.dataOrNull,
         lastChapter: lastChapter.dataOrNull,
         wordCount: wordCount.dataOrNull,
@@ -192,4 +195,24 @@ Future<ParseResult<List<Book>>> readBooks(
   }
 
   return ParseSuccess<List<Book>>(books);
+}
+
+/// [value] with a `,{…}` URL-option suffix removed, or `null` when it is absent.
+///
+/// A cover address is a **URL rule** in the corpus (`img@src##$##,{"headers":{"Referer":…}}`), but
+/// the cover loader sends no per-image headers yet, so the options are dropped with a warning
+/// instead of becoming part of the address (ADR-0069 G4).
+String? _coverOf(String? value, PageFetchService pages, String baseUrl) {
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  final String clean = stripUrlOptions(value);
+  if (clean != value) {
+    pages.warn(
+      'Cover URL options dropped (covers carry no request headers): '
+      'base=$baseUrl',
+    );
+  }
+
+  return clean;
 }

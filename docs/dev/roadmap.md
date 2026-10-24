@@ -456,6 +456,8 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | `webView` / `webJs` / `retry` 等 URL 选项字段 | ✅ **已闭环（M21a，ADR-0068 §决策 6/8）**：`webView`（GET/POST）+ `webViewDelayTime` + `webJs` + `overrideUrlRegex` + `retry`（≤3）+ `readTimeout`（≤120 s）；`proxy` / `dnsIp` / `callTimeout` / `HEAD` / `encodedForm` 仍按名记 `unsupported`（§决策 8 登记） |
 | 过人机验证（可见 WebView、图片验证码、`loginCheckJs`） | ✅ **已闭环（M21a 第二刀，2026-10-24）**：可见 WebView 页 + 图片验证码 + `java.startBrowser*` / `getVerificationCode` / `webView*` + Cookie v8 持久化与双向同步 + 三个登录源字段 + `loginCheckJs` **响应拦截器** + 书源管理的「登录 / 过验证」入口 + `sourceRegex` / `bodyJs`（ADR-0068 及其增补）。**未做**：原生 `loginUi` 表单（归 M21b/U15）、字体反爬（见下一行） |
 | 字体反爬 `queryTTF` / `queryBase64TTF` / `replaceFont` | ✅ **已闭环（M21a 第三刀，2026-10-24）**：零新依赖，自研 `cmap`（format 0/4/6/12）+ `post` 2.0 解析，字形名优先、字形 id 兜底，字体以不透明句柄随 job 存活；`queryTTF(url)` 走新加的字节门并返回 Promise。`getFontGlyph` 上游并不存在，未实现（ADR-0068 增补决策 9） |
+| 图片源兼容面（ADR-0069）：URL 规则里的 `{{非 JS 规则}}`（G2）、列表 JSONPath + `@js:` 的 `result` 形状（G9）、封面 / 图片的 per-URL header、`imageStyle` 的 `left`/`right`/居中分支 | **部分闭环（ADR-0069，2026-10-24）**：G1/G3/G4/G5/G7/G8 已修（`java.encodeURI(charset)`、任意段末尾 `.N` 索引、图片/封面的 `,{…}` 选项、`imageStyle`/`imageDecode` 建模、`Array.size` 垫片、空 `chapterUrl` 回落）；G2/G9 需要真实响应或语料统计才能定论，per-URL header 与对齐分支未做。逐条触发条件见 ADR-0069「登记差异」 |
+| 同步 `java.post/get/ajax` 响应对象（G6） | **登记不做（ADR-0069）**：沙箱是独立 isolate，阻塞不了宿主；规则要改成 `await http.post(...)`。触发 = 出现只能靠同步响应对象、改写不了的真实源 |
 | `concurrentRate` 的真源只有 3 条且都跑不了原样链路 | 已登记（b2 用派生源 A/B 取证）；触发 = 其中任一条变得可跑 |
 | 「关于」页入口（设置页的菜单行） | **5.9**：与法律声明页一起落地；一个打开空页的菜单行是死链（C-BAN-2），所以 5.6 没有加它 |
 | Big5 / Big5-HKSCS 的解码 | ✅ **已闭环（M12，2026-10-21）**：`enough_convert`（MPL-2.0，白名单 + ADR-0048）的 `Big5Codec` 补解码；`book-source.md` §5.1 已更新 |

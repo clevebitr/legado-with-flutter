@@ -46,6 +46,9 @@ final RegExp _putFlag = RegExp(r'@put:\{([^{}]*)\}', caseSensitive: false);
 /// The `@get:{key}` flag of matrix #16, lower-cased for a case-insensitive scan.
 const String _getFlag = '@get:{';
 
+/// The trailing `.N` / `.-N` index a degraded segment may carry (matrix #28's dot form).
+final RegExp _dotIndex = RegExp(r'^-?\d+$');
+
 /// The `@put:` flag, lower-cased for a case-insensitive scan.
 const String _putScanFlag = '@put:';
 
@@ -2795,6 +2798,18 @@ final class RuleEngine {
     String segment, {
     required String field,
   }) {
+    // 上游把**任何**段末尾的 `.N` 当索引（`ElementsSingle`）：`#image_div img.0` 读的是
+    // 「`#image_div img` 的第 0 个」，不是「类名 0」。只有纯数字（可带负号）才算索引，
+    // 所以 `div.item` / `.result-item` 仍是 CSS（ADR-0069 G3）。
+    final int dot = segment.lastIndexOf('.');
+    if (dot > 0 && _dotIndex.hasMatch(segment.substring(dot + 1))) {
+      return _indexSuffix(
+        segment.substring(0, dot),
+        segment.substring(dot + 1),
+        field: field,
+      );
+    }
+
     final int bracket = segment.indexOf('[');
     if (bracket >= 0) {
       return _indexSuffix(

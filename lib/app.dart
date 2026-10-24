@@ -869,6 +869,7 @@ final class _MangaPageSource implements MangaPageProvider {
             ReadingPage(
               url: url,
               headers: data.headers ?? const <String, String>{},
+              style: _mangaStyleOf(data.imageStyle),
             ),
         ]),
       ParseFailure<MangaPages>(
@@ -879,6 +880,20 @@ final class _MangaPageSource implements MangaPageProvider {
     };
   }
 }
+
+/// The reader's layout enum for a source's `ruleContent.imageStyle` (ADR-0069 G5).
+///
+/// Upstream compares the value case-insensitively and lets an unknown one fall through to the
+/// centered default, which is what this does. `left` / `right` / `centered` still render like
+/// `full` — the alignment branch is registered in `docs/dev/roadmap.md` §3.7.
+MangaImageStyle _mangaStyleOf(String? imageStyle) =>
+    switch (imageStyle?.trim().toLowerCase()) {
+      'full' => MangaImageStyle.full,
+      'single' => MangaImageStyle.single,
+      'left' => MangaImageStyle.left,
+      'right' => MangaImageStyle.right,
+      _ => MangaImageStyle.centered,
+    };
 
 /// `AudioTrackProvider` bound to `book_source`'s `FetchAudioTracks` (ADR-0054 §决策 2).
 final class _AudioTrackSource implements AudioTrackProvider {

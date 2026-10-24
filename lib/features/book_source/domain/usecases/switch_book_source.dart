@@ -231,12 +231,8 @@ final class SwitchBookSource {
       ):
         return failureAt<SourceSwitchResult>(kind: kind, rulePath: rulePath);
       case ParseSuccess<List<Chapter>>(:final List<Chapter> data):
-        if (data.isEmpty) {
-          return failureAt<SourceSwitchResult>(
-            kind: ParseFailureKind.parseFailed,
-            rulePath: 'tocRule.chapterList',
-          );
-        }
+        // `FetchToc` 已经保证「成功即非空」：列表规则没命中是 `parseFailed`，而命中后每条
+        // 都至少带着目录页地址（ADR-0069 G8 的回落），所以这里不再重复判空。
         chapters = data;
     }
 

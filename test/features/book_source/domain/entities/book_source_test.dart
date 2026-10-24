@@ -535,6 +535,45 @@ void main() {
     });
   });
 
+  group('ContentRule image fields (ADR-0069 G5)', () {
+    test(
+      'fromLegadoJson_givenImageStyleAndDecode_modelsThemInsteadOfExtras',
+      () {
+        // 图片源的这两个字段以前落进 `extra`：`imageStyle` 是版式，`imageDecode` 是图片字节
+        // 解密脚本（本仓执行不了，但必须保住原文并在命中时显式拒绝）。
+        final BookSource source = BookSource.fromLegadoJson(<String, Object?>{
+          'bookSourceName': '漫画源',
+          'bookSourceUrl': 'https://a.test',
+          'bookSourceType': 2,
+          'ruleSearch': <String, Object?>{'bookList': 'class.i'},
+          'ruleToc': <String, Object?>{'chapterList': 'class.c'},
+          'ruleContent': <String, Object?>{
+            'content': 'class.page@tag.img@src',
+            'imageStyle': 'full',
+            'imageDecode': '@js:decode(result)',
+          },
+        });
+
+        expect(source.contentRule.imageStyle, 'full');
+        expect(source.contentRule.imageDecode, '@js:decode(result)');
+        expect(source.contentRule.extra, isEmpty);
+      },
+    );
+
+    test('toJson_givenTheImageFields_writesTheLegadoKeysBack', () {
+      const ContentRule rule = ContentRule(
+        content: 'class.page@tag.img@src',
+        imageStyle: 'single',
+        imageDecode: '',
+      );
+
+      final Map<String, Object?> encoded = rule.toJson();
+
+      expect(encoded['imageStyle'], 'single');
+      expect(encoded['imageDecode'], '');
+    });
+  });
+
   group('BookSource serialisation', () {
     test('toJson_givenImportedSource_reproducesTheLegadoKeys', () {
       final BookSource source = BookSource.fromLegadoJson(_loadFixture());

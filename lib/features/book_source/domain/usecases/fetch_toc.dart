@@ -173,18 +173,23 @@ final class FetchToc {
       );
 
       final String? chapterUrl = url.dataOrNull;
+      // 目录项没有 URL 时**回落**到目录页地址，而不是丢掉这一章：图片源的目录常常只有一行
+      // 「美女欣赏」、`chapterUrl` 为空，真实章节就是目录页本身（上游 `BookChapterList`
+      // 同样用 `baseUrl` 顶替，ADR-0069 G8）。丢掉它会让整本书变成「没有目录」。
       if (chapterUrl == null || chapterUrl.isEmpty) {
         _pages.warn(
-          'Chapter without URL skipped: source=${source.url} toc=$baseUrl',
+          'Chapter without URL reuses the toc page: source=${source.url} '
+          'toc=$baseUrl',
         );
-        continue;
       }
 
       chapters.add(
         Chapter(
           name: name.dataOrNull ?? '',
           // 选项（`,{webView:…}`）必须留在 URL 之外解析：先绝对化会把 `{` 编码成 `%7B`。
-          url: resolveUrlRule(chapterUrl, baseUrl),
+          url: chapterUrl == null || chapterUrl.isEmpty
+              ? baseUrl
+              : resolveUrlRule(chapterUrl, baseUrl),
           isVip: _isVip(vip.dataOrNull),
           // 展示用字符串：保留规则原文，不做日期解析。
           updateTime: updateTime.dataOrNull,

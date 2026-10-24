@@ -6,6 +6,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/manga_pages.
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/source_login.dart';
+import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:html/dom.dart' as html_dom;
 import 'package:html/parser.dart' as html_parser;
@@ -26,6 +27,21 @@ final class FetchMangaPages {
     BookSource source,
     ChapterRequest request,
   ) async {
+    // `imageDecode` 是「图片字节二次解密」的脚本（上游 `ContentRule.kt:21`）。本仓沙箱没有
+    // 字节数组，执行不了；**显式拒绝**，否则用户只会看到一堆解密前的乱码图片（ADR-0069 G5）。
+    final String? decode = source.contentRule.imageDecode;
+    if (decode != null && decode.trim().isNotEmpty) {
+      _logger.warning(
+        'Image decoding is not supported: source=${source.url} '
+        'field=contentRule.imageDecode',
+      );
+
+      return failureAt<MangaPages>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'contentRule.imageDecode',
+      );
+    }
+
     final String url = request.url;
     // 书源自己的限速要在第一个请求之前进预算。
     _pages.applySourceRate(source);
@@ -75,6 +91,9 @@ final class FetchMangaPages {
   ) async {
     final List<String> urls = <String>[];
     final Set<String> seen = <String>{};
+    // 图片地址是 URL 规则：`img@src##$##,{"headers":{"Referer":…}}` 的选项要落到请求头上，
+    // 不能跟着地址一起发出去（ADR-0069 G4）。一章节的图片通常同一套头，所以合并成一张表。
+    final Map<String, String> pageHeaders = <String, String>{...?headers};
 
     for (var index = 0; index < walk.pages.length; index++) {
       final FetchedPage page = walk.pages[index];
@@ -92,7 +111,12 @@ final class FetchMangaPages {
           return failureAt<MangaPages>(kind: kind, rulePath: failedAt);
         case ParseSuccess<List<String>>(:final List<String> data):
           for (final String value in data) {
-            for (final String address in _addressesOf(value)) {
+            for (final String rawAddress in _addressesOf(value)) {
+              final String address = _withoutOptions(
+                rawAddress,
+                source: source,
+                into: pageHeaders,
+              );
               final String absolute = resolveAbsoluteUrl(address, page.url);
               if (!_isHttpUrl(absolute)) {
                 // 相对地址在无 base 时仍是相对；非 http(s)（data: / javascript:）也不是图片源。
@@ -119,7 +143,43 @@ final class FetchMangaPages {
       );
     }
 
-    return ParseSuccess<MangaPages>(MangaPages(urls: urls, headers: headers));
+    return ParseSuccess<MangaPages>(
+      MangaPages(
+        urls: urls,
+        headers: pageHeaders.isEmpty ? null : pageHeaders,
+        imageStyle: source.contentRule.imageStyle,
+      ),
+    );
+  }
+
+  /// [address] without its `,{…}` options, whose headers are merged into [into].
+  ///
+  /// An unreadable suffix is dropped as well: sending it as part of the address is what used to
+  /// break hotlink-protected galleries (`book-source.md` §4.3, ADR-0069 G4).
+  String _withoutOptions(
+    String address, {
+    required BookSource source,
+    required Map<String, String> into,
+  }) {
+    final ParseResult<UrlRule> parsed = parseUrlRule(
+      address,
+      rulePath: mangaPagesRulePath,
+    );
+    switch (parsed) {
+      case ParseSuccess<UrlRule>(:final UrlRule data):
+        final Map<String, String>? options = data.options?.headers;
+        if (options != null && options.isNotEmpty) {
+          into.addAll(options);
+        }
+
+        return data.template;
+      case ParseFailure<UrlRule>():
+        _logger.warning(
+          'Unreadable image URL options dropped: source=${source.url}',
+        );
+
+        return stripUrlOptions(address);
+    }
   }
 
   // 日志里最多保留 80 字符的单行预览。

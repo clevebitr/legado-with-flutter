@@ -673,6 +673,41 @@ void main() {
     });
   });
 
+  group('java.encodeURI charset (ADR-0069 G1)', () {
+    test('javaEncodeUri_givenACharset_escapesItsBytes', () {
+      // 美女图片网的 searchUrl 用 `java.encodeURI(key,"GBK")`：老 PHP 站点只认 GBK 字节。
+      expect(javaEncodeUri('美女', charset: 'gbk'), '%C3%C0%C5%AE');
+      expect(javaEncodeUri('剑来', charset: 'GBK'), '%BD%A3%C0%B4');
+    });
+
+    test('javaEncodeUri_givenNoCharset_staysUtf8', () {
+      expect(javaEncodeUri('a b'), 'a+b');
+      expect(javaEncodeUri('剑来'), '%E5%89%91%E6%9D%A5');
+    });
+
+    test('applyJsJavaCall_givenTheTwoArgumentForm_passesTheCharset', () {
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'encodeUri',
+          'value': '美女',
+          'charset': 'gbk',
+        }),
+        '{"ok":true,"value":"%C3%C0%C5%AE"}',
+      );
+    });
+
+    test('decodeJsJavaRequest_givenANonStringCharset_returnsNull', () {
+      expect(
+        decodeJsJavaRequest(<String, Object?>{
+          'operation': 'encodeUri',
+          'value': 'a',
+          'charset': 1,
+        }),
+        isNull,
+      );
+    });
+  });
+
   group('applyJsJavaCall fonts (M21a)', () {
     late JsFontRegistry fonts;
 

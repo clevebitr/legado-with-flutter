@@ -168,9 +168,7 @@ final class PageFetchService {
       rulePath: rulePath,
     )) {
       ParseSuccess<UrlRule>(:final UrlRule data) => data,
-      ParseFailure<UrlRule>() => UrlRule(
-        template: stripUnreadableUrlOptions(rendered),
-      ),
+      ParseFailure<UrlRule>() => UrlRule(template: stripUrlOptions(rendered)),
     };
     final UrlRuleOptions options = renderedRule.options ?? textOptions;
     // `webView` 有真正的实现时不要再报「忽略」；只有平台没有 WebView 才回落。

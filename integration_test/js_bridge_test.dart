@@ -120,6 +120,24 @@ void main() {
     });
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_givenAJavaStyleList_readsSizeLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    // 上游的列表是 Java `List`，真实语料写 `list.size`（美女图片网的正文 JS）。没有这条垫片，
+    // 那个循环一次都不跑，正文会静默变成空串（ADR-0069 G7）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var list = ['a', 'b', 'c'];"
+            "var out = '';"
+            'for (let i = 0; i < list.size; i++) { out = out + list[i]; }'
+            'out',
+      ),
+    );
+
+    expect(_value(result), 'abc');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('jsBridge_givenABase64Font_replacesTheObfuscatedText', (
     WidgetTester tester,
   ) async {
