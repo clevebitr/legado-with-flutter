@@ -232,3 +232,15 @@ M19 按用户裁决分两批，但结构改动一次升到 schemaVersion 7（ADR
 6. **对话框里的 TextEditingController**：`showDialog` 返回后立即 `dispose()` 会在退场动画那一帧再 build 一次 TextField，抛 “used after being disposed”。改成 StatefulWidget 对话框（`_GroupNameDialog`）自己持有并释放控制器。
 
 其它：`CoverImage` 新增 `localPath`（本地封面优先于网络 URL）；自定义封面存**绝对路径**（相对路径会让每行书架做一次异步基准目录查询）；`ContentCache.write` 加可选 `bookUrl` 写 `scope_key`，读仍是同一个 `cache_key`，旧条目只是不计入按书统计。验证：1659 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、`build_runner` 幂等；新增豁免项 5 条（封面 file_selector 适配器、ShelfCoverPicker 端口、ShelfGroup 与两个书签/记录 freezed 实体、三张 drift 表）。
+
+## 2026-10-23 — M21a 第一批落地：可见 WebView 验证 + Cookie v8 + 引擎 A/B/D 簇（ADR-0068），四个坑
+
+M21a 按用户裁决拆成「验证 + 引擎」与「原 U8–U15」两条线（M22）。第一批交付：可见 WebView 验证页 + 图片验证码页、`SourceVerification`/`WebViewCookieBridge` 端口与装配根绑定、`appNavigatorKey`、cookie 表 v8 与 `PersistentCookieManager`（`main()` 前 hydrate + 写穿 + WebView 双向同步）、`HttpClient.getBytes`、JS 验证族（`startBrowser*` / `getVerificationCode` / `webView*`，用户门控）、`webViewDelayTime`/`webJs`/`overrideUrlRegex`、`ContentRule.webJs`、`retry`/`readTimeout`、`ParseFailureKind.loginRequired`。
+
+坑与结论：
+1. **验证族在沙箱里只能是 Promise。** 上游 Rhino 能同步阻塞线程，本仓 QuickJS 不能停下来等宿主，所以 `startBrowserAwait`/`getVerificationCode` 返回 Promise（规则要 `await`），`startBrowser`（上游返回 void）没有差异。**不要**为了「兼容」去假装同步，否则规则拿到的是 `[object Promise]`。已写进 `book-source.md` §6。
+2. **等用户的时间必须从 JS 预算里扣除。** 桥的硬预算 `timeout + killGrace` 与 `_onResult` 的「跑满预算 = 超时」判定都按墙钟算；不扣除 `_humanWaitMs` 时，一次两分钟的人机验证会被判成 `js:timeout`。验证调用同时免掉每规则调用额度（额度数的是 CPU 往返）。
+3. **`webView` 从「被忽略的选项」变成字段后，旧的 `canWebView && ignored == 'webView'` 分支就成了死代码**；覆盖率门禁直接把它标出来（domain 100% 不允许不可达行），顺手删掉。同理 `UrlRuleOptions` 的 `retry`/`readTimeout` 要在**解析侧**钳制（3 / 120 s），否则 C-NET-2 的「显式上限」形同虚设。
+4. **验证码图片不能走文本门。** `HttpClient.get` 会把正文按检测到的编码解码成 String，图片过一遍就坏了；新增 `getBytes`（共享同一套 URL 校验 / 预算 / 重试 / cookie），这也是将来字体反爬（TTF 字节）必需的门。
+
+未做（ADR-0068 落地注记里逐项写了原因与触发条件）：`loginUrl`/`loginUi`/`loginCheckJs` 三个源字段、`ContentRule.sourceRegex`、字体反爬 C 簇、`proxy`/`dnsIp`/`callTimeout`/`HEAD`/`encodedForm`。验证：1719 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 双用例（真实 `main()` 启动 + 文件库 v8 cookie）通过；Android 待跑。
