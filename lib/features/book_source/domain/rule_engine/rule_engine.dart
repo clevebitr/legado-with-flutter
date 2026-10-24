@@ -1150,10 +1150,29 @@ final class RuleEngine {
       }
 
       final String verb = match.group(1) ?? '';
-      final bool wantsList = verb == 'getStringList' || verb == 'getElements';
+      // `java.getStringList` 求的是**值**（含提取段，`@css:.box img@src` 要 URL 列表）；
+      // `getElements` / `getElement` 要元素文档（ADR-0037 §决策 3）。两者不能混。
+      final bool wantsValues = verb == 'getStringList';
+      final bool wantsElements = verb == 'getElements';
       // `getElement` 是**单值**形态（上游拿一个元素），异步路径同样只答第一个（ADR-0037 §决策 3）。
       final bool wantsDoc = verb == 'getElement';
-      final ParseResult<List<Object?>> values = wantsList || wantsDoc
+      final ParseResult<List<Object?>> values = wantsValues
+          ? switch (await _evaluate(
+              rule,
+              scope,
+              rulePath: field,
+              single: false,
+              depth: 1,
+            )) {
+              ParseFailure<List<String>>(
+                :final ParseFailureKind kind,
+                :final String rulePath,
+              ) =>
+                failureAt<List<Object?>>(kind: kind, rulePath: rulePath),
+              ParseSuccess<List<String>>(:final List<String> data) =>
+                ParseSuccess<List<Object?>>(<Object?>[...data]),
+            }
+          : wantsElements || wantsDoc
           ? await _selectAllValues(rule, scope, field: field)
           : await _evaluate(
               rule,
@@ -1170,14 +1189,15 @@ final class RuleEngine {
           return failureAt<String>(kind: kind, rulePath: rulePath);
         case ParseSuccess<List<Object?>>(:final List<Object?> data):
           inlined = inlined.replaceRange(match.start, match.end, switch ((
-            wantsList,
+            wantsValues || wantsElements,
             wantsDoc,
           )) {
             (true, _) => jsonEncode(data),
             // 单文档形态无匹配时与异步路径一致地给 `null`。
             (_, true) => jsonEncode(data.isEmpty ? null : data.first),
-            // `getString` 无匹配给空串——异步路径（`parse.getString`）就是这个形状。
-            _ => jsonEncode(data.isEmpty ? '' : data.first),
+            // `getString`：多匹配用换行拼接（上游 `AnalyzeRule.getString`），无匹配给空串
+            // ——异步路径（`parse.getString`）就是这个形状（ADR-0069 G9）。
+            _ => jsonEncode(data.join(_valueSeparator)),
           });
       }
     }
@@ -1997,6 +2017,25 @@ final class RuleEngine {
       );
     }
 
+    if (request.wantsList && request.wantsValues) {
+      // `java.getStringList`：抽取值（上游 `AnalyzeRule.getStringList` 会跑提取段）。
+      return switch (await _evaluate(
+        request.rule,
+        scope,
+        rulePath: field,
+        single: false,
+        allowJs: false,
+      )) {
+        ParseFailure<List<String>>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ) =>
+          failureAt<Object?>(kind: kind, rulePath: rulePath),
+        ParseSuccess<List<String>>(:final List<String> data) =>
+          ParseSuccess<Object?>(data),
+      };
+    }
+
     if (request.wantsList) {
       return switch (await selectAll(request.rule, scope, rulePath: field)) {
         ParseFailure<List<RuleScope>>(
@@ -2023,8 +2062,9 @@ final class RuleEngine {
         :final String rulePath,
       ) =>
         failureAt<Object?>(kind: kind, rulePath: rulePath),
+      // 上游 `getString`：多匹配用换行拼接（ADR-0069 G9），不是只给第一个。
       ParseSuccess<List<String>>(:final List<String> data) =>
-        ParseSuccess<Object?>(data.isEmpty ? '' : data.first),
+        ParseSuccess<Object?>(data.join(_valueSeparator)),
     };
   };
 
@@ -2418,10 +2458,30 @@ final class RuleEngine {
   String _selectorFor(_SelectorStep step) => switch (step.type) {
     // 矩阵 #12：`@css:` 的选择器原样交给 cascadia，不做任何改写。
     'css' => step.name,
-    'class' => '.${cascadia.escapeCssIdent(step.name)}',
+    // 上游 `getElementsByClass(rules[1])`（jsoup）把带空格的类名按**全部命中**处理：
+    // `class.col-lg-3 col-md-4 col-6 mb-2` 表示「这四个类都要有」。只取第一个（或把空格
+    // 当后代选择器）会让这类源的每一条列表规则都返回空（ADR-0069 G13）。
+    'class' => _classSelector(step.name),
     'id' => '#${cascadia.escapeCssIdent(step.name)}',
     _ => cascadia.escapeCssIdent(step.name),
   };
+
+  /// The CSS selector for a `class.` segment: every whitespace-separated class is required.
+  ///
+  /// An empty name keeps the old single-token behaviour (`.`) so the failure stays the same
+  /// `parseFailed` the caller already handles.
+  String _classSelector(String name) {
+    final Iterable<String> classes = name
+        .split(_whitespace)
+        .where((String token) => token.isNotEmpty);
+    if (classes.isEmpty) {
+      return '.';
+    }
+
+    return classes
+        .map((String token) => '.${cascadia.escapeCssIdent(token)}')
+        .join();
+  }
 
   /// Splits [rule] into its `##` parts, its leading `-` and its `@`-separated
   /// segments.

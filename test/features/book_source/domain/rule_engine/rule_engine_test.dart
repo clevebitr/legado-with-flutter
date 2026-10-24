@@ -1621,6 +1621,110 @@ void main() {
     );
   });
 
+  group('RuleEngine java.getStringList (ADR-0069 G14)', () {
+    const String html =
+        '<html><body><div class="box">'
+        '<img src="/a.jpg"><img src="/b.jpg"></div></body></html>';
+
+    /// The script after inline expansion, as the sandbox would receive it.
+    Future<String> scriptOf(String script) async {
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+      await _engine(null, bridge).extractFirst(
+        '@js:$script',
+        _scope(_document(html)),
+        rulePath: 'contentRule.content',
+      );
+
+      return bridge.jobs.single.script;
+    }
+
+    test('inline_givenGetStringList_inlinesTheExtractedValues', () async {
+      // 上游 `java.getStringList(rule)` 跑完整条规则（含 `@src` 提取段），回的是**值**。
+      // 用元素文档内联会让 `@css:.box img@src` 变成空数组（美女图片网的正文就是这么挂的）。
+      expect(
+        await scriptOf('java.getStringList("@css:.box img@src")'),
+        '["/a.jpg","/b.jpg"]',
+      );
+    });
+
+    test('inline_givenGetElements_keepsTheElementDocuments', () async {
+      // `parse.getElements` 的契约不同：它给元素（outerHtml），不能跟着改成值。
+      final String script = await scriptOf('java.getElements("@css:.box img")');
+
+      expect(script, contains('<img src='));
+      expect(script, contains('/a.jpg'));
+      expect(script, contains('/b.jpg'));
+      expect(script, isNot(contains('["/a.jpg"')));
+    });
+
+    test('inline_givenGetString_joinsTheMatches', () async {
+      // 上游 `getString` 的多匹配用换行拼接（ADR-0069 G9），JSON 里是转义的换行。
+      expect(
+        await scriptOf('java.getString("@css:.box img@src")'),
+        '"/a.jpg\\n/b.jpg"',
+      );
+    });
+  });
+
+  group('RuleEngine class selectors with spaces (ADR-0069 G13)', () {
+    const String html =
+        '<html><body>'
+        '<div class="col-lg-3 col-md-4 col-6 mb-2"><a href="/a">甲</a></div>'
+        '<div class="col-lg-3 col-md-4 special"><a href="/b">乙</a></div>'
+        '<div class="col-lg-3"><a href="/c">丙</a></div>'
+        '<div class="card"><a href="/d">丁</a></div></body></html>';
+
+    test('extractFirst_givenSeveralClasses_requiresAllOfThem', () async {
+      // 上游 `getElementsByClass("a b c")` 是「这几个类都要有」（jsoup 语义）。只取第一个
+      // 或把空格当后代选择器，会让这类源的每一条列表规则都返回空（ADR-0069 G13）。
+      expect(
+        await _first(
+          _engine().extractFirst(
+            'class.col-lg-3 col-md-4 col-6 mb-2@tag.a@href',
+            _scope(_document(html)),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        '/a',
+      );
+      // 两个类都命中第二条：`class.A B` 不是后代选择器，而是「A 与 B 都要有」。
+      expect(
+        await _first(
+          _engine().extractFirst(
+            'class.col-lg-3 special@tag.a@href',
+            _scope(_document(html)),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        '/b',
+      );
+      // 少写一个类就退化成「第一个有它的元素」——正是补丁前那条空结果的来源。
+      expect(
+        await _first(
+          _engine().extractFirst(
+            'class.col-6@tag.a@href',
+            _scope(_document(html)),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        '/a',
+      );
+    });
+
+    test('extractFirst_givenASingleClass_stillMatches', () async {
+      expect(
+        await _first(
+          _engine().extractFirst(
+            'class.card@tag.a@href',
+            _scope(_document(html)),
+            rulePath: 'searchRule.bookUrl',
+          ),
+        ),
+        '/d',
+      );
+    });
+  });
+
   group('RuleEngine extractJoined (ADR-0069 G9)', () {
     const String pageHtml =
         '<html><body><div class="p"><img src="a.jpg"></div>'
@@ -3256,6 +3360,83 @@ void main() {
       expect(bridge.jobs.single.result, _countHtml);
     });
 
+    test(
+      'extractAll_givenAGetStringListCall_answersTheExtractedValues',
+      () async {
+        // `java.getStringList` 走宿主求值时同样要**抽取值**（不是元素文档）：这是美女图片网
+        // 正文脚本的那条路径（ADR-0069 G14）。
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(
+              rule: 'class.result-list@tag.li@text',
+              wantsList: true,
+              wantsValues: true,
+            ),
+          );
+
+        final List<String> values = await _values(
+          _engine(null, bridge).extractAll(
+            "@js:java.getStringList('class.result-list@tag.li@text')",
+            _pageWithContext(_listHtml),
+            rulePath: 'contentRule.content',
+          ),
+        );
+
+        expect(values, <String>[
+          'One Author A',
+          'Two Author B',
+          'Three Author C',
+        ]);
+      },
+    );
+
+    test(
+      'extractAll_givenARejectedGetStringListCall_carriesTheFailure',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(
+              rule: '@xpath://div',
+              wantsList: true,
+              wantsValues: true,
+            ),
+          );
+
+        expect(
+          (await _failure(
+            _engine(null, bridge).extractAll(
+              // 参数不是字面量时字面量内联不生效，请求才会走到沙箱的 parse 通道。
+              '@js:java.getStringList(baseUrl)',
+              _pageWithContext(_listHtml),
+              rulePath: 'contentRule.content',
+            ),
+          )).kind,
+          ParseFailureKind.unsupportedRule,
+        );
+      },
+    );
+
+    test(
+      'extractAll_givenARejectedGetElementsCall_carriesTheFailure',
+      () async {
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..parseRequests.add(
+            const JsParseRequest(rule: '@xpath://div', wantsList: true),
+          );
+
+        expect(
+          (await _failure(
+            _engine(null, bridge).extractAll(
+              "@js:java.getElements('@xpath://div')",
+              _pageWithContext(_listHtml),
+              rulePath: 'contentRule.content',
+            ),
+          )).kind,
+          ParseFailureKind.unsupportedRule,
+        );
+      },
+    );
+
     test('extractFirst_givenAParseCall_evaluatesTheRuleOnThePage', () async {
       final FakeJsBridge bridge = FakeJsBridge()
         ..parseRequests.add(
@@ -4618,11 +4799,10 @@ void main() {
           ),
         );
 
-        // 快路径内联的是 **JSON 值本身**，不是 `toString()` 后的字符串：异步路径
-        // （`parse.getElements` → `_jsDocOf`，§6「JSON 匹配给值本身」）给 `7` / `true`，
-        // 内联若写成 `"7"` / `"true"` 就会让同一个调用在两条路径上得到不同类型
-        // （ADR-0037 §决策 3）。所以这里断言字面量里**没有引号包着的数字/布尔**。
-        expect(bridge.jobs.single.script, '["a.jpg",7,true]');
+        // 上游 `java.getStringList` 回的是 `List<String>`：**值会被串化**（`7` → `"7"`）。
+        // 类型保真属于 `parse.getElements`（`_jsDocOf` 给 JSON 值本身，见下一条测试），
+        // ADR-0037 §决策 3 的原始口径把两者混为一谈，ADR-0069 G14 改掉了。
+        expect(bridge.jobs.single.script, '["a.jpg","7","true"]');
       },
     );
 

@@ -771,6 +771,7 @@ JsParseRequest? decodeJsParseRequest(Object? args) {
   final bool? wantsList = switch (call['operation']) {
     'getString' => false,
     'getElements' => true,
+    'getStringList' => true,
     _ => null,
   };
   final Object? rule = call['rule'];
@@ -782,7 +783,13 @@ JsParseRequest? decodeJsParseRequest(Object? args) {
     return null;
   }
 
-  return JsParseRequest(rule: rule, wantsList: wantsList, doc: doc);
+  return JsParseRequest(
+    rule: rule,
+    wantsList: wantsList,
+    // `java.getStringList` 要**抽取值**（上游语义），`parse.getElements` 要元素文档。
+    wantsValues: call['operation'] == 'getStringList',
+    doc: doc,
+  );
 }
 
 /// Merges the book source's own headers under the rule's own.

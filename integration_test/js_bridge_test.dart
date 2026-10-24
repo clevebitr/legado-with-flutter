@@ -131,11 +131,13 @@ void main() {
             "var list = ['a', 'b', 'c'];"
             "var out = '';"
             'for (let i = 0; i < list.size; i++) { out = out + list[i]; }'
-            'out',
+            // 同一份导出里还有 `list.size()` 的写法：`size` 取回的是可调用对象，
+            // 调用与算术两种用法都要成立（ADR-0069 G14）。
+            'out + "|" + list.size() + "|" + (list.size + 1)',
       ),
     );
 
-    expect(_value(result), 'abc');
+    expect(_value(result), 'abc|3|4');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('jsBridge_givenABase64Font_replacesTheObfuscatedText', (
@@ -904,7 +906,9 @@ void main() {
 
     final ParseResult<String?> result = await engine.extractFirst(
       "@js:java.getString('class.odd.0@tag.a.0@text') + '|' + "
-      "java.getStringList('class.odd@tag.a').toArray().length",
+      // `getStringList` 要**带提取段**的规则（上游语义：最后一段是提取）：`@text` 才是值，
+      // 光写选择器末段会被当成属性名而得到空列表（ADR-0069 G14）。
+      "java.getStringList('class.odd@tag.a@text').toArray().length",
       scope,
       rulePath: 'contentRule.content',
     );

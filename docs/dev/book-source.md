@@ -710,7 +710,7 @@ java.replaceFont(result, errorFont, correctFont);
 | `encodeURI(str)` | **Java `URLEncoder.encode(str, "UTF-8")`**：空格 → `+`，保留 `A-Za-z0-9` 与 `-_.*`，其余 UTF-8 字节 `%XX` 大写——**不是** JS 的 `encodeURI`（上游 `JsExtensions.kt:683-689`） | ✅ 已落地（M1-b1b） |
 | `encodeURI(str, charset)` | 同上，但按**声明的字符集**取字节（真实语料：`java.encodeURI(key, "GBK")`，ADR-0069 G1）；未知标签退 UTF-8（上游抛错返回 `""`） | ✅ M21a（ADR-0069） |
 | `log(msg)` | = `log.info(msg)`（自动附 `rulePath`；上游 `JsExtensions.kt:1128-1132`） | ✅ 已落地（M1-b1b） |
-| `getString(rule)` / `getStringList(rule)` / `getElement(rule)` / `getElements(rule)` | **对当前 scope 求值**，两种形态：① 首参是字符串字面量、且内层规则不带 `@js:` / `{{` / `@put:` / `@get:` / `<js>` 时，由**引擎在脚本执行前内联**（同步语义，覆盖语料 377/379 个字面量嵌套调用）；② 其余走宿主调用，形态是 **Promise**（等价 `parse.getString(rule, 当前 scope)` 等）——在表达式内当字符串用会显式 `js:error`，不会静默给错值 | ✅ 已落地（M1-b1b） |
+| `getString(rule)` / `getStringList(rule)` / `getElement(rule)` / `getElements(rule)` | **对当前 scope 求值**，两种形态：① 首参是字符串字面量、且内层规则不带 `@js:` / `{{` / `@put:` / `@get:` / `<js>` 时，由**引擎在脚本执行前内联**（同步语义，覆盖语料 377/379 个字面量嵌套调用）；② 其余走宿主调用，形态是 **Promise**（等价 `parse.getString(rule, 当前 scope)` 等）——在表达式内当字符串用会显式 `js:error`，不会静默给错值。**`getStringList` 求的是值**（含提取段，`@css:.box img@src` 回 URL 列表、元素串化），`getElements` 才给元素文档（`outerHtml` / JSON 值），见 ADR-0069 G14 | ✅ 已落地（M1-b1b；语义细化 M21a） |
 | `getString(rule, false)` | 接受（`false` = 不 unescape，正是本仓行为）；`(rule, true)` 与三参形态**具名拒绝** | ✅ 已落地（M1-b1b） |
 | 列表返回值 | JS `Array`；沙箱另装 `Array.prototype.toArray()`（返回 `this`），配上游 Java `List.toArray()` 习惯用法（语料 38 处） | ✅ 已落地（M1-b1b） |
 | 多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)` / `encodeURI` 两参 …） | 具名拒绝：本仓没有 flags / charset 语义，猜一个只会静默给不同结果 | 拒绝 |

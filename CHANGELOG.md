@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two more engine gaps, the ones that made a whole image source read as empty (ADR-0069 G13–G14)
+
+- **`class.a b c` means "all of these classes".** Upstream hands the string to jsoup's
+  `getElementsByClass`, which requires every listed class; we treated the whole thing as one class
+  name, so every rule of `📷🔞美图网` matched nothing — list, detail, body and toc alike. `class.`
+  now builds `.a.b.c`. Single-class rules are unchanged.
+- **`java.getStringList` answers *values*, not element documents.** Upstream runs the whole rule
+  including its extraction segment, so `java.getStringList("@css:.box img@src")` is a list of URLs
+  (as strings). We routed it through the same channel as `parse.getElements` (element docs), so the
+  trailing `@src` became a selector and the chapter body came out empty. The two now have separate
+  semantics; `parse.getElements` keeps its typed element documents.
+- **`list.size` and `list.size()` both work.** One source uses the property in a comparison, another
+  calls it. `size` now resolves to a callable object whose `valueOf()` is the length, so both
+  spellings are correct (strict equality against a number is the only casualty, and no rule does it).
+
+Still registered: synchronous `java.post(...).body()` (G6) — a sandbox cannot block its host; that
+would need a deterministic replay design of its own.
+
 ### The device log said "not a function"; it was four different bugs (ADR-0069 addendum)
 
 Running the same five sources on a device produced four kinds of warning, and each one traced to a

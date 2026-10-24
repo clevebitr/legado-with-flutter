@@ -139,3 +139,43 @@
 
 G2（URL 规则里的非 JS `{{…}}`）、G6（同步 `java.post` 响应对象）、封面的 per-URL header、
 `imageStyle` 的 `left`/`right`/居中分支——触发条件见上文表格。
+
+---
+
+## 2026-10-24 增补二：美图网 / 美女图片网的第二轮（G13–G14）
+
+同一条 5 源导出里再挑两条源逐规则过了一遍引擎，只剩两个纯引擎缺口（其余都是 G6）：
+
+### G13（关闭）：`class.a b c` 是「这几个类都要有」，不是后代选择器
+
+上游 `AnalyzeByJSoup.ElementsSingle`：`class` 走 `temp.getElementsByClass(rules[1])`，而 jsoup 的
+`getElementsByClass("a b c")` 要求元素**同时**带这几个类。本仓把整串当成一个类名（
+`.${escapeCssIdent('a b c')}`），于是 `📷🔞美图网` 的**每一条**规则都返回空：`bookList`
+（`class.col-lg-3 col-md-4 col-6 mb-2@tag.div.0`）、`ruleBookInfo`（`class.container pt-3@tag.a.3@text`）、
+正文（`class.mb-4 container-inner-fix-m@html`）、目录（`class.pagination my-pagination@a`）。
+
+修法：`class.` 的名称按空白切成多个类，选择器拼成 `.a.b.c`（`_classSelector`）。单类行为不变。
+
+### G14（关闭）：`java.getStringList` 求**值**，`list.size` 两种写法都要成立
+
+同一份导出里两条正文脚本各踩一脚：
+
+1. **`java.getStringList("@css:.ArticleImageBox img@src")`**（美女图片网）——上游
+   `AnalyzeRule.getStringList` 会跑完整条规则**包括提取段**，回 `List<String>`；本仓把它和
+   `parse.getElements` 混成一条通道（都答元素文档），末尾的 `@src` 被当成选择器 → 空数组 →
+   正文空。ADR-0037 §决策 3 的原始口径就把这两件事写成了一件。
+   现在 `java.getStringList` 走独立语义（`JsParseRequest.wantsValues`）：抽取值、串化
+   （`7` → `"7"`，与上游 `List<String>` 一致）；`parse.getElements` 仍答元素文档（类型保真，
+   那是它自己的契约）。字面量内联与宿主求值器两条路径同口径。
+2. **`list.size()`**（同一条源的另一段脚本）——上一轮给 `Array.prototype` 加了 `size` **属性**，
+   而这里写的是 `list.size()`；同一份导出里另一处又写 `list.size` 参与比较。JS 里一个值不能既
+   是数字又是函数，因此 `size` 取回来的是**可调用对象**：调用 → 长度，参与算术/比较 →
+   `valueOf()` → 长度。只有严格相等（`list.size === 3`）不成立，语料里没有这种写法。
+
+### 仍未做：G6（同步 `java.post(...).body()`）
+
+`📷🔞小姐姐写真` 的正文只有这一条路：`java.post(".../admin-ajax.php", body, {}).body()`。沙箱是
+独立 isolate，阻塞不了宿主，所以同步响应对象在本仓不可能直接实现。要么登记（现状），要么做
+**确定性重放**：脚本遇到同步网络调用时抛一个带调用描述的哨兵 → 宿主执行该调用 → 用记忆表重跑
+脚本，直到没有待办调用。后者能覆盖整族 `java.post/get/head/ajax/connect`，但会改变 job 的执行
+语义（脚本被跑多次；`java.put`、`log` 会重复），需要单独一轮设计与验收，不在本次补丁里。

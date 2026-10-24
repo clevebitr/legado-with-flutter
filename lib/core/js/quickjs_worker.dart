@@ -663,8 +663,10 @@ globalThis.java = (function () {
       }
       return __parse('getString', rule, null);
     },
+    // 上游 `java.getStringList` 求的是**值**（含提取段），不是元素：`@css:.box img@src`
+    // 要回 URL 列表。元素形态是 `parse.getElements` 的事（ADR-0037 §决策 3）。
     getStringList: function (rule) {
-      return __parse('getElements', rule, null);
+      return __parse('getStringList', rule, null);
     },
     getElement: function (rule) {
       // 单值形态：异步路径也只答第一个（与快路径内联的第一个匹配同形）——否则同一个调用在
@@ -755,12 +757,25 @@ if (Array.prototype.toArray === undefined) {
   });
 }
 
-// 上游返回的是 Java `List`，真实语料写 `list.size`（美女图片网的正文 JS 用它遍历
-// `java.getStringList(...)` 的结果）。本仓给的是 JS Array，没有 `size` —— 不加这条垫片，
-// 那个循环会一次都不跑，正文静默变成空串。只加属性，不加 `size()` 方法（属性与方法同名）。
+// 上游返回的是 Java `List`，真实语料两种写法都有：`list.size`（属性，美女图片网）与
+// `list.size()`（方法，同一份导出里的另一条正文脚本）。JS 里一个值不能既是数字又是函数，
+// 所以 `size` 取回来的是一个**可调用对象**：
+//   * `list.size()` → 调用它，闭包记住的数组长度；
+//   * `list.size` 参与算术/比较 → `valueOf()` 给出长度（`i < list.size` 成立）。
+// 只有严格相等（`list.size === 3`）会失败，语料里没有这种写法（ADR-0069 G14）。
 if (Object.getOwnPropertyDescriptor(Array.prototype, 'size') === undefined) {
   Object.defineProperty(Array.prototype, 'size', {
-    get: function () { return this.length; },
+    get: function () {
+      var array = this;
+      var accessor = function () { return array.length; };
+      Object.defineProperty(accessor, 'valueOf', {
+        value: function () { return array.length; }
+      });
+      Object.defineProperty(accessor, 'toString', {
+        value: function () { return String(array.length); }
+      });
+      return accessor;
+    },
     enumerable: false,
     configurable: true
   });

@@ -73,13 +73,26 @@ final class JsBookInfo {
 /// answers the script.
 final class JsParseRequest {
   /// Creates a parse request.
-  const JsParseRequest({required this.rule, required this.wantsList, this.doc});
+  const JsParseRequest({
+    required this.rule,
+    required this.wantsList,
+    this.wantsValues = false,
+    this.doc,
+  });
 
   /// The nested rule the script asked to evaluate.
   final String rule;
 
-  /// Whether the call came from `parse.getElements` rather than `parse.getString`.
+  /// Whether the call answers several matches rather than one.
   final bool wantsList;
+
+  /// Whether a list call answers **extracted values** (`java.getStringList`) instead of element
+  /// documents (`parse.getElements`).
+  ///
+  /// Upstream's `java.getStringList(rule)` runs the whole rule including its extraction segment
+  /// (`@css:.box img@src` answers URLs), while this repository's own `parse.getElements` answers the
+  /// matched elements (ADR-0037 §决策 3). Both exist, so the request has to say which one it is.
+  final bool wantsValues;
 
   /// The `doc` argument the rule passed, or `null` when it passed none.
   final String? doc;
