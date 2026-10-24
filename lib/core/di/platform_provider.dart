@@ -7,6 +7,7 @@ import 'package:flutter_reader/core/platform/file_selector_book_source_file_save
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
+import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'platform_provider.g.dart';
@@ -64,3 +65,12 @@ LongRunningTask longRunningTask(Ref ref) =>
 @Riverpod(keepAlive: true)
 SourceVerification sourceVerification(Ref ref) =>
     UnboundSourceVerification(logger: ref.watch(appLoggerProvider));
+
+/// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
+///
+/// It lives in `core/di/` because two features use it (the source engine's page fetch and the JS
+/// sandbox) and `core/` may not import `features/` (C-ARCH-2). The real implementation is bound by
+/// the composition root; the default answers `unsupportedRule`, which makes a forgotten binding a
+/// readable failure instead of a rule that silently sees an unrendered page.
+@Riverpod(keepAlive: true)
+WebPageFetcher webPageFetcher(Ref ref) => const UnsupportedWebPageFetcher();

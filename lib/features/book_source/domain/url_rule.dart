@@ -21,6 +21,12 @@ final class UrlRuleOptions {
     this.body,
     this.charset,
     this.headers = const <String, String>{},
+    this.webView = false,
+    this.webViewDelayTime,
+    this.webJs,
+    this.overrideUrlRegex,
+    this.retry,
+    this.readTimeout,
     this.unsupported = const <String>[],
   });
 
@@ -38,7 +44,28 @@ final class UrlRuleOptions {
   /// Headers the option adds to this request on top of the source's own `header`.
   final Map<String, String> headers;
 
-  /// Option fields this repository cannot honour, e.g. `webJs` / `retry`.
+  /// Whether the request has to be rendered in a WebView (`webView: true`).
+  final bool webView;
+
+  /// How long the WebView waits after `onLoadStop` before the HTML is read (`webViewDelayTime`).
+  ///
+  /// Sources such as `ting55` fill the page from a script that runs *after* the load event, so a
+  /// fixed short settle window is not enough (ADR-0068 §决策 6).
+  final Duration? webViewDelayTime;
+
+  /// A script evaluated **inside** the rendered page; its result is the page body (`webJs`).
+  final String? webJs;
+
+  /// A regex whose match stops the WebView load and becomes the result URL (`overrideUrlRegex`).
+  final String? overrideUrlRegex;
+
+  /// The retry bound this rule asks for (`retry`), capped by the caller at 3 (C-NET-2).
+  final int? retry;
+
+  /// Per-request response timeout in milliseconds (`readTimeout`), capped at 120 s.
+  final Duration? readTimeout;
+
+  /// Option fields this repository cannot honour, e.g. `origin` / `dnsIp`.
   final List<String> unsupported;
 }
 
@@ -146,15 +173,34 @@ UrlRuleOptions _optionsOf(_OptionNode node) {
     }
   }
 
+  final bool webView = _flagOf(members['webView']);
+  final String? webJs = _stringOf(members['webJs']);
+  final String? overrideUrlRegex = _stringOf(members['overrideUrlRegex']);
+  final Duration? webViewDelayTime = _durationOf(
+    members['webViewDelayTime'],
+    max: const Duration(seconds: 30),
+  );
+  final int? retry = _intOf(members['retry'], max: 3);
+  final Duration? readTimeout = _durationOf(
+    members['readTimeout'],
+    max: const Duration(seconds: 120),
+  );
+
   for (final MapEntry<String, _OptionNode> entry in members.entries) {
     const Set<String> modelled = <String>{
       'method',
       'body',
       'charset',
       'headers',
+      'webView',
+      'webJs',
+      'overrideUrlRegex',
+      'webViewDelayTime',
+      'retry',
+      'readTimeout',
     };
     if (!modelled.contains(entry.key) && entry.value.raw.trim().isNotEmpty) {
-      // `webView` / `webJs` / `retry` / `origin` / `type` / `js`：本仓没有对应实现。
+      // `origin` / `type` / `js` / `dnsIp` / `proxy` / `callTimeout`：本仓没有对应实现。
       unsupported.add(entry.key);
     }
   }
@@ -168,8 +214,53 @@ UrlRuleOptions _optionsOf(_OptionNode node) {
     body: method == UrlRequestMethod.post ? _bodyTextOf(members['body']) : null,
     charset: charset == null || charset.isEmpty ? null : charset,
     headers: headers,
+    webView: webView,
+    webViewDelayTime: webViewDelayTime,
+    webJs: webJs,
+    overrideUrlRegex: overrideUrlRegex,
+    retry: retry,
+    readTimeout: readTimeout,
     unsupported: unsupported,
   );
+}
+
+/// Reads a boolean-ish option (`true` / `"true"` / `1`).
+bool _flagOf(_OptionNode? node) {
+  final String text = (node?.text ?? '').trim().toLowerCase();
+
+  return text == 'true' || text == '1';
+}
+
+/// Reads a non-empty string option, or `null`.
+String? _stringOf(_OptionNode? node) {
+  final String? text = node?.text;
+  if (text == null) {
+    return null;
+  }
+  final String trimmed = text.trim();
+
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+/// Reads a millisecond option and caps it with [max].
+Duration? _durationOf(_OptionNode? node, {required Duration max}) {
+  final int? value = _intOf(node);
+  if (value == null || value <= 0) {
+    return null;
+  }
+  final Duration duration = Duration(milliseconds: value);
+
+  return duration > max ? max : duration;
+}
+
+/// Reads a non-negative integer option no greater than [max].
+int? _intOf(_OptionNode? node, {int? max}) {
+  final int? value = int.tryParse((node?.text ?? '').trim());
+  if (value == null || value < 0) {
+    return null;
+  }
+
+  return max != null && value > max ? max : value;
 }
 
 /// The body a POST sends: a quoted string as written, a JSON object as its source text.

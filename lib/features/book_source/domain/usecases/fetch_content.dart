@@ -5,6 +5,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:html/parser.dart' as html_parser;
 
 /// Reads the body of one chapter (`docs/dev/roadmap.md` 2.4, `ruleContent`).
 ///
@@ -43,6 +44,14 @@ final class FetchContent {
     _pages.applySourceRate(source);
     // `header` 写成规则时要在**第一个请求之前**求值（book-source.md §2、M12-A2）。
     final Map<String, String>? headers = await _pages.headersOf(source);
+
+    // `ruleContent.webJs`（M21a，ADR-0068 §决策 7）：正文页必须由 WebView 渲染后才能在页面里
+    // 执行脚本。这条路径不跟 `nextContentUrl` 翻页——脚本产出的是整段正文，再翻页没有语义。
+    final String? webJs = source.contentRule.webJs;
+    if (webJs != null && webJs.trim().isNotEmpty) {
+      return _readRendered(source, request, webJs, headers);
+    }
+
     final ParseResult<PageWalk> walk = await _pages.walk(
       rule: url,
       rulePath: 'ruleContent',
@@ -80,6 +89,92 @@ final class FetchContent {
         data,
       ),
     };
+  }
+
+  /// Reads a chapter whose page must be rendered before its script can run (`webJs`).
+  ///
+  /// The rendered body becomes the scope of `ruleContent.content`, and the result goes through the
+  /// same `replaceRegex` + cache as a plain read, so the rest of the pipeline cannot tell the two
+  /// paths apart.
+  Future<ParseResult<String>> _readRendered(
+    BookSource source,
+    ChapterRequest request,
+    String webJs,
+    Map<String, String>? headers,
+  ) async {
+    final ParseResult<String> rendered = await _pages.fetchRendered(
+      request.url,
+      rulePath: 'contentRule.webJs',
+      script: webJs,
+      headers: headers,
+      sourceId: source.url,
+      source: source.jsSourceInfo,
+      bookName: request.bookName,
+      chapterTitle: request.title,
+    );
+    final String html;
+    switch (rendered) {
+      case ParseFailure<String>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        return failureAt<String>(kind: kind, rulePath: failedAt);
+      case ParseSuccess<String>(:final String data):
+        html = data;
+    }
+
+    final ParseResult<String> body = await _pages.content(
+      source.contentRule.content,
+      RuleScope.dom(
+        html_parser.parse(html),
+        body: html,
+        jsContext: JsPageContext(
+          baseUrl: request.url,
+          source: source.jsSourceInfo,
+          headers: headers,
+          bookName: request.bookName,
+          chapterTitle: request.title,
+          book: JsBookInfo(
+            name: request.bookName,
+            author: request.author,
+            bookUrl: request.bookUrl,
+            tocUrl: request.tocUrl,
+            intro: request.intro,
+            kind: request.kind,
+          ),
+        ),
+      ),
+      'contentRule.content',
+    );
+    final String text;
+    switch (body) {
+      case ParseFailure<String>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        return failureAt<String>(kind: kind, rulePath: failedAt);
+      case ParseSuccess<String>(:final String data):
+        text = data;
+    }
+
+    final String content = await _pages.replaceContent(
+      source.contentRule.replaceRegex,
+      text,
+      'contentRule.replaceRegex',
+      sourceId: source.url,
+      jsContext: JsPageContext(
+        baseUrl: request.url,
+        source: source.jsSourceInfo,
+      ),
+    );
+    await _cache.write(
+      sourceId: source.url,
+      url: request.url,
+      body: content,
+      bookUrl: request.bookUrl,
+    );
+
+    return ParseSuccess<String>(content);
   }
 
   /// Reads every walked page and joins the pieces into one body.

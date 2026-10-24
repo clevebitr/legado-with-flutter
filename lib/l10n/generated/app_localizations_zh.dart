@@ -1335,4 +1335,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sourceCaptchaConfirm => '确定';
+
+  @override
+  String get failureLoginRequired => '该书源需要登录或重新完成人机验证，请先在书源管理里打开验证。';
 }

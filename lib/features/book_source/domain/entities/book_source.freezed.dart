@@ -1672,7 +1672,11 @@ as Map<String, Object?>,
 /// @nodoc
 mixin _$ContentRule {
 
- String? get content; String? get nextContentUrl; String? get replaceRegex;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
+ String? get content; String? get nextContentUrl; String? get replaceRegex;/// A regex that cuts the wanted payload out of the **raw** page before the rules run
+/// (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 7).
+ String? get sourceRegex;/// A script evaluated **inside a WebView** after the page loaded; its result is the body
+/// (`webJs`, ADR-0068 §决策 6/7).
+ String? get webJs;@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra;
 /// Create a copy of ContentRule
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1686,20 +1690,20 @@ $ContentRuleCopyWith<ContentRule> get copyWith => _$ContentRuleCopyWithImpl<Cont
 @override
 bool operator ==(Object other) {
   final _this = this as ContentRule;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ContentRule&&(identical(other.content, _this.content) || other.content == _this.content)&&(identical(other.nextContentUrl, _this.nextContentUrl) || other.nextContentUrl == _this.nextContentUrl)&&(identical(other.replaceRegex, _this.replaceRegex) || other.replaceRegex == _this.replaceRegex)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ContentRule&&(identical(other.content, _this.content) || other.content == _this.content)&&(identical(other.nextContentUrl, _this.nextContentUrl) || other.nextContentUrl == _this.nextContentUrl)&&(identical(other.replaceRegex, _this.replaceRegex) || other.replaceRegex == _this.replaceRegex)&&(identical(other.sourceRegex, _this.sourceRegex) || other.sourceRegex == _this.sourceRegex)&&(identical(other.webJs, _this.webJs) || other.webJs == _this.webJs)&&const DeepCollectionEquality().equals(other.extra, _this.extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
   final _this = this as ContentRule;
-  return Object.hash(runtimeType,_this.content,_this.nextContentUrl,_this.replaceRegex,const DeepCollectionEquality().hash(_this.extra));
+  return Object.hash(runtimeType,_this.content,_this.nextContentUrl,_this.replaceRegex,_this.sourceRegex,_this.webJs,const DeepCollectionEquality().hash(_this.extra));
 }
 
 @override
 String toString() {
   final _this = this as ContentRule;
-  return 'ContentRule(content: ${_this.content}, nextContentUrl: ${_this.nextContentUrl}, replaceRegex: ${_this.replaceRegex}, extra: ${_this.extra})';
+  return 'ContentRule(content: ${_this.content}, nextContentUrl: ${_this.nextContentUrl}, replaceRegex: ${_this.replaceRegex}, sourceRegex: ${_this.sourceRegex}, webJs: ${_this.webJs}, extra: ${_this.extra})';
 }
 
 
@@ -1710,7 +1714,7 @@ abstract mixin class $ContentRuleCopyWith<$Res>  {
   factory $ContentRuleCopyWith(ContentRule value, $Res Function(ContentRule) _then) = _$ContentRuleCopyWithImpl;
 @useResult
 $Res call({
- String? content, String? nextContentUrl, String? replaceRegex,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? content, String? nextContentUrl, String? replaceRegex, String? sourceRegex, String? webJs,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -1727,11 +1731,13 @@ class _$ContentRuleCopyWithImpl<$Res>
 
 /// Create a copy of ContentRule
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? content = freezed,Object? nextContentUrl = freezed,Object? replaceRegex = freezed,Object? extra = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? content = freezed,Object? nextContentUrl = freezed,Object? replaceRegex = freezed,Object? sourceRegex = freezed,Object? webJs = freezed,Object? extra = null,}) {
   return _then(ContentRule(
 content: freezed == content ? _self.content : content // ignore: cast_nullable_to_non_nullable
 as String?,nextContentUrl: freezed == nextContentUrl ? _self.nextContentUrl : nextContentUrl // ignore: cast_nullable_to_non_nullable
 as String?,replaceRegex: freezed == replaceRegex ? _self.replaceRegex : replaceRegex // ignore: cast_nullable_to_non_nullable
+as String?,sourceRegex: freezed == sourceRegex ? _self.sourceRegex : sourceRegex // ignore: cast_nullable_to_non_nullable
+as String?,webJs: freezed == webJs ? _self.webJs : webJs // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self.extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));
@@ -1818,10 +1824,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? content,  String? nextContentUrl,  String? replaceRegex, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? content,  String? nextContentUrl,  String? replaceRegex,  String? sourceRegex,  String? webJs, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ContentRule() when $default != null:
-return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.extra);case _:
+return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.sourceRegex,_that.webJs,_that.extra);case _:
   return orElse();
 
 }
@@ -1839,10 +1845,10 @@ return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.extr
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? content,  String? nextContentUrl,  String? replaceRegex, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? content,  String? nextContentUrl,  String? replaceRegex,  String? sourceRegex,  String? webJs, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)  $default,) {final _that = this;
 switch (_that) {
 case _ContentRule():
-return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.extra);case _:
+return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.sourceRegex,_that.webJs,_that.extra);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1859,10 +1865,10 @@ return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.extr
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? content,  String? nextContentUrl,  String? replaceRegex, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? content,  String? nextContentUrl,  String? replaceRegex,  String? sourceRegex,  String? webJs, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra)?  $default,) {final _that = this;
 switch (_that) {
 case _ContentRule() when $default != null:
-return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.extra);case _:
+return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.sourceRegex,_that.webJs,_that.extra);case _:
   return null;
 
 }
@@ -1874,12 +1880,18 @@ return $default(_that.content,_that.nextContentUrl,_that.replaceRegex,_that.extr
 @JsonSerializable()
 
 class _ContentRule implements ContentRule {
-  const _ContentRule({this.content, this.nextContentUrl, this.replaceRegex, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
+  const _ContentRule({this.content, this.nextContentUrl, this.replaceRegex, this.sourceRegex, this.webJs, @JsonKey(includeFromJson: false, includeToJson: false)  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
   factory _ContentRule.fromJson(Map<String, dynamic> json) => _$ContentRuleFromJson(json);
 
 @override final  String? content;
 @override final  String? nextContentUrl;
 @override final  String? replaceRegex;
+/// A regex that cuts the wanted payload out of the **raw** page before the rules run
+/// (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 7).
+@override final  String? sourceRegex;
+/// A script evaluated **inside a WebView** after the page loaded; its result is the body
+/// (`webJs`, ADR-0068 §决策 6/7).
+@override final  String? webJs;
  final  Map<String, Object?> _extra;
 @override@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> get extra {
   if (_extra is EqualUnmodifiableMapView) return _extra;
@@ -1901,18 +1913,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ContentRule&&(identical(other.content, content) || other.content == content)&&(identical(other.nextContentUrl, nextContentUrl) || other.nextContentUrl == nextContentUrl)&&(identical(other.replaceRegex, replaceRegex) || other.replaceRegex == replaceRegex)&&const DeepCollectionEquality().equals(other.extra, _extra));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ContentRule&&(identical(other.content, content) || other.content == content)&&(identical(other.nextContentUrl, nextContentUrl) || other.nextContentUrl == nextContentUrl)&&(identical(other.replaceRegex, replaceRegex) || other.replaceRegex == replaceRegex)&&(identical(other.sourceRegex, sourceRegex) || other.sourceRegex == sourceRegex)&&(identical(other.webJs, webJs) || other.webJs == webJs)&&const DeepCollectionEquality().equals(other.extra, _extra));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
 int get hashCode {
-    return Object.hash(runtimeType,content,nextContentUrl,replaceRegex,const DeepCollectionEquality().hash(_extra));
+    return Object.hash(runtimeType,content,nextContentUrl,replaceRegex,sourceRegex,webJs,const DeepCollectionEquality().hash(_extra));
 }
 
 @override
 String toString() {
-    return 'ContentRule(content: $content, nextContentUrl: $nextContentUrl, replaceRegex: $replaceRegex, extra: $extra)';
+    return 'ContentRule(content: $content, nextContentUrl: $nextContentUrl, replaceRegex: $replaceRegex, sourceRegex: $sourceRegex, webJs: $webJs, extra: $extra)';
 }
 
 
@@ -1923,7 +1935,7 @@ abstract mixin class _$ContentRuleCopyWith<$Res> implements $ContentRuleCopyWith
   factory _$ContentRuleCopyWith(_ContentRule value, $Res Function(_ContentRule) _then) = __$ContentRuleCopyWithImpl;
 @override @useResult
 $Res call({
- String? content, String? nextContentUrl, String? replaceRegex,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
+ String? content, String? nextContentUrl, String? replaceRegex, String? sourceRegex, String? webJs,@JsonKey(includeFromJson: false, includeToJson: false) Map<String, Object?> extra
 });
 
 
@@ -1940,11 +1952,13 @@ class __$ContentRuleCopyWithImpl<$Res>
 
 /// Create a copy of ContentRule
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? content = freezed,Object? nextContentUrl = freezed,Object? replaceRegex = freezed,Object? extra = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? content = freezed,Object? nextContentUrl = freezed,Object? replaceRegex = freezed,Object? sourceRegex = freezed,Object? webJs = freezed,Object? extra = null,}) {
   return _then(_ContentRule(
 content: freezed == content ? _self.content : content // ignore: cast_nullable_to_non_nullable
 as String?,nextContentUrl: freezed == nextContentUrl ? _self.nextContentUrl : nextContentUrl // ignore: cast_nullable_to_non_nullable
 as String?,replaceRegex: freezed == replaceRegex ? _self.replaceRegex : replaceRegex // ignore: cast_nullable_to_non_nullable
+as String?,sourceRegex: freezed == sourceRegex ? _self.sourceRegex : sourceRegex // ignore: cast_nullable_to_non_nullable
+as String?,webJs: freezed == webJs ? _self.webJs : webJs // ignore: cast_nullable_to_non_nullable
 as String?,extra: null == extra ? _self._extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));

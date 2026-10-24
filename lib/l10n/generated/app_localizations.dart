@@ -2543,6 +2543,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm'**
   String get sourceCaptchaConfirm;
+
+  /// No description provided for @failureLoginRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This source needs a sign-in or a fresh human check; open the source and finish it first.'**
+  String get failureLoginRequired;
 }
 
 class _AppLocalizationsDelegate

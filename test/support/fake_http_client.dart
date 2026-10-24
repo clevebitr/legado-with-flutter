@@ -46,6 +46,12 @@ final class FakeHttpClient implements HttpClient {
   /// The request body of every request, in order (`null` for a GET).
   final List<String?> requestedBodies = <String?>[];
 
+  /// The `maxRetries` a URL rule asked for, in order (`null` = policy default).
+  final List<int?> requestedMaxRetries = <int?>[];
+
+  /// The `receiveTimeout` a URL rule asked for, in order.
+  final List<Duration?> requestedReceiveTimeouts = <Duration?>[];
+
   /// The `charset` a URL rule declared for every request, in order
   /// (`book-source.md` §4.3): `url,{“charset”:“gbk”}` has to reach the decoder.
   final List<String?> requestedCharsets = <String?>[];
@@ -104,6 +110,8 @@ final class FakeHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) => _serve(
     method: 'GET',
     url: url,
@@ -112,6 +120,8 @@ final class FakeHttpClient implements HttpClient {
     sourceId: sourceId,
     maxBytes: maxBytes,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
   );
 
   /// Answers the **bytes** of the served body.
@@ -157,6 +167,8 @@ final class FakeHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) => _serve(
     method: 'POST',
     url: url,
@@ -165,6 +177,8 @@ final class FakeHttpClient implements HttpClient {
     headers: headers,
     sourceId: sourceId,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
   );
 
   /// Records one request and answers from the registered bodies / failures.
@@ -177,7 +191,11 @@ final class FakeHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) async {
+    requestedMaxRetries.add(maxRetries);
+    requestedReceiveTimeouts.add(receiveTimeout);
     requestedUrls.add(url);
     requestedRulePaths.add(rulePath);
     requestedHeaders.add(headers);

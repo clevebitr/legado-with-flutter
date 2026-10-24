@@ -54,6 +54,7 @@ String resolveFailureMessage(AppLocalizations l10n, ParseFailureKind kind) =>
       ParseFailureKind.parseFailed => l10n.failureParseFailed,
       ParseFailureKind.unsupportedRule => l10n.failureUnsupportedRule,
       ParseFailureKind.invalidBookSource => l10n.failureInvalidBookSource,
+      ParseFailureKind.loginRequired => l10n.failureLoginRequired,
       // 取消是静默的，没有对应文案。
       ParseFailureKind.cancelled => '',
     };

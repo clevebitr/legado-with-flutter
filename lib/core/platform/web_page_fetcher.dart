@@ -29,12 +29,22 @@ abstract interface class WebPageFetcher {
   /// Loads [url] and returns the rendered page.
   ///
   /// [body] is the rule's rendered payload and is ignored for [WebPageRequestMethod.get].
+  /// [javaScript] is `webJs` / `java.webView(url, js)`: a script evaluated **inside** the rendered
+  /// page whose string result becomes the body (ADR-0068 §决策 6). `null` returns the DOM.
+  ///
+  /// [delayTime] makes the port wait longer than its settle window before reading the page
+  /// (`webViewDelayTime`), for sites that fill the page after the load event. [overrideUrlRegex]
+  /// stops the load at the first navigation whose URL matches and answers that page
+  /// (`overrideUrlRegex`), which is how a source that redirects to a result page is read.
   Future<ParseResult<FetchedWebPage>> fetch({
     required String url,
     Map<String, String>? headers,
     required String rulePath,
     WebPageRequestMethod method = WebPageRequestMethod.get,
     String? body,
+    String? javaScript,
+    Duration? delayTime,
+    String? overrideUrlRegex,
   });
 }
 
@@ -53,6 +63,9 @@ final class UnsupportedWebPageFetcher implements WebPageFetcher {
     required String rulePath,
     WebPageRequestMethod method = WebPageRequestMethod.get,
     String? body,
+    String? javaScript,
+    Duration? delayTime,
+    String? overrideUrlRegex,
   }) async => const ParseFailure<FetchedWebPage>(
     kind: ParseFailureKind.unsupportedRule,
     rulePath: 'webView',

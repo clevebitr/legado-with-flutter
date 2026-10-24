@@ -1,3 +1,7 @@
+// 私有字段不能做具名初始化形参（Dart 限制），两个可选端口只能手写赋值；
+// prefer_initializing_formals 在这里是误报。
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:isolate';
@@ -10,6 +14,8 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/redaction.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/platform/source_verification.dart';
+import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 
 /// Single-evaluation wall-clock budget.
 const Duration defaultJsTimeout = Duration(seconds: 5);
@@ -54,11 +60,14 @@ final class QuickJsWorkerBridge implements JsBridge {
     required this._launch,
     required this._http,
     required this._variables,
+    SourceVerification? verification,
+    WebPageFetcher? webPages,
     this._timeout = defaultJsTimeout,
     this._killGrace = defaultJsKillGrace,
     this._memoryLimit = defaultJsMemoryLimitBytes,
     this._maxBindingCalls = defaultJsMaxBindingCalls,
-  });
+  }) : _verification = verification,
+       _webPages = webPages;
 
   final AppLogger _logger;
   final JsWorkerLauncher _launch;
@@ -68,6 +77,8 @@ final class QuickJsWorkerBridge implements JsBridge {
   final Duration _killGrace;
   final int _memoryLimit;
   final int _maxBindingCalls;
+  final SourceVerification? _verification;
+  final WebPageFetcher? _webPages;
 
   final Queue<_PendingJob> _pending = Queue<_PendingJob>();
   _WorkerSession? _session;
@@ -165,6 +176,8 @@ final class QuickJsWorkerBridge implements JsBridge {
       timeout: _timeout,
       killGrace: _killGrace,
       maxBindingCalls: _maxBindingCalls,
+      verification: _verification,
+      webPages: _webPages,
     );
     _session = created;
 
@@ -194,6 +207,8 @@ final class _WorkerSession {
     required this._timeout,
     required this._killGrace,
     required this._maxBindingCalls,
+    required this._verification,
+    required this._webPages,
   }) {
     _subscription = _handle.messages.listen(
       _onMessage,
@@ -209,6 +224,14 @@ final class _WorkerSession {
   final Duration _timeout;
   final Duration _killGrace;
   final int _maxBindingCalls;
+  final SourceVerification? _verification;
+  final WebPageFetcher? _webPages;
+
+  /// Milliseconds the job's wall clock spent waiting for a human.
+  ///
+  /// The budget protects the CPU, not the user: without subtracting this, a two-minute challenge
+  /// would look like a runaway script (ADR-0068 §决策 5).
+  int _humanWaitMs = 0;
 
   late final StreamSubscription<Map<String, Object?>> _subscription;
   final Completer<void> _closed = Completer<void>();
@@ -233,6 +256,7 @@ final class _WorkerSession {
     _inFlight = completer;
     _inFlightJob = job;
     _bindingCalls = 0;
+    _humanWaitMs = 0;
     _handle.send(<String, Object?>{'type': 'evaluate', 'job': job.toJson()});
     _budget = Timer(_timeout + _killGrace, _onBudgetExpired);
 
@@ -312,7 +336,9 @@ final class _WorkerSession {
     // 中断和脚本异常都表现为 isError，用耗时区分：跑满预算才算超时。
     final int elapsedMs = _intField(message, 'elapsedMs') ?? 0;
     final Object? error = message['error'];
-    if (elapsedMs >= _timeout.inMilliseconds) {
+    // 等用户的时间不计入超时判定：跑满预算才叫超时（ADR-0068 §决策 5）。
+    final int activeMs = elapsedMs - _humanWaitMs;
+    if (activeMs >= _timeout.inMilliseconds) {
       _completeInFlight(
         failureAt<Object?>(
           kind: ParseFailureKind.parseFailed,
@@ -382,7 +408,8 @@ final class _WorkerSession {
 
       return;
     }
-    if (_countCall()) {
+    // 验证调用等的是人：不占每规则的调用额度，也不受硬预算限制（ADR-0068 §决策 5）。
+    if (call.binding != jsVerifyBinding && _countCall()) {
       _failJobFatally(
         kind: ParseFailureKind.parseFailed,
         rulePath: '$_field:$_jsQuotaMarker',
@@ -398,6 +425,8 @@ final class _WorkerSession {
         unawaited(_serveHttp(call));
       case jsParseBinding:
         unawaited(_serveParse(call));
+      case jsVerifyBinding:
+        unawaited(_serveVerify(call));
       default:
         // 白名单外的频道显式拒绝，不静默返回 undefined。
         _reply(
@@ -405,6 +434,161 @@ final class _WorkerSession {
         );
     }
   }
+
+  // 验证族（ADR-0068 §决策 5）：这些调用等的是人，因此等的时候**不打表**。
+  //
+  // 上游的 Rhino 可以同步阻塞线程；本仓的沙箱不能让 QuickJS 停下来等宿主，所以这三个名字返回
+  // Promise（规则里要 `await`，差异登记在 `book-source.md` §6）。等待期间：
+  // * 每规则的调用额度不扣（它数的是 CPU 侧的往返）；
+  // * 硬预算暂停，完成后重新计时（预算保护的是 CPU，不是人的耐心）；
+  // * 等掉的时间从 `elapsedMs` 里减掉，否则 3 分钟的验证会被判成 `js:timeout`。
+  Future<void> _serveVerify(JsHostCall call) async {
+    final JsVerifyRequest? request = decodeJsVerifyRequest(call.args);
+    if (request == null) {
+      _reply(JsHostReply.rejected(call.callId, 'malformed verification call'));
+
+      return;
+    }
+    final JsJob? job = _inFlightJob;
+    if (job == null) {
+      _reply(JsHostReply.rejected(call.callId, 'no job is running'));
+
+      return;
+    }
+    final String sourceUrl = job.source.url;
+    final String sourceName = job.source.name;
+    final String url = request.url;
+    final Map<String, String>? headers = _headersOrNull(job.sourceHeaders);
+
+    // `startBrowser` 上游返回 void：先答复再慢慢开页面，规则不会被它挡住。
+    final SourceVerification? verification = _verification;
+    if (request.operation == JsVerifyOperation.startBrowser) {
+      _reply(JsHostReply.success(call.callId, ''));
+      if (verification != null && verification.isSupported) {
+        unawaited(
+          verification.verify(
+            SourceVerificationRequest(
+              sourceUrl: sourceUrl,
+              sourceName: sourceName,
+              url: url,
+              title: request.title ?? sourceName,
+              headers: headers,
+              html: request.html,
+            ),
+          ),
+        );
+      }
+
+      return;
+    }
+
+    final DateTime startedAt = DateTime.now();
+    _budget?.cancel();
+    ParseResult<Object?>? reply;
+    if (request.operation == JsVerifyOperation.webView) {
+      final WebPageFetcher? fetcher = _webPages;
+      if (fetcher == null || !fetcher.isSupported) {
+        reply = const ParseFailure<Object?>(
+          kind: ParseFailureKind.unsupportedRule,
+          rulePath: 'java.webView',
+        );
+      } else {
+        final ParseResult<FetchedWebPage> page = await fetcher.fetch(
+          url: url,
+          headers: headers,
+          rulePath: '$_field:webView',
+          javaScript: request.script,
+        );
+        reply = switch (page) {
+          ParseSuccess<FetchedWebPage>(:final FetchedWebPage data) =>
+            ParseSuccess<Object?>(data.body),
+          ParseFailure<FetchedWebPage>(
+            :final ParseFailureKind kind,
+            :final String rulePath,
+          ) =>
+            ParseFailure<Object?>(kind: kind, rulePath: rulePath),
+        };
+      }
+    } else if (verification == null || !verification.isSupported) {
+      reply = ParseFailure<Object?>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'java.${request.operation.name}',
+      );
+    } else if (request.operation == JsVerifyOperation.imageCode) {
+      final ParseResult<String> code = await verification.imageCode(
+        sourceUrl: sourceUrl,
+        sourceName: sourceName,
+        imageUrl: url,
+        title: request.title ?? sourceName,
+      );
+      reply = switch (code) {
+        ParseSuccess<String>(:final String data) => ParseSuccess<Object?>(data),
+        ParseFailure<String>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ) =>
+          ParseFailure<Object?>(kind: kind, rulePath: rulePath),
+      };
+    } else {
+      final ParseResult<SourceVerificationOutcome> outcome = await verification
+          .verify(
+            SourceVerificationRequest(
+              sourceUrl: sourceUrl,
+              sourceName: sourceName,
+              url: url,
+              title: request.title ?? sourceName,
+              headers: headers,
+              html: request.html,
+              refetchAfterSuccess: request.refetchAfterSuccess,
+            ),
+          );
+      reply = switch (outcome) {
+        ParseSuccess<SourceVerificationOutcome>(
+          :final SourceVerificationOutcome data,
+        ) =>
+          ParseSuccess<Object?>(<String, Object?>{
+            'url': data.url,
+            'body': data.body,
+          }),
+        ParseFailure<SourceVerificationOutcome>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ) =>
+          ParseFailure<Object?>(kind: kind, rulePath: rulePath),
+      };
+    }
+    _humanWaitMs += DateTime.now().difference(startedAt).inMilliseconds;
+    if (_inFlight != null) {
+      // 等完之后重新给满预算：脚本接下来还有它自己的那一份执行时间。
+      _budget = Timer(_timeout + _killGrace, _onBudgetExpired);
+    }
+    if (_inFlightJob != job || _fatalFailure != null) {
+      _reply(JsHostReply.rejected(call.callId, 'the job already failed'));
+
+      return;
+    }
+
+    switch (reply) {
+      case ParseSuccess<Object?>(:final Object? data):
+        _reply(JsHostReply.success(call.callId, data));
+      case ParseFailure<Object?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        // 验证失败（用户取消 / 要登录 / 平台不支持）是**整个 job 的答案**：脚本吞掉它只会得到
+        // 一个没有正文的页面，而 UI 需要看到 cancelled / loginRequired（ADR-0068 §决策 10）。
+        _failJobFatally(
+          kind: kind,
+          rulePath: rulePath,
+          message: 'verification failed: ${kind.name}',
+          callId: call.callId,
+        );
+    }
+  }
+
+  /// An empty header map and “no headers” are the same thing for a request.
+  static Map<String, String>? _headersOrNull(Map<String, String>? headers) =>
+      headers == null || headers.isEmpty ? null : headers;
 
   // 传输失败只拒绝脚本的 Promise（规则可换镜像重试），不直接判 job 失败。
   Future<void> _serveHttp(JsHostCall call) async {

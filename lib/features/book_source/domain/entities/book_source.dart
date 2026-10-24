@@ -242,6 +242,14 @@ abstract class ContentRule with _$ContentRule {
     String? content,
     String? nextContentUrl,
     String? replaceRegex,
+
+    /// A regex that cuts the wanted payload out of the **raw** page before the rules run
+    /// (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 7).
+    String? sourceRegex,
+
+    /// A script evaluated **inside a WebView** after the page loaded; its result is the body
+    /// (`webJs`, ADR-0068 §决策 6/7).
+    String? webJs,
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<String, Object?>{})
     Map<String, Object?> extra,

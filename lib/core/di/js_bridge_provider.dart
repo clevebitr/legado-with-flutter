@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
@@ -21,6 +22,10 @@ JsBridge jsBridge(Ref ref) {
     launch: launchQuickJsWorker,
     http: ref.watch(httpClientProvider),
     variables: ref.watch(jsVariableStoreProvider),
+    // 验证族与 `webView` 需要平台能力（ADR-0068 §决策 5/6）：端口在 core/platform，
+    // 实现在装配根绑定，沙箱本身不认识页面。
+    verification: ref.watch(sourceVerificationProvider),
+    webPages: ref.watch(webPageFetcherProvider),
   );
   ref.onDispose(() => unawaited(bridge.dispose()));
 

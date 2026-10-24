@@ -112,12 +112,36 @@ void main() {
       expect(rule.options?.headers, <String, String>{'os': 'pc'});
     });
 
-    test('parseUrlRule_givenWebView_reportsItInsteadOfDroppingIt', () {
+    test('parseUrlRule_givenWebView_modelsIt', () {
+      // M21a（ADR-0068 §决策 6）：`webView` 从「被忽略的选项」变成字段。
       final UrlRule rule = _parse(
         'https://a.test/s?k={{key}},{"webView":true}',
       );
 
-      expect(rule.options?.unsupported, contains('webView'));
+      expect(rule.options?.webView, isTrue);
+      expect(rule.options?.unsupported, isNot(contains('webView')));
+    });
+
+    test('parseUrlRule_givenTheWebViewFamily_modelsDelayJsAndOverride', () {
+      final UrlRule rule = _parse(
+        'https://a.test/s?k={{key}},{"webView":true,"webViewDelayTime":800,'
+        '"webJs":"document.body.innerText","overrideUrlRegex":"/result"}',
+      );
+
+      expect(rule.options?.webViewDelayTime, const Duration(milliseconds: 800));
+      expect(rule.options?.webJs, 'document.body.innerText');
+      expect(rule.options?.overrideUrlRegex, '/result');
+      expect(rule.options?.unsupported, isEmpty);
+    });
+
+    test('parseUrlRule_givenRetryAndReadTimeout_capsThem', () {
+      // 上限在这里就钳住：`retry` ≤ 3（C-NET-2），`readTimeout` ≤ 120 s（ADR-0068 §决策 8）。
+      final UrlRule rule = _parse(
+        'https://a.test/s?k={{key}},{"retry":9,"readTimeout":999999}',
+      );
+
+      expect(rule.options?.retry, 3);
+      expect(rule.options?.readTimeout, const Duration(seconds: 120));
     });
 
     test('parseUrlRule_givenABodyWithAGet_reportsTheIgnoredBody', () {
@@ -157,10 +181,10 @@ void main() {
 
     test('parseUrlRule_givenAnArrayValue_keepsItAsRawText', () {
       final UrlRule rule = _parse(
-        'https://a.test/s?k={{key}},{"retry":[1,2],"method":"GET"}',
+        'https://a.test/s?k={{key}},{"origin":[1,2],"method":"GET"}',
       );
 
-      expect(rule.options?.unsupported, contains('retry'));
+      expect(rule.options?.unsupported, contains('origin'));
       expect(rule.options?.method, UrlRequestMethod.get);
     });
 
@@ -175,10 +199,10 @@ void main() {
     test('parseUrlRule_givenAnArrayWithEscapedQuotes_keepsItRaw', () {
       // 数组值里的字符串可以带转义引号：宽松扫描器要按“在字符串里”跳过它。
       final UrlRule rule = _parse(
-        r'https://a.test/s?k={{key}},{"retry":["a\"b",2],"method":"GET"}',
+        r'https://a.test/s?k={{key}},{"origin":["a\"b",2],"method":"GET"}',
       );
 
-      expect(rule.options?.unsupported, contains('retry'));
+      expect(rule.options?.unsupported, contains('origin'));
     });
 
     test('parseUrlRule_givenAnUnbalancedValue_rejectsItByName', () {

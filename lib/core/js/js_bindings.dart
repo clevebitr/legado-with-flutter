@@ -34,6 +34,100 @@ const String jsParseBinding = 'parse';
 /// The binding name of `java.*`, which the worker answers inside its own isolate.
 const String jsJavaBinding = 'java';
 
+/// The binding name of the verification family (`java.startBrowser*`, `java.getVerificationCode`,
+/// `java.webView*`).
+///
+/// These calls **wait for a human** (ADR-0068 §决策 5), so they travel on their own channel: the
+/// bridge does not count them against the per-rule call quota and does not let the job's wall-clock
+/// budget expire while one is outstanding.
+const String jsVerifyBinding = 'verify';
+
+/// The verbs the verification channel binds.
+enum JsVerifyOperation {
+  /// `java.startBrowser(url, title[, html])`: opens the page, answers immediately.
+  startBrowser,
+
+  /// `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])`.
+  startBrowserAwait,
+
+  /// `java.getVerificationCode(imageUrl)`.
+  imageCode,
+
+  /// `java.webView(url[, js])` / `java.webViewGetString(url[, js])`.
+  webView,
+}
+
+/// One validated verification call, decoded on the host isolate.
+final class JsVerifyRequest {
+  /// Creates a request.
+  const JsVerifyRequest({
+    required this.operation,
+    required this.url,
+    this.title,
+    this.html,
+    this.script,
+    this.refetchAfterSuccess = true,
+  });
+
+  /// The verb the rule called.
+  final JsVerifyOperation operation;
+
+  /// The address to open (`startBrowser*`, `webView*`) or the image (`imageCode`).
+  final String url;
+
+  /// The page title the rule passed (`startBrowser*`); falls back to the source name.
+  final String? title;
+
+  /// An HTML document to show instead of loading [url] (`startBrowser`'s third argument).
+  final String? html;
+
+  /// The script to run inside the rendered page (`webView*`'s second argument).
+  final String? script;
+
+  /// Whether `startBrowserAwait` should re-fetch over HTTP once the user finishes.
+  final bool refetchAfterSuccess;
+}
+
+/// Reads one verification call's arguments, or `null` when they are unusable.
+///
+/// The arguments are JSON: `{operation, url, title, html, script, refetchAfterSuccess}`.
+JsVerifyRequest? decodeJsVerifyRequest(Object? args) {
+  final Map<String, Object?>? call = _jsonObjectOf(args);
+  if (call == null) {
+    return null;
+  }
+  final JsVerifyOperation? operation = switch (call['operation']) {
+    'startBrowser' => JsVerifyOperation.startBrowser,
+    'startBrowserAwait' => JsVerifyOperation.startBrowserAwait,
+    'imageCode' => JsVerifyOperation.imageCode,
+    'webView' => JsVerifyOperation.webView,
+    _ => null,
+  };
+  final Object? url = call['url'];
+  if (operation == null || url is! String || url.isEmpty) {
+    return null;
+  }
+  final Object? title = call['title'];
+  final Object? html = call['html'];
+  final Object? script = call['script'];
+  final Object? refetch = call['refetchAfterSuccess'];
+  if (title is! String? || html is! String? || script is! String?) {
+    return null;
+  }
+  if (refetch is! bool?) {
+    return null;
+  }
+
+  return JsVerifyRequest(
+    operation: operation,
+    url: url,
+    title: title,
+    html: html,
+    script: script,
+    refetchAfterSuccess: refetch ?? true,
+  );
+}
+
 /// One binding call the worker forwards to the host isolate.
 ///
 /// The script's Promise stays pending until a [JsHostReply] names the same

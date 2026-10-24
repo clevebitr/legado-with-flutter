@@ -180,6 +180,11 @@ final class _Worker {
       jsParseBinding,
       (Object? args) => _callHost(jsParseBinding, args),
     );
+    // 验证族（ADR-0068 §决策 5）：等的是人，桥会暂停硬预算并免掉调用额度。
+    _runtime.onMessage(
+      jsVerifyBinding,
+      (Object? args) => _callHost(jsVerifyBinding, args),
+    );
     // java.* 在本 isolate 内完成，所以 JS 同步拿到值。
     _runtime.onMessage(jsJavaBinding, _applyJava);
   }
@@ -480,8 +485,8 @@ globalThis.__sandboxBook = function (data) {
 // 因此没有可用的拼写，只能靠 `ajax` 这一族具名拒绝（ADR-0037 §决策 5）。
 globalThis.__javaRejectedNames = [
   'ajax', 'post', 'head', 'ajaxAll', 'connect',
-  'webView', 'webViewGetString', 'webViewGetElements', 'startBrowser', 'startBrowserAwait',
-  'downloadFile', 'cacheFile', 'importScript', 'getVerificationCode', 'getCookie',
+  'webViewGetElements',
+  'downloadFile', 'cacheFile', 'importScript', 'getCookie',
   'setContent', 'toast', 'longToast',
   'base64DecodeToByteArray', 'hexDecodeToByteArray',
   'createSymmetricCrypto', 'aesBase64DecodeToString', 'aesEncodeToString', 'aesDecodeToString',
@@ -498,6 +503,27 @@ globalThis.Packages = new Proxy({}, {
     throw new Error('Packages.* interop is not supported (M2): see book-source.md §11');
   }
 });
+
+// 验证族（ADR-0068 §决策 5）：这些调用等的是**人**，所以走独立的 host 频道，返回 Promise。
+// 上游是「同步阻塞」，本仓的沙箱不可能阻塞 QuickJS 去等宿主，因此规则里要 `await`（差异登记在
+// book-source.md §6）。`startBrowser` 上游返回 void，这里同样不等结果（浮空 Promise 的错误吞掉，
+// 页面本身已经打开）。
+globalThis.__verify = function (operation, url, title, refetchAfterSuccess, html, script) {
+  var payload = { operation: operation, url: String(url) };
+  if (title !== undefined && title !== null) {
+    payload.title = String(title);
+  }
+  if (refetchAfterSuccess !== undefined && refetchAfterSuccess !== null) {
+    payload.refetchAfterSuccess = refetchAfterSuccess !== false;
+  }
+  if (html !== undefined && html !== null) {
+    payload.html = String(html);
+  }
+  if (script !== undefined && script !== null) {
+    payload.script = String(script);
+  }
+  return sendMessage('verify', JSON.stringify(payload));
+};
 
 globalThis.java = (function () {
   var surface = {
@@ -566,6 +592,31 @@ globalThis.java = (function () {
     },
     getElements: function (rule) {
       return __parse('getElements', rule, null);
+    },
+    // 验证族（ADR-0068 §决策 5）。`startBrowser` 与上游一样不返回页面；带 Await 的那个返回
+    // `{url, body}`（上游 `StrResponse` 的两个字段）。
+    startBrowser: function (url, title, html) {
+      __verify('startBrowser', url, title, null, html, null).catch(function () {});
+    },
+    startBrowserAwait: function (url, title, refetchAfterSuccess, html) {
+      return __verify('startBrowserAwait', url, title, refetchAfterSuccess, html, null)
+        .then(function (payload) {
+          if (payload === null || payload === undefined) {
+            return { url: String(url), body: '' };
+          }
+          return { url: String(payload.url), body: String(payload.body) };
+        });
+    },
+    getVerificationCode: function (imageUrl) {
+      return __verify('imageCode', imageUrl, null, null, null, null).then(function (code) {
+        return code === null || code === undefined ? '' : String(code);
+      });
+    },
+    webView: function (url, js) {
+      return __verify('webView', url, null, null, null, js);
+    },
+    webViewGetString: function (url, js) {
+      return __verify('webView', url, null, null, null, js);
     }
   };
   for (var rejectedIndex = 0; rejectedIndex < __javaRejectedNames.length; rejectedIndex++) {

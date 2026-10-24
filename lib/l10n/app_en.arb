@@ -1910,5 +1910,9 @@
   "sourceCaptchaConfirm": "Confirm",
   "@sourceCaptchaConfirm": {
     "@description": "Confirm button of the captcha page."
+  },
+  "failureLoginRequired": "This source needs a sign-in or a fresh human check; open the source and finish it first.",
+  "@failureLoginRequired": {
+    "@description": "Failure message when a source answers that the session/login is gone (M21a)."
   }
 }

@@ -164,13 +164,10 @@ final class PageFetchService {
     final UrlRuleOptions options = renderedRule.options ?? textOptions;
     // `webView` 有真正的实现时不要再报「忽略」；只有平台没有 WebView 才回落。
     // POST/body 不再排除在外：表单型站点（ADR-0062 §决策 1）只有提交之后才有结果页。
+    // `webView` 现在是 UrlRuleOptions 的**字段**（M21a，ADR-0068 §决策 6），不再是「被忽略的选项」。
     final bool canWebView =
-        options.unsupported.contains('webView') &&
-        (_webPages?.isSupported ?? false);
+        options.webView && (_webPages?.isSupported ?? false);
     for (final String ignored in options.unsupported) {
-      if (canWebView && ignored == 'webView') {
-        continue;
-      }
       _logger.warning(
         'Ignoring an unsupported URL option: rule=$rulePath '
         'option=$ignored source=${sourceId ?? 'unknown'}',
@@ -224,6 +221,9 @@ final class PageFetchService {
             rulePath: rulePath,
             method: post ? WebPageRequestMethod.post : WebPageRequestMethod.get,
             body: post ? body : null,
+            javaScript: options.webJs,
+            delayTime: options.webViewDelayTime,
+            overrideUrlRegex: options.overrideUrlRegex,
           );
       switch (rendered) {
         case ParseSuccess<FetchedWebPage>(:final FetchedWebPage data):
@@ -265,6 +265,8 @@ final class PageFetchService {
             keyword: keyword,
             sourceId: sourceId,
             declaredCharset: options.charset,
+            maxRetries: options.retry,
+            receiveTimeout: options.readTimeout,
           )
         : await _http.get(
             url,
@@ -273,6 +275,8 @@ final class PageFetchService {
             keyword: keyword,
             sourceId: sourceId,
             declaredCharset: options.charset,
+            maxRetries: options.retry,
+            receiveTimeout: options.readTimeout,
           );
 
     return _pageOf(
@@ -289,6 +293,47 @@ final class PageFetchService {
 
   /// The WebView port, which is non-null whenever the `webView` branch was taken.
   WebPageFetcher _requireWebPages() => _webPages!;
+
+  /// Fetches [url] in a WebView and answers its body, for `ruleContent.webJs`
+  /// (ADR-0068 §决策 7).
+  ///
+  /// The script runs **inside** the page, so a site whose body is assembled by its own JavaScript
+  /// is read the way a browser reads it. Without a platform WebView the call fails as
+  /// `unsupportedRule`; the caller reports it instead of parsing an unrendered page.
+  Future<ParseResult<String>> fetchRendered(
+    String url, {
+    required String rulePath,
+    required String script,
+    Map<String, String>? headers,
+    String? sourceId,
+    JsSourceInfo? source,
+    String? bookName,
+    String? chapterTitle,
+  }) async {
+    final WebPageFetcher? pages = _webPages;
+    if (pages == null || !pages.isSupported) {
+      return const ParseFailure<String>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'contentRule.webJs',
+      );
+    }
+    final ParseResult<FetchedWebPage> page = await pages.fetch(
+      url: url,
+      headers: headers,
+      rulePath: rulePath,
+      javaScript: script,
+    );
+
+    return switch (page) {
+      ParseSuccess<FetchedWebPage>(:final FetchedWebPage data) =>
+        ParseSuccess<String>(data.body),
+      ParseFailure<FetchedWebPage>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        ParseFailure<String>(kind: kind, rulePath: rulePath),
+    };
+  }
 
   /// Whether [body] is a JSON / XML payload rather than a form (`AnalyzeUrl.analyzeFields`).
   bool _isStructuredBody(String body) {

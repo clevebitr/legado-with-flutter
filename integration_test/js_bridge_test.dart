@@ -850,6 +850,8 @@ final class _ProbeHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) async {
     requestedUrls.add(url);
     requestedMethods.add('GET');
@@ -886,6 +888,8 @@ final class _ProbeHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) async {
     requestedUrls.add(url);
     requestedMethods.add('POST');

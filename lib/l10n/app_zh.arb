@@ -406,5 +406,6 @@
   "sourceCaptchaTitle": "图片验证码 · {source}",
   "sourceCaptchaImage": "验证码图片",
   "sourceCaptchaHint": "输入图中的字符",
-  "sourceCaptchaConfirm": "确定"
+  "sourceCaptchaConfirm": "确定",
+  "failureLoginRequired": "该书源需要登录或重新完成人机验证，请先在书源管理里打开验证。"
 }

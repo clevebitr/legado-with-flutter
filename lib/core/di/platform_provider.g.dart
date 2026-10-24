@@ -351,3 +351,64 @@ final class SourceVerificationProvider
 
 String _$sourceVerificationHash() =>
     r'f8f51b442facda34452fd3c221f42a3f012cdeb3';
+
+/// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
+///
+/// It lives in `core/di/` because two features use it (the source engine's page fetch and the JS
+/// sandbox) and `core/` may not import `features/` (C-ARCH-2). The real implementation is bound by
+/// the composition root; the default answers `unsupportedRule`, which makes a forgotten binding a
+/// readable failure instead of a rule that silently sees an unrendered page.
+
+@ProviderFor(webPageFetcher)
+final webPageFetcherProvider = WebPageFetcherProvider._();
+
+/// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
+///
+/// It lives in `core/di/` because two features use it (the source engine's page fetch and the JS
+/// sandbox) and `core/` may not import `features/` (C-ARCH-2). The real implementation is bound by
+/// the composition root; the default answers `unsupportedRule`, which makes a forgotten binding a
+/// readable failure instead of a rule that silently sees an unrendered page.
+
+final class WebPageFetcherProvider
+    extends $FunctionalProvider<WebPageFetcher, WebPageFetcher, WebPageFetcher>
+    with $Provider<WebPageFetcher> {
+  /// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
+  ///
+  /// It lives in `core/di/` because two features use it (the source engine's page fetch and the JS
+  /// sandbox) and `core/` may not import `features/` (C-ARCH-2). The real implementation is bound by
+  /// the composition root; the default answers `unsupportedRule`, which makes a forgotten binding a
+  /// readable failure instead of a rule that silently sees an unrendered page.
+  WebPageFetcherProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'webPageFetcherProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$webPageFetcherHash();
+
+  @$internal
+  @override
+  $ProviderElement<WebPageFetcher> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  WebPageFetcher create(Ref ref) {
+    return webPageFetcher(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(WebPageFetcher value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<WebPageFetcher>(value),
+    );
+  }
+}
+
+String _$webPageFetcherHash() => r'e258afa898dc2d848748bdf28feb5fe1fe8478d9';

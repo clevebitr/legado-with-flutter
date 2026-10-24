@@ -221,6 +221,8 @@ _ContentRule _$ContentRuleFromJson(Map<String, dynamic> json) =>
         content: $checkedConvert('content', (v) => v as String?),
         nextContentUrl: $checkedConvert('nextContentUrl', (v) => v as String?),
         replaceRegex: $checkedConvert('replaceRegex', (v) => v as String?),
+        sourceRegex: $checkedConvert('sourceRegex', (v) => v as String?),
+        webJs: $checkedConvert('webJs', (v) => v as String?),
       );
       return val;
     });
@@ -230,4 +232,6 @@ Map<String, dynamic> _$ContentRuleToJson(_ContentRule instance) =>
       'content': instance.content,
       'nextContentUrl': instance.nextContentUrl,
       'replaceRegex': instance.replaceRegex,
+      'sourceRegex': instance.sourceRegex,
+      'webJs': instance.webJs,
     };

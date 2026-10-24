@@ -257,58 +257,6 @@ final class PageFetchServiceProvider
 
 String _$pageFetchServiceHash() => r'468d712869d464c9328f014cebea12126c981668';
 
-/// Provides WebView support for `,{webView:…}` rules; unsupported by default.
-///
-/// Kept alive because the services that watch it are kept alive too.
-
-@ProviderFor(webPageFetcher)
-final webPageFetcherProvider = WebPageFetcherProvider._();
-
-/// Provides WebView support for `,{webView:…}` rules; unsupported by default.
-///
-/// Kept alive because the services that watch it are kept alive too.
-
-final class WebPageFetcherProvider
-    extends $FunctionalProvider<WebPageFetcher, WebPageFetcher, WebPageFetcher>
-    with $Provider<WebPageFetcher> {
-  /// Provides WebView support for `,{webView:…}` rules; unsupported by default.
-  ///
-  /// Kept alive because the services that watch it are kept alive too.
-  WebPageFetcherProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'webPageFetcherProvider',
-        isAutoDispose: false,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
-
-  @override
-  String debugGetCreateSourceHash() => _$webPageFetcherHash();
-
-  @$internal
-  @override
-  $ProviderElement<WebPageFetcher> $createElement($ProviderPointer pointer) =>
-      $ProviderElement(pointer);
-
-  @override
-  WebPageFetcher create(Ref ref) {
-    return webPageFetcher(ref);
-  }
-
-  /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(WebPageFetcher value) {
-    return $ProviderOverride(
-      origin: this,
-      providerOverride: $SyncValueProvider<WebPageFetcher>(value),
-    );
-  }
-}
-
-String _$webPageFetcherHash() => r'e258afa898dc2d848748bdf28feb5fe1fe8478d9';
-
 /// Provides the search use case.
 
 @ProviderFor(searchBooks)

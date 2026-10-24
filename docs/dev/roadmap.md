@@ -453,7 +453,8 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 页面字段规则的 `page` 绑定与「已取到的那一页」不一致（搜得 / 发现阶段不传 `page`） | ✅ **取证后不改（M12，ADR-0047 §决策 6）**：字段规则本身不消费 `page`（只有 URL 模板与 `@js:` 绑定消费），语料无反例 |
 | `<js>…</js>` 分段链（矩阵 #31）与 `url,{…}` 后缀（§4.3） | ✅ **已闭环（M12，2026-10-21，ADR-0047 §决策 1/2）**：真实语料里各覆盖 50 条源；列表规则上的 `@js:` 与 JSON 条目 `result` 一并落地 |
 | 统一「单源预算」（超时 / 重试）抽成公共件 | ✅ **已闭环（M12，2026-10-21）**：`domain/source_budget.dart` 是「一个源一份预算」的唯一实现，聚合搜索 60 s / 校验 180 s 都改用它（ADR-0049 §决策 3）；单章正文仍靠 `HttpPolicy` 的逐请求超时 |
-| `webView` / `webJs` / `retry` 等 URL 选项字段 | **部分闭环（M24，ADR-0062 §决策 1）**：`webView` 走 headless WebView，**GET 与 POST+body 都支持**，失败 / 平台无 WebView2 回落普通 HTTP；`webJs` / `retry` 等仍按名记 `unsupported` |
+| `webView` / `webJs` / `retry` 等 URL 选项字段 | ✅ **已闭环（M21a，ADR-0068 §决策 6/8）**：`webView`（GET/POST）+ `webViewDelayTime` + `webJs` + `overrideUrlRegex` + `retry`（≤3）+ `readTimeout`（≤120 s）；`proxy` / `dnsIp` / `callTimeout` / `HEAD` / `encodedForm` 仍按名记 `unsupported`（§决策 8 登记） |
+| 过人机验证（可见 WebView、图片验证码、`loginCheckJs`） | **部分闭环（M21a）**：可见 WebView 页 + 图片验证码 + `java.startBrowser*` / `getVerificationCode` / `webView*` + Cookie v8 持久化与双向同步；**未做**：`loginUrl`/`loginUi`/`loginCheckJs` 三个源字段、`sourceRegex`、字体反爬（ADR-0068 落地注记） |
 | `concurrentRate` 的真源只有 3 条且都跑不了原样链路 | 已登记（b2 用派生源 A/B 取证）；触发 = 其中任一条变得可跑 |
 | 「关于」页入口（设置页的菜单行） | **5.9**：与法律声明页一起落地；一个打开空页的菜单行是死链（C-BAN-2），所以 5.6 没有加它 |
 | Big5 / Big5-HKSCS 的解码 | ✅ **已闭环（M12，2026-10-21）**：`enough_convert`（MPL-2.0，白名单 + ADR-0048）的 `Big5Codec` 补解码；`book-source.md` §5.1 已更新 |

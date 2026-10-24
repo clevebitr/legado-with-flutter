@@ -1377,4 +1377,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sourceCaptchaConfirm => 'Confirm';
+
+  @override
+  String get failureLoginRequired =>
+      'This source needs a sign-in or a fresh human check; open the source and finish it first.';
 }

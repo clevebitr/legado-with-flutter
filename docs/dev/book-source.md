@@ -60,7 +60,7 @@
 | `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName`、`updateTime` | M0（`canReName`、`updateTime` 为 M1） |
 | `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
-| `ContentRule` | `webJs`、`sourceRegex`、`imageStyle` | **M2** |
+| `ContentRule` | `webJs`（✅ M21a：渲染后执行脚本，见 §4.3）、`sourceRegex`、`imageStyle`（**未做**，登记在 ADR-0068） | M2 |
 
 模型必须使用 `freezed` + `json_serializable`（C-SRC-7）。未知字段必须**保留而非丢弃**：
 在 `extra` 中承载，以便导出时不丢信息。
@@ -488,7 +488,13 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 | `body` | POST 载荷，可含 `{{…}}` | ✅ 是**规则**：URL / 表单里 `{{key}}` 按 `charset` 百分号编码，**JSON / XML 载荷里原样** |
 | `charset` | 该请求的编码 | ✅ 双向：请求侧编码 `{{key}}`，响应侧作为 §5 的**最高优先级声明** |
 | `headers` | 该请求额外 header（对象，或**字符串形式的对象**） | ✅ 合并到书源 `header` **之上** |
-| `webView` | 用真实 WebView 渲染页面；**GET 与 POST + body 都支持**（POST 的表单由 WebView 自己提交，见下方约定），平台无 WebView2 / 取页失败回落普通 HTTP（ADR-0061 §决策 4、ADR-0062 §决策 1） | ✅ 走 `WebPageFetcher` 端口 |
+| `webView` | 用真实 WebView 渲染页面（`webView: true`）；**GET 与 POST + body 都支持**（POST 的表单由 WebView 自己提交，见下方约定），平台无 WebView2 / 取页失败回落普通 HTTP（ADR-0061 §决策 4、ADR-0062 §决策 1） | ✅ 走 `WebPageFetcher` 端口 |
+| `webViewDelayTime` | `onLoadStop` 之后再等这么多毫秒才取 HTML（上限 30 s），给站点自己的脚本时间（ADR-0068 §决策 6） | ✅ M21a |
+| `webJs` | 在渲染后的页面里执行脚本，返回字符串即 body | ✅ M21a（同时是 `ContentRule.webJs` 的实现） |
+| `overrideUrlRegex` | 命中则把该 URL 当结果页，停止加载 | ✅ M21a |
+| `retry` | 这一条请求的重试次数（规则侧上限 3） | ✅ M21a |
+| `readTimeout` | 这一条请求的响应超时（上限 120 s） | ✅ M21a |
+| `origin` / `type` / `js` / `dnsIp` / `proxy` / `callTimeout` | 本仓没有对应实现，按名记 `unsupported` 并 warning | ❌ 登记未做（ADR-0068 §决策 8） |
 | `webJs` / `retry` / `origin` / `type` / `js` | 重试 / 源类型等 | ❌ 记 `unsupported` 并按名 warning（ADR-0032 的降级口径） |
 
 约定：
@@ -637,6 +643,10 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `parse.getString(rule, doc)` | `String` | 复用规则引擎，可递归 | M0 |
 | `parse.getElements(rule, doc)` | `List` | 同上 | M0 |
 | `java.put(key, value)` / `java.get(key)` | `void` / `String` | 规则变量，与 `@put:` / `@get:` 是同一份（ADR-0034）；**仅 JS 内可用** | M1 |
+| `java.startBrowser(url, title[, html])` | `void` | 打开**可见 WebView**让用户过人机验证；不等结果（ADR-0068 §决策 5） | M21a |
+| `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])` | `Promise<{url, body}>` | 同上但等用户按「完成」，成功后按需用新 cookie 重取；**本仓返回 Promise，规则里要 `await`**（上游是同步，差异见注记） | M21a |
+| `java.getVerificationCode(imageUrl)` | `Promise<String>` | 图片验证码对话框，返回用户输入的字符串；**需 `await`** | M21a |
+| `java.webView(url[, js])` / `webViewGetString(url[, js])` | `Promise<String>` | 隐藏 WebView 渲染（可执行 `js`），结果是 body | M21a |
 | `java.timeFormat(timestamp)` | `String` | `yyyy/MM/dd HH:mm` | M1 |
 | `key` | `String` | 搜索关键词，**只在 URL 规则的 JS 里**存在（ADR-0034 §决策 3） | M1 |
 | `log.debug/info/warn/error(msg)` | `void` | 转发到 `core/logging`，自动附加 `rulePath` | M0 |
@@ -970,7 +980,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 - `@xpath:` XPath 规则（需要引入 XPath 依赖，须先开 ADR）
 - `:` 正则规则（仅书籍列表与目录列表）
 - `webJs`、`sourceRegex`、字体反爬字形映射
-- 原版的登录脚本、登录 UI、登录检查 JS
+- 原版的登录脚本、登录 UI、登录检查 JS（`loginUrl` / `loginUi` / `loginCheckJs` 仍未建模；M21a 只做了"过验证"这一半，见 ADR-0068）
 - RSS / 订阅源、朗读规则
 - 需要浏览器 DOM/BOM 的网页 JS、依赖 Android WebView 行为的规则
 - 提取段里的嵌套规则（矩阵 #30：末段本身是一条规则，如 `class.a@css:.b`；命中报 `unsupported:nested-rule`）
@@ -987,8 +997,9 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 - **`java.*` 的具名拒绝族（ADR-0037 §决策 5；形态与实现档位见 §6 的兼容面表）：**
   **其中 `get` / `put` 不在拒绝族里：** §6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**读写（ADR-0034），名字被占用；上游那套同步返回 body 的 `get(url)` / `post(url)` 因此没有可用拼写，只能靠 `ajax` 族具名拒绝（`java.post` 也已登记具名拒绝）。另：`base64Encode` / `base64Decode` 的多参重载**具名拒绝**（本仓没有 `flags` / `charset` 语义）。
   `ajax` / `get` / `post` / `head` / `ajaxAll` / `connect`（上游**同步**返回 body，与本仓 `http.*` 的
-  Promise 形态冲突）、`webView*` / `startBrowser*` / `downloadFile` / `cacheFile` / `importScript` /
-  `getVerificationCode` / `getCookie`（沙箱禁忌或需要平台能力）、`setContent`（脚本中途改 scope，
+  Promise 形态冲突）、`webViewGetElements`（本仓没有元素列表形态的渲染接口）、
+  `downloadFile` / `cacheFile` / `importScript` / `getCookie`（沙箱禁忌或需要平台能力）、
+  `setContent`（脚本中途改 scope，
   需要一个规则 / 作用域 API）、`toast` / `longToast`（UI）、`base64DecodeToByteArray` /
   `hexDecodeToByteArray`（Rhino 字节数组；语料里 326/328 处直接喂给 `IvParameterSpec` /
   `SecretKeySpec`，即密钥类 crypto）、`createSymmetricCrypto` / `aes*` / `des*` / `HMac*`（密钥类 crypto）、

@@ -23,10 +23,11 @@ void main() {
           messages.add(message);
         }
 
-        expect(messages, hasLength(8));
+        // 10 个 kind 里只有 cancelled 静默，因此 9 条文案（M21a 加了 loginRequired）。
+        expect(messages, hasLength(9));
         expect(
           messages.toSet(),
-          hasLength(8),
+          hasLength(9),
           reason: 'Every kind needs its own message (C-ERR-7).',
         );
       },

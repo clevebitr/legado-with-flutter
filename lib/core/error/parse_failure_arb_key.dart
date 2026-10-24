@@ -13,5 +13,6 @@ String? resolveFailureArbKey(ParseFailureKind kind) => switch (kind) {
   ParseFailureKind.parseFailed => 'failureParseFailed',
   ParseFailureKind.unsupportedRule => 'failureUnsupportedRule',
   ParseFailureKind.invalidBookSource => 'failureInvalidBookSource',
+  ParseFailureKind.loginRequired => 'failureLoginRequired',
   ParseFailureKind.cancelled => null,
 };

@@ -143,6 +143,9 @@ enum ParseFailureKind {
   unsupportedRule,
   invalidBookSource,
   cancelled,
+
+  /// 站点说会话没了：需要登录或重新过人机验证（M21a，ADR-0068 §决策 3）。
+  loginRequired,
 }
 
 /// Result of an operation that can fail without throwing.
@@ -173,6 +176,9 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | 路径必填 | `rulePath` 使用「书源字段 + 规则片段」描述，如 `searchRule.list`、`contentRule.content`（C-SRC-8） |
 | 穷尽匹配 | 消费方必须 `switch` 穷尽两个分支，禁止 `is` 判断后回退到 `null` |
 
+> **M21a 的那次新增：** `loginRequired` 由 ADR-0068 §决策 3 引入，理由见该节；其余阶段失败仍按下面的
+> 归类规则留在报告内部。
+
 > **不新增 kind 的既有裁决：** 书源校验的阶段失败（搜索失败 / 目录为空 / 正文为空 / 超时 / JS 失效）
 > 属于**归类**而不是新的失败类型，因此仍在 `ParseResult<SourceCheckReport>` 的报告内部表达，
 > `ParseFailureKind` 保持这 9 个值（ADR-0043 §决策 4）。需要新 kind 时先改本节并写 ADR。
@@ -196,6 +202,9 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 - 路由参数必须为**类型化对象**（`freezed`），禁止传递裸 `Map<String, Object?>`。
 - 页面间传参不得传递 Entity 之外的未序列化状态；需要跨页共享的数据放入 Notifier。
 - 预测性返回接线见 `docs/dev/platform.md`（C-UI-4、C-PLT-2）。
+- **一次例外（M21a，ADR-0068 §决策 3）：** `MaterialApp.navigatorKey`（`appNavigatorKey`）让**没有
+  `BuildContext`** 的调用方也能推页面 —— 书源规则触发的「过人机验证」页就是这种调用（JS → 桥 →
+  适配器）。页面本身仍走 `AppRouter`/`Navigator`，这个 key 只给验证页用。
 
 | 路由类型（`features/<f>/presentation/<f>_route.dart`） | 页面 | feature | 分期 |
 |---|---|---|---|

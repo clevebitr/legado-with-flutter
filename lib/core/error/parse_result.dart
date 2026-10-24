@@ -31,6 +31,13 @@ enum ParseFailureKind {
   /// The imported book source JSON misses required fields or is malformed.
   invalidBookSource,
 
+  /// The site says the session is gone: the source needs a login or a fresh human check
+  /// (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 3).
+  ///
+  /// It is a distinct kind because the UI offers 「去登录/去验证」 for it, while a plain
+  /// [parseFailed] has nothing actionable to show.
+  loginRequired,
+
   /// The user cancelled the operation; the UI stays silent about it.
   cancelled;
 
@@ -45,6 +52,7 @@ enum ParseFailureKind {
     ParseFailureKind.parseFailed => false,
     ParseFailureKind.unsupportedRule => false,
     ParseFailureKind.invalidBookSource => false,
+    ParseFailureKind.loginRequired => false,
     ParseFailureKind.cancelled => false,
   };
 }

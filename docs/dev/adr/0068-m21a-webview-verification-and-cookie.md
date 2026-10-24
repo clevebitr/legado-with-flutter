@@ -166,3 +166,35 @@ E（规则方言：`:正则` / `@xpath:` / 嵌套规则 / 表单型发现分类�
 - 代价：`main()` 多一步异步 bootstrap；新增一张表与一个 `ParseFailureKind`；
   验证页是 **UI 阻塞**的（用户不在场时会等到 10 分钟超时），因此只在规则显式调用时才出现。
 - 未做：每书源 cookie 隔离、通用浏览器、E/F 两簇、`dnsIp`、云 TTS（ADR-0063 仍 Proposed）。
+
+---
+
+## 2026-10-23 落地注记：M21a 第一批的实测结果
+
+**已落地：** v8 cookie jar（Drift + `PersistentCookieManager`，`main()` 前 hydrate）、可见
+WebView 验证页 + 图片验证码页、`SourceVerification` / `WebViewCookieBridge` 端口与装配根绑定、
+`appNavigatorKey`、`HttpClient.getBytes`（字节门，供验证码与将来的字体文件）、
+`java.startBrowser` / `startBrowserAwait` / `getVerificationCode` / `webView` / `webViewGetString`
+（用户门控：不占单规则额度、暂停硬预算、等掉的时间从 `elapsedMs` 扣除）、
+`webViewDelayTime` / `webJs` / `overrideUrlRegex`、`ContentRule.webJs`、`retry` / `readTimeout`、
+`ParseFailureKind.loginRequired`。
+
+**两处必须记住的语义差异：**
+
+1. **验证族返回 Promise。** 上游的 Rhino 能同步阻塞线程，所以 `startBrowserAwait` /
+   `getVerificationCode` 在规则里是同步取值；本仓的 QuickJS 沙箱不可能停下来等宿主，因此这两个
+   名字返回 Promise，规则必须 `await`。`startBrowser`（上游返回 void）没有这个差异。
+   已写进 `book-source.md` §6。
+2. **验证失败即整次 job 的答案。** 用户取消 → `cancelled`；平台无 WebView → `unsupportedRule`；
+   `loginCheckJs`（尚未建模）将来判失效 → `loginRequired`。让脚本吞掉只会得到一个没有正文的页面，
+   而 UI 需要能显示「去登录/已取消」。
+
+**本批未做（仍登记）：**
+
+| 项 | 原因 / 触发条件 |
+|---|---|
+| `ContentRule.sourceRegex`（正文前从原始 HTML 截取片段） | 需要先决定「截取后按 JSON 还是 DOM 建 scope」，且与 `nextContentUrl` 翻页组合的语义要先取证；触发 = 出现「规则本身正确但页面是壳」的真实源 |
+| `proxy` / `dnsIp` / `callTimeout` / `HEAD` / `encodedForm` | 前两者要按源建 Dio 实例与自定义 DNS，收益未取证；后三者没有真实语料。仍按名记 `unsupported` |
+| 字体反爬 `queryBase64TTF` / `replaceFont` / `getFontGlyph` | 评估结论：需要 TTF `cmap` 解析（约 200–300 行纯 Dart，或引一个第三方包并做许可评估）。本批**不引依赖**，命中仍报 `unsupportedRule`；作为 C 簇的下一刀 |
+| `loginUrl` / `loginUi` / `loginCheckJs` 三个源字段 | 「过验证」这一半已通；「登录表单 + 失效检测」需要 UI 表单与脚本判定两件事，排在 M21a 第二刀 |
+| 每书源 cookie 隔离 | 用户裁决为「持久化 + 双向同步」，不隔离（与上游 Android 的全局 jar 一致） |

@@ -20,6 +20,9 @@ abstract interface class HttpClient {
   /// Sends a GET for [url]; expected failures come back as a [ParseFailure].
   ///
   /// [rulePath] locates the failure, [headers] override the policy, and [maxBytes] bounds the body (over it: a [BodyTooLargeException] cause).
+  /// [maxRetries] overrides the policy's bound for this request: a URL rule's `retry` option
+  /// (`docs/dev/roadmap.md` M21a) is capped by the caller at 3, so C-NET-2's 「显式次数上限」 still
+  /// holds. [receiveTimeout] is the rule's `readTimeout`, again capped by the caller.
   Future<ParseResult<HttpResponse>> get(
     String url, {
     required String rulePath,
@@ -28,6 +31,8 @@ abstract interface class HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   });
 
   /// Sends a GET and answers the raw bytes of a 2xx response.
@@ -53,6 +58,8 @@ abstract interface class HttpClient {
     String? keyword,
     String? sourceId,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   });
 
   /// Applies the `concurrentRate` [sourceId] declares to that source's budget.
@@ -153,6 +160,8 @@ final class DioHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) => _request(
     method: 'GET',
     url: url,
@@ -162,6 +171,8 @@ final class DioHttpClient implements HttpClient {
     sourceId: sourceId,
     maxBytes: maxBytes,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
   );
 
   @override
@@ -218,6 +229,8 @@ final class DioHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) => _request(
     method: 'POST',
     url: url,
@@ -227,6 +240,8 @@ final class DioHttpClient implements HttpClient {
     keyword: keyword,
     sourceId: sourceId,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
   );
 
   // 发送一次 method 请求并把正文解码成文本。
@@ -240,6 +255,8 @@ final class DioHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) async {
     final ParseResult<_RawResponse> raw = await _perform<_RawResponse>(
       method: method,
@@ -249,6 +266,7 @@ final class DioHttpClient implements HttpClient {
       keyword: keyword,
       sourceId: sourceId,
       maxBytes: maxBytes,
+      maxRetries: maxRetries,
       send: (Uri uri) => _sendRaw(
         url,
         method: method,
@@ -258,6 +276,7 @@ final class DioHttpClient implements HttpClient {
         keyword: keyword,
         sourceId: sourceId,
         maxBytes: maxBytes,
+        receiveTimeout: receiveTimeout,
       ),
       failure: (ParseFailureKind kind, Object? cause) =>
           ParseFailure<_RawResponse>(
@@ -302,6 +321,7 @@ final class DioHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     int? maxBytes,
+    int? maxRetries,
   }) async {
     final Uri? uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
@@ -321,6 +341,8 @@ final class DioHttpClient implements HttpClient {
       return failure(ParseFailureKind.networkFailed, null);
     }
 
+    // 规则自己的 `retry` 覆盖策略默认值；两者都不允许无限重试（C-NET-2）。
+    final int retryBound = maxRetries ?? _policy.maxRetries;
     var attempt = 0;
     // 同一书源的请求共用一份并发预算；没有书源时按主机分桶。
     final String limitKey = sourceId ?? uri.host;
@@ -335,14 +357,14 @@ final class DioHttpClient implements HttpClient {
           return result;
         case ParseFailure<T>(:final ParseFailureKind kind):
           // 只有可重试的 kind 才继续，上限来自策略。
-          if (!kind.isRetryable || attempt >= _policy.maxRetries) {
+          if (!kind.isRetryable || attempt >= retryBound) {
             return result;
           }
       }
 
       attempt++;
       _logger.warning(
-        'Retrying request: rule=$rulePath attempt=${attempt + 1}/${_policy.maxRetries + 1}',
+        'Retrying request: rule=$rulePath attempt=${attempt + 1}/${retryBound + 1}',
       );
     }
   }
@@ -357,6 +379,7 @@ final class DioHttpClient implements HttpClient {
     required String? sourceId,
     String? body,
     int? maxBytes,
+    Duration? receiveTimeout,
   }) async {
     final Response<ResponseBody> response;
     try {
@@ -367,6 +390,9 @@ final class DioHttpClient implements HttpClient {
           method: method,
           headers: headers,
           responseType: ResponseType.stream,
+          // 规则声明的 `readTimeout` 只影响这一条请求（上限由解析侧钳到 120 s）。
+          receiveTimeout: receiveTimeout,
+          sendTimeout: receiveTimeout,
         ),
       );
     } on DioException catch (error, stackTrace) {

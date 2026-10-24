@@ -54,6 +54,9 @@ final class _FakeWebPages implements WebPageFetcher {
   /// The bodies handed to the WebView, in order.
   final List<String?> bodies = <String?>[];
 
+  /// The scripts handed to the WebView, in order (`webJs` / `java.webView`).
+  final List<String?> javaScripts = <String?>[];
+
   /// The headers of the last request.
   Map<String, String>? headers;
 
@@ -73,10 +76,14 @@ final class _FakeWebPages implements WebPageFetcher {
     required String rulePath,
     WebPageRequestMethod method = WebPageRequestMethod.get,
     String? body,
+    String? javaScript,
+    Duration? delayTime,
+    String? overrideUrlRegex,
   }) async {
     urls.add(url);
     methods.add(method);
     bodies.add(body);
+    javaScripts.add(javaScript);
     this.headers = headers;
     if (fail) {
       return failureAt<FetchedWebPage>(
@@ -90,6 +97,21 @@ final class _FakeWebPages implements WebPageFetcher {
     );
   }
 }
+
+/// Returns the data of [result], failing the test when it failed.
+T _data<T>(ParseResult<T> result) => switch (result) {
+  ParseSuccess<T>(:final T data) => data,
+  ParseFailure<T>(:final ParseFailureKind kind) => fail(
+    'Expected a success but got $kind.',
+  ),
+};
+
+/// Returns the failure of [result], failing the test when it succeeded.
+ParseFailure<Never> _failure<T>(ParseResult<T> result) => switch (result) {
+  ParseFailure<T>(:final ParseFailureKind kind, :final String rulePath) =>
+    ParseFailure<Never>(kind: kind, rulePath: rulePath),
+  ParseSuccess<T>() => fail('Expected a failure.'),
+};
 
 /// Builds the service under test around [jsBridge].
 ({PageFetchService pages, FakeLogPrinter printer}) _service(
@@ -586,7 +608,7 @@ void main() {
       );
 
       await pages.fetchRule(
-        'https://example-novel.test/s?k={{key}},{"webView":true}',
+        'https://example-novel.test/s?k={{key}},{"origin":"https://a.test"}',
         rulePath: 'searchUrl',
         params: <String, String>{'key': '剑来'},
         context: _context(),
@@ -596,7 +618,7 @@ void main() {
       expect(
         printer.events
             .map((LogEvent event) => event.message.toString())
-            .any((String message) => message.contains('option=webView')),
+            .any((String message) => message.contains('option=origin')),
         isTrue,
       );
     });
@@ -718,6 +740,90 @@ void main() {
         (rendered as ParseSuccess<String>).data,
         'https://example-novel.test/search?q=%E4%B8%AD%E6%96%87+%E4%B9%A6',
       );
+    });
+
+    test('fetchRule_givenRetryAndReadTimeout_passesThemToTheClient', () async {
+      // ADR-0068 §决策 8：`retry` 与 `readTimeout` 是**这一条请求**的覆盖，上限在解析侧钳住。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?k=%E5%89%91%E6%9D%A5',
+          '<div>ok</div>',
+        );
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/s?k={{key}},'
+        '{"retry":2,"readTimeout":5000}',
+        rulePath: 'searchUrl',
+        params: <String, String>{'key': '剑来'},
+        context: _context(),
+      );
+
+      expect(http.requestedMaxRetries, <int?>[2]);
+      expect(http.requestedReceiveTimeouts, <Duration?>[
+        const Duration(seconds: 5),
+      ]);
+    });
+  });
+
+  group('PageFetchService fetchRendered', () {
+    test('fetchRendered_givenARenderer_answersItsBody', () async {
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge());
+      final _FakeWebPages web = _FakeWebPages();
+
+      final ParseResult<String> body =
+          await PageFetchService(
+            engine: RuleEngine(
+              logger: AppLogger(
+                level: LogLevel.debug,
+                printer: service.printer,
+              ),
+              jsBridge: FakeJsBridge(),
+              variables: JsVariableStore(),
+            ),
+            http: FakeHttpClient(),
+            logger: AppLogger(level: LogLevel.debug, printer: service.printer),
+            webPages: web,
+          ).fetchRendered(
+            'https://example-novel.test/page',
+            rulePath: 'contentRule.webJs',
+            script: 'document.title',
+          );
+
+      expect(_data(body), contains('webview'));
+      expect(web.javaScripts.single, 'document.title');
+    });
+
+    test('fetchRendered_givenAFailingRenderer_mapsTheFailure', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: FakeHttpClient(),
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+        webPages: _FakeWebPages()..fail = true,
+      );
+
+      final ParseResult<String> body = await pages.fetchRendered(
+        'https://example-novel.test/page',
+        rulePath: 'contentRule.webJs',
+        script: 'document.title',
+      );
+
+      expect(_failure(body).kind, ParseFailureKind.unsupportedRule);
     });
   });
 }

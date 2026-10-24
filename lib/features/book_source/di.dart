@@ -2,9 +2,9 @@ import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/js_bridge_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/di/preference_store_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
-import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_view_store_impl.dart';
 import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
@@ -69,12 +69,6 @@ PageFetchService pageFetchService(Ref ref) => PageFetchService(
   logger: ref.watch(appLoggerProvider),
   webPages: ref.watch(webPageFetcherProvider),
 );
-
-/// Provides WebView support for `,{webView:…}` rules; unsupported by default.
-///
-/// Kept alive because the services that watch it are kept alive too.
-@Riverpod(keepAlive: true)
-WebPageFetcher webPageFetcher(Ref ref) => const UnsupportedWebPageFetcher();
 
 /// Provides the search use case.
 @Riverpod(keepAlive: true)

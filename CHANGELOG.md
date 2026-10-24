@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Pass a site's human check, and keep the cookies (ADR-0068, M21a)
+
+- **A visible WebView for 「人机验证」.** `java.startBrowser(url, title)` opens the page and returns,
+  `java.startBrowserAwait(...)` waits for the user's 「完成」 and answers the page (re-fetched over
+  HTTP with the cookies the challenge earned, unless the rule says otherwise), and
+  `java.getVerificationCode(imageUrl)` asks for the characters in a captcha image. These calls do
+  **not** spend the per-rule JS quota and pause the job's wall-clock budget: they wait for a human,
+  not for the CPU.
+- **The cookie jar is persistent and shared.** Schema v8 adds a `cookies` table; the app jar is
+  hydrated before `runApp`, written through on every `Set-Cookie`, and the verification page seeds
+  the WebView with it and harvests what the page collected afterwards. A solved challenge now
+  survives the next request **and** the next launch.
+- **`webView` grew the fields real sources use.** `webViewDelayTime`, `webJs` (a script run inside
+  the rendered page, also available as `ruleContent.webJs`), `overrideUrlRegex`, `retry` and
+  `readTimeout` are modelled instead of being ignored; `HttpClient.getBytes` adds the byte door the
+  captcha (and later the font work) needs.
+- **A session that vanished is its own failure.** `ParseFailureKind.loginRequired` (10th kind) lets
+  the UI say 「去登录/去验证」 instead of the generic 「解析失败」.
+- **Known dialect difference:** because the sandbox cannot block a thread, `startBrowserAwait` and
+  `getVerificationCode` return **Promises** — rules must `await` them (upstream is synchronous).
+  Registered in `docs/dev/book-source.md` §6.
+- Not in this batch (registered in ADR-0068): `loginUrl`/`loginUi`/`loginCheckJs` fields,
+  `ruleContent.sourceRegex`, font anti-scraping, `proxy`/`dnsIp`/`callTimeout`/`HEAD`/`encodedForm`.
+
 ### Shelf groups, bookmarks, reading records and a per-book cache (ADR-0066, M19)
 
 - **The shelf can be organised.** Groups are a real table (`book_groups`) and `books.group_id`
