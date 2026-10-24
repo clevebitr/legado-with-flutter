@@ -323,3 +323,16 @@ M21a 第三刀按 ADR-0068 决策 9 的评估执行：零新依赖、自研解�
 坑：`build_runner --build-filter` 会删掉不匹配的生成物（4000+ analyze 错），改实体一律全量 build。另外迁移测试里几条 `fromV?ToV8` 的名字在目标版本升到 9 后一并改名，避免「名字说 8、断言跑 9」。
 
 验证：1842 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等、schema dump 与生成迁移同步；Windows 5 文件全过（含 on-disk v9）。
+
+## 2026-10-24 — 真机日志四连：content 单值语义（G9）、explore 分组标题（G11）、默认 UA（G10）、HTTP 失败日志（G12）
+
+用户贴了一段真机日志，四类 warning 各对应一个不同的 bug，全部修掉（ADR-0069 增补）：
+
+1. **`JS rule failed: field=contentRule.content error=<String: 14 chars>`** —— 14 字符就是 `not a function`。那份导出的正文规则是 `$.data[*].image` + `@js:result.split("\n")`：上游 `BookContent.kt:234` 对所有书型都用 `getString`，而 `AnalyzeRule.getString` 把多匹配 `joinToString("\n")`，脚本拿到的是**字符串**；本仓漫画链路用 `extractAll`，`result` 是 **List**，`split` 不存在。修法：新增 `RuleEngine.extractJoined`（= `getString` 语义），漫画链路改用它并按行切分；同时把**单值字段交给脚本的 `result`** 从「首个匹配」改成「换行拼接的字符串」（`extractFirst` 的返回值口径不变，仍是首个匹配）。
+2. **`Explore category rejected … missing url (title=══ 推荐 ══)`** —— 真实 `exploreUrl` 用「只有标题、没有地址」的条目做**分组标题**；上游 `BookSourceExtensions.exploreKinds()` 直接映射、不校验 url 非空，本仓却按坏条目丢了。修法：`ExploreCategory.url` 可空（`null` = 分组标题），解析两条路径都保留，发现页画成不可点标签，`openCategory` 遇 null 直接返回，`ExploreBooks` 防御性返回空列表。
+3. **`Request failed for rule=ruleToc/ruleBookInfo/exploreUrl … <DioException: sha256>`** —— 两层：① 默认 UA 是 `flutter_reader`，一批站点在规则跑之前就 403（上游 `FeatureSettingsRepositories.kt:157-162` 默认是桌面 Chrome）；② 日志把 dio 异常整体脱敏，403 与超时长得一样。修法：默认 UA 换桌面 Chrome（源的 `header` 仍覆盖，C-NET-4）；失败日志带 `type=`/`status=`，URL 仍走 `redactUrl`。
+4. 顺带：漫画链路换掉 `extractAll` 之后 `PageFetchService.extractAll` 成了死代码（C-BAN-1），删掉。
+
+转义又踩了两次坑（python 里写 `\n` 进 Dart 源码变成真换行）：以后这种多行/带反斜杠的测试片段改用 write 工具写进临时文件再 splice，别在 heredoc 里拼。
+
+验证：1851 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 5 文件全过（js_bridge 34/34）。
