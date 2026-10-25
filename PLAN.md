@@ -35,5 +35,5 @@ auto-breakpoint: false
 
 ## Current: M8 — 5.7 缓存清理 + 5.8 导出保真
 
-goal: M22-a 第一批已落地：按源缓存 + Cookie 管理
-breakpoint: 下一步：M22-a 第二批 = loginUi 登录表单（todo #19）
+goal: M22-a 已闭环：按源缓存 + Cookie 管理 + loginUi 表单
+breakpoint: M22-a 已闭环；下一批候选：备份恢复（zip+JSON）或主题/阅读设置扩展
