@@ -1115,6 +1115,7 @@ final class _ProbeHttpClient implements HttpClient {
       statusCode: 200,
       headers: const <String, List<String>>{},
       body: body,
+      url: 'https://js.test/',
     ),
   );
 }
