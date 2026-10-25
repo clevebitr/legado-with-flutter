@@ -38,6 +38,12 @@ abstract interface class AppNavigation {
   /// Opens the 高亮标签 list.
   void openHighlightRules(BuildContext context);
 
+  /// Opens the per-source cache page (`docs/dev/roadmap.md` M22, ADR-0072 §决策 1).
+  void openCacheManage(BuildContext context);
+
+  /// Opens the cookie jar view (`docs/dev/roadmap.md` M22, ADR-0072 §决策 2).
+  void openCookies(BuildContext context);
+
   /// Opens the reading records of one book.
   void openBookReadingRecords(
     BuildContext context, {
@@ -119,6 +125,14 @@ final class UnboundAppNavigation implements AppNavigation {
   void openHighlightRules(BuildContext context) => _warn(
     'No AppNavigation is bound: the highlight-rule entry does nothing.',
   );
+
+  @override
+  void openCacheManage(BuildContext context) =>
+      _warn('No AppNavigation is bound: the cache entry does nothing.');
+
+  @override
+  void openCookies(BuildContext context) =>
+      _warn('No AppNavigation is bound: the cookie entry does nothing.');
 
   @override
   void openReader(

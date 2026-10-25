@@ -93,3 +93,4 @@
 | [0069](0069-engine-compatibility-gap-from-a-real-export.md) | 用一份「上游可用、本仓不可用」的真实导出定位引擎语法差距（G1–G9）：修 G1/G3/G4/G5/G7/G8，登记 G2/G6/G9 与封面 per-URL header | Accepted（2026-10-24，用户裁决「G1–G5+G7+G8 全做完，G6 登记」） | 本次新增 |
 | [0070](0070-m20-rule-storage-and-in-book-search.md) | M20：四类规则一张表 + `kind` + JSON payload（未知键保留、坏 payload 标坏不丢）；书内搜索顺序预取 + 可停止 + 命中带偏移；净化接在 `replaceRegex` 之后、规则一变即作废正文缓存 | Accepted（2026-10-24，用户裁决三项 + 开工前四项增补） | 本次新增 |
 | [0071](0071-rule-and-book-source-import-export.md) | 净化规则导入/导出（上游 `ReplaceRule` 数组、三入口、预览 + 逐条勾选、`name`+`pattern` 去重）与书源导出（全部/选中，用户态覆盖 payload）；净化按 scope 分正文/标题执行，`@js:` 替换一条规则一章一个 job | Accepted（2026-10-24，用户裁决四项：连 scope 与 `@js:` 一起做） | 本次新增 |
+| [0072](0072-m22a-cache-cookie-login.md) | M22-a：`cache_entries` 加 `source_key`（v10，升级清空旧缓存）与按源缓存管理页；Cookie 管理页（可见/可删、不显示值、不做按源隔离）；`loginUi` 表单照上游 `RowUi` 渲染 + 登录信息按源存明文快照、沙箱经 `JsJob` 快照读 `source.getLoginInfo*` | Accepted（2026-10-25，用户裁决 M22 第一批范围与四项边界） | 本次新增 |

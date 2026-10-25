@@ -27,6 +27,7 @@ class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
     required String payload,
     required Duration ttl,
     String? scopeKey,
+    String? sourceKey,
   }) async {
     await into(cacheEntries).insertOnConflictUpdate(
       CacheEntriesCompanion.insert(
@@ -39,6 +40,7 @@ class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
         payload: payload,
         expiresAt: _clock.now().add(ttl),
         scopeKey: Value<String?>(scopeKey),
+        sourceKey: Value<String?>(sourceKey),
       ),
     );
   }
@@ -95,6 +97,33 @@ class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
   Future<int> deleteByScope(String scopeKey) => (delete(
     cacheEntries,
   )..where((CacheEntries table) => table.scopeKey.equals(scopeKey))).go();
+
+  /// Counts the entries written for one book source (`ADR-0072 §决策 1`).
+  Future<int> countBySourceKey(String sourceKey) async {
+    final QueryRow row = await customSelect(
+      'SELECT COUNT(*) AS c FROM ${cacheEntries.actualTableName} '
+      'WHERE source_key = ?',
+      variables: <Variable<Object>>[Variable<String>(sourceKey)],
+    ).getSingle();
+
+    return row.data['c'] as int? ?? 0;
+  }
+
+  /// Deletes one book source's entries and returns how many rows were removed.
+  Future<int> deleteBySourceKey(String sourceKey) =>
+      (delete(cacheEntries)..where(
+            ($CacheEntriesTable table) => table.sourceKey.equals(sourceKey),
+          ))
+          .go();
+
+  /// Counts every stored entry.
+  Future<int> countAll() async {
+    final QueryRow row = await customSelect(
+      'SELECT COUNT(*) AS c FROM ${cacheEntries.actualTableName}',
+    ).getSingle();
+
+    return row.data['c'] as int? ?? 0;
+  }
 
   /// Deletes **every** entry and returns how many rows were removed.
   Future<int> deleteAll() => delete(cacheEntries).go();

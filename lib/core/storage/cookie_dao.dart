@@ -75,6 +75,11 @@ class CookieDao extends DatabaseAccessor<ReaderDatabase> with _$CookieDaoMixin {
           ))
           .go();
 
+  /// Deletes every cookie of [domain] and answers how many went away.
+  Future<int> deleteByDomain(String domain) => (delete(
+    cookies,
+  )..where(($CookiesTable table) => table.domain.equals(domain))).go();
+
   /// Deletes the whole jar (settings' "clear cache" and tests).
   Future<int> deleteAll() => delete(cookies).go();
 }

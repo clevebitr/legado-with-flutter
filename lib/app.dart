@@ -36,6 +36,7 @@ import 'package:flutter_reader/features/book_source/presentation/pages/book_sour
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_edit_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_list_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/cache_manage_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/source_captcha_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/source_verification_page.dart';
@@ -74,6 +75,7 @@ import 'package:flutter_reader/features/rules/presentation/rules_route.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_theme_mode.dart';
 import 'package:flutter_reader/features/settings/presentation/notifiers/settings_notifier.dart';
+import 'package:flutter_reader/features/settings/presentation/pages/cookie_manage_page.dart';
 import 'package:flutter_reader/features/settings/presentation/pages/settings_page.dart';
 import 'package:flutter_reader/features/settings/presentation/settings_route.dart';
 import 'package:flutter_reader/features/shell/presentation/pages/about_page.dart';
@@ -247,6 +249,8 @@ class ReaderApp extends ConsumerWidget {
       ruleId: route.ruleId,
     ),
     RulesImportRoute() => const RulesImportPage(),
+    BookSourceCacheRoute() => const CacheManagePage(),
+    SettingsCookiesRoute() => const CookieManagePage(),
     // 落地页就是外壳（ADR-0055 §决策 5）：未知参数回落到它，而不是搜索页。
     _ => const AppShell(),
   };
@@ -339,6 +343,14 @@ final class _RootNavigation implements AppNavigation {
   @override
   void openBookmarks(BuildContext context) =>
       pushReaderRoute(context, const ReaderRoute.bookmarks());
+
+  @override
+  void openCacheManage(BuildContext context) =>
+      pushBookSourceRoute(context, const BookSourceRoute.cacheManage());
+
+  @override
+  void openCookies(BuildContext context) =>
+      pushSettingsRoute(context, const SettingsRoute.cookies());
 
   @override
   void openReplaceRules(BuildContext context) =>

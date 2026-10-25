@@ -107,6 +107,31 @@ void main() {
       ]);
     });
 
+    test('deleteByDomain_givenTwoDomains_removesOnlyThatOne', () async {
+      // Cookie 管理页的「清空该域」（ADR-0072 §决策 2）。
+      await dao.upsert(
+        domain: 'a.test',
+        path: '/',
+        name: 'token',
+        value: '1',
+        isSecure: false,
+        expiresAt: null,
+      );
+      await dao.upsert(
+        domain: 'b.test',
+        path: '/',
+        name: 'token',
+        value: '2',
+        isSecure: false,
+        expiresAt: null,
+      );
+
+      expect(await dao.deleteByDomain('a.test'), 1);
+      expect((await dao.findAll()).map((CookieRow row) => row.domain), <String>[
+        'b.test',
+      ]);
+    });
+
     test('deleteAll_whenCalled_emptiesTheJar', () async {
       await save();
       await save(name: 'other');

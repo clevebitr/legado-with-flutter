@@ -91,4 +91,28 @@ final class CookieDaoStore implements CookieStore {
 
     return removed ?? 0;
   }
+
+  @override
+  Future<int> deleteByDomain(String domain) async {
+    final int? removed = await absorbCacheFailure<int>(
+      () => _dao.deleteByDomain(domain),
+      logger: _logger,
+      scope: _scope,
+      url: domain,
+    );
+
+    return removed ?? 0;
+  }
+
+  @override
+  Future<int> deleteAll() async {
+    final int? removed = await absorbCacheFailure<int>(
+      _dao.deleteAll,
+      logger: _logger,
+      scope: _scope,
+      url: 'cookies',
+    );
+
+    return removed ?? 0;
+  }
 }

@@ -1626,4 +1626,90 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rulesListMenu => 'More';
+
+  @override
+  String get mySectionData => 'Data';
+
+  @override
+  String get cacheManageTitle => 'Cached chapters';
+
+  @override
+  String get cacheManageMore => 'More';
+
+  @override
+  String cacheManageTotal(int count) {
+    return '$count cached chapters in total';
+  }
+
+  @override
+  String cacheManageSourceCount(int count) {
+    return '$count chapters';
+  }
+
+  @override
+  String get cacheManageClearSource => 'Clear this source';
+
+  @override
+  String get cacheManageClearExpired => 'Clear expired entries';
+
+  @override
+  String get cacheManageClearAll => 'Clear the whole cache';
+
+  @override
+  String get cacheManageClearAllTitle => 'Clear the whole cache?';
+
+  @override
+  String get cacheManageClearAllBody =>
+      'Cached chapters and probe results are downloaded again when needed.';
+
+  @override
+  String get cacheManageEmpty => 'Nothing is cached.';
+
+  @override
+  String get cacheManageLoadFailed => 'The cache could not be read.';
+
+  @override
+  String get myCookies => 'Cookies';
+
+  @override
+  String get myCookiesBody => 'What sites stored to keep you signed in';
+
+  @override
+  String get cookieManageTitle => 'Cookies';
+
+  @override
+  String get cookieManageMore => 'More';
+
+  @override
+  String get cookieManageSession => 'Until the app closes';
+
+  @override
+  String cookieManageExpiresAt(String moment) {
+    return 'Expires $moment';
+  }
+
+  @override
+  String get cookieManageDelete => 'Delete this cookie';
+
+  @override
+  String get cookieManageClearDomain => 'Clear this domain';
+
+  @override
+  String get cookieManageClearExpired => 'Clear expired cookies';
+
+  @override
+  String get cookieManageClearAll => 'Clear all cookies';
+
+  @override
+  String get cookieManageClearAllTitle => 'Clear all cookies?';
+
+  @override
+  String get cookieManageClearAllBody =>
+      'Every site will ask you to sign in again.';
+
+  @override
+  String get cookieManageEmpty => 'No cookies are stored.';
+
+  @override
+  String get cookieManageLoadFailed => 'The cookies could not be read.';
 }

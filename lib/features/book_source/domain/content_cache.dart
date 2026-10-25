@@ -27,6 +27,18 @@ abstract interface class ContentCache {
   /// Deletes one book's cached chapter bodies and answers how many went away.
   Future<int> clearForBook({required String sourceId, required String bookUrl});
 
+  /// How many cached bodies belong to one book source (`docs/dev/roadmap.md` M22, ADR-0072 §决策 1).
+  Future<int> countForSource(String sourceId);
+
+  /// Deletes one book source's cached bodies and answers how many went away.
+  Future<int> clearForSource(String sourceId);
+
+  /// How many entries the cache holds in total, chapters and charset probes alike.
+  Future<int> countAll();
+
+  /// Drops the entries whose TTL has passed and answers how many went away.
+  Future<int> clearExpired();
+
   /// Deletes **every** cached entry.
   ///
   /// Used when the user's purge rules change: the stored bodies are finished text with the old

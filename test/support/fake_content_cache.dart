@@ -15,6 +15,15 @@ final class FakeContentCache implements ContentCache {
   /// The keys written, in order.
   final List<String> writes = <String>[];
 
+  /// Per-source counts the page reads (`countForSource`).
+  final Map<String, int> sourceCounts = <String, int>{};
+
+  /// When set, [countForSource] throws it (a broken database).
+  Exception? sourceCountFailure;
+
+  /// What [countAll] answers.
+  int totalCount = 0;
+
   /// The `bookUrl` of every write, in order (`null` for an unscoped write).
   final List<String?> writeScopes = <String?>[];
 
@@ -56,6 +65,38 @@ final class FakeContentCache implements ContentCache {
     required String bookUrl,
   }) async {
     scopeCalls.add('clear|$sourceId|$bookUrl');
+    final int removed = entries.length;
+    entries.clear();
+
+    return removed;
+  }
+
+  @override
+  Future<int> countForSource(String sourceId) async {
+    scopeCalls.add('sourceCount|$sourceId');
+    final Exception? failure = sourceCountFailure;
+    if (failure != null) {
+      throw failure;
+    }
+
+    return sourceCounts[sourceId] ?? 0;
+  }
+
+  @override
+  Future<int> clearForSource(String sourceId) async {
+    scopeCalls.add('sourceClear|$sourceId');
+    final int removed = entries.length;
+    entries.clear();
+
+    return removed;
+  }
+
+  @override
+  Future<int> countAll() async => totalCount;
+
+  @override
+  Future<int> clearExpired() async {
+    scopeCalls.add('clearExpired');
     final int removed = entries.length;
     entries.clear();
 

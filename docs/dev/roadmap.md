@@ -443,7 +443,9 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 并发上限接入用户设置时必须**显式校验 / 钳制 `> 0`**（今天只有 `assert`，release 会剥掉；`0` = 永久排队） | ✅ **已闭环（5.6，2026-10-21）**：`budgetOrDefault` 在 release 也生效（`<= 0` 回落默认 + warning），设置页的下限也是 1 |
 | `httpClientProvider` 是 autoDispose，预算挂在实例上 ⇒ 跨操作会重建 | ✅ **已闭环（5.6）**：改 `keepAlive`，预算跨操作保持一份（批量下载因此不必另起机制） |
 | `extra` 的导出合并（`toLegadoJson`） | ✅ **已闭环（M23，2026-10-25，ADR-0071 §决策 3）**：不需要 `toLegadoJson` —— 书源导出写的是**存储里的 payload**，只把 `enabled` / `customOrder` 换成当前用户态，未知键与键序天然保真；单条与批量（全部 / 选中）同一实现 |
-| 按书源清理缓存（给 `cache_entries` 加列 + 迁移） | **5.7 ②**（① 全量清空 ✅ 已随 5.6 落地；② 仍按真实需求排期） |
+| 按书源清理缓存（给 `cache_entries` 加列 + 迁移） | ✅ **已闭环（M22-a，2026-10-25，ADR-0072 §决策 1）**：v10 给缓存加 `source_key` + 索引（升级时顺带清空旧缓存），「我的 → 缓存管理」按源列章数、可清理该源 / 过期 / 全部 |
+| 每书源 **Cookie 隔离**（本仓的 Cookie 罐按域共享） | **未做（ADR-0072 §决策 2）**：M22-a 先把「能看能删」做出来，共享语义保持不变。触发 = 出现「两个源同域但需要不同会话」的真实需求 |
+| 登录信息（`login_info`）**明文存库** | **登记差异（ADR-0072 §决策 3）**：与 v8 起明文存的 Cookie 同级；触发 = 引入 `flutter_secure_storage` 或系统密钥库封装时一并改。另：`source.putLoginHeader` / `java.upLoginData` 仍未实现 |
 | Android **前台服务**（通知 + `startForeground`）：批量校验现在只有 `PARTIAL_WAKE_LOCK` | **未做（5.10 登记，ADR-0043 §决策 3）**：需要通知渠道 + `POST_NOTIFICATIONS` 运行时权限 + 服务生命周期三件原生接线。触发 = 真机上息屏后批量校验被系统杀掉 |
 | 校验的**阶段开关与单源超时**目前是页面内状态（默认全开 + 180 s），不持久化 | **未排期（5.10 登记，ADR-0043 §后果）**：要落进 `AppSettings`（`shared_preferences`）就得跨 feature 取设置，触发 = 用户反馈每次都要重选 |
 | 文件型数据库（后台 isolate + 原生库）无自动化覆盖 | **持续约定**：5.1 起每个新表都由 `integration_test/on_disk_database_test.dart` 真实写入一次（`books` / `reading_progress` 已随 5.4 补上） |

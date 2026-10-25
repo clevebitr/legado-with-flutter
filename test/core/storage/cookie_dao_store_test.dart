@@ -93,6 +93,34 @@ void main() {
       expect(await store.loadAll(), isEmpty);
     });
 
+    test('deleteByDomain_whenCalled_answersHowManyWentAway', () async {
+      await store.save(cookie());
+      await store.save(
+        const StoredCookie(
+          name: 'session',
+          value: 'abc',
+          domain: 'other.test',
+          path: '/',
+          isSecure: false,
+          isDeletion: false,
+          expiresAt: null,
+        ),
+      );
+
+      expect(await store.deleteByDomain('example.com'), 1);
+      expect(
+        (await store.loadAll()).map((StoredCookie item) => item.domain),
+        <String>['other.test'],
+      );
+    });
+
+    test('deleteAll_whenCalled_emptiesTheJar', () async {
+      await store.save(cookie());
+
+      expect(await store.deleteAll(), 1);
+      expect(await store.loadAll(), isEmpty);
+    });
+
     test('deleteExpired_whenOneExpired_answersOne', () async {
       await store.save(cookie(name: 'old', expiresAt: clock.now()));
       await store.save(

@@ -15,4 +15,10 @@ abstract interface class CookieStore {
 
   /// Deletes every expired cookie and answers how many went away.
   Future<int> deleteExpired(DateTime now);
+
+  /// Deletes every cookie of [domain] and answers how many went away.
+  Future<int> deleteByDomain(String domain);
+
+  /// Deletes the whole jar and answers how many went away.
+  Future<int> deleteAll();
 }

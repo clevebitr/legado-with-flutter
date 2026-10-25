@@ -2282,5 +2282,124 @@
   "rulesListMenu": "More",
   "@rulesListMenu": {
     "@description": "Tooltip of the overflow menu of a rule list page."
+  },
+  "mySectionData": "Data",
+  "@mySectionData": {
+    "@description": "Section label of the cache and cookie entries in the Me tab."
+  },
+  "cacheManageTitle": "Cached chapters",
+  "@cacheManageTitle": {
+    "@description": "Title of the per-source cache page."
+  },
+  "cacheManageMore": "More",
+  "@cacheManageMore": {
+    "@description": "Tooltip of the cache page's overflow menu."
+  },
+  "cacheManageTotal": "{count} cached chapters in total",
+  "@cacheManageTotal": {
+    "@description": "Total line of the cache page.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cacheManageSourceCount": "{count} chapters",
+  "@cacheManageSourceCount": {
+    "@description": "How many cached chapters one book source holds.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cacheManageClearSource": "Clear this source",
+  "@cacheManageClearSource": {
+    "@description": "Row action of the cache page."
+  },
+  "cacheManageClearExpired": "Clear expired entries",
+  "@cacheManageClearExpired": {
+    "@description": "Overflow action of the cache page."
+  },
+  "cacheManageClearAll": "Clear the whole cache",
+  "@cacheManageClearAll": {
+    "@description": "Overflow action of the cache page."
+  },
+  "cacheManageClearAllTitle": "Clear the whole cache?",
+  "@cacheManageClearAllTitle": {
+    "@description": "Confirmation title of the cache page."
+  },
+  "cacheManageClearAllBody": "Cached chapters and probe results are downloaded again when needed.",
+  "@cacheManageClearAllBody": {
+    "@description": "Confirmation body of the cache page."
+  },
+  "cacheManageEmpty": "Nothing is cached.",
+  "@cacheManageEmpty": {
+    "@description": "Empty state of the cache page."
+  },
+  "cacheManageLoadFailed": "The cache could not be read.",
+  "@cacheManageLoadFailed": {
+    "@description": "Failure state of the cache page."
+  },
+  "myCookies": "Cookies",
+  "@myCookies": {
+    "@description": "Me tab entry of the cookie jar page."
+  },
+  "myCookiesBody": "What sites stored to keep you signed in",
+  "@myCookiesBody": {
+    "@description": "Subtitle of the cookie jar entry."
+  },
+  "cookieManageTitle": "Cookies",
+  "@cookieManageTitle": {
+    "@description": "Title of the cookie jar page."
+  },
+  "cookieManageMore": "More",
+  "@cookieManageMore": {
+    "@description": "Tooltip of the cookie page's overflow menu."
+  },
+  "cookieManageSession": "Until the app closes",
+  "@cookieManageSession": {
+    "@description": "Second line of a session cookie."
+  },
+  "cookieManageExpiresAt": "Expires {moment}",
+  "@cookieManageExpiresAt": {
+    "@description": "Second line of a cookie with an expiry.",
+    "placeholders": {
+      "moment": {
+        "type": "String"
+      }
+    }
+  },
+  "cookieManageDelete": "Delete this cookie",
+  "@cookieManageDelete": {
+    "@description": "Row action of the cookie page."
+  },
+  "cookieManageClearDomain": "Clear this domain",
+  "@cookieManageClearDomain": {
+    "@description": "Section action of the cookie page."
+  },
+  "cookieManageClearExpired": "Clear expired cookies",
+  "@cookieManageClearExpired": {
+    "@description": "Overflow action of the cookie page."
+  },
+  "cookieManageClearAll": "Clear all cookies",
+  "@cookieManageClearAll": {
+    "@description": "Overflow action of the cookie page."
+  },
+  "cookieManageClearAllTitle": "Clear all cookies?",
+  "@cookieManageClearAllTitle": {
+    "@description": "Confirmation title of the cookie page."
+  },
+  "cookieManageClearAllBody": "Every site will ask you to sign in again.",
+  "@cookieManageClearAllBody": {
+    "@description": "Confirmation body of the cookie page."
+  },
+  "cookieManageEmpty": "No cookies are stored.",
+  "@cookieManageEmpty": {
+    "@description": "Empty state of the cookie page."
+  },
+  "cookieManageLoadFailed": "The cookies could not be read.",
+  "@cookieManageLoadFailed": {
+    "@description": "Failure state of the cookie page."
   }
 }

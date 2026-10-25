@@ -53,12 +53,24 @@ class $CacheEntriesTable extends CacheEntries
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _sourceKeyMeta = const VerificationMeta(
+    'sourceKey',
+  );
+  @override
+  late final GeneratedColumn<String> sourceKey = GeneratedColumn<String>(
+    'source_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     cacheKey,
     payload,
     expiresAt,
     scopeKey,
+    sourceKey,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -102,6 +114,12 @@ class $CacheEntriesTable extends CacheEntries
         scopeKey.isAcceptableOrUnknown(data['scope_key']!, _scopeKeyMeta),
       );
     }
+    if (data.containsKey('source_key')) {
+      context.handle(
+        _sourceKeyMeta,
+        sourceKey.isAcceptableOrUnknown(data['source_key']!, _sourceKeyMeta),
+      );
+    }
     return context;
   }
 
@@ -127,6 +145,10 @@ class $CacheEntriesTable extends CacheEntries
         DriftSqlType.string,
         data['${effectivePrefix}scope_key'],
       ),
+      sourceKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_key'],
+      ),
     );
   }
 
@@ -150,11 +172,19 @@ class CacheEntry extends DataClass implements Insertable<CacheEntry> {
   ///
   /// Takes no part in the lookup key; it only supports per-book cache views.
   final String? scopeKey;
+
+  /// Digest of the book source the entry came from (`ADR-0072 §决策 1`).
+  ///
+  /// Like [scopeKey] it is a view column, not part of the key: the per-source cache page counts and
+  /// clears by it. `null` only for rows written before v10 — the migration drops those, so the
+  /// page never shows a count it cannot justify.
+  final String? sourceKey;
   const CacheEntry({
     required this.cacheKey,
     required this.payload,
     required this.expiresAt,
     this.scopeKey,
+    this.sourceKey,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -164,6 +194,9 @@ class CacheEntry extends DataClass implements Insertable<CacheEntry> {
     map['expires_at'] = Variable<DateTime>(expiresAt);
     if (!nullToAbsent || scopeKey != null) {
       map['scope_key'] = Variable<String>(scopeKey);
+    }
+    if (!nullToAbsent || sourceKey != null) {
+      map['source_key'] = Variable<String>(sourceKey);
     }
     return map;
   }
@@ -176,6 +209,9 @@ class CacheEntry extends DataClass implements Insertable<CacheEntry> {
       scopeKey: scopeKey == null && nullToAbsent
           ? const Value.absent()
           : Value(scopeKey),
+      sourceKey: sourceKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceKey),
     );
   }
 
@@ -189,6 +225,7 @@ class CacheEntry extends DataClass implements Insertable<CacheEntry> {
       payload: serializer.fromJson<String>(json['payload']),
       expiresAt: serializer.fromJson<DateTime>(json['expiresAt']),
       scopeKey: serializer.fromJson<String?>(json['scopeKey']),
+      sourceKey: serializer.fromJson<String?>(json['sourceKey']),
     );
   }
   @override
@@ -199,6 +236,7 @@ class CacheEntry extends DataClass implements Insertable<CacheEntry> {
       'payload': serializer.toJson<String>(payload),
       'expiresAt': serializer.toJson<DateTime>(expiresAt),
       'scopeKey': serializer.toJson<String?>(scopeKey),
+      'sourceKey': serializer.toJson<String?>(sourceKey),
     };
   }
 
@@ -207,11 +245,13 @@ class CacheEntry extends DataClass implements Insertable<CacheEntry> {
     String? payload,
     DateTime? expiresAt,
     Value<String?> scopeKey = const Value.absent(),
+    Value<String?> sourceKey = const Value.absent(),
   }) => CacheEntry(
     cacheKey: cacheKey ?? this.cacheKey,
     payload: payload ?? this.payload,
     expiresAt: expiresAt ?? this.expiresAt,
     scopeKey: scopeKey.present ? scopeKey.value : this.scopeKey,
+    sourceKey: sourceKey.present ? sourceKey.value : this.sourceKey,
   );
   CacheEntry copyWithCompanion(CacheEntriesCompanion data) {
     return CacheEntry(
@@ -219,6 +259,7 @@ class CacheEntry extends DataClass implements Insertable<CacheEntry> {
       payload: data.payload.present ? data.payload.value : this.payload,
       expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
       scopeKey: data.scopeKey.present ? data.scopeKey.value : this.scopeKey,
+      sourceKey: data.sourceKey.present ? data.sourceKey.value : this.sourceKey,
     );
   }
 
@@ -228,13 +269,15 @@ class CacheEntry extends DataClass implements Insertable<CacheEntry> {
           ..write('cacheKey: $cacheKey, ')
           ..write('payload: $payload, ')
           ..write('expiresAt: $expiresAt, ')
-          ..write('scopeKey: $scopeKey')
+          ..write('scopeKey: $scopeKey, ')
+          ..write('sourceKey: $sourceKey')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(cacheKey, payload, expiresAt, scopeKey);
+  int get hashCode =>
+      Object.hash(cacheKey, payload, expiresAt, scopeKey, sourceKey);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -242,7 +285,8 @@ class CacheEntry extends DataClass implements Insertable<CacheEntry> {
           other.cacheKey == this.cacheKey &&
           other.payload == this.payload &&
           other.expiresAt == this.expiresAt &&
-          other.scopeKey == this.scopeKey);
+          other.scopeKey == this.scopeKey &&
+          other.sourceKey == this.sourceKey);
 }
 
 class CacheEntriesCompanion extends UpdateCompanion<CacheEntry> {
@@ -250,12 +294,14 @@ class CacheEntriesCompanion extends UpdateCompanion<CacheEntry> {
   final Value<String> payload;
   final Value<DateTime> expiresAt;
   final Value<String?> scopeKey;
+  final Value<String?> sourceKey;
   final Value<int> rowid;
   const CacheEntriesCompanion({
     this.cacheKey = const Value.absent(),
     this.payload = const Value.absent(),
     this.expiresAt = const Value.absent(),
     this.scopeKey = const Value.absent(),
+    this.sourceKey = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CacheEntriesCompanion.insert({
@@ -263,6 +309,7 @@ class CacheEntriesCompanion extends UpdateCompanion<CacheEntry> {
     required String payload,
     required DateTime expiresAt,
     this.scopeKey = const Value.absent(),
+    this.sourceKey = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : cacheKey = Value(cacheKey),
        payload = Value(payload),
@@ -272,6 +319,7 @@ class CacheEntriesCompanion extends UpdateCompanion<CacheEntry> {
     Expression<String>? payload,
     Expression<DateTime>? expiresAt,
     Expression<String>? scopeKey,
+    Expression<String>? sourceKey,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -279,6 +327,7 @@ class CacheEntriesCompanion extends UpdateCompanion<CacheEntry> {
       if (payload != null) 'payload': payload,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (scopeKey != null) 'scope_key': scopeKey,
+      if (sourceKey != null) 'source_key': sourceKey,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -288,6 +337,7 @@ class CacheEntriesCompanion extends UpdateCompanion<CacheEntry> {
     Value<String>? payload,
     Value<DateTime>? expiresAt,
     Value<String?>? scopeKey,
+    Value<String?>? sourceKey,
     Value<int>? rowid,
   }) {
     return CacheEntriesCompanion(
@@ -295,6 +345,7 @@ class CacheEntriesCompanion extends UpdateCompanion<CacheEntry> {
       payload: payload ?? this.payload,
       expiresAt: expiresAt ?? this.expiresAt,
       scopeKey: scopeKey ?? this.scopeKey,
+      sourceKey: sourceKey ?? this.sourceKey,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -314,6 +365,9 @@ class CacheEntriesCompanion extends UpdateCompanion<CacheEntry> {
     if (scopeKey.present) {
       map['scope_key'] = Variable<String>(scopeKey.value);
     }
+    if (sourceKey.present) {
+      map['source_key'] = Variable<String>(sourceKey.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -327,6 +381,7 @@ class CacheEntriesCompanion extends UpdateCompanion<CacheEntry> {
           ..write('payload: $payload, ')
           ..write('expiresAt: $expiresAt, ')
           ..write('scopeKey: $scopeKey, ')
+          ..write('sourceKey: $sourceKey, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5748,6 +5803,10 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
   late final $ReadRecordsTable readRecords = $ReadRecordsTable(this);
   late final $CookiesTable cookies = $CookiesTable(this);
   late final $RulesTable rules = $RulesTable(this);
+  late final Index cacheEntriesSource = Index(
+    'cache_entries_source',
+    'CREATE INDEX cache_entries_source ON cache_entries (source_key)',
+  );
   late final Index sourceChecksSourceChecked = Index(
     'source_checks_source_checked',
     'CREATE INDEX source_checks_source_checked ON source_checks (source_id, checked_at)',
@@ -5787,6 +5846,7 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
     readRecords,
     cookies,
     rules,
+    cacheEntriesSource,
     sourceChecksSourceChecked,
     bookmarksBook,
     readRecordsBook,
@@ -5802,6 +5862,7 @@ typedef $$CacheEntriesTableCreateCompanionBuilder =
       required String payload,
       required DateTime expiresAt,
       Value<String?> scopeKey,
+      Value<String?> sourceKey,
       Value<int> rowid,
     });
 typedef $$CacheEntriesTableUpdateCompanionBuilder =
@@ -5810,6 +5871,7 @@ typedef $$CacheEntriesTableUpdateCompanionBuilder =
       Value<String> payload,
       Value<DateTime> expiresAt,
       Value<String?> scopeKey,
+      Value<String?> sourceKey,
       Value<int> rowid,
     });
 
@@ -5839,6 +5901,11 @@ class $$CacheEntriesTableFilterComposer
 
   ColumnFilters<String> get scopeKey => $composableBuilder(
     column: $table.scopeKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceKey => $composableBuilder(
+    column: $table.sourceKey,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5871,6 +5938,11 @@ class $$CacheEntriesTableOrderingComposer
     column: $table.scopeKey,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get sourceKey => $composableBuilder(
+    column: $table.sourceKey,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CacheEntriesTableAnnotationComposer
@@ -5893,6 +5965,9 @@ class $$CacheEntriesTableAnnotationComposer
 
   GeneratedColumn<String> get scopeKey =>
       $composableBuilder(column: $table.scopeKey, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceKey =>
+      $composableBuilder(column: $table.sourceKey, builder: (column) => column);
 }
 
 class $$CacheEntriesTableTableManager
@@ -5930,12 +6005,14 @@ class $$CacheEntriesTableTableManager
                 Value<String> payload = const Value.absent(),
                 Value<DateTime> expiresAt = const Value.absent(),
                 Value<String?> scopeKey = const Value.absent(),
+                Value<String?> sourceKey = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CacheEntriesCompanion(
                 cacheKey: cacheKey,
                 payload: payload,
                 expiresAt: expiresAt,
                 scopeKey: scopeKey,
+                sourceKey: sourceKey,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5944,12 +6021,14 @@ class $$CacheEntriesTableTableManager
                 required String payload,
                 required DateTime expiresAt,
                 Value<String?> scopeKey = const Value.absent(),
+                Value<String?> sourceKey = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CacheEntriesCompanion.insert(
                 cacheKey: cacheKey,
                 payload: payload,
                 expiresAt: expiresAt,
                 scopeKey: scopeKey,
+                sourceKey: sourceKey,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -1579,4 +1579,88 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get rulesListMenu => '更多';
+
+  @override
+  String get mySectionData => '数据';
+
+  @override
+  String get cacheManageTitle => '缓存管理';
+
+  @override
+  String get cacheManageMore => '更多';
+
+  @override
+  String cacheManageTotal(int count) {
+    return '共 $count 章缓存';
+  }
+
+  @override
+  String cacheManageSourceCount(int count) {
+    return '$count 章';
+  }
+
+  @override
+  String get cacheManageClearSource => '清理该源缓存';
+
+  @override
+  String get cacheManageClearExpired => '清理过期条目';
+
+  @override
+  String get cacheManageClearAll => '清空全部缓存';
+
+  @override
+  String get cacheManageClearAllTitle => '清空全部缓存？';
+
+  @override
+  String get cacheManageClearAllBody => '缓存下来的正文与探测结果会在需要时重新下载。';
+
+  @override
+  String get cacheManageEmpty => '还没有缓存。';
+
+  @override
+  String get cacheManageLoadFailed => '缓存读取失败。';
+
+  @override
+  String get myCookies => 'Cookie 管理';
+
+  @override
+  String get myCookiesBody => '站点为保持登录存下的凭据';
+
+  @override
+  String get cookieManageTitle => 'Cookie 管理';
+
+  @override
+  String get cookieManageMore => '更多';
+
+  @override
+  String get cookieManageSession => '关闭应用前有效';
+
+  @override
+  String cookieManageExpiresAt(String moment) {
+    return '过期时间 $moment';
+  }
+
+  @override
+  String get cookieManageDelete => '删除这条 Cookie';
+
+  @override
+  String get cookieManageClearDomain => '清空该域';
+
+  @override
+  String get cookieManageClearExpired => '清理过期 Cookie';
+
+  @override
+  String get cookieManageClearAll => '清空全部 Cookie';
+
+  @override
+  String get cookieManageClearAllTitle => '清空全部 Cookie？';
+
+  @override
+  String get cookieManageClearAllBody => '所有站点都会要求你重新登录。';
+
+  @override
+  String get cookieManageEmpty => '没有存下任何 Cookie。';
+
+  @override
+  String get cookieManageLoadFailed => 'Cookie 读取失败。';
 }

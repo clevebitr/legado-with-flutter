@@ -73,6 +73,19 @@ class MyPage extends ConsumerWidget {
             title: Text(l10n.rulesHighlightTitle),
             onTap: () => navigation.openHighlightRules(context),
           ),
+          // 数据面：缓存（按源）与 Cookie 罐（ADR-0072）。两者都是「看得到才敢动」的东西。
+          _heading(context, l10n.mySectionData),
+          ListTile(
+            leading: const Icon(Icons.sd_storage_outlined),
+            title: Text(l10n.cacheManageTitle),
+            onTap: () => navigation.openCacheManage(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cookie_outlined),
+            title: Text(l10n.myCookies),
+            subtitle: Text(l10n.myCookiesBody),
+            onTap: () => navigation.openCookies(context),
+          ),
           _heading(context, l10n.mySectionApp),
           ListTile(
             leading: const Icon(Icons.settings_outlined),

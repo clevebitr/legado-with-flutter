@@ -79,6 +79,28 @@ void main() {
       expect(printer.events.single.message, contains('reading-record'));
     });
 
+    test('openCacheManage_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openCacheManage(_FakeContext());
+
+      expect(printer.events.single.message, contains('cache'));
+    });
+
+    test('openCookies_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openCookies(_FakeContext());
+
+      expect(printer.events.single.message, contains('cookie'));
+    });
+
     test('openReplaceRules_whenCalled_logsAndDoesNothing', () {
       final FakeLogPrinter printer = FakeLogPrinter();
       final UnboundAppNavigation navigation = UnboundAppNavigation(

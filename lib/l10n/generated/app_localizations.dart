@@ -2975,6 +2975,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get rulesListMenu;
+
+  /// No description provided for @mySectionData.
+  ///
+  /// In en, this message translates to:
+  /// **'Data'**
+  String get mySectionData;
+
+  /// No description provided for @cacheManageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached chapters'**
+  String get cacheManageTitle;
+
+  /// No description provided for @cacheManageMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get cacheManageMore;
+
+  /// No description provided for @cacheManageTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} cached chapters in total'**
+  String cacheManageTotal(int count);
+
+  /// No description provided for @cacheManageSourceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters'**
+  String cacheManageSourceCount(int count);
+
+  /// No description provided for @cacheManageClearSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear this source'**
+  String get cacheManageClearSource;
+
+  /// No description provided for @cacheManageClearExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear expired entries'**
+  String get cacheManageClearExpired;
+
+  /// No description provided for @cacheManageClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the whole cache'**
+  String get cacheManageClearAll;
+
+  /// No description provided for @cacheManageClearAllTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the whole cache?'**
+  String get cacheManageClearAllTitle;
+
+  /// No description provided for @cacheManageClearAllBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached chapters and probe results are downloaded again when needed.'**
+  String get cacheManageClearAllBody;
+
+  /// No description provided for @cacheManageEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is cached.'**
+  String get cacheManageEmpty;
+
+  /// No description provided for @cacheManageLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The cache could not be read.'**
+  String get cacheManageLoadFailed;
+
+  /// No description provided for @myCookies.
+  ///
+  /// In en, this message translates to:
+  /// **'Cookies'**
+  String get myCookies;
+
+  /// No description provided for @myCookiesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'What sites stored to keep you signed in'**
+  String get myCookiesBody;
+
+  /// No description provided for @cookieManageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cookies'**
+  String get cookieManageTitle;
+
+  /// No description provided for @cookieManageMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get cookieManageMore;
+
+  /// No description provided for @cookieManageSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Until the app closes'**
+  String get cookieManageSession;
+
+  /// No description provided for @cookieManageExpiresAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {moment}'**
+  String cookieManageExpiresAt(String moment);
+
+  /// No description provided for @cookieManageDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this cookie'**
+  String get cookieManageDelete;
+
+  /// No description provided for @cookieManageClearDomain.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear this domain'**
+  String get cookieManageClearDomain;
+
+  /// No description provided for @cookieManageClearExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear expired cookies'**
+  String get cookieManageClearExpired;
+
+  /// No description provided for @cookieManageClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all cookies'**
+  String get cookieManageClearAll;
+
+  /// No description provided for @cookieManageClearAllTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all cookies?'**
+  String get cookieManageClearAllTitle;
+
+  /// No description provided for @cookieManageClearAllBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Every site will ask you to sign in again.'**
+  String get cookieManageClearAllBody;
+
+  /// No description provided for @cookieManageEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No cookies are stored.'**
+  String get cookieManageEmpty;
+
+  /// No description provided for @cookieManageLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The cookies could not be read.'**
+  String get cookieManageLoadFailed;
 }
 
 class _AppLocalizationsDelegate

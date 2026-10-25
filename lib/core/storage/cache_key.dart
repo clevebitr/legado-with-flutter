@@ -29,3 +29,10 @@ String cacheScopeKeyFor({required String sourceId, required String bookUrl}) =>
     sha256
         .convert(utf8.encode(<String>[sourceId, bookUrl].join(_fieldSeparator)))
         .toString();
+
+/// Builds the **source key** that groups the cache entries of one book source.
+///
+/// A digest of the source id alone; the per-source cache view counts by it without keeping the
+/// cleartext URL, and it deliberately does **not** take part in the lookup key.
+String cacheSourceKeyFor(String sourceId) =>
+    sha256.convert(utf8.encode(sourceId)).toString();

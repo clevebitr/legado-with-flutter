@@ -155,6 +155,40 @@ void main() {
       });
     });
 
+    testWidgets('build_givenTheDataEntries_showsCacheAndCookies', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester);
+      final AppLocalizations l10n = AppLocalizations.of(
+        tester.element(find.byType(MyPage)),
+      );
+
+      await _scrollTo(tester, find.text(l10n.cacheManageTitle));
+      expect(find.text(l10n.mySectionData), findsOneWidget);
+      expect(find.text(l10n.cacheManageTitle), findsOneWidget);
+      await _scrollTo(tester, find.text(l10n.myCookies));
+      expect(find.text(l10n.myCookies), findsOneWidget);
+    });
+
+    testWidgets('tap_whenTheDataEntriesAreChosen_asksTheMatchingPort', (
+      WidgetTester tester,
+    ) async {
+      final FakeAppNavigation navigation = await _pump(tester);
+      final AppLocalizations l10n = AppLocalizations.of(
+        tester.element(find.byType(MyPage)),
+      );
+
+      await _scrollTo(tester, find.text(l10n.cacheManageTitle));
+      await tester.tap(find.text(l10n.cacheManageTitle));
+      await tester.pumpAndSettle();
+      await _scrollTo(tester, find.text(l10n.myCookies));
+      await tester.tap(find.text(l10n.myCookies));
+      await tester.pumpAndSettle();
+
+      expect(navigation.cacheCalls, 1);
+      expect(navigation.cookieCalls, 1);
+    });
+
     testWidgets('tap_whenAboutIsChosen_asksTheNavigationPort', (
       WidgetTester tester,
     ) async {

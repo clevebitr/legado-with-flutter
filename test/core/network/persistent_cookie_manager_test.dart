@@ -52,6 +52,24 @@ final class _FakeStore implements CookieStore {
     return before - rows.length;
   }
 
+  @override
+  Future<int> deleteByDomain(String domain) async {
+    final int before = rows.length;
+    rows.removeWhere(
+      (String _, StoredCookie cookie) => cookie.domain == domain,
+    );
+
+    return before - rows.length;
+  }
+
+  @override
+  Future<int> deleteAll() async {
+    final int before = rows.length;
+    rows.clear();
+
+    return before;
+  }
+
   /// The storage key of one cookie.
   String _key(StoredCookie cookie) =>
       '${cookie.domain}|${cookie.path}|${cookie.name}';

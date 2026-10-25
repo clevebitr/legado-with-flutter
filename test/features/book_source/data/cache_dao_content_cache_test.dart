@@ -48,6 +48,7 @@ final class _FailingCacheDao extends CacheDao {
     required String payload,
     required Duration ttl,
     String? scopeKey,
+    String? sourceKey,
   }) async => throw error;
 
   @override
@@ -196,6 +197,40 @@ void main() {
         ),
         1,
       );
+    });
+
+    test('countForSource_givenTwoSources_countsEach', () async {
+      await cache.write(sourceId: sourceId, url: url, body: body);
+      await cache.write(
+        sourceId: 'https://other.test',
+        url: 'https://other.test/1.html',
+        body: body,
+      );
+
+      expect(await cache.countForSource(sourceId), 1);
+      expect(await cache.countForSource('https://other.test'), 1);
+      expect(await cache.countForSource('https://none.test'), 0);
+      expect(await cache.countAll(), 2);
+    });
+
+    test('clearForSource_givenTwoSources_removesOnlyThatOne', () async {
+      await cache.write(sourceId: sourceId, url: url, body: body);
+      await cache.write(
+        sourceId: 'https://other.test',
+        url: 'https://other.test/1.html',
+        body: body,
+      );
+
+      expect(await cache.clearForSource(sourceId), 1);
+      expect(await cache.read(sourceId: sourceId, url: url), isNull);
+      expect(await cache.countAll(), 1);
+    });
+
+    test('clearExpired_givenAFreshEntry_keepsIt', () async {
+      await cache.write(sourceId: sourceId, url: url, body: body);
+
+      expect(await cache.clearExpired(), 0);
+      expect(await cache.read(sourceId: sourceId, url: url), body);
     });
 
     test('clearAll_givenStoredBodies_removesEveryEntry', () async {

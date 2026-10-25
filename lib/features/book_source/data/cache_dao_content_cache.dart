@@ -53,10 +53,11 @@ final class CacheDaoContentCache implements ContentCache {
           page: _page,
           payload: body,
           ttl: chapterCacheTtl,
-          // 归属书只用于「按书统计/清理」，不参与键计算：旧条目没有 scope_key 仍然能命中。
+          // 归属书与来源只用于「按书 / 按源统计与清理」，不参与键计算。
           scopeKey: bookUrl == null
               ? null
               : cacheScopeKeyFor(sourceId: sourceId, bookUrl: bookUrl),
+          sourceKey: cacheSourceKeyFor(sourceId),
         );
 
         return true;
@@ -97,6 +98,54 @@ final class CacheDaoContentCache implements ContentCache {
       logger: _logger,
       scope: 'Chapter cache clear',
       url: bookUrl,
+    );
+
+    return removed ?? 0;
+  }
+
+  @override
+  Future<int> countForSource(String sourceId) async {
+    final int? count = await absorbCacheFailure<int>(
+      () => _dao.countBySourceKey(cacheSourceKeyFor(sourceId)),
+      logger: _logger,
+      scope: 'Source cache count',
+      url: sourceId,
+    );
+
+    return count ?? 0;
+  }
+
+  @override
+  Future<int> clearForSource(String sourceId) async {
+    final int? removed = await absorbCacheFailure<int>(
+      () => _dao.deleteBySourceKey(cacheSourceKeyFor(sourceId)),
+      logger: _logger,
+      scope: 'Source cache clear',
+      url: sourceId,
+    );
+
+    return removed ?? 0;
+  }
+
+  @override
+  Future<int> countAll() async {
+    final int? count = await absorbCacheFailure<int>(
+      _dao.countAll,
+      logger: _logger,
+      scope: 'Cache count',
+      url: 'cache',
+    );
+
+    return count ?? 0;
+  }
+
+  @override
+  Future<int> clearExpired() async {
+    final int? removed = await absorbCacheFailure<int>(
+      _dao.deleteExpired,
+      logger: _logger,
+      scope: 'Expired cache clear',
+      url: 'cache',
     );
 
     return removed ?? 0;

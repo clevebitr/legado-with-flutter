@@ -31,7 +31,7 @@ class ReaderDatabase extends _$ReaderDatabase {
   ReaderDatabase(super.e);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -103,6 +103,15 @@ class ReaderDatabase extends _$ReaderDatabase {
         if (!await _hasSchemaObject(rulesKindOrder.entityName)) {
           await m.create(rulesKindOrder);
         }
+      }
+      // v10 给缓存加「来源」列与索引，并清掉旧缓存（ADR-0072 §决策 1）：旧行没有来源摘要，
+      // 留着会让按源统计在 TTL 内少算——缓存是可再生数据，清空比显示错数诚实。
+      if (from < 10) {
+        await _addColumnIfMissing(m, cacheEntries, cacheEntries.sourceKey);
+        if (!await _hasSchemaObject(cacheEntriesSource.entityName)) {
+          await m.create(cacheEntriesSource);
+        }
+        await delete(cacheEntries).go();
       }
     },
   );
