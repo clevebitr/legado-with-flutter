@@ -44,8 +44,15 @@ void main() {
 
     test('pick_givenAnOversizedArchive_answersTheSizeLimitMarker', () async {
       // 超限不是取消：用户要知道为什么文件没被读（对话框在读取前就拒了它）。
+      // 不用 const：const 构造会在编译期折叠，core 层的构造行就没有执行点（ADR-0019）。
+      // ignore: prefer_const_constructors
+      final OversizedBackupArchive oversized = OversizedBackupArchive(
+        name: 'huge.zip',
+        length: 2048,
+      );
+
       final ParseResult<PickedBackupArchive?> result = await _pickerReturning(
-        const OversizedBackupArchive(name: 'huge.zip', length: 2048),
+        oversized,
       ).pick(maxBytes: 1024);
 
       expect(result, isA<ParseFailure<PickedBackupArchive?>>());

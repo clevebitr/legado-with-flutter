@@ -162,6 +162,9 @@ class RuleDao extends DatabaseAccessor<ReaderDatabase> with _$RuleDaoMixin {
         (int removed) => removed > 0,
       );
 
+  /// Deletes every rule, of every kind (`ADR-0074` §决策 3, overwrite restore).
+  Future<int> deleteAll() => delete(rules).go();
+
   /// Deletes every rule of [kind] (the 编辑页「恢复默认」uses it before re-seeding).
   Future<int> deleteKind(String kind) =>
       (delete(rules)..where((Rules table) => table.kind.equals(kind))).go();

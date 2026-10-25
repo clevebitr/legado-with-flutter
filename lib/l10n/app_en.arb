@@ -2554,5 +2554,208 @@
         "type": "int"
       }
     }
+  },
+  "backupAutoTitle": "Automatic backup",
+  "@backupAutoTitle": {
+    "@description": "自动备份"
+  },
+  "backupAutoBody": "Backs up once a day at start-up when the last archive is older than a day.",
+  "@backupAutoBody": {
+    "@description": "启动时若距上次备份超过一天，就自动备份一次。"
+  },
+  "backupRetentionTitle": "Backups to keep",
+  "@backupRetentionTitle": {
+    "@description": "保留份数"
+  },
+  "backupRetentionBody": "Older archives beyond this count are deleted; only files this app wrote are removed.",
+  "@backupRetentionBody": {
+    "@description": "超出份数的旧备份会被删掉；只删本应用写的文件。"
+  },
+  "backupRetentionValue": "{count} files",
+  "@backupRetentionValue": {
+    "@description": "{count} 份",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "backupLocationTitle": "Backup location",
+  "@backupLocationTitle": {
+    "@description": "备份位置"
+  },
+  "backupLocationPrivate": "App private folder",
+  "@backupLocationPrivate": {
+    "@description": "应用私有目录"
+  },
+  "backupLocationChoose": "Choose a folder",
+  "@backupLocationChoose": {
+    "@description": "选择文件夹"
+  },
+  "backupLocationReset": "Use the private folder",
+  "@backupLocationReset": {
+    "@description": "恢复默认"
+  },
+  "backupLocationFallback": "The chosen folder is unavailable; archives go to the app's private folder for now.",
+  "@backupLocationFallback": {
+    "@description": "选的文件夹不可用，暂时写到应用私有目录。"
+  },
+  "backupPasswordTitle": "Backup password",
+  "@backupPasswordTitle": {
+    "@description": "备份口令"
+  },
+  "backupPasswordBody": "When set, whole archives are encrypted (AES-256); the password lives in the system key store.",
+  "@backupPasswordBody": {
+    "@description": "设置后备份整包加密（AES-256），口令存在系统密钥库。"
+  },
+  "backupPasswordChange": "Change the password",
+  "@backupPasswordChange": {
+    "@description": "修改口令"
+  },
+  "backupPasswordSet": "Set a password",
+  "@backupPasswordSet": {
+    "@description": "设置口令"
+  },
+  "backupPasswordClear": "Remove the password",
+  "@backupPasswordClear": {
+    "@description": "清除口令"
+  },
+  "backupPasswordStored": "Set (archives are encrypted)",
+  "@backupPasswordStored": {
+    "@description": "已设置（备份加密）"
+  },
+  "backupPasswordMissing": "Not set (archives stay unencrypted)",
+  "@backupPasswordMissing": {
+    "@description": "未设置（备份不加密）"
+  },
+  "backupPasswordStoreFailed": "The key store is unavailable, so the password was not stored: archives stay unencrypted.",
+  "@backupPasswordStoreFailed": {
+    "@description": "密钥库不可用，口令没存下：备份仍不加密。"
+  },
+  "backupSaveToLocation": "Save to the backup location",
+  "@backupSaveToLocation": {
+    "@description": "保存到备份位置"
+  },
+  "backupSaveAs": "Save as…",
+  "@backupSaveAs": {
+    "@description": "另存为…"
+  },
+  "backupRestoreFromFile": "Restore from a file",
+  "@backupRestoreFromFile": {
+    "@description": "从文件恢复"
+  },
+  "backupSavedTo": "Saved to {path}",
+  "@backupSavedTo": {
+    "@description": "已保存到 {path}",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "backupRemoteTitle": "Cloud backups",
+  "@backupRemoteTitle": {
+    "@description": "云端备份"
+  },
+  "backupRemoteEmpty": "No backup files on the server.",
+  "@backupRemoteEmpty": {
+    "@description": "云端没有备份文件。"
+  },
+  "backupRemoteRestore": "Restore from the cloud",
+  "@backupRemoteRestore": {
+    "@description": "从云端恢复"
+  },
+  "backupRemoteDelete": "Delete the cloud backup",
+  "@backupRemoteDelete": {
+    "@description": "删除云端备份"
+  },
+  "backupCloudUpload": "Upload the current backup",
+  "@backupCloudUpload": {
+    "@description": "上传当前备份"
+  },
+  "backupCloudRefresh": "Refresh the cloud list",
+  "@backupCloudRefresh": {
+    "@description": "刷新云端列表"
+  },
+  "backupWebDavTitle": "WebDAV",
+  "@backupWebDavTitle": {
+    "@description": "WebDAV"
+  },
+  "backupWebDavUrl": "URL (collection)",
+  "@backupWebDavUrl": {
+    "@description": "地址（集合目录）"
+  },
+  "backupWebDavUsername": "User name",
+  "@backupWebDavUsername": {
+    "@description": "账号"
+  },
+  "backupWebDavPassword": "Password",
+  "@backupWebDavPassword": {
+    "@description": "密码"
+  },
+  "backupWebDavSave": "Save the WebDAV configuration",
+  "@backupWebDavSave": {
+    "@description": "保存 WebDAV 配置"
+  },
+  "backupWebDavNotConfigured": "WebDAV is not configured yet.",
+  "@backupWebDavNotConfigured": {
+    "@description": "还没配置 WebDAV。"
+  },
+  "backupPasswordRequired": "This archive is encrypted and needs its password.",
+  "@backupPasswordRequired": {
+    "@description": "这份备份已加密，需要口令。"
+  },
+  "backupPasswordPrompt": "Enter the backup password",
+  "@backupPasswordPrompt": {
+    "@description": "输入备份口令"
+  },
+  "backupPasswordWrong": "That password is wrong; try again.",
+  "@backupPasswordWrong": {
+    "@description": "口令不对，请再试一次。"
+  },
+  "backupMergeMode": "Merge",
+  "@backupMergeMode": {
+    "@description": "合并"
+  },
+  "backupOverwriteMode": "Overwrite",
+  "@backupOverwriteMode": {
+    "@description": "覆盖"
+  },
+  "backupOverwriteWarning": "Overwriting clears this device's book sources, shelf, groups, bookmarks, reading records and rules first, then writes the archive; a safety copy is saved before it starts.",
+  "@backupOverwriteWarning": {
+    "@description": "覆盖会先清空本机的书源、书架、分组、书签、阅读记录与规则，再写入备份，并在恢复前自动保存一份安全副本。"
+  },
+  "backupOverwriteConfirm": "Overwrite this device",
+  "@backupOverwriteConfirm": {
+    "@description": "确认覆盖"
+  },
+  "backupSafetyCopy": "Safety copy saved first: {name}",
+  "@backupSafetyCopy": {
+    "@description": "已先保存安全副本：{name}",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "backupWorkSavingAs": "Saving…",
+  "@backupWorkSavingAs": {
+    "@description": "正在另存…"
+  },
+  "backupWorkUploading": "Uploading…",
+  "@backupWorkUploading": {
+    "@description": "正在上传…"
+  },
+  "backupWorkListingRemote": "Listing the cloud collection…",
+  "@backupWorkListingRemote": {
+    "@description": "正在读取云端列表…"
+  },
+  "backupWorkDownloading": "Downloading…",
+  "@backupWorkDownloading": {
+    "@description": "正在下载…"
+  },
+  "backupLocalTitle": "On this device",
+  "@backupLocalTitle": {
+    "@description": "本机备份"
   }
 }

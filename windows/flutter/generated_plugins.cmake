@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   flutter_inappwebview_windows
   flutter_qjs_next
+  flutter_secure_storage_windows
   flutter_tts
   just_audio_windows
   media_kit_libs_windows_audio

@@ -1,6 +1,8 @@
+import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_contents.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_restore_report.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_table.dart';
+import 'package:flutter_reader/features/backup/domain/entities/restore_mode.dart';
 import 'package:flutter_reader/features/backup/domain/repositories/backup_repository.dart';
 
 /// In-memory [BackupRepository] for the backup use-case tests.
@@ -17,6 +19,9 @@ final class FakeBackupRepository implements BackupRepository {
 
   /// The contents [restore] was called with, or `null` when it was not called.
   BackupContents? restoredContents;
+
+  /// The mode [restore] was called with, or `null` when it was not called.
+  RestoreMode? restoredMode;
 
   /// How often [collect] ran.
   int collectCount = 0;
@@ -41,9 +46,25 @@ final class FakeBackupRepository implements BackupRepository {
   }
 
   @override
-  Future<BackupRestoreReport> restore(BackupContents contents) async {
+  Future<BackupRestoreReport> restore(
+    BackupContents contents, {
+    RestoreMode mode = RestoreMode.merge,
+  }) async {
     restoredContents = contents;
+    restoredMode = mode;
 
     return report;
   }
 }
+
+/// A [BackupRestoreReport] whose restore changed [changed] rows.
+BackupRestoreReport reportWith({required int changed, int preferences = 0}) =>
+    BackupRestoreReport(
+      outcomes: <BackupTable, BackupTableOutcome>{
+        BackupTable.books: BackupTableOutcome(inserted: changed),
+      },
+      preferencesWritten: preferences,
+    );
+
+/// A successful `void` result, for the store fakes.
+const ParseResult<void> voidSuccess = ParseSuccess<void>(null);

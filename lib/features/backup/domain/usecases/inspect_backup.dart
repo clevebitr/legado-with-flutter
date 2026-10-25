@@ -15,10 +15,16 @@ final class InspectBackup {
   const InspectBackup();
 
   /// Decodes [bytes] and answers what the archive holds.
-  Future<ParseResult<BackupPreview>> execute({required List<int> bytes}) async {
+  ///
+  /// [password] is the one the user typed (or the stored one); the codec answers
+  /// `backup.read.passwordRequired` / `backup.read.badPassword` so the page can ask again.
+  Future<ParseResult<BackupPreview>> execute({
+    required List<int> bytes,
+    String? password,
+  }) async {
     final List<int> archive = bytes;
     final ParseResult<BackupSnapshot> decoded = await Isolate.run(
-      () => decodeBackupArchive(archive),
+      () => decodeBackupArchive(archive, password: password),
     );
 
     return switch (decoded) {

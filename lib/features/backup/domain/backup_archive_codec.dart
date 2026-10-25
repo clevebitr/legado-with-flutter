@@ -23,6 +23,7 @@ Uint8List encodeBackupArchive(
   BackupContents contents, {
   required DateTime createdAt,
   required String appVersion,
+  String? password,
 }) {
   final Archive archive = Archive();
 
@@ -50,8 +51,65 @@ Uint8List encodeBackupArchive(
   }
   addDocument(backupPreferencesFileName, contents.preferences);
 
-  return ZipEncoder().encodeBytes(archive);
+  // 口令非空 = 整包 WinZip AES-256（ADR-0074 §决策 4）；不新增密码学依赖。
+  return ZipEncoder(password: password).encodeBytes(archive);
 }
+
+/// Whether [bytes] is a zip whose entries are encrypted.
+///
+/// The decoder needs to know this **before** trying to read anything: an encrypted archive without a
+/// password must answer 「需要口令」, not 「不是备份」. The zip general-purpose flag bit 0 says so, and
+/// the central directory is where it can be read without inflating a thing.
+bool isEncryptedBackupArchive(List<int> bytes) {
+  final int directoryOffset = _centralDirectoryOffset(bytes);
+  final int directorySize = _centralDirectorySize(bytes);
+  if (directoryOffset <= 0 || directorySize <= 0) {
+    return false;
+  }
+
+  var index = directoryOffset;
+  final int end = directoryOffset + directorySize;
+  while (index + 46 <= end && index + 4 <= bytes.length) {
+    if (_uint32(bytes, index) != 0x02014b50) {
+      return false;
+    }
+    if (_uint16(bytes, index + 8) & 0x1 != 0) {
+      return true;
+    }
+    index +=
+        46 +
+        _uint16(bytes, index + 28) +
+        _uint16(bytes, index + 30) +
+        _uint16(bytes, index + 32);
+  }
+
+  return false;
+}
+
+/// Offset of the central directory read from the end-of-central-directory record, or `-1`.
+int _centralDirectoryOffset(List<int> bytes) => _eocdField(bytes, 16);
+
+/// Size of the central directory read from the same record, or `-1`.
+int _centralDirectorySize(List<int> bytes) => _eocdField(bytes, 12);
+
+int _eocdField(List<int> bytes, int fieldOffset) {
+  for (var index = bytes.length - 22; index >= 0; index--) {
+    if (_uint32(bytes, index) == 0x06054b50) {
+      return _uint32(bytes, index + fieldOffset);
+    }
+  }
+
+  return -1;
+}
+
+int _uint16(List<int> bytes, int index) =>
+    (bytes[index] & 0xFF) | ((bytes[index + 1] & 0xFF) << 8);
+
+int _uint32(List<int> bytes, int index) =>
+    (bytes[index] & 0xFF) |
+    ((bytes[index + 1] & 0xFF) << 8) |
+    ((bytes[index + 2] & 0xFF) << 16) |
+    ((bytes[index + 3] & 0xFF) << 24);
 
 /// Reads one archive, refusing anything this build does not understand.
 ///
@@ -62,16 +120,28 @@ Uint8List encodeBackupArchive(
 /// format.
 ParseResult<BackupSnapshot> decodeBackupArchive(
   List<int> bytes, {
+  String? password,
   // 上限可注入只为了让测试用几十字节验证拒绝分支；生产调用一律用默认值。
   int maxArchiveBytes = maxBackupArchiveBytes,
   int maxEntryBytes = maxBackupEntryBytes,
   int maxTotalBytes = maxBackupUncompressedBytes,
   int maxEntries = maxBackupEntryCount,
 }) {
+  final bool isEncrypted = isEncryptedBackupArchive(bytes);
+  if (isEncrypted && password == null) {
+    // 加密包先判、再解：不给口令就报「需要口令」，而不是「这不是备份」（ADR-0074 §决策 4）。
+    return failureAt<BackupSnapshot>(
+      kind: ParseFailureKind.parseFailed,
+      rulePath: 'backup.read.passwordRequired',
+    );
+  }
+
   try {
     return ParseSuccess<BackupSnapshot>(
       _decode(
         bytes,
+        password: password,
+        isEncrypted: isEncrypted,
         maxArchiveBytes: maxArchiveBytes,
         maxEntryBytes: maxEntryBytes,
         maxTotalBytes: maxTotalBytes,
@@ -79,6 +149,17 @@ ParseResult<BackupSnapshot> decodeBackupArchive(
       ),
     );
   } on _BackupFormatError catch (error) {
+    // 加密包 + 给了口令仍然读不出来 = 口令不对：`archive` 在**解条目**时才失败，所以这一个判断
+    // 必须放在最外层。代价是「口令对但条目真的坏」也会被报成口令错，这种包本来也恢复不了。
+    if (isEncrypted &&
+        password != null &&
+        error.rulePath != 'backup.read.badPassword') {
+      return failureAt<BackupSnapshot>(
+        kind: ParseFailureKind.parseFailed,
+        rulePath: 'backup.read.badPassword',
+      );
+    }
+
     return failureAt<BackupSnapshot>(
       kind: error.kind,
       rulePath: error.rulePath,
@@ -123,6 +204,8 @@ T _guarded<T>(String rulePath, T Function() read) {
 
 BackupSnapshot _decode(
   List<int> bytes, {
+  required String? password,
+  required bool isEncrypted,
   required int maxArchiveBytes,
   required int maxEntryBytes,
   required int maxTotalBytes,
@@ -133,8 +216,9 @@ BackupSnapshot _decode(
   }
 
   final Archive archive = _guarded(
-    'backup.read.notZip',
-    () => ZipDecoder().decodeBytes(bytes),
+    // 加密包解不开就是口令错；没加密的包解不开才是「不是 zip」。
+    isEncrypted ? 'backup.read.badPassword' : 'backup.read.notZip',
+    () => ZipDecoder().decodeBytes(bytes, password: password),
   );
 
   final List<ArchiveFile> files = <ArchiveFile>[

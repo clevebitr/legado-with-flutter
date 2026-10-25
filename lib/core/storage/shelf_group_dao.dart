@@ -62,6 +62,12 @@ class ShelfGroupDao extends DatabaseAccessor<ReaderDatabase>
     )..where((BookGroups table) => table.id.equals(id))).go();
   });
 
+  /// Deletes every group, leaving its books ungrouped (`ADR-0074` §决策 3).
+  ///
+  /// The overwrite restore clears the shelf itself, so this only has to remove the groups; the
+  /// `books.groupId` pointers go away with the books.
+  Future<int> deleteAll() => delete(bookGroups).go();
+
   /// Writes [ids]'s normalized order (`0..n-1`) in one transaction.
   Future<void> reorder(List<int> ids) => transaction(() async {
     for (var index = 0; index < ids.length; index++) {

@@ -2,15 +2,19 @@ import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
+import 'package:flutter_reader/core/platform/backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
+import 'package:flutter_reader/core/platform/file_selector_backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/flutter_secure_storage_secret_store.dart';
 import 'package:flutter_reader/core/platform/json_file_picker.dart';
 import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
+import 'package:flutter_reader/core/platform/secret_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -211,6 +215,82 @@ void main() {
       expect(picker, isA<UnsupportedBackupArchivePicker>());
       expect((await picker.pick(maxBytes: 8)).dataOrNull, isNull);
     });
+  });
+
+  group('secretStore', () {
+    test('secretStore_givenAShippedPlatform_usesThePlatformKeyStore', () {
+      for (final FakePlatformInfo platform in <FakePlatformInfo>[
+        const FakePlatformInfo.android(),
+        const FakePlatformInfo.ios(),
+        const FakePlatformInfo.desktop(),
+      ]) {
+        final ProviderContainer container = ProviderContainer.test(
+          overrides: <Override>[
+            platformInfoProvider.overrideWithValue(platform),
+          ],
+        );
+
+        expect(
+          container.read(secretStoreProvider),
+          isA<FlutterSecureStorageSecretStore>(),
+        );
+      }
+    });
+
+    test('secretStore_givenAnUnshippedPlatform_doesNotStore', () async {
+      final ProviderContainer container = ProviderContainer.test(
+        overrides: <Override>[
+          platformInfoProvider.overrideWithValue(
+            const FakePlatformInfo.unsupported(),
+          ),
+        ],
+      );
+
+      final SecretStore store = container.read(secretStoreProvider);
+      expect(store, isA<UnsupportedSecretStore>());
+      expect(await store.write('k', 'v'), isFalse);
+      expect(await store.read('k'), isNull);
+    });
+  });
+
+  group('backupDirectoryPicker', () {
+    test('backupDirectoryPicker_givenAShippedPlatform_usesTheRealDialog', () {
+      for (final FakePlatformInfo platform in <FakePlatformInfo>[
+        const FakePlatformInfo.android(),
+        const FakePlatformInfo.ios(),
+        const FakePlatformInfo.desktop(),
+      ]) {
+        final ProviderContainer container = ProviderContainer.test(
+          overrides: <Override>[
+            platformInfoProvider.overrideWithValue(platform),
+          ],
+        );
+
+        expect(
+          container.read(backupDirectoryPickerProvider),
+          isA<FileSelectorBackupDirectoryPicker>(),
+        );
+      }
+    });
+
+    test(
+      'backupDirectoryPicker_givenAnUnshippedPlatform_picksNothing',
+      () async {
+        final ProviderContainer container = ProviderContainer.test(
+          overrides: <Override>[
+            platformInfoProvider.overrideWithValue(
+              const FakePlatformInfo.unsupported(),
+            ),
+          ],
+        );
+
+        final BackupDirectoryPicker picker = container.read(
+          backupDirectoryPickerProvider,
+        );
+        expect(picker, isA<UnsupportedBackupDirectoryPicker>());
+        expect((await picker.pick()).dataOrNull, isNull);
+      },
+    );
   });
 
   group('longRunningTask', () {

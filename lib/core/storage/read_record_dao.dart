@@ -72,6 +72,9 @@ class ReadRecordDao extends DatabaseAccessor<ReaderDatabase>
             ..limit(limit))
           .get();
 
+  /// Deletes every record (`ADR-0074` §决策 3, overwrite restore).
+  Future<int> deleteAll() => delete(readRecords).go();
+
   /// Appends one finished session and returns its generated id.
   Future<int> insertNew({
     required String sourceUrl,

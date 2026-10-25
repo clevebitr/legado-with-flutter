@@ -12,6 +12,7 @@ import 'package:flutter_reader/features/backup/data/backup_row_codec.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_contents.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_restore_report.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_table.dart';
+import 'package:flutter_reader/features/backup/domain/entities/restore_mode.dart';
 import 'package:flutter_reader/features/backup/domain/repositories/backup_repository.dart';
 
 /// [BackupRepository] on top of the Drift DAOs and the preference store
@@ -167,11 +168,18 @@ final class BackupRepositoryImpl implements BackupRepository {
   }
 
   @override
-  Future<BackupRestoreReport> restore(BackupContents contents) =>
+  Future<BackupRestoreReport> restore(
+    BackupContents contents, {
+    RestoreMode mode = RestoreMode.merge,
+  }) =>
       // 一个事务覆盖全部表与设置：任何一步抛错都整次不落库（ADR-0073 §决策 3）。
       _database.transaction(() async {
         final Map<BackupTable, BackupTableOutcome> outcomes =
             <BackupTable, BackupTableOutcome>{};
+
+        if (mode == RestoreMode.overwrite) {
+          await _clearTables();
+        }
 
         outcomes[BackupTable.bookGroups] = await _restoreGroups(contents);
         outcomes[BackupTable.books] = await _restoreBooks(contents);
@@ -191,6 +199,20 @@ final class BackupRepositoryImpl implements BackupRepository {
           preferencesWritten: preferencesWritten,
         );
       });
+
+  /// Empties the seven tables before an overwrite restore writes them back.
+  ///
+  /// `preferences` is deliberately not touched: it has no natural key, so 「清空」 would mean deleting
+  /// keys this build does not understand (ADR-0074 §决策 3).
+  Future<void> _clearTables() async {
+    await _books.deleteAll();
+    await _bookmarks.deleteAll();
+    await _records.deleteAll();
+    await _rules.deleteAll();
+    // 分组要在书架之后清：书架行没了，group id 引用也一起没了。
+    await _groups.deleteAll();
+    await _sources.deleteAll();
+  }
 
   Future<BackupTableOutcome> _restoreGroups(BackupContents contents) async {
     final _Counter counter = _Counter();

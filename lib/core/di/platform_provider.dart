@@ -1,15 +1,19 @@
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
+import 'package:flutter_reader/core/platform/backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
+import 'package:flutter_reader/core/platform/file_selector_backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/flutter_secure_storage_secret_store.dart';
 import 'package:flutter_reader/core/platform/json_file_picker.dart';
 import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
+import 'package:flutter_reader/core/platform/secret_store.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -75,6 +79,30 @@ BackupArchivePicker backupArchivePicker(Ref ref) {
   return platform.isMobile || platform.isDesktop
       ? const FileSelectorBackupArchivePicker()
       : const UnsupportedBackupArchivePicker();
+}
+
+/// Provides the platform key store for the backup and WebDAV passwords
+/// (`docs/dev/roadmap.md` M22, ADR-0074 §决策 5).
+///
+/// Only Android / iOS / Windows ship a key store here; the other platforms answer “not stored” and
+/// the backup page says the archive stays unencrypted rather than pretending otherwise.
+@Riverpod(keepAlive: true)
+SecretStore secretStore(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? FlutterSecureStorageSecretStore(logger: ref.watch(appLoggerProvider))
+      : UnsupportedSecretStore(logger: ref.watch(appLoggerProvider));
+}
+
+/// Provides the folder dialog the backup location is chosen with (ADR-0074 §决策 1).
+@Riverpod(keepAlive: true)
+BackupDirectoryPicker backupDirectoryPicker(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBackupDirectoryPicker()
+      : const UnsupportedBackupDirectoryPicker();
 }
 
 /// Provides the long-task marker a batch check holds while it runs.

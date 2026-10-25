@@ -341,6 +341,117 @@ final class BackupArchivePickerProvider
 String _$backupArchivePickerHash() =>
     r'b418885595d7f2608a7a967a19cea0fea085e17b';
 
+/// Provides the platform key store for the backup and WebDAV passwords
+/// (`docs/dev/roadmap.md` M22, ADR-0074 §决策 5).
+///
+/// Only Android / iOS / Windows ship a key store here; the other platforms answer “not stored” and
+/// the backup page says the archive stays unencrypted rather than pretending otherwise.
+
+@ProviderFor(secretStore)
+final secretStoreProvider = SecretStoreProvider._();
+
+/// Provides the platform key store for the backup and WebDAV passwords
+/// (`docs/dev/roadmap.md` M22, ADR-0074 §决策 5).
+///
+/// Only Android / iOS / Windows ship a key store here; the other platforms answer “not stored” and
+/// the backup page says the archive stays unencrypted rather than pretending otherwise.
+
+final class SecretStoreProvider
+    extends $FunctionalProvider<SecretStore, SecretStore, SecretStore>
+    with $Provider<SecretStore> {
+  /// Provides the platform key store for the backup and WebDAV passwords
+  /// (`docs/dev/roadmap.md` M22, ADR-0074 §决策 5).
+  ///
+  /// Only Android / iOS / Windows ship a key store here; the other platforms answer “not stored” and
+  /// the backup page says the archive stays unencrypted rather than pretending otherwise.
+  SecretStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'secretStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$secretStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<SecretStore> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SecretStore create(Ref ref) {
+    return secretStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SecretStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SecretStore>(value),
+    );
+  }
+}
+
+String _$secretStoreHash() => r'665c45ceb4c7ded7b53c4b086b4b6b9b4b86940c';
+
+/// Provides the folder dialog the backup location is chosen with (ADR-0074 §决策 1).
+
+@ProviderFor(backupDirectoryPicker)
+final backupDirectoryPickerProvider = BackupDirectoryPickerProvider._();
+
+/// Provides the folder dialog the backup location is chosen with (ADR-0074 §决策 1).
+
+final class BackupDirectoryPickerProvider
+    extends
+        $FunctionalProvider<
+          BackupDirectoryPicker,
+          BackupDirectoryPicker,
+          BackupDirectoryPicker
+        >
+    with $Provider<BackupDirectoryPicker> {
+  /// Provides the folder dialog the backup location is chosen with (ADR-0074 §决策 1).
+  BackupDirectoryPickerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'backupDirectoryPickerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$backupDirectoryPickerHash();
+
+  @$internal
+  @override
+  $ProviderElement<BackupDirectoryPicker> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BackupDirectoryPicker create(Ref ref) {
+    return backupDirectoryPicker(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BackupDirectoryPicker value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BackupDirectoryPicker>(value),
+    );
+  }
+}
+
+String _$backupDirectoryPickerHash() =>
+    r'916608672e8264703ff018e74bef6d355a0bf1b6';
+
 /// Provides the long-task marker a batch check holds while it runs.
 ///
 /// Only Android has a real one; other platforms get a no-op.

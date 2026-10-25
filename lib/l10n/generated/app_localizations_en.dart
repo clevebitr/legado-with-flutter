@@ -1819,4 +1819,158 @@ class AppLocalizationsEn extends AppLocalizations {
   String backupRestored(int changed, int preferences) {
     return 'Merged: $changed rows written, $preferences settings.';
   }
+
+  @override
+  String get backupAutoTitle => 'Automatic backup';
+
+  @override
+  String get backupAutoBody =>
+      'Backs up once a day at start-up when the last archive is older than a day.';
+
+  @override
+  String get backupRetentionTitle => 'Backups to keep';
+
+  @override
+  String get backupRetentionBody =>
+      'Older archives beyond this count are deleted; only files this app wrote are removed.';
+
+  @override
+  String backupRetentionValue(int count) {
+    return '$count files';
+  }
+
+  @override
+  String get backupLocationTitle => 'Backup location';
+
+  @override
+  String get backupLocationPrivate => 'App private folder';
+
+  @override
+  String get backupLocationChoose => 'Choose a folder';
+
+  @override
+  String get backupLocationReset => 'Use the private folder';
+
+  @override
+  String get backupLocationFallback =>
+      'The chosen folder is unavailable; archives go to the app\'s private folder for now.';
+
+  @override
+  String get backupPasswordTitle => 'Backup password';
+
+  @override
+  String get backupPasswordBody =>
+      'When set, whole archives are encrypted (AES-256); the password lives in the system key store.';
+
+  @override
+  String get backupPasswordChange => 'Change the password';
+
+  @override
+  String get backupPasswordSet => 'Set a password';
+
+  @override
+  String get backupPasswordClear => 'Remove the password';
+
+  @override
+  String get backupPasswordStored => 'Set (archives are encrypted)';
+
+  @override
+  String get backupPasswordMissing => 'Not set (archives stay unencrypted)';
+
+  @override
+  String get backupPasswordStoreFailed =>
+      'The key store is unavailable, so the password was not stored: archives stay unencrypted.';
+
+  @override
+  String get backupSaveToLocation => 'Save to the backup location';
+
+  @override
+  String get backupSaveAs => 'Save as…';
+
+  @override
+  String get backupRestoreFromFile => 'Restore from a file';
+
+  @override
+  String backupSavedTo(String path) {
+    return 'Saved to $path';
+  }
+
+  @override
+  String get backupRemoteTitle => 'Cloud backups';
+
+  @override
+  String get backupRemoteEmpty => 'No backup files on the server.';
+
+  @override
+  String get backupRemoteRestore => 'Restore from the cloud';
+
+  @override
+  String get backupRemoteDelete => 'Delete the cloud backup';
+
+  @override
+  String get backupCloudUpload => 'Upload the current backup';
+
+  @override
+  String get backupCloudRefresh => 'Refresh the cloud list';
+
+  @override
+  String get backupWebDavTitle => 'WebDAV';
+
+  @override
+  String get backupWebDavUrl => 'URL (collection)';
+
+  @override
+  String get backupWebDavUsername => 'User name';
+
+  @override
+  String get backupWebDavPassword => 'Password';
+
+  @override
+  String get backupWebDavSave => 'Save the WebDAV configuration';
+
+  @override
+  String get backupWebDavNotConfigured => 'WebDAV is not configured yet.';
+
+  @override
+  String get backupPasswordRequired =>
+      'This archive is encrypted and needs its password.';
+
+  @override
+  String get backupPasswordPrompt => 'Enter the backup password';
+
+  @override
+  String get backupPasswordWrong => 'That password is wrong; try again.';
+
+  @override
+  String get backupMergeMode => 'Merge';
+
+  @override
+  String get backupOverwriteMode => 'Overwrite';
+
+  @override
+  String get backupOverwriteWarning =>
+      'Overwriting clears this device\'s book sources, shelf, groups, bookmarks, reading records and rules first, then writes the archive; a safety copy is saved before it starts.';
+
+  @override
+  String get backupOverwriteConfirm => 'Overwrite this device';
+
+  @override
+  String backupSafetyCopy(String name) {
+    return 'Safety copy saved first: $name';
+  }
+
+  @override
+  String get backupWorkSavingAs => 'Saving…';
+
+  @override
+  String get backupWorkUploading => 'Uploading…';
+
+  @override
+  String get backupWorkListingRemote => 'Listing the cloud collection…';
+
+  @override
+  String get backupWorkDownloading => 'Downloading…';
+
+  @override
+  String get backupLocalTitle => 'On this device';
 }

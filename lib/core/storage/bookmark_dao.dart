@@ -88,6 +88,9 @@ class BookmarkDao extends DatabaseAccessor<ReaderDatabase>
     ),
   );
 
+  /// Deletes every bookmark (`ADR-0074` §决策 3, overwrite restore).
+  Future<int> deleteAll() => delete(bookmarks).go();
+
   /// Deletes bookmark [id] and reports how many rows went away (0 or 1).
   Future<int> deleteById(int id) =>
       (delete(bookmarks)..where((Bookmarks table) => table.id.equals(id))).go();

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Backups grow up: scheduled, encrypted, overwritable, and on WebDAV (ADR-0074, M22-c)
+
+- **A backup location you choose.** 「我的 → 备份与恢复」writes the daily backup, the safety copy and
+  「保存到备份位置」 into the app's private folder by default, or into a folder picked through the
+  system dialog. A folder that disappears falls back to the private one and says so; 「另存为…」
+  keeps the system save dialog.
+- **Automatic backup, once a day.** After the shell's first frame the app writes a backup when the
+  switch is on and the last one is older than 24 h, then prunes the folder to the retention (1–30,
+  default 5; `1` is upstream's `onlyLatestBackup`). Only files matching `backup*.zip[.enc]` are ever
+  deleted. The timestamp advances only after a successful write, so a failure retries next start.
+- **Overwrite restore, with a safety net.** The preview now offers 「合并 / 覆盖」: overwrite clears the
+  seven tables in the same transaction and writes the archive back, but only after a timestamped
+  safety copy has been written to the backup location — if that copy fails, nothing is touched.
+  Preferences are merged in both modes.
+- **Whole-archive encryption (AES-256).** Setting a backup password encrypts the zip with
+  `archive`'s WinZip AES-256 (no new crypto dependency). An encrypted archive without a password
+  answers `backup.read.passwordRequired` and the page asks for it; a wrong one answers
+  `backup.read.badPassword`. The password lives in the platform key store
+  (`flutter_secure_storage`, BSD-3), never inside the backup.
+- **WebDAV.** Configure a collection URL, user name and password (password in the key store, plain
+  `http` only with the existing plaintext opt-in), then upload the current backup, list the remote
+  archives, restore one from the cloud, or delete one. Remote retention follows the same count.
+
 ### The whole library leaves and comes back as one zip (ADR-0073, M22-b)
 
 - **New feature `backup`** (domain / data / presentation). 「我的 → 备份与恢复」exports

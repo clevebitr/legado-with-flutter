@@ -14,6 +14,7 @@ import 'package:flutter_reader/features/backup/data/backup_repository_impl.dart'
 import 'package:flutter_reader/features/backup/domain/entities/backup_contents.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_restore_report.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_table.dart';
+import 'package:flutter_reader/features/backup/domain/entities/restore_mode.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -363,6 +364,38 @@ void main() {
           (await target.repository.collect()).tables[BackupTable.books]!;
       expect(report.outcomes[BackupTable.books]?.inserted, 1);
       expect(books.single['groupName'], isNull);
+    });
+
+    test('restore_givenOverwrite_clearsTheTablesFirst', () async {
+      // 覆盖 = 「回到备份那天」：先清空七张表，再写备份里的内容（ADR-0074 §决策 3）。
+      final BackupContents before = await source.repository.collect();
+      await target.repository.restore(before);
+      await target.books.insertNew(
+        sourceUrl: 'https://a.example',
+        bookUrl: 'https://a.example/book/extra',
+        tocUrl: null,
+        name: '本地多出来的书',
+        author: null,
+        kind: null,
+        coverUrl: null,
+        intro: null,
+        lastChapter: null,
+      );
+
+      final BackupRestoreReport report = await target.repository.restore(
+        before,
+        mode: RestoreMode.overwrite,
+      );
+
+      final BackupContents after = await target.repository.collect();
+      expect(report.outcomes[BackupTable.books]?.inserted, 1);
+      expect(after.tables[BackupTable.books], hasLength(1));
+      expect(
+        after.tables[BackupTable.books]!.single['name'],
+        before.tables[BackupTable.books]!.single['name'],
+      );
+      // 设置仍然只合并：覆盖不动 preferences。
+      expect(after.preferences, before.preferences);
     });
 
     test('restore_givenPreferences_writesOnlyTheKeysItCarries', () async {

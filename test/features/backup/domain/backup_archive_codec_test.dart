@@ -374,6 +374,86 @@ void main() {
     });
   });
 
+  group('encryption', () {
+    Uint8List encrypted() => encodeBackupArchive(
+      _contents(),
+      createdAt: DateTime.utc(2026, 10, 25, 12),
+      appVersion: '9.9.9',
+      password: 'secret',
+    );
+
+    test('isEncryptedBackupArchive_givenAPlainArchive_answersFalse', () {
+      final Uint8List bytes = encodeBackupArchive(
+        _contents(),
+        createdAt: DateTime.utc(2026),
+        appVersion: '1',
+      );
+
+      expect(isEncryptedBackupArchive(bytes), isFalse);
+    });
+
+    test('isEncryptedBackupArchive_givenAnEncryptedArchive_answersTrue', () {
+      expect(isEncryptedBackupArchive(encrypted()), isTrue);
+    });
+
+    test('isEncryptedBackupArchive_givenGarbage_answersFalse', () {
+      expect(isEncryptedBackupArchive(utf8.encode('not a zip')), isFalse);
+    });
+
+    test('decodeBackupArchive_givenTheRightPassword_roundTrips', () {
+      final ParseResult<BackupSnapshot> decoded = decodeBackupArchive(
+        encrypted(),
+        password: 'secret',
+      );
+
+      expect(decoded, isA<ParseSuccess<BackupSnapshot>>());
+      expect(
+        (decoded as ParseSuccess<BackupSnapshot>)
+            .data
+            .contents
+            .tables[BackupTable.books],
+        hasLength(1),
+      );
+    });
+
+    test('decodeBackupArchive_givenNoPassword_asksForOne', () {
+      final ParseResult<BackupSnapshot> decoded = decodeBackupArchive(
+        encrypted(),
+      );
+
+      expect(
+        (decoded as ParseFailure<BackupSnapshot>).rulePath,
+        'backup.read.passwordRequired',
+      );
+    });
+
+    test('decodeBackupArchive_givenAWrongPassword_answersBadPassword', () {
+      final ParseResult<BackupSnapshot> decoded = decodeBackupArchive(
+        encrypted(),
+        password: 'wrong',
+      );
+
+      expect(
+        (decoded as ParseFailure<BackupSnapshot>).rulePath,
+        'backup.read.badPassword',
+      );
+    });
+
+    test('decodeBackupArchive_givenAPasswordForAPlainArchive_stillReads', () {
+      // 口令不是包的属性：没有加密的包带口令也照读（用户可能记错了哪个是加密的）。
+      final Uint8List bytes = encodeBackupArchive(
+        _contents(),
+        createdAt: DateTime.utc(2026),
+        appVersion: '1',
+      );
+
+      expect(
+        decodeBackupArchive(bytes, password: 'secret'),
+        isA<ParseSuccess<BackupSnapshot>>(),
+      );
+    });
+  });
+
   group('entities', () {
     test('countOf_givenATableWithRows_answersItsLength', () {
       expect(_contents().countOf(BackupTable.bookSources), 1);

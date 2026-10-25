@@ -155,6 +155,16 @@ GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `e
 **评估后未采用：** `smtc_windows`（同样 MIT，但走 flutter_rust_bridge，构建需要 Rust 工具链，
 且要另起一套通知端口实现）；`audio_service_win` 复用已有 `audio_service` 接线，代价更小。
 
+**2026-10-25 增量（备份增强，M22-c/ADR-0074）：** `dependencies` 新增 `flutter_secure_storage ^11.2.0`
+（**BSD-3-Clause**，Flutter 团队生态的密钥库封装：Android Keystore / Windows DPAPI / iOS Keychain），
+带入 7 个传递依赖：`flutter_secure_storage_darwin` / `_linux` / `_windows` / `_web` /
+`_platform_interface`（均 BSD-3-Clause）、`win32`（BSD-3-Clause）、`ffi_leak_tracker`（BSD-3-Clause）。
+`dart run tool/scan_licenses.dart` 复算：**201 包 / BSD-3 113 / MIT 55 / Apache 18 / BSD-2 6 / MPL 1 /
+SDK 8，Risky items: none**。GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_convert`。
+**评估后未采用：** `cryptography` / `pointycastle`（整包加密直接用 `archive` 自带的 WinZip AES-256，
+不新增密码学依赖）；`webdav_client`（第三方 WebDAV 包维护不活跃，且我们要的只是四个方法，写在
+`core/network/` 里更可控）。
+
 **2026-10-25 增量（备份与恢复，M22-b/ADR-0073）：** `dependencies` 新增 `archive ^4.5.2`
 （Brendan Duncan，**MIT**，纯 Dart；传递依赖 `path`、`posix` 均宽松许可）。它此前已经是
 `build_runner` 的 **dev 传递依赖**，这次只是把它提升为运行时直接依赖，所以包总数与分类计数
@@ -199,6 +209,7 @@ GPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_c
 | `crypto` | 3.0.7 | BSD-3-Clause |
 | `charset` | 2.0.1 | Apache-2.0 |
 | `archive` | 4.5.2 | MIT |
+| `flutter_secure_storage`（+ 5 个平台实现） | 11.2.0 | BSD-3-Clause |
 | `freezed_annotation` | 3.1.0 | MIT |
 | `json_annotation` | 4.12.0 | BSD-3-Clause |
 | `flutter_lints`（dev） | 6.0.0 | BSD-3-Clause |

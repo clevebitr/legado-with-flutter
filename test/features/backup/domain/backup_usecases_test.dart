@@ -5,13 +5,16 @@ import 'package:flutter_reader/features/backup/domain/entities/backup_contents.d
 import 'package:flutter_reader/features/backup/domain/entities/backup_restore_report.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_snapshot.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_table.dart';
+import 'package:flutter_reader/features/backup/domain/entities/restore_mode.dart';
 import 'package:flutter_reader/features/backup/domain/repositories/restore_completion_hook.dart';
 import 'package:flutter_reader/features/backup/domain/usecases/create_backup.dart';
 import 'package:flutter_reader/features/backup/domain/usecases/inspect_backup.dart';
 import 'package:flutter_reader/features/backup/domain/usecases/restore_backup.dart';
+import 'package:flutter_reader/features/backup/domain/usecases/save_backup.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../support/fake_backup_repository.dart';
+import '../../../support/fake_backup_stores.dart';
 import '../../../support/fake_clock.dart';
 import '../../../support/fake_log_printer.dart';
 
@@ -130,37 +133,97 @@ void main() {
   });
 
   group('RestoreBackup', () {
+    /// Builds the use case over fakes; [settings] carries the password the restore should try.
+    RestoreBackup restoreBackup({
+      required FakeBackupRepository repository,
+      required _RecordingHook hook,
+      FakeBackupSettingsRepository? settings,
+      bool failSafetyCopy = false,
+    }) {
+      final FakeBackupSettingsRepository resolved =
+          settings ?? FakeBackupSettingsRepository();
+      final FakeLocalBackupStore store = FakeLocalBackupStore()
+        ..failWrites = failSafetyCopy;
+
+      return RestoreBackup(
+        repository: repository,
+        completionHook: hook,
+        settings: resolved,
+        saveBackup: SaveBackup(
+          repository: repository,
+          settings: resolved,
+          localStore: store,
+          clock: FakeClock(start: DateTime.utc(2026, 10, 25, 12)),
+          appVersion: '1',
+        ),
+      );
+    }
+
+    Future<List<int>> archiveBytes() async => (await CreateBackup(
+      repository: FakeBackupRepository(contents: _contents),
+      clock: FakeClock(start: DateTime.utc(2026, 10, 25, 12)),
+      appVersion: '1',
+    ).execute()).bytes;
+
     test('execute_givenAValidArchive_mergesItAndNotifiesTheHook', () async {
-      final BackupArchive archive = await CreateBackup(
-        repository: FakeBackupRepository(contents: _contents),
-        clock: FakeClock(start: DateTime.utc(2026, 10, 25)),
-        appVersion: '1',
-      ).execute();
+      final List<int> bytes = await archiveBytes();
       final FakeBackupRepository repository = FakeBackupRepository(
         contents: FakeBackupRepository.emptyContents,
-        report: const BackupRestoreReport(
-          outcomes: <BackupTable, BackupTableOutcome>{
-            BackupTable.books: BackupTableOutcome(inserted: 2),
-          },
-          preferencesWritten: 1,
-        ),
+        report: reportWith(changed: 2, preferences: 1),
       );
       final _RecordingHook hook = _RecordingHook();
 
-      final ParseResult<BackupRestoreReport> result = await RestoreBackup(
+      final ParseResult<RestoreOutcome> result = await restoreBackup(
         repository: repository,
-        completionHook: hook,
-      ).execute(bytes: archive.bytes);
+        hook: hook,
+      ).execute(bytes: bytes);
 
-      final BackupRestoreReport report =
-          (result as ParseSuccess<BackupRestoreReport>).data;
-      expect(report.changedRows, 2);
-      expect(report.preferencesWritten, 1);
+      final RestoreOutcome outcome =
+          (result as ParseSuccess<RestoreOutcome>).data;
+      expect(outcome.report.changedRows, 2);
+      expect(outcome.safetyCopy, isNull);
+      expect(repository.restoredMode, RestoreMode.merge);
       expect(
         repository.restoredContents?.tables[BackupTable.books],
         hasLength(2),
       );
       expect(hook.calls, 1);
+    });
+
+    test('execute_givenOverwrite_writesASafetyCopyFirst', () async {
+      final List<int> bytes = await archiveBytes();
+      final FakeBackupRepository repository = FakeBackupRepository(
+        contents: FakeBackupRepository.emptyContents,
+      );
+
+      final ParseResult<RestoreOutcome> result = await restoreBackup(
+        repository: repository,
+        hook: _RecordingHook(),
+      ).execute(bytes: bytes, mode: RestoreMode.overwrite);
+
+      final RestoreOutcome outcome =
+          (result as ParseSuccess<RestoreOutcome>).data;
+      expect(outcome.safetyCopy?.name, startsWith('backup-before-restore-'));
+      expect(repository.restoredMode, RestoreMode.overwrite);
+    });
+
+    test('execute_givenAFailingSafetyCopy_doesNotRestore', () async {
+      final List<int> bytes = await archiveBytes();
+      final FakeBackupRepository repository = FakeBackupRepository(
+        contents: FakeBackupRepository.emptyContents,
+      );
+      final _RecordingHook hook = _RecordingHook();
+
+      final ParseResult<RestoreOutcome> result = await restoreBackup(
+        repository: repository,
+        hook: hook,
+        failSafetyCopy: true,
+      ).execute(bytes: bytes, mode: RestoreMode.overwrite);
+
+      // 覆盖不可逆：安全副本写不出来就不覆盖（ADR-0074 §决策 3）。
+      expect((result as ParseFailure<RestoreOutcome>).rulePath, 'backup.write');
+      expect(repository.restoredContents, isNull);
+      expect(hook.calls, 0);
     });
 
     test('execute_givenGarbage_doesNotTouchTheDatabaseNorTheHook', () async {
@@ -169,15 +232,59 @@ void main() {
       );
       final _RecordingHook hook = _RecordingHook();
 
-      final ParseResult<BackupRestoreReport> result = await RestoreBackup(
+      final ParseResult<RestoreOutcome> result = await restoreBackup(
         repository: repository,
-        completionHook: hook,
+        hook: hook,
       ).execute(bytes: <int>[1, 2, 3]);
 
-      expect(result, isA<ParseFailure<BackupRestoreReport>>());
+      expect(result, isA<ParseFailure<RestoreOutcome>>());
       expect(repository.restoredContents, isNull);
       expect(hook.calls, 0);
     });
+
+    test(
+      'execute_givenAnEncryptedArchiveWithoutAPassword_asksForOne',
+      () async {
+        final List<int> bytes = (await CreateBackup(
+          repository: FakeBackupRepository(contents: _contents),
+          clock: FakeClock(start: DateTime.utc(2026, 10, 25, 12)),
+          appVersion: '1',
+        ).execute(password: 'secret')).bytes;
+
+        final ParseResult<RestoreOutcome> result = await restoreBackup(
+          repository: FakeBackupRepository(
+            contents: FakeBackupRepository.emptyContents,
+          ),
+          hook: _RecordingHook(),
+        ).execute(bytes: bytes);
+
+        expect(
+          (result as ParseFailure<RestoreOutcome>).rulePath,
+          'backup.read.passwordRequired',
+        );
+      },
+    );
+
+    test(
+      'execute_givenAnEncryptedArchiveWithTheStoredPassword_restores',
+      () async {
+        final List<int> bytes = (await CreateBackup(
+          repository: FakeBackupRepository(contents: _contents),
+          clock: FakeClock(start: DateTime.utc(2026, 10, 25, 12)),
+          appVersion: '1',
+        ).execute(password: 'secret')).bytes;
+
+        final ParseResult<RestoreOutcome> result = await restoreBackup(
+          repository: FakeBackupRepository(
+            contents: FakeBackupRepository.emptyContents,
+          ),
+          hook: _RecordingHook(),
+          settings: FakeBackupSettingsRepository(password: 'secret'),
+        ).execute(bytes: bytes);
+
+        expect(result, isA<ParseSuccess<RestoreOutcome>>());
+      },
+    );
   });
 
   group('report entities', () {

@@ -27,13 +27,21 @@ final class CreateBackup {
   final String _appVersion;
 
   /// Collects everything and answers the archive to hand to the save dialog.
-  Future<BackupArchive> execute() async {
+  ///
+  /// [password] non-empty encrypts the whole archive (WinZip AES-256, ADR-0074 §决策 4); the caller
+  /// passes the password it read from the key store, `null` means 「不加密」.
+  Future<BackupArchive> execute({String? password}) async {
     final BackupContents contents = await _repository.collect();
     final DateTime now = _clock.now();
     // 只捕获原语：`Isolate.run` 的闭包不能带上 `this`（里面有仓储与数据库句柄）。
     final String version = _appVersion;
     final List<int> bytes = await Isolate.run(
-      () => encodeBackupArchive(contents, createdAt: now, appVersion: version),
+      () => encodeBackupArchive(
+        contents,
+        createdAt: now,
+        appVersion: version,
+        password: password,
+      ),
     );
 
     return BackupArchive(

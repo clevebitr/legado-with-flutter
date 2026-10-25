@@ -77,6 +77,11 @@ Future<BackupArchiveSelection?> fileSelectorOpenBackupArchive({
   return PickedBackupArchive(name: file.name, bytes: await file.readAsBytes());
 }
 
+/// Opens the platform's folder dialog and answers the chosen path, or `null` when cancelled.
+///
+/// No type group: a folder is a folder, and `file_selector` filters files only.
+Future<String?> fileSelectorPickDirectory() => getDirectoryPath();
+
 /// Asks the user where to save [bytes] and writes them, or answers `null` when they cancelled.
 Future<String?> fileSelectorSaveBackupArchive({
   required String suggestedName,

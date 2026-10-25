@@ -8,26 +8,32 @@ part of 'backup_notifier.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Drives export and restore (`docs/dev/roadmap.md` M22, ADR-0073).
+/// Drives every backup action (`docs/dev/roadmap.md` M22, ADR-0073 / ADR-0074).
 ///
-/// The notifier owns the order the restore needs — read and preview first, write only after the user
-/// confirms — because that order *is* the feature: an archive is decoded and validated completely
-/// before a single row is written (ADR-0073 §决策 3).
+/// Three orders are owned here because they *are* the feature:
+///
+/// * an archive is decoded and validated completely before a single row is written;
+/// * an overwrite restore writes a safety copy first and aborts when that copy fails;
+/// * an encrypted archive asks for its password only after the codec said it needs one.
 
 @ProviderFor(Backup)
 final backupProvider = BackupProvider._();
 
-/// Drives export and restore (`docs/dev/roadmap.md` M22, ADR-0073).
+/// Drives every backup action (`docs/dev/roadmap.md` M22, ADR-0073 / ADR-0074).
 ///
-/// The notifier owns the order the restore needs — read and preview first, write only after the user
-/// confirms — because that order *is* the feature: an archive is decoded and validated completely
-/// before a single row is written (ADR-0073 §决策 3).
+/// Three orders are owned here because they *are* the feature:
+///
+/// * an archive is decoded and validated completely before a single row is written;
+/// * an overwrite restore writes a safety copy first and aborts when that copy fails;
+/// * an encrypted archive asks for its password only after the codec said it needs one.
 final class BackupProvider extends $NotifierProvider<Backup, BackupState> {
-  /// Drives export and restore (`docs/dev/roadmap.md` M22, ADR-0073).
+  /// Drives every backup action (`docs/dev/roadmap.md` M22, ADR-0073 / ADR-0074).
   ///
-  /// The notifier owns the order the restore needs — read and preview first, write only after the user
-  /// confirms — because that order *is* the feature: an archive is decoded and validated completely
-  /// before a single row is written (ADR-0073 §决策 3).
+  /// Three orders are owned here because they *are* the feature:
+  ///
+  /// * an archive is decoded and validated completely before a single row is written;
+  /// * an overwrite restore writes a safety copy first and aborts when that copy fails;
+  /// * an encrypted archive asks for its password only after the codec said it needs one.
   BackupProvider._()
     : super(
         from: null,
@@ -55,13 +61,15 @@ final class BackupProvider extends $NotifierProvider<Backup, BackupState> {
   }
 }
 
-String _$backupHash() => r'bb4001d0210d4bd79129dce9e59ef2b20784862e';
+String _$backupHash() => r'8be8f1459c47a6945fa2af83e47ee4fde36f953f';
 
-/// Drives export and restore (`docs/dev/roadmap.md` M22, ADR-0073).
+/// Drives every backup action (`docs/dev/roadmap.md` M22, ADR-0073 / ADR-0074).
 ///
-/// The notifier owns the order the restore needs — read and preview first, write only after the user
-/// confirms — because that order *is* the feature: an archive is decoded and validated completely
-/// before a single row is written (ADR-0073 §决策 3).
+/// Three orders are owned here because they *are* the feature:
+///
+/// * an archive is decoded and validated completely before a single row is written;
+/// * an overwrite restore writes a safety copy first and aborts when that copy fails;
+/// * an encrypted archive asks for its password only after the codec said it needs one.
 
 abstract class _$Backup extends $Notifier<BackupState> {
   BackupState build();

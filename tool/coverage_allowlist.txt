@@ -96,3 +96,7 @@ lib/features/rules/domain/repositories/rule_seed_loader.dart  # 纯接口声明�
 lib/core/app_version.dart  # 只有一个 const 声明（无执行点的「无可测量行」子情形）；正确性由 test/core/app_version_test.dart 与 pubspec.yaml 逐字比对保证
 lib/features/backup/domain/entities/backup_table.dart  # 纯 enum 声明，属「无可测量行」子情形；每个值的文件名由 backup_archive_codec_test.dart 的往返与缺表用例行使
 lib/features/backup/domain/repositories/backup_repository.dart  # 纯接口声明（只有两个抽象方法），属「无可测量行」子情形；契约由 BackupRepositoryImpl 与其测试行使
+lib/features/backup/domain/entities/restore_mode.dart  # 纯 enum 声明，属「无可测量行」子情形；两个值的语义由 RestoreBackup 与 BackupRepositoryImpl 的用例行使
+lib/features/backup/domain/repositories/backup_settings_repository.dart  # 纯接口声明，属「无可测量行」子情形；契约由 BackupSettingsRepositoryImpl 与其测试、FakeBackupSettingsRepository 行使
+lib/features/backup/domain/repositories/local_backup_store.dart  # 纯接口声明，属「无可测量行」子情形；契约由 FileSystemLocalBackupStore 与其测试行使
+lib/features/backup/domain/repositories/remote_backup_store.dart  # 纯接口声明，属「无可测量行」子情形；契约由 WebDavRemoteBackupStore 与其测试、FakeRemoteBackupStore 行使

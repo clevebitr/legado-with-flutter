@@ -9,11 +9,15 @@ import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/backup/di.dart';
 import 'package:flutter_reader/features/backup/domain/backup_archive_codec.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_contents.dart';
+import 'package:flutter_reader/features/backup/domain/entities/backup_location.dart';
+import 'package:flutter_reader/features/backup/domain/entities/backup_settings.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_table.dart';
+import 'package:flutter_reader/features/backup/domain/entities/stored_backup.dart';
 import 'package:flutter_reader/features/backup/domain/repositories/restore_completion_hook.dart';
 import 'package:flutter_reader/features/backup/domain/usecases/create_backup.dart';
 import 'package:flutter_reader/features/backup/domain/usecases/inspect_backup.dart';
 import 'package:flutter_reader/features/backup/domain/usecases/restore_backup.dart';
+import 'package:flutter_reader/features/backup/domain/usecases/save_backup.dart';
 import 'package:flutter_reader/features/backup/presentation/pages/backup_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,9 +25,9 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_backup_repository.dart';
+import '../../../../support/fake_backup_stores.dart';
 import '../../../../support/fake_clock.dart';
 
-/// One row in two tables: enough that the preview has something to count.
 const BackupContents _contents = BackupContents(
   tables: <BackupTable, List<Map<String, Object?>>>{
     BackupTable.bookSources: <Map<String, Object?>>[
@@ -36,7 +40,6 @@ const BackupContents _contents = BackupContents(
   preferences: <String, Object?>{'settings.fontScale': 1.2},
 );
 
-/// A plugin-free hook for the restore use case.
 final class _CountingHook implements RestoreCompletionHook {
   int calls = 0;
 
@@ -44,50 +47,103 @@ final class _CountingHook implements RestoreCompletionHook {
   void onRestored() => calls += 1;
 }
 
-/// Pumps the page with a working export path and a picker answering [selection].
-Future<void> _pump(
-  WidgetTester tester, {
-  required bool saved,
-  BackupArchiveSelection? selection,
-  _CountingHook? hook,
-}) async {
+/// The fakes one page test works with, so assertions can look at them afterwards.
+final class _Harness {
+  _Harness({
+    BackupSettings settings = BackupSettings.defaults,
+    this.password,
+    this.selection,
+    this.remoteBackups = const <RemoteBackup>[],
+  }) : settingsRepository = FakeBackupSettingsRepository(
+         settings: settings,
+         password: password,
+       );
+
+  final String? password;
+  final BackupArchiveSelection? selection;
+  final List<RemoteBackup> remoteBackups;
+  final FakeBackupSettingsRepository settingsRepository;
   final FakeBackupRepository repository = FakeBackupRepository(
     contents: _contents,
   );
+  final FakeBackupSettingsRepository saveSettings =
+      FakeBackupSettingsRepository();
+  final FakeLocalBackupStore localStore = FakeLocalBackupStore();
+  final _CountingHook hook = _CountingHook();
 
+  late final FakeRemoteBackupStore remoteStore = FakeRemoteBackupStore(
+    backups: remoteBackups,
+  );
+
+  /// Overrides that replace every platform dialog and every database access.
+  List<Override> get overrides => <Override>[
+    appLoggerProvider.overrideWithValue(AppLogger()),
+    backupSettingsRepositoryProvider.overrideWith((Ref ref) async {
+      // 读数与写口令走同一个 fake：控制器保存后页面立刻能看到新状态。
+      return settingsRepository;
+    }),
+    backupRepositoryProvider.overrideWith((Ref ref) async => repository),
+    localBackupStoreProvider.overrideWithValue(localStore),
+    remoteBackupStoreProvider.overrideWith((Ref ref) async => remoteStore),
+    createBackupProvider.overrideWith(
+      (Ref ref) async => CreateBackup(
+        repository: repository,
+        clock: FakeClock(start: DateTime.utc(2026, 10, 25, 12)),
+        appVersion: '9.9.9',
+      ),
+    ),
+    saveBackupProvider.overrideWith(
+      (Ref ref) async => SaveBackup(
+        repository: repository,
+        settings: settingsRepository,
+        localStore: localStore,
+        clock: FakeClock(start: DateTime.utc(2026, 10, 25, 12)),
+        appVersion: '9.9.9',
+      ),
+    ),
+    inspectBackupProvider.overrideWithValue(const InspectBackup()),
+    restoreBackupProvider.overrideWith(
+      (Ref ref) async => RestoreBackup(
+        repository: repository,
+        completionHook: hook,
+        settings: settingsRepository,
+        saveBackup: SaveBackup(
+          repository: repository,
+          settings: saveSettings,
+          localStore: localStore,
+          clock: FakeClock(start: DateTime.utc(2026, 10, 25, 12)),
+          appVersion: '9.9.9',
+        ),
+      ),
+    ),
+    backupArchiveSaverProvider.overrideWithValue(
+      FileSelectorBackupArchiveSaver(
+        write: ({
+          required String suggestedName,
+          required List<int> bytes,
+        }) async => '/tmp/$suggestedName',
+      ),
+    ),
+    backupArchivePickerProvider.overrideWithValue(
+      FileSelectorBackupArchivePicker(
+        opener: ({required int maxBytes}) async => selection,
+      ),
+    ),
+  ];
+
+  /// The bytes of an archive written from [_contents].
+  List<int> archiveBytes({String? password}) => encodeBackupArchive(
+    _contents,
+    createdAt: DateTime.utc(2026, 10, 25, 12),
+    appVersion: '9.9.9',
+    password: password,
+  );
+}
+
+Future<void> _pump(WidgetTester tester, _Harness harness) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: <Override>[
-        appLoggerProvider.overrideWithValue(AppLogger()),
-        createBackupProvider.overrideWith(
-          (Ref ref) async => CreateBackup(
-            repository: repository,
-            clock: FakeClock(start: DateTime.utc(2026, 10, 25, 12)),
-            appVersion: '9.9.9',
-          ),
-        ),
-        backupRepositoryProvider.overrideWith((Ref ref) async => repository),
-        inspectBackupProvider.overrideWithValue(const InspectBackup()),
-        restoreBackupProvider.overrideWith(
-          (Ref ref) async => RestoreBackup(
-            repository: repository,
-            completionHook: hook ?? _CountingHook(),
-          ),
-        ),
-        backupArchiveSaverProvider.overrideWithValue(
-          FileSelectorBackupArchiveSaver(
-            write: ({
-              required String suggestedName,
-              required List<int> bytes,
-            }) async => saved ? '/tmp/$suggestedName' : null,
-          ),
-        ),
-        backupArchivePickerProvider.overrideWithValue(
-          FileSelectorBackupArchivePicker(
-            opener: ({required int maxBytes}) async => selection,
-          ),
-        ),
-      ],
+      overrides: harness.overrides,
       child: MaterialApp(
         locale: const Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -100,24 +156,44 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-/// The page's own strings.
 AppLocalizations _l10n(WidgetTester tester) =>
     AppLocalizations.of(tester.element(find.byType(BackupPage)));
 
-/// The archive one export produces, for the restore side of the page.
-List<int> _archiveBytes() => encodeBackupArchive(
-  _contents,
-  createdAt: DateTime.utc(2026, 10, 25, 12),
-  appVersion: '9.9.9',
-);
+/// One archive picked through the file dialog.
+BackupArchiveSelection _picked(BackupContents contents, {String? password}) =>
+    PickedBackupArchive(
+      name: 'backup2026-10-25.zip',
+      bytes: encodeBackupArchive(
+        contents,
+        createdAt: DateTime.utc(2026, 10, 25, 12),
+        appVersion: '9.9.9',
+        password: password,
+      ),
+    );
 
-/// Taps [label], then waits for the action to finish.
+/// Scrolls the page down until [finder] is built (the list is lazy).
+Future<void> _reveal(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 20; attempt++) {
+    if (finder.evaluate().isNotEmpty) {
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+
+      return;
+    }
+    await tester.drag(find.byType(ListView), const Offset(0, -280));
+    await tester.pumpAndSettle();
+  }
+
+  fail('The widget never appeared while scrolling.');
+}
+
+/// Taps [finder], then waits for the action to finish.
 ///
-/// The use cases compress and decompress **in another isolate** (C-PERF-4), and the fake clock of
-/// `pumpAndSettle` cannot deliver that message; `runAsync` is what gives the test real event-loop
-/// turns. The loop stops as soon as the progress indicator is gone, so the 50 ms cap is only a guard.
-Future<void> _tapAndWait(WidgetTester tester, String label) async {
-  await tester.tap(find.text(label));
+/// The use cases compress and decompress **in another isolate** (C-PERF-4), and `pumpAndSettle`'s
+/// fake clock cannot deliver that message; `runAsync` gives the test real event-loop turns.
+Future<void> _tapAndWait(WidgetTester tester, Finder finder) async {
+  await _reveal(tester, finder);
+  await tester.tap(finder, warnIfMissed: false);
   await tester.pump();
 
   for (var attempt = 0; attempt < 50; attempt++) {
@@ -134,120 +210,126 @@ Future<void> _tapAndWait(WidgetTester tester, String label) async {
 }
 
 void main() {
-  group('BackupPage', () {
-    testWidgets('build_givenIdle_showsBothActionsAndThePlaintextHint', (
-      WidgetTester tester,
-    ) async {
-      await _pump(tester, saved: true);
-      final AppLocalizations l10n = _l10n(tester);
+  testWidgets('build_givenDefaults_showsEverySection', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _Harness());
+    final AppLocalizations l10n = _l10n(tester);
 
-      expect(find.text(l10n.backupTitle), findsOneWidget);
-      expect(find.text(l10n.backupExportTitle), findsOneWidget);
-      expect(find.text(l10n.backupRestoreTitle), findsOneWidget);
-      // 备份是明文且含登录信息，这一点必须在动作旁边说清楚（ADR-0073 §决策 1）。
-      expect(find.text(l10n.backupIncludeSecretsHint), findsOneWidget);
-    });
+    expect(find.text(l10n.backupTitle), findsOneWidget);
+    expect(find.text(l10n.backupAutoTitle), findsWidgets);
+    expect(find.text(l10n.backupLocationTitle), findsOneWidget);
+    expect(find.text(l10n.backupPasswordTitle), findsOneWidget);
+    // 备份是明文且含登录信息，这一点必须在动作旁边说清楚（ADR-0073 §决策 1）。
+    expect(find.text(l10n.backupIncludeSecretsHint), findsWidgets);
 
-    testWidgets('export_givenASavedArchive_reportsItsNameAndRowCount', (
-      WidgetTester tester,
-    ) async {
-      await _pump(tester, saved: true);
-      final AppLocalizations l10n = _l10n(tester);
+    for (final String label in <String>[
+      l10n.backupSaveToLocation,
+      l10n.backupRestoreFromFile,
+      l10n.backupWebDavTitle,
+    ]) {
+      final Finder finder = find.text(label);
+      if (finder.evaluate().isEmpty) {
+        await tester.scrollUntilVisible(
+          finder,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
+      expect(finder, findsWidgets);
+    }
+  });
 
-      await _tapAndWait(tester, l10n.backupExportTitle);
+  testWidgets('saveToLocation_givenABackupLocation_reportsThePath', (
+    WidgetTester tester,
+  ) async {
+    final _Harness harness = _Harness(
+      settings: BackupSettings(location: const AppPrivateBackupLocation()),
+    );
+    await _pump(tester, harness);
+    final AppLocalizations l10n = _l10n(tester);
 
-      expect(
-        find.text(l10n.backupExported('backup2026-10-25.zip', 2)),
-        findsOneWidget,
-      );
-    });
+    await _tapAndWait(tester, find.text(l10n.backupSaveToLocation));
 
-    testWidgets('export_givenACancelledDialog_staysSilent', (
-      WidgetTester tester,
-    ) async {
-      await _pump(tester, saved: false);
-      final AppLocalizations l10n = _l10n(tester);
+    expect(
+      find.text(l10n.backupSavedTo('/tmp/backups/backup2026-10-25.zip')),
+      findsOneWidget,
+    );
+    expect(harness.localStore.files, hasLength(1));
+  });
 
-      await _tapAndWait(tester, l10n.backupExportTitle);
+  testWidgets('restore_givenAValidArchive_mergesAfterConfirmation', (
+    WidgetTester tester,
+  ) async {
+    final _Harness harness = _Harness(selection: _picked(_contents));
+    await _pump(tester, harness);
+    final AppLocalizations l10n = _l10n(tester);
 
-      // 取消不是失败：既没有回执也没有错误。
-      expect(find.byType(LinearProgressIndicator), findsNothing);
-      expect(find.textContaining('backup2026'), findsNothing);
-    });
+    await _tapAndWait(tester, find.text(l10n.backupRestoreFromFile));
 
-    testWidgets('restore_givenACancelledDialog_staysSilent', (
-      WidgetTester tester,
-    ) async {
-      await _pump(tester, saved: true);
-      final AppLocalizations l10n = _l10n(tester);
+    expect(find.text(l10n.backupPreviewTitle), findsOneWidget);
+    expect(find.text(l10n.backupTableBooks), findsOneWidget);
 
-      await _tapAndWait(tester, l10n.backupRestoreTitle);
+    await _tapAndWait(tester, find.text(l10n.backupMergeMode));
 
-      expect(find.text(l10n.backupPreviewTitle), findsNothing);
-    });
+    await _reveal(tester, find.textContaining('Merged'));
+    expect(find.textContaining('Merged'), findsOneWidget);
+    expect(harness.hook.calls, 1);
+  });
 
-    testWidgets('restore_givenAValidArchive_showsThePreviewThenMerges', (
-      WidgetTester tester,
-    ) async {
-      final _CountingHook hook = _CountingHook();
-      await _pump(
-        tester,
-        saved: true,
-        hook: hook,
-        selection: PickedBackupArchive(
-          name: 'backup2026-10-25.zip',
-          bytes: _archiveBytes(),
-        ),
-      );
-      final AppLocalizations l10n = _l10n(tester);
+  testWidgets('restore_givenOverwrite_asksForConfirmationFirst', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _Harness(selection: _picked(_contents)));
+    final AppLocalizations l10n = _l10n(tester);
 
-      await _tapAndWait(tester, l10n.backupRestoreTitle);
+    await _tapAndWait(tester, find.text(l10n.backupRestoreFromFile));
+    await _tapAndWait(tester, find.text(l10n.backupOverwriteMode));
 
-      expect(find.text(l10n.backupPreviewTitle), findsOneWidget);
-      expect(find.text(l10n.backupTableBookSources), findsOneWidget);
-      expect(find.text(l10n.backupPreviewPreferences(1)), findsOneWidget);
+    // 覆盖是不可逆动作：先问一次（ADR-0074 §决策 3）。
+    expect(find.text(l10n.backupOverwriteWarning), findsWidgets);
+    await _tapAndWait(tester, find.text(l10n.backupOverwriteConfirm));
 
-      await _tapAndWait(tester, l10n.backupConfirmRestore);
+    await _reveal(tester, find.textContaining('Merged'));
+    expect(find.textContaining('Merged'), findsOneWidget);
+  });
 
-      expect(find.text(l10n.backupPreviewTitle), findsNothing);
-      expect(find.textContaining('Merged'), findsOneWidget);
-      expect(hook.calls, 1);
-    });
+  testWidgets('restore_givenAnEncryptedArchive_asksForThePassword', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _Harness(selection: _picked(_contents, password: 'secret')),
+    );
+    final AppLocalizations l10n = _l10n(tester);
 
-    testWidgets('restore_givenAnOversizedArchive_reportsTheSizeLimit', (
-      WidgetTester tester,
-    ) async {
-      await _pump(
-        tester,
-        saved: true,
-        // 不用 const：const 构造会在编译期折叠，core 层的构造行就没有执行点（ADR-0019）。
-        // ignore: prefer_const_constructors
-        selection: OversizedBackupArchive(name: 'huge.zip', length: 1),
-      );
-      final AppLocalizations l10n = _l10n(tester);
+    await _tapAndWait(tester, find.text(l10n.backupRestoreFromFile));
 
-      await _tapAndWait(tester, l10n.backupRestoreTitle);
+    expect(find.text(l10n.backupPasswordRequired), findsOneWidget);
+    expect(find.text(l10n.backupPasswordPrompt), findsOneWidget);
+  });
 
-      expect(find.text(l10n.failureParseFailed), findsOneWidget);
-    });
+  testWidgets('remoteList_givenArchives_showsThemForRestore', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _Harness(
+        remoteBackups: <RemoteBackup>[
+          RemoteBackup(
+            name: 'backup2026-10-25.zip',
+            sizeBytes: 2048,
+            modifiedAt: DateTime.utc(2026, 10, 25),
+          ),
+        ],
+      ),
+    );
+    final AppLocalizations l10n = _l10n(tester);
 
-    testWidgets('preview_givenCancelButton_dropsThePreview', (
-      WidgetTester tester,
-    ) async {
-      await _pump(
-        tester,
-        saved: true,
-        selection: PickedBackupArchive(
-          name: 'backup2026-10-25.zip',
-          bytes: _archiveBytes(),
-        ),
-      );
-      final AppLocalizations l10n = _l10n(tester);
+    await _tapAndWait(tester, find.text(l10n.backupCloudRefresh));
 
-      await _tapAndWait(tester, l10n.backupRestoreTitle);
-      await _tapAndWait(tester, l10n.actionCancel);
-
-      expect(find.text(l10n.backupPreviewTitle), findsNothing);
-    });
+    await _reveal(tester, find.text('backup2026-10-25.zip'));
+    expect(find.text('backup2026-10-25.zip'), findsOneWidget);
+    expect(find.byTooltip(l10n.backupRemoteRestore), findsOneWidget);
   });
 }

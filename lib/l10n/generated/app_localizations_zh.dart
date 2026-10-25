@@ -1764,4 +1764,152 @@ class AppLocalizationsZh extends AppLocalizations {
   String backupRestored(int changed, int preferences) {
     return '已合并：写回 $changed 条记录、$preferences 项设置。';
   }
+
+  @override
+  String get backupAutoTitle => '自动备份';
+
+  @override
+  String get backupAutoBody => '启动时若距上次备份超过一天，就自动备份一次。';
+
+  @override
+  String get backupRetentionTitle => '保留份数';
+
+  @override
+  String get backupRetentionBody => '超出份数的旧备份会被删掉；只删本应用写的文件。';
+
+  @override
+  String backupRetentionValue(int count) {
+    return '$count 份';
+  }
+
+  @override
+  String get backupLocationTitle => '备份位置';
+
+  @override
+  String get backupLocationPrivate => '应用私有目录';
+
+  @override
+  String get backupLocationChoose => '选择文件夹';
+
+  @override
+  String get backupLocationReset => '恢复默认';
+
+  @override
+  String get backupLocationFallback => '选的文件夹不可用，暂时写到应用私有目录。';
+
+  @override
+  String get backupPasswordTitle => '备份口令';
+
+  @override
+  String get backupPasswordBody => '设置后备份整包加密（AES-256），口令存在系统密钥库。';
+
+  @override
+  String get backupPasswordChange => '修改口令';
+
+  @override
+  String get backupPasswordSet => '设置口令';
+
+  @override
+  String get backupPasswordClear => '清除口令';
+
+  @override
+  String get backupPasswordStored => '已设置（备份加密）';
+
+  @override
+  String get backupPasswordMissing => '未设置（备份不加密）';
+
+  @override
+  String get backupPasswordStoreFailed => '密钥库不可用，口令没存下：备份仍不加密。';
+
+  @override
+  String get backupSaveToLocation => '保存到备份位置';
+
+  @override
+  String get backupSaveAs => '另存为…';
+
+  @override
+  String get backupRestoreFromFile => '从文件恢复';
+
+  @override
+  String backupSavedTo(String path) {
+    return '已保存到 $path';
+  }
+
+  @override
+  String get backupRemoteTitle => '云端备份';
+
+  @override
+  String get backupRemoteEmpty => '云端没有备份文件。';
+
+  @override
+  String get backupRemoteRestore => '从云端恢复';
+
+  @override
+  String get backupRemoteDelete => '删除云端备份';
+
+  @override
+  String get backupCloudUpload => '上传当前备份';
+
+  @override
+  String get backupCloudRefresh => '刷新云端列表';
+
+  @override
+  String get backupWebDavTitle => 'WebDAV';
+
+  @override
+  String get backupWebDavUrl => '地址（集合目录）';
+
+  @override
+  String get backupWebDavUsername => '账号';
+
+  @override
+  String get backupWebDavPassword => '密码';
+
+  @override
+  String get backupWebDavSave => '保存 WebDAV 配置';
+
+  @override
+  String get backupWebDavNotConfigured => '还没配置 WebDAV。';
+
+  @override
+  String get backupPasswordRequired => '这份备份已加密，需要口令。';
+
+  @override
+  String get backupPasswordPrompt => '输入备份口令';
+
+  @override
+  String get backupPasswordWrong => '口令不对，请再试一次。';
+
+  @override
+  String get backupMergeMode => '合并';
+
+  @override
+  String get backupOverwriteMode => '覆盖';
+
+  @override
+  String get backupOverwriteWarning =>
+      '覆盖会先清空本机的书源、书架、分组、书签、阅读记录与规则，再写入备份，并在恢复前自动保存一份安全副本。';
+
+  @override
+  String get backupOverwriteConfirm => '确认覆盖';
+
+  @override
+  String backupSafetyCopy(String name) {
+    return '已先保存安全副本：$name';
+  }
+
+  @override
+  String get backupWorkSavingAs => '正在另存…';
+
+  @override
+  String get backupWorkUploading => '正在上传…';
+
+  @override
+  String get backupWorkListingRemote => '正在读取云端列表…';
+
+  @override
+  String get backupWorkDownloading => '正在下载…';
+
+  @override
+  String get backupLocalTitle => '本机备份';
 }

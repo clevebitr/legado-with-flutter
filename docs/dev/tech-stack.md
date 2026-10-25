@@ -191,7 +191,8 @@ m3e.spacing.md;
 | `shared_preferences` | `^2.5.3` | 仅轻量开关（主题模式、字号） | BSD-3-Clause | C-NET-9 |
 | `path_provider` | `^2.1.6` | 跨平台路径（唯一来源） | BSD-3-Clause | C-PLT-3 |
 | `file_selector` | `^1.1.0` | 文件选择（平台对话框；只在 `core/platform/` 内使用） | BSD-3-Clause | C-PLT-1、C-SEC-5、ADR-0040 §决策 9 的修订注记 |
-| `archive` | `^4.5.2` | 备份 zip 的编解码（纯 Dart；只在 `features/backup/domain/` 使用） | MIT | C-PERF-4/5、C-SEC-5、ADR-0073 §决策 2/5 |
+| `archive` | `^4.5.2` | 备份 zip 的编解码与整包 AES-256（纯 Dart；只在 `features/backup/domain/` 使用） | MIT | C-PERF-4/5、C-SEC-5、ADR-0073 §决策 2/5、ADR-0074 §决策 4 |
+| `flutter_secure_storage` | `^11.2.0` | 备份口令与 WebDAV 密码（系统密钥库；只在 `core/platform/` 的 `SecretStore` 实现里使用） | BSD-3-Clause | C-SEC-1、C-DEP-7、ADR-0074 §决策 5 |
 
 > **关于 `file_selector`（2026-10-14 新增）：** 它是 **Flutter 团队维护的联邦插件**
 > （`file_selector_android` / `_ios` / `_windows` / `_macos` / `_linux` 由 pub 求解器自动带入，

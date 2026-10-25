@@ -1,5 +1,6 @@
 import 'package:flutter_reader/features/backup/domain/entities/backup_contents.dart';
 import 'package:flutter_reader/features/backup/domain/entities/backup_restore_report.dart';
+import 'package:flutter_reader/features/backup/domain/entities/restore_mode.dart';
 
 /// Reads every backed-up table out of the database and writes one back
 /// (`docs/dev/roadmap.md` M22, ADR-0073 §决策 3).
@@ -13,6 +14,13 @@ abstract interface class BackupRepository {
   /// Collects every table and the preferences into one snapshot.
   Future<BackupContents> collect();
 
-  /// Merges [contents] into the database in one transaction, answering what changed.
-  Future<BackupRestoreReport> restore(BackupContents contents);
+  /// Writes [contents] into the database in one transaction, answering what changed.
+  ///
+  /// [mode] decides what happens to rows the archive does not mention: [RestoreMode.merge] keeps
+  /// them (ADR-0073), [RestoreMode.overwrite] clears the seven tables first (ADR-0074 §决策 3).
+  /// Preferences are merged in both modes.
+  Future<BackupRestoreReport> restore(
+    BackupContents contents, {
+    RestoreMode mode = RestoreMode.merge,
+  });
 }

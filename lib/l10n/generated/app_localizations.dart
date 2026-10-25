@@ -3317,6 +3317,288 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Merged: {changed} rows written, {preferences} settings.'**
   String backupRestored(int changed, int preferences);
+
+  /// No description provided for @backupAutoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic backup'**
+  String get backupAutoTitle;
+
+  /// No description provided for @backupAutoBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Backs up once a day at start-up when the last archive is older than a day.'**
+  String get backupAutoBody;
+
+  /// No description provided for @backupRetentionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backups to keep'**
+  String get backupRetentionTitle;
+
+  /// No description provided for @backupRetentionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Older archives beyond this count are deleted; only files this app wrote are removed.'**
+  String get backupRetentionBody;
+
+  /// No description provided for @backupRetentionValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files'**
+  String backupRetentionValue(int count);
+
+  /// No description provided for @backupLocationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup location'**
+  String get backupLocationTitle;
+
+  /// No description provided for @backupLocationPrivate.
+  ///
+  /// In en, this message translates to:
+  /// **'App private folder'**
+  String get backupLocationPrivate;
+
+  /// No description provided for @backupLocationChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a folder'**
+  String get backupLocationChoose;
+
+  /// No description provided for @backupLocationReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the private folder'**
+  String get backupLocationReset;
+
+  /// No description provided for @backupLocationFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'The chosen folder is unavailable; archives go to the app\'s private folder for now.'**
+  String get backupLocationFallback;
+
+  /// No description provided for @backupPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup password'**
+  String get backupPasswordTitle;
+
+  /// No description provided for @backupPasswordBody.
+  ///
+  /// In en, this message translates to:
+  /// **'When set, whole archives are encrypted (AES-256); the password lives in the system key store.'**
+  String get backupPasswordBody;
+
+  /// No description provided for @backupPasswordChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the password'**
+  String get backupPasswordChange;
+
+  /// No description provided for @backupPasswordSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a password'**
+  String get backupPasswordSet;
+
+  /// No description provided for @backupPasswordClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the password'**
+  String get backupPasswordClear;
+
+  /// No description provided for @backupPasswordStored.
+  ///
+  /// In en, this message translates to:
+  /// **'Set (archives are encrypted)'**
+  String get backupPasswordStored;
+
+  /// No description provided for @backupPasswordMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set (archives stay unencrypted)'**
+  String get backupPasswordMissing;
+
+  /// No description provided for @backupPasswordStoreFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The key store is unavailable, so the password was not stored: archives stay unencrypted.'**
+  String get backupPasswordStoreFailed;
+
+  /// No description provided for @backupSaveToLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to the backup location'**
+  String get backupSaveToLocation;
+
+  /// No description provided for @backupSaveAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as…'**
+  String get backupSaveAs;
+
+  /// No description provided for @backupRestoreFromFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from a file'**
+  String get backupRestoreFromFile;
+
+  /// No description provided for @backupSavedTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to {path}'**
+  String backupSavedTo(String path);
+
+  /// No description provided for @backupRemoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud backups'**
+  String get backupRemoteTitle;
+
+  /// No description provided for @backupRemoteEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No backup files on the server.'**
+  String get backupRemoteEmpty;
+
+  /// No description provided for @backupRemoteRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from the cloud'**
+  String get backupRemoteRestore;
+
+  /// No description provided for @backupRemoteDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the cloud backup'**
+  String get backupRemoteDelete;
+
+  /// No description provided for @backupCloudUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload the current backup'**
+  String get backupCloudUpload;
+
+  /// No description provided for @backupCloudRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh the cloud list'**
+  String get backupCloudRefresh;
+
+  /// No description provided for @backupWebDavTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WebDAV'**
+  String get backupWebDavTitle;
+
+  /// No description provided for @backupWebDavUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'URL (collection)'**
+  String get backupWebDavUrl;
+
+  /// No description provided for @backupWebDavUsername.
+  ///
+  /// In en, this message translates to:
+  /// **'User name'**
+  String get backupWebDavUsername;
+
+  /// No description provided for @backupWebDavPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get backupWebDavPassword;
+
+  /// No description provided for @backupWebDavSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save the WebDAV configuration'**
+  String get backupWebDavSave;
+
+  /// No description provided for @backupWebDavNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'WebDAV is not configured yet.'**
+  String get backupWebDavNotConfigured;
+
+  /// No description provided for @backupPasswordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This archive is encrypted and needs its password.'**
+  String get backupPasswordRequired;
+
+  /// No description provided for @backupPasswordPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the backup password'**
+  String get backupPasswordPrompt;
+
+  /// No description provided for @backupPasswordWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'That password is wrong; try again.'**
+  String get backupPasswordWrong;
+
+  /// No description provided for @backupMergeMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Merge'**
+  String get backupMergeMode;
+
+  /// No description provided for @backupOverwriteMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Overwrite'**
+  String get backupOverwriteMode;
+
+  /// No description provided for @backupOverwriteWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Overwriting clears this device\'s book sources, shelf, groups, bookmarks, reading records and rules first, then writes the archive; a safety copy is saved before it starts.'**
+  String get backupOverwriteWarning;
+
+  /// No description provided for @backupOverwriteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Overwrite this device'**
+  String get backupOverwriteConfirm;
+
+  /// No description provided for @backupSafetyCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety copy saved first: {name}'**
+  String backupSafetyCopy(String name);
+
+  /// No description provided for @backupWorkSavingAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get backupWorkSavingAs;
+
+  /// No description provided for @backupWorkUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get backupWorkUploading;
+
+  /// No description provided for @backupWorkListingRemote.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing the cloud collection…'**
+  String get backupWorkListingRemote;
+
+  /// No description provided for @backupWorkDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading…'**
+  String get backupWorkDownloading;
+
+  /// No description provided for @backupLocalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'On this device'**
+  String get backupLocalTitle;
 }
 
 class _AppLocalizationsDelegate
