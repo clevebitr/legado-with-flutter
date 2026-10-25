@@ -242,6 +242,7 @@ final class PageFetchService {
                 statusCode: 200,
                 headers: const <String, List<String>>{},
                 body: data.body,
+                url: data.url,
               ),
             ),
             url: data.url,
@@ -487,6 +488,10 @@ final class PageFetchService {
       ):
         return failureAt<FetchedPage>(kind: kind, rulePath: failedAt);
       case ParseSuccess<HttpResponse>(:final HttpResponse data):
+        // 页面地址是它**最终**被读到的地址：上游 `StrResponse` 里也是 OkHttp 跟随重定向之后
+        // 的请求地址，相对链接、`baseUrl` 与 `loginCheckJs` 的 `url()` 都以它为准
+        // （`http_response.dart`）。没重定向时它就是请求地址。
+        final String pageUrl = data.url.isEmpty ? url : data.url;
         final ParseResult<String> cut = _cutBody(data, sourceRegex);
         final String body;
         switch (cut) {
@@ -499,7 +504,7 @@ final class PageFetchService {
             body = data;
         }
         final JsPageContext context = JsPageContext(
-          baseUrl: url,
+          baseUrl: pageUrl,
           page: page,
           source: source,
           headers: headers,
@@ -510,7 +515,7 @@ final class PageFetchService {
           book: book,
         );
         final FetchedPage pageScope = FetchedPage(
-          url: url,
+          url: pageUrl,
           scope: RuleScope.dom(
             parser.parse(body),
             body: body,
@@ -524,6 +529,7 @@ final class PageFetchService {
             statusCode: data.statusCode,
             headers: data.headers,
             body: body,
+            url: data.url,
           ),
           context: context,
           body: body,
@@ -700,6 +706,7 @@ final class PageFetchService {
                 statusCode: data.statusCode,
                 headers: data.headers,
                 body: value,
+                url: data.url,
               ),
             );
         }

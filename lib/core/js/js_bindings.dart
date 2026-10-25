@@ -299,6 +299,7 @@ final class JsHttpRequest {
     required this.url,
     this.body,
     this.headers = const <String, String>{},
+    this.wantsResponse = false,
   });
 
   /// The verb the rule called.
@@ -312,6 +313,13 @@ final class JsHttpRequest {
 
   /// The headers the rule declared (`options.headers`).
   final Map<String, String> headers;
+
+  /// Whether the rule asked for the whole response (`options.response`) instead of the body.
+  ///
+  /// The body alone cannot answer “where did I end up”: a site that hands a session off through a
+  /// `302` (ASP searches) only tells the rule the real address in `Location`, and re-issuing that
+  /// address is the whole point of the second request.
+  final bool wantsResponse;
 }
 
 /// Reads one `http.*` call's arguments, or `null` when they are unusable.
@@ -345,11 +353,18 @@ JsHttpRequest? decodeJsHttpRequest(Object? args) {
     return null;
   }
   final Object? body = options['body'];
-  if (body is! String?) {
+  final Object? response = options['response'];
+  if (body is! String? || (response != null && response is! bool)) {
     return null;
   }
 
-  return JsHttpRequest(method: method, url: url, body: body, headers: headers);
+  return JsHttpRequest(
+    method: method,
+    url: url,
+    body: body,
+    headers: headers,
+    wantsResponse: response == true,
+  );
 }
 
 /// The verbs `java.*` binds.

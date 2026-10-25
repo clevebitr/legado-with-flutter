@@ -666,7 +666,26 @@ final class _WorkerSession {
 
     switch (response) {
       case ParseSuccess<HttpResponse>(:final HttpResponse data):
-        _reply(JsHostReply.success(call.callId, data.body));
+        _reply(
+          JsHostReply.success(
+            call.callId,
+            request.wantsResponse
+                ? <String, Object?>{
+                    // 与 loginCheckJs 的响应对象同形（ADR-0068 增补）：worker 用
+                    // __sandboxValue 把它变成 body 属性 + url()/code()/headers() 方法。
+                    '__strResponse': true,
+                    'body': data.body,
+                    '__url': data.url,
+                    '__code': data.statusCode,
+                    '__headers': <String, String>{
+                      for (final MapEntry<String, List<String>> entry
+                          in data.headers.entries)
+                        entry.key: entry.value.join(', '),
+                    },
+                  }
+                : data.body,
+          ),
+        );
       case ParseFailure<HttpResponse>(:final ParseFailureKind kind):
         _reply(JsHostReply.rejected(call.callId, kind.name));
     }

@@ -82,15 +82,24 @@ final class FakeHttpClient implements HttpClient {
   final Map<String, ParseFailureKind> _failures = <String, ParseFailureKind>{};
   final Map<String, Object?> _causes = <String, Object?>{};
   final Map<String, Exception> _throws = <String, Exception>{};
+  final Map<String, String> _finalUrls = <String, String>{};
 
-  /// Serves [body] for [url].
+  /// Serves [body] for [url], optionally answering from another address.
+  ///
+  /// [finalUrl] is the address a redirect landed on (`HttpResponse.url`): a page read from it
+  /// must resolve its relative links against **that** address, and `loginCheckJs` must see it
+  /// in `url()` — which is what upstream's `StrResponse` does (`http_response.dart`).
   void serve(
     String url,
     String body, {
     Map<String, List<String>> headers = const <String, List<String>>{},
+    String? finalUrl,
   }) {
     _bodies[url] = body;
     _responseHeaders[url] = headers;
+    if (finalUrl != null) {
+      _finalUrls[url] = finalUrl;
+    }
   }
 
   /// Serves [bytes] to `getBytes` (the font byte door) instead of the text body.
@@ -253,6 +262,7 @@ final class FakeHttpClient implements HttpClient {
         statusCode: 200,
         headers: _responseHeaders[url] ?? const <String, List<String>>{},
         body: served,
+        url: _finalUrls[url] ?? url,
       ),
     );
   }

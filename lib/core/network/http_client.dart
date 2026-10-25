@@ -88,11 +88,35 @@ final class _RawResponse {
     required this.status,
     required this.headers,
     required this.bytes,
+    required this.url,
   });
 
   final int status;
   final Headers headers;
   final List<int> bytes;
+
+  /// 读过重定向之后的地址（没有重定向时就是请求的地址）。
+  final Uri url;
+}
+
+/// The address a response finally came from: [requested] with every redirect applied.
+///
+/// dio exposes the chain (`Response.redirects`) rather than the final address, so a relative
+/// `Location` (`?9bdb14…`, which is how an ASP session hands a search off) has to be resolved
+/// against the address it was served from, in order, to land where a browser would.
+Uri _finalUri(Uri requested, List<RedirectRecord> redirects) {
+  var current = requested;
+  for (final RedirectRecord record in redirects) {
+    // dio 5.11 起 `RedirectRecord.location` 是 `Uri`（更早是 `String?`）；转回字符串再 resolve，
+    // 相对引用（`?token`）的语义才与浏览器一致。
+    final String location = record.location.toString();
+    if (location.isEmpty) {
+      continue;
+    }
+    current = current.resolve(location);
+  }
+
+  return current;
 }
 
 /// [HttpClient] backed by `dio`.
@@ -294,6 +318,7 @@ final class DioHttpClient implements HttpClient {
         rulePath: rulePath,
         keyword: keyword,
         url: url,
+        responseUrl: data.url,
         sourceId: sourceId,
         declaredCharset: declaredCharset,
       ),
@@ -459,7 +484,12 @@ final class DioHttpClient implements HttpClient {
     }
 
     return ParseSuccess<_RawResponse>(
-      _RawResponse(status: status, headers: response.headers, bytes: bytes),
+      _RawResponse(
+        status: status,
+        headers: response.headers,
+        bytes: bytes,
+        url: _finalUri(response.requestOptions.uri, response.redirects),
+      ),
     );
   }
 
@@ -491,6 +521,7 @@ final class DioHttpClient implements HttpClient {
     required String rulePath,
     required String? keyword,
     required String url,
+    required Uri responseUrl,
     required String? sourceId,
     String? declaredCharset,
   }) async {
@@ -522,6 +553,7 @@ final class DioHttpClient implements HttpClient {
           statusCode: status,
           headers: headers.map,
           body: decoded.text,
+          url: responseUrl.toString(),
         ),
       );
     } on FormatException catch (error, stackTrace) {

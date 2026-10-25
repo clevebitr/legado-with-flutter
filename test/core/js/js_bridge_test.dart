@@ -717,6 +717,48 @@ void main() {
       expect(await call, isA<ParseSuccess<Object?>>());
     });
 
+    test('evaluate_givenAnHttpRequestThatAsksForTheResponse_answersUrlCodeAndHeaders', () async {
+      // `options.response` 要的是整个响应：重定向之后的地址只有响应里才有，
+      // 而规则重发请求时需要的正是它（book-source.md §6）。
+      final _Fixture fixture = _buildBridge();
+      fixture.http.serve(
+        'https://mirror.test/sscc/',
+        'moved body',
+        headers: const <String, List<String>>{
+          'location': <String>['?9bdb14'],
+        },
+        finalUrl: 'https://mirror.test/sscc/?9bdb14',
+      );
+
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(7, jsHttpBinding, <String, Object?>{
+          'operation': 'post',
+          'url': 'https://mirror.test/sscc/',
+          'options': <String, Object?>{'body': 'q=1', 'response': true},
+        }),
+      );
+      await pumpEventQueue();
+
+      final Map<String, Object?> value =
+          _replies(worker).single['value']! as Map<String, Object?>;
+      expect(value['__strResponse'], isTrue);
+      expect(value['body'], 'moved body');
+      expect(value['__url'], 'https://mirror.test/sscc/?9bdb14');
+      expect(value['__code'], 200);
+      expect(value['__headers'], containsPair('location', '?9bdb14'));
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+    });
+
     test('evaluate_givenAnHttpGetBytesThatFails_rejectsThePromise', () async {
       final _Fixture fixture = _buildBridge();
       fixture.http

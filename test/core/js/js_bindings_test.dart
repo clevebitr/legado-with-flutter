@@ -207,6 +207,31 @@ void main() {
 
       expect(request?.headers, isEmpty);
       expect(request?.body, isNull);
+      // 默认只要正文；`response: true` 才是整个响应（book-source.md §6）。
+      expect(request?.wantsResponse, isFalse);
+    });
+
+    test('decodeJsHttpRequest_givenAResponseFlag_readsIt', () {
+      final JsHttpRequest? request = decodeJsHttpRequest(<String, Object?>{
+        'operation': 'post',
+        'url': 'https://a.test/x',
+        'options': <String, Object?>{'body': 'q=1', 'response': true},
+      });
+
+      expect(request?.wantsResponse, isTrue);
+      expect(request?.body, 'q=1');
+    });
+
+    test('decodeJsHttpRequest_givenANonBooleanResponseFlag_returnsNull', () {
+      // 听不懂的标志位要让这次调用显式失败，而不是静默退回「只要正文」。
+      expect(
+        decodeJsHttpRequest(<String, Object?>{
+          'operation': 'get',
+          'url': 'https://a.test/x',
+          'options': <String, Object?>{'response': 'yes'},
+        }),
+        isNull,
+      );
     });
 
     test('decodeJsHttpRequest_givenUnusableArguments_returnsNull', () {

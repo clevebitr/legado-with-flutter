@@ -239,6 +239,50 @@ void main() {
 
   group('PageFetchService fetchRule', () {
     test(
+      'fetchRule_givenARedirectedResponse_readsThePageFromItsFinalAddress',
+      () async {
+        // 站点用 `302` 换地址时（ASP 的 `?token` 交接），页面的地址是**跳完之后**的地址：
+        // 相对链接要按它解析，`loginCheckJs` 的 `url()` 也看它（上游 `StrResponse` 同义）。
+        final FakeLogPrinter printer = FakeLogPrinter();
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            'https://example-novel.test/s?q=key',
+            '<div id="content">正文</div>',
+            finalUrl: 'https://example-novel.test/book/9/?9bdb14',
+          );
+        final PageFetchService pages = PageFetchService(
+          engine: RuleEngine(
+            logger: AppLogger(level: LogLevel.debug, printer: printer),
+            jsBridge: FakeJsBridge(),
+            variables: JsVariableStore(),
+          ),
+          http: http,
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+        );
+
+        final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+          'https://example-novel.test/s?q=key',
+          rulePath: 'searchUrl',
+          params: const <String, String>{},
+          context: _context(),
+          sourceId: 'https://example-novel.test',
+        );
+
+        final FetchedPage page = switch (fetched) {
+          ParseSuccess<FetchedPage>(:final FetchedPage data) => data,
+          ParseFailure<FetchedPage>() => fail('Expected the page.'),
+        };
+        expect(page.url, 'https://example-novel.test/book/9/?9bdb14');
+        final RuleScope scope = page.scope;
+        final JsPageContext? jsContext = switch (scope) {
+          DomScope(:final JsPageContext? jsContext) => jsContext,
+          JsonScope(:final JsPageContext? jsContext) => jsContext,
+        };
+        expect(jsContext?.baseUrl, 'https://example-novel.test/book/9/?9bdb14');
+      },
+    );
+
+    test(
       'fetchRule_givenAPostSuffix_sendsTheBodyAndMergesTheHeaders',
       () async {
         // `url,{…}` 后缀：动词、body、charset 与 headers 全部要落到请求上

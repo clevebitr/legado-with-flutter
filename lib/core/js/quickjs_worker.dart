@@ -816,7 +816,7 @@ globalThis.__httpOptions = function (operation, options) {
   if (typeof options !== 'object') {
     throw new Error('http.' + operation + ': options must be an object');
   }
-  var allowed = ['headers', 'body'];
+  var allowed = ['headers', 'body', 'response'];
   for (var key in options) {
     if (allowed.indexOf(key) < 0) {
       // 听不懂的键会让这次调用答非所问（`webView` 会拿回未渲染的页面），所以显式拒绝，
@@ -828,16 +828,23 @@ globalThis.__httpOptions = function (operation, options) {
     headers: (options.headers === undefined || options.headers === null)
       ? null : options.headers,
     body: (options.body === undefined || options.body === null)
-      ? null : String(options.body)
+      ? null : String(options.body),
+    // `response: true` 要的是整个响应（body / url / code / headers），不是只有正文。
+    response: options.response === true
   };
 };
 
 globalThis.__http = function (operation, url, options) {
-  return __hostCall('http', {
-    operation: operation,
-    url: String(url),
-    options: __httpOptions(operation, options)
-  });
+  var opts = __httpOptions(operation, options);
+  var call = { operation: operation, url: String(url), options: opts };
+  if (opts !== null && opts.response === true) {
+    // 宿主回的是响应信封；__sandboxValue 把 url() / code() / headers() 方法挂回去，
+    // 形状与 loginCheckJs 看到的 `result` 相同（book-source.md §6）。
+    return __hostCall('http', call).then(function (reply) {
+      return __sandboxValue(reply);
+    });
+  }
+  return __hostCall('http', call);
 };
 
 globalThis.http = Object.freeze({

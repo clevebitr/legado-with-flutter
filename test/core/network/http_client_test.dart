@@ -264,7 +264,32 @@ void main() {
       expect(response.headers['content-type'], <String>[
         'text/html; charset=utf-8',
       ]);
+      // 没有重定向时，最终地址就是请求的地址。
+      expect(response.url, 'https://example.com/a');
     });
+
+    test(
+      'get_whenTheSiteRedirectsToARelativeLocation_answersTheFinalUrl',
+      () async {
+        // ASP 搜索就是这样交接会话的：`302` + 相对 `Location`，之后只有那个带 token 的地址
+        // 才认得这次搜索。规则要重发请求就必须知道它，而正文里没有。
+        final _Fixture fixture = _buildClient();
+        fixture.adapter.enqueueRedirect(location: '?9bdb14643876d1ae');
+        fixture.adapter.enqueueResponse(
+          bytes: utf8.encode('<html>moved</html>'),
+        );
+
+        final HttpResponse response = _expectSuccess(
+          await fixture.client.post(
+            'https://example.com/sscc/',
+            rulePath: 'searchUrl',
+          ),
+        );
+
+        expect(response.body, '<html>moved</html>');
+        expect(response.url, 'https://example.com/sscc/?9bdb14643876d1ae');
+      },
+    );
 
     test('get_whenContentTypeDeclaresGbk_decodesGbkBytes', () async {
       final _Fixture fixture = _buildClient();
