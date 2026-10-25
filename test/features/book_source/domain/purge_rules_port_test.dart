@@ -37,17 +37,41 @@ void main() {
         rule,
         isNot(const PurgeRule(pattern: 'a', replacement: 'b', isRegex: false)),
       );
+      // 作用范围也参与相等：只改标题的规则与改正文的规则是两条。
+      expect(
+        rule,
+        isNot(
+          const PurgeRule(
+            pattern: 'a',
+            replacement: 'b',
+            isRegex: true,
+            appliesToContent: false,
+          ),
+        ),
+      );
+      expect(
+        rule,
+        isNot(
+          const PurgeRule(
+            pattern: 'a',
+            replacement: 'b',
+            isRegex: true,
+            appliesToTitle: true,
+          ),
+        ),
+      );
       expect(rule, isNot('a'));
     });
 
-    test('toString_givenARule_showsBothSidesAndTheMode', () {
+    test('toString_givenARule_showsBothSidesAndBothScopes', () {
       expect(
         const PurgeRule(
           pattern: 'a',
           replacement: 'b',
           isRegex: false,
+          appliesToTitle: true,
         ).toString(),
-        'PurgeRule(a -> b, isRegex: false)',
+        'PurgeRule(a -> b, isRegex: false, content: true, title: true, timeoutMs: null)',
       );
     });
   });

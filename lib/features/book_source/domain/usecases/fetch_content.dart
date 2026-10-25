@@ -170,17 +170,24 @@ final class FetchContent {
         text = data;
     }
 
-    final String content = await _purifier.purge(
+    // `replaceRegex` 与净化用同一个上下文：`@js:` 替换要在沙箱里读到同一页（ADR-0071 §决策 5）。
+    final JsPageContext jsContext = JsPageContext(
+      baseUrl: request.url,
+      source: source.jsSourceInfo,
+      headers: headers,
+      bookName: request.bookName,
+      chapterTitle: request.title,
+      book: _bookOf(request),
+    );
+    final String content = await _purifier.purgeContent(
       await _pages.replaceContent(
         source.contentRule.replaceRegex,
         text,
         'contentRule.replaceRegex',
         sourceId: source.url,
-        jsContext: JsPageContext(
-          baseUrl: request.url,
-          source: source.jsSourceInfo,
-        ),
+        jsContext: jsContext,
       ),
+      context: jsContext,
     );
     await _cache.write(
       sourceId: source.url,
@@ -232,18 +239,23 @@ final class FetchContent {
       }
     }
 
-    final String content = await _purifier.purge(
+    // 净化规则拿得到它读的那一页：上游 `getString(replaceRegex, contentStr)` 同样有上下文。
+    final JsPageContext jsContext = JsPageContext(
+      baseUrl: walk.pages.first.url,
+      source: source.jsSourceInfo,
+      bookName: request.bookName,
+      chapterTitle: request.title,
+      book: _bookOf(request),
+    );
+    final String content = await _purifier.purgeContent(
       await _pages.replaceContent(
         source.contentRule.replaceRegex,
         bodies.join('\n'),
         'contentRule.replaceRegex',
         sourceId: source.url,
-        // 净化规则拿得到它读的那一页：上游 `getString(replaceRegex, contentStr)` 同样有上下文。
-        jsContext: JsPageContext(
-          baseUrl: walk.pages.first.url,
-          source: source.jsSourceInfo,
-        ),
+        jsContext: jsContext,
       ),
+      context: jsContext,
     );
     // 缓存的是**成品**：分页已拼好、`replaceRegex` 与净化规则都已跑过，所以命中可直接跳过整个引擎。
     // 也正因为如此，改净化规则必须作废缓存（ADR-0070 增补 §7）。
@@ -259,3 +271,13 @@ final class FetchContent {
     return ParseSuccess<String>(content);
   }
 }
+
+/// The book bindings a purge script may read, taken from the request.
+JsBookInfo _bookOf(ChapterRequest request) => JsBookInfo(
+  name: request.bookName,
+  author: request.author,
+  bookUrl: request.bookUrl,
+  tocUrl: request.tocUrl,
+  intro: request.intro,
+  kind: request.kind,
+);

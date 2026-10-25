@@ -117,10 +117,14 @@ PurgeRuleSource purgeRuleSource(Ref ref) =>
     UnboundPurgeRuleSource(logger: ref.watch(appLoggerProvider));
 
 /// Provides the purifier the chapter body goes through after the source's `replaceRegex`.
+///
+/// It carries the JS sandbox because a purge rule's replacement may be a `@js:` script
+/// (`docs/dev/roadmap.md` M23, ADR-0071 §决策 5); one job per rule per chapter.
 @Riverpod(keepAlive: true)
 ContentPurifier contentPurifier(Ref ref) => ContentPurifier(
   rules: ref.watch(purgeRuleSourceProvider),
   logger: ref.watch(appLoggerProvider),
+  js: ref.watch(jsBridgeProvider),
 );
 
 /// Provides the use case that reads a manga chapter's image list.

@@ -26,6 +26,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/manga_pages.
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/switch_book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
@@ -160,6 +161,9 @@ final class _PurgeRuleSource implements PurgeRuleSource {
               pattern: payload.pattern,
               replacement: payload.replacement,
               isRegex: payload.isRegex,
+              appliesToContent: payload.scopeContent,
+              appliesToTitle: payload.scopeTitle,
+              timeoutMs: payload.timeoutMs,
             ),
     ];
   }
@@ -850,16 +854,42 @@ final class _ChapterListSource implements ChapterListProvider {
 
     return switch (result) {
       ParseSuccess<List<Chapter>>(:final List<Chapter> data) =>
-        ParseSuccess<List<ReadingChapter>>(<ReadingChapter>[
-          for (final Chapter chapter in data)
-            ReadingChapter(title: chapter.name, url: chapter.url),
-        ]),
+        ParseSuccess<List<ReadingChapter>>(
+          await _purifiedChapters(data, source: source, tocUrl: tocUrl),
+        ),
       ParseFailure<List<Chapter>>(
         :final ParseFailureKind kind,
         :final String rulePath,
       ) =>
         failureAt<List<ReadingChapter>>(kind: kind, rulePath: rulePath),
     };
+  }
+}
+
+/// The chapters with the user's **title** purge rules applied.
+///
+/// This is the one place the reader's titles come from, so purifying here makes the 目录 sheet, the
+/// chapter header, the stored progress name and a search hit agree on one title (ADR-0071 §决策 4).
+/// The detail page's TOC preview and the shelf's 「最新章节」 read `book_source`'s own cache instead
+/// and stay unpurified — registered in `roadmap.md` §3.7.
+extension on _ChapterListSource {
+  Future<List<ReadingChapter>> _purifiedChapters(
+    List<Chapter> chapters, {
+    required BookSource source,
+    required String tocUrl,
+  }) async {
+    final List<String> titles = await _ref
+        .read(contentPurifierProvider)
+        .purgeTitles(
+          <String>[for (final Chapter chapter in chapters) chapter.name],
+          // 标题规则读到的是**目录页**：`baseUrl` 就是 tocUrl，`@js:` 标题脚本靠它取上下文。
+          context: JsPageContext(baseUrl: tocUrl, source: source.jsSourceInfo),
+        );
+
+    return <ReadingChapter>[
+      for (var index = 0; index < chapters.length; index++)
+        ReadingChapter(title: titles[index], url: chapters[index].url),
+    ];
   }
 }
 

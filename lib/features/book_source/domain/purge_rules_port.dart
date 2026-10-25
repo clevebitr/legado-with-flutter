@@ -2,15 +2,18 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 
 /// One 替换净化 rule as the chapter pipeline needs it (`docs/dev/roadmap.md` M20, ADR-0070 §决策 3).
 ///
-/// Only the three fields the pipeline acts on: the rule's name, its sort order and its timeout are
-/// the rules feature's business, and the pipeline must not start caring about them just because the
-/// table has columns for them.
+/// Only the fields the pipeline acts on: the rule's name, its sort order and its scope flags are the
+/// rules feature's business. The two scope flags **are** here, because they decide where a rule runs
+/// (`docs/dev/roadmap.md` M23, ADR-0071 §决策 4).
 final class PurgeRule {
   /// Creates one purge rule.
   const PurgeRule({
     required this.pattern,
     required this.replacement,
     required this.isRegex,
+    this.appliesToContent = true,
+    this.appliesToTitle = false,
+    this.timeoutMs,
   });
 
   /// What to look for: a regular expression when [isRegex], otherwise a literal substring.
@@ -22,18 +25,41 @@ final class PurgeRule {
   /// Whether [pattern] is a regular expression.
   final bool isRegex;
 
+  /// Whether the rule rewrites a chapter **body** (upstream's `scopeContent`, default true).
+  final bool appliesToContent;
+
+  /// Whether the rule rewrites a chapter **title** (upstream's `scopeTitle`, default false).
+  final bool appliesToTitle;
+
+  /// Upstream's per-rule limit, in milliseconds, for a `@js:` replacement (ADR-0071 §决策 5).
+  ///
+  /// A regular-expression rule ignores it: Dart's `RegExp` has no timeout.
+  final int? timeoutMs;
+
   @override
   bool operator ==(Object other) =>
       other is PurgeRule &&
       other.pattern == pattern &&
       other.replacement == replacement &&
-      other.isRegex == isRegex;
+      other.isRegex == isRegex &&
+      other.appliesToContent == appliesToContent &&
+      other.appliesToTitle == appliesToTitle &&
+      other.timeoutMs == timeoutMs;
 
   @override
-  int get hashCode => Object.hash(pattern, replacement, isRegex);
+  int get hashCode => Object.hash(
+    pattern,
+    replacement,
+    isRegex,
+    appliesToContent,
+    appliesToTitle,
+    timeoutMs,
+  );
 
   @override
-  String toString() => 'PurgeRule($pattern -> $replacement, isRegex: $isRegex)';
+  String toString() =>
+      'PurgeRule($pattern -> $replacement, isRegex: $isRegex, '
+      'content: $appliesToContent, title: $appliesToTitle, timeoutMs: $timeoutMs)';
 }
 
 /// The enabled purge rules the chapter pipeline applies (`docs/dev/roadmap.md` M20).

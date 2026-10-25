@@ -11,6 +11,8 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
+import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -254,6 +256,39 @@ void main() {
     );
 
     expect(_value(result), '900150983cd24fb0d6963f7d28e17f72|YQ==');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('contentPurifier_givenAJSReplacement_rewritesEveryMatch', (
+    WidgetTester tester,
+  ) async {
+    // 净化规则的 `@js:` 替换在**真沙箱**上验证（ADR-0071 §决策 5）：一条规则一批一个 job，
+    // 脚本的**完成值**就是替换文本（上游的脚本常写成 `if (…) { … } else { "" }`）。
+    final ContentPurifier purifier = ContentPurifier(
+      rules: const _FixedPurgeRules(<PurgeRule>[
+        PurgeRule(pattern: r'\d', replacement: '@js:result * 2', isRegex: true),
+        PurgeRule(
+          pattern: r'.+',
+          replacement: '@js:if (result.length > 4) { "长标题" } else { "" }',
+          isRegex: true,
+          appliesToContent: false,
+          appliesToTitle: true,
+        ),
+      ]),
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      js: bridge,
+    );
+    const JsPageContext context = JsPageContext(
+      baseUrl: 'https://example-novel.test/book/1/1.html',
+    );
+
+    expect(await purifier.purgeContent('1 和 2', context: context), '2 和 4');
+    expect(
+      await purifier.purgeTitles(<String>[
+        '第1章 很长的标题',
+        '第1章',
+      ], context: context),
+      <String>['长标题', ''],
+    );
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('jsBridge_whenTheRuleLogs_forwardsItWithTheField', (
@@ -1082,4 +1117,14 @@ final class _ProbeHttpClient implements HttpClient {
       body: body,
     ),
   );
+}
+
+/// A [PurgeRuleSource] answering a fixed list (the device test's rules are written inline).
+final class _FixedPurgeRules implements PurgeRuleSource {
+  const _FixedPurgeRules(this._rules);
+
+  final List<PurgeRule> _rules;
+
+  @override
+  Future<List<PurgeRule>> purgeRules() async => _rules;
 }

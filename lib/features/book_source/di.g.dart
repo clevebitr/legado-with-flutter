@@ -596,17 +596,26 @@ final class PurgeRuleSourceProvider
 String _$purgeRuleSourceHash() => r'1882ba98973dccc542530cf6b85aca6cef9f6ea8';
 
 /// Provides the purifier the chapter body goes through after the source's `replaceRegex`.
+///
+/// It carries the JS sandbox because a purge rule's replacement may be a `@js:` script
+/// (`docs/dev/roadmap.md` M23, ADR-0071 §决策 5); one job per rule per chapter.
 
 @ProviderFor(contentPurifier)
 final contentPurifierProvider = ContentPurifierProvider._();
 
 /// Provides the purifier the chapter body goes through after the source's `replaceRegex`.
+///
+/// It carries the JS sandbox because a purge rule's replacement may be a `@js:` script
+/// (`docs/dev/roadmap.md` M23, ADR-0071 §决策 5); one job per rule per chapter.
 
 final class ContentPurifierProvider
     extends
         $FunctionalProvider<ContentPurifier, ContentPurifier, ContentPurifier>
     with $Provider<ContentPurifier> {
   /// Provides the purifier the chapter body goes through after the source's `replaceRegex`.
+  ///
+  /// It carries the JS sandbox because a purge rule's replacement may be a `@js:` script
+  /// (`docs/dev/roadmap.md` M23, ADR-0071 §决策 5); one job per rule per chapter.
   ContentPurifierProvider._()
     : super(
         from: null,
@@ -640,7 +649,7 @@ final class ContentPurifierProvider
   }
 }
 
-String _$contentPurifierHash() => r'd680bbe02fb559a460992e46eabb7fe7fcf7abfd';
+String _$contentPurifierHash() => r'4436168169b3e70d210007c7d3e3221767ef293d';
 
 /// Provides the use case that reads a manga chapter's image list.
 

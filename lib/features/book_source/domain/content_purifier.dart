@@ -1,22 +1,40 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 
-/// Applies the user's 替换净化 rules to a finished chapter body
-/// (`docs/dev/roadmap.md` M20, ADR-0070 §决策 3).
+/// The prefix that marks a purge rule's replacement as a script (`@js:`).
+const String _scriptFlag = '@js:';
+
+/// The `rulePath` every purge degradation is logged under.
+const String _rulePath = 'rules.purge';
+
+/// Applies the user's 替换净化 rules to chapter bodies and titles
+/// (`docs/dev/roadmap.md` M20/M23, ADR-0070 §决策 3, ADR-0071 §决策 4/§决策 5).
 ///
-/// The position is fixed by the ADR: **after** the source's own `replaceRegex` and **before** the
-/// body is cached, so what the reader shows and what the cache holds are the same text. That also
-/// means a purge-rule edit has to retire the cached bodies — the rules feature does that through
-/// `ChapterBodyInvalidator` (ADR-0070 增补 §7).
+/// Three properties are fixed by those ADRs and visible in the signature:
+///
+/// * **where the rules run** — after the source's own `replaceRegex` and before the body is cached,
+///   so what the reader shows and what the cache holds are the same text (which is why a rule edit
+///   has to retire the cache, ADR-0070 增补 §7);
+/// * **which rules run** — the scope flags decide (ADR-0071 §决策 4), and a title batch is one pass
+///   over the whole chapter list rather than one pass per title;
+/// * **how a `@js:` replacement runs** — one sandbox job per rule per batch: the chapter's matches
+///   become an array the script walks (ADR-0071 §决策 5), because the sandbox is an isolate and a
+///   per-match round trip would cost thousands of them for one chapter.
 ///
 /// Degradation follows ADR-0026 §决策 2: a rule this build cannot run is **skipped with a warning**,
-/// never turned into a failed chapter. Reading a chapter with one fewer rewrite is the smaller
-/// failure, and it keeps one bad user-written pattern from hiding every book.
+/// never turned into a failed chapter.
 final class ContentPurifier {
   /// Creates the purifier.
   const ContentPurifier({
     this.rules = const UnboundPurgeRuleSource(),
     this.logger,
+    this.js,
   });
 
   /// Where the enabled rules come from.
@@ -25,36 +43,210 @@ final class ContentPurifier {
   /// Where degradations are recorded.
   final AppLogger? logger;
 
-  /// Returns [text] with every enabled purge rule applied in order.
-  Future<String> purge(String text) async {
-    final List<PurgeRule> purgeRules = await rules.purgeRules();
+  /// The sandbox `@js:` replacements run in; `null` skips them with a warning.
+  final JsBridge? js;
+
+  /// Returns [text] (a chapter body) with every content-scoped purge rule applied in order.
+  Future<String> purgeContent(
+    String text, {
+    required JsPageContext context,
+  }) async {
+    final List<PurgeRule> purgeRules = <PurgeRule>[
+      for (final PurgeRule rule in await rules.purgeRules())
+        if (rule.appliesToContent) rule,
+    ];
     if (purgeRules.isEmpty || text.isEmpty) {
       return text;
     }
 
-    String result = text;
+    return (await _run(<String>[text], purgeRules, context)).single;
+  }
+
+  /// Returns [titles] with every title-scoped purge rule applied, in the same order.
+  ///
+  /// The whole list is one batch: a 2000-chapter book must not ask the sandbox for one job per title
+  /// (ADR-0071 §决策 4/§决策 5).
+  Future<List<String>> purgeTitles(
+    List<String> titles, {
+    required JsPageContext context,
+  }) async {
+    final List<PurgeRule> purgeRules = <PurgeRule>[
+      for (final PurgeRule rule in await rules.purgeRules())
+        if (rule.appliesToTitle) rule,
+    ];
+    if (purgeRules.isEmpty || titles.isEmpty) {
+      return titles;
+    }
+
+    return _run(titles, purgeRules, context);
+  }
+
+  /// Applies [purgeRules] to every text of [texts], one rule at a time.
+  Future<List<String>> _run(
+    List<String> texts,
+    List<PurgeRule> purgeRules,
+    JsPageContext context,
+  ) async {
+    List<String> result = texts;
     for (final PurgeRule rule in purgeRules) {
-      result = _apply(text: result, rule: rule);
+      result = rule.replacement.startsWith(_scriptFlag)
+          ? await _runScript(result, rule, context)
+          : <String>[for (final String text in result) _apply(text, rule)];
     }
 
     return result;
   }
 
-  String _apply({required String text, required PurgeRule rule}) {
-    // 空 pattern 在上游直接被跳过；正则化它只会命中「每个位置」并把正文清空。
-    if (rule.pattern.isEmpty) {
-      return text;
+  /// Runs one `@js:` rule over the whole batch with a **single** sandbox job.
+  ///
+  /// Every match of every text is collected in order, the script answers one replacement per match,
+  /// and the texts are rebuilt from that answer. A script that fails, times out, or answers a list of
+  /// the wrong length leaves the batch untouched — the rule is skipped, not the chapter.
+  Future<List<String>> _runScript(
+    List<String> texts,
+    PurgeRule rule,
+    JsPageContext context,
+  ) async {
+    final RegExp regex;
+    try {
+      regex = RegExp(rule.pattern);
+    } on FormatException catch (error) {
+      logger?.warning('Purge rule skipped: invalid regular expression', error);
+
+      return texts;
     }
 
-    // 上游的 `replacement` 以 `@js:` 开头时是「每个匹配跑一段脚本」（`RegexExtensions.kt:32-58`）。
-    // 本仓没有这条通道，按字面替换会把整段脚本源码写进正文——那比不替换坏得多，所以显式跳过
-    // 并记 warning（ADR-0026 §决策 2、ADR-0070 增补 §7 的登记项）。
-    if (rule.replacement.startsWith('@js:')) {
-      logger?.warning(
-        'Purge rule skipped: @js: replacements are not supported '
-        '(${rule.pattern})',
-      );
+    final List<List<RegExpMatch>> perText = <List<RegExpMatch>>[
+      for (final String text in texts) regex.allMatches(text).toList(),
+    ];
+    final int total = perText.fold<int>(
+      0,
+      (int sum, List<RegExpMatch> matches) => sum + matches.length,
+    );
+    if (total == 0) {
+      return texts;
+    }
 
+    final JsBridge? js = this.js;
+    if (js == null) {
+      // 没有沙箱（例如只接了正则的宿主）时不能按字面量替换——那会把脚本文本写进正文。
+      logger?.warning('Purge rule skipped: no sandbox for a @js: replacement');
+
+      return texts;
+    }
+
+    final List<String> matches = <String>[
+      for (final List<RegExpMatch> textMatches in perText)
+        for (final RegExpMatch match in textMatches) match.group(0) ?? '',
+    ];
+
+    final List<String>? replacements = await _evaluateScript(
+      js: js,
+      rule: rule,
+      matches: matches,
+      context: context,
+    );
+    if (replacements == null || replacements.length != matches.length) {
+      if (replacements != null) {
+        logger?.warning(
+          'Purge rule skipped: the script answered the wrong count',
+        );
+      }
+
+      return texts;
+    }
+
+    final List<String> rebuilt = <String>[];
+    var cursor = 0;
+    for (var index = 0; index < texts.length; index++) {
+      final StringBuffer buffer = StringBuffer();
+      var consumed = 0;
+      for (final RegExpMatch match in perText[index]) {
+        buffer
+          ..write(texts[index].substring(consumed, match.start))
+          ..write(replacements[cursor++]);
+        consumed = match.end;
+      }
+      buffer.write(texts[index].substring(consumed));
+      rebuilt.add(buffer.toString());
+    }
+
+    return rebuilt;
+  }
+
+  /// Evaluates one batched script and answers its replacements, or `null` when it degraded.
+  Future<List<String>?> _evaluateScript({
+    required JsBridge js,
+    required PurgeRule rule,
+    required List<String> matches,
+    required JsPageContext context,
+  }) async {
+    final JsJob job = JsJob(
+      script: _scriptOf(
+        rule.replacement.substring(_scriptFlag.length),
+        matches,
+      ),
+      rulePath: _rulePath,
+      baseUrl: context.baseUrl,
+      page: context.page,
+      source: context.source,
+      bookName: context.bookName,
+      chapterTitle: context.chapterTitle,
+      book: context.book,
+    );
+
+    try {
+      final Future<ParseResult<Object?>> evaluation = js.evaluate(job);
+      final int? timeoutMs = rule.timeoutMs;
+      final ParseResult<Object?> answer = timeoutMs == null || timeoutMs <= 0
+          ? await evaluation
+          : await evaluation.timeout(Duration(milliseconds: timeoutMs));
+
+      return switch (answer) {
+        // 桥自己的失败（脚本抛错 / 被拒的 API）也走这里：跳过该规则。
+        ParseFailure<Object?>() => _reject(),
+        ParseSuccess<Object?>(:final Object? data) => switch (data) {
+          final List<Object?> list => <String>[
+            for (final Object? item in list) item?.toString() ?? '',
+          ],
+          _ => _reject(),
+        },
+      };
+    } on TimeoutException {
+      // `timeoutMs` 终于有了用处：一条跑不完的脚本按上游的做法禁用掉，而不是卡住整章。
+      logger?.warning('Purge rule skipped: the script timed out');
+
+      return null;
+    }
+  }
+
+  /// Logs a script answer this build cannot use and answers `null`.
+  List<String>? _reject() {
+    logger?.warning('Purge rule skipped: the script answered no list');
+
+    return null;
+  }
+
+  /// The one job's script: walk the matches, evaluate the rule's expression for each of them.
+  ///
+  /// `result` is the match text, as upstream binds it (`RegexExtensions.kt:52`), and `eval` is used
+  /// for its **completion value**: a purge replacement is often written as
+  /// `if (cond) { … } else { "" }`, which is a statement — `new Function` would need every rule to
+  /// `return`.
+  String _scriptOf(String expression, List<String> matches) => <String>[
+    'var __matches = ${jsonEncode(matches)};',
+    'var __out = [];',
+    'for (var __i = 0; __i < __matches.length; __i++) {',
+    '  var result = __matches[__i];',
+    '  __out.push(eval(${jsonEncode(expression)}));',
+    '}',
+    '__out;',
+  ].join('\n');
+
+  /// Applies one non-script rule to [text].
+  String _apply(String text, PurgeRule rule) {
+    // 空 pattern 在上游直接被跳过；正则化它只会命中「每个位置」并把正文清空。
+    if (rule.pattern.isEmpty) {
       return text;
     }
 

@@ -1,11 +1,22 @@
+import 'dart:async';
+
+import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:logger/logger.dart' show Level;
 
+import '../../../support/fake_js_bridge.dart';
 import '../../../support/fake_log_printer.dart';
+
+/// The page a purge runs against; most rules never read it, a `@js:` one may.
+const JsPageContext _context = JsPageContext(
+  baseUrl: 'https://source.test/book/1/1.html',
+);
 
 /// A [PurgeRuleSource] answering a fixed list.
 final class _FixedRules implements PurgeRuleSource {
@@ -31,16 +42,19 @@ void main() {
         rules: _FixedRules(<PurgeRule>[]),
       );
 
-      expect(await purifier.purge('正文'), '正文');
+      expect(await purifier.purgeContent('正文', context: _context), '正文');
     });
 
     test('purge_givenEmptyText_returnsItWithoutApplyingAnything', () async {
       // 空正文没什么可替换的；也不该为它去读一次规则表。
-      expect(await _literal('a', 'b').purge(''), '');
+      expect(await _literal('a', 'b').purgeContent('', context: _context), '');
     });
 
     test('purge_givenALiteralRule_replacesEveryOccurrence', () async {
-      expect(await _literal('广告', ' ').purge('开头广告中间广告结尾'), '开头 中间 结尾');
+      expect(
+        await _literal('广告', ' ').purgeContent('开头广告中间广告结尾', context: _context),
+        '开头 中间 结尾',
+      );
     });
 
     test('purge_givenSeveralRules_appliesThemInOrder', () async {
@@ -51,7 +65,7 @@ void main() {
             PurgeRule(pattern: 'a', replacement: 'b', isRegex: false),
             PurgeRule(pattern: 'b', replacement: 'c', isRegex: false),
           ]),
-        ).purge('a'),
+        ).purgeContent('a', context: _context),
         'c',
       );
     });
@@ -62,7 +76,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: r'\d+', replacement: 'N', isRegex: true),
           ]),
-        ).purge('第1章 共12段'),
+        ).purgeContent('第1章 共12段', context: _context),
         '第N章 共N段',
       );
     });
@@ -74,7 +88,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: r'第(\d+)章', replacement: r'[$1]', isRegex: true),
           ]),
-        ).purge('第12章 开始'),
+        ).purgeContent('第12章 开始', context: _context),
         '[12] 开始',
       );
     });
@@ -89,7 +103,7 @@ void main() {
               isRegex: true,
             ),
           ]),
-        ).purge('hey! ho!'),
+        ).purgeContent('hey! ho!', context: _context),
         'hey? ho?',
       );
     });
@@ -100,7 +114,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: 'x', replacement: r'\$1', isRegex: true),
           ]),
-        ).purge('x'),
+        ).purgeContent('x', context: _context),
         r'$1',
       );
     });
@@ -112,7 +126,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: '(a)', replacement: r'<$3>', isRegex: true),
           ]),
-        ).purge('a'),
+        ).purgeContent('a', context: _context),
         '<>',
       );
     });
@@ -123,7 +137,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: '(a)|(b)', replacement: r'<$2>', isRegex: true),
           ]),
-        ).purge('a'),
+        ).purgeContent('a', context: _context),
         '<>',
       );
     });
@@ -135,7 +149,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: 'x', replacement: r'$$', isRegex: true),
           ]),
-        ).purge('x'),
+        ).purgeContent('x', context: _context),
         r'$$',
       );
       expect(
@@ -143,7 +157,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: 'x', replacement: r'$a', isRegex: true),
           ]),
-        ).purge('x'),
+        ).purgeContent('x', context: _context),
         r'$a',
       );
       expect(
@@ -151,7 +165,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: 'x', replacement: r'${open', isRegex: true),
           ]),
-        ).purge('x'),
+        ).purgeContent('x', context: _context),
         r'${open',
       );
     });
@@ -163,7 +177,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: '(x)', replacement: r'a\nb$1', isRegex: true),
           ]),
-        ).purge('x'),
+        ).purgeContent('x', context: _context),
         r'a\nbx',
       );
     });
@@ -175,14 +189,13 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: '', replacement: '-', isRegex: true),
           ]),
-        ).purge('正文'),
+        ).purgeContent('正文', context: _context),
         '正文',
       );
     });
 
-    test('purge_givenAJsReplacement_skipsTheRuleAndWarns', () async {
-      // 上游的 `@js:` 替换是「每个匹配跑一段脚本」；本仓没有这条通道，按字面替换会把脚本源码
-      // 写进正文，所以显式跳过并记 warning（ADR-0026 §决策 2、ADR-0070 增补 §7）。
+    test('purgeContent_givenAJsRuleWithoutASandbox_skipsIt', () async {
+      // 没有沙箱时不能按字面量替换——那会把脚本文本写进正文（ADR-0026 §决策 2）。
       final FakeLogPrinter printer = FakeLogPrinter();
 
       final String result = await ContentPurifier(
@@ -194,10 +207,248 @@ void main() {
           ),
         ]),
         logger: AppLogger(printer: printer),
-      ).purge('a');
+      ).purgeContent('a', context: _context);
 
       expect(result, 'a');
-      expect(printer.events.single.message, contains('@js: replacements'));
+      expect(printer.events.single.message, contains('no sandbox'));
+    });
+
+    test('purgeContent_givenAJsRule_evaluatesItOnceForEveryMatch', () async {
+      // 一条规则一章**一个** job：一章上千个匹配也只是一次跨 isolate 往返
+      // （ADR-0071 §决策 5）。
+      final FakeJsBridge js = FakeJsBridge()..result = <Object?>['X', 'Y'];
+      final FakeLogPrinter printer = FakeLogPrinter();
+
+      final String result = await ContentPurifier(
+        rules: const _FixedRules(<PurgeRule>[
+          PurgeRule(
+            pattern: r'\d',
+            replacement: '@js:rule(result)',
+            isRegex: true,
+          ),
+        ]),
+        logger: AppLogger(printer: printer),
+        js: js,
+      ).purgeContent('1 和 2', context: _context);
+
+      expect(result, 'X 和 Y');
+      expect(js.jobs, hasLength(1));
+      // 匹配文本按顺序塞进脚本，`result` 仍是上游那一条绑定。
+      expect(js.jobs.single.script, contains('var __matches = ["1","2"]'));
+      expect(js.jobs.single.script, contains('eval("rule(result)")'));
+      expect(js.jobs.single.bookName, isNull);
+    });
+
+    test('purgeContent_givenAJSFailure_keepsTheTextAndWarns', () async {
+      final FakeJsBridge js = FakeJsBridge()
+        ..failure = failureAt<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'js.rule',
+        );
+      final FakeLogPrinter printer = FakeLogPrinter();
+
+      final String result = await ContentPurifier(
+        rules: const _FixedRules(<PurgeRule>[
+          PurgeRule(pattern: 'a', replacement: '@js:x', isRegex: true),
+        ]),
+        logger: AppLogger(printer: printer),
+        js: js,
+      ).purgeContent('a', context: _context);
+
+      expect(result, 'a');
+      expect(printer.events, isNotEmpty);
+    });
+
+    test('purgeContent_givenAScriptAnsweringNoList_keepsTheText', () async {
+      final FakeJsBridge js = FakeJsBridge()..result = 42;
+      final FakeLogPrinter printer = FakeLogPrinter();
+
+      final String result = await ContentPurifier(
+        rules: const _FixedRules(<PurgeRule>[
+          PurgeRule(pattern: 'a', replacement: '@js:x', isRegex: true),
+        ]),
+        logger: AppLogger(printer: printer),
+        js: js,
+      ).purgeContent('a', context: _context);
+
+      expect(result, 'a');
+      expect(printer.events.single.message, contains('no list'));
+    });
+
+    test(
+      'purgeContent_givenAScriptAnsweringTheWrongCount_keepsTheText',
+      () async {
+        // 少一条、多一条都对不上位置：宁可整条规则不生效（ADR-0026 §决策 2）。
+        final FakeJsBridge js = FakeJsBridge()..result = <Object?>['X'];
+        final FakeLogPrinter printer = FakeLogPrinter();
+
+        final String result = await ContentPurifier(
+          rules: const _FixedRules(<PurgeRule>[
+            PurgeRule(pattern: r'\d', replacement: '@js:x', isRegex: true),
+          ]),
+          logger: AppLogger(printer: printer),
+          js: js,
+        ).purgeContent('1 和 2', context: _context);
+
+        expect(result, '1 和 2');
+        expect(printer.events.single.message, contains('wrong count'));
+      },
+    );
+
+    test('purgeContent_givenAJSBreakingRegex_keepsTheText', () async {
+      final FakeJsBridge js = FakeJsBridge();
+      final FakeLogPrinter printer = FakeLogPrinter();
+
+      final String result = await ContentPurifier(
+        rules: const _FixedRules(<PurgeRule>[
+          PurgeRule(pattern: '(', replacement: '@js:x', isRegex: true),
+        ]),
+        logger: AppLogger(printer: printer),
+        js: js,
+      ).purgeContent('a', context: _context);
+
+      expect(result, 'a');
+      expect(js.jobs, isEmpty);
+    });
+
+    test('purgeContent_givenAJSWithNoMatch_neverStartsTheSandbox', () async {
+      final FakeJsBridge js = FakeJsBridge();
+
+      final String result = await ContentPurifier(
+        rules: const _FixedRules(<PurgeRule>[
+          PurgeRule(pattern: 'zzz', replacement: '@js:x', isRegex: true),
+        ]),
+        js: js,
+      ).purgeContent('abc', context: _context);
+
+      expect(result, 'abc');
+      expect(js.jobs, isEmpty);
+    });
+
+    test('purgeTitles_givenAJSWithATimeout_skipsTheRule', () async {
+      // `timeoutMs` 是上游那条逐规则上限：跑不完就跳过（ADR-0071 §决策 5）。
+      // 假桥立即返回，所以用一个 0 毫秒（= 未设置）以外的极小值配合 `Future.delayed` 不可行；
+      // 这里用「桥永远不答」的形态：借 `FakeJsBridge` 的顺序队列之外的一条自定义桥。
+      final _SlowBridge js = _SlowBridge();
+
+      final List<String> titles = await ContentPurifier(
+        rules: const _FixedRules(<PurgeRule>[
+          PurgeRule(
+            pattern: 'a',
+            replacement: '@js:x',
+            isRegex: true,
+            appliesToTitle: true,
+            timeoutMs: 1,
+          ),
+        ]),
+        js: js,
+      ).purgeTitles(<String>['a'], context: _context);
+
+      expect(titles, <String>['a']);
+    });
+
+    test('purgeContent_givenATitleOnlyRule_leavesTheBodyAlone', () async {
+      // 只作用于标题的规则（上游 scopeTitle: true / scopeContent: false）不该改正文，
+      // 否则「数字标题」这种规则会把正文章节号一起改花（ADR-0071 §决策 4）。
+      expect(
+        await const ContentPurifier(
+          rules: _FixedRules(<PurgeRule>[
+            PurgeRule(
+              pattern: '第',
+              replacement: 'Chapter ',
+              isRegex: false,
+              appliesToContent: false,
+              appliesToTitle: true,
+            ),
+          ]),
+        ).purgeContent('第1章 开端', context: _context),
+        '第1章 开端',
+      );
+    });
+
+    test('purgeContent_givenBothScopes_appliesToTheBody', () async {
+      expect(
+        await const ContentPurifier(
+          rules: _FixedRules(<PurgeRule>[
+            PurgeRule(
+              pattern: '第',
+              replacement: 'Chapter ',
+              isRegex: false,
+              appliesToContent: true,
+              appliesToTitle: true,
+            ),
+          ]),
+        ).purgeContent('第1章', context: _context),
+        'Chapter 1章',
+      );
+    });
+
+    test('purgeTitles_givenATitleRule_rewritesEveryTitle', () async {
+      expect(
+        await const ContentPurifier(
+          rules: _FixedRules(<PurgeRule>[
+            PurgeRule(
+              pattern: r'第(\d+)章',
+              replacement: r'[$1]',
+              isRegex: true,
+              appliesToContent: false,
+              appliesToTitle: true,
+            ),
+          ]),
+        ).purgeTitles(<String>['第1章 开端', '第2章 继续'], context: _context),
+        <String>['[1] 开端', '[2] 继续'],
+      );
+    });
+
+    test('purgeTitles_givenAContentOnlyRule_answersThemUnchanged', () async {
+      expect(
+        await const ContentPurifier(
+          rules: _FixedRules(<PurgeRule>[
+            PurgeRule(pattern: 'a', replacement: 'b', isRegex: false),
+          ]),
+        ).purgeTitles(<String>['第1章'], context: _context),
+        <String>['第1章'],
+      );
+    });
+
+    test('purgeTitles_givenNoTitles_answersAnEmptyList', () async {
+      expect(
+        await const ContentPurifier(
+          rules: _FixedRules(<PurgeRule>[
+            PurgeRule(
+              pattern: 'a',
+              replacement: 'b',
+              isRegex: false,
+              appliesToTitle: true,
+            ),
+          ]),
+        ).purgeTitles(const <String>[], context: _context),
+        isEmpty,
+      );
+    });
+
+    test('purgeTitles_givenSeveralRules_appliesThemInOrder', () async {
+      expect(
+        await const ContentPurifier(
+          rules: _FixedRules(<PurgeRule>[
+            PurgeRule(
+              pattern: 'a',
+              replacement: 'b',
+              isRegex: false,
+              appliesToContent: false,
+              appliesToTitle: true,
+            ),
+            PurgeRule(
+              pattern: 'b',
+              replacement: 'c',
+              isRegex: false,
+              appliesToContent: false,
+              appliesToTitle: true,
+            ),
+          ]),
+        ).purgeTitles(<String>['a'], context: _context),
+        <String>['c'],
+      );
     });
 
     test('purge_givenABrokenRegularExpression_keepsTheTextAndWarns', () async {
@@ -208,7 +459,7 @@ void main() {
           PurgeRule(pattern: '(', replacement: '-', isRegex: true),
         ]),
         logger: AppLogger(printer: printer),
-      ).purge('正文');
+      ).purgeContent('正文', context: _context);
 
       expect(result, '正文');
       expect(printer.events.single.level, Level.warning);
@@ -226,7 +477,7 @@ void main() {
           PurgeRule(pattern: 'a|', replacement: '-', isRegex: true),
         ]),
         logger: AppLogger(printer: printer),
-      ).purge('a');
+      ).purgeContent('a', context: _context);
 
       expect(result, 'a');
       expect(printer.events.single.message, contains('bare "|"'));
@@ -239,7 +490,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: r'a\|', replacement: '-', isRegex: true),
           ]),
-        ).purge('a|b'),
+        ).purgeContent('a|b', context: _context),
         '-b',
       );
     });
@@ -251,7 +502,7 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: '(', replacement: '-', isRegex: true),
           ]),
-        ).purge('正文'),
+        ).purgeContent('正文', context: _context),
         '正文',
       );
       expect(
@@ -259,9 +510,19 @@ void main() {
           rules: _FixedRules(<PurgeRule>[
             PurgeRule(pattern: 'a|', replacement: '-', isRegex: true),
           ]),
-        ).purge('a'),
+        ).purgeContent('a', context: _context),
         'a',
       );
     });
   });
+}
+
+/// A [JsBridge] that never answers, so a rule's `timeoutMs` is the only thing that ends the wait.
+final class _SlowBridge implements JsBridge {
+  @override
+  Future<ParseResult<Object?>> evaluate(JsJob job) =>
+      Completer<ParseResult<Object?>>().future;
+
+  @override
+  Future<void> dispose() async {}
 }
