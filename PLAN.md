@@ -35,5 +35,5 @@ auto-breakpoint: false
 
 ## Current: M8 — 5.7 缓存清理 + 5.8 导出保真
 
-goal: M23 已闭环：规则/书源导入导出 + scope + @js:
-breakpoint: 下一步：M8 剩 5.7 按源缓存（5.8 导出保真已随 M23 闭环）
+goal: M22-a 第一批已落地：按源缓存 + Cookie 管理
+breakpoint: 下一步：M22-a 第二批 = loginUi 登录表单（todo #19）

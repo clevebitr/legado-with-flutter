@@ -412,3 +412,19 @@ M20-d 落地，落点写进 ADR-0070 增补 §10（§决策 2 的语义不变：
 登记（roadmap §3.7）：规则分组只存不展示不筛选、正则规则仍无超时、标题净化不覆盖详情页目录预览与书架「最新章节」。
 
 验证：2062 用例全过；core 100% / domain 100% / data 98.25%；format 0、analyze 干净、codegen 幂等；Windows app_boot 通过、js_bridge 35/35（含新的真沙箱净化替换用例）。
+
+## 2026-10-25 — M22-a 第一批：按源缓存（v10）与 Cookie 管理页
+
+M22 拆批并落了第一批（ADR-0072），先按用户裁决对齐上游行为：
+
+上游实况（逐条查过）：缓存清理只有「全部 / 按书」（`BookHelp.clearCache`），**没有按源**；Cookie 只有书源编辑页里的「清掉该源的 Cookie」（`BookSourceEditViewModel.clearCookie`）+ `enabledCookieJar` 开关，**没有列表页**；`loginUi` 是 `RowUi` 数组（text/password/toggle/select/button + `viewName` 可求值 + 本身可以是 `@js:`/`<js>`），登录信息由 `BaseSource.putLoginInfo` 加密存、确认时跑 `loginUrl` 里的 `login()`。所以「按源缓存」与「Cookie 列表」是本仓在**上游没有的粒度上做的增强**，ADR 里写明了这一点。
+
+第一批交付：
+- **schema v10**：`cache_entries.source_key` + 索引；迁移**顺带清空旧缓存**——摘要无法反推，留着会让按源统计在 TTL 内少算，缓存又是可再生数据，清空比显示错数诚实。schema dump v10 + 迁移测试（fromV9→v10、全量链路、版本断言）齐了。
+- **按源缓存页**（book_source，「我的 → 缓存管理」）：每源章数、清理该源、清理过期、清空全部（带二次确认）。
+- **Cookie 管理页**（settings，「我的 → Cookie 管理」）：按域分组，显示名称与过期（**不显示值**——会话凭据印在屏上没有用处）；删单条/整域/过期/全部。`CookieStore` 补 `deleteByDomain`/`deleteAll`。
+- `ContentCache` 补 `countForSource`/`clearForSource`/`countAll`/`clearExpired`。
+
+登记：每书源 Cookie 隔离仍不做（当前是全局按域）；登录信息将按 ADR 明文存库（与 Cookie 同级）；`putLoginHeader`/`upLoginData` 不做。
+
+验证：2089 用例全过；core 100% / domain 100% / data 98.30%；format 0、analyze 干净、codegen 幂等；Windows app_boot 与 on-disk 数据库用例通过。
