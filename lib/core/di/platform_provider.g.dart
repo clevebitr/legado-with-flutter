@@ -452,6 +452,59 @@ final class BackupDirectoryPickerProvider
 String _$backupDirectoryPickerHash() =>
     r'916608672e8264703ff018e74bef6d355a0bf1b6';
 
+/// Provides the image dialog the theme background is chosen with (`ADR-0075` §决策 1).
+
+@ProviderFor(backgroundImagePicker)
+final backgroundImagePickerProvider = BackgroundImagePickerProvider._();
+
+/// Provides the image dialog the theme background is chosen with (`ADR-0075` §决策 1).
+
+final class BackgroundImagePickerProvider
+    extends
+        $FunctionalProvider<
+          BackgroundImagePicker,
+          BackgroundImagePicker,
+          BackgroundImagePicker
+        >
+    with $Provider<BackgroundImagePicker> {
+  /// Provides the image dialog the theme background is chosen with (`ADR-0075` §决策 1).
+  BackgroundImagePickerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'backgroundImagePickerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$backgroundImagePickerHash();
+
+  @$internal
+  @override
+  $ProviderElement<BackgroundImagePicker> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BackgroundImagePicker create(Ref ref) {
+    return backgroundImagePicker(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BackgroundImagePicker value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BackgroundImagePicker>(value),
+    );
+  }
+}
+
+String _$backgroundImagePickerHash() =>
+    r'66a3dc5328016972bafc548f424c00a9cefe7cf4';
+
 /// Provides the long-task marker a batch check holds while it runs.
 ///
 /// Only Android has a real one; other platforms get a no-op.

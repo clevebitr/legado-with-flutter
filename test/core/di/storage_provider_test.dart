@@ -7,6 +7,7 @@ import 'package:flutter_reader/core/di/database_path_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/storage/bookmark_dao.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
+import 'package:flutter_reader/core/storage/local_image_store.dart';
 import 'package:flutter_reader/core/storage/read_record_dao.dart';
 import 'package:flutter_reader/core/storage/rule_dao.dart';
 import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
@@ -134,5 +135,11 @@ void main() {
         same(container.read(readerDatabaseProvider)),
       );
     });
+  });
+
+  test('localImageStore_whenRead_answersTheStore', () {
+    final ProviderContainer container = ProviderContainer.test();
+
+    expect(container.read(localImageStoreProvider), isA<LocalImageStore>());
   });
 }

@@ -2757,5 +2757,41 @@
   "backupLocalTitle": "On this device",
   "@backupLocalTitle": {
     "@description": "本机备份"
+  },
+  "settingsSeedColor": "Colour",
+  "@settingsSeedColor": {
+    "@description": "配色"
+  },
+  "settingsSeedColorHint": "Dynamic colour wins when the platform has it; this decides the colours on devices that do not.",
+  "@settingsSeedColorHint": {
+    "@description": "有动态取色时系统配色优先；这里决定没有动态取色的设备用哪套颜色。"
+  },
+  "settingsSeedColorDefault": "Default",
+  "@settingsSeedColorDefault": {
+    "@description": "默认"
+  },
+  "settingsBackgroundImage": "Background",
+  "@settingsBackgroundImage": {
+    "@description": "背景图"
+  },
+  "settingsBackgroundImageNone": "Not set",
+  "@settingsBackgroundImageNone": {
+    "@description": "未设置"
+  },
+  "settingsBackgroundImageChoose": "Choose an image",
+  "@settingsBackgroundImageChoose": {
+    "@description": "选择图片"
+  },
+  "settingsBackgroundImageRemove": "Remove",
+  "@settingsBackgroundImageRemove": {
+    "@description": "移除"
+  },
+  "settingsBackgroundImageHint": "The image is copied into the app, so deleting the original is fine.",
+  "@settingsBackgroundImageHint": {
+    "@description": "图片会复制到应用目录，原图删除也不影响。"
+  },
+  "settingsBackgroundImageFailed": "The background image could not be saved; try again.",
+  "@settingsBackgroundImageFailed": {
+    "@description": "背景图没能保存，请再试一次。"
   }
 }

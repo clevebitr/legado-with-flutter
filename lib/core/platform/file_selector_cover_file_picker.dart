@@ -1,5 +1,6 @@
 // coverage:ignore-file
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter_reader/core/platform/background_image_picker.dart';
 import 'package:flutter_reader/core/platform/cover_file_picker.dart';
 
 /// The production [CoverFilePicker]: the plugin call lives in this one file.
@@ -28,4 +29,16 @@ Future<PickedCoverFile?> fileSelectorOpenCoverImage() async {
   }
 
   return PickedCoverFile(name: file.name, bytes: await file.readAsBytes());
+}
+
+/// Opens the same image dialog for the theme background (ADR-0075 §决策 1).
+///
+/// One dialog for both: the accepted types are identical, and a second copy of them would be a second
+/// answer to「哪些图片能选」.
+Future<PickedBackgroundImage?> fileSelectorOpenBackgroundImage() async {
+  final PickedCoverFile? file = await fileSelectorOpenCoverImage();
+
+  return file == null
+      ? null
+      : PickedBackgroundImage(name: file.name, bytes: file.bytes);
 }

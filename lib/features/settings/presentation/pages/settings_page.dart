@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
@@ -85,6 +86,10 @@ class SettingsPage extends ConsumerWidget {
           ),
         ),
       ),
+      _heading(l10n.settingsSeedColor, tokens),
+      _seedColor(ref, settings, tokens, l10n),
+      _heading(l10n.settingsBackgroundImage, tokens),
+      _backgroundImage(context, ref, settings, tokens, l10n),
       _heading(l10n.settingsFontScale, tokens),
       _fontScale(ref, settings, tokens, l10n),
       _heading(l10n.settingsConcurrency, tokens),
@@ -119,6 +124,159 @@ class SettingsPage extends ConsumerWidget {
     ),
     child: Text(title, style: tokens.typography.base.titleMedium),
   );
+
+  /// Builds the seed-colour swatches plus 「默认」 (`ADR-0075` §决策 1).
+  Widget _seedColor(
+    WidgetRef ref,
+    AppSettings settings,
+    M3ETheme tokens,
+    AppLocalizations l10n,
+  ) => Padding(
+    padding: EdgeInsets.symmetric(horizontal: tokens.spacing.lg),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Wrap(
+          spacing: tokens.spacing.sm,
+          runSpacing: tokens.spacing.sm,
+          children: <Widget>[
+            for (final Color preset in themeSeedPresets())
+              _swatch(
+                ref,
+                key: ValueKey<String>('seedColor-${preset.toARGB32()}'),
+                color: preset,
+                isSelected: settings.seedColor == preset.toARGB32(),
+                tokens: tokens,
+                label: l10n.settingsSeedColor,
+              ),
+            _defaultSwatch(ref, settings, tokens, l10n),
+          ],
+        ),
+        Padding(
+          padding: EdgeInsets.only(top: tokens.spacing.xs),
+          child: Text(
+            l10n.settingsSeedColorHint,
+            style: tokens.typography.base.bodySmall,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  /// One selectable seed colour.
+  Widget _swatch(
+    WidgetRef ref, {
+    required Key key,
+    required Color color,
+    required bool isSelected,
+    required M3ETheme tokens,
+    required String label,
+  }) => Semantics(
+    button: true,
+    selected: isSelected,
+    label: label,
+    child: InkWell(
+      key: key,
+      borderRadius: tokens.shapes.round.xs,
+      onTap: () => unawaited(
+        ref.read(settingsProvider.notifier).setSeedColor(color.toARGB32()),
+      ),
+      child: Container(
+        width: tokens.spacing.xxl,
+        height: tokens.spacing.xxl,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: isSelected
+              ? Border.all(color: tokens.colors.onSurface, width: 2)
+              : null,
+        ),
+      ),
+    ),
+  );
+
+  /// The 「默认」 swatch: clears the stored seed.
+  Widget _defaultSwatch(
+    WidgetRef ref,
+    AppSettings settings,
+    M3ETheme tokens,
+    AppLocalizations l10n,
+  ) => Tooltip(
+    message: l10n.settingsSeedColorDefault,
+    child: InkWell(
+      key: const ValueKey<String>('seedColor-default'),
+      borderRadius: tokens.shapes.round.xs,
+      onTap: () =>
+          unawaited(ref.read(settingsProvider.notifier).setSeedColor(null)),
+      child: Container(
+        width: tokens.spacing.xxl,
+        height: tokens.spacing.xxl,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: tokens.colors.surfaceContainerHighest,
+          shape: BoxShape.circle,
+          border: settings.seedColor == null
+              ? Border.all(color: tokens.colors.onSurface, width: 2)
+              : null,
+        ),
+        child: Icon(Icons.restart_alt, size: tokens.spacing.md),
+      ),
+    ),
+  );
+
+  /// Builds the background-image row: what is stored, and how to change it.
+  Widget _backgroundImage(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+    M3ETheme tokens,
+    AppLocalizations l10n,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: <Widget>[
+      ListTile(
+        leading: const Icon(Icons.image_outlined),
+        title: Text(
+          settings.backgroundImageName ?? l10n.settingsBackgroundImageNone,
+        ),
+        subtitle: Text(l10n.settingsBackgroundImageHint),
+        trailing: Wrap(
+          spacing: tokens.spacing.xs,
+          children: <Widget>[
+            if (settings.backgroundImageName != null)
+              TextButton(
+                onPressed: () => unawaited(
+                  ref.read(settingsProvider.notifier).removeBackgroundImage(),
+                ),
+                child: Text(l10n.settingsBackgroundImageRemove),
+              ),
+            TextButton(
+              onPressed: () =>
+                  unawaited(_pickBackgroundImage(context, ref, l10n)),
+              child: Text(l10n.settingsBackgroundImageChoose),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  /// Picks an image and reports a failed copy; a cancel stays silent.
+  Future<void> _pickBackgroundImage(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) async {
+    final ParseResult<bool> result = await ref
+        .read(settingsProvider.notifier)
+        .pickBackgroundImage();
+    if (!context.mounted || result is! ParseFailure<bool>) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.settingsBackgroundImageFailed)));
+  }
 
   /// Builds the text-scale slider; the current value is spelled as a percentage.
   Widget _fontScale(

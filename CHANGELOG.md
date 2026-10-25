@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A theme you can colour, with a picture behind it (ADR-0075, M22-d part 1)
+
+- **Seed colour.** The settings page offers six presets plus 「默认」; the choice is stored as an
+  `int` and only decides the scheme when the platform reports no dynamic colour (dynamic colour still
+  wins, ADR-0004). The presets are derived from `defaultSeedColor` by hue rotation rather than added
+  as literals, so C-UI-1's one-literal rule still holds.
+- **Background image.** Picking one copies it into the app's own `backgrounds/` folder and stores only
+  the file name, so the theme survives the original file moving or an Android URI grant expiring.
+  Replacing it deletes the previous file; removing it clears both. The reader will use it in the next
+  slice (`useThemeBackground`).
+- New `LocalImageStore` (core) and `BackgroundImagePicker` port; settings keys
+  `settings.seedColor` / `settings.backgroundImage`.
+- Also fixes two API drifts found by `flutter analyze` on this tree: dio 5.11's
+  `RedirectRecord.location` is a `Uri`, and `HttpResponse` now requires `url` in the integration
+  test's fake client.
+
 ### Backups grow up: scheduled, encrypted, overwritable, and on WebDAV (ADR-0074, M22-c)
 
 - **A backup location you choose.** 「我的 → 备份与恢复」writes the daily backup, the safety copy and

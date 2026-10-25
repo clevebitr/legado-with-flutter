@@ -11,9 +11,11 @@ import 'package:flutter_reader/core/storage/cache_dao.dart';
 import 'package:flutter_reader/core/storage/cookie_dao.dart';
 import 'package:flutter_reader/core/storage/cookie_dao_store.dart';
 import 'package:flutter_reader/core/storage/database.dart';
+import 'package:flutter_reader/core/storage/local_image_store.dart';
 import 'package:flutter_reader/core/storage/read_record_dao.dart';
 import 'package:flutter_reader/core/storage/rule_dao.dart';
 import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'storage_provider.g.dart';
@@ -86,3 +88,8 @@ ReadRecordDao readRecordDao(Ref ref) =>
 /// Provides the DAO of the user-editable rules (替换净化 / 目录 / 字典 / 高亮).
 @Riverpod(keepAlive: true)
 RuleDao ruleDao(Ref ref) => RuleDao(ref.watch(readerDatabaseProvider));
+
+/// Provides the store user-picked images are copied into (`ADR-0075` §决策 1).
+@Riverpod(keepAlive: true)
+LocalImageStore localImageStore(Ref ref) =>
+    const LocalImageStore(supportDirectory: getApplicationSupportDirectory);

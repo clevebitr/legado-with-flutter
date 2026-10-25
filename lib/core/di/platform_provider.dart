@@ -1,8 +1,10 @@
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/platform/background_image_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
+import 'package:flutter_reader/core/platform/file_selector_background_image_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_directory_picker.dart';
@@ -103,6 +105,16 @@ BackupDirectoryPicker backupDirectoryPicker(Ref ref) {
   return platform.isMobile || platform.isDesktop
       ? const FileSelectorBackupDirectoryPicker()
       : const UnsupportedBackupDirectoryPicker();
+}
+
+/// Provides the image dialog the theme background is chosen with (`ADR-0075` §决策 1).
+@Riverpod(keepAlive: true)
+BackgroundImagePicker backgroundImagePicker(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBackgroundImagePicker()
+      : const UnsupportedBackgroundImagePicker();
 }
 
 /// Provides the long-task marker a batch check holds while it runs.

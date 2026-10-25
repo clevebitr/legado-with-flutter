@@ -582,5 +582,14 @@
   "backupWorkUploading": "正在上传…",
   "backupWorkListingRemote": "正在读取云端列表…",
   "backupWorkDownloading": "正在下载…",
-  "backupLocalTitle": "本机备份"
+  "backupLocalTitle": "本机备份",
+  "settingsSeedColor": "配色",
+  "settingsSeedColorHint": "有动态取色时系统配色优先；这里决定没有动态取色的设备用哪套颜色。",
+  "settingsSeedColorDefault": "默认",
+  "settingsBackgroundImage": "背景图",
+  "settingsBackgroundImageNone": "未设置",
+  "settingsBackgroundImageChoose": "选择图片",
+  "settingsBackgroundImageRemove": "移除",
+  "settingsBackgroundImageHint": "图片会复制到应用目录，原图删除也不影响。",
+  "settingsBackgroundImageFailed": "背景图没能保存，请再试一次。"
 }

@@ -191,6 +191,12 @@ final class _ChapterBodyInvalidator implements ChapterBodyInvalidator {
       _ref.read(contentCacheProvider).clearAll();
 }
 
+/// The theme seed the user picked, as a [Color], or `null` for the project default.
+Color? _seedOf(AppSettings settings) => switch (settings.seedColor) {
+  final int argb => Color(argb),
+  null => null,
+};
+
 /// `RestoreCompletionHook` bound to the two providers that cache `shared_preferences`
 /// (ADR-0073 §决策 3).
 ///
@@ -305,8 +311,13 @@ class ReaderApp extends ConsumerWidget {
         AppLocalizations.of(context).appTitle,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    theme: buildReaderTheme(lightDynamic ?? fallbackLightColorScheme()),
-    darkTheme: buildReaderTheme(darkDynamic ?? fallbackDarkColorScheme()),
+    // 用户选的种子色只在「平台没有动态取色」时生效（ADR-0075 §决策 1）。
+    theme: buildReaderTheme(
+      lightDynamic ?? fallbackLightColorScheme(seedColor: _seedOf(settings)),
+    ),
+    darkTheme: buildReaderTheme(
+      darkDynamic ?? fallbackDarkColorScheme(seedColor: _seedOf(settings)),
+    ),
     themeMode: switch (settings.themeMode) {
       AppThemeMode.system => ThemeMode.system,
       AppThemeMode.light => ThemeMode.light,

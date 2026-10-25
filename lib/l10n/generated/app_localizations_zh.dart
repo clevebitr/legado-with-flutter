@@ -1912,4 +1912,31 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get backupLocalTitle => '本机备份';
+
+  @override
+  String get settingsSeedColor => '配色';
+
+  @override
+  String get settingsSeedColorHint => '有动态取色时系统配色优先；这里决定没有动态取色的设备用哪套颜色。';
+
+  @override
+  String get settingsSeedColorDefault => '默认';
+
+  @override
+  String get settingsBackgroundImage => '背景图';
+
+  @override
+  String get settingsBackgroundImageNone => '未设置';
+
+  @override
+  String get settingsBackgroundImageChoose => '选择图片';
+
+  @override
+  String get settingsBackgroundImageRemove => '移除';
+
+  @override
+  String get settingsBackgroundImageHint => '图片会复制到应用目录，原图删除也不影响。';
+
+  @override
+  String get settingsBackgroundImageFailed => '背景图没能保存，请再试一次。';
 }

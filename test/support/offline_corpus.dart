@@ -8,11 +8,14 @@ import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
+import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/platform/background_image_picker.dart';
 import 'package:flutter_reader/core/platform/json_file_picker.dart';
 import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
+import 'package:flutter_reader/core/storage/local_image_store.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
@@ -372,6 +375,8 @@ Future<void> pumpSettingsPage(
   required Widget page,
   required FakeSettingsRepository repository,
   required FakeCachePurger purger,
+  BackgroundImagePicker? imagePicker,
+  LocalImageStore? imageStore,
 }) async {
   _fixViewSize(tester);
 
@@ -381,6 +386,10 @@ Future<void> pumpSettingsPage(
         settingsRepositoryProvider.overrideWith((Ref ref) async => repository),
         cachePurgerProvider.overrideWithValue(purger),
         appLoggerProvider.overrideWithValue(_logger()),
+        if (imagePicker != null)
+          backgroundImagePickerProvider.overrideWithValue(imagePicker),
+        if (imageStore != null)
+          localImageStoreProvider.overrideWithValue(imageStore),
       ],
       child: MaterialApp(
         locale: const Locale('en'),

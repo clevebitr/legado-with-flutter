@@ -1,9 +1,11 @@
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/platform/background_image_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
+import 'package:flutter_reader/core/platform/file_selector_background_image_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_directory_picker.dart';
@@ -289,6 +291,46 @@ void main() {
         );
         expect(picker, isA<UnsupportedBackupDirectoryPicker>());
         expect((await picker.pick()).dataOrNull, isNull);
+      },
+    );
+  });
+
+  group('backgroundImagePicker', () {
+    test('backgroundImagePicker_givenAShippedPlatform_usesTheRealDialog', () {
+      for (final FakePlatformInfo platform in <FakePlatformInfo>[
+        const FakePlatformInfo.android(),
+        const FakePlatformInfo.ios(),
+        const FakePlatformInfo.desktop(),
+      ]) {
+        final ProviderContainer container = ProviderContainer.test(
+          overrides: <Override>[
+            platformInfoProvider.overrideWithValue(platform),
+          ],
+        );
+
+        expect(
+          container.read(backgroundImagePickerProvider),
+          isA<FileSelectorBackgroundImagePicker>(),
+        );
+      }
+    });
+
+    test(
+      'backgroundImagePicker_givenAnUnshippedPlatform_picksNothing',
+      () async {
+        final ProviderContainer container = ProviderContainer.test(
+          overrides: <Override>[
+            platformInfoProvider.overrideWithValue(
+              const FakePlatformInfo.unsupported(),
+            ),
+          ],
+        );
+
+        final BackgroundImagePicker picker = container.read(
+          backgroundImagePickerProvider,
+        );
+        expect(picker, isA<UnsupportedBackgroundImagePicker>());
+        expect(await picker.pick(), isNull);
       },
     );
   });

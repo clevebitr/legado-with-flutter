@@ -1973,4 +1973,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backupLocalTitle => 'On this device';
+
+  @override
+  String get settingsSeedColor => 'Colour';
+
+  @override
+  String get settingsSeedColorHint =>
+      'Dynamic colour wins when the platform has it; this decides the colours on devices that do not.';
+
+  @override
+  String get settingsSeedColorDefault => 'Default';
+
+  @override
+  String get settingsBackgroundImage => 'Background';
+
+  @override
+  String get settingsBackgroundImageNone => 'Not set';
+
+  @override
+  String get settingsBackgroundImageChoose => 'Choose an image';
+
+  @override
+  String get settingsBackgroundImageRemove => 'Remove';
+
+  @override
+  String get settingsBackgroundImageHint =>
+      'The image is copied into the app, so deleting the original is fine.';
+
+  @override
+  String get settingsBackgroundImageFailed =>
+      'The background image could not be saved; try again.';
 }

@@ -3599,6 +3599,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'On this device'**
   String get backupLocalTitle;
+
+  /// No description provided for @settingsSeedColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get settingsSeedColor;
+
+  /// No description provided for @settingsSeedColorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Dynamic colour wins when the platform has it; this decides the colours on devices that do not.'**
+  String get settingsSeedColorHint;
+
+  /// No description provided for @settingsSeedColorDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get settingsSeedColorDefault;
+
+  /// No description provided for @settingsBackgroundImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get settingsBackgroundImage;
+
+  /// No description provided for @settingsBackgroundImageNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get settingsBackgroundImageNone;
+
+  /// No description provided for @settingsBackgroundImageChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an image'**
+  String get settingsBackgroundImageChoose;
+
+  /// No description provided for @settingsBackgroundImageRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get settingsBackgroundImageRemove;
+
+  /// No description provided for @settingsBackgroundImageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is copied into the app, so deleting the original is fine.'**
+  String get settingsBackgroundImageHint;
+
+  /// No description provided for @settingsBackgroundImageFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The background image could not be saved; try again.'**
+  String get settingsBackgroundImageFailed;
 }
 
 class _AppLocalizationsDelegate

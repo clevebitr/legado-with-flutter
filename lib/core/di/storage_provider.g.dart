@@ -467,3 +467,50 @@ final class RuleDaoProvider
 }
 
 String _$ruleDaoHash() => r'587caa574599184a2d3f9fd44b81cb72cc6d564f';
+
+/// Provides the store user-picked images are copied into (`ADR-0075` §决策 1).
+
+@ProviderFor(localImageStore)
+final localImageStoreProvider = LocalImageStoreProvider._();
+
+/// Provides the store user-picked images are copied into (`ADR-0075` §决策 1).
+
+final class LocalImageStoreProvider
+    extends
+        $FunctionalProvider<LocalImageStore, LocalImageStore, LocalImageStore>
+    with $Provider<LocalImageStore> {
+  /// Provides the store user-picked images are copied into (`ADR-0075` §决策 1).
+  LocalImageStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'localImageStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$localImageStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<LocalImageStore> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  LocalImageStore create(Ref ref) {
+    return localImageStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(LocalImageStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<LocalImageStore>(value),
+    );
+  }
+}
+
+String _$localImageStoreHash() => r'859f76cea7544e67eff7b8d169ee7d8f6147d62a';
