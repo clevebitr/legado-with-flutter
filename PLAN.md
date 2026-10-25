@@ -34,8 +34,9 @@ auto-breakpoint: false
 - [x] M23 — M23 — 规则/书源导入导出 + 净化 scope 与 @js:（ADR-0071）
 - [x] M22b — M22b — 备份恢复：
 - [x] M22c — M22c — 备份增强：自动/加密/覆盖/WebDAV（#32）
+- [ ] M24 — M24 — 同步 java.* 重放层（ADR-0076，详见 #33）
 
 ## Current: M8 — 5.7 缓存清理 + 5.8 导出保真
 
-goal: M22b 已闭环：zip 备份 + 合并恢复（ADR-0073）
-breakpoint: 下一批候选：主题/阅读设置扩展或本地 txt 导入
+goal: 同步 java.* 重放层（ADR-0076）
+breakpoint: 重放引擎未开工；兼容版源已交付

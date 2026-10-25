@@ -486,3 +486,18 @@ M22-a 第二批落地（ADR-0072 §决策 3 + 实现注记）：loginUi 表单 +
 - const 构造折叠又一次：OversizedBackupArchive / BackupContents 的测试用例改非 const 并 // ignore: prefer_const_constructors。
 
 验证：2298 用例全过；core 100% / domain 100% / data 95.79%；format 0、analyze 干净、codegen 幂等（第二次 0 输出）；scan_licenses 201 包无风险项。未做（已登记 §3.7）：后台调度的自动备份、密钥库不可用时的降级策略、口令强度校验、云端进度同步、读上游 zip。主题与阅读设置扩展（U9/U10）本轮未开始，下一步。
+
+## 2026-10-25 — M24 同步 java.* 重放层的切片与验收
+
+目标：让上游「同步 java.*」书源不改写即可跑（触发源：来看文学，`java.ajax` 在 searchUrl 第一行就拒绝）。
+
+切片顺序（每片都能独立过门禁）：
+1. 与重放无关的三个缺口先补：`cookie.getCookie/setCookie/removeCookie`（读自 job 快照、写穿 CookieManager）、`source.getVariable/setVariable/putVariable`（每源持久变量，落点待定：Drift 新表 or 复用书源字段）、`java.toast/longToast`（转发到 UI，去重）。
+2. 重放骨架：worker 内 `java.ajax` 命中未缓存 → 抛哨兵 `{op,url}`；桥取页后缓存 → **从脚本开头重跑**；`_variables` 按 pass 重置、成功 pass 才提交；pass 上限 16；等人的时间不计预算（沿用 ADR-0068 §决策 5）。
+3. 同步族补齐：`java.ajax/post/head`（`post` 返回可 `.header()` 的响应对象，复用 `http.* {response:true}` 的信封）、`java.getCookie`、`java.setContent`（页级 scope 的内容覆盖）。
+4. 验证族答案记忆：`getVerificationCode` / `startBrowserAwait` 按 `op+url` 记忆，重跑时同步返回上次答案（保证只弹一次窗）。
+5. 文档：`book-source.md` §11 把 `ajax/post/getCookie/setContent/cookie.*` 从「明确不支持」移出，写清重放语义与 pass 上限；roadmap §3.7 对应行。
+
+已落地的前置（2026-10-25）：`HttpResponse.url`（跟随重定向后的地址，页面 baseUrl / loginCheckJs 的 url() 都改用它）+ `http.* {response:true}` 返回响应对象（与 loginCheckJs 的 result 同形）。
+
+未做且不在本里程碑：`java.importScript` / `cacheFile` / `downloadFile` / `refreshBookUrl` / Rhino Java 互操作。
