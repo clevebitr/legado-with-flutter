@@ -428,3 +428,20 @@ M22 拆批并落了第一批（ADR-0072），先按用户裁决对齐上游行�
 登记：每书源 Cookie 隔离仍不做（当前是全局按域）；登录信息将按 ADR 明文存库（与 Cookie 同级）；`putLoginHeader`/`upLoginData` 不做。
 
 验证：2089 用例全过；core 100% / domain 100% / data 98.30%；format 0、analyze 干净、codegen 幂等；Windows app_boot 与 on-disk 数据库用例通过。
+
+## 2026-10-25 — M22-a 第二批：loginUi 原生登录表单与 login() 执行
+
+M22-a 第二批落地（ADR-0072 §决策 3 + 实现注记）：loginUi 表单 + 登录信息 + `login()`。
+
+上游行为照搬的地方：`loginUi` 是 `RowUi` 数组（text/password/toggle/select/button，`chars` 是选项、`default` 初值、`viewName` 引号字面量或脚本）；`loginUi` 本身可以是 `@js:`/`<js>`（前置 `loginUrl` 的脚本求值）；确认时**先存值再跑** `<loginUrl 脚本>\nif (typeof login=='function'){ login.apply(this) } else { throw ... }`，值绑在 `result`；脚本失败也保留已存值。
+
+本仓的落点：
+- **schema v11** `book_sources.login_info`（JSON 文本，属用户态，重导入不覆盖）。原计划并进 v10，但 v10 已提交，改历史版本会让已升到 v10 的库永远补不上列——ADR-0056 的同一教训。
+- `ResolveLoginForm`（domain）：字面量/脚本两种 `loginUi`、`viewName` 求值（失败退回 `name`）、未知 type 退 text、无 `name` 的行跳过；坏文档给 `loginUi` 的 rulePath。
+- `SignIn`（domain）：确认与按钮 `action` 两条入口共用同一个 `_run`；`loginUrl` 是裸地址时明确 `unsupportedRule`（那是浏览器那条路）。`loginScriptOf` 统一判定三种脚本形态。
+- 沙箱：`JsJob.loginInfo` 快照 + 前奏 `source.getLoginInfo()`/`getLoginInfoMap()`（沿用 ADR-0034 的「随 job 进、随结果回」机制）。
+- 入口：列表行「登录」——有 `loginUi` 走表单页，只有 `loginUrl` 仍走可见 WebView；表单为空就明说。
+
+登记（roadmap §3.7 + book-source.md §11 已改）：登录信息只喂给登录自己的 job，页面请求 job（`loginCheckJs`/字段规则）还读不到；`java.upLoginData`、`source.putLoginHeader` 未做。
+
+验证：2118 用例全过；core 100% / domain 100% / data 98.35%；format 0、analyze 干净、codegen 幂等；Windows app_boot / on-disk / js_bridge(35) 逐个跑通。
