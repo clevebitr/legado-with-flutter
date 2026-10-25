@@ -31,8 +31,9 @@ auto-breakpoint: false
 - [x] M20 — 书内全文搜索 + 规则管理 UI（净化/目录/字典/高亮）（ui-gap §4）
 - [x] M21 — M21a — WebView 验证 + Cookie 持久化 + 引擎兼容（ADR-0068）
 - [ ] M22 — M21b — 按源缓存/主题/备份/本地导入/二维码/登录表单
+- [x] M23 — M23 — 规则/书源导入导出 + 净化 scope 与 @js:（ADR-0071）
 
 ## Current: M8 — 5.7 缓存清理 + 5.8 导出保真
 
-goal: M20 已闭环（a/b/c/d 全部落地）
-breakpoint: M20 已闭环；下一条候选：M8（5.7 按源缓存 + 5.8 extra 导出保真）或 M22
+goal: M23 已闭环：规则/书源导入导出 + scope + @js:
+breakpoint: 下一步：M8 剩 5.7 按源缓存（5.8 导出保真已随 M23 闭环）

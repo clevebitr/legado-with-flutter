@@ -394,3 +394,21 @@ M20-d 落地，落点写进 ADR-0070 增补 §10（§决策 2 的语义不变：
 已登记（roadmap §3.7）：搜索历史/结果落库、正则开关/繁简转换/跨书聚合，均带触发条件。
 
 验证：1999 用例全过；core 100% / domain 100% / data 98.42%；format 0、analyze 干净、codegen 幂等、Windows app_boot 通过。
+
+## 2026-10-25 — M23 规则与书源导入导出、净化 scope 与 @js: 替换
+
+按用户四项裁决（连 scope 与 `@js:` 一起做、书源导出全部+选中、预览+逐条勾选、URL+粘贴+文件）落地，规格在 ADR-0071。
+
+**导出的格式就是上游的**：净化规则导出为 `ReplaceRule` 数组（`id` 不导出、`order`/`isEnabled` 取列值、`timeoutMillisecond` ↔ `timeoutMs`、未知键经 payload 的 `extra` 往返）；书源导出直接写存储里的 payload（ADR-0040 §决策 4 的原样保真），只覆盖 `enabled`/`customOrder` 两个用户态键——因此单条导出也改走同一方法，ADR-0050 §决策 4 的「字节就是 payload」被这一条修订。
+
+**导入**：`ImportReplaceRules` 接三种来源（粘贴/URL/文件，32 MB 上限，明文 http 跟 `allowPlainHttp`），先预览（逐条可勾、坏条目带原因且不可勾），提交时按 `name`+`pattern` 去重——同键改写、不同键新增、**从不删除**；提交前重新读库，避免「更新一条预览后被删掉的行」变成静默无操作。
+
+**执行面两块新东西**（这是用户明确要求的「不只是搬运」）：
+- *scope*：`PurgeRule` 带 `appliesToContent`/`appliesToTitle`，`purgeContent` 与 `purgeTitles` 各扫各的；标题净化在装配根把目录映射成阅读器 `ReadingChapter` 时做，因此目录 sheet / 正文头 / 进度名 / 搜索命中是同一份净化后的标题。
+- *`@js:` 替换*：一条规则**一批一个 job**——所有匹配合成 `__matches`，用 `eval` 的完成值取每条替换（上游的脚本常写成 `if (…) { … } else { "" }`，语句形态只有 eval 能回答）；`timeoutMs` 终于有了用处（该 job 的上限），脚本报错/超时/答案长度不符都只跳过该规则。设备级用例在真 QuickJS 上跑通了这套脚本形状。
+
+**语料口径校正**：`净化规则.json` 20 条里 `@js:` 只有 4 条（#01–#04）、标题专用 1 条、全部 isRegex/带 group/无 timeoutMillisecond——ADR 背景里先写成「大量」是错的，已按逐条统计改正。
+
+登记（roadmap §3.7）：规则分组只存不展示不筛选、正则规则仍无超时、标题净化不覆盖详情页目录预览与书架「最新章节」。
+
+验证：2062 用例全过；core 100% / domain 100% / data 98.25%；format 0、analyze 干净、codegen 幂等；Windows app_boot 通过、js_bridge 35/35（含新的真沙箱净化替换用例）。
