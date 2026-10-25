@@ -101,4 +101,15 @@ final class CacheDaoContentCache implements ContentCache {
 
     return removed ?? 0;
   }
+
+  @override
+  Future<void> clearAll() async {
+    // 吸收失败：一次没删干净的代价是旧正文多活一阵，不是读不了章节（ADR-0033 的 total 契约）。
+    await absorbCacheFailure<int>(
+      _dao.deleteAll,
+      logger: _logger,
+      scope: 'Chapter cache purge',
+      url: 'chapter-cache',
+    );
+  }
 }

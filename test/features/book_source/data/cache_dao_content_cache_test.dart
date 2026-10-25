@@ -49,6 +49,9 @@ final class _FailingCacheDao extends CacheDao {
     required Duration ttl,
     String? scopeKey,
   }) async => throw error;
+
+  @override
+  Future<int> deleteAll() async => throw error;
 }
 
 void main() {
@@ -193,6 +196,39 @@ void main() {
         ),
         1,
       );
+    });
+
+    test('clearAll_givenStoredBodies_removesEveryEntry', () async {
+      // 净化规则一改，所有已缓存的「成品正文」都过期了（ADR-0070 增补 §7）。
+      await cache.write(sourceId: sourceId, url: url, body: body);
+      await cache.write(
+        sourceId: sourceId,
+        url: 'https://example-novel.test/book/2/1.html',
+        body: body,
+      );
+
+      await cache.clearAll();
+
+      expect(await cache.read(sourceId: sourceId, url: url), isNull);
+      expect(
+        await cache.read(
+          sourceId: sourceId,
+          url: 'https://example-novel.test/book/2/1.html',
+        ),
+        isNull,
+      );
+    });
+
+    test('clearAll_givenABrokenDatabase_completesAnyway', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final CacheDaoContentCache failing = CacheDaoContentCache(
+        _FailingCacheDao(database, error: Exception('database is gone')),
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      // 没删干净只会让旧正文多活一阵，不该把「改一条净化规则」变成一次失败（ADR-0033）。
+      await expectLater(failing.clearAll(), completes);
+      expect(printer.events, isNotEmpty);
     });
   });
 }

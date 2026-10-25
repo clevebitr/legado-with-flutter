@@ -61,4 +61,10 @@ final class FakeContentCache implements ContentCache {
 
     return removed;
   }
+
+  @override
+  Future<void> clearAll() async {
+    scopeCalls.add('clearAll');
+    entries.clear();
+  }
 }

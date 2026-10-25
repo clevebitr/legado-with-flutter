@@ -12,6 +12,7 @@ import 'package:flutter_reader/core/storage/cookie_dao.dart';
 import 'package:flutter_reader/core/storage/cookie_dao_store.dart';
 import 'package:flutter_reader/core/storage/database.dart';
 import 'package:flutter_reader/core/storage/read_record_dao.dart';
+import 'package:flutter_reader/core/storage/rule_dao.dart';
 import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -81,3 +82,7 @@ CookieStore cookieStore(Ref ref) => CookieDaoStore(
 @Riverpod(keepAlive: true)
 ReadRecordDao readRecordDao(Ref ref) =>
     ReadRecordDao(ref.watch(readerDatabaseProvider));
+
+/// Provides the DAO of the user-editable rules (替换净化 / 目录 / 字典 / 高亮).
+@Riverpod(keepAlive: true)
+RuleDao ruleDao(Ref ref) => RuleDao(ref.watch(readerDatabaseProvider));

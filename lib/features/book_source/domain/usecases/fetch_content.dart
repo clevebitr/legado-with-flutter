@@ -1,6 +1,7 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
+import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
@@ -11,14 +12,22 @@ import 'package:html/parser.dart' as html_parser;
 /// Reads the body of one chapter (`docs/dev/roadmap.md` 2.4, `ruleContent`).
 ///
 /// Paging follows `nextContentUrl` and the assembled body is purified by
-/// `replaceRegex` (`docs/dev/roadmap.md` 3.5, `book-source.md` §4.1). A finished body is remembered in
+/// `replaceRegex` (`docs/dev/roadmap.md` 3.5, `book-source.md` §4.1) and then by the user's
+/// 替换净化 rules (`docs/dev/roadmap.md` M20, ADR-0070 §决策 3). A finished body is remembered in
 /// [ContentCache], so re-entering the same chapter costs no request (`docs/dev/roadmap.md` 5.2).
 final class FetchContent {
   /// Creates the use case.
-  const FetchContent({required this._pages, required this._cache});
+  const FetchContent({
+    required this._pages,
+    required this._cache,
+    this._purifier = const ContentPurifier(),
+  });
 
   final PageFetchService _pages;
   final ContentCache _cache;
+
+  /// The user's purge rules; the default purges nothing, which is what「没接上净化」looks like.
+  final ContentPurifier _purifier;
 
   /// Fetches [request]'s URL and returns the chapter body as plain text.
   ///
@@ -161,14 +170,16 @@ final class FetchContent {
         text = data;
     }
 
-    final String content = await _pages.replaceContent(
-      source.contentRule.replaceRegex,
-      text,
-      'contentRule.replaceRegex',
-      sourceId: source.url,
-      jsContext: JsPageContext(
-        baseUrl: request.url,
-        source: source.jsSourceInfo,
+    final String content = await _purifier.purge(
+      await _pages.replaceContent(
+        source.contentRule.replaceRegex,
+        text,
+        'contentRule.replaceRegex',
+        sourceId: source.url,
+        jsContext: JsPageContext(
+          baseUrl: request.url,
+          source: source.jsSourceInfo,
+        ),
       ),
     );
     await _cache.write(
@@ -221,18 +232,21 @@ final class FetchContent {
       }
     }
 
-    final String content = await _pages.replaceContent(
-      source.contentRule.replaceRegex,
-      bodies.join('\n'),
-      'contentRule.replaceRegex',
-      sourceId: source.url,
-      // 净化规则拿得到它读的那一页：上游 `getString(replaceRegex, contentStr)` 同样有上下文。
-      jsContext: JsPageContext(
-        baseUrl: walk.pages.first.url,
-        source: source.jsSourceInfo,
+    final String content = await _purifier.purge(
+      await _pages.replaceContent(
+        source.contentRule.replaceRegex,
+        bodies.join('\n'),
+        'contentRule.replaceRegex',
+        sourceId: source.url,
+        // 净化规则拿得到它读的那一页：上游 `getString(replaceRegex, contentStr)` 同样有上下文。
+        jsContext: JsPageContext(
+          baseUrl: walk.pages.first.url,
+          source: source.jsSourceInfo,
+        ),
       ),
     );
-    // 缓存的是**成品**：分页已拼好、`replaceRegex` 已跑过，所以命中可以直接跳过整个引擎。
+    // 缓存的是**成品**：分页已拼好、`replaceRegex` 与净化规则都已跑过，所以命中可直接跳过整个引擎。
+    // 也正因为如此，改净化规则必须作废缓存（ADR-0070 增补 §7）。
     // 写只发生在成功路径上：失败在前面就已经返回，不会被当成内容存下来。
     await _cache.write(
       sourceId: source.url,

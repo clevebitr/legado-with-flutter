@@ -29,7 +29,7 @@ lib/
 ├── features/
 │   └── <feature>/                # book_source（书源 / 搜索 / 发现 / 详情 / 校验 / 调试）；Phase 5 新增
 │                                 #   reader（阅读会话 / 阅读设置 / 进度端口）/ bookshelf / settings
-│                                 #   （边界见 ADR-0041、ADR-0044）
+│                                 #   （边界见 ADR-0041、ADR-0044）/ rules（四类规则的 CRUD，ADR-0070）
 │       ├── data/                 # DTO(freezed) + DataSource + RepositoryImpl
 │       ├── domain/               # Entity + Repository 接口 + UseCase
 │       ├── presentation/         # pages / widgets / notifiers（Notifier 与该 feature 的派生 provider 同放 notifiers/）

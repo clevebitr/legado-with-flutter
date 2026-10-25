@@ -421,3 +421,49 @@ final class ReadRecordDaoProvider
 }
 
 String _$readRecordDaoHash() => r'96e142bea54bbe17d5271c8c20a11cd78f908dc9';
+
+/// Provides the DAO of the user-editable rules (替换净化 / 目录 / 字典 / 高亮).
+
+@ProviderFor(ruleDao)
+final ruleDaoProvider = RuleDaoProvider._();
+
+/// Provides the DAO of the user-editable rules (替换净化 / 目录 / 字典 / 高亮).
+
+final class RuleDaoProvider
+    extends $FunctionalProvider<RuleDao, RuleDao, RuleDao>
+    with $Provider<RuleDao> {
+  /// Provides the DAO of the user-editable rules (替换净化 / 目录 / 字典 / 高亮).
+  RuleDaoProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'ruleDaoProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$ruleDaoHash();
+
+  @$internal
+  @override
+  $ProviderElement<RuleDao> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  RuleDao create(Ref ref) {
+    return ruleDao(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(RuleDao value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<RuleDao>(value),
+    );
+  }
+}
+
+String _$ruleDaoHash() => r'587caa574599184a2d3f9fd44b81cb72cc6d564f';

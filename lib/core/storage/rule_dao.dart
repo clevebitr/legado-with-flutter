@@ -91,6 +91,14 @@ class RuleDao extends DatabaseAccessor<ReaderDatabase> with _$RuleDaoMixin {
     );
   }
 
+  /// One rule by id, or `null` when the row is gone.
+  ///
+  /// The pages edit one row at a time and never hold the whole list, so the kind of a row has to be
+  /// readable on its own: it is what tells a purge edit to retire the cached chapter bodies.
+  Future<RuleRow?> byId(int id) => (select(
+    rules,
+  )..where((Rules table) => table.id.equals(id))).getSingleOrNull();
+
   /// Replaces the editable fields of one row; `null` leaves a field alone.
   Future<void> updateRow(
     int id, {

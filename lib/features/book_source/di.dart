@@ -10,7 +10,9 @@ import 'package:flutter_reader/features/book_source/data/book_source_view_store_
 import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
 import 'package:flutter_reader/features/book_source/data/search_scope_store_impl.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
+import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_view_store.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
@@ -97,6 +99,22 @@ ContentCache contentCache(Ref ref) => CacheDaoContentCache(
 FetchContent fetchContent(Ref ref) => FetchContent(
   pages: ref.watch(pageFetchServiceProvider),
   cache: ref.watch(contentCacheProvider),
+  purifier: ref.watch(contentPurifierProvider),
+);
+
+/// Provides the purge-rule source, **unbound** by default.
+///
+/// The composition root overrides it with the rules feature's repository (ADR-0041 §决策 2), so
+/// reading never imports `features/rules`. The default purges nothing.
+@Riverpod(keepAlive: true)
+PurgeRuleSource purgeRuleSource(Ref ref) =>
+    UnboundPurgeRuleSource(logger: ref.watch(appLoggerProvider));
+
+/// Provides the purifier the chapter body goes through after the source's `replaceRegex`.
+@Riverpod(keepAlive: true)
+ContentPurifier contentPurifier(Ref ref) => ContentPurifier(
+  rules: ref.watch(purgeRuleSourceProvider),
+  logger: ref.watch(appLoggerProvider),
 );
 
 /// Provides the use case that reads a manga chapter's image list.

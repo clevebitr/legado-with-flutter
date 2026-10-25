@@ -88,3 +88,7 @@ lib/core/storage/rules.dart  # 同上：drift 表定义（列 getter 与 @TableI
 lib/core/network/cookie_store.dart  # 纯接口声明（只有抽象方法签名），属 ADR-0019 §2 的「源文件无可测量行」子情形；契约由 CookieDaoStore 与 PersistentCookieManager 的测试行使
 lib/core/platform/in_app_webview_cookie_bridge.dart  # ADR-0019 第二类：插件 CookieManager 的平台通道只在真实 WebView 运行时可用（Android WebView / WebView2 / WKWebView），宿主 VM 没有通道；「何时写、写哪些、读回怎么用」由 PersistentCookieManager 与验证页测试钉住，本文件由设备级用例验证能编译链接
 lib/core/platform/webview_cookie_bridge.dart  # 纯接口声明（只有抽象方法签名），属 ADR-0019 §2 的「源文件无可测量行」子情形；契约由 InAppWebViewCookieBridge（设备级）与验证流程测试行使
+# --- M20 规则仓储（ADR-0070 增补 §5/§6）新增的豁免项 ---
+lib/features/rules/domain/entities/rule.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有两个重定向工厂声明；行为由 rule_repository_impl_test.dart 构造并读取、由 rule_payload_codec_test.dart 的 round-trip 保证
+lib/features/rules/domain/repositories/rule_repository.dart  # 纯接口声明（只有抽象方法签名），属「无可测量行」子情形；契约由 RuleRepositoryImpl 与其测试行使
+lib/features/rules/domain/repositories/rule_seed_loader.dart  # 纯接口声明（只有一个抽象方法），同属「无可测量行」子情形；契约由 AssetRuleSeedLoader 与其测试、FakeSeeds 行使

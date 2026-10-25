@@ -105,3 +105,7 @@ flutter:
     # GPL-3.0 全文：法律声明页的「查看许可全文」入口（C-UI-9，ADR-0055 §决策 4）。
     # 来源是根目录 LICENSE，更新许可证时两者必须一起换。
     - assets/legal/gpl-3.0.txt
+    # 内置规则的种子数据（M20，ADR-0070 增补 §5）：目录规则与字典规则，来自上游
+    # `app/src/main/assets/defaultData/`，与本仓同许可（GPL-3.0），来源见 assets/rules/README.md。
+    - assets/rules/txt_toc_rule.json
+    - assets/rules/dict_rule.json

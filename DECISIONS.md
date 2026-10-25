@@ -350,3 +350,14 @@ M21a 第三刀按 ADR-0068 决策 9 的评估执行：零新依赖、自研解�
 **G6 仍是`📷🔞小姐姐写真`的唯一死结**：正文只有 `java.post(...).body()` 一条路，沙箱阻塞不了宿主。两条出路：登记（现状），或做**确定性重放**（同步网络调用抛哨兵 → 宿主执行 → 记忆表重跑脚本，直到无待办）。后者能覆盖 `java.post/get/head/ajax/connect` 整族，但脚本会被跑多次（`java.put`/`log` 重复）、`js:quota` 计数要重新定义，属于一轮独立设计，已在 ADR-0069 增补里写明，等用户裁决。
 
 验证：1859 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 5 文件全过（js_bridge 34/34）、Android js_bridge 34/34（含新的 `size()` 探针）。
+
+## 2026-10-25 — M20-b 开工前的四项裁决：播种范围、rules feature 边界、净化与缓存、G6 维持登记
+
+开工前四项空白已由用户裁决，全部写进 ADR-0070 的「增补（2026-10-24，M20-b 开工前的四项裁决）」：
+
+1. **播种（§5）**：只播目录规则（上游 `txtTocRule.json`）与字典规则（`dictRules.json`），净化/高亮不播。原文「内置净化规则」与上游事实不符，已撤销——上游 assets/defaultData 里根本没有默认净化规则，凭空的净化会改用户正文且无从解释。
+2. **feature 边界（§6）**：新建 `lib/features/rules/`（data/domain/presentation/di.dart）。判据：dict/highlight/toc 与书源无关，数据源是 Drift 而非 shared_preferences，所以既不属于 book_source 也不属于 settings。book_source 要读净化规则、规则变更要清缓存，两件事只走 ADR-0041 端口 + 装配根绑定，rules 不被任何 feature import。
+3. **净化与缓存（§7）**：保持「replaceRegex 之后、写缓存前」，但 `replace` 规则任一写入（增/改/删/启停/排序）后作废正文缓存——只删 `ruleField = content` 的条目（`CacheDao.deleteByRuleField` + `ContentCache.clearAll()`），书源信息/目录/封面缓存保留。不做「只删受影响章节」：规则是全局表达式，命中面无法先验确定。副作用：进度/书签偏移可能与新正文不逐字对应，与 5.3「进度是比例估算」同量级，不另开机制。
+4. **G6（§8）**：维持登记不做（ADR-0069 的口径不变），不做确定性重放。理由：本轮只一条源命中，重放会改 job 执行语义（脚本多次运行、java.put/log 重复、js:quota 计数重定义），属独立一轮设计与验收。
+
+文档改动：ADR-0070 §决策 4 修正 + 增补 §5–§8 与「影响（增补）」；`architecture.md` §1 的 feature 列表加 `rules`（引用 ADR-0070）。

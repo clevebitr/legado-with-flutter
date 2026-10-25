@@ -6,9 +6,11 @@ import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
+import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -448,6 +450,56 @@ void main() {
       );
     });
 
+    test('execute_givenPurgeRules_appliesThemAfterReplaceRegex', () async {
+      // M20 的接线位置（ADR-0070 §决策 3）：源自己的 `replaceRegex` 先跑，净化规则后跑。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, _page('chapter_page.html'));
+      final FakeContentCache cache = FakeContentCache();
+
+      final String content = _data(
+        await FetchContent(
+          pages: _service(http),
+          cache: cache,
+          purifier: const ContentPurifier(
+            rules: _FixedPurgeRules(<PurgeRule>[
+              PurgeRule(pattern: '正文第一段。', replacement: 'P1', isRegex: false),
+            ]),
+          ),
+        ).execute(
+          _purifyingSource('##正文第二段。##'),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(content, 'P1\n\n正文第三段。');
+      // 缓存的是净化之后的成品：命中时不能再跑一遍引擎，也就不可能补上净化。
+      expect(cache.entries.values.single, content);
+    });
+
+    test('execute_givenABrokenPurgeRule_stillReturnsTheChapter', () async {
+      // ADR-0026 §决策 2：一条自己写的坏正则不该让整章读不出来。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, _page('chapter_page.html'));
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _serviceAndPrinter(http);
+
+      final String content = _data(
+        await FetchContent(
+          pages: service.pages,
+          cache: FakeContentCache(),
+          purifier: ContentPurifier(
+            rules: const _FixedPurgeRules(<PurgeRule>[
+              PurgeRule(pattern: '(', replacement: '-', isRegex: true),
+            ]),
+            logger: AppLogger(printer: service.printer),
+          ),
+        ).execute(_source(), const ChapterRequest(url: _chapterUrl)),
+      );
+
+      expect(content, '正文第一段。\n正文第二段。\n正文第三段。');
+      expect(service.printer.events, isNotEmpty);
+    });
+
     test(
       'execute_givenATemplateInTheExtractedUrl_rendersItBeforeRequesting',
       () async {
@@ -560,4 +612,14 @@ void main() {
       expect(_failure(result).rulePath, 'contentRule.webJs');
     });
   });
+}
+
+/// A [PurgeRuleSource] answering a fixed list (the rules feature owns the real one).
+final class _FixedPurgeRules implements PurgeRuleSource {
+  const _FixedPurgeRules(this._rules);
+
+  final List<PurgeRule> _rules;
+
+  @override
+  Future<List<PurgeRule>> purgeRules() async => _rules;
 }

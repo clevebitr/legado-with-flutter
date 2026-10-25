@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/storage/bookmark_dao.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
 import 'package:flutter_reader/core/storage/read_record_dao.dart';
+import 'package:flutter_reader/core/storage/rule_dao.dart';
 import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -106,6 +107,18 @@ void main() {
       expect(container.read(readRecordDaoProvider), isA<ReadRecordDao>());
       expect(
         container.read(readRecordDaoProvider).attachedDatabase,
+        same(container.read(readerDatabaseProvider)),
+      );
+    });
+  });
+
+  group('ruleDao', () {
+    test('ruleDao_whenRead_returnsADaoOnTheSharedDatabase', () {
+      final ProviderContainer container = _memoryContainer();
+
+      expect(container.read(ruleDaoProvider), isA<RuleDao>());
+      expect(
+        container.read(ruleDaoProvider).attachedDatabase,
         same(container.read(readerDatabaseProvider)),
       );
     });

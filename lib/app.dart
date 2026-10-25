@@ -24,6 +24,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/manga_pages.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/switch_book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
@@ -59,6 +60,12 @@ import 'package:flutter_reader/features/reader/domain/repositories/reader_source
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
 import 'package:flutter_reader/features/reader/presentation/reader_route.dart';
+import 'package:flutter_reader/features/rules/di.dart';
+import 'package:flutter_reader/features/rules/domain/entities/rule.dart';
+import 'package:flutter_reader/features/rules/domain/entities/rule_kind.dart';
+import 'package:flutter_reader/features/rules/domain/entities/rule_payload.dart';
+import 'package:flutter_reader/features/rules/domain/repositories/chapter_body_invalidator.dart';
+import 'package:flutter_reader/features/rules/domain/repositories/rule_repository.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_theme_mode.dart';
 import 'package:flutter_reader/features/settings/presentation/notifiers/settings_notifier.dart';
@@ -117,7 +124,53 @@ List<Override> appProviderOverrides() => <Override>[
   // 人机验证需要推一个页面并等结果（ADR-0068 §决策 3）：绑定只能在这里，`core/` 不认识
   // `features/`，`domain/` 也不能碰 `BuildContext`。
   sourceVerificationProvider.overrideWith(_SourceVerification.new),
+  // 替换净化（M20，ADR-0070 增补 §6）：`book_source` 声明「取启用的净化规则」端口，这里把它绑到
+  // `rules` 的仓储；实体在装配根就地映射成消费方的 `PurgeRule`（ADR-0041 §决策 2）。
+  purgeRuleSourceProvider.overrideWith(_PurgeRuleSource.new),
+  // 反过来的一条：规则写入后要作废已缓存的成品正文，端口由 `rules` 声明、这里绑到 `book_source`
+  // 的正文缓存（ADR-0070 增补 §7）。
+  chapterBodyInvalidatorProvider.overrideWith(_ChapterBodyInvalidator.new),
 ];
+
+/// `PurgeRuleSource` bound to the rules feature, which owns the table (ADR-0070 §决策 3).
+///
+/// Only **enabled** `replace` rules travel: the pipeline has no use for a disabled rule or for the
+/// other three kinds, and a payload this build cannot read is simply not a regex to run.
+final class _PurgeRuleSource implements PurgeRuleSource {
+  const _PurgeRuleSource(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<List<PurgeRule>> purgeRules() async {
+    final RuleRepository repository = await _ref.read(
+      ruleRepositoryProvider.future,
+    );
+    final List<Rule> rules = await repository.ofKind(RuleKind.replace);
+
+    return <PurgeRule>[
+      for (final Rule rule in rules)
+        if (rule.isEnabled)
+          if (rule.payload case final ReplacePayload payload)
+            PurgeRule(
+              pattern: payload.pattern,
+              replacement: payload.replacement,
+              isRegex: payload.isRegex,
+            ),
+    ];
+  }
+}
+
+/// `ChapterBodyInvalidator` bound to the chapter body cache in `book_source` (ADR-0070 增补 §7).
+final class _ChapterBodyInvalidator implements ChapterBodyInvalidator {
+  const _ChapterBodyInvalidator(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<void> invalidateChapterBodies() =>
+      _ref.read(contentCacheProvider).clearAll();
+}
 
 /// The root navigator key (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 3).
 ///

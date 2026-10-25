@@ -78,9 +78,12 @@ payload 里**未知键必须保留**（与书源 `extra` 同一立场，ADR-0021
 ## 决策 4 迁移与默认数据
 
 - schema v8 → **v9**：只加 `rules` 表与索引，沿用 ADR-0056 的可重入写法（建表前查 `sqlite_master`）。
-- 默认规则（内置净化规则）**不在迁移里插入**：迁移必须只做结构变更；内置规则由仓储在
+- 默认规则**不在迁移里插入**：迁移必须只做结构变更；内置规则由仓储在
   「表为空且从未初始化过」时一次性写入，并打上 `is_built_in = 1`。用户删掉其中一条后不再补回
   （`is_built_in` 只表示来源，不代表「受保护不能删」）。
+- **播种哪些内置规则**（2026-10-24 修正本节，见文末增补 §5）：照上游资产 `txtTocRule.json` /
+  `dictRules.json`，**只有目录规则与字典规则**；净化与高亮**不播种**。原文写的「内置净化规则」
+  与上游事实不符，已撤销。
 
 ## 后果
 
@@ -90,3 +93,84 @@ payload 里**未知键必须保留**（与书源 `extra` 同一立场，ADR-0021
   规则数量在几十到几百条量级，可接受。另外 JSON 里的类型要自己校验，读坏的行必须显式标坏。
 - 未做：字典/高亮/目录规则的执行接线、规则导入导出 UI、搜索的跨书聚合，均登记在
   `docs/dev/roadmap.md` §3.7。
+
+## 增补（2026-10-24，M20-b 开工前的四项裁决）
+
+§决策 1–3 不变（表结构 / payload 形状 / 搜索语义 / 接线范围均已实现或已定稿）。以下四项是
+开工时暴露、必须由用户裁决的空白，裁决结果取代对应原文：
+
+### §5 播种哪些内置规则：只播目录与字典，净化不播
+
+本文 §决策 4 原文写「内置净化规则」，但上游 `app/src/main/assets/defaultData/` 里**没有**
+默认净化规则：随包数据只有 `txtTocRule.json`（目录规则 8 条）与 `dictRules.json`（百度汉语 /
+海词英文两条），净化与高亮在上游一律由用户自建。凭空发明净化规则会把用户的正文改掉且无从解释
+（「这条规则哪来的？」），所以：
+
+| kind | 是否播种 | 来源 |
+|---|---|---|
+| `toc` | **是** | 上游 `txtTocRule.json` 原样移植（`serialNumber` → `sortOrder`） |
+| `dict` | **是** | 上游 `dictRules.json` 原样移植 |
+| `replace` | **否** | 无上游默认数据；首次打开列表为空是正确状态 |
+| `highlight` | **否** | 同上 |
+
+种子文件的许可：两者都是上游项目（GPL-3.0）自己的数据资产，与本仓同许可，不需要新增白名单
+（C-DEP-7 只约束**依赖**）；随包位置与 `assets/legal/` 一致，在 `pubspec.yaml` 的 `assets:` 登记。
+
+### §6 规则管理是一个**新 feature**（`lib/features/rules/`）
+
+按 `architecture.md` §1 的判据，四类规则既不属于书源（`dict` / `highlight` / `toc` 与书源无关），
+也不属于设置（它们是内容语义，且数据源是 Drift 而不是 `shared_preferences`），因此新建
+`features/rules/`（`data/` + `domain/` + `presentation/` + `di.dart`），目录一并登记到
+`architecture.md` §1 的 feature 列表。
+
+跨 feature 的两件事**只走 ADR-0041 的端口机制**，`rules` 不被 `book_source` / `reader` import：
+
+| 需求 | 端口在哪 | 谁绑定 |
+|---|---|---|
+| 正文净化要读启用的 `replace` 规则 | `book_source/domain/` 定义端口，默认实现返回空表 + warning | 装配根 `app.dart` 的 `appProviderOverrides()` |
+| 规则变更后作废已缓存正文 | 同上（端口同时暴露「规则版本」，见 §7） | 同上 |
+
+### §7 净化位置不变，但**规则一变就作废旧正文**
+
+净化仍在「`replaceRegex` 之后、写缓存前」（§决策 3），所以缓存里存的是成品正文。这样做的代价是
+「改规则对已缓存章节不生效」，用户调好一条净化后看不出变化。裁决：**保持写入位置，改为在规则
+变更时作废正文缓存**。
+
+- 触发条件：`replace` 规则的**新增 / 编辑 / 删除 / 启停 / 排序**任一项成功写入。
+- 作废范围：**整张缓存表**（`CacheDao.deleteAll()`，经 `ContentCache.clearAll()`）。原计划是「只删
+  `ruleField = content` 的条目」，**实际做不了**：`cache_entries` 的主键是
+  `sha256(书源 ID, ruleField, URL, 页码)`，没有 `rule_field` 列，按字段删要么加列 + v10 迁移，要么扫全表
+  重算摘要——两条都不如「整表清空 + 字符集重新探测一次」划算。代价只是书源信息 / 目录要重下一次。
+- 不做「只删受影响的章节」：规则是全局表达式，命中面无法先验确定，按「全清缓存」处理最省且
+  不会留下错的一章。
+- 因此 `reading_progress` / 书签的字符偏移可能与新正文不再逐字对应（净化改变长度）；这与 5.3 登记
+  「进度是比例估算」同一量级，不另开机制。
+
+**净化规则本身的已知差异（本轮登记，不做）：**
+
+| 项 | 为什么不做 | 重开触发条件 |
+|---|---|---|
+| `replacement` 以 `@js:` 开头（上游逐匹配跑脚本） | 要把沙箱搬进正文净化路径，并且每个匹配一次 `JsJob`，成本与 `js:quota` 语义都要重新裁决 | 语料或用户反馈出现「必须用脚本改写匹配文本」的真实规则；届时按 `replaceRegex` 的 `@js:` 通道复用 |
+| 正则超时（上游 `timeoutMillisecond`，默认 3000，超时禁用该规则） | Dart 的 `RegExp` 没有超时 API，只能整段丢进 isolate + 强制 kill | 出现「用户写的正则把正文净化卡死」的实例；现阶段用上游 `isValid()` 的两条静态拦截（语法错、以未转义 `|` 结尾） |
+| 上游的逐行 trim（`ContentProcessor.getContent` 先 `lines().trim()`） | `PageFetchService.replaceContent` 已经裁定这是阅读器排版的事、不在解析层做 | 读者反馈「正文空行 / 行首空格很多」且不属于源本身的问题 |
+
+### §8 G6 维持登记不做（2026-10-24 复核）
+
+用户复核了 ADR-0069「登记差异」里的 G6（同步 `java.post/get/ajax` 响应对象）：**维持登记**，不做
+确定性重放。理由：该缺口本轮只有 `📷🔞小姐姐写真` 一条源命中，重放会改 job 执行语义
+（脚本多次运行、`java.put` / `log` 重复、`js:quota` 计数重定义），属独立一轮设计与验收；
+真要做时的触发条件仍是 ADR-0069 的那一条（出现只能靠同步响应对象、改写不了的真实源）。
+
+## 影响（增补）
+
+- `lib/features/rules/`（新）：`domain/entities/rule.dart`（四类 payload 类型化 + 坏 payload 标记）、
+  `domain/repositories/rule_repository.dart`、`data/rule_repository_impl.dart`、
+  `data/rule_seed_loader.dart`（读 `assets/rules/*.json`）、`di.dart`。
+- `assets/rules/txt_toc_rule.json` / `assets/rules/dict_rule.json`（新）：来自上游的种子数据。
+- `lib/features/book_source/domain/purge_rules_port.dart`（新）：消费方端口 + null object。
+- `lib/features/book_source/domain/usecases/fetch_content.dart`：`replaceRegex` 之后、写缓存前按
+  `sortOrder` 应用启用的净化规则。
+- `lib/features/book_source/domain/content_cache.dart` + `data/cache_dao_content_cache.dart` +
+  `lib/core/storage/cache_dao.dart`：新增「清空缓存」能力（C-ARCH 无新增，见 §7 的修正）。
+- `lib/features/book_source/domain/content_purifier.dart`（新）：净化规则的执行点与降级策略。
+- `lib/app.dart`：`appProviderOverrides()` 绑定两个端口（`_PurgeRuleSource` / `_ChapterBodyInvalidator`）。

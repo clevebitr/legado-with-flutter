@@ -485,7 +485,110 @@ final class FetchContentProvider
   }
 }
 
-String _$fetchContentHash() => r'ff2400b9199601c795ec64f858569ad2bb2ec8af';
+String _$fetchContentHash() => r'18e5b1367fd53d1181078b85ce98ca37303394fc';
+
+/// Provides the purge-rule source, **unbound** by default.
+///
+/// The composition root overrides it with the rules feature's repository (ADR-0041 §决策 2), so
+/// reading never imports `features/rules`. The default purges nothing.
+
+@ProviderFor(purgeRuleSource)
+final purgeRuleSourceProvider = PurgeRuleSourceProvider._();
+
+/// Provides the purge-rule source, **unbound** by default.
+///
+/// The composition root overrides it with the rules feature's repository (ADR-0041 §决策 2), so
+/// reading never imports `features/rules`. The default purges nothing.
+
+final class PurgeRuleSourceProvider
+    extends
+        $FunctionalProvider<PurgeRuleSource, PurgeRuleSource, PurgeRuleSource>
+    with $Provider<PurgeRuleSource> {
+  /// Provides the purge-rule source, **unbound** by default.
+  ///
+  /// The composition root overrides it with the rules feature's repository (ADR-0041 §决策 2), so
+  /// reading never imports `features/rules`. The default purges nothing.
+  PurgeRuleSourceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'purgeRuleSourceProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$purgeRuleSourceHash();
+
+  @$internal
+  @override
+  $ProviderElement<PurgeRuleSource> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  PurgeRuleSource create(Ref ref) {
+    return purgeRuleSource(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(PurgeRuleSource value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<PurgeRuleSource>(value),
+    );
+  }
+}
+
+String _$purgeRuleSourceHash() => r'1882ba98973dccc542530cf6b85aca6cef9f6ea8';
+
+/// Provides the purifier the chapter body goes through after the source's `replaceRegex`.
+
+@ProviderFor(contentPurifier)
+final contentPurifierProvider = ContentPurifierProvider._();
+
+/// Provides the purifier the chapter body goes through after the source's `replaceRegex`.
+
+final class ContentPurifierProvider
+    extends
+        $FunctionalProvider<ContentPurifier, ContentPurifier, ContentPurifier>
+    with $Provider<ContentPurifier> {
+  /// Provides the purifier the chapter body goes through after the source's `replaceRegex`.
+  ContentPurifierProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'contentPurifierProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$contentPurifierHash();
+
+  @$internal
+  @override
+  $ProviderElement<ContentPurifier> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  ContentPurifier create(Ref ref) {
+    return contentPurifier(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ContentPurifier value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ContentPurifier>(value),
+    );
+  }
+}
+
+String _$contentPurifierHash() => r'd680bbe02fb559a460992e46eabb7fe7fcf7abfd';
 
 /// Provides the use case that reads a manga chapter's image list.
 

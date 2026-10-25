@@ -76,6 +76,9 @@ final class _NoContentCache implements ContentCache {
     required String sourceId,
     required String bookUrl,
   }) async => 0;
+
+  @override
+  Future<void> clearAll() async {}
 }
 
 /// One stage of one source.

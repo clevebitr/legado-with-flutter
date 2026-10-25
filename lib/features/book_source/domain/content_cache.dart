@@ -26,4 +26,12 @@ abstract interface class ContentCache {
 
   /// Deletes one book's cached chapter bodies and answers how many went away.
   Future<int> clearForBook({required String sourceId, required String bookUrl});
+
+  /// Deletes **every** cached entry.
+  ///
+  /// Used when the user's purge rules change: the stored bodies are finished text with the old
+  /// rules already applied, so they are all stale at once (ADR-0070 增补 §7). It cannot be narrowed
+  /// to the bodies alone — the key is a digest, so the shared TTL table cannot tell a chapter body
+  /// from a charset probe without a new column — and re-probing a charset is cheap.
+  Future<void> clearAll();
 }

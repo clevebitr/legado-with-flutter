@@ -42,6 +42,26 @@ void main() {
       );
     });
 
+    test('byId_givenAnExistingRow_answersIt', () async {
+      final ({ReaderDatabase database, RuleDao dao}) fixture = _fixture();
+      final int id = await fixture.dao.insert(
+        kind: RuleKind.replace,
+        name: '净化',
+        payload: <String, Object?>{'pattern': 'a'},
+      );
+
+      final RuleRow? row = await fixture.dao.byId(id);
+
+      expect(row?.name, '净化');
+      expect(row?.kind, RuleKind.replace);
+    });
+
+    test('byId_givenAnUnknownId_answersNull', () async {
+      final ({ReaderDatabase database, RuleDao dao}) fixture = _fixture();
+
+      expect(await fixture.dao.byId(4242), isNull);
+    });
+
     test('ofKind_givenSeveralKinds_answersOnlyThatKind', () async {
       final ({ReaderDatabase database, RuleDao dao}) fixture = _fixture();
 
