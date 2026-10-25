@@ -774,6 +774,16 @@ java.replaceFont(result, errorFont, correctFont);
 >   唯一实现是 `core/network/HttpClient`（C-NET-1），因此超时 / 重试 / 编码 / 明文策略与页面
 >   抓取完全同一套。请求带上书源自带的 `header`（C-NET-4，规则自己的同名键优先），并以**书源
 >   URL** 作为并发预算键，所以它花的仍是 §8 那份预算。
+> - **规则想 `await` 就必须把整段包成 `(async function () { … })()`。** 沙箱执行一条规则是
+>   `__runRule(script)` → **同步** `eval(script)`（`core/js/quickjs_worker.dart`），顶层 `await`
+>   在那里是**语法错误**（`await is only valid in async functions`，错误落在该字段、耗时 0–1 ms，
+>   一个请求都不会发）。`http.*` / `parse.*` / `java.startBrowserAwait` / `java.getVerificationCode`
+>   都要这个包装才用得了。
+> - **`<js>…</js>` 的链式求值（矩阵 #31）：** 脚本段之后的段读到的是**脚本的产出**——
+>   选择器段在「脚本返回的那份 HTML」上跑（值规则与列表规则同口径，与上游
+>   `AnalyzeRule.getString` 把上一段的值当新 `content` 一致）；字符串长得不像标记时仍留在原
+>   页面上，所以 `<js>java.put(…)</js>https://…/{{result}}.html` 这类拼接不受影响。这是
+>   「先过盾取回真实页面、再读正文」的写法能工作的前提。
 > - **`options` 只认 `headers`、`response` 与（POST 的）`body`**，其余键（如 `charset` / `timeout` / `retry` /
 >   `webView`）让**该次调用抛错**：策略由 `HttpPolicy` 拥有，而 `webView` 本仓没有，悄悄忽略
 >   它会把「未渲染的页面」当成答案（§1 的不兼容清单）。

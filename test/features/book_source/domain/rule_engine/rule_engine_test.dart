@@ -670,6 +670,27 @@ void main() {
     });
 
     test(
+      'extractJoined_givenAScriptThatReturnsHtml_readsTheNextSelectorOnIt',
+      () async {
+        // 链式求值对**单值**规则同样成立：`<js>…</js>class.x@text` 里脚本换掉的页面就是
+        // 下一段要读的内容（上游 `AnalyzeRule.getString` 把上一段的产出当新 content 交给
+        // AnalyzeByJSoup）。来看文学（兼容版）的正文规则正是这个形状：先过盾取真实页面，
+        // 再用 `class.TxtContent@html` 读正文。
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..result = '<div class="TxtContent"><p>正文第一段</p><p>正文第二段</p></div>';
+
+        final ParseResult<String> result = await _engine(null, bridge)
+            .extractJoined(
+              '<js>unshield()</js>class.TxtContent@html',
+              _scope(_document('<p>壳页面，没有正文</p>')),
+              rulePath: 'contentRule.content',
+            );
+
+        expect((result as ParseSuccess<String>).data, contains('正文第一段'));
+      },
+    );
+
+    test(
       'selectAll_givenAJavaScriptListRuleOfObjects_returnsJsonScopes',
       () async {
         final FakeJsBridge bridge = FakeJsBridge()

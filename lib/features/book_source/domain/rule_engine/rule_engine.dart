@@ -1023,7 +1023,9 @@ final class RuleEngine {
   ///
   /// This is upstream's chaining loop (`AnalyzeRule.getString` / `getStringList`): the first
   /// segment reads the **page**, every later one reads the previous segment's value as
-  /// `result`. That is what makes `<js>java.put(…)</js>https://…/{{result}}.html` produce a
+  /// `result` — and a script that answers a whole document becomes the page the next selector
+  /// reads (see [_chainedPageOf]), which is how a rule replaces a shell page before reading it.
+  /// That is also what makes `<js>java.put(…)</js>https://…/{{result}}.html` produce a
   /// URL: the script's value becomes `{{result}}` in the text that follows.
   ///
   /// A failing segment fails the whole rule (C-SRC-4); a script is subject to the same
@@ -1038,13 +1040,15 @@ final class RuleEngine {
   }) async {
     List<String> values = const <String>[];
     var hasResult = false;
+    // 脚本段可能把整页换掉（过盾后重取的真实页面）：下一段选择器要读它，而不是原页面。
+    var pageScope = scope;
 
     for (final _RuleSegment segment in _jsSegmentsOf(rule)) {
       final Object? previous = hasResult
           ? (single
                 ? (values.isEmpty ? null : values.join(_valueSeparator))
                 : values)
-          : _resultOf(scope);
+          : _resultOf(pageScope);
       final ParseResult<List<String>> evaluated;
       if (segment.isScript) {
         // `<js>…</js>` 里的 `{{…}}` / `@get:` 同样在脚本执行前展开（上游 makeUpRule 对
@@ -1072,7 +1076,7 @@ final class RuleEngine {
       } else {
         evaluated = await _evaluate(
           segment.text,
-          scope,
+          pageScope,
           rulePath: rulePath,
           single: single,
           allowJs: allowJs,
@@ -1087,10 +1091,39 @@ final class RuleEngine {
           values = data;
       }
       hasResult = true;
+      if (segment.isScript) {
+        pageScope = _chainedPageOf(values, pageScope);
+      }
     }
 
     return ParseSuccess<List<String>>(values);
   }
+
+  /// The page a selector segment after `<js>…</js>` reads.
+  ///
+  /// 上游 `AnalyzeRule.getString` 的链式循环把上一段的产出当成新的 content 交给
+  /// `AnalyzeByJSoup`：脚本换掉的页面（`java.startBrowserAwait` / 过盾后重取的真实页面）
+  /// 就是下一段选择器要读的正文。只有长得像标记的值才重建 scope——一个普通字符串（URL、
+  /// 章节名）留在原页面上，语义与今天的完全一致，也不白解析一次 HTML。
+  RuleScope _chainedPageOf(List<String> values, RuleScope origin) {
+    final String text = values.join(_valueSeparator);
+    if (!_looksLikeMarkup(text)) {
+      return origin;
+    }
+
+    return RuleScope.dom(
+      html_parser.parse(text),
+      body: text,
+      jsContext: _jsContextOf(origin),
+    );
+  }
+
+  /// Whether a value carries an HTML tag (`<div`, `</p`, or an opening comment).
+  static final RegExp _markupPattern = RegExp(r'<[a-zA-Z!/]');
+
+  /// Whether a value is a document rather than a plain value (URL, chapter name).
+  static bool _looksLikeMarkup(String text) =>
+      text.length > 3 && _markupPattern.hasMatch(text);
 
   /// The `result` binding a script sees on [scope].
   ///
