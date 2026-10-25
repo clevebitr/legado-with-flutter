@@ -117,6 +117,16 @@ class RuleDao extends DatabaseAccessor<ReaderDatabase> with _$RuleDaoMixin {
     ),
   );
 
+  /// Writes one row's manual order.
+  ///
+  /// The list page drags a row to a new place and the repository then rewrites the whole kind's
+  /// orders, so this stays a single-row write: renumbering is the caller's decision, not the
+  /// table's.
+  Future<void> updateSortOrder(int id, int sortOrder) =>
+      (update(rules)..where((Rules table) => table.id.equals(id))).write(
+        RulesCompanion(sortOrder: Value<int>(sortOrder)),
+      );
+
   /// Deletes one rule; answers whether a row was removed.
   Future<bool> deleteById(int id) =>
       (delete(rules)..where((Rules table) => table.id.equals(id))).go().then(

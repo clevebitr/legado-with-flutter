@@ -9,9 +9,9 @@ import 'package:m3e_design/m3e_design.dart';
 /// (`docs/dev/roadmap.md` §3.11 M18, ADR-0055 §决策 3).
 ///
 /// Every row calls a method on the [AppNavigation] port (ADR-0042), so this page does not import
-/// `book_source`, `settings` or `reader`: the composition root binds the real push functions. The cache
-/// entry deliberately lives in settings only — two "clear cache" buttons would be two answers to
-/// the same question.
+/// `book_source`, `settings`, `reader` or `rules`: the composition root binds the real push
+/// functions. The cache entry deliberately lives in settings only — two "clear cache" buttons would
+/// be two answers to the same question.
 class MyPage extends ConsumerWidget {
   /// Creates the page.
   const MyPage({super.key});
@@ -49,6 +49,29 @@ class MyPage extends ConsumerWidget {
             title: Text(l10n.myReadingRecords),
             subtitle: Text(l10n.myReadingRecordsBody),
             onTap: () => navigation.openReadingRecords(context),
+          ),
+          // 四类规则各自一页（M20，ADR-0070 §决策 1）：它们同构，但一处入口进一类，
+          // 免得「在净化列表里看到字典规则」。
+          _heading(context, l10n.mySectionRules),
+          ListTile(
+            leading: const Icon(Icons.auto_fix_high),
+            title: Text(l10n.rulesReplaceTitle),
+            onTap: () => navigation.openReplaceRules(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.format_list_bulleted),
+            title: Text(l10n.rulesTocTitle),
+            onTap: () => navigation.openTocRules(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.translate),
+            title: Text(l10n.rulesDictTitle),
+            onTap: () => navigation.openDictRules(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.brush_outlined),
+            title: Text(l10n.rulesHighlightTitle),
+            onTap: () => navigation.openHighlightRules(context),
           ),
           _heading(context, l10n.mySectionApp),
           ListTile(

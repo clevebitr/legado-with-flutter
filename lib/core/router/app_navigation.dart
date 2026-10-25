@@ -23,6 +23,21 @@ abstract interface class AppNavigation {
   /// Opens the reading records, grouped by day.
   void openReadingRecords(BuildContext context);
 
+  /// Opens the 替换净化 rule list (`docs/dev/roadmap.md` M20).
+  ///
+  /// Four methods instead of one with a kind parameter: the port carries primitives only
+  /// (ADR-0042), and a stringly-typed kind would move a switch into every implementation.
+  void openReplaceRules(BuildContext context);
+
+  /// Opens the 目录规则 list.
+  void openTocRules(BuildContext context);
+
+  /// Opens the 字典规则 list.
+  void openDictRules(BuildContext context);
+
+  /// Opens the 高亮标签 list.
+  void openHighlightRules(BuildContext context);
+
   /// Opens the reading records of one book.
   void openBookReadingRecords(
     BuildContext context, {
@@ -86,6 +101,23 @@ final class UnboundAppNavigation implements AppNavigation {
     required String bookName,
   }) => _warn(
     'No AppNavigation is bound: the book reading-record entry does nothing.',
+  );
+
+  @override
+  void openReplaceRules(BuildContext context) =>
+      _warn('No AppNavigation is bound: the replace-rule entry does nothing.');
+
+  @override
+  void openTocRules(BuildContext context) =>
+      _warn('No AppNavigation is bound: the toc-rule entry does nothing.');
+
+  @override
+  void openDictRules(BuildContext context) =>
+      _warn('No AppNavigation is bound: the dict-rule entry does nothing.');
+
+  @override
+  void openHighlightRules(BuildContext context) => _warn(
+    'No AppNavigation is bound: the highlight-rule entry does nothing.',
   );
 
   @override

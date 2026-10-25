@@ -29,4 +29,11 @@ abstract interface class RuleRepository {
 
   /// Deletes one rule; a rule that ships with the app is deleted just the same.
   Future<void> delete(int id);
+
+  /// Rewrites the manual order of [kind] to [orderedIds] (first id runs first).
+  ///
+  /// The whole kind is renumbered rather than swapping two rows: a list that was dragged around a
+  /// few times would otherwise accumulate gaps and ties, and the purge pipeline's result depends on
+  /// the exact order.
+  Future<void> reorder({required RuleKind kind, required List<int> orderedIds});
 }

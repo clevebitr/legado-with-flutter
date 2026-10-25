@@ -2573,6 +2573,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This source needs a sign-in or a fresh human check; open the source and finish it first.'**
   String get failureLoginRequired;
+
+  /// No description provided for @mySectionRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules'**
+  String get mySectionRules;
+
+  /// No description provided for @rulesReplaceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace & clean'**
+  String get rulesReplaceTitle;
+
+  /// No description provided for @rulesTocTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter rules'**
+  String get rulesTocTitle;
+
+  /// No description provided for @rulesDictTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Dictionaries'**
+  String get rulesDictTitle;
+
+  /// No description provided for @rulesHighlightTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Highlight tags'**
+  String get rulesHighlightTitle;
+
+  /// No description provided for @rulesAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add rule'**
+  String get rulesAdd;
+
+  /// No description provided for @rulesEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit rule'**
+  String get rulesEditTitle;
+
+  /// No description provided for @rulesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No rules yet'**
+  String get rulesEmpty;
+
+  /// No description provided for @rulesLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The rules could not be loaded.'**
+  String get rulesLoadFailed;
+
+  /// No description provided for @rulesGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This rule no longer exists.'**
+  String get rulesGone;
+
+  /// No description provided for @rulesBroken.
+  ///
+  /// In en, this message translates to:
+  /// **'Unreadable rule'**
+  String get rulesBroken;
+
+  /// No description provided for @rulesBuiltIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get rulesBuiltIn;
+
+  /// No description provided for @rulesBrokenNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This rule\'s stored content cannot be read. It is shown below; saving replaces it.'**
+  String get rulesBrokenNotice;
+
+  /// No description provided for @rulesReorderHandle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reorder'**
+  String get rulesReorderHandle;
+
+  /// No description provided for @rulesNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get rulesNameLabel;
+
+  /// No description provided for @rulesPatternLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Find (regular expression or text)'**
+  String get rulesPatternLabel;
+
+  /// No description provided for @rulesReplacementLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace with'**
+  String get rulesReplacementLabel;
+
+  /// No description provided for @rulesIsRegexLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a regular expression'**
+  String get rulesIsRegexLabel;
+
+  /// No description provided for @rulesRuleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter title rule'**
+  String get rulesRuleLabel;
+
+  /// No description provided for @rulesSerialNumberLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Serial number (optional)'**
+  String get rulesSerialNumberLabel;
+
+  /// No description provided for @rulesUrlRuleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Lookup address'**
+  String get rulesUrlRuleLabel;
+
+  /// No description provided for @rulesShowRuleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract rule'**
+  String get rulesShowRuleLabel;
+
+  /// No description provided for @rulesColorLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour, #AARRGGBB (optional)'**
+  String get rulesColorLabel;
+
+  /// No description provided for @rulesGroupLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Group (optional)'**
+  String get rulesGroupLabel;
+
+  /// No description provided for @rulesEnabledLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get rulesEnabledLabel;
+
+  /// No description provided for @rulesRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required.'**
+  String get rulesRequired;
+
+  /// No description provided for @rulesInvalidRegex.
+  ///
+  /// In en, this message translates to:
+  /// **'This is not a valid regular expression.'**
+  String get rulesInvalidRegex;
+
+  /// No description provided for @rulesInvalidColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Use #RRGGBB or #AARRGGBB.'**
+  String get rulesInvalidColor;
 }
 
 class _AppLocalizationsDelegate

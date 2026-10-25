@@ -46,6 +46,9 @@ final class FakeAppNavigation implements AppNavigation {
   /// How many times the reading records were opened.
   int readingRecordsCalls = 0;
 
+  /// How many times each rule list was opened, keyed by the stored `kind` value.
+  final Map<String, int> ruleCalls = <String, int>{};
+
   /// Every `openBookReadingRecords` call's arguments, in the order the port takes them.
   final List<({String sourceUrl, String bookUrl, String bookName})>
   bookReadingRecordsCalls =
@@ -68,6 +71,21 @@ final class FakeAppNavigation implements AppNavigation {
 
   @override
   void openReadingRecords(BuildContext context) => readingRecordsCalls++;
+
+  @override
+  void openReplaceRules(BuildContext context) => _countRule('replace');
+
+  @override
+  void openTocRules(BuildContext context) => _countRule('toc');
+
+  @override
+  void openDictRules(BuildContext context) => _countRule('dict');
+
+  @override
+  void openHighlightRules(BuildContext context) => _countRule('highlight');
+
+  void _countRule(String kind) =>
+      ruleCalls.update(kind, (int count) => count + 1, ifAbsent: () => 1);
 
   @override
   void openBookReadingRecords(

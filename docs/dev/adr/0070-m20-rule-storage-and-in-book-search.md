@@ -154,6 +154,23 @@ payload 里**未知键必须保留**（与书源 `extra` 同一立场，ADR-0021
 | 正则超时（上游 `timeoutMillisecond`，默认 3000，超时禁用该规则） | Dart 的 `RegExp` 没有超时 API，只能整段丢进 isolate + 强制 kill | 出现「用户写的正则把正文净化卡死」的实例；现阶段用上游 `isValid()` 的两条静态拦截（语法错、以未转义 `|` 结尾） |
 | 上游的逐行 trim（`ContentProcessor.getContent` 先 `lines().trim()`） | `PageFetchService.replaceContent` 已经裁定这是阅读器排版的事、不在解析层做 | 读者反馈「正文空行 / 行首空格很多」且不属于源本身的问题 |
 
+### §9 规则管理 UI 的形态（M20-c 落地时确定）
+
+- **一条 kind 一页**：`RulesRoute.list(kind)` → `RulesListPage`，四类共用同一页与同一套操作
+  （启停开关 / 拖动排序 / 删除 / 点击进表单）；kind 只影响标题与行摘要，所以不会出现「四份会各自漂移的列表」。
+- **表单按 kind 分支，字段之外的东西一律保留**：`RuleEditPage` 只呈现当前 kind 拥有的字段，
+  保存时把 `timeoutMs`（净化）与 payload 的 `extra`（四类都可能有）原样写回——这正是 §决策 1
+  「未知键必须保留」在 UI 上的落地方式。
+- **入口在「我的」**：`AppNavigation` 增加四个方法（`openReplaceRules` / `openTocRules` /
+  `openDictRules` / `openHighlightRules`）。四个方法而不是一个带 kind 参数的方法：端口只收发原语
+  （ADR-0042），字符串 kind 会把一个 switch 搬进每个实现。
+- **排序会改净化结果**：`RuleRepository.reorder` 把整类重新编号为 `0..n-1`，并对 `replace`
+  触发一次正文缓存作废（与 §7 同一理由）。
+- **表单的两条前置校验**（超前于执行期降级，执行期仍按 `ContentPurifier` 的规则跳过）：
+  正则表达式必须能编译、高亮颜色必须是 `#RRGGBB` / `#AARRGGBB`。名字与各 kind 的必填表达式不能为空。
+- **坏 payload 可修**：表单显示「这条规则存的内容读不懂」+ 原文，用户填好一份合法内容保存即替换它
+  ——与 §决策 1「允许删除 / 编辑」一致，而不是把它藏掉。
+
 ### §8 G6 维持登记不做（2026-10-24 复核）
 
 用户复核了 ADR-0069「登记差异」里的 G6（同步 `java.post/get/ajax` 响应对象）：**维持登记**，不做
@@ -173,4 +190,10 @@ payload 里**未知键必须保留**（与书源 `extra` 同一立场，ADR-0021
 - `lib/features/book_source/domain/content_cache.dart` + `data/cache_dao_content_cache.dart` +
   `lib/core/storage/cache_dao.dart`：新增「清空缓存」能力（C-ARCH 无新增，见 §7 的修正）。
 - `lib/features/book_source/domain/content_purifier.dart`（新）：净化规则的执行点与降级策略。
-- `lib/app.dart`：`appProviderOverrides()` 绑定两个端口（`_PurgeRuleSource` / `_ChapterBodyInvalidator`）。
+- `lib/app.dart`：`appProviderOverrides()` 绑定两个端口（`_PurgeRuleSource` / `_ChapterBodyInvalidator`）；
+  页面表登记 `RulesRoute` 的两条路由。
+- `lib/features/rules/presentation/`（M20-c）：`rules_route.dart`、`rules_strings.dart`、
+  `notifiers/rules_list_notifier.dart`（kind 家族，写后重载）、`pages/rules_list_page.dart`、
+  `pages/rule_edit_page.dart`。
+- `lib/core/router/app_navigation.dart` + `lib/features/shell/.../my_page.dart`：「我的」的四个规则入口。
+- `lib/core/storage/rule_dao.dart`：`byId` / `updateSortOrder`。

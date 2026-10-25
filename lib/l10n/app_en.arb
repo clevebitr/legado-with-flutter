@@ -1930,5 +1930,117 @@
   "failureLoginRequired": "This source needs a sign-in or a fresh human check; open the source and finish it first.",
   "@failureLoginRequired": {
     "@description": "Failure message when a source answers that the session/login is gone (M21a)."
+  },
+  "mySectionRules": "Rules",
+  "@mySectionRules": {
+    "@description": "Section label of the rules management entries in the Me tab."
+  },
+  "rulesReplaceTitle": "Replace & clean",
+  "@rulesReplaceTitle": {
+    "@description": "Title of the replace/purge rules page, and of its row in the Me tab."
+  },
+  "rulesTocTitle": "Chapter rules",
+  "@rulesTocTitle": {
+    "@description": "Title of the local-text chapter-detection rules page."
+  },
+  "rulesDictTitle": "Dictionaries",
+  "@rulesDictTitle": {
+    "@description": "Title of the dictionary rules page."
+  },
+  "rulesHighlightTitle": "Highlight tags",
+  "@rulesHighlightTitle": {
+    "@description": "Title of the highlight tag rules page."
+  },
+  "rulesAdd": "Add rule",
+  "@rulesAdd": {
+    "@description": "Floating action button that opens an empty rule form."
+  },
+  "rulesEditTitle": "Edit rule",
+  "@rulesEditTitle": {
+    "@description": "App bar title of the rule form when it edits an existing rule."
+  },
+  "rulesEmpty": "No rules yet",
+  "@rulesEmpty": {
+    "@description": "Empty state of a rule list."
+  },
+  "rulesLoadFailed": "The rules could not be loaded.",
+  "@rulesLoadFailed": {
+    "@description": "Shown when the rule list cannot be read from the database."
+  },
+  "rulesGone": "This rule no longer exists.",
+  "@rulesGone": {
+    "@description": "Shown when the edited rule was deleted from under the form."
+  },
+  "rulesBroken": "Unreadable rule",
+  "@rulesBroken": {
+    "@description": "Badge of a stored rule whose payload this build cannot read."
+  },
+  "rulesBuiltIn": "Built-in",
+  "@rulesBuiltIn": {
+    "@description": "Badge of a rule that shipped with the app; it is still editable and deletable."
+  },
+  "rulesBrokenNotice": "This rule's stored content cannot be read. It is shown below; saving replaces it.",
+  "@rulesBrokenNotice": {
+    "@description": "Notice above the raw payload of an unreadable rule."
+  },
+  "rulesReorderHandle": "Reorder",
+  "@rulesReorderHandle": {
+    "@description": "Accessible name of the drag handle in a rule row."
+  },
+  "rulesNameLabel": "Name",
+  "@rulesNameLabel": {
+    "@description": "Label of the rule name field."
+  },
+  "rulesPatternLabel": "Find (regular expression or text)",
+  "@rulesPatternLabel": {
+    "@description": "Label of the pattern field of a purge or highlight rule."
+  },
+  "rulesReplacementLabel": "Replace with",
+  "@rulesReplacementLabel": {
+    "@description": "Label of the replacement field of a purge rule."
+  },
+  "rulesIsRegexLabel": "Use a regular expression",
+  "@rulesIsRegexLabel": {
+    "@description": "Switch that decides whether a purge rule's pattern is a regular expression."
+  },
+  "rulesRuleLabel": "Chapter title rule",
+  "@rulesRuleLabel": {
+    "@description": "Label of the chapter-detection expression of a local-text rule."
+  },
+  "rulesSerialNumberLabel": "Serial number (optional)",
+  "@rulesSerialNumberLabel": {
+    "@description": "Label of the optional serial number of a chapter rule."
+  },
+  "rulesUrlRuleLabel": "Lookup address",
+  "@rulesUrlRuleLabel": {
+    "@description": "Label of the address a dictionary looks a word up at."
+  },
+  "rulesShowRuleLabel": "Extract rule",
+  "@rulesShowRuleLabel": {
+    "@description": "Label of the rule that extracts the dictionary entry from the page."
+  },
+  "rulesColorLabel": "Colour, #AARRGGBB (optional)",
+  "@rulesColorLabel": {
+    "@description": "Label of the highlight colour field."
+  },
+  "rulesGroupLabel": "Group (optional)",
+  "@rulesGroupLabel": {
+    "@description": "Label of the highlight tag group field."
+  },
+  "rulesEnabledLabel": "Enabled",
+  "@rulesEnabledLabel": {
+    "@description": "Switch inside the rule form that turns the rule on or off."
+  },
+  "rulesRequired": "Required.",
+  "@rulesRequired": {
+    "@description": "Validation message for a required rule field."
+  },
+  "rulesInvalidRegex": "This is not a valid regular expression.",
+  "@rulesInvalidRegex": {
+    "@description": "Validation message for a pattern that does not compile."
+  },
+  "rulesInvalidColor": "Use #RRGGBB or #AARRGGBB.",
+  "@rulesInvalidColor": {
+    "@description": "Validation message for a colour that is not a hex colour."
   }
 }

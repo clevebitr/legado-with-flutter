@@ -42,6 +42,28 @@ void main() {
       );
     });
 
+    test('updateSortOrder_givenANewOrder_movesTheRow', () async {
+      final ({ReaderDatabase database, RuleDao dao}) fixture = _fixture();
+      final int first = await fixture.dao.insert(
+        kind: RuleKind.replace,
+        name: '第一',
+        payload: const <String, Object?>{},
+      );
+      await fixture.dao.insert(
+        kind: RuleKind.replace,
+        name: '第二',
+        payload: const <String, Object?>{},
+      );
+
+      await fixture.dao.updateSortOrder(first, 2);
+
+      expect(
+        (await fixture.dao.ofKind(RuleKind.replace))
+            .map((RuleRow row) => row.name),
+        <String>['第二', '第一'],
+      );
+    });
+
     test('byId_givenAnExistingRow_answersIt', () async {
       final ({ReaderDatabase database, RuleDao dao}) fixture = _fixture();
       final int id = await fixture.dao.insert(

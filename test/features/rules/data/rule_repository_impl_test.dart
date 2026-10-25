@@ -301,6 +301,46 @@ void main() {
     );
 
     test(
+      'reorder_givenANewOrder_renumbersTheKindAndRetiresTheBodies',
+      () async {
+        // 顺序对净化是有意义的（从上到下依次跑），所以重排同样作废已缓存的成品正文。
+        await repository().create(
+          const RuleDraft(
+            kind: RuleKind.replace,
+            name: '第一',
+            payload: RulePayload.replace(pattern: 'a', replacement: ''),
+          ),
+        );
+        await repository().create(
+          const RuleDraft(
+            kind: RuleKind.replace,
+            name: '第二',
+            payload: RulePayload.replace(pattern: 'b', replacement: ''),
+          ),
+        );
+        final List<Rule> stored = await repository().ofKind(RuleKind.replace);
+
+        await repository().reorder(
+          kind: RuleKind.replace,
+          orderedIds: <int>[stored.last.id, stored.first.id],
+        );
+
+        expect(
+          (await repository().ofKind(RuleKind.replace))
+              .map((Rule rule) => rule.name),
+          <String>['第二', '第一'],
+        );
+        expect(invalidator.calls, 3);
+      },
+    );
+
+    test('reorder_givenATocKind_leavesTheChapterCacheAlone', () async {
+      await repository().reorder(kind: RuleKind.toc, orderedIds: const <int>[]);
+
+      expect(invalidator.calls, 0);
+    });
+
+    test(
       'delete_givenAReplaceRule_removesItAndRetiresTheCachedBodies',
       () async {
         await repository().create(

@@ -361,3 +361,18 @@ M21a 第三刀按 ADR-0068 决策 9 的评估执行：零新依赖、自研解�
 4. **G6（§8）**：维持登记不做（ADR-0069 的口径不变），不做确定性重放。理由：本轮只一条源命中，重放会改 job 执行语义（脚本多次运行、java.put/log 重复、js:quota 计数重定义），属独立一轮设计与验收。
 
 文档改动：ADR-0070 §决策 4 修正 + 增补 §5–§8 与「影响（增补）」；`architecture.md` §1 的 feature 列表加 `rules`（引用 ADR-0070）。
+
+## 2026-10-25 — M20-c 规则管理 UI：四类共用一页、表单保留未知键、入口在「我的」
+
+M20-c 落地，形态写进 ADR-0070 增补 §9：
+
+- **一条 kind 一页**：`RulesRoute.list(kind)` → `RulesListPage`，四类共用启停 / 拖动排序 / 删除 / 点击进表单；kind 只影响标题与行摘要。
+- **字段之外的东西一律保留**：`RuleEditPage` 只呈现当前 kind 的字段，保存时把 `timeoutMs`（净化）与 payload 的 `extra`（上游的 volumeRule / example / excludeScope 等）原样写回——这是 ADR-0070 §决策 1「未知键必须保留」在 UI 上的落点。
+- **入口在「我的」**：`AppNavigation` 加四个方法（openReplaceRules / openTocRules / openDictRules / openHighlightRules）。四个方法而不是一个带 kind 参数的：端口只收发原语（ADR-0042），字符串 kind 会把 switch 搬进每个实现。
+- **排序也作废缓存**：`RuleRepository.reorder` 把整类重编号 0..n-1，`replace` 触发一次正文缓存作废（顺序变了净化结果就会变）。
+- **表单前置校验**（执行期仍按 ContentPurifier 的规则跳过）：正则必须能编译、颜色必须 #RRGGBB/#AARRGGBB、名字与各 kind 必填表达式非空。
+- **坏 payload 可修**：表单显示「存的内容读不懂」+ 原文，填好合法内容保存即替换。
+
+踩坑：MyPage 多了 4 行之后「设置 / 关于」落到首屏之外，`ListView(children:)` 是懒挂载的，老测试 `find.text` 直接找不到 → 测试改成先 `scrollUntilVisible`。表单页的保存按钮同理：`RuleEditPage` 的坏 payload 分支多出一段提示，Save 被挤出视口，tap 静默不打中，抽取 `_save()` 帮手统一 `ensureVisible`。
+
+验证：1969 用例全过；core 100% / domain 100% / data 98.42%；format 0、analyze 干净。

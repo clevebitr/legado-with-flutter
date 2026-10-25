@@ -118,6 +118,19 @@ final class RuleRepositoryImpl implements RuleRepository {
     }
   }
 
+  @override
+  Future<void> reorder({
+    required RuleKind kind,
+    required List<int> orderedIds,
+  }) async {
+    for (int index = 0; index < orderedIds.length; index++) {
+      await _dao.updateSortOrder(orderedIds[index], index);
+    }
+
+    // 顺序变了，净化的结果就可能变：同样要作废已缓存的成品正文（ADR-0070 增补 §7）。
+    await _retireChapterBodies(kind);
+  }
+
   /// One stored row as a [Rule]; an unreadable payload becomes [MalformedPayload] plus a warning.
   Rule _toRule({required RuleKind kind, required RuleRow row}) {
     final RulePayload payload = decodeRulePayload(

@@ -1350,4 +1350,88 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get failureLoginRequired => '该书源需要登录或重新完成人机验证，请先在书源管理里打开验证。';
+
+  @override
+  String get mySectionRules => '规则';
+
+  @override
+  String get rulesReplaceTitle => '替换净化';
+
+  @override
+  String get rulesTocTitle => '目录规则';
+
+  @override
+  String get rulesDictTitle => '字典规则';
+
+  @override
+  String get rulesHighlightTitle => '高亮标签';
+
+  @override
+  String get rulesAdd => '新增规则';
+
+  @override
+  String get rulesEditTitle => '编辑规则';
+
+  @override
+  String get rulesEmpty => '还没有规则';
+
+  @override
+  String get rulesLoadFailed => '规则读取失败。';
+
+  @override
+  String get rulesGone => '这条规则已经不存在了。';
+
+  @override
+  String get rulesBroken => '规则损坏';
+
+  @override
+  String get rulesBuiltIn => '内置';
+
+  @override
+  String get rulesBrokenNotice => '这条规则存的内容读不懂，原文见下方；保存会用它替换掉。';
+
+  @override
+  String get rulesReorderHandle => '调整顺序';
+
+  @override
+  String get rulesNameLabel => '名称';
+
+  @override
+  String get rulesPatternLabel => '查找内容（正则或文本）';
+
+  @override
+  String get rulesReplacementLabel => '替换为';
+
+  @override
+  String get rulesIsRegexLabel => '按正则处理';
+
+  @override
+  String get rulesRuleLabel => '章节标题规则';
+
+  @override
+  String get rulesSerialNumberLabel => '序号（可空）';
+
+  @override
+  String get rulesUrlRuleLabel => '查询地址';
+
+  @override
+  String get rulesShowRuleLabel => '提取规则';
+
+  @override
+  String get rulesColorLabel => '颜色，#AARRGGBB（可空）';
+
+  @override
+  String get rulesGroupLabel => '分组（可空）';
+
+  @override
+  String get rulesEnabledLabel => '启用';
+
+  @override
+  String get rulesRequired => '不能为空。';
+
+  @override
+  String get rulesInvalidRegex => '这不是合法的正则表达式。';
+
+  @override
+  String get rulesInvalidColor => '请写 #RRGGBB 或 #AARRGGBB。';
 }

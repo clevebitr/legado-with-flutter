@@ -1396,4 +1396,89 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get failureLoginRequired =>
       'This source needs a sign-in or a fresh human check; open the source and finish it first.';
+
+  @override
+  String get mySectionRules => 'Rules';
+
+  @override
+  String get rulesReplaceTitle => 'Replace & clean';
+
+  @override
+  String get rulesTocTitle => 'Chapter rules';
+
+  @override
+  String get rulesDictTitle => 'Dictionaries';
+
+  @override
+  String get rulesHighlightTitle => 'Highlight tags';
+
+  @override
+  String get rulesAdd => 'Add rule';
+
+  @override
+  String get rulesEditTitle => 'Edit rule';
+
+  @override
+  String get rulesEmpty => 'No rules yet';
+
+  @override
+  String get rulesLoadFailed => 'The rules could not be loaded.';
+
+  @override
+  String get rulesGone => 'This rule no longer exists.';
+
+  @override
+  String get rulesBroken => 'Unreadable rule';
+
+  @override
+  String get rulesBuiltIn => 'Built-in';
+
+  @override
+  String get rulesBrokenNotice =>
+      'This rule\'s stored content cannot be read. It is shown below; saving replaces it.';
+
+  @override
+  String get rulesReorderHandle => 'Reorder';
+
+  @override
+  String get rulesNameLabel => 'Name';
+
+  @override
+  String get rulesPatternLabel => 'Find (regular expression or text)';
+
+  @override
+  String get rulesReplacementLabel => 'Replace with';
+
+  @override
+  String get rulesIsRegexLabel => 'Use a regular expression';
+
+  @override
+  String get rulesRuleLabel => 'Chapter title rule';
+
+  @override
+  String get rulesSerialNumberLabel => 'Serial number (optional)';
+
+  @override
+  String get rulesUrlRuleLabel => 'Lookup address';
+
+  @override
+  String get rulesShowRuleLabel => 'Extract rule';
+
+  @override
+  String get rulesColorLabel => 'Colour, #AARRGGBB (optional)';
+
+  @override
+  String get rulesGroupLabel => 'Group (optional)';
+
+  @override
+  String get rulesEnabledLabel => 'Enabled';
+
+  @override
+  String get rulesRequired => 'Required.';
+
+  @override
+  String get rulesInvalidRegex => 'This is not a valid regular expression.';
+
+  @override
+  String get rulesInvalidColor => 'Use #RRGGBB or #AARRGGBB.';
 }

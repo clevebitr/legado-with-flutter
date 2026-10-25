@@ -219,6 +219,7 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | `ReaderRoute.read` | `ReaderPage`（可带 `chapterUrl` / `charOffset`） | `reader` | ✅ M19（ADR-0066 §决策 7：书签跳转需要偏移） |
 | `ReaderRoute.bookmarks` / `ReaderRoute.records` / `ReaderRoute.bookRecords` | `BookmarkListPage` / `ReadingRecordsPage` / `BookReadingRecordsPage` | `reader` | ✅ M19（书签 / 阅读记录） |
 | `ShellRoute.about` / `ShellRoute.legalNotices` | `AboutPage` / `LegalNoticesPage` | `shell` | ✅ M18（2026-10-22） |
+| `RulesRoute.list` / `RulesRoute.edit` | `RulesListPage`（按 kind）/ `RuleEditPage` | `rules` | ✅ M20-c（ADR-0070 §决策 1；入口在「我的」） |
 
 > 落地页是组合根里的 `AppShell`（ADR-0055）：它组合四个 feature 的页面，因此不进本表；
 > 表内只登记 feature 自己 push 的类型化路由。

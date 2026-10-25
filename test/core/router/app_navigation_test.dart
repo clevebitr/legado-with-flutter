@@ -79,6 +79,50 @@ void main() {
       expect(printer.events.single.message, contains('reading-record'));
     });
 
+    test('openReplaceRules_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openReplaceRules(_FakeContext());
+
+      expect(printer.events.single.message, contains('replace-rule'));
+    });
+
+    test('openTocRules_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openTocRules(_FakeContext());
+
+      expect(printer.events.single.message, contains('toc-rule'));
+    });
+
+    test('openDictRules_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openDictRules(_FakeContext());
+
+      expect(printer.events.single.message, contains('dict-rule'));
+    });
+
+    test('openHighlightRules_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openHighlightRules(_FakeContext());
+
+      expect(printer.events.single.message, contains('highlight-rule'));
+    });
+
     test('openBookReadingRecords_whenCalled_logsAndDoesNothing', () {
       final FakeLogPrinter printer = FakeLogPrinter();
       final UnboundAppNavigation navigation = UnboundAppNavigation(
