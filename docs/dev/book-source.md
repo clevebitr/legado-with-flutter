@@ -642,8 +642,8 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `page` | `int` | 当前页码 | M0 |
 | `source` | 只读对象 | 仅 `name`、`url`、`group`，其余不可见 | M0 |
 | `book` | 对象（字段 + 方法） | 字段 `name` / `author` / `bookUrl` / `tocUrl` / `intro` / `kind`；阶段不知道时为 `null`。方法：`putVariable(k,v)` / `getVariable(k)`（= `java.put` / `java.get` 的规则变量表）、`setType` / `getType` / `setReverseToc` / `getReverseToc`（job 内可读回，**不影响宿主**）、`type` 字段。ADR-0061 §决策 5、ADR-0062 §决策 2 | M17 / M24 |
-| `http.get(url, options)` | `String` | 经 `core/network/HttpClient` 代理，受超时与重试策略约束 | M0 |
-| `http.post(url, options)` | `String` | 同上 | M0 |
+| `http.get(url, options)` | `String` | 经 `core/network/HttpClient` 代理，受超时与重试策略约束；`{response:true}` 改为返回整个响应对象 | M0 / M21a |
+| `http.post(url, options)` | `String` | 同上 | M0 / M21a |
 | `parse.getString(rule, doc)` | `String` | 复用规则引擎，可递归 | M0 |
 | `parse.getElements(rule, doc)` | `List` | 同上 | M0 |
 | `java.put(key, value)` / `java.get(key)` | `void` / `String` | 规则变量，与 `@put:` / `@get:` 是同一份（ADR-0034）；**仅 JS 内可用** | M1 |
@@ -774,9 +774,14 @@ java.replaceFont(result, errorFont, correctFont);
 >   唯一实现是 `core/network/HttpClient`（C-NET-1），因此超时 / 重试 / 编码 / 明文策略与页面
 >   抓取完全同一套。请求带上书源自带的 `header`（C-NET-4，规则自己的同名键优先），并以**书源
 >   URL** 作为并发预算键，所以它花的仍是 §8 那份预算。
-> - **`options` 只认 `headers` 与（POST 的）`body`**，其余键（如 `charset` / `timeout` / `retry` /
+> - **`options` 只认 `headers`、`response` 与（POST 的）`body`**，其余键（如 `charset` / `timeout` / `retry` /
 >   `webView`）让**该次调用抛错**：策略由 `HttpPolicy` 拥有，而 `webView` 本仓没有，悄悄忽略
 >   它会把「未渲染的页面」当成答案（§1 的不兼容清单）。
+> - **`options.response: true` 返回响应对象**（`body` 属性 + `url()` / `code()` / `headers()` /
+>   `header(name)` / `cookie()` / `contentType()` / `isSuccessful()`），与 `loginCheckJs` 看到的
+>   `result` **同一个形状**（ADR-0068 增补）。`url()` 是**跟随重定向之后**的地址，与页面
+>   `baseUrl` 同源（`core/network/http_response.dart`）：站点用 `302` + 相对 `Location` 交接会话时
+>   （ASP 搜索的 `?token`），规则只能从这里拿到真正该重发的地址，正文里没有它。
 > - **传输失败只拒绝这次的 Promise**（message 是 `ParseFailureKind` 名，如 `networkTimeout`）：
 >   规则可以自己 `catch` 后改走镜像；规则没 catch 时该 job 按 §7 报 `js:error`。
 >   **已登记的取舍：** 可重试性（`isRetryable`）不随它上抛——脚本可能吞掉它，把「传输失败」
