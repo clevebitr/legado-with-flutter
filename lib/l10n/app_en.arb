@@ -2042,5 +2042,74 @@
   "rulesInvalidColor": "Use #RRGGBB or #AARRGGBB.",
   "@rulesInvalidColor": {
     "@description": "Validation message for a colour that is not a hex colour."
+  },
+  "readerSearchAction": "Search in book",
+  "@readerSearchAction": {
+    "@description": "App bar action of the reader that opens the in-book search."
+  },
+  "readerSearchHint": "Search this book",
+  "@readerSearchHint": {
+    "@description": "Hint of the in-book search field."
+  },
+  "readerSearchStart": "Search",
+  "@readerSearchStart": {
+    "@description": "Accessible name of the in-book search button."
+  },
+  "readerSearchStop": "Stop",
+  "@readerSearchStop": {
+    "@description": "Button that cancels a running in-book search."
+  },
+  "readerSearchProgress": "Searched {scanned} of {total} chapters",
+  "@readerSearchProgress": {
+    "@description": "Progress line of a running in-book search.",
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSearchStopped": "Stopped after {scanned} of {total} chapters.",
+  "@readerSearchStopped": {
+    "@description": "Progress line after the user cancelled the search.",
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSearchBudgetSpent": "Time is up: stopped after {scanned} of {total} chapters.",
+  "@readerSearchBudgetSpent": {
+    "@description": "Progress line when the search run spent its time budget.",
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSearchEmpty": "Nothing found.",
+  "@readerSearchEmpty": {
+    "@description": "Shown when a finished in-book search matched nothing."
+  },
+  "readerSearchFailedChapters": "{count} chapters could not be read.",
+  "@readerSearchFailedChapters": {
+    "@description": "Note above the results when some chapters failed to load.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSearchUntitledChapter": "Untitled chapter",
+  "@readerSearchUntitledChapter": {
+    "@description": "Result row title when the chapter has no title."
   }
 }

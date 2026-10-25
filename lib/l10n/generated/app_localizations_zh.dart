@@ -1434,4 +1434,42 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get rulesInvalidColor => '请写 #RRGGBB 或 #AARRGGBB。';
+
+  @override
+  String get readerSearchAction => '搜索本书';
+
+  @override
+  String get readerSearchHint => '在本机这本书里找';
+
+  @override
+  String get readerSearchStart => '搜索';
+
+  @override
+  String get readerSearchStop => '停止';
+
+  @override
+  String readerSearchProgress(int scanned, int total) {
+    return '已搜 $scanned/$total 章';
+  }
+
+  @override
+  String readerSearchStopped(int scanned, int total) {
+    return '已停止，搜到 $scanned/$total 章。';
+  }
+
+  @override
+  String readerSearchBudgetSpent(int scanned, int total) {
+    return '时间用完，停在 $scanned/$total 章。';
+  }
+
+  @override
+  String get readerSearchEmpty => '没有找到。';
+
+  @override
+  String readerSearchFailedChapters(int count) {
+    return '有 $count 章读取失败。';
+  }
+
+  @override
+  String get readerSearchUntitledChapter => '无标题章节';
 }

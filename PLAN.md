@@ -34,5 +34,5 @@ auto-breakpoint: false
 
 ## Current: M20 — 书内全文搜索 + 规则管理 UI（净化/目录/字典/高亮）（ui-gap §4）
 
-goal: M20-b 已落地：规则仓储 + 净化接线 + 播种 + 双向端口
-breakpoint: 下一步：M20-c 规则管理 UI（todo #7）
+goal: M20-c 已落地：四类规则列表 + 按 kind 表单 + 我的入口
+breakpoint: 下一步：M20-d 书内全文搜索（todo #8）

@@ -376,3 +376,21 @@ M20-c 落地，形态写进 ADR-0070 增补 §9：
 踩坑：MyPage 多了 4 行之后「设置 / 关于」落到首屏之外，`ListView(children:)` 是懒挂载的，老测试 `find.text` 直接找不到 → 测试改成先 `scrollUntilVisible`。表单页的保存按钮同理：`RuleEditPage` 的坏 payload 分支多出一段提示，Save 被挤出视口，tap 静默不打中，抽取 `_save()` 帮手统一 `ensureVisible`。
 
 验证：1969 用例全过；core 100% / domain 100% / data 98.42%；format 0、analyze 干净。
+
+## 2026-10-25 — M20-d 书内全文搜索：reader 侧窗口预取 + 自量预算 + sheet 落点
+
+M20-d 落地，落点写进 ADR-0070 增补 §10（§决策 2 的语义不变：当前章起顺序预取、并发 2、可停、命中带章节与偏移）。
+
+- **用例在 reader**：`SearchInBook` 只依赖阅读器已有的 `ChapterContentProvider`，所以「发请求」仍全在 book_source，速率门与 `HttpPolicy` 原样生效。
+- **预算自己量**：`SourceBudget` 属 book_source/domain，跨 feature 不能 import（C-ARCH-2），改用注入 `Clock` + `budget`（默认 2 分钟，与聚合搜索 60 s / 校验 180 s 同量级），用完以 `budgetSpent` 停，已找到的命中仍算数。
+- **窗口式顺序预取**：每窗 ≤2 章、`Future.wait` 后按章序产出；不是滑动窗口（慢章会拖同伴），换来顺序与「最多 2 个在飞」一眼可验。
+- **取消语义**：cancel 后不再发新请求、在途结果丢弃（正文留在缓存里不算副作用）；run 放在**下一个微任务**启动，所以 `execute` 后立刻 cancel 一个请求都不发。
+- **命中粒度按上游逐条**，但每章上限 20 条；`excerpt` 两侧各 40 字符、换行压空格；`offsetInText` 用 `RegExp(caseSensitive: false)` 在原串求位置——不用 `toLowerCase` 双串比较，因为 `İ` 这类字符会改长度、把偏移整体挪位。
+- **失败章节不吞**：计入 `failedChapters` 并在 UI 明说「有 N 章读取失败」。
+- **UI 是 sheet**：入口在阅读器 AppBar 搜索按钮；点命中把 `hit.offsetInText` 当 `charOffset` 交给 session（与书签同一套，ADR-0066 §决策 7），落在那一句；关 sheet 即 dispose → 取消。
+
+踩坑两条：① 单订阅 `StreamController.close()` 的 future 在有监听者之前不完成，所以 `run()` 末尾改成 `unawaited(controller.close())`，否则只等 `done` 的调用方会永远挂着；② autoDispose notifier 在测试里用裸 `container.read` 轮询会在两次读之间被销毁而自动取消搜索，测试必须先 `container.listen` 保活。
+
+已登记（roadmap §3.7）：搜索历史/结果落库、正则开关/繁简转换/跨书聚合，均带触发条件。
+
+验证：1999 用例全过；core 100% / domain 100% / data 98.42%；format 0、analyze 干净、codegen 幂等、Windows app_boot 通过。

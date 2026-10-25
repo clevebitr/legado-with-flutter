@@ -1481,4 +1481,42 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rulesInvalidColor => 'Use #RRGGBB or #AARRGGBB.';
+
+  @override
+  String get readerSearchAction => 'Search in book';
+
+  @override
+  String get readerSearchHint => 'Search this book';
+
+  @override
+  String get readerSearchStart => 'Search';
+
+  @override
+  String get readerSearchStop => 'Stop';
+
+  @override
+  String readerSearchProgress(int scanned, int total) {
+    return 'Searched $scanned of $total chapters';
+  }
+
+  @override
+  String readerSearchStopped(int scanned, int total) {
+    return 'Stopped after $scanned of $total chapters.';
+  }
+
+  @override
+  String readerSearchBudgetSpent(int scanned, int total) {
+    return 'Time is up: stopped after $scanned of $total chapters.';
+  }
+
+  @override
+  String get readerSearchEmpty => 'Nothing found.';
+
+  @override
+  String readerSearchFailedChapters(int count) {
+    return '$count chapters could not be read.';
+  }
+
+  @override
+  String get readerSearchUntitledChapter => 'Untitled chapter';
 }

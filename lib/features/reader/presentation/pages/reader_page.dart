@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/reader/di.dart';
 import 'package:flutter_reader/features/reader/domain/bookmark_excerpt.dart';
+import 'package:flutter_reader/features/reader/domain/entities/book_search.dart';
 import 'package:flutter_reader/features/reader/domain/entities/bookmark.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_settings.dart';
@@ -26,6 +27,7 @@ import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts
 import 'package:flutter_reader/features/reader/presentation/pages/manga_reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_search_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_source_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
@@ -293,6 +295,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               title: Text(_title(chapters, l10n)),
               actions: <Widget>[
                 IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: l10n.readerSearchAction,
+                  onPressed: () => _keepAlive(
+                    () => _openSearch(switch (chapters.value) {
+                      ParseSuccess<List<ReadingChapter>>(
+                        :final List<ReadingChapter> data,
+                      ) =>
+                        data,
+                      _ => const <ReadingChapter>[],
+                    }),
+                  ),
+                ),
+                IconButton(
                   icon: const Icon(Icons.text_fields),
                   tooltip: l10n.readerSettingsAction,
                   onPressed: () => _keepAlive(() => _openSettings(settings)),
@@ -541,13 +556,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   /// Jumps to chapter [index] and keeps the chrome alive.
-  void _jumpToChapter(int index) {
+  void _jumpToChapter(int index, {int charOffset = 0}) {
     if (_chapters.isEmpty) {
       return;
     }
     final int target = index.clamp(0, _chapters.length - 1);
     unawaited(
-      ref.read(readerSessionProvider(_book).notifier).selectChapter(target),
+      ref
+          .read(readerSessionProvider(_book).notifier)
+          .selectChapter(target, charOffset: charOffset),
     );
     _keepAlive(() {});
   }
@@ -976,6 +993,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         context: context,
         isScrollControlled: true,
         builder: (BuildContext context) => ReaderTtsSheet(book: widget.book),
+      ),
+    );
+  }
+
+  /// Opens the in-book search and jumps to the hit the user picks
+  /// (`docs/dev/roadmap.md` M20, ADR-0070 §决策 2).
+  ///
+  /// The hit's `offsetInText` is the reader's own text offset, so it travels as the session's
+  /// `charOffset` — exactly how a bookmark lands on its sentence (ADR-0066 §决策 7).
+  void _openSearch(List<ReadingChapter> chapters) {
+    if (chapters.isEmpty) {
+      return;
+    }
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (BuildContext context) => SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.85,
+          child: ReaderSearchSheet(
+            book: widget.book,
+            chapters: chapters,
+            fromIndex: _currentIndex,
+            onSelected: (BookSearchHit hit) {
+              Navigator.of(context).pop();
+              _jumpToChapter(hit.chapterIndex, charOffset: hit.offsetInText);
+            },
+          ),
+        ),
       ),
     );
   }

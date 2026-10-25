@@ -154,6 +154,13 @@ payload 里**未知键必须保留**（与书源 `extra` 同一立场，ADR-0021
 | 正则超时（上游 `timeoutMillisecond`，默认 3000，超时禁用该规则） | Dart 的 `RegExp` 没有超时 API，只能整段丢进 isolate + 强制 kill | 出现「用户写的正则把正文净化卡死」的实例；现阶段用上游 `isValid()` 的两条静态拦截（语法错、以未转义 `|` 结尾） |
 | 上游的逐行 trim（`ContentProcessor.getContent` 先 `lines().trim()`） | `PageFetchService.replaceContent` 已经裁定这是阅读器排版的事、不在解析层做 | 读者反馈「正文空行 / 行首空格很多」且不属于源本身的问题 |
 
+### §8 G6 维持登记不做（2026-10-24 复核）
+
+用户复核了 ADR-0069「登记差异」里的 G6（同步 `java.post/get/ajax` 响应对象）：**维持登记**，不做
+确定性重放。理由：该缺口本轮只有 `📷🔞小姐姐写真` 一条源命中，重放会改 job 执行语义
+（脚本多次运行、`java.put` / `log` 重复、`js:quota` 计数重定义），属独立一轮设计与验收；
+真要做时的触发条件仍是 ADR-0069 的那一条（出现只能靠同步响应对象、改写不了的真实源）。
+
 ### §9 规则管理 UI 的形态（M20-c 落地时确定）
 
 - **一条 kind 一页**：`RulesRoute.list(kind)` → `RulesListPage`，四类共用同一页与同一套操作
@@ -171,12 +178,29 @@ payload 里**未知键必须保留**（与书源 `extra` 同一立场，ADR-0021
 - **坏 payload 可修**：表单显示「这条规则存的内容读不懂」+ 原文，用户填好一份合法内容保存即替换它
   ——与 §决策 1「允许删除 / 编辑」一致，而不是把它藏掉。
 
-### §8 G6 维持登记不做（2026-10-24 复核）
+### §10 书内搜索的落点（M20-d 实现时确定）
 
-用户复核了 ADR-0069「登记差异」里的 G6（同步 `java.post/get/ajax` 响应对象）：**维持登记**，不做
-确定性重放。理由：该缺口本轮只有 `📷🔞小姐姐写真` 一条源命中，重放会改 job 执行语义
-（脚本多次运行、`java.put` / `log` 重复、`js:quota` 计数重定义），属独立一轮设计与验收；
-真要做时的触发条件仍是 ADR-0069 的那一条（出现只能靠同步响应对象、改写不了的真实源）。
+§决策 2 的语义不变（当前章起顺序预取、并发 2、可停、命中带章节与偏移），实现落点如下：
+
+- **用例在 `reader`**：`SearchInBook` 只依赖 `ChapterContentProvider`（阅读器已有的端口），
+  所以「发请求」这件事仍然全在 `book_source`，速率门与 `HttpPolicy` 原样生效（礼貌性这件事本来就归 `book_source`，`book-source.md` §8）。
+- **预算自己量，不借 `SourceBudget`**：后者属 `book_source/domain`，跨 feature 不能 import
+  （C-ARCH-2）。这里用注入的 `Clock` + 一个 `Duration budget`（默认 **2 分钟**，与聚合搜索 60 s、
+  校验 180 s 同一量级），用完即以 `budgetSpent` 停下，已找到的命中仍然是真的。
+- **窗口式顺序预取**：每窗最多 `concurrency`（2）章，`Future.wait` 之后按章序产出命中。
+  不是滑动窗口——慢的一章会拖住它的同伴，换来的是顺序与「最多 2 个在飞」这两件事一眼可验。
+- **`cancel()` 停新请求、丢弃在途结果**：先发出去的请求照样 await，但结果不再进列表；
+  它们取的正文留在正文缓存里（正常阅读也会写进去，不算副作用）。开关放在**下一个微任务**上，
+  所以 `execute` 之后立刻 `cancel()` 一个请求都不会发出。
+- **命中粒度按上游**：一次匹配一条命中（上游 `SearchContentRepository` 同样逐条给结果），
+  但**每章最多 20 条**——一章重复 100 次同一个词不是 100 个目的地。`excerpt` 保留匹配两侧各 40
+  字符并把换行压成空格；`offsetInText` 用 `RegExp(caseSensitive: false)` 在**原串**上求位置，
+  不用 `toLowerCase` 双串比较（后者在 `İ` 这类字符上会改长度、把偏移整体挪位）。
+- **读不出来的章节不吞掉**：计入 `failedChapters`，跑完时 UI 明确说「有 N 章读取失败」，
+  而不是让「没搜到」和「没读到」长得一样。
+- **UI 是一个 sheet**（`ReaderSearchSheet`，入口在阅读器 AppBar 的搜索按钮）：点命中时把
+  `hit.offsetInText` 当 `charOffset` 交给 session，与书签跳转同一套机制（ADR-0066 §决策 7），
+  因此落在那一句而不是章首。关掉 sheet 即 dispose notifier → 取消搜索。
 
 ## 影响（增补）
 
@@ -197,3 +221,8 @@ payload 里**未知键必须保留**（与书源 `extra` 同一立场，ADR-0021
   `pages/rule_edit_page.dart`。
 - `lib/core/router/app_navigation.dart` + `lib/features/shell/.../my_page.dart`：「我的」的四个规则入口。
 - `lib/core/storage/rule_dao.dart`：`byId` / `updateSortOrder`。
+- `lib/features/reader/domain/usecases/search_in_book.dart` + `domain/entities/book_search.dart`（M20-d）：
+  `SearchInBook`、`BookSearchSession`、`BookSearchHit` / `BookSearchProgress` / `BookSearchStop`。
+- `lib/features/reader/presentation/notifiers/book_search_notifier.dart` +
+  `presentation/widgets/reader_search_sheet.dart` + `pages/reader_page.dart`（AppBar 入口与
+  `charOffset` 跳章）。

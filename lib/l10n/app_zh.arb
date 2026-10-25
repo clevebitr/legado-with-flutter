@@ -439,5 +439,15 @@
   "rulesEnabledLabel": "启用",
   "rulesRequired": "不能为空。",
   "rulesInvalidRegex": "这不是合法的正则表达式。",
-  "rulesInvalidColor": "请写 #RRGGBB 或 #AARRGGBB。"
+  "rulesInvalidColor": "请写 #RRGGBB 或 #AARRGGBB。",
+  "readerSearchAction": "搜索本书",
+  "readerSearchHint": "在本机这本书里找",
+  "readerSearchStart": "搜索",
+  "readerSearchStop": "停止",
+  "readerSearchProgress": "已搜 {scanned}/{total} 章",
+  "readerSearchStopped": "已停止，搜到 {scanned}/{total} 章。",
+  "readerSearchBudgetSpent": "时间用完，停在 {scanned}/{total} 章。",
+  "readerSearchEmpty": "没有找到。",
+  "readerSearchFailedChapters": "有 {count} 章读取失败。",
+  "readerSearchUntitledChapter": "无标题章节"
 }

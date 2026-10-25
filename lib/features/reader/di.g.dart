@@ -697,6 +697,61 @@ final class ReaderAudioTrackProvider
 
 String _$readerAudioTrackHash() => r'302ea06f6920d7d0ea3896e5e77b0a89dd82e46d';
 
+/// Provides the in-book search (`docs/dev/roadmap.md` M20, ADR-0070 §决策 2).
+///
+/// It only needs the chapter-content port: the run is orchestrated here, and the politeness of the
+/// requests themselves stays inside `book_source` (rate gate + `HttpPolicy`).
+
+@ProviderFor(searchInBook)
+final searchInBookProvider = SearchInBookProvider._();
+
+/// Provides the in-book search (`docs/dev/roadmap.md` M20, ADR-0070 §决策 2).
+///
+/// It only needs the chapter-content port: the run is orchestrated here, and the politeness of the
+/// requests themselves stays inside `book_source` (rate gate + `HttpPolicy`).
+
+final class SearchInBookProvider
+    extends $FunctionalProvider<SearchInBook, SearchInBook, SearchInBook>
+    with $Provider<SearchInBook> {
+  /// Provides the in-book search (`docs/dev/roadmap.md` M20, ADR-0070 §决策 2).
+  ///
+  /// It only needs the chapter-content port: the run is orchestrated here, and the politeness of the
+  /// requests themselves stays inside `book_source` (rate gate + `HttpPolicy`).
+  SearchInBookProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'searchInBookProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$searchInBookHash();
+
+  @$internal
+  @override
+  $ProviderElement<SearchInBook> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SearchInBook create(Ref ref) {
+    return searchInBook(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SearchInBook value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SearchInBook>(value),
+    );
+  }
+}
+
+String _$searchInBookHash() => r'cfd974806f8b0d0b64b3356d066862300655a974';
+
 /// Provides the media-notification binding for this platform
 /// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 3/4).
 

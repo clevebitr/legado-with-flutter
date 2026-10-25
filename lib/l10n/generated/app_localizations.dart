@@ -2741,6 +2741,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use #RRGGBB or #AARRGGBB.'**
   String get rulesInvalidColor;
+
+  /// No description provided for @readerSearchAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Search in book'**
+  String get readerSearchAction;
+
+  /// No description provided for @readerSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search this book'**
+  String get readerSearchHint;
+
+  /// No description provided for @readerSearchStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get readerSearchStart;
+
+  /// No description provided for @readerSearchStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get readerSearchStop;
+
+  /// No description provided for @readerSearchProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Searched {scanned} of {total} chapters'**
+  String readerSearchProgress(int scanned, int total);
+
+  /// No description provided for @readerSearchStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped after {scanned} of {total} chapters.'**
+  String readerSearchStopped(int scanned, int total);
+
+  /// No description provided for @readerSearchBudgetSpent.
+  ///
+  /// In en, this message translates to:
+  /// **'Time is up: stopped after {scanned} of {total} chapters.'**
+  String readerSearchBudgetSpent(int scanned, int total);
+
+  /// No description provided for @readerSearchEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing found.'**
+  String get readerSearchEmpty;
+
+  /// No description provided for @readerSearchFailedChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters could not be read.'**
+  String readerSearchFailedChapters(int count);
+
+  /// No description provided for @readerSearchUntitledChapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled chapter'**
+  String get readerSearchUntitledChapter;
 }
 
 class _AppLocalizationsDelegate

@@ -24,6 +24,7 @@ import 'package:flutter_reader/features/reader/domain/repositories/reading_chapt
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_record_repository.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/speech_synthesizer.dart';
+import 'package:flutter_reader/features/reader/domain/usecases/search_in_book.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'di.g.dart';
@@ -124,6 +125,14 @@ SpeechSynthesizer speechSynthesizer(Ref ref) {
 @riverpod
 AudioTrackProvider readerAudioTrack(Ref ref) =>
     UnboundAudioTrackProvider(logger: ref.watch(appLoggerProvider));
+
+/// Provides the in-book search (`docs/dev/roadmap.md` M20, ADR-0070 §决策 2).
+///
+/// It only needs the chapter-content port: the run is orchestrated here, and the politeness of the
+/// requests themselves stays inside `book_source` (rate gate + `HttpPolicy`).
+@riverpod
+SearchInBook searchInBook(Ref ref) =>
+    SearchInBook(content: ref.watch(readerChapterContentProvider));
 
 /// Provides the media-notification binding for this platform
 /// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 3/4).
