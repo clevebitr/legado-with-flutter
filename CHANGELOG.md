@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The whole library leaves and comes back as one zip (ADR-0073, M22-b)
+
+- **New feature `backup`** (domain / data / presentation). 「我的 → 备份与恢复」exports
+  `backup<yyyy-MM-dd>.zip` and merges one back: `manifest.json` + one JSON per table (book sources,
+  shelf, reading progress, groups, bookmarks, reading records, rules) + `preferences.json`.
+- **Restoring merges, it never deletes.** Rows are addressed by natural keys (`sourceUrl + bookUrl`,
+  `url + fingerprint`, group *name*, `kind + name`, the bookmark quad), synthetic ids are never
+  carried, a shelf group travels as its name, and an existing row keeps its local user state unless
+  the archive is the authority for that column (progress only moves forward). Everything applies in
+  one transaction, and the archive is fully validated before the first row is written.
+- **A restore also brings the settings back.** `preferences.json` is the whole
+  `shared_preferences` snapshot, so the backup feature never learns a `settings.*` / `reader.*` key
+  name; a `RestoreCompletionHook` bound in the composition root invalidates the two `keepAlive`
+  setting providers so the theme and text scale change immediately.
+- **New dependency `archive ^4.5.2`** (MIT, pure Dart; it was already a transitive dev dependency).
+  Two new platform ports (`BackupArchiveSaver` / `BackupArchivePicker`) on `file_selector`; the
+  picker checks the file size *before* reading it, and the decoder checks the declared entry sizes
+  *before* inflating (64 MiB archive / 16 MiB entry / 64 MiB total / 32 entries).
+- **Not done, registered in `docs/dev/roadmap.md` §3.7:** WebDAV, scheduled automatic backups and
+  retention, overwrite-style restore, encrypted archives, reading an upstream Legado zip.
+
 ### Two more engine gaps, the ones that made a whole image source read as empty (ADR-0069 G13–G14)
 
 - **`class.a b c` means "all of these classes".** Upstream hands the string to jsoup's

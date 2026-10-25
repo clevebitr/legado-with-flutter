@@ -220,6 +220,7 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | `ReaderRoute.bookmarks` / `ReaderRoute.records` / `ReaderRoute.bookRecords` | `BookmarkListPage` / `ReadingRecordsPage` / `BookReadingRecordsPage` | `reader` | ✅ M19（书签 / 阅读记录） |
 | `ShellRoute.about` / `ShellRoute.legalNotices` | `AboutPage` / `LegalNoticesPage` | `shell` | ✅ M18（2026-10-22） |
 | `RulesRoute.list` / `RulesRoute.edit` | `RulesListPage`（按 kind）/ `RuleEditPage` | `rules` | ✅ M20-c（ADR-0070 §决策 1；入口在「我的」） |
+| `BackupRoute.page` | `BackupPage`（导出 / 恢复） | `backup` | ✅ M22-b（ADR-0073；入口在「我的 → 备份与恢复」） |
 
 > 落地页是组合根里的 `AppShell`（ADR-0055）：它组合四个 feature 的页面，因此不进本表；
 > 表内只登记 feature 自己 push 的类型化路由。

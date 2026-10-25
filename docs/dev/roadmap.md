@@ -402,7 +402,7 @@ Phase 6    发布前                          清单见 §5
 | **M18 — 应用外壳与「我的」** | ✅ 底部导航（书架/发现/搜索/我的）+ `IndexedStack` 保活；我的页入口；关于与法律声明（C-UI-9）。落地记录见本节末 |
 | **M19 — 书架与书籍详情** | 书架分组 + 管理页（多选批量）；详情目录预览/阅读记录/改分组；书签与阅读记录 |
 | **M20 — 阅读内搜索与规则管理** | 书内全文搜索；替换净化 / 目录规则 / 字典规则 / 高亮标签的最小 CRUD |
-| **M21 — 数据与系统 UI** | 按书/按源缓存、主题配置、阅读设置扩展、备份恢复、本地导入、二维码、书源登录 |
+| **M21 — 数据与系统 UI** | 按书/按源缓存、主题配置、阅读设置扩展、备份恢复（✅ M22-b）、本地导入、二维码、书源登录 |
 
 **顺序：** M18 先立「家」；M19 依赖 M18 的导航与入口；M20/M21 可换序。U16（首页统计）排到
 M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，需独立 ADR）。
@@ -419,6 +419,14 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 > `url_launcher`）；法律声明页覆盖 C-UI-9 六键并可查看 GPL 全文。落地页从搜索页改为外壳，
 > `app_test` / `app_boot_test` 同步更新。
 > **未闭环：** 设备级 `integration_test` 实跑（Windows / Android）与「我的」入口的真机点按。
+
+> **M22-b 落地记录（2026-10-25，ADR-0073）：** 新 feature `features/backup/`（domain 格式编解码 + 两个
+> 用例、data 读写八张表、presentation 一页）。产物是 `backup<yyyy-MM-dd>.zip`：`manifest.json` +
+> 每表一个 JSON（书源 / 书架 / 阅读进度 / 分组 / 书签 / 阅读记录 / 规则）+ `preferences.json`。
+> 恢复按自然键合并、从不删除、整次一个事务；`books.groupId` 以组名往返。新依赖 `archive ^4.5.2`（MIT）。
+> 新增端口 `BackupArchiveSaver` / `BackupArchivePicker`（`file_selector`，读取前按大小拒）；
+> 恢复完成后经 `RestoreCompletionHook` 让 `Settings` 与阅读设置重新读盘。
+> **未做（登记在 §3.7）：** WebDAV、自动备份与保留份数、覆盖式恢复、备份加密、读上游 zip。
 
 ### 3.7 未闭环交接登记（不得静默丢弃）
 
@@ -448,6 +456,11 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 页面请求的 job 里读不到 `source.getLoginInfo*` | **未做（M22-a，ADR-0072 实现注记）**：登录信息只喂给登录自己的 job；要一路传到 `PageFetchService` 造的每个 job 上。触发 = 出现「`loginCheckJs` / 字段规则里读登录信息」的真实源 |
 | `java.upLoginData`（脚本动态改登录表单）与 `source.putLoginHeader`（脚本改登录头） | **未做（ADR-0072）**：前者要 UI 与沙箱双向通道，后者要新增「按源的登录头」存储。触发 = 出现只能用它们的真实源 |
 | 登录信息（`login_info`）**明文存库** | **登记差异（ADR-0072 §决策 3）**：与 v8 起明文存的 Cookie 同级；触发 = 引入 `flutter_secure_storage` 或系统密钥库封装时一并改。另：`source.putLoginHeader` / `java.upLoginData` 仍未实现 |
+| 备份的**自动执行**（上游 1 天节流 + `onlyLatestBackup` 保留份数）与 **WebDAV** 上传/下载 | **未做（M22-b，ADR-0073 §决策 1）**：前者要后台调度与保留策略，后者要网络 + 密钥存储，用户裁决 WebDAV 另立。触发 = 用户要求「自动备份」或「换机不用手动拷文件」 |
+| 备份的**覆盖式恢复**（先清空再写入）与「恢复前自动备份」 | **未做（M22-b，ADR-0073 §决策 3）**：当前只合并、不删除。触发 = 用户反馈「想真正回到备份那天」 |
+| 备份**加密**（口令或系统密钥库） | **未做（M22-b，ADR-0073 §后果）**：备份是明文 zip 且含 `login_info`，页面已明示。触发 = 备份要放到不可信位置 |
+| 读取**上游 Legado 的 zip** | **不做（M22-b，ADR-0073 §决策 2，用户裁决）**：字段与主键不同构，硬映射会得到半成品；真需要时走既有的「导入书源 / 导入净化规则」两个入口 |
+| 备份不含 **Cookie** 与 `cache_entries` / `source_checks` | **有意差异（M22-b，ADR-0073 §决策 1）**：缓存可再生、校验历史带合成 id、Cookie 是会话凭据。触发 = 用户明确要求把 Cookie 也带走 |
 | Android **前台服务**（通知 + `startForeground`）：批量校验现在只有 `PARTIAL_WAKE_LOCK` | **未做（5.10 登记，ADR-0043 §决策 3）**：需要通知渠道 + `POST_NOTIFICATIONS` 运行时权限 + 服务生命周期三件原生接线。触发 = 真机上息屏后批量校验被系统杀掉 |
 | 校验的**阶段开关与单源超时**目前是页面内状态（默认全开 + 180 s），不持久化 | **未排期（5.10 登记，ADR-0043 §后果）**：要落进 `AppSettings`（`shared_preferences`）就得跨 feature 取设置，触发 = 用户反馈每次都要重选 |
 | 文件型数据库（后台 isolate + 原生库）无自动化覆盖 | **持续约定**：5.1 起每个新表都由 `integration_test/on_disk_database_test.dart` 真实写入一次（`books` / `reading_progress` 已随 5.4 补上） |

@@ -13,6 +13,34 @@ class ReadRecordDao extends DatabaseAccessor<ReaderDatabase>
   /// Creates the DAO.
   ReadRecordDao(super.attachedDatabase);
 
+  /// Every record, newest first.
+  ///
+  /// The backup exports the whole history (`ADR-0073` §决策 1), so this one has no `limit`; the pages
+  /// keep using [findRecent] / [findForBook].
+  Future<List<ReadRecordRow>> findAll() =>
+      (select(readRecords)..orderBy(<OrderClauseGenerator<$ReadRecordsTable>>[
+            ($ReadRecordsTable table) => OrderingTerm.desc(table.startedAt),
+            ($ReadRecordsTable table) => OrderingTerm.desc(table.id),
+          ]))
+          .get();
+
+  /// The record of one session, identified by `(sourceUrl, bookUrl, startedAt)`, or `null`.
+  ///
+  /// That triple is the restore's natural key (`ADR-0073` §决策 3): re-importing the same backup must
+  /// not add the session twice, and the history table has no other stable identity.
+  Future<ReadRecordRow?> findSession({
+    required String sourceUrl,
+    required String bookUrl,
+    required DateTime startedAt,
+  }) =>
+      (select(readRecords)..where(
+            (ReadRecords table) =>
+                table.sourceUrl.equals(sourceUrl) &
+                table.bookUrl.equals(bookUrl) &
+                table.startedAt.equals(startedAt),
+          ))
+          .getSingleOrNull();
+
   /// The most recent records across every book, newest first.
   ///
   /// [limit] is required because the page only shows the last few sessions.

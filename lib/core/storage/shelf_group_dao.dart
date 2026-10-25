@@ -31,14 +31,19 @@ class ShelfGroupDao extends DatabaseAccessor<ReaderDatabase>
   )..where((BookGroups table) => table.name.equals(name))).getSingleOrNull();
 
   /// Inserts [name] at [sortOrder] and returns the generated id.
-  Future<int> insertNew({required String name, required int sortOrder}) =>
-      into(bookGroups).insert(
-        BookGroupsCompanion.insert(
-          name: name,
-          sortOrder: Value<int>(sortOrder),
-          createdAt: _clock.now(),
-        ),
-      );
+  ///
+  /// [createdAt] is optional so a restore can keep the original creation time (`ADR-0073`).
+  Future<int> insertNew({
+    required String name,
+    required int sortOrder,
+    DateTime? createdAt,
+  }) => into(bookGroups).insert(
+    BookGroupsCompanion.insert(
+      name: name,
+      sortOrder: Value<int>(sortOrder),
+      createdAt: createdAt ?? _clock.now(),
+    ),
+  );
 
   /// Renames group [id].
   Future<void> rename({required int id, required String name}) =>

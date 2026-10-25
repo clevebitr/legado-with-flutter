@@ -44,6 +44,9 @@ abstract interface class AppNavigation {
   /// Opens the cookie jar view (`docs/dev/roadmap.md` M22, ADR-0072 §决策 2).
   void openCookies(BuildContext context);
 
+  /// Opens the backup and restore page (`docs/dev/roadmap.md` M22, ADR-0073).
+  void openBackup(BuildContext context);
+
   /// Opens the reading records of one book.
   void openBookReadingRecords(
     BuildContext context, {
@@ -133,6 +136,10 @@ final class UnboundAppNavigation implements AppNavigation {
   @override
   void openCookies(BuildContext context) =>
       _warn('No AppNavigation is bound: the cookie entry does nothing.');
+
+  @override
+  void openBackup(BuildContext context) =>
+      _warn('No AppNavigation is bound: the backup entry does nothing.');
 
   @override
   void openReader(

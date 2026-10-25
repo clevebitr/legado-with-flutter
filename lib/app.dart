@@ -17,6 +17,10 @@ import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/router/app_navigation.dart';
 import 'package:flutter_reader/core/router/app_router.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
+import 'package:flutter_reader/features/backup/di.dart';
+import 'package:flutter_reader/features/backup/domain/repositories/restore_completion_hook.dart';
+import 'package:flutter_reader/features/backup/presentation/backup_route.dart';
+import 'package:flutter_reader/features/backup/presentation/pages/backup_page.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/audio_track.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
@@ -62,6 +66,7 @@ import 'package:flutter_reader/features/reader/domain/repositories/manga_page_so
 import 'package:flutter_reader/features/reader/domain/repositories/reader_source_kind_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/reader_route.dart';
 import 'package:flutter_reader/features/rules/di.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule.dart';
@@ -138,6 +143,9 @@ List<Override> appProviderOverrides() => <Override>[
   // 反过来的一条：规则写入后要作废已缓存的成品正文，端口由 `rules` 声明、这里绑到 `book_source`
   // 的正文缓存（ADR-0070 增补 §7）。
   chapterBodyInvalidatorProvider.overrideWith(_ChapterBodyInvalidator.new),
+  // 恢复写过设置之后要让界面重读（ADR-0073 §决策 3）：端口由 `backup` 声明，这里绑到
+  // settings 与 reader 的 keepAlive provider —— 它们不失效就会一直显示恢复前的主题与字号。
+  restoreCompletionHookProvider.overrideWith(_RestoreHook.new),
 ];
 
 /// `PurgeRuleSource` bound to the rules feature, which owns the table (ADR-0070 §决策 3).
@@ -181,6 +189,25 @@ final class _ChapterBodyInvalidator implements ChapterBodyInvalidator {
   @override
   Future<void> invalidateChapterBodies() =>
       _ref.read(contentCacheProvider).clearAll();
+}
+
+/// `RestoreCompletionHook` bound to the two providers that cache `shared_preferences`
+/// (ADR-0073 §决策 3).
+///
+/// Both are `keepAlive`, so a restore would otherwise leave the app on the theme and text scale it
+/// had before until the next launch. Nothing else is invalidated: the rows the restore wrote are read
+/// by pages that are rebuilt when they are opened, and the shelf was already rebuilt by the
+/// navigation that got the user here.
+final class _RestoreHook implements RestoreCompletionHook {
+  const _RestoreHook(this._ref);
+
+  final Ref _ref;
+
+  @override
+  void onRestored() {
+    _ref.invalidate(settingsProvider);
+    _ref.invalidate(readerSettingsProvider);
+  }
 }
 
 /// The root navigator key (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 3).
@@ -255,6 +282,7 @@ class ReaderApp extends ConsumerWidget {
       sourceId: route.sourceId,
     ),
     SettingsCookiesRoute() => const CookieManagePage(),
+    BackupPageRoute() => const BackupPage(),
     // 落地页就是外壳（ADR-0055 §决策 5）：未知参数回落到它，而不是搜索页。
     _ => const AppShell(),
   };
@@ -355,6 +383,10 @@ final class _RootNavigation implements AppNavigation {
   @override
   void openCookies(BuildContext context) =>
       pushSettingsRoute(context, const SettingsRoute.cookies());
+
+  @override
+  void openBackup(BuildContext context) =>
+      pushBackupRoute(context, const BackupRoute.page());
 
   @override
   void openReplaceRules(BuildContext context) =>

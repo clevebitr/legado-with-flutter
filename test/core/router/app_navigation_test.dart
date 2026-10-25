@@ -101,6 +101,17 @@ void main() {
       expect(printer.events.single.message, contains('cookie'));
     });
 
+    test('openBackup_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openBackup(_FakeContext());
+
+      expect(printer.events.single.message, contains('backup'));
+    });
+
     test('openReplaceRules_whenCalled_logsAndDoesNothing', () {
       final FakeLogPrinter printer = FakeLogPrinter();
       final UnboundAppNavigation navigation = UnboundAppNavigation(

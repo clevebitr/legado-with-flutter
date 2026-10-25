@@ -1,6 +1,10 @@
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
+import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
+import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
 import 'package:flutter_reader/core/platform/json_file_picker.dart';
@@ -128,6 +132,84 @@ void main() {
           .read(jsonFileSaverProvider)
           .save(suggestedName: 'a.json', contents: '{}');
       expect((saved as ParseSuccess<bool>).data, isFalse);
+    });
+  });
+
+  group('backupArchiveSaver', () {
+    test('backupArchiveSaver_givenAShippedPlatform_usesTheRealDialog', () {
+      for (final FakePlatformInfo platform in <FakePlatformInfo>[
+        const FakePlatformInfo.android(),
+        const FakePlatformInfo.ios(),
+        const FakePlatformInfo.desktop(),
+      ]) {
+        final ProviderContainer container = ProviderContainer.test(
+          overrides: <Override>[
+            platformInfoProvider.overrideWithValue(platform),
+          ],
+        );
+
+        expect(
+          container.read(backupArchiveSaverProvider),
+          isA<FileSelectorBackupArchiveSaver>(),
+        );
+      }
+    });
+
+    test('backupArchiveSaver_givenAnUnshippedPlatform_doesNotSave', () async {
+      final ProviderContainer container = ProviderContainer.test(
+        overrides: <Override>[
+          platformInfoProvider.overrideWithValue(
+            const FakePlatformInfo.unsupported(),
+          ),
+        ],
+      );
+
+      final BackupArchiveSaver saver = container.read(
+        backupArchiveSaverProvider,
+      );
+      expect(saver, isA<UnsupportedBackupArchiveSaver>());
+      final ParseResult<bool> saved = await saver.save(
+        suggestedName: 'backup.zip',
+        bytes: <int>[1],
+      );
+      expect((saved as ParseSuccess<bool>).data, isFalse);
+    });
+  });
+
+  group('backupArchivePicker', () {
+    test('backupArchivePicker_givenAShippedPlatform_usesTheRealDialog', () {
+      for (final FakePlatformInfo platform in <FakePlatformInfo>[
+        const FakePlatformInfo.android(),
+        const FakePlatformInfo.ios(),
+        const FakePlatformInfo.desktop(),
+      ]) {
+        final ProviderContainer container = ProviderContainer.test(
+          overrides: <Override>[
+            platformInfoProvider.overrideWithValue(platform),
+          ],
+        );
+
+        expect(
+          container.read(backupArchivePickerProvider),
+          isA<FileSelectorBackupArchivePicker>(),
+        );
+      }
+    });
+
+    test('backupArchivePicker_givenAnUnshippedPlatform_picksNothing', () async {
+      final ProviderContainer container = ProviderContainer.test(
+        overrides: <Override>[
+          platformInfoProvider.overrideWithValue(
+            const FakePlatformInfo.unsupported(),
+          ),
+        ],
+      );
+
+      final BackupArchivePicker picker = container.read(
+        backupArchivePickerProvider,
+      );
+      expect(picker, isA<UnsupportedBackupArchivePicker>());
+      expect((await picker.pick(maxBytes: 8)).dataOrNull, isNull);
     });
   });
 

@@ -56,6 +56,10 @@ dependencies:
   audio_service_win: ^0.0.3
   flutter_tts: ^4.2.5
 
+  # 备份与恢复：zip 编解码（纯 Dart，MIT；ADR-0073 §决策 5）。
+  # 只在 `features/backup/domain/` 的编解码模块里使用，页面与 data 层不直接依赖它。
+  archive: ^4.5.2
+
   # 观测：业务侧只允许经 core/logging 使用（C-ERR-5、ADR-0006）
   logger: ^2.8.0
   # 日志脱敏摘要（sha256）与 `@js:` 沙箱的 crypto.* 绑定：仅 core/logging/redaction.dart

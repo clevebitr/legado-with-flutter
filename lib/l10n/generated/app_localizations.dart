@@ -3161,6 +3161,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Signed in. The source\'s own script reported success.'**
   String get bookSourceLoginDone;
+
+  /// No description provided for @myBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup and restore'**
+  String get myBackup;
+
+  /// No description provided for @myBackupBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Pack everything into one zip, or restore from one'**
+  String get myBackupBody;
+
+  /// No description provided for @backupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup and restore'**
+  String get backupTitle;
+
+  /// No description provided for @backupExportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export a backup'**
+  String get backupExportTitle;
+
+  /// No description provided for @backupExportBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Book sources, shelf, groups, bookmarks, reading records, rules and settings, packed into one zip.'**
+  String get backupExportBody;
+
+  /// No description provided for @backupRestoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from a backup'**
+  String get backupRestoreTitle;
+
+  /// No description provided for @backupRestoreBody.
+  ///
+  /// In en, this message translates to:
+  /// **'See what the archive holds first, then merge it into this device.'**
+  String get backupRestoreBody;
+
+  /// No description provided for @backupIncludeSecretsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The archive is a plain file and includes book-source login data. Keep it somewhere you trust.'**
+  String get backupIncludeSecretsHint;
+
+  /// No description provided for @backupWorkingExporting.
+  ///
+  /// In en, this message translates to:
+  /// **'Packing…'**
+  String get backupWorkingExporting;
+
+  /// No description provided for @backupWorkingReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the archive…'**
+  String get backupWorkingReading;
+
+  /// No description provided for @backupWorkingRestoring.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring…'**
+  String get backupWorkingRestoring;
+
+  /// No description provided for @backupPreviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What the archive holds'**
+  String get backupPreviewTitle;
+
+  /// No description provided for @backupPreviewEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This archive holds no rows.'**
+  String get backupPreviewEmpty;
+
+  /// No description provided for @backupConfirmRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Merge into this device'**
+  String get backupConfirmRestore;
+
+  /// No description provided for @backupMergeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring only merges: anything this device has that the archive lacks stays as it is.'**
+  String get backupMergeHint;
+
+  /// No description provided for @backupTableBookSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Book sources'**
+  String get backupTableBookSources;
+
+  /// No description provided for @backupTableBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'Shelf'**
+  String get backupTableBooks;
+
+  /// No description provided for @backupTableReadingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading progress'**
+  String get backupTableReadingProgress;
+
+  /// No description provided for @backupTableBookGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get backupTableBookGroups;
+
+  /// No description provided for @backupTableBookmarks.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks'**
+  String get backupTableBookmarks;
+
+  /// No description provided for @backupTableReadRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records'**
+  String get backupTableReadRecords;
+
+  /// No description provided for @backupTableRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules'**
+  String get backupTableRules;
+
+  /// No description provided for @backupExported.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {fileName} ({count} rows).'**
+  String backupExported(String fileName, int count);
+
+  /// No description provided for @backupPreviewMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'Written {createdAt} by version {appVersion}.'**
+  String backupPreviewMeta(String createdAt, String appVersion);
+
+  /// No description provided for @backupPreviewPreferences.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} settings'**
+  String backupPreviewPreferences(int count);
+
+  /// No description provided for @backupRestored.
+  ///
+  /// In en, this message translates to:
+  /// **'Merged: {changed} rows written, {preferences} settings.'**
+  String backupRestored(int changed, int preferences);
 }
 
 class _AppLocalizationsDelegate

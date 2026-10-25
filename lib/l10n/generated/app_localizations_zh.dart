@@ -1678,4 +1678,90 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookSourceLoginDone => '已提交，书源自己的脚本没有报错。';
+
+  @override
+  String get myBackup => '备份与恢复';
+
+  @override
+  String get myBackupBody => '打成一个 zip，或从 zip 恢复';
+
+  @override
+  String get backupTitle => '备份与恢复';
+
+  @override
+  String get backupExportTitle => '导出备份';
+
+  @override
+  String get backupExportBody => '书源、书架、分组、书签、阅读记录、四类规则与设置，打成一个 zip。';
+
+  @override
+  String get backupRestoreTitle => '从备份恢复';
+
+  @override
+  String get backupRestoreBody => '先看备份里有什么，确认后按自然键合并进本机。';
+
+  @override
+  String get backupIncludeSecretsHint => '备份是明文文件，包含书源登录信息。请放在自己信任的位置。';
+
+  @override
+  String get backupWorkingExporting => '正在打包…';
+
+  @override
+  String get backupWorkingReading => '正在读取备份…';
+
+  @override
+  String get backupWorkingRestoring => '正在恢复…';
+
+  @override
+  String get backupPreviewTitle => '备份内容';
+
+  @override
+  String get backupPreviewEmpty => '这份备份里没有任何记录。';
+
+  @override
+  String get backupConfirmRestore => '合并进本机';
+
+  @override
+  String get backupMergeHint => '恢复只合并、不删除：本机已有且备份里没有的内容都保留。';
+
+  @override
+  String get backupTableBookSources => '书源';
+
+  @override
+  String get backupTableBooks => '书架';
+
+  @override
+  String get backupTableReadingProgress => '阅读进度';
+
+  @override
+  String get backupTableBookGroups => '分组';
+
+  @override
+  String get backupTableBookmarks => '书签';
+
+  @override
+  String get backupTableReadRecords => '阅读记录';
+
+  @override
+  String get backupTableRules => '规则';
+
+  @override
+  String backupExported(String fileName, int count) {
+    return '已保存 $fileName（$count 条记录）。';
+  }
+
+  @override
+  String backupPreviewMeta(String createdAt, String appVersion) {
+    return '备份于 $createdAt，写入版本 $appVersion。';
+  }
+
+  @override
+  String backupPreviewPreferences(int count) {
+    return '$count 项设置';
+  }
+
+  @override
+  String backupRestored(int changed, int preferences) {
+    return '已合并：写回 $changed 条记录、$preferences 项设置。';
+  }
 }

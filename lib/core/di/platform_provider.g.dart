@@ -223,6 +223,124 @@ final class JsonFileSaverProvider
 
 String _$jsonFileSaverHash() => r'51d513898a1bf349e8152385c6c8a72590d2add9';
 
+/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms report `not saved` instead of throwing.
+
+@ProviderFor(backupArchiveSaver)
+final backupArchiveSaverProvider = BackupArchiveSaverProvider._();
+
+/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms report `not saved` instead of throwing.
+
+final class BackupArchiveSaverProvider
+    extends
+        $FunctionalProvider<
+          BackupArchiveSaver,
+          BackupArchiveSaver,
+          BackupArchiveSaver
+        >
+    with $Provider<BackupArchiveSaver> {
+  /// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+  ///
+  /// Unsupported platforms report `not saved` instead of throwing.
+  BackupArchiveSaverProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'backupArchiveSaverProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$backupArchiveSaverHash();
+
+  @$internal
+  @override
+  $ProviderElement<BackupArchiveSaver> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BackupArchiveSaver create(Ref ref) {
+    return backupArchiveSaver(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BackupArchiveSaver value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BackupArchiveSaver>(value),
+    );
+  }
+}
+
+String _$backupArchiveSaverHash() =>
+    r'3d40b6a2082c5dc2ff9d2a3ff20b8a5605b28a90';
+
+/// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms answer “nothing picked” instead of throwing.
+
+@ProviderFor(backupArchivePicker)
+final backupArchivePickerProvider = BackupArchivePickerProvider._();
+
+/// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms answer “nothing picked” instead of throwing.
+
+final class BackupArchivePickerProvider
+    extends
+        $FunctionalProvider<
+          BackupArchivePicker,
+          BackupArchivePicker,
+          BackupArchivePicker
+        >
+    with $Provider<BackupArchivePicker> {
+  /// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+  ///
+  /// Unsupported platforms answer “nothing picked” instead of throwing.
+  BackupArchivePickerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'backupArchivePickerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$backupArchivePickerHash();
+
+  @$internal
+  @override
+  $ProviderElement<BackupArchivePicker> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BackupArchivePicker create(Ref ref) {
+    return backupArchivePicker(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BackupArchivePicker value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BackupArchivePicker>(value),
+    );
+  }
+}
+
+String _$backupArchivePickerHash() =>
+    r'b418885595d7f2608a7a967a19cea0fea085e17b';
+
 /// Provides the long-task marker a batch check holds while it runs.
 ///
 /// Only Android has a real one; other platforms get a no-op.

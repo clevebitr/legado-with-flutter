@@ -2421,5 +2421,138 @@
   "bookSourceLoginDone": "Signed in. The source's own script reported success.",
   "@bookSourceLoginDone": {
     "@description": "Outcome line after a successful submit."
+  },
+  "myBackup": "Backup and restore",
+  "@myBackup": {
+    "@description": "我的页的数据分区入口。"
+  },
+  "myBackupBody": "Pack everything into one zip, or restore from one",
+  "@myBackupBody": {
+    "@description": "我的页该行的副标题。"
+  },
+  "backupTitle": "Backup and restore",
+  "@backupTitle": {
+    "@description": "备份与恢复页的标题。"
+  },
+  "backupExportTitle": "Export a backup",
+  "@backupExportTitle": {
+    "@description": "导出动作的标题。"
+  },
+  "backupExportBody": "Book sources, shelf, groups, bookmarks, reading records, rules and settings, packed into one zip.",
+  "@backupExportBody": {
+    "@description": "导出动作说明：zip 里包含哪些数据。"
+  },
+  "backupRestoreTitle": "Restore from a backup",
+  "@backupRestoreTitle": {
+    "@description": "恢复动作的标题。"
+  },
+  "backupRestoreBody": "See what the archive holds first, then merge it into this device.",
+  "@backupRestoreBody": {
+    "@description": "恢复动作说明：先预览再合并。"
+  },
+  "backupIncludeSecretsHint": "The archive is a plain file and includes book-source login data. Keep it somewhere you trust.",
+  "@backupIncludeSecretsHint": {
+    "@description": "导出前明示备份含明文登录信息。"
+  },
+  "backupWorkingExporting": "Packing…",
+  "@backupWorkingExporting": {
+    "@description": "导出进行中的进度文案。"
+  },
+  "backupWorkingReading": "Reading the archive…",
+  "@backupWorkingReading": {
+    "@description": "读取备份进行中的进度文案。"
+  },
+  "backupWorkingRestoring": "Restoring…",
+  "@backupWorkingRestoring": {
+    "@description": "恢复进行中的进度文案。"
+  },
+  "backupPreviewTitle": "What the archive holds",
+  "@backupPreviewTitle": {
+    "@description": "预览卡片的标题。"
+  },
+  "backupPreviewEmpty": "This archive holds no rows.",
+  "@backupPreviewEmpty": {
+    "@description": "备份里一张表都没有内容时的说明。"
+  },
+  "backupConfirmRestore": "Merge into this device",
+  "@backupConfirmRestore": {
+    "@description": "确认恢复的按钮。"
+  },
+  "backupMergeHint": "Restoring only merges: anything this device has that the archive lacks stays as it is.",
+  "@backupMergeHint": {
+    "@description": "恢复语义说明：只合并不删除。"
+  },
+  "backupTableBookSources": "Book sources",
+  "@backupTableBookSources": {
+    "@description": "预览里书源表的标签。"
+  },
+  "backupTableBooks": "Shelf",
+  "@backupTableBooks": {
+    "@description": "预览里书架表的标签。"
+  },
+  "backupTableReadingProgress": "Reading progress",
+  "@backupTableReadingProgress": {
+    "@description": "预览里阅读进度表的标签。"
+  },
+  "backupTableBookGroups": "Groups",
+  "@backupTableBookGroups": {
+    "@description": "预览里分组表的标签。"
+  },
+  "backupTableBookmarks": "Bookmarks",
+  "@backupTableBookmarks": {
+    "@description": "预览里书签表的标签。"
+  },
+  "backupTableReadRecords": "Reading records",
+  "@backupTableReadRecords": {
+    "@description": "预览里阅读记录表的标签。"
+  },
+  "backupTableRules": "Rules",
+  "@backupTableRules": {
+    "@description": "预览里规则表的标签。"
+  },
+  "backupExported": "Saved {fileName} ({count} rows).",
+  "@backupExported": {
+    "@description": "导出成功后的回执。",
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "backupPreviewMeta": "Written {createdAt} by version {appVersion}.",
+  "@backupPreviewMeta": {
+    "@description": "预览卡片里备份自身的信息行。",
+    "placeholders": {
+      "createdAt": {
+        "type": "String"
+      },
+      "appVersion": {
+        "type": "String"
+      }
+    }
+  },
+  "backupPreviewPreferences": "{count} settings",
+  "@backupPreviewPreferences": {
+    "@description": "预览里设置项的数量。",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "backupRestored": "Merged: {changed} rows written, {preferences} settings.",
+  "@backupRestored": {
+    "@description": "恢复成功后的回执。",
+    "placeholders": {
+      "changed": {
+        "type": "int"
+      },
+      "preferences": {
+        "type": "int"
+      }
+    }
   }
 }

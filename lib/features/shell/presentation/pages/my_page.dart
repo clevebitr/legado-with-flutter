@@ -86,6 +86,13 @@ class MyPage extends ConsumerWidget {
             subtitle: Text(l10n.myCookiesBody),
             onTap: () => navigation.openCookies(context),
           ),
+          // 备份与恢复也是数据面：导出的 zip 带走用户数据，恢复把它拿回来（M22，ADR-0073）。
+          ListTile(
+            leading: const Icon(Icons.settings_backup_restore),
+            title: Text(l10n.myBackup),
+            subtitle: Text(l10n.myBackupBody),
+            onTap: () => navigation.openBackup(context),
+          ),
           _heading(context, l10n.mySectionApp),
           ListTile(
             leading: const Icon(Icons.settings_outlined),

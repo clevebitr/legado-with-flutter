@@ -48,6 +48,18 @@ class RuleDao extends DatabaseAccessor<ReaderDatabase> with _$RuleDaoMixin {
     return query.get();
   }
 
+  /// Every rule of every kind, in the same order [ofKind] answers.
+  ///
+  /// The backup exports the whole table (`ADR-0073` §决策 1); going through the kinds would make this
+  /// feature keep a second copy of the kind names the rules feature owns.
+  Future<List<RuleRow>> findAll() =>
+      (select(rules)..orderBy(<OrderClauseGenerator<$RulesTable>>[
+            (Rules table) => OrderingTerm.asc(table.kind),
+            (Rules table) => OrderingTerm.asc(table.sortOrder),
+            (Rules table) => OrderingTerm.asc(table.id),
+          ]))
+          .get();
+
   /// The **enabled** rules of [kind], in the same order [ofKind] answers.
   Future<List<RuleRow>> enabledOfKind(String kind) {
     final SimpleSelectStatement<$RulesTable, RuleRow> query = select(rules)
@@ -90,6 +102,19 @@ class RuleDao extends DatabaseAccessor<ReaderDatabase> with _$RuleDaoMixin {
       ),
     );
   }
+
+  /// The rule of [kind] named [name], or `null`.
+  ///
+  /// `(kind, name)` is the restore's natural key (`ADR-0073` §决策 3): the same four kinds share one
+  /// table, and a name is what tells two purge rules apart.
+  Future<RuleRow?> findByKindAndName({
+    required String kind,
+    required String name,
+  }) =>
+      (select(rules)..where(
+            (Rules table) => table.kind.equals(kind) & table.name.equals(name),
+          ))
+          .getSingleOrNull();
 
   /// One rule by id, or `null` when the row is gone.
   ///

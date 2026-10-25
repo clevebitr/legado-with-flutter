@@ -68,7 +68,7 @@
 | U9 | **主题配置页**：背景图、导航栏（顶/底/tab 图标）、启动图标、配色管理 | `ui/config/themeConfig/*`、`ui/theme/*` | 只有 `themeMode` 三段 |
 | U10 | **阅读设置扩展**：字体族/段距/缩进/页边距/翻页键位/亮度与进度条行为 | `ui/config/readConfig/*`、`ui/book/read/*` | M14 已做四轴，键位与背景图未做 |
 | U11 | **规则管理 UI**：替换净化、目录规则、字典规则、高亮标签/分组、多角色规则 | `ui/replace/*`、`ui/dict/*`、`ui/highlightTagRule/*`、`ui/tagGroupRule/*` | 全部没有；只有书源编辑里的 JSON 文本域 |
-| U12 | **备份与恢复**：本地文件导出/导入、WebDAV 备份、书架/进度/书源全量 | `ui/config/backupConfig/*`、`home` 的备份卡 | 无（书源单条导出 ≠ 备份） |
+| U12 | **备份与恢复**：本地文件导出/导入、WebDAV 备份、书架/进度/书源全量 | `ui/config/backupConfig/*`、`home` 的备份卡 | ✅ M22-b：本地 zip（manifest + 每表一个 JSON）+ 合并式恢复（ADR-0073）；**未做**：WebDAV、自动备份、覆盖式恢复 |
 | U13 | **本地书籍导入**（txt/epub）+ 文件管理 | `ui/book/import/local/*`、`ui/file/*` | 无（只有网络书源） |
 | U14 | **二维码导入/分享** | `ui/qrcode/*` | 无 |
 | U15 | **书源登录 / Cookie 管理** | `ui/login/*` | 无（`header` 规则可用，但没有交互式登录） |

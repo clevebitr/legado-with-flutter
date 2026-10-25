@@ -60,6 +60,8 @@ class BookmarkDao extends DatabaseAccessor<ReaderDatabase>
           .getSingleOrNull();
 
   /// Inserts one bookmark and returns its generated id.
+  ///
+  /// [createdAt] is optional so a restore can keep the original time (`ADR-0073`).
   Future<int> insertNew({
     required String sourceUrl,
     required String bookUrl,
@@ -70,6 +72,7 @@ class BookmarkDao extends DatabaseAccessor<ReaderDatabase>
     required int chapterIndex,
     required int charOffset,
     required String? excerpt,
+    DateTime? createdAt,
   }) => into(bookmarks).insert(
     BookmarksCompanion.insert(
       sourceUrl: sourceUrl,
@@ -81,7 +84,7 @@ class BookmarkDao extends DatabaseAccessor<ReaderDatabase>
       chapterIndex: Value<int>(chapterIndex),
       charOffset: Value<int>(charOffset),
       excerpt: Value<String?>(excerpt),
-      createdAt: _clock.now(),
+      createdAt: createdAt ?? _clock.now(),
     ),
   );
 

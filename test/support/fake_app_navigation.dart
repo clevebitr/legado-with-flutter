@@ -37,6 +37,9 @@ final class FakeAppNavigation implements AppNavigation {
   /// How many times the book-source management page was opened.
   int bookSourcesCalls = 0;
 
+  /// How many times the backup page was opened.
+  int backupCalls = 0;
+
   /// How many times the about page was opened.
   int aboutCalls = 0;
 
@@ -80,6 +83,9 @@ final class FakeAppNavigation implements AppNavigation {
 
   @override
   void openCacheManage(BuildContext context) => cacheCalls++;
+
+  @override
+  void openBackup(BuildContext context) => backupCalls += 1;
 
   @override
   void openCookies(BuildContext context) => cookieCalls++;

@@ -1728,4 +1728,95 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get bookSourceLoginDone =>
       'Signed in. The source\'s own script reported success.';
+
+  @override
+  String get myBackup => 'Backup and restore';
+
+  @override
+  String get myBackupBody =>
+      'Pack everything into one zip, or restore from one';
+
+  @override
+  String get backupTitle => 'Backup and restore';
+
+  @override
+  String get backupExportTitle => 'Export a backup';
+
+  @override
+  String get backupExportBody =>
+      'Book sources, shelf, groups, bookmarks, reading records, rules and settings, packed into one zip.';
+
+  @override
+  String get backupRestoreTitle => 'Restore from a backup';
+
+  @override
+  String get backupRestoreBody =>
+      'See what the archive holds first, then merge it into this device.';
+
+  @override
+  String get backupIncludeSecretsHint =>
+      'The archive is a plain file and includes book-source login data. Keep it somewhere you trust.';
+
+  @override
+  String get backupWorkingExporting => 'Packing…';
+
+  @override
+  String get backupWorkingReading => 'Reading the archive…';
+
+  @override
+  String get backupWorkingRestoring => 'Restoring…';
+
+  @override
+  String get backupPreviewTitle => 'What the archive holds';
+
+  @override
+  String get backupPreviewEmpty => 'This archive holds no rows.';
+
+  @override
+  String get backupConfirmRestore => 'Merge into this device';
+
+  @override
+  String get backupMergeHint =>
+      'Restoring only merges: anything this device has that the archive lacks stays as it is.';
+
+  @override
+  String get backupTableBookSources => 'Book sources';
+
+  @override
+  String get backupTableBooks => 'Shelf';
+
+  @override
+  String get backupTableReadingProgress => 'Reading progress';
+
+  @override
+  String get backupTableBookGroups => 'Groups';
+
+  @override
+  String get backupTableBookmarks => 'Bookmarks';
+
+  @override
+  String get backupTableReadRecords => 'Reading records';
+
+  @override
+  String get backupTableRules => 'Rules';
+
+  @override
+  String backupExported(String fileName, int count) {
+    return 'Saved $fileName ($count rows).';
+  }
+
+  @override
+  String backupPreviewMeta(String createdAt, String appVersion) {
+    return 'Written $createdAt by version $appVersion.';
+  }
+
+  @override
+  String backupPreviewPreferences(int count) {
+    return '$count settings';
+  }
+
+  @override
+  String backupRestored(int changed, int preferences) {
+    return 'Merged: $changed rows written, $preferences settings.';
+  }
 }

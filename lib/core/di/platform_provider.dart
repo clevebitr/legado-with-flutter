@@ -1,5 +1,9 @@
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
+import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
+import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
 import 'package:flutter_reader/core/platform/json_file_picker.dart';
@@ -47,6 +51,30 @@ JsonFileSaver jsonFileSaver(Ref ref) {
   return platform.isMobile || platform.isDesktop
       ? const FileSelectorJsonFileSaver()
       : const UnsupportedJsonFileSaver();
+}
+
+/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms report `not saved` instead of throwing.
+@Riverpod(keepAlive: true)
+BackupArchiveSaver backupArchiveSaver(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBackupArchiveSaver()
+      : const UnsupportedBackupArchiveSaver();
+}
+
+/// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms answer “nothing picked” instead of throwing.
+@Riverpod(keepAlive: true)
+BackupArchivePicker backupArchivePicker(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBackupArchivePicker()
+      : const UnsupportedBackupArchivePicker();
 }
 
 /// Provides the long-task marker a batch check holds while it runs.

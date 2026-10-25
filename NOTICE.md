@@ -155,6 +155,15 @@ GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `e
 **评估后未采用：** `smtc_windows`（同样 MIT，但走 flutter_rust_bridge，构建需要 Rust 工具链，
 且要另起一套通知端口实现）；`audio_service_win` 复用已有 `audio_service` 接线，代价更小。
 
+**2026-10-25 增量（备份与恢复，M22-b/ADR-0073）：** `dependencies` 新增 `archive ^4.5.2`
+（Brendan Duncan，**MIT**，纯 Dart；传递依赖 `path`、`posix` 均宽松许可）。它此前已经是
+`build_runner` 的 **dev 传递依赖**，这次只是把它提升为运行时直接依赖，所以包总数与分类计数
+**不变**：`dart run tool/scan_licenses.dart` 复算仍为
+**193 包 / BSD-3 105 / MIT 55 / Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**。
+GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_convert`。
+**评估后未采用：** `flutter_archive`（把 zip 推给各平台原生实现，与「纯 Dart 优先、
+Windows/Android 行为一致」相反，且多一层原生库许可审查）。
+
 **2026-10-22 增量（播放后端与 WebView，ADR-0061）：** `dependencies` 新增
 `media_kit ^1.2.6`（MIT）、`media_kit_libs_windows_audio ^1.0.9`（包 LICENSE 为 MIT；
 Windows 构建随包的 **libmpv / FFmpeg 动态库为 LGPL-2.1+**，见下方手工登记）、
@@ -189,6 +198,7 @@ GPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_c
 | `logger` | 2.8.0 | MIT |
 | `crypto` | 3.0.7 | BSD-3-Clause |
 | `charset` | 2.0.1 | Apache-2.0 |
+| `archive` | 4.5.2 | MIT |
 | `freezed_annotation` | 3.1.0 | MIT |
 | `json_annotation` | 4.12.0 | BSD-3-Clause |
 | `flutter_lints`（dev） | 6.0.0 | BSD-3-Clause |

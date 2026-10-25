@@ -190,6 +190,28 @@ void main() {
       expect(row.isPinned, isTrue);
     });
 
+    test(
+      'restoreUserState_givenATocUrl_fillsItWhenTheLocalRowHasNone',
+      () async {
+        // 恢复只在本地没有目录地址时补（ADR-0073 §决策 3）：有值说明本机已解析过，不该被改回去。
+        final int id = await insert(tocUrl: null);
+
+        await dao.restoreUserState(
+          id: id,
+          status: 1,
+          isPinned: true,
+          groupId: null,
+          customCoverPath: '/covers/x.jpg',
+          tocUrl: 'https://source.test/book/1/toc',
+        );
+
+        final BookRow row = (await dao.findAll()).single.book;
+        expect(row.tocUrl, 'https://source.test/book/1/toc');
+        expect(row.customCoverPath, '/covers/x.jpg');
+        expect(row.isPinned, isTrue);
+      },
+    );
+
     test('findAll_whenTwoRows_ordersPinnedFirst', () async {
       final int first = await insert(bookUrl: 'https://source.test/book/1');
       final int second = await insert(

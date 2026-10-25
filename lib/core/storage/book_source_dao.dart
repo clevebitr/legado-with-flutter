@@ -118,6 +118,9 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
           .getSingleOrNull();
 
   /// Inserts a new row and returns its generated id.
+  ///
+  /// `comment` / `loginInfo` / the two timestamps are optional so a restore can write back what the
+  /// backup carried (`ADR-0073` §决策 3); an ordinary import leaves them at their defaults.
   Future<int> insertNew({
     required String url,
     required String fingerprint,
@@ -131,6 +134,10 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
     required int? lastUpdateTime,
     required int? respondTime,
     required bool isExploreEnabled,
+    String? comment,
+    String? loginInfo,
+    DateTime? importedAt,
+    DateTime? updatedAt,
   }) {
     final DateTime now = _clock.now();
 
@@ -141,6 +148,7 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
         payload: payload,
         name: name,
         groupName: Value<String?>(groupName),
+        comment: Value<String?>(comment),
         sourceType: Value<int>(sourceType),
         isEnabled: Value<bool>(isEnabled),
         isExploreEnabled: Value<bool>(isExploreEnabled),
@@ -148,8 +156,9 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
         weight: Value<int>(weight),
         lastUpdateTime: Value<int?>(lastUpdateTime),
         respondTime: Value<int?>(respondTime),
-        importedAt: now,
-        updatedAt: now,
+        loginInfo: Value<String?>(loginInfo),
+        importedAt: importedAt ?? now,
+        updatedAt: updatedAt ?? now,
       ),
     );
   }

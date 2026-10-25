@@ -92,3 +92,7 @@ lib/core/platform/webview_cookie_bridge.dart  # 纯接口声明（只有抽象�
 lib/features/rules/domain/entities/rule.dart  # freezed 声明式输入文件，属 ADR-0019 第三类的「无可测量行」子情形：源文件只有两个重定向工厂声明；行为由 rule_repository_impl_test.dart 构造并读取、由 rule_payload_codec_test.dart 的 round-trip 保证
 lib/features/rules/domain/repositories/rule_repository.dart  # 纯接口声明（只有抽象方法签名），属「无可测量行」子情形；契约由 RuleRepositoryImpl 与其测试行使
 lib/features/rules/domain/repositories/rule_seed_loader.dart  # 纯接口声明（只有一个抽象方法），同属「无可测量行」子情形；契约由 AssetRuleSeedLoader 与其测试、FakeSeeds 行使
+# --- M22-b 备份与恢复（ADR-0073）新增的豁免项 ---
+lib/core/app_version.dart  # 只有一个 const 声明（无执行点的「无可测量行」子情形）；正确性由 test/core/app_version_test.dart 与 pubspec.yaml 逐字比对保证
+lib/features/backup/domain/entities/backup_table.dart  # 纯 enum 声明，属「无可测量行」子情形；每个值的文件名由 backup_archive_codec_test.dart 的往返与缺表用例行使
+lib/features/backup/domain/repositories/backup_repository.dart  # 纯接口声明（只有两个抽象方法），属「无可测量行」子情形；契约由 BackupRepositoryImpl 与其测试行使
