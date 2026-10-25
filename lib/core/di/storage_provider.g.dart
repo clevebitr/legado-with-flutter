@@ -513,4 +513,4 @@ final class LocalImageStoreProvider
   }
 }
 
-String _$localImageStoreHash() => r'859f76cea7544e67eff7b8d169ee7d8f6147d62a';
+String _$localImageStoreHash() => r'c1b93eaa248f0c55fa99a1087ae2b42abb372661';
