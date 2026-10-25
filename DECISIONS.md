@@ -445,3 +445,22 @@ M22-a 第二批落地（ADR-0072 §决策 3 + 实现注记）：loginUi 表单 +
 登记（roadmap §3.7 + book-source.md §11 已改）：登录信息只喂给登录自己的 job，页面请求 job（`loginCheckJs`/字段规则）还读不到；`java.upLoginData`、`source.putLoginHeader` 未做。
 
 验证：2118 用例全过；core 100% / domain 100% / data 98.35%；format 0、analyze 干净、codegen 幂等；Windows app_boot / on-disk / js_bridge(35) 逐个跑通。
+
+## 2026-10-25 — M22-b 备份与恢复：zip + 每表 JSON、合并式恢复、archive 依赖
+
+按用户四项裁决（范围 = 数据 + 设置、恢复 = 按自然键合并、格式 = 本仓格式带 manifest、归属 = 新 feature `backup`）落地，规格在 ADR-0073。上游格式只当对照组：每表一个 JSON + config.xml，没有 manifest、按 id 插入、个别表 replaceAll。
+
+落地要点：
+- 产物 backup<yyyy-MM-dd>.zip：manifest.json（formatVersion/createdAt/appVersion/tables/preferences）+ 七个表文件 + preferences.json。行对象用列名（camelCase）作键，DateTime 一律 ISO-8601 UTC，id 不导出；books 的分组写组名（groupName）而不是 groupId。
+- 恢复：先整包解析校验，再在一个 drift 事务里按自然键合并；从不删除；本地进度更新时不回拨；已存在的规则/书签/会话不动；书源已存在时刷新 payload 与用户态但不搬 customOrder；单行坏掉记 skipped，文件级坏掉整次失败。
+- 设置：PreferenceStore.snapshot()/writeAll()（只写给的键、返回写入数），备份 feature 不需要知道任何 settings.* / reader.* 键名；恢复后由装配根的 RestoreCompletionHook invalidate 两个 keepAlive 设置 provider，否则界面一直显示恢复前的主题与字号。
+- 依赖：archive ^4.5.2（MIT、纯 Dart、此前已是 dev 传递依赖，包总数不变）；新增端口 BackupArchiveSaver / BackupArchivePicker，读取前按 XFile.length() 判上限，解码前按中央目录声明值判条目大小。appVersion 是 core/app_version.dart 的常量镜像，app_version_test 读 pubspec.yaml 防漂移。
+
+踩坑：
+- archive 4.x 两种失败类型：结构坏（截断/中央目录越界/zip64 locator 坏）抛 ArchiveException，解压流坏抛 FormatException（Windows 实测）。统一进私有 _guarded 后两个 catch 都有可测触发路径。构造触发输入的手法：① EOCD 前 20 字节写 zip64 locator 签名；② 把中央目录「解压后大小」写小；③ 打坏 deflate 数据。
+- 纯垃圾字节不会让 decodeBytes 抛：它安静解出空档案，失败落在「没有 manifest」。别为「不是 zip」写走不到的分支。
+- pumpAndSettle 等不到 Isolate.run 的结果，且 working 态的 LinearProgressIndicator 一直在动会直接超时；widget 测试要 tester.runAsync + pump（见 backup_page_test 的 _tapAndWait）。
+- const 构造折叠再次踩到：OversizedBackupArchive / BackupContents 的非 const 用例要 // ignore: prefer_const_constructors 并写理由，否则 core/domain 的 100% 门禁缺执行点。
+- DAO 时间戳可注入：insertNew / upsertProgress / restoreUserState 加可选 createdAt/updatedAt/tocUrl，默认仍取 Clock；恢复要写回备份里的时间，否则「最近阅读」被重排。
+
+验证：2196 用例全过；core 100% / domain 100% / data 96.41%；format 0、analyze 干净、codegen 幂等（第二次写 0 输出）；scan_licenses 193 包 Risky items: none。Windows 设备级用例未跑（本批无平台通道改动，file_selector 对话框在宿主 VM 里不可自动化）。

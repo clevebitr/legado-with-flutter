@@ -32,8 +32,9 @@ auto-breakpoint: false
 - [x] M21 — M21a — WebView 验证 + Cookie 持久化 + 引擎兼容（ADR-0068）
 - [ ] M22 — M21b — 按源缓存/主题/备份/本地导入/二维码/登录表单
 - [x] M23 — M23 — 规则/书源导入导出 + 净化 scope 与 @js:（ADR-0071）
+- [x] M22b — M22b — 备份恢复：zip + 每表 JSON
 
 ## Current: M8 — 5.7 缓存清理 + 5.8 导出保真
 
-goal: M22-a 已闭环：按源缓存 + Cookie 管理 + loginUi 表单
-breakpoint: M22-a 已闭环；下一批候选：备份恢复（zip+JSON）或主题/阅读设置扩展
+goal: M22b 已闭环：zip 备份 + 合并恢复（ADR-0073）
+breakpoint: 下一批候选：主题/阅读设置扩展或本地 txt 导入
