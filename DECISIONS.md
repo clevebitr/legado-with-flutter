@@ -464,3 +464,25 @@ M22-a 第二批落地（ADR-0072 §决策 3 + 实现注记）：loginUi 表单 +
 - DAO 时间戳可注入：insertNew / upsertProgress / restoreUserState 加可选 createdAt/updatedAt/tocUrl，默认仍取 Clock；恢复要写回备份里的时间，否则「最近阅读」被重排。
 
 验证：2196 用例全过；core 100% / domain 100% / data 96.41%；format 0、analyze 干净、codegen 幂等（第二次写 0 输出）；scan_licenses 193 包 Risky items: none。Windows 设备级用例未跑（本批无平台通道改动，file_selector 对话框在宿主 VM 里不可自动化）。
+
+## 2026-10-25 — M22-c 备份增强：位置/自动备份与保留份数/覆盖恢复/整包加密/WebDAV
+
+按用户裁决落地 ADR-0074：四项一次做完（含 WebDAV）、范围维持不含 Cookie/缓存/校验历史、凭据进系统密钥库、安全副本写「用户选的备份位置，未设置则应用私有目录」。
+
+交付：
+- 备份位置：BackupLocation = appPrivate（path_provider 的应用支持目录 /backups）或用户选的文件夹；自动备份、恢复前安全副本、页面「保存到备份位置」共用；文件夹不可用回落私有目录并在页面显示真实落点；「另存为…」仍走系统保存框。
+- 自动备份：AppShell 首帧后触发，1 天节流（backup.lastAutoBackupAt），成功后保留份数 N=1..30（默认 5，N=1 等价上游 onlyLatestBackup）；只删匹配 ^backup.*\.zip(\.enc)?$ 的文件；时间戳只在写成功后前进。
+- 覆盖式恢复：RestoreMode.overwrite 在同一 drift 事务里先清空七张表再写入；覆盖前先写 backup-before-restore-<yyyyMMdd-HHmmss>.zip[.enc] 安全副本，写失败即中止；preferences 两种模式都只合并不删除。DAO 补 deleteAll（分组/书签/阅读记录/规则）。
+- 加密：整包 WinZip AES-256（archive 自带 password 支持，不引新密码学依赖）；口令存 flutter_secure_storage；解码前先读中央目录 flag bit 0 判「加密包」，无口令报 backup.read.passwordRequired、口令错报 backup.read.badPassword（外层兜底：加密包+有口令仍读不出=口令错）。
+- WebDAV：core/network 的 WebDavClient（PROPFIND Depth:1 / PUT / GET / DELETE，Basic 认证，http 受 allowPlainHttp 约束）+ features/backup/data 的 WebDavRemoteBackupStore（凭据每次现读、只认本应用命名、远端保留份数）；页面有配置对话框、上传、刷新、云端恢复、删除。
+- 新依赖 flutter_secure_storage ^11.2.0（BSD-3），包数 193→201，Risky items: none。
+
+踩坑：
+- dart:io 的 HttpDate 才是 PROPFIND 的 getlastmodified 格式（RFC 1123）解析器，DateTime.tryParse 对它一律返回 null——一度让所有条目落到 epoch、列表退化成按名字排序。HttpDate.parse 对非 RFC1123 抛 HttpException（不是 FormatException），所以只接 HttpException。
+- 同一时间戳的排序要用名字兜底，否则会随服务器返回顺序抖动。
+- 集合条目（href 以 / 结尾）必须跳过，真实 NAS 有的不给 resourcetype。
+- widget 测试里 ListView 是懒挂载：先 drag 到目标再 tap，否则静默打空；Isolate.run 需要 tester.runAsync 给真实事件循环。
+- secret store 的默认闭包（插件调用）在宿主 VM 里跑不到：用一个 FlutterSecureStorage 的假子类注入 storage 参数，才能覆盖那三行（core 100% 门禁）。
+- const 构造折叠又一次：OversizedBackupArchive / BackupContents 的测试用例改非 const 并 // ignore: prefer_const_constructors。
+
+验证：2298 用例全过；core 100% / domain 100% / data 95.79%；format 0、analyze 干净、codegen 幂等（第二次 0 输出）；scan_licenses 201 包无风险项。未做（已登记 §3.7）：后台调度的自动备份、密钥库不可用时的降级策略、口令强度校验、云端进度同步、读上游 zip。主题与阅读设置扩展（U9/U10）本轮未开始，下一步。

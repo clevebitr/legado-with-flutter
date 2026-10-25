@@ -32,7 +32,8 @@ auto-breakpoint: false
 - [x] M21 — M21a — WebView 验证 + Cookie 持久化 + 引擎兼容（ADR-0068）
 - [ ] M22 — M21b — 按源缓存/主题/备份/本地导入/二维码/登录表单
 - [x] M23 — M23 — 规则/书源导入导出 + 净化 scope 与 @js:（ADR-0071）
-- [x] M22b — M22b — 备份恢复：zip + 每表 JSON
+- [x] M22b — M22b — 备份恢复：
+- [x] M22c — M22c — 备份增强：自动/加密/覆盖/WebDAV（#32）
 
 ## Current: M8 — 5.7 缓存清理 + 5.8 导出保真
 
