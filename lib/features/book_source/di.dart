@@ -29,8 +29,10 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_explor
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_manga_pages.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/resolve_login_form.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/run_source_debug.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/sign_in.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/switch_book_source.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -40,6 +42,20 @@ part 'di.g.dart';
 @Riverpod(keepAlive: true)
 BookSourceRepository bookSourceRepository(Ref ref) => BookSourceRepositoryImpl(
   dao: ref.watch(bookSourceDaoProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
+/// Provides the `loginUi` form resolver (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+@Riverpod(keepAlive: true)
+ResolveLoginForm resolveLoginForm(Ref ref) => ResolveLoginForm(
+  js: ref.watch(jsBridgeProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
+/// Provides the sign-in runner (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+@Riverpod(keepAlive: true)
+SignIn signIn(Ref ref) => SignIn(
+  js: ref.watch(jsBridgeProvider),
   logger: ref.watch(appLoggerProvider),
 );
 

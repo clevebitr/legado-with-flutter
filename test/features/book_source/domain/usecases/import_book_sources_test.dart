@@ -80,6 +80,11 @@ final class _FakeRepository implements BookSourceRepository {
   @override
   Future<List<String>> exportPayloads({Set<int>? ids}) async =>
       const <String>[];
+  @override
+  Future<Map<String, String>> loginInfoOf(int id) async => <String, String>{};
+
+  @override
+  Future<void> saveLoginInfo(int id, Map<String, String> info) async {}
 
   @override
   Future<String?> payloadOf(int id) async => null;

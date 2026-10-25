@@ -1253,6 +1253,15 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     AppLocalizations l10n,
     StoredBookSource source,
   ) async {
+    // 源声明了 `loginUi` 就有原生表单（ADR-0072 §决策 3）：表单页自己跑 `login()`；
+    // 只有 `loginUrl` 的源仍旧交给浏览器，两条路各自是最合适的那个。
+    final String? loginUi = source.source.loginUi;
+    if (loginUi != null && loginUi.trim().isNotEmpty) {
+      pushBookSourceRoute(context, BookSourceRoute.signIn(sourceId: source.id));
+
+      return;
+    }
+
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     final SourceVerification verification = ref.read(
       sourceVerificationProvider,

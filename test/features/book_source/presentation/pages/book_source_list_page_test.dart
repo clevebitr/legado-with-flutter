@@ -452,7 +452,8 @@ void main() {
       final FakeSourceVerification verification = FakeSourceVerification()
         ..supported = false;
       final FakeBookSourceRepository repository = FakeBookSourceRepository()
-        ..add(source: withLogin('noshield', loginUi: '[]'));
+        // 没有 `loginUi` 的源走浏览器那条路（有 `loginUi` 的会进原生表单页，ADR-0072 §决策 3）。
+        ..add(source: withLogin('noshield', loginUrl: 'https://a.test/login'));
 
       await pumpSourceManagementPage(
         tester,

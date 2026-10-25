@@ -176,6 +176,7 @@ final class JsJob {
     this.bookName,
     this.chapterTitle,
     this.book,
+    this.loginInfo = const <String, String>{},
   });
 
   /// The JavaScript the rule asked for, with the `@js:` flag already removed.
@@ -200,6 +201,14 @@ final class JsJob {
 
   /// The book being read (the `book` binding), or `null` when the stage has none.
   final JsBookInfo? book;
+
+  /// The source's `loginUi` values, as `source.getLoginInfo()` / `getLoginInfoMap()` read them
+  /// (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+  ///
+  /// A **snapshot**: the sandbox is an isolate and cannot ask the host mid-script, so the values
+  /// travel with the job (the same mechanism as the rule variables, ADR-0034). Empty means「never
+  /// signed in」, which is what a source that declares no `loginUi` always answers.
+  final Map<String, String> loginInfo;
 
   /// The page the rule was read on (the `baseUrl` binding).
   final String baseUrl;
@@ -243,6 +252,7 @@ final class JsJob {
     'bookName': bookName,
     'chapterTitle': chapterTitle,
     'book': book?.toJson(),
+    'loginInfo': loginInfo,
   };
 }
 

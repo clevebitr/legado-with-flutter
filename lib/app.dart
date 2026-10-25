@@ -36,6 +36,7 @@ import 'package:flutter_reader/features/book_source/presentation/pages/book_sour
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_edit_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_list_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/book_source_login_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/cache_manage_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/source_captcha_page.dart';
@@ -250,6 +251,9 @@ class ReaderApp extends ConsumerWidget {
     ),
     RulesImportRoute() => const RulesImportPage(),
     BookSourceCacheRoute() => const CacheManagePage(),
+    final BookSourceLoginRoute route => BookSourceLoginPage(
+      sourceId: route.sourceId,
+    ),
     SettingsCookiesRoute() => const CookieManagePage(),
     // 落地页就是外壳（ADR-0055 §决策 5）：未知参数回落到它，而不是搜索页。
     _ => const AppShell(),

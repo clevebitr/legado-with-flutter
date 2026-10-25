@@ -49,6 +49,13 @@ class BookSources extends Table {
   /// `respondTime`, projected for display.
   IntColumn get respondTime => integer().nullable()();
 
+  /// The `loginUi` form's values, as a JSON object, or `null` when the source was never signed in
+  /// (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+  ///
+  /// User state like [isEnabled]: an import never overwrites it, and it is stored in cleartext —
+  /// the same level as the cookie jar (registered in `roadmap.md` §3.7).
+  TextColumn get loginInfo => text().nullable()();
+
   /// When the row was created.
   DateTimeColumn get importedAt => dateTime()();
 

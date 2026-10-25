@@ -185,6 +185,46 @@ final class BookSourceRepositoryImpl implements BookSourceRepository {
   }
 
   @override
+  Future<Map<String, String>> loginInfoOf(int id) async {
+    final BookSourceRow? row = await _dao.findById(id);
+    final String? text = row?.loginInfo;
+    if (text == null || text.isEmpty) {
+      return <String, String>{};
+    }
+
+    // 存的是本页自己写下去的 JSON：读不懂就当「没登录过」，不是让页面崩掉的理由。
+    final Object? decoded = _decodeLoginInfo(text);
+    if (decoded is! Map<String, Object?>) {
+      _skip(row!, 'the stored login info is not a JSON object');
+
+      return <String, String>{};
+    }
+
+    return <String, String>{
+      for (final MapEntry<String, Object?> entry in decoded.entries)
+        entry.key: entry.value?.toString() ?? '',
+    };
+  }
+
+  @override
+  Future<void> saveLoginInfo(int id, Map<String, String> info) =>
+      _dao.writeLoginInfo(
+        id: id,
+        loginInfo: info.isEmpty ? null : jsonEncode(info),
+      );
+
+  /// Decodes the stored login info, or answers `null` when it is not JSON.
+  Map<String, Object?>? _decodeLoginInfo(String text) {
+    try {
+      final Object? decoded = jsonDecode(text);
+
+      return decoded is Map<String, Object?> ? decoded : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  @override
   Future<List<String>> exportPayloads({Set<int>? ids}) async {
     final List<BookSourceRow> rows = <BookSourceRow>[];
     if (ids == null || ids.isEmpty) {

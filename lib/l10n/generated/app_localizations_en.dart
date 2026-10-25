@@ -1712,4 +1712,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cookieManageLoadFailed => 'The cookies could not be read.';
+
+  @override
+  String get bookSourceLoginTitle => 'Sign in';
+
+  @override
+  String get bookSourceLoginLoadFailed => 'The login form could not be read.';
+
+  @override
+  String get bookSourceLoginNoForm => 'This source declares no login form.';
+
+  @override
+  String get bookSourceLoginWorking => 'Signing in…';
+
+  @override
+  String get bookSourceLoginDone =>
+      'Signed in. The source\'s own script reported success.';
 }

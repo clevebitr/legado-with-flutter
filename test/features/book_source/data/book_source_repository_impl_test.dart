@@ -445,6 +445,52 @@ void main() {
       expect(await repository.payloadOf(999), isNull);
     });
 
+    group('login info', () {
+      test('loginInfoOf_givenNoStoredValue_answersAnEmptyMap', () async {
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+
+        expect(await repository.loginInfoOf(id), isEmpty);
+        // 不存在的行也答空表，不抛：页面拿它就是「没登录过」。
+        expect(await repository.loginInfoOf(999), isEmpty);
+      });
+
+      test('saveLoginInfo_thenRead_roundTripsTheValues', () async {
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+
+        await repository.saveLoginInfo(id, <String, String>{
+          '账号': 'reader',
+          '密码': 'secret',
+        });
+
+        expect(await repository.loginInfoOf(id), <String, String>{
+          '账号': 'reader',
+          '密码': 'secret',
+        });
+      });
+
+      test('saveLoginInfo_givenAnEmptyMap_clearsTheColumn', () async {
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+        await repository.saveLoginInfo(id, <String, String>{'账号': 'reader'});
+
+        await repository.saveLoginInfo(id, <String, String>{});
+
+        expect(await repository.loginInfoOf(id), isEmpty);
+      });
+
+      test('loginInfoOf_givenABrokenColumn_answersAnEmptyMap', () async {
+        // 列里的内容读不懂就当「没登录过」，并记一条 warning——不是让页面崩掉的理由。
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+        await dao.writeLoginInfo(id: id, loginInfo: '{oops');
+
+        expect(await repository.loginInfoOf(id), isEmpty);
+        expect(printer.events, isNotEmpty);
+      });
+    });
+
     group('exportPayloads', () {
       test('exportPayloads_givenEverySource_answersThemAsStored', () async {
         await repository.saveAll(<Map<String, Object?>>[

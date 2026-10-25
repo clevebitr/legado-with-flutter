@@ -1663,4 +1663,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get cookieManageLoadFailed => 'Cookie 读取失败。';
+
+  @override
+  String get bookSourceLoginTitle => '登录';
+
+  @override
+  String get bookSourceLoginLoadFailed => '登录表单读取失败。';
+
+  @override
+  String get bookSourceLoginNoForm => '这个书源没有声明登录表单。';
+
+  @override
+  String get bookSourceLoginWorking => '登录中…';
+
+  @override
+  String get bookSourceLoginDone => '已提交，书源自己的脚本没有报错。';
 }

@@ -3131,6 +3131,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The cookies could not be read.'**
   String get cookieManageLoadFailed;
+
+  /// No description provided for @bookSourceLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get bookSourceLoginTitle;
+
+  /// No description provided for @bookSourceLoginLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The login form could not be read.'**
+  String get bookSourceLoginLoadFailed;
+
+  /// No description provided for @bookSourceLoginNoForm.
+  ///
+  /// In en, this message translates to:
+  /// **'This source declares no login form.'**
+  String get bookSourceLoginNoForm;
+
+  /// No description provided for @bookSourceLoginWorking.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing in…'**
+  String get bookSourceLoginWorking;
+
+  /// No description provided for @bookSourceLoginDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in. The source\'s own script reported success.'**
+  String get bookSourceLoginDone;
 }
 
 class _AppLocalizationsDelegate

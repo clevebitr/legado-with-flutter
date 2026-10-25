@@ -504,5 +504,10 @@
   "cookieManageClearAllTitle": "清空全部 Cookie？",
   "cookieManageClearAllBody": "所有站点都会要求你重新登录。",
   "cookieManageEmpty": "没有存下任何 Cookie。",
-  "cookieManageLoadFailed": "Cookie 读取失败。"
+  "cookieManageLoadFailed": "Cookie 读取失败。",
+  "bookSourceLoginTitle": "登录",
+  "bookSourceLoginLoadFailed": "登录表单读取失败。",
+  "bookSourceLoginNoForm": "这个书源没有声明登录表单。",
+  "bookSourceLoginWorking": "登录中…",
+  "bookSourceLoginDone": "已提交，书源自己的脚本没有报错。"
 }

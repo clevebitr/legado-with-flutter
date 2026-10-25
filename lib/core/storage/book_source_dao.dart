@@ -154,6 +154,15 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
     );
   }
 
+  /// Writes the `loginUi` values of [id] (JSON text, `null` clears them).
+  ///
+  /// User state like `is_enabled`: only the login page writes it, and a re-import leaves it alone
+  /// (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+  Future<void> writeLoginInfo({required int id, required String? loginInfo}) =>
+      (update(bookSources)
+            ..where(($BookSourcesTable table) => table.id.equals(id)))
+          .write(BookSourcesCompanion(loginInfo: Value<String?>(loginInfo)));
+
   /// Refreshes the stored payload of row [id] — the idempotent half of a re-import.
   ///
   /// Only `payload` and `updatedAt` change; user state and display metadata stay.

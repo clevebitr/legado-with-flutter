@@ -58,6 +58,13 @@ abstract interface class BookSourceRepository {
   /// Deletes [id].
   Future<void> delete(int id);
 
+  /// The `loginUi` values stored for [id], or an empty map when the source was never signed in
+  /// (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+  Future<Map<String, String>> loginInfoOf(int id);
+
+  /// Stores the `loginUi` values of [id]; an empty map clears them.
+  Future<void> saveLoginInfo(int id, Map<String, String> info);
+
   /// The raw payload of [id] exactly as imported, or `null` when the row is gone.
   /// Export and the editor work from these bytes, so unmodelled keys survive.
   Future<String?> payloadOf(int id);

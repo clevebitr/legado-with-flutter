@@ -22,7 +22,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(6);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 10);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
@@ -31,7 +31,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(7);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 10);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
@@ -41,7 +41,16 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(8);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 10);
+      await verifier.migrateAndValidate(database, 11);
+      await database.close();
+    });
+
+    test('migration_fromV10ToV11_addsTheLoginInfoColumn', () async {
+      // M22-a 第二批（ADR-0072 §决策 3）：`loginUi` 表单填出来的值按源存一列 JSON。
+      final InitializedSchema schema = await verifier.schemaAt(10);
+      final ReaderDatabase database = ReaderDatabase(schema.newConnection());
+
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
@@ -51,68 +60,68 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(9);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 10);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV1ToV10_createsEveryTable', () async {
+    test('migration_fromV1ToV11_createsEveryTable', () async {
       // 从 v1 建库再跑到最新版：v2 加 `book_sources`（ADR-0040），v3 加 `books` 与
       // `reading_progress`（ADR-0041 §决策 4），v4 给书源加 `comment` 列（ADR-0043），
       // v5 给书架加 `tocUrl` 列（ADR-0044），v6 加校验历史表与 `isExploreEnabled` 列
       // （ADR-0052 §决策 1/3），v7 加分组 / 书签 / 阅读记录与按书缓存列（ADR-0066），v8 加 Cookie jar
-      // （ADR-0068），v9 加规则表（ADR-0070），v10 给缓存加来源列（ADR-0072）。
+      // （ADR-0068），v9 加规则表（ADR-0070），v10 给缓存加来源列、v11 给书源加登录信息列（ADR-0072）。
       // 这条也是「新表已建好之后不要再 addColumn」的回归点：v1 的 `books` 走的是
       // `createTable` 的当前形状。
       final InitializedSchema schema = await verifier.schemaAt(1);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 10);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV2ToV10_keepsTheImportedSources', () async {
+    test('migration_fromV2ToV11_keepsTheImportedSources', () async {
       // v3 只有新表、v4 只有一列可空值：从导入书源那一版升上来时，既有行必须原样保留，
       // 新列的初值就是 null。
       final InitializedSchema schema = await verifier.schemaAt(2);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 10);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV3ToV10_addsTheCommentAndTocColumns', () async {
+    test('migration_fromV3ToV11_addsTheCommentAndTocColumns', () async {
       // 5.4 / 5.6 那一版的库升上来：书架与阅读进度表已存在，两列分别在这一步补上。
       final InitializedSchema schema = await verifier.schemaAt(3);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 10);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV4ToV10_addsTheTocUrlColumn', () async {
+    test('migration_fromV4ToV11_addsTheTocUrlColumn', () async {
       // M10 那一版（v4）升上来：书源表多一列可空的目录地址（ADR-0044 §决策 3），
       // 再到 v6 时补校验历史表与探索开关列。
       final InitializedSchema schema = await verifier.schemaAt(4);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 10);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV5ToV10_addsTheCheckHistoryAndExploreFlag', () async {
+    test('migration_fromV5ToV11_addsTheCheckHistoryAndExploreFlag', () async {
       // M13 那一版（v5）升上来：书源与书架列不动，新增 `source_checks` 表与
       // `is_explore_enabled` 列，默认值让旧行保持「发现开着」（ADR-0052 §决策 1/3）。
       final InitializedSchema schema = await verifier.schemaAt(5);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 10);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
     test(
       'migration_whenTheVersionIsBehindTheActualSchema_repairsTheDatabase',
       () async {
-        // 回归点（ADR-0056）：库的实际结构已经是 v10，`user_version` 却还停在 8。
+        // 回归点（ADR-0056）：库的实际结构已经是 v11，`user_version` 却还停在 8。
         // 真实成因是「用还没提交的表定义建过库」或迁移做到一半被杀 —— 用户机器上的
         // reader.db 就是这样，表现为打开库就抛 DriftRemoteException，前台看到的是
         // 「书源加载不出来」「导入失败」。
@@ -121,21 +130,21 @@ void main() {
         // 都失败；现在每个步骤先问「对象在不在」，重跑是空操作。ADR-0066 的 v7 步骤同样走
         // `createTable` + `sqlite_master` 询问，所以从「结构已是 v7、版本还是 6」的库上也
         // 能重新打开。
-        final InitializedSchema schema = await verifier.schemaAt(10);
+        final InitializedSchema schema = await verifier.schemaAt(11);
         schema.rawDatabase.execute('PRAGMA user_version = 8');
         final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-        await verifier.migrateAndValidate(database, 10);
+        await verifier.migrateAndValidate(database, 11);
         final QueryRow version = await database
             .customSelect('PRAGMA user_version')
             .getSingle();
-        expect(version.data.values.single, 10);
+        expect(version.data.values.single, 11);
         await database.close();
       },
     );
 
-    test('schemaVersion_whenRead_isTen', () {
-      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 10);
+    test('schemaVersion_whenRead_isEleven', () {
+      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 11);
     });
   });
 }

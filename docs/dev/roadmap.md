@@ -445,6 +445,8 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | `extra` 的导出合并（`toLegadoJson`） | ✅ **已闭环（M23，2026-10-25，ADR-0071 §决策 3）**：不需要 `toLegadoJson` —— 书源导出写的是**存储里的 payload**，只把 `enabled` / `customOrder` 换成当前用户态，未知键与键序天然保真；单条与批量（全部 / 选中）同一实现 |
 | 按书源清理缓存（给 `cache_entries` 加列 + 迁移） | ✅ **已闭环（M22-a，2026-10-25，ADR-0072 §决策 1）**：v10 给缓存加 `source_key` + 索引（升级时顺带清空旧缓存），「我的 → 缓存管理」按源列章数、可清理该源 / 过期 / 全部 |
 | 每书源 **Cookie 隔离**（本仓的 Cookie 罐按域共享） | **未做（ADR-0072 §决策 2）**：M22-a 先把「能看能删」做出来，共享语义保持不变。触发 = 出现「两个源同域但需要不同会话」的真实需求 |
+| 页面请求的 job 里读不到 `source.getLoginInfo*` | **未做（M22-a，ADR-0072 实现注记）**：登录信息只喂给登录自己的 job；要一路传到 `PageFetchService` 造的每个 job 上。触发 = 出现「`loginCheckJs` / 字段规则里读登录信息」的真实源 |
+| `java.upLoginData`（脚本动态改登录表单）与 `source.putLoginHeader`（脚本改登录头） | **未做（ADR-0072）**：前者要 UI 与沙箱双向通道，后者要新增「按源的登录头」存储。触发 = 出现只能用它们的真实源 |
 | 登录信息（`login_info`）**明文存库** | **登记差异（ADR-0072 §决策 3）**：与 v8 起明文存的 Cookie 同级；触发 = 引入 `flutter_secure_storage` 或系统密钥库封装时一并改。另：`source.putLoginHeader` / `java.upLoginData` 仍未实现 |
 | Android **前台服务**（通知 + `startForeground`）：批量校验现在只有 `PARTIAL_WAKE_LOCK` | **未做（5.10 登记，ADR-0043 §决策 3）**：需要通知渠道 + `POST_NOTIFICATIONS` 运行时权限 + 服务生命周期三件原生接线。触发 = 真机上息屏后批量校验被系统杀掉 |
 | 校验的**阶段开关与单源超时**目前是页面内状态（默认全开 + 180 s），不持久化 | **未排期（5.10 登记，ADR-0043 §后果）**：要落进 `AppSettings`（`shared_preferences`）就得跨 feature 取设置，触发 = 用户反馈每次都要重选 |

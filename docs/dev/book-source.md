@@ -1032,9 +1032,10 @@ java.replaceFont(result, errorFont, correctFont);
 
 - `@xpath:` XPath 规则（需要引入 XPath 依赖，须先开 ADR）
 - `:` 正则规则（仅书籍列表与目录列表）
-- 原生登录表单（`loginUi` 的 text / password / button / select / toggle + `action` JS、
-  `source.getLoginInfoMap()`、`java.upLoginData`）：三个登录字段本身已建模，`loginCheckJs` 拦截器与
-  「登录 / 过验证」入口已可用；表单渲染与登录信息存储归 M21b 的登录 / Cookie 管理 UI（U15）
+- 原生登录表单的**后续交互**：`java.upLoginData`（脚本动态改表单）、`source.putLoginHeader`（脚本改登录头）
+  仍未实现；`loginUi` 的 text / password / button / select / toggle + `action` JS 与
+  `source.getLoginInfo()` / `getLoginInfoMap()` **已实现**（M22-a，ADR-0072 §决策 3），但登录信息目前只喂给
+  登录自己的脚本 job，页面请求的 job 里还读不到（登记在 `roadmap.md` §3.7）
 - 图片字节解密 `ruleContent.imageDecode`（非空即显式 `unsupportedRule`，ADR-0069 G5）
 - **同步**返回响应对象的 `java.post` / `java.get` / `java.ajax*` / `java.head` / `java.connect`：
   沙箱阻塞不了宿主，规则要写 `await http.post(...)`（ADR-0069 G6 登记差异）

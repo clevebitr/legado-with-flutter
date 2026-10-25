@@ -59,7 +59,7 @@ M22（M21b）一次覆盖七件事，用户裁决先做「按源缓存 + Cookie 
 - **值收集**：所有非 `button` 行组成 `loginInfo` map（`name → 值`）。确认时：保存这份 map，然后执行
   `loginUrl` 定义的那段脚本 + `if (typeof login=='function'){ login.apply(this) } else { throw ... }`，
   `result` 绑定就是这份 map（与上游 `SourceLoginViewModel.confirm` 同形）。
-- **存储**：新增 `login_info` 文本列（**第 10 版**，与 §决策 1 同一次迁移），按源存 JSON。
+- **存储**：新增 `login_info` 文本列（**第 11 版**；原计划并进 v10，但 v10 已提交过，改历史版本会让已经升到 v10 的库永远补不上这一列——ADR-0056 的同一教训），按源存 JSON。
   上游用 `androidId` 派生密钥 AES 加密；本仓**明文存本机数据库**，与 v8 起就明文存的 Cookie 罐同一级别，
   登记差异（触发 = 引入 `flutter_secure_storage` 或系统密钥库封装时一并改）。
 - **沙箱面**：脚本通过 `source.getLoginInfo()` / `source.getLoginInfoMap()` 读这份快照。
@@ -75,3 +75,17 @@ M22（M21b）一次覆盖七件事，用户裁决先做「按源缓存 + Cookie 
 - 代价：v10 迁移会清空正文缓存（一次性的、可再生的）；登录信息明文存库（与 Cookie 同级，已登记）。
 - 未做（登记 `roadmap.md` §3.7）：每书源 Cookie 隔离、登录信息的加密存储、`putLoginHeader`/`upLoginData`、
   自动填充与多账号切换、WebDAV 备份（M22-b）。
+
+## 实现注记（2026-10-25 落地时补充）
+
+- **沙箱面只覆盖登录自己的 job**：`source.getLoginInfo()` / `getLoginInfoMap()` 读的是随 job 进来的
+  快照，本批只在「解析 `loginUi` / 求值 `viewName` / 跑 `login()` / 跑按钮 `action`」这几个 job 上喂了它。
+  页面请求的 job（`loginCheckJs` 拦截器、字段规则）**暂时还读不到**——那要把登录信息一路传到
+  `PageFetchService` 造的每个 job 上，登记在 `roadmap.md` §3.7。
+- `loginUrl` 的三种形态（`@js:` / `<js>` / 裸脚本）由 `loginScriptOf` 统一判定；**裸地址**不算脚本，
+  那是浏览器那条路，登录页只在源的 `loginUrl` 确实是脚本时才跑 `login()`。
+- 列表行的「登录」入口分两路：源声明了 `loginUi` → 原生表单页；只有 `loginUrl` → 可见 WebView。
+  表单为空（例如 `loginUi: "[]"`）时页面明说「这个书源没有声明登录表单」。
+- 提交顺序照上游：**先存值再跑脚本**，所以脚本里的 `source.getLoginInfo()` 与下一次取页看到的是同一份值；
+  脚本失败也保留已存的值，下一次重试不用重填。
+- 按钮行的 `action` 是绝对地址时交给浏览器（沙箱的 `open` 打不开页面），否则按脚本拼在 `login()` 之后跑。

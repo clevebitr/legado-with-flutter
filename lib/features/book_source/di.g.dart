@@ -61,6 +61,102 @@ final class BookSourceRepositoryProvider
 String _$bookSourceRepositoryHash() =>
     r'3ecd37d01f723401a48df8ed049d7f0bb3d20900';
 
+/// Provides the `loginUi` form resolver (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+
+@ProviderFor(resolveLoginForm)
+final resolveLoginFormProvider = ResolveLoginFormProvider._();
+
+/// Provides the `loginUi` form resolver (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+
+final class ResolveLoginFormProvider
+    extends
+        $FunctionalProvider<
+          ResolveLoginForm,
+          ResolveLoginForm,
+          ResolveLoginForm
+        >
+    with $Provider<ResolveLoginForm> {
+  /// Provides the `loginUi` form resolver (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+  ResolveLoginFormProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'resolveLoginFormProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$resolveLoginFormHash();
+
+  @$internal
+  @override
+  $ProviderElement<ResolveLoginForm> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  ResolveLoginForm create(Ref ref) {
+    return resolveLoginForm(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ResolveLoginForm value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ResolveLoginForm>(value),
+    );
+  }
+}
+
+String _$resolveLoginFormHash() => r'bd222cca73932b8abf6527b4d4d336cc18b14c6a';
+
+/// Provides the sign-in runner (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+
+@ProviderFor(signIn)
+final signInProvider = SignInProvider._();
+
+/// Provides the sign-in runner (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+
+final class SignInProvider extends $FunctionalProvider<SignIn, SignIn, SignIn>
+    with $Provider<SignIn> {
+  /// Provides the sign-in runner (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+  SignInProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'signInProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$signInHash();
+
+  @$internal
+  @override
+  $ProviderElement<SignIn> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SignIn create(Ref ref) {
+    return signIn(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SignIn value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SignIn>(value),
+    );
+  }
+}
+
+String _$signInHash() => r'a9ff606e52a178c5e5093092e4fe5b4f90b311ca';
+
 /// Provides the book-source export (`docs/dev/roadmap.md` 5.8, ADR-0071 §决策 3).
 
 @ProviderFor(exportBookSources)

@@ -44,6 +44,10 @@ sealed class BookSourceRoute with _$BookSourceRoute {
   /// Shows the per-source cache usage (`docs/dev/roadmap.md` M22, ADR-0072 §决策 1).
   const factory BookSourceRoute.cacheManage() = BookSourceCacheRoute;
 
+  /// Shows one source's native login form (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+  const factory BookSourceRoute.signIn({required int sourceId}) =
+      BookSourceLoginRoute;
+
   /// The path this route is served under.
   String get path => switch (this) {
     ExploreRoute() => _explorePath,
@@ -54,6 +58,7 @@ sealed class BookSourceRoute with _$BookSourceRoute {
     BookSourceDebugRoute() => _sourceDebugPath,
     BookSourceEditRoute() => _sourceEditPath,
     BookSourceCacheRoute() => _sourceCachePath,
+    BookSourceLoginRoute() => _sourceLoginPath,
   };
 }
 
@@ -70,6 +75,8 @@ const String _sourceCheckPath = '/sources/check';
 const String _sourceDebugPath = '/sources/debug';
 
 const String _sourceCachePath = '/sources/cache';
+
+const String _sourceLoginPath = '/sources/login';
 
 const String _sourceEditPath = '/sources/edit';
 

@@ -555,6 +555,17 @@ class $BookSourcesTable extends BookSources
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _loginInfoMeta = const VerificationMeta(
+    'loginInfo',
+  );
+  @override
+  late final GeneratedColumn<String> loginInfo = GeneratedColumn<String>(
+    'login_info',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _importedAtMeta = const VerificationMeta(
     'importedAt',
   );
@@ -593,6 +604,7 @@ class $BookSourcesTable extends BookSources
     weight,
     lastUpdateTime,
     respondTime,
+    loginInfo,
     importedAt,
     updatedAt,
   ];
@@ -712,6 +724,12 @@ class $BookSourcesTable extends BookSources
         ),
       );
     }
+    if (data.containsKey('login_info')) {
+      context.handle(
+        _loginInfoMeta,
+        loginInfo.isAcceptableOrUnknown(data['login_info']!, _loginInfoMeta),
+      );
+    }
     if (data.containsKey('imported_at')) {
       context.handle(
         _importedAtMeta,
@@ -797,6 +815,10 @@ class $BookSourcesTable extends BookSources
         DriftSqlType.int,
         data['${effectivePrefix}respond_time'],
       ),
+      loginInfo: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}login_info'],
+      ),
       importedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}imported_at'],
@@ -857,6 +879,13 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
   /// `respondTime`, projected for display.
   final int? respondTime;
 
+  /// The `loginUi` form's values, as a JSON object, or `null` when the source was never signed in
+  /// (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+  ///
+  /// User state like [isEnabled]: an import never overwrites it, and it is stored in cleartext —
+  /// the same level as the cookie jar (registered in `roadmap.md` §3.7).
+  final String? loginInfo;
+
   /// When the row was created.
   final DateTime importedAt;
 
@@ -877,6 +906,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     required this.weight,
     this.lastUpdateTime,
     this.respondTime,
+    this.loginInfo,
     required this.importedAt,
     required this.updatedAt,
   });
@@ -904,6 +934,9 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     }
     if (!nullToAbsent || respondTime != null) {
       map['respond_time'] = Variable<int>(respondTime);
+    }
+    if (!nullToAbsent || loginInfo != null) {
+      map['login_info'] = Variable<String>(loginInfo);
     }
     map['imported_at'] = Variable<DateTime>(importedAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -934,6 +967,9 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       respondTime: respondTime == null && nullToAbsent
           ? const Value.absent()
           : Value(respondTime),
+      loginInfo: loginInfo == null && nullToAbsent
+          ? const Value.absent()
+          : Value(loginInfo),
       importedAt: Value(importedAt),
       updatedAt: Value(updatedAt),
     );
@@ -959,6 +995,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       weight: serializer.fromJson<int>(json['weight']),
       lastUpdateTime: serializer.fromJson<int?>(json['lastUpdateTime']),
       respondTime: serializer.fromJson<int?>(json['respondTime']),
+      loginInfo: serializer.fromJson<String?>(json['loginInfo']),
       importedAt: serializer.fromJson<DateTime>(json['importedAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -981,6 +1018,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       'weight': serializer.toJson<int>(weight),
       'lastUpdateTime': serializer.toJson<int?>(lastUpdateTime),
       'respondTime': serializer.toJson<int?>(respondTime),
+      'loginInfo': serializer.toJson<String?>(loginInfo),
       'importedAt': serializer.toJson<DateTime>(importedAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1001,6 +1039,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     int? weight,
     Value<int?> lastUpdateTime = const Value.absent(),
     Value<int?> respondTime = const Value.absent(),
+    Value<String?> loginInfo = const Value.absent(),
     DateTime? importedAt,
     DateTime? updatedAt,
   }) => BookSourceRow(
@@ -1020,6 +1059,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
         ? lastUpdateTime.value
         : this.lastUpdateTime,
     respondTime: respondTime.present ? respondTime.value : this.respondTime,
+    loginInfo: loginInfo.present ? loginInfo.value : this.loginInfo,
     importedAt: importedAt ?? this.importedAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1051,6 +1091,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       respondTime: data.respondTime.present
           ? data.respondTime.value
           : this.respondTime,
+      loginInfo: data.loginInfo.present ? data.loginInfo.value : this.loginInfo,
       importedAt: data.importedAt.present
           ? data.importedAt.value
           : this.importedAt,
@@ -1075,6 +1116,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
           ..write('weight: $weight, ')
           ..write('lastUpdateTime: $lastUpdateTime, ')
           ..write('respondTime: $respondTime, ')
+          ..write('loginInfo: $loginInfo, ')
           ..write('importedAt: $importedAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1097,6 +1139,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     weight,
     lastUpdateTime,
     respondTime,
+    loginInfo,
     importedAt,
     updatedAt,
   );
@@ -1118,6 +1161,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
           other.weight == this.weight &&
           other.lastUpdateTime == this.lastUpdateTime &&
           other.respondTime == this.respondTime &&
+          other.loginInfo == this.loginInfo &&
           other.importedAt == this.importedAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1137,6 +1181,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
   final Value<int> weight;
   final Value<int?> lastUpdateTime;
   final Value<int?> respondTime;
+  final Value<String?> loginInfo;
   final Value<DateTime> importedAt;
   final Value<DateTime> updatedAt;
   const BookSourcesCompanion({
@@ -1154,6 +1199,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     this.weight = const Value.absent(),
     this.lastUpdateTime = const Value.absent(),
     this.respondTime = const Value.absent(),
+    this.loginInfo = const Value.absent(),
     this.importedAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -1172,6 +1218,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     this.weight = const Value.absent(),
     this.lastUpdateTime = const Value.absent(),
     this.respondTime = const Value.absent(),
+    this.loginInfo = const Value.absent(),
     required DateTime importedAt,
     required DateTime updatedAt,
   }) : url = Value(url),
@@ -1195,6 +1242,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     Expression<int>? weight,
     Expression<int>? lastUpdateTime,
     Expression<int>? respondTime,
+    Expression<String>? loginInfo,
     Expression<DateTime>? importedAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -1213,6 +1261,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
       if (weight != null) 'weight': weight,
       if (lastUpdateTime != null) 'last_update_time': lastUpdateTime,
       if (respondTime != null) 'respond_time': respondTime,
+      if (loginInfo != null) 'login_info': loginInfo,
       if (importedAt != null) 'imported_at': importedAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -1233,6 +1282,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     Value<int>? weight,
     Value<int?>? lastUpdateTime,
     Value<int?>? respondTime,
+    Value<String?>? loginInfo,
     Value<DateTime>? importedAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -1251,6 +1301,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
       weight: weight ?? this.weight,
       lastUpdateTime: lastUpdateTime ?? this.lastUpdateTime,
       respondTime: respondTime ?? this.respondTime,
+      loginInfo: loginInfo ?? this.loginInfo,
       importedAt: importedAt ?? this.importedAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -1301,6 +1352,9 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     if (respondTime.present) {
       map['respond_time'] = Variable<int>(respondTime.value);
     }
+    if (loginInfo.present) {
+      map['login_info'] = Variable<String>(loginInfo.value);
+    }
     if (importedAt.present) {
       map['imported_at'] = Variable<DateTime>(importedAt.value);
     }
@@ -1327,6 +1381,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
           ..write('weight: $weight, ')
           ..write('lastUpdateTime: $lastUpdateTime, ')
           ..write('respondTime: $respondTime, ')
+          ..write('loginInfo: $loginInfo, ')
           ..write('importedAt: $importedAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -6081,6 +6136,7 @@ typedef $$BookSourcesTableCreateCompanionBuilder =
       Value<int> weight,
       Value<int?> lastUpdateTime,
       Value<int?> respondTime,
+      Value<String?> loginInfo,
       required DateTime importedAt,
       required DateTime updatedAt,
     });
@@ -6100,6 +6156,7 @@ typedef $$BookSourcesTableUpdateCompanionBuilder =
       Value<int> weight,
       Value<int?> lastUpdateTime,
       Value<int?> respondTime,
+      Value<String?> loginInfo,
       Value<DateTime> importedAt,
       Value<DateTime> updatedAt,
     });
@@ -6180,6 +6237,11 @@ class $$BookSourcesTableFilterComposer
 
   ColumnFilters<int> get respondTime => $composableBuilder(
     column: $table.respondTime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get loginInfo => $composableBuilder(
+    column: $table.loginInfo,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6273,6 +6335,11 @@ class $$BookSourcesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get loginInfo => $composableBuilder(
+    column: $table.loginInfo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get importedAt => $composableBuilder(
     column: $table.importedAt,
     builder: (column) => ColumnOrderings(column),
@@ -6347,6 +6414,9 @@ class $$BookSourcesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get loginInfo =>
+      $composableBuilder(column: $table.loginInfo, builder: (column) => column);
+
   GeneratedColumn<DateTime> get importedAt => $composableBuilder(
     column: $table.importedAt,
     builder: (column) => column,
@@ -6401,6 +6471,7 @@ class $$BookSourcesTableTableManager
                 Value<int> weight = const Value.absent(),
                 Value<int?> lastUpdateTime = const Value.absent(),
                 Value<int?> respondTime = const Value.absent(),
+                Value<String?> loginInfo = const Value.absent(),
                 Value<DateTime> importedAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => BookSourcesCompanion(
@@ -6418,6 +6489,7 @@ class $$BookSourcesTableTableManager
                 weight: weight,
                 lastUpdateTime: lastUpdateTime,
                 respondTime: respondTime,
+                loginInfo: loginInfo,
                 importedAt: importedAt,
                 updatedAt: updatedAt,
               ),
@@ -6437,6 +6509,7 @@ class $$BookSourcesTableTableManager
                 Value<int> weight = const Value.absent(),
                 Value<int?> lastUpdateTime = const Value.absent(),
                 Value<int?> respondTime = const Value.absent(),
+                Value<String?> loginInfo = const Value.absent(),
                 required DateTime importedAt,
                 required DateTime updatedAt,
               }) => BookSourcesCompanion.insert(
@@ -6454,6 +6527,7 @@ class $$BookSourcesTableTableManager
                 weight: weight,
                 lastUpdateTime: lastUpdateTime,
                 respondTime: respondTime,
+                loginInfo: loginInfo,
                 importedAt: importedAt,
                 updatedAt: updatedAt,
               ),

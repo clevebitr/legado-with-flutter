@@ -2401,5 +2401,25 @@
   "cookieManageLoadFailed": "The cookies could not be read.",
   "@cookieManageLoadFailed": {
     "@description": "Failure state of the cookie page."
+  },
+  "bookSourceLoginTitle": "Sign in",
+  "@bookSourceLoginTitle": {
+    "@description": "Title of the native login form page."
+  },
+  "bookSourceLoginLoadFailed": "The login form could not be read.",
+  "@bookSourceLoginLoadFailed": {
+    "@description": "Failure state of the login page when the source row or its form is unreadable."
+  },
+  "bookSourceLoginNoForm": "This source declares no login form.",
+  "@bookSourceLoginNoForm": {
+    "@description": "Shown when a source has a loginUrl but no loginUi."
+  },
+  "bookSourceLoginWorking": "Signing in…",
+  "@bookSourceLoginWorking": {
+    "@description": "Submit button label while the login script runs."
+  },
+  "bookSourceLoginDone": "Signed in. The source's own script reported success.",
+  "@bookSourceLoginDone": {
+    "@description": "Outcome line after a successful submit."
   }
 }

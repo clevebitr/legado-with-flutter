@@ -310,7 +310,10 @@ String _evaluationSource(Map<String, Object?> fields) {
     ..writeln('var baseUrl = ${jsonEncode(fields['baseUrl'])};')
     ..writeln('var result = __sandboxValue(${jsonEncode(result)});')
     ..writeln('var page = ${jsonEncode(fields['page'])};')
-    ..writeln('var source = Object.freeze(${jsonEncode(fields['source'])});');
+    ..writeln(
+      'var source = __sandboxSource(${jsonEncode(fields['source'])}, '
+      '${jsonEncode(fields['loginInfo'] ?? const <String, String>{})});',
+    );
   final Object? book = fields['book'];
   buffer.writeln(
     'var book = __sandboxBook(${book == null ? 'null' : jsonEncode(book)});',
@@ -512,6 +515,27 @@ globalThis.__sandboxValue = function (value) {
     return __sandboxStrResponse(value);
   }
   return value;
+};
+
+// `source` 对象：字段照旧冻结，另挂两个**登录信息**读取器（ADR-0072 §决策 3）。
+// 它们是同步的纯读取：值随 job 进来（ADR-0034 的快照做法），不回写宿主。
+globalThis.__sandboxSource = function (data, loginInfo) {
+  var source = {};
+  for (var field in data) {
+    source[field] = data[field];
+  }
+  var info = loginInfo || {};
+  source.getLoginInfoMap = function () {
+    var copy = {};
+    for (var key in info) {
+      copy[key] = info[key];
+    }
+    return copy;
+  };
+  source.getLoginInfo = function () {
+    return JSON.stringify(source.getLoginInfoMap());
+  };
+  return Object.freeze(source);
 };
 
 globalThis.__sandboxBook = function (data) {
