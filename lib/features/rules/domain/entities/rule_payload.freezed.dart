@@ -129,10 +129,10 @@ return malformed(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String pattern,  String replacement,  bool isRegex,  int? timeoutMs,  Map<String, Object?> extra)?  replace,TResult Function( String rule,  int? serialNumber,  Map<String, Object?> extra)?  toc,TResult Function( String urlRule,  String showRule,  String? ruleGroupType,  Map<String, Object?> extra)?  dict,TResult Function( String pattern,  String? colorHex,  String? group,  Map<String, Object?> extra)?  highlight,TResult Function( String raw)?  malformed,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String pattern,  String replacement,  bool isRegex,  int? timeoutMs,  String? group,  bool scopeContent,  bool scopeTitle,  Map<String, Object?> extra)?  replace,TResult Function( String rule,  int? serialNumber,  Map<String, Object?> extra)?  toc,TResult Function( String urlRule,  String showRule,  String? ruleGroupType,  Map<String, Object?> extra)?  dict,TResult Function( String pattern,  String? colorHex,  String? group,  Map<String, Object?> extra)?  highlight,TResult Function( String raw)?  malformed,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case ReplacePayload() when replace != null:
-return replace(_that.pattern,_that.replacement,_that.isRegex,_that.timeoutMs,_that.extra);case TocPayload() when toc != null:
+return replace(_that.pattern,_that.replacement,_that.isRegex,_that.timeoutMs,_that.group,_that.scopeContent,_that.scopeTitle,_that.extra);case TocPayload() when toc != null:
 return toc(_that.rule,_that.serialNumber,_that.extra);case DictPayload() when dict != null:
 return dict(_that.urlRule,_that.showRule,_that.ruleGroupType,_that.extra);case HighlightPayload() when highlight != null:
 return highlight(_that.pattern,_that.colorHex,_that.group,_that.extra);case MalformedPayload() when malformed != null:
@@ -154,10 +154,10 @@ return malformed(_that.raw);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String pattern,  String replacement,  bool isRegex,  int? timeoutMs,  Map<String, Object?> extra)  replace,required TResult Function( String rule,  int? serialNumber,  Map<String, Object?> extra)  toc,required TResult Function( String urlRule,  String showRule,  String? ruleGroupType,  Map<String, Object?> extra)  dict,required TResult Function( String pattern,  String? colorHex,  String? group,  Map<String, Object?> extra)  highlight,required TResult Function( String raw)  malformed,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String pattern,  String replacement,  bool isRegex,  int? timeoutMs,  String? group,  bool scopeContent,  bool scopeTitle,  Map<String, Object?> extra)  replace,required TResult Function( String rule,  int? serialNumber,  Map<String, Object?> extra)  toc,required TResult Function( String urlRule,  String showRule,  String? ruleGroupType,  Map<String, Object?> extra)  dict,required TResult Function( String pattern,  String? colorHex,  String? group,  Map<String, Object?> extra)  highlight,required TResult Function( String raw)  malformed,}) {final _that = this;
 switch (_that) {
 case ReplacePayload():
-return replace(_that.pattern,_that.replacement,_that.isRegex,_that.timeoutMs,_that.extra);case TocPayload():
+return replace(_that.pattern,_that.replacement,_that.isRegex,_that.timeoutMs,_that.group,_that.scopeContent,_that.scopeTitle,_that.extra);case TocPayload():
 return toc(_that.rule,_that.serialNumber,_that.extra);case DictPayload():
 return dict(_that.urlRule,_that.showRule,_that.ruleGroupType,_that.extra);case HighlightPayload():
 return highlight(_that.pattern,_that.colorHex,_that.group,_that.extra);case MalformedPayload():
@@ -175,10 +175,10 @@ return malformed(_that.raw);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String pattern,  String replacement,  bool isRegex,  int? timeoutMs,  Map<String, Object?> extra)?  replace,TResult? Function( String rule,  int? serialNumber,  Map<String, Object?> extra)?  toc,TResult? Function( String urlRule,  String showRule,  String? ruleGroupType,  Map<String, Object?> extra)?  dict,TResult? Function( String pattern,  String? colorHex,  String? group,  Map<String, Object?> extra)?  highlight,TResult? Function( String raw)?  malformed,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String pattern,  String replacement,  bool isRegex,  int? timeoutMs,  String? group,  bool scopeContent,  bool scopeTitle,  Map<String, Object?> extra)?  replace,TResult? Function( String rule,  int? serialNumber,  Map<String, Object?> extra)?  toc,TResult? Function( String urlRule,  String showRule,  String? ruleGroupType,  Map<String, Object?> extra)?  dict,TResult? Function( String pattern,  String? colorHex,  String? group,  Map<String, Object?> extra)?  highlight,TResult? Function( String raw)?  malformed,}) {final _that = this;
 switch (_that) {
 case ReplacePayload() when replace != null:
-return replace(_that.pattern,_that.replacement,_that.isRegex,_that.timeoutMs,_that.extra);case TocPayload() when toc != null:
+return replace(_that.pattern,_that.replacement,_that.isRegex,_that.timeoutMs,_that.group,_that.scopeContent,_that.scopeTitle,_that.extra);case TocPayload() when toc != null:
 return toc(_that.rule,_that.serialNumber,_that.extra);case DictPayload() when dict != null:
 return dict(_that.urlRule,_that.showRule,_that.ruleGroupType,_that.extra);case HighlightPayload() when highlight != null:
 return highlight(_that.pattern,_that.colorHex,_that.group,_that.extra);case MalformedPayload() when malformed != null:
@@ -194,13 +194,16 @@ return malformed(_that.raw);case _:
 
 
 class ReplacePayload implements RulePayload {
-  const ReplacePayload({required this.pattern, required this.replacement, this.isRegex = true, this.timeoutMs,  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
+  const ReplacePayload({required this.pattern, required this.replacement, this.isRegex = true, this.timeoutMs, this.group, this.scopeContent = true, this.scopeTitle = false,  Map<String, Object?> extra = const <String, Object?>{}}): _extra = extra;
   
 
  final  String pattern;
  final  String replacement;
 @JsonKey() final  bool isRegex;
  final  int? timeoutMs;
+ final  String? group;
+@JsonKey() final  bool scopeContent;
+@JsonKey() final  bool scopeTitle;
  final  Map<String, Object?> _extra;
 @JsonKey() Map<String, Object?> get extra {
   if (_extra is EqualUnmodifiableMapView) return _extra;
@@ -219,18 +222,18 @@ $ReplacePayloadCopyWith<ReplacePayload> get copyWith => _$ReplacePayloadCopyWith
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is ReplacePayload&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.replacement, replacement) || other.replacement == replacement)&&(identical(other.isRegex, isRegex) || other.isRegex == isRegex)&&(identical(other.timeoutMs, timeoutMs) || other.timeoutMs == timeoutMs)&&const DeepCollectionEquality().equals(other.extra, _extra));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ReplacePayload&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.replacement, replacement) || other.replacement == replacement)&&(identical(other.isRegex, isRegex) || other.isRegex == isRegex)&&(identical(other.timeoutMs, timeoutMs) || other.timeoutMs == timeoutMs)&&(identical(other.group, group) || other.group == group)&&(identical(other.scopeContent, scopeContent) || other.scopeContent == scopeContent)&&(identical(other.scopeTitle, scopeTitle) || other.scopeTitle == scopeTitle)&&const DeepCollectionEquality().equals(other.extra, _extra));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,pattern,replacement,isRegex,timeoutMs,const DeepCollectionEquality().hash(_extra));
+    return Object.hash(runtimeType,pattern,replacement,isRegex,timeoutMs,group,scopeContent,scopeTitle,const DeepCollectionEquality().hash(_extra));
 }
 
 @override
 String toString() {
-    return 'RulePayload.replace(pattern: $pattern, replacement: $replacement, isRegex: $isRegex, timeoutMs: $timeoutMs, extra: $extra)';
+    return 'RulePayload.replace(pattern: $pattern, replacement: $replacement, isRegex: $isRegex, timeoutMs: $timeoutMs, group: $group, scopeContent: $scopeContent, scopeTitle: $scopeTitle, extra: $extra)';
 }
 
 
@@ -241,7 +244,7 @@ abstract mixin class $ReplacePayloadCopyWith<$Res> implements $RulePayloadCopyWi
   factory $ReplacePayloadCopyWith(ReplacePayload value, $Res Function(ReplacePayload) _then) = _$ReplacePayloadCopyWithImpl;
 @useResult
 $Res call({
- String pattern, String replacement, bool isRegex, int? timeoutMs, Map<String, Object?> extra
+ String pattern, String replacement, bool isRegex, int? timeoutMs, String? group, bool scopeContent, bool scopeTitle, Map<String, Object?> extra
 });
 
 
@@ -258,13 +261,16 @@ class _$ReplacePayloadCopyWithImpl<$Res>
 
 /// Create a copy of RulePayload
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? pattern = null,Object? replacement = null,Object? isRegex = null,Object? timeoutMs = freezed,Object? extra = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? pattern = null,Object? replacement = null,Object? isRegex = null,Object? timeoutMs = freezed,Object? group = freezed,Object? scopeContent = null,Object? scopeTitle = null,Object? extra = null,}) {
   return _then(ReplacePayload(
 pattern: null == pattern ? _self.pattern : pattern // ignore: cast_nullable_to_non_nullable
 as String,replacement: null == replacement ? _self.replacement : replacement // ignore: cast_nullable_to_non_nullable
 as String,isRegex: null == isRegex ? _self.isRegex : isRegex // ignore: cast_nullable_to_non_nullable
 as bool,timeoutMs: freezed == timeoutMs ? _self.timeoutMs : timeoutMs // ignore: cast_nullable_to_non_nullable
-as int?,extra: null == extra ? _self._extra : extra // ignore: cast_nullable_to_non_nullable
+as int?,group: freezed == group ? _self.group : group // ignore: cast_nullable_to_non_nullable
+as String?,scopeContent: null == scopeContent ? _self.scopeContent : scopeContent // ignore: cast_nullable_to_non_nullable
+as bool,scopeTitle: null == scopeTitle ? _self.scopeTitle : scopeTitle // ignore: cast_nullable_to_non_nullable
+as bool,extra: null == extra ? _self._extra : extra // ignore: cast_nullable_to_non_nullable
 as Map<String, Object?>,
   ));
 }

@@ -2111,5 +2111,176 @@
   "readerSearchUntitledChapter": "Untitled chapter",
   "@readerSearchUntitledChapter": {
     "@description": "Result row title when the chapter has no title."
+  },
+  "rulesImportTitle": "Import rules",
+  "@rulesImportTitle": {
+    "@description": "Title of the replace-rule import page."
+  },
+  "rulesImportTextLabel": "Rules JSON",
+  "@rulesImportTextLabel": {
+    "@description": "Label of the paste field of the replace-rule import."
+  },
+  "rulesImportTextHint": "Paste the contents of a 净化规则 JSON file",
+  "@rulesImportTextHint": {
+    "@description": "Hint of the paste field of the replace-rule import."
+  },
+  "rulesImportUrlLabel": "Or a URL",
+  "@rulesImportUrlLabel": {
+    "@description": "Label of the download-address field of the replace-rule import."
+  },
+  "rulesImportUrlHint": "https://…/replaceRules.json",
+  "@rulesImportUrlHint": {
+    "@description": "Hint of the download-address field of the replace-rule import."
+  },
+  "rulesImportFileAction": "Choose a JSON file",
+  "@rulesImportFileAction": {
+    "@description": "Button that opens the file dialog of the replace-rule import."
+  },
+  "rulesImportSelectAll": "Import all of them",
+  "@rulesImportSelectAll": {
+    "@description": "Checkbox that selects every usable entry of the import preview."
+  },
+  "rulesImportSelected": "{selected} of {usable} selected",
+  "@rulesImportSelected": {
+    "@description": "Count of ticked entries in the import preview.",
+    "placeholders": {
+      "selected": {
+        "type": "int"
+      },
+      "usable": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesImportCommit": "Import selected ({count})",
+  "@rulesImportCommit": {
+    "@description": "Commit button of the import preview.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesImportSucceeded": "Imported {created} new rules and updated {updated}.",
+  "@rulesImportSucceeded": {
+    "@description": "Outcome of an import with no skipped entries.",
+    "placeholders": {
+      "created": {
+        "type": "int"
+      },
+      "updated": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesImportSucceededWithSkipped": "Imported {created} new rules and updated {updated}; {skipped} entries were skipped as unreadable.",
+  "@rulesImportSucceededWithSkipped": {
+    "@description": "Outcome of an import where some entries could not be read.",
+    "placeholders": {
+      "created": {
+        "type": "int"
+      },
+      "updated": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesImportUntitled": "Untitled rule",
+  "@rulesImportUntitled": {
+    "@description": "Preview row title for an entry without a name."
+  },
+  "rulesImportUpdate": "Update",
+  "@rulesImportUpdate": {
+    "@description": "Badge of a preview entry that will rewrite a stored rule (same name and pattern)."
+  },
+  "rulesImportProblemFormat": "not a rule object",
+  "@rulesImportProblemFormat": {
+    "@description": "Preview badge for an entry that is not a JSON object."
+  },
+  "rulesImportProblemMissingPattern": "missing pattern",
+  "@rulesImportProblemMissingPattern": {
+    "@description": "Preview badge for an entry without a pattern."
+  },
+  "rulesExportAction": "Export",
+  "@rulesExportAction": {
+    "@description": "Menu action that writes every replace rule to a JSON file."
+  },
+  "rulesExportEmpty": "There are no rules to export.",
+  "@rulesExportEmpty": {
+    "@description": "Shown when an export would write nothing."
+  },
+  "rulesExportSaved": "Saved {count} rules.",
+  "@rulesExportSaved": {
+    "@description": "Outcome of a replace-rule export.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesExportSavedWithSkipped": "Saved {count} rules; {skipped} unreadable rules were left out.",
+  "@rulesExportSavedWithSkipped": {
+    "@description": "Outcome of an export that had to leave unreadable rules out.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesExportFailed": "Could not export the rules.",
+  "@rulesExportFailed": {
+    "@description": "Shown when writing the rules file failed."
+  },
+  "rulesScopeBoth": "title + body",
+  "@rulesScopeBoth": {
+    "@description": "Scope label: the rule rewrites both the chapter title and the body."
+  },
+  "rulesScopeContent": "body only",
+  "@rulesScopeContent": {
+    "@description": "Scope label: the rule rewrites only the chapter body."
+  },
+  "rulesScopeTitle": "title only",
+  "@rulesScopeTitle": {
+    "@description": "Scope label: the rule rewrites only the chapter title."
+  },
+  "rulesScopeNone": "not applied",
+  "@rulesScopeNone": {
+    "@description": "Scope label: the rule declares neither scope, so nothing runs it."
+  },
+  "bookSourceExportAll": "Export all",
+  "@bookSourceExportAll": {
+    "@description": "App bar action that writes every stored book source to a JSON file."
+  },
+  "bookSourceExportSelected": "Export selected ({count})",
+  "@bookSourceExportSelected": {
+    "@description": "Batch action that writes the ticked book sources to a JSON file.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceExportAllSaved": "Saved {count} book sources.",
+  "@bookSourceExportAllSaved": {
+    "@description": "Outcome of a batch book-source export.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceExportEmpty": "There are no book sources to export.",
+  "@bookSourceExportEmpty": {
+    "@description": "Shown when an export would write nothing."
+  },
+  "rulesListMenu": "More",
+  "@rulesListMenu": {
+    "@description": "Tooltip of the overflow menu of a rule list page."
   }
 }

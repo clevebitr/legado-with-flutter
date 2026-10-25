@@ -4,7 +4,7 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 /// Stores a cover the user picked and answers the path to remember
 /// (`docs/dev/roadmap.md` M19, ADR-0066 §决策 5).
 ///
-/// The port exists for the same reason `BookSourceFilePicker` does (C-PLT-1): the dialog is a
+/// The port exists for the same reason `JsonFilePicker` does (C-PLT-1): the dialog is a
 /// platform capability, while «copy the bytes into the app's own directory and answer the absolute
 /// path» is ordinary Dart that a test can exercise with a fake opener and a temporary directory.
 ///

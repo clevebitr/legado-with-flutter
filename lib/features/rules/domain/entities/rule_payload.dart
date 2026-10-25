@@ -15,16 +15,23 @@ part 'rule_payload.freezed.dart';
 ///   list — the user can still see, edit or delete the row (ADR-0070 §决策 1).
 @freezed
 sealed class RulePayload with _$RulePayload {
-  /// A 替换净化 rule: rewrite [pattern] into [replacement] across a chapter body.
+  /// A 替换净化 rule: rewrite [pattern] into [replacement] across a chapter body or a title.
   ///
-  /// [isRegex] selects `RegExp` or a literal search; [timeoutMs] is upstream's guard for a slow
-  /// regular expression and is **only preserved**, because Dart has no regex timeout (ADR-0070
-  /// 增补 §7 的登记项).
+  /// [isRegex] selects `RegExp` or a literal search. [timeoutMs] is upstream's per-rule limit; it
+  /// applies to the sandbox round trip of a `@js:` replacement (ADR-0071 §决策 5) and is only
+  /// preserved for a regular expression, since Dart's `RegExp` has no timeout (ADR-0070 增补 §7).
+  ///
+  /// [scopeContent] / [scopeTitle] decide **where** the rule runs (ADR-0071 §决策 4) and default to
+  /// upstream's values: content yes, title no. [group] is upstream's display grouping and takes no
+  /// part in execution.
   const factory RulePayload.replace({
     required String pattern,
     required String replacement,
     @Default(true) bool isRegex,
     int? timeoutMs,
+    String? group,
+    @Default(true) bool scopeContent,
+    @Default(false) bool scopeTitle,
     @Default(<String, Object?>{}) Map<String, Object?> extra,
   }) = ReplacePayload;
 

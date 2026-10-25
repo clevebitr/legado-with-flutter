@@ -1,14 +1,14 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
-import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
-import 'package:flutter_reader/core/platform/file_selector_book_source_file_saver.dart';
+import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('UnsupportedBookSourceFileSaver', () {
+  group('UnsupportedJsonFileSaver', () {
     test('save_givenNoDialog_answersNotSaved', () async {
       // platform.md §2：没有保存对话框的平台 = 用户取消，不是失败。
       expect(
-        (await const UnsupportedBookSourceFileSaver().save(
+        (await const UnsupportedJsonFileSaver().save(
           suggestedName: 'a.json',
           contents: '{}',
         ) as ParseSuccess<bool>).data,
@@ -17,10 +17,10 @@ void main() {
     });
   });
 
-  group('FileSelectorBookSourceFileSaver', () {
+  group('FileSelectorJsonFileSaver', () {
     test('save_givenAChosenPath_answersSaved', () async {
       String? writtenPath;
-      final BookSourceFileSaver saver = FileSelectorBookSourceFileSaver(
+      final JsonFileSaver saver = FileSelectorJsonFileSaver(
         write:
             ({required String suggestedName, required String contents}) async {
               writtenPath = '/tmp/$suggestedName:$contents';
@@ -39,7 +39,7 @@ void main() {
     });
 
     test('save_givenACancelledDialog_answersNotSaved', () async {
-      final BookSourceFileSaver saver = FileSelectorBookSourceFileSaver(
+      final JsonFileSaver saver = FileSelectorJsonFileSaver(
         write: ({
           required String suggestedName,
           required String contents,
@@ -56,7 +56,7 @@ void main() {
     });
 
     test('save_givenAWriteFailure_answersTheExportMarker', () async {
-      final BookSourceFileSaver saver = FileSelectorBookSourceFileSaver(
+      final JsonFileSaver saver = FileSelectorJsonFileSaver(
         write: ({
           required String suggestedName,
           required String contents,

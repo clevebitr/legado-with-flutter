@@ -62,6 +62,14 @@ abstract interface class BookSourceRepository {
   /// Export and the editor work from these bytes, so unmodelled keys survive.
   Future<String?> payloadOf(int id);
 
+  /// The payloads of [ids] (every source when it is `null` or empty), in list order.
+  ///
+  /// Two keys are written over the imported values before they are answered: `enabled` from the
+  /// row's user state and `customOrder` from its manual order. Everything else — including the keys
+  /// this build never modelled — stays as imported, which is what makes a re-import lossless
+  /// (ADR-0071 §决策 3). A row whose payload no longer parses is skipped with a warning.
+  Future<List<String>> exportPayloads({Set<int>? ids});
+
   /// Enables or disables every id in [ids] in one transaction.
   Future<void> setEnabledFor(List<int> ids, {required bool isEnabled});
 

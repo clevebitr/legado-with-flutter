@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
@@ -441,6 +443,67 @@ void main() {
         contains('"bookSourceUrl":"https://a.test"'),
       );
       expect(await repository.payloadOf(999), isNull);
+    });
+
+    group('exportPayloads', () {
+      test('exportPayloads_givenEverySource_answersThemAsStored', () async {
+        await repository.saveAll(<Map<String, Object?>>[
+          _entry(name: 'a', url: 'https://a.test'),
+          _entry(name: 'b', url: 'https://b.test'),
+        ]);
+
+        final List<String> payloads = await repository.exportPayloads();
+
+        expect(payloads, hasLength(2));
+        expect(payloads.first, contains('"bookSourceUrl":"https://a.test"'));
+      });
+
+      test('exportPayloads_givenIds_answersOnlyThose', () async {
+        await repository.saveAll(<Map<String, Object?>>[
+          _entry(name: 'a', url: 'https://a.test'),
+          _entry(name: 'b', url: 'https://b.test'),
+        ]);
+        final List<StoredBookSource> stored = await repository.getAll();
+
+        final List<String> payloads = await repository.exportPayloads(
+          ids: <int>{stored.first.id},
+        );
+
+        expect(payloads.single, contains('https://a.test'));
+        // 不存在的 id 不该变出一个空条目。
+        expect(await repository.exportPayloads(ids: <int>{999}), isEmpty);
+      });
+
+      test(
+        'exportPayloads_givenUserState_overwritesTheImportedValues',
+        () async {
+          // 文件里的 `enabled` / `customOrder` 是导入那一刻的快照；导出要带用户后来改的状态
+          // （ADR-0071 §决策 3）。
+          await repository.saveAll(<Map<String, Object?>>[
+            _entry(name: 'a', url: 'https://a.test', customOrder: 7),
+          ]);
+          final int id = (await repository.getAll()).single.id;
+          await repository.setEnabled(id: id, isEnabled: false);
+
+          final Map<String, Object?> exported = jsonDecode(
+            (await repository.exportPayloads()).single,
+          ) as Map<String, Object?>;
+
+          expect(exported['enabled'], isFalse);
+          expect(exported['customOrder'], 7);
+          // 其余键保持导入时的样子。
+          expect(exported['bookSourceName'], 'a');
+        },
+      );
+
+      test('exportPayloads_givenABrokenPayload_skipsItWithAWarning', () async {
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+        await dao.refreshPayload(id: id, payload: '{oops');
+
+        expect(await repository.exportPayloads(), isEmpty);
+        expect(printer.events, isNotEmpty);
+      });
     });
 
     test('setEnabledFor_givenASelection_flipsEveryRow', () async {

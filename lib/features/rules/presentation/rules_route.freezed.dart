@@ -15,66 +15,30 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$RulesRoute {
 
- RuleKind get kind;
-/// Create a copy of RulesRoute
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$RulesRouteCopyWith<RulesRoute> get copyWith => _$RulesRouteCopyWithImpl<RulesRoute>(this as RulesRoute, _$identity);
+
 
 
 
 @override
 bool operator ==(Object other) {
-  final _this = this as RulesRoute;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RulesRoute&&(identical(other.kind, _this.kind) || other.kind == _this.kind));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is RulesRoute);
 }
 
 
 @override
-int get hashCode {
-  final _this = this as RulesRoute;
-  return Object.hash(runtimeType,_this.kind);
-}
+int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  final _this = this as RulesRoute;
-  return 'RulesRoute(kind: ${_this.kind})';
+    return 'RulesRoute()';
 }
 
 
 }
 
 /// @nodoc
-abstract mixin class $RulesRouteCopyWith<$Res>  {
-  factory $RulesRouteCopyWith(RulesRoute value, $Res Function(RulesRoute) _then) = _$RulesRouteCopyWithImpl;
-@useResult
-$Res call({
- RuleKind kind
-});
-
-
-
-
-}
-/// @nodoc
-class _$RulesRouteCopyWithImpl<$Res>
-    implements $RulesRouteCopyWith<$Res> {
-  _$RulesRouteCopyWithImpl(this._self, this._then);
-
-  final RulesRoute _self;
-  final $Res Function(RulesRoute) _then;
-
-/// Create a copy of RulesRoute
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? kind = null,}) {
-  return _then(_self.copyWith(
-kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
-as RuleKind,
-  ));
-}
-
+class $RulesRouteCopyWith<$Res>  {
+$RulesRouteCopyWith(RulesRoute _, $Res Function(RulesRoute) __);
 }
 
 
@@ -92,12 +56,13 @@ extension RulesRoutePatterns on RulesRoute {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( RulesListRoute value)?  list,TResult Function( RulesEditRoute value)?  edit,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( RulesListRoute value)?  list,TResult Function( RulesEditRoute value)?  edit,TResult Function( RulesImportRoute value)?  import,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case RulesListRoute() when list != null:
 return list(_that);case RulesEditRoute() when edit != null:
-return edit(_that);case _:
+return edit(_that);case RulesImportRoute() when import != null:
+return import(_that);case _:
   return orElse();
 
 }
@@ -115,12 +80,13 @@ return edit(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( RulesListRoute value)  list,required TResult Function( RulesEditRoute value)  edit,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( RulesListRoute value)  list,required TResult Function( RulesEditRoute value)  edit,required TResult Function( RulesImportRoute value)  import,}){
 final _that = this;
 switch (_that) {
 case RulesListRoute():
 return list(_that);case RulesEditRoute():
-return edit(_that);}
+return edit(_that);case RulesImportRoute():
+return import(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -134,12 +100,13 @@ return edit(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( RulesListRoute value)?  list,TResult? Function( RulesEditRoute value)?  edit,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( RulesListRoute value)?  list,TResult? Function( RulesEditRoute value)?  edit,TResult? Function( RulesImportRoute value)?  import,}){
 final _that = this;
 switch (_that) {
 case RulesListRoute() when list != null:
 return list(_that);case RulesEditRoute() when edit != null:
-return edit(_that);case _:
+return edit(_that);case RulesImportRoute() when import != null:
+return import(_that);case _:
   return null;
 
 }
@@ -156,11 +123,12 @@ return edit(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( RuleKind kind)?  list,TResult Function( RuleKind kind,  int? ruleId)?  edit,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( RuleKind kind)?  list,TResult Function( RuleKind kind,  int? ruleId)?  edit,TResult Function()?  import,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case RulesListRoute() when list != null:
 return list(_that.kind);case RulesEditRoute() when edit != null:
-return edit(_that.kind,_that.ruleId);case _:
+return edit(_that.kind,_that.ruleId);case RulesImportRoute() when import != null:
+return import();case _:
   return orElse();
 
 }
@@ -178,11 +146,12 @@ return edit(_that.kind,_that.ruleId);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( RuleKind kind)  list,required TResult Function( RuleKind kind,  int? ruleId)  edit,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( RuleKind kind)  list,required TResult Function( RuleKind kind,  int? ruleId)  edit,required TResult Function()  import,}) {final _that = this;
 switch (_that) {
 case RulesListRoute():
 return list(_that.kind);case RulesEditRoute():
-return edit(_that.kind,_that.ruleId);}
+return edit(_that.kind,_that.ruleId);case RulesImportRoute():
+return import();}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -196,11 +165,12 @@ return edit(_that.kind,_that.ruleId);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( RuleKind kind)?  list,TResult? Function( RuleKind kind,  int? ruleId)?  edit,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( RuleKind kind)?  list,TResult? Function( RuleKind kind,  int? ruleId)?  edit,TResult? Function()?  import,}) {final _that = this;
 switch (_that) {
 case RulesListRoute() when list != null:
 return list(_that.kind);case RulesEditRoute() when edit != null:
-return edit(_that.kind,_that.ruleId);case _:
+return edit(_that.kind,_that.ruleId);case RulesImportRoute() when import != null:
+return import();case _:
   return null;
 
 }
@@ -215,11 +185,11 @@ class RulesListRoute extends RulesRoute {
   const RulesListRoute({required this.kind}): super._();
   
 
-@override final  RuleKind kind;
+ final  RuleKind kind;
 
 /// Create a copy of RulesRoute
 /// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
+@JsonKey(includeFromJson: false, includeToJson: false)
 @pragma('vm:prefer-inline')
 $RulesListRouteCopyWith<RulesListRoute> get copyWith => _$RulesListRouteCopyWithImpl<RulesListRoute>(this, _$identity);
 
@@ -247,7 +217,7 @@ String toString() {
 /// @nodoc
 abstract mixin class $RulesListRouteCopyWith<$Res> implements $RulesRouteCopyWith<$Res> {
   factory $RulesListRouteCopyWith(RulesListRoute value, $Res Function(RulesListRoute) _then) = _$RulesListRouteCopyWithImpl;
-@override @useResult
+@useResult
 $Res call({
  RuleKind kind
 });
@@ -266,7 +236,7 @@ class _$RulesListRouteCopyWithImpl<$Res>
 
 /// Create a copy of RulesRoute
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? kind = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? kind = null,}) {
   return _then(RulesListRoute(
 kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
 as RuleKind,
@@ -283,12 +253,12 @@ class RulesEditRoute extends RulesRoute {
   const RulesEditRoute({required this.kind, this.ruleId}): super._();
   
 
-@override final  RuleKind kind;
+ final  RuleKind kind;
  final  int? ruleId;
 
 /// Create a copy of RulesRoute
 /// with the given fields replaced by the non-null parameter values.
-@override @JsonKey(includeFromJson: false, includeToJson: false)
+@JsonKey(includeFromJson: false, includeToJson: false)
 @pragma('vm:prefer-inline')
 $RulesEditRouteCopyWith<RulesEditRoute> get copyWith => _$RulesEditRouteCopyWithImpl<RulesEditRoute>(this, _$identity);
 
@@ -316,7 +286,7 @@ String toString() {
 /// @nodoc
 abstract mixin class $RulesEditRouteCopyWith<$Res> implements $RulesRouteCopyWith<$Res> {
   factory $RulesEditRouteCopyWith(RulesEditRoute value, $Res Function(RulesEditRoute) _then) = _$RulesEditRouteCopyWithImpl;
-@override @useResult
+@useResult
 $Res call({
  RuleKind kind, int? ruleId
 });
@@ -335,7 +305,7 @@ class _$RulesEditRouteCopyWithImpl<$Res>
 
 /// Create a copy of RulesRoute
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? kind = null,Object? ruleId = freezed,}) {
+@pragma('vm:prefer-inline') $Res call({Object? kind = null,Object? ruleId = freezed,}) {
   return _then(RulesEditRoute(
 kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
 as RuleKind,ruleId: freezed == ruleId ? _self.ruleId : ruleId // ignore: cast_nullable_to_non_nullable
@@ -345,5 +315,37 @@ as int?,
 
 
 }
+
+/// @nodoc
+
+
+class RulesImportRoute extends RulesRoute {
+  const RulesImportRoute(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is RulesImportRoute);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'RulesRoute.import()';
+}
+
+
+}
+
+
+
 
 // dart format on

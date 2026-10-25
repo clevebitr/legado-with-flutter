@@ -3,7 +3,7 @@
 > 由 `plan` 工具维护，请勿直接编辑。步骤级进度以 `todo` 工具为准；决策与踩坑写入 DECISIONS.md。
 
 <!-- plan-bridge:state -->
-current: M20
+current: M8
 auto-breakpoint: false
 <!-- /plan-bridge:state -->
 
@@ -28,11 +28,11 @@ auto-breakpoint: false
 - [x] M17 — M17：听书与音频引擎（音频源播放 + TTS 朗读）
 - [x] M18 — 应用外壳与我的页：底部导航 + 关于/法律声明（ui-gap §4）
 - [x] M19 — 书架分组与管理页、详情增强、书签/阅读记录（ui-gap §4）
-- [ ] M20 — 书内全文搜索 + 规则管理 UI（净化/目录/字典/高亮）（ui-gap §4）
+- [x] M20 — 书内全文搜索 + 规则管理 UI（净化/目录/字典/高亮）（ui-gap §4）
 - [x] M21 — M21a — WebView 验证 + Cookie 持久化 + 引擎兼容（ADR-0068）
 - [ ] M22 — M21b — 按源缓存/主题/备份/本地导入/二维码/登录表单
 
-## Current: M20 — 书内全文搜索 + 规则管理 UI（净化/目录/字典/高亮）（ui-gap §4）
+## Current: M8 — 5.7 缓存清理 + 5.8 导出保真
 
-goal: M20-c 已落地：四类规则列表 + 按 kind 表单 + 我的入口
-breakpoint: 下一步：M20-d 书内全文搜索（todo #8）
+goal: M20 已闭环（a/b/c/d 全部落地）
+breakpoint: M20 已闭环；下一条候选：M8（5.7 按源缓存 + 5.8 extra 导出保真）或 M22

@@ -1519,4 +1519,111 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerSearchUntitledChapter => 'Untitled chapter';
+
+  @override
+  String get rulesImportTitle => 'Import rules';
+
+  @override
+  String get rulesImportTextLabel => 'Rules JSON';
+
+  @override
+  String get rulesImportTextHint => 'Paste the contents of a 净化规则 JSON file';
+
+  @override
+  String get rulesImportUrlLabel => 'Or a URL';
+
+  @override
+  String get rulesImportUrlHint => 'https://…/replaceRules.json';
+
+  @override
+  String get rulesImportFileAction => 'Choose a JSON file';
+
+  @override
+  String get rulesImportSelectAll => 'Import all of them';
+
+  @override
+  String rulesImportSelected(int selected, int usable) {
+    return '$selected of $usable selected';
+  }
+
+  @override
+  String rulesImportCommit(int count) {
+    return 'Import selected ($count)';
+  }
+
+  @override
+  String rulesImportSucceeded(int created, int updated) {
+    return 'Imported $created new rules and updated $updated.';
+  }
+
+  @override
+  String rulesImportSucceededWithSkipped(
+    int created,
+    int updated,
+    int skipped,
+  ) {
+    return 'Imported $created new rules and updated $updated; $skipped entries were skipped as unreadable.';
+  }
+
+  @override
+  String get rulesImportUntitled => 'Untitled rule';
+
+  @override
+  String get rulesImportUpdate => 'Update';
+
+  @override
+  String get rulesImportProblemFormat => 'not a rule object';
+
+  @override
+  String get rulesImportProblemMissingPattern => 'missing pattern';
+
+  @override
+  String get rulesExportAction => 'Export';
+
+  @override
+  String get rulesExportEmpty => 'There are no rules to export.';
+
+  @override
+  String rulesExportSaved(int count) {
+    return 'Saved $count rules.';
+  }
+
+  @override
+  String rulesExportSavedWithSkipped(int count, int skipped) {
+    return 'Saved $count rules; $skipped unreadable rules were left out.';
+  }
+
+  @override
+  String get rulesExportFailed => 'Could not export the rules.';
+
+  @override
+  String get rulesScopeBoth => 'title + body';
+
+  @override
+  String get rulesScopeContent => 'body only';
+
+  @override
+  String get rulesScopeTitle => 'title only';
+
+  @override
+  String get rulesScopeNone => 'not applied';
+
+  @override
+  String get bookSourceExportAll => 'Export all';
+
+  @override
+  String bookSourceExportSelected(int count) {
+    return 'Export selected ($count)';
+  }
+
+  @override
+  String bookSourceExportAllSaved(int count) {
+    return 'Saved $count book sources.';
+  }
+
+  @override
+  String get bookSourceExportEmpty => 'There are no book sources to export.';
+
+  @override
+  String get rulesListMenu => 'More';
 }

@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:flutter_reader/features/rules/data/rule_payload_codec.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule_kind.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule_payload.dart';
+import 'package:flutter_reader/features/rules/domain/rule_payload_codec.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -164,6 +164,9 @@ void main() {
           'replacement': 'b',
           'isRegex': false,
           'timeoutMs': 1000,
+          // 作用范围与上游同默认：正文 true、标题 false（ADR-0071 §决策 4）。
+          'scopeContent': true,
+          'scopeTitle': false,
         },
       );
     });
@@ -207,7 +210,9 @@ void main() {
       const RulePayload original = RulePayload.replace(
         pattern: 'a',
         replacement: 'b',
-        extra: <String, Object?>{'scopeTitle': true, 'excludeScope': 'x'},
+        scopeTitle: true,
+        group: '格式',
+        extra: <String, Object?>{'excludeScope': 'x'},
       );
 
       expect(

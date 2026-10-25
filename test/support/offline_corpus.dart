@@ -10,8 +10,8 @@ import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
-import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
-import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
+import 'package:flutter_reader/core/platform/json_file_picker.dart';
+import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
@@ -196,9 +196,9 @@ Future<void> pumpSourceManagementPage(
   required Widget page,
   required FakeBookSourceRepository repository,
   FakeHttpClient? http,
-  BookSourceFilePicker? picker,
+  JsonFilePicker? picker,
   FakeBookSourceViewStore? viewStore,
-  BookSourceFileSaver? saver,
+  JsonFileSaver? saver,
   Clock? clock,
   SourceVerification? verification,
   void Function(Object? arguments)? onPush,
@@ -212,12 +212,12 @@ Future<void> pumpSourceManagementPage(
         httpClientProvider.overrideWithValue(http ?? FakeHttpClient()),
         appLoggerProvider.overrideWithValue(_logger()),
         // 文件选择器的默认实现要走平台通道；测试永远覆盖端口（testing.md §4）。
-        bookSourceFilePickerProvider.overrideWithValue(
-          picker ?? const UnsupportedBookSourceFilePicker(),
+        jsonFilePickerProvider.overrideWithValue(
+          picker ?? const UnsupportedJsonFilePicker(),
         ),
         // 单条导出同理：保存对话框是平台通道，测试覆盖端口。
-        bookSourceFileSaverProvider.overrideWithValue(
-          saver ?? const UnsupportedBookSourceFileSaver(),
+        jsonFileSaverProvider.overrideWithValue(
+          saver ?? const UnsupportedJsonFileSaver(),
         ),
         // 5.5 起列表页还读「排序 + 分组筛选」这条视图偏好；宿主 VM 里没有平台存储，
         // 所以端口给内存替身（testing.md §4）。

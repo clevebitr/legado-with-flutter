@@ -315,7 +315,11 @@ $RulePayloadCopyWith<$Res> get payload {
 /// @nodoc
 mixin _$RuleDraft {
 
- RuleKind get kind; String get name; RulePayload get payload; bool get isEnabled; bool get isBuiltIn;
+ RuleKind get kind; String get name; RulePayload get payload; bool get isEnabled; bool get isBuiltIn;/// Where the row should sit inside its kind; `null` appends (what「新增」does).
+///
+/// An import is the one caller that needs it: the file carries an `order` per rule and the
+/// imported list must come out in the file's order (ADR-0071 §决策 1).
+ int? get sortOrder;
 /// Create a copy of RuleDraft
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -327,20 +331,20 @@ $RuleDraftCopyWith<RuleDraft> get copyWith => _$RuleDraftCopyWithImpl<RuleDraft>
 @override
 bool operator ==(Object other) {
   final _this = this as RuleDraft;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RuleDraft&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.payload, _this.payload) || other.payload == _this.payload)&&(identical(other.isEnabled, _this.isEnabled) || other.isEnabled == _this.isEnabled)&&(identical(other.isBuiltIn, _this.isBuiltIn) || other.isBuiltIn == _this.isBuiltIn));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RuleDraft&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.payload, _this.payload) || other.payload == _this.payload)&&(identical(other.isEnabled, _this.isEnabled) || other.isEnabled == _this.isEnabled)&&(identical(other.isBuiltIn, _this.isBuiltIn) || other.isBuiltIn == _this.isBuiltIn)&&(identical(other.sortOrder, _this.sortOrder) || other.sortOrder == _this.sortOrder));
 }
 
 
 @override
 int get hashCode {
   final _this = this as RuleDraft;
-  return Object.hash(runtimeType,_this.kind,_this.name,_this.payload,_this.isEnabled,_this.isBuiltIn);
+  return Object.hash(runtimeType,_this.kind,_this.name,_this.payload,_this.isEnabled,_this.isBuiltIn,_this.sortOrder);
 }
 
 @override
 String toString() {
   final _this = this as RuleDraft;
-  return 'RuleDraft(kind: ${_this.kind}, name: ${_this.name}, payload: ${_this.payload}, isEnabled: ${_this.isEnabled}, isBuiltIn: ${_this.isBuiltIn})';
+  return 'RuleDraft(kind: ${_this.kind}, name: ${_this.name}, payload: ${_this.payload}, isEnabled: ${_this.isEnabled}, isBuiltIn: ${_this.isBuiltIn}, sortOrder: ${_this.sortOrder})';
 }
 
 
@@ -351,7 +355,7 @@ abstract mixin class $RuleDraftCopyWith<$Res>  {
   factory $RuleDraftCopyWith(RuleDraft value, $Res Function(RuleDraft) _then) = _$RuleDraftCopyWithImpl;
 @useResult
 $Res call({
- RuleKind kind, String name, RulePayload payload, bool isEnabled, bool isBuiltIn
+ RuleKind kind, String name, RulePayload payload, bool isEnabled, bool isBuiltIn, int? sortOrder
 });
 
 
@@ -368,14 +372,15 @@ class _$RuleDraftCopyWithImpl<$Res>
 
 /// Create a copy of RuleDraft
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? kind = null,Object? name = null,Object? payload = null,Object? isEnabled = null,Object? isBuiltIn = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? kind = null,Object? name = null,Object? payload = null,Object? isEnabled = null,Object? isBuiltIn = null,Object? sortOrder = freezed,}) {
   return _then(RuleDraft(
 kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
 as RuleKind,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,payload: null == payload ? _self.payload : payload // ignore: cast_nullable_to_non_nullable
 as RulePayload,isEnabled: null == isEnabled ? _self.isEnabled : isEnabled // ignore: cast_nullable_to_non_nullable
 as bool,isBuiltIn: null == isBuiltIn ? _self.isBuiltIn : isBuiltIn // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,sortOrder: freezed == sortOrder ? _self.sortOrder : sortOrder // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 /// Create a copy of RuleDraft
@@ -469,10 +474,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( RuleKind kind,  String name,  RulePayload payload,  bool isEnabled,  bool isBuiltIn)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( RuleKind kind,  String name,  RulePayload payload,  bool isEnabled,  bool isBuiltIn,  int? sortOrder)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _RuleDraft() when $default != null:
-return $default(_that.kind,_that.name,_that.payload,_that.isEnabled,_that.isBuiltIn);case _:
+return $default(_that.kind,_that.name,_that.payload,_that.isEnabled,_that.isBuiltIn,_that.sortOrder);case _:
   return orElse();
 
 }
@@ -490,10 +495,10 @@ return $default(_that.kind,_that.name,_that.payload,_that.isEnabled,_that.isBuil
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( RuleKind kind,  String name,  RulePayload payload,  bool isEnabled,  bool isBuiltIn)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( RuleKind kind,  String name,  RulePayload payload,  bool isEnabled,  bool isBuiltIn,  int? sortOrder)  $default,) {final _that = this;
 switch (_that) {
 case _RuleDraft():
-return $default(_that.kind,_that.name,_that.payload,_that.isEnabled,_that.isBuiltIn);case _:
+return $default(_that.kind,_that.name,_that.payload,_that.isEnabled,_that.isBuiltIn,_that.sortOrder);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -510,10 +515,10 @@ return $default(_that.kind,_that.name,_that.payload,_that.isEnabled,_that.isBuil
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( RuleKind kind,  String name,  RulePayload payload,  bool isEnabled,  bool isBuiltIn)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( RuleKind kind,  String name,  RulePayload payload,  bool isEnabled,  bool isBuiltIn,  int? sortOrder)?  $default,) {final _that = this;
 switch (_that) {
 case _RuleDraft() when $default != null:
-return $default(_that.kind,_that.name,_that.payload,_that.isEnabled,_that.isBuiltIn);case _:
+return $default(_that.kind,_that.name,_that.payload,_that.isEnabled,_that.isBuiltIn,_that.sortOrder);case _:
   return null;
 
 }
@@ -525,7 +530,7 @@ return $default(_that.kind,_that.name,_that.payload,_that.isEnabled,_that.isBuil
 
 
 class _RuleDraft implements RuleDraft {
-  const _RuleDraft({required this.kind, required this.name, required this.payload, this.isEnabled = true, this.isBuiltIn = false});
+  const _RuleDraft({required this.kind, required this.name, required this.payload, this.isEnabled = true, this.isBuiltIn = false, this.sortOrder});
   
 
 @override final  RuleKind kind;
@@ -533,6 +538,11 @@ class _RuleDraft implements RuleDraft {
 @override final  RulePayload payload;
 @override@JsonKey() final  bool isEnabled;
 @override@JsonKey() final  bool isBuiltIn;
+/// Where the row should sit inside its kind; `null` appends (what「新增」does).
+///
+/// An import is the one caller that needs it: the file carries an `order` per rule and the
+/// imported list must come out in the file's order (ADR-0071 §决策 1).
+@override final  int? sortOrder;
 
 /// Create a copy of RuleDraft
 /// with the given fields replaced by the non-null parameter values.
@@ -544,18 +554,18 @@ _$RuleDraftCopyWith<_RuleDraft> get copyWith => __$RuleDraftCopyWithImpl<_RuleDr
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _RuleDraft&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.name, name) || other.name == name)&&(identical(other.payload, payload) || other.payload == payload)&&(identical(other.isEnabled, isEnabled) || other.isEnabled == isEnabled)&&(identical(other.isBuiltIn, isBuiltIn) || other.isBuiltIn == isBuiltIn));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _RuleDraft&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.name, name) || other.name == name)&&(identical(other.payload, payload) || other.payload == payload)&&(identical(other.isEnabled, isEnabled) || other.isEnabled == isEnabled)&&(identical(other.isBuiltIn, isBuiltIn) || other.isBuiltIn == isBuiltIn)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,kind,name,payload,isEnabled,isBuiltIn);
+    return Object.hash(runtimeType,kind,name,payload,isEnabled,isBuiltIn,sortOrder);
 }
 
 @override
 String toString() {
-    return 'RuleDraft(kind: $kind, name: $name, payload: $payload, isEnabled: $isEnabled, isBuiltIn: $isBuiltIn)';
+    return 'RuleDraft(kind: $kind, name: $name, payload: $payload, isEnabled: $isEnabled, isBuiltIn: $isBuiltIn, sortOrder: $sortOrder)';
 }
 
 
@@ -566,7 +576,7 @@ abstract mixin class _$RuleDraftCopyWith<$Res> implements $RuleDraftCopyWith<$Re
   factory _$RuleDraftCopyWith(_RuleDraft value, $Res Function(_RuleDraft) _then) = __$RuleDraftCopyWithImpl;
 @override @useResult
 $Res call({
- RuleKind kind, String name, RulePayload payload, bool isEnabled, bool isBuiltIn
+ RuleKind kind, String name, RulePayload payload, bool isEnabled, bool isBuiltIn, int? sortOrder
 });
 
 
@@ -583,14 +593,15 @@ class __$RuleDraftCopyWithImpl<$Res>
 
 /// Create a copy of RuleDraft
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? kind = null,Object? name = null,Object? payload = null,Object? isEnabled = null,Object? isBuiltIn = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? kind = null,Object? name = null,Object? payload = null,Object? isEnabled = null,Object? isBuiltIn = null,Object? sortOrder = freezed,}) {
   return _then(_RuleDraft(
 kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
 as RuleKind,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,payload: null == payload ? _self.payload : payload // ignore: cast_nullable_to_non_nullable
 as RulePayload,isEnabled: null == isEnabled ? _self.isEnabled : isEnabled // ignore: cast_nullable_to_non_nullable
 as bool,isBuiltIn: null == isBuiltIn ? _self.isBuiltIn : isBuiltIn // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,sortOrder: freezed == sortOrder ? _self.sortOrder : sortOrder // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 

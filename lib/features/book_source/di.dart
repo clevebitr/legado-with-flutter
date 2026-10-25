@@ -21,6 +21,7 @@ import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engi
 import 'package:flutter_reader/features/book_source/domain/usecases/aggregate_search_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/check_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/explore_books.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/export_book_sources.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_audio_tracks.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
@@ -41,6 +42,11 @@ BookSourceRepository bookSourceRepository(Ref ref) => BookSourceRepositoryImpl(
   dao: ref.watch(bookSourceDaoProvider),
   logger: ref.watch(appLoggerProvider),
 );
+
+/// Provides the book-source export (`docs/dev/roadmap.md` 5.8, ADR-0071 §决策 3).
+@Riverpod(keepAlive: true)
+ExportBookSources exportBookSources(Ref ref) =>
+    ExportBookSources(repository: ref.watch(bookSourceRepositoryProvider));
 
 /// Provides the import use case (pasted text or a URL).
 @Riverpod(keepAlive: true)

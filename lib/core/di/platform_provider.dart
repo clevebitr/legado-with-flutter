@@ -1,9 +1,9 @@
 import 'package:flutter_reader/core/di/logger_provider.dart';
-import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
-import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
-import 'package:flutter_reader/core/platform/file_selector_book_source_file_picker.dart';
-import 'package:flutter_reader/core/platform/file_selector_book_source_file_saver.dart';
+import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/json_file_picker.dart';
+import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
@@ -29,24 +29,24 @@ DynamicColorProvider? platformDynamicColor(Ref ref) =>
 ///
 /// Unsupported platforms get a no-op picker instead of an exception.
 @Riverpod(keepAlive: true)
-BookSourceFilePicker bookSourceFilePicker(Ref ref) {
+JsonFilePicker jsonFilePicker(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 
   return platform.isMobile || platform.isDesktop
-      ? const FileSelectorBookSourceFilePicker()
-      : const UnsupportedBookSourceFilePicker();
+      ? const FileSelectorJsonFilePicker()
+      : const UnsupportedJsonFilePicker();
 }
 
 /// Provides the platform save dialog for single-source export.
 ///
 /// Unsupported platforms report `not saved` instead of throwing.
 @Riverpod(keepAlive: true)
-BookSourceFileSaver bookSourceFileSaver(Ref ref) {
+JsonFileSaver jsonFileSaver(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 
   return platform.isMobile || platform.isDesktop
-      ? const FileSelectorBookSourceFileSaver()
-      : const UnsupportedBookSourceFileSaver();
+      ? const FileSelectorJsonFileSaver()
+      : const UnsupportedJsonFileSaver();
 }
 
 /// Provides the long-task marker a batch check holds while it runs.

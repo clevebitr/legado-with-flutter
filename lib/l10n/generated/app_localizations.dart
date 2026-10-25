@@ -2801,6 +2801,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Untitled chapter'**
   String get readerSearchUntitledChapter;
+
+  /// No description provided for @rulesImportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import rules'**
+  String get rulesImportTitle;
+
+  /// No description provided for @rulesImportTextLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules JSON'**
+  String get rulesImportTextLabel;
+
+  /// No description provided for @rulesImportTextHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste the contents of a 净化规则 JSON file'**
+  String get rulesImportTextHint;
+
+  /// No description provided for @rulesImportUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Or a URL'**
+  String get rulesImportUrlLabel;
+
+  /// No description provided for @rulesImportUrlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'https://…/replaceRules.json'**
+  String get rulesImportUrlHint;
+
+  /// No description provided for @rulesImportFileAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a JSON file'**
+  String get rulesImportFileAction;
+
+  /// No description provided for @rulesImportSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Import all of them'**
+  String get rulesImportSelectAll;
+
+  /// No description provided for @rulesImportSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected} of {usable} selected'**
+  String rulesImportSelected(int selected, int usable);
+
+  /// No description provided for @rulesImportCommit.
+  ///
+  /// In en, this message translates to:
+  /// **'Import selected ({count})'**
+  String rulesImportCommit(int count);
+
+  /// No description provided for @rulesImportSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {created} new rules and updated {updated}.'**
+  String rulesImportSucceeded(int created, int updated);
+
+  /// No description provided for @rulesImportSucceededWithSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {created} new rules and updated {updated}; {skipped} entries were skipped as unreadable.'**
+  String rulesImportSucceededWithSkipped(int created, int updated, int skipped);
+
+  /// No description provided for @rulesImportUntitled.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled rule'**
+  String get rulesImportUntitled;
+
+  /// No description provided for @rulesImportUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get rulesImportUpdate;
+
+  /// No description provided for @rulesImportProblemFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'not a rule object'**
+  String get rulesImportProblemFormat;
+
+  /// No description provided for @rulesImportProblemMissingPattern.
+  ///
+  /// In en, this message translates to:
+  /// **'missing pattern'**
+  String get rulesImportProblemMissingPattern;
+
+  /// No description provided for @rulesExportAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get rulesExportAction;
+
+  /// No description provided for @rulesExportEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no rules to export.'**
+  String get rulesExportEmpty;
+
+  /// No description provided for @rulesExportSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {count} rules.'**
+  String rulesExportSaved(int count);
+
+  /// No description provided for @rulesExportSavedWithSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {count} rules; {skipped} unreadable rules were left out.'**
+  String rulesExportSavedWithSkipped(int count, int skipped);
+
+  /// No description provided for @rulesExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not export the rules.'**
+  String get rulesExportFailed;
+
+  /// No description provided for @rulesScopeBoth.
+  ///
+  /// In en, this message translates to:
+  /// **'title + body'**
+  String get rulesScopeBoth;
+
+  /// No description provided for @rulesScopeContent.
+  ///
+  /// In en, this message translates to:
+  /// **'body only'**
+  String get rulesScopeContent;
+
+  /// No description provided for @rulesScopeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'title only'**
+  String get rulesScopeTitle;
+
+  /// No description provided for @rulesScopeNone.
+  ///
+  /// In en, this message translates to:
+  /// **'not applied'**
+  String get rulesScopeNone;
+
+  /// No description provided for @bookSourceExportAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Export all'**
+  String get bookSourceExportAll;
+
+  /// No description provided for @bookSourceExportSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Export selected ({count})'**
+  String bookSourceExportSelected(int count);
+
+  /// No description provided for @bookSourceExportAllSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {count} book sources.'**
+  String bookSourceExportAllSaved(int count);
+
+  /// No description provided for @bookSourceExportEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no book sources to export.'**
+  String get bookSourceExportEmpty;
+
+  /// No description provided for @rulesListMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get rulesListMenu;
 }
 
 class _AppLocalizationsDelegate

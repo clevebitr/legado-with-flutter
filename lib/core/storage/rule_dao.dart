@@ -105,6 +105,7 @@ class RuleDao extends DatabaseAccessor<ReaderDatabase> with _$RuleDaoMixin {
     String? name,
     Map<String, Object?>? payload,
     bool? isEnabled,
+    int? sortOrder,
   }) => (update(rules)..where((Rules table) => table.id.equals(id))).write(
     RulesCompanion(
       name: name == null ? const Value<String>.absent() : Value<String>(name),
@@ -114,6 +115,9 @@ class RuleDao extends DatabaseAccessor<ReaderDatabase> with _$RuleDaoMixin {
       isEnabled: isEnabled == null
           ? const Value<bool>.absent()
           : Value<bool>(isEnabled),
+      sortOrder: sortOrder == null
+          ? const Value<int>.absent()
+          : Value<int>(sortOrder),
     ),
   );
 

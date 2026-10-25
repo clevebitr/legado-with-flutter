@@ -1472,4 +1472,111 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerSearchUntitledChapter => '无标题章节';
+
+  @override
+  String get rulesImportTitle => '导入规则';
+
+  @override
+  String get rulesImportTextLabel => '规则 JSON';
+
+  @override
+  String get rulesImportTextHint => '粘贴净化规则 JSON 文件的内容';
+
+  @override
+  String get rulesImportUrlLabel => '或填写下载地址';
+
+  @override
+  String get rulesImportUrlHint => 'https://…/replaceRules.json';
+
+  @override
+  String get rulesImportFileAction => '选择 JSON 文件';
+
+  @override
+  String get rulesImportSelectAll => '全部导入';
+
+  @override
+  String rulesImportSelected(int selected, int usable) {
+    return '已选 $selected/$usable';
+  }
+
+  @override
+  String rulesImportCommit(int count) {
+    return '导入选中（$count）';
+  }
+
+  @override
+  String rulesImportSucceeded(int created, int updated) {
+    return '新增 $created 条、更新 $updated 条。';
+  }
+
+  @override
+  String rulesImportSucceededWithSkipped(
+    int created,
+    int updated,
+    int skipped,
+  ) {
+    return '新增 $created 条、更新 $updated 条；$skipped 条读不懂已跳过。';
+  }
+
+  @override
+  String get rulesImportUntitled => '无名规则';
+
+  @override
+  String get rulesImportUpdate => '更新';
+
+  @override
+  String get rulesImportProblemFormat => '不是规则对象';
+
+  @override
+  String get rulesImportProblemMissingPattern => '缺少 pattern';
+
+  @override
+  String get rulesExportAction => '导出';
+
+  @override
+  String get rulesExportEmpty => '没有可导出的规则。';
+
+  @override
+  String rulesExportSaved(int count) {
+    return '已导出 $count 条规则。';
+  }
+
+  @override
+  String rulesExportSavedWithSkipped(int count, int skipped) {
+    return '已导出 $count 条；$skipped 条读不懂的没有导出。';
+  }
+
+  @override
+  String get rulesExportFailed => '规则导出失败。';
+
+  @override
+  String get rulesScopeBoth => '标题 + 正文';
+
+  @override
+  String get rulesScopeContent => '只改正文';
+
+  @override
+  String get rulesScopeTitle => '只改标题';
+
+  @override
+  String get rulesScopeNone => '不生效';
+
+  @override
+  String get bookSourceExportAll => '导出全部';
+
+  @override
+  String bookSourceExportSelected(int count) {
+    return '导出选中（$count）';
+  }
+
+  @override
+  String bookSourceExportAllSaved(int count) {
+    return '已导出 $count 个书源。';
+  }
+
+  @override
+  String get bookSourceExportEmpty => '没有可导出的书源。';
+
+  @override
+  String get rulesListMenu => '更多';
 }

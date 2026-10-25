@@ -185,6 +185,39 @@ final class BookSourceRepositoryImpl implements BookSourceRepository {
   }
 
   @override
+  Future<List<String>> exportPayloads({Set<int>? ids}) async {
+    final List<BookSourceRow> rows = <BookSourceRow>[];
+    if (ids == null || ids.isEmpty) {
+      rows.addAll(await _dao.findAll());
+    } else {
+      for (final int id in ids) {
+        final BookSourceRow? row = await _dao.findById(id);
+        if (row != null) {
+          rows.add(row);
+        }
+      }
+    }
+
+    final List<String> payloads = <String>[];
+    for (final BookSourceRow row in rows) {
+      final Map<String, Object?>? payload = _payloadOf(row);
+      if (payload == null) {
+        continue;
+      }
+      // 只覆盖两个用户态键：文件里的 `enabled` / `customOrder` 是导入那一刻的快照。
+      payloads.add(
+        jsonEncode(<String, Object?>{
+          ...payload,
+          'enabled': row.isEnabled,
+          'customOrder': row.customOrder,
+        }),
+      );
+    }
+
+    return payloads;
+  }
+
+  @override
   Future<void> setEnabledFor(List<int> ids, {required bool isEnabled}) =>
       _dao.setEnabledFor(ids, isEnabled: isEnabled);
 

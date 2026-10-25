@@ -1,24 +1,22 @@
 import 'dart:convert';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
-import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_dialog.dart';
+import 'package:flutter_reader/core/platform/json_file_picker.dart';
 
-/// [BookSourceFilePicker] backed by `file_selector`.
+/// [JsonFilePicker] backed by `file_selector`.
 ///
 /// The dialog call is injected through `opener`, so reading, the size cap and BOM handling are
 /// ordinary testable Dart.
-final class FileSelectorBookSourceFilePicker implements BookSourceFilePicker {
+final class FileSelectorJsonFilePicker implements JsonFilePicker {
   /// Creates the picker; `opener` defaults to the real dialog.
-  const FileSelectorBookSourceFilePicker({
-    this._opener = fileSelectorOpenJsonFile,
-  });
+  const FileSelectorJsonFilePicker({this._opener = fileSelectorOpenJsonFile});
 
-  final BookSourceFileOpener _opener;
+  final JsonFileOpener _opener;
 
   @override
   Future<ParseResult<String?>> pick({required int maxBytes}) async {
-    final PickedBookSourceFile? file = await _opener();
+    final PickedJsonFile? file = await _opener();
     if (file == null) {
       // 用户取消：不是失败，也不该被当成「读了空文件」去解析。
       return const ParseSuccess<String?>(null);

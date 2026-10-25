@@ -78,6 +78,10 @@ final class _FakeRepository implements BookSourceRepository {
 
   // 导入路径不碰这三个写口（ADR-0050）：实现成空操作，避免测试为了「能编译」而假装它们被调用。
   @override
+  Future<List<String>> exportPayloads({Set<int>? ids}) async =>
+      const <String>[];
+
+  @override
   Future<String?> payloadOf(int id) async => null;
 
   @override

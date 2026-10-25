@@ -52,6 +52,100 @@ final class RuleRepositoryProvider
 
 String _$ruleRepositoryHash() => r'17cecca4a7c54e5cdd1a7029bc9addb170adc64c';
 
+/// Provides the replace-rule import (`docs/dev/roadmap.md` M23, ADR-0071 §决策 2).
+
+@ProviderFor(importReplaceRules)
+final importReplaceRulesProvider = ImportReplaceRulesProvider._();
+
+/// Provides the replace-rule import (`docs/dev/roadmap.md` M23, ADR-0071 §决策 2).
+
+final class ImportReplaceRulesProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<ImportReplaceRules>,
+          ImportReplaceRules,
+          FutureOr<ImportReplaceRules>
+        >
+    with
+        $FutureModifier<ImportReplaceRules>,
+        $FutureProvider<ImportReplaceRules> {
+  /// Provides the replace-rule import (`docs/dev/roadmap.md` M23, ADR-0071 §决策 2).
+  ImportReplaceRulesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'importReplaceRulesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$importReplaceRulesHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<ImportReplaceRules> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<ImportReplaceRules> create(Ref ref) {
+    return importReplaceRules(ref);
+  }
+}
+
+String _$importReplaceRulesHash() =>
+    r'05d066f265321127ef289da9aadbea7124f85061';
+
+/// Provides the replace-rule export (`docs/dev/roadmap.md` M23, ADR-0071 §决策 1).
+
+@ProviderFor(exportReplaceRules)
+final exportReplaceRulesProvider = ExportReplaceRulesProvider._();
+
+/// Provides the replace-rule export (`docs/dev/roadmap.md` M23, ADR-0071 §决策 1).
+
+final class ExportReplaceRulesProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<ExportReplaceRules>,
+          ExportReplaceRules,
+          FutureOr<ExportReplaceRules>
+        >
+    with
+        $FutureModifier<ExportReplaceRules>,
+        $FutureProvider<ExportReplaceRules> {
+  /// Provides the replace-rule export (`docs/dev/roadmap.md` M23, ADR-0071 §决策 1).
+  ExportReplaceRulesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'exportReplaceRulesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$exportReplaceRulesHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<ExportReplaceRules> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<ExportReplaceRules> create(Ref ref) {
+    return exportReplaceRules(ref);
+  }
+}
+
+String _$exportReplaceRulesHash() =>
+    r'305c8cb052a58bb4d63163f052a4411c67ff73e0';
+
 /// Provides the loader of the bundled seed rules.
 
 @ProviderFor(ruleSeedLoader)

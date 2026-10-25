@@ -4,13 +4,13 @@ import 'package:flutter_reader/core/storage/database.dart' show RuleRow;
 import 'package:flutter_reader/core/storage/preference_store.dart';
 import 'package:flutter_reader/core/storage/rule_dao.dart' show RuleDao;
 import 'package:flutter_reader/core/utils/clock.dart';
-import 'package:flutter_reader/features/rules/data/rule_payload_codec.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule_kind.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule_payload.dart';
 import 'package:flutter_reader/features/rules/domain/repositories/chapter_body_invalidator.dart';
 import 'package:flutter_reader/features/rules/domain/repositories/rule_repository.dart';
 import 'package:flutter_reader/features/rules/domain/repositories/rule_seed_loader.dart';
+import 'package:flutter_reader/features/rules/domain/rule_payload_codec.dart';
 
 /// `shared_preferences` key of the「内置规则已经播过」flag.
 ///
@@ -69,6 +69,7 @@ final class RuleRepositoryImpl implements RuleRepository {
       payload: encodeRulePayload(draft.payload),
       isEnabled: draft.isEnabled,
       isBuiltIn: draft.isBuiltIn,
+      sortOrder: draft.sortOrder,
       now: _clock.now(),
     );
 
@@ -92,6 +93,8 @@ final class RuleRepositoryImpl implements RuleRepository {
       name: rule.name,
       payload: encodeRulePayload(rule.payload),
       isEnabled: rule.isEnabled,
+      // 导入会带着文件里的 `order` 回来（ADR-0071 §决策 1）；手动排序仍走 reorder。
+      sortOrder: rule.sortOrder,
     );
 
     await _retireChapterBodies(rule.kind);

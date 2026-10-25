@@ -18,6 +18,7 @@ import 'package:flutter_reader/features/book_source/domain/source_check_light.da
 import 'package:flutter_reader/features/book_source/domain/source_login.dart';
 import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/export_book_sources.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -146,6 +147,20 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
                     context,
                     const BookSourceRoute.importSources(),
                   ),
+                ),
+                // 全部导出放进溢出菜单：主工具条已经有 6 个按钮，再加一个会让标题在窄屏上被挤掉。
+                PopupMenuButton<_ViewAction>(
+                  tooltip: l10n.bookSourceListMoreActions,
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (_ViewAction action) =>
+                      unawaited(_exportSources(context, ref, l10n)),
+                  itemBuilder: (BuildContext context) =>
+                      <PopupMenuEntry<_ViewAction>>[
+                        PopupMenuItem<_ViewAction>(
+                          value: _ViewAction.groupByDomain,
+                          child: Text(l10n.bookSourceExportAll),
+                        ),
+                      ],
                 ),
               ],
             ),
@@ -288,6 +303,12 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
               itemBuilder: (BuildContext context) =>
                   <PopupMenuEntry<_BatchAction>>[
                     PopupMenuItem<_BatchAction>(
+                      value: _BatchAction.export,
+                      child: Text(
+                        l10n.bookSourceExportSelected(selected.length),
+                      ),
+                    ),
+                    PopupMenuItem<_BatchAction>(
                       value: _BatchAction.moveTop,
                       child: Text(l10n.bookSourceListBatchMoveTop),
                     ),
@@ -325,6 +346,8 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     required void Function(Future<void> Function()) run,
   }) {
     switch (action) {
+      case _BatchAction.export:
+        run(() => _exportSources(context, ref, l10n, ids: selected));
       case _BatchAction.moveTop:
         run(
           () => ref
@@ -1327,6 +1350,48 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Writes every source (or the ticked [ids]) to a file the user picks
+  /// (`docs/dev/roadmap.md` 5.8, ADR-0071 §决策 3).
+  ///
+  /// The bytes are the stored payloads with `enabled` / `customOrder` written over the imported
+  /// values, so a re-import elsewhere reproduces the list the user is looking at.
+  Future<void> _exportSources(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n, {
+    Set<int>? ids,
+  }) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final ParseResult<BookSourceExport> exported = await ref
+        .read(exportBookSourcesProvider)
+        .execute(ids: ids);
+    final BookSourceExport document;
+    switch (exported) {
+      case ParseSuccess<BookSourceExport>(:final BookSourceExport data):
+        document = data;
+      case ParseFailure<BookSourceExport>():
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.bookSourceExportEmpty)),
+        );
+
+        return;
+    }
+
+    final ParseResult<bool> saved = await ref
+        .read(jsonFileSaverProvider)
+        .save(suggestedName: document.fileName, contents: document.contents);
+    if (!context.mounted) {
+      return;
+    }
+
+    final String message = switch (saved) {
+      ParseSuccess<bool>(data: false) => l10n.actionCancel,
+      ParseSuccess<bool>() => l10n.bookSourceExportAllSaved(document.count),
+      ParseFailure<bool>() => l10n.bookSourceExportFailed,
+    };
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
   /// Copies the source's JSON to the clipboard and offers to save it (ADR-0050 §决策 4).
   ///
   /// The bytes are the stored **payload**, so a re-import of the export produces the same source.
@@ -1340,10 +1405,12 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     StoredBookSource source,
   ) async {
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    final String? payload = await ref
+    // 走批量导出同一个方法：单条导出也要把 `enabled` / `customOrder` 换成当前用户态
+    // （ADR-0071 §决策 3 修订了 ADR-0050 §决策 4 的「字节就是 payload」）。
+    final List<String> payloads = await ref
         .read(bookSourceRepositoryProvider)
-        .payloadOf(source.id);
-    if (payload == null) {
+        .exportPayloads(ids: <int>{source.id});
+    if (payloads.isEmpty) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.bookSourceExportFailed)),
       );
@@ -1351,9 +1418,10 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
       return;
     }
 
+    final String payload = payloads.first;
     unawaited(_copyToClipboard(payload));
     final ParseResult<bool> saved = await ref
-        .read(bookSourceFileSaverProvider)
+        .read(jsonFileSaverProvider)
         .save(suggestedName: '${source.source.name}.json', contents: payload);
     if (!context.mounted) {
       return;
@@ -1573,7 +1641,14 @@ enum _RowAction {
 enum _ViewAction { groupByDomain, manageGroups }
 
 /// The batch actions that live in the overflow menu (ADR-0052 §决策 4).
-enum _BatchAction { moveTop, moveBottom, removeGroup, exploreOn, exploreOff }
+enum _BatchAction {
+  export,
+  moveTop,
+  moveBottom,
+  removeGroup,
+  exploreOn,
+  exploreOff,
+}
 
 /// What to do with a group in the management dialog (ADR-0052 §决策 4).
 enum _GroupAction { rename, delete, selectSources, deleteSources }

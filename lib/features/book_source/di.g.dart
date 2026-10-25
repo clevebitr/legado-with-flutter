@@ -61,6 +61,58 @@ final class BookSourceRepositoryProvider
 String _$bookSourceRepositoryHash() =>
     r'3ecd37d01f723401a48df8ed049d7f0bb3d20900';
 
+/// Provides the book-source export (`docs/dev/roadmap.md` 5.8, ADR-0071 §决策 3).
+
+@ProviderFor(exportBookSources)
+final exportBookSourcesProvider = ExportBookSourcesProvider._();
+
+/// Provides the book-source export (`docs/dev/roadmap.md` 5.8, ADR-0071 §决策 3).
+
+final class ExportBookSourcesProvider
+    extends
+        $FunctionalProvider<
+          ExportBookSources,
+          ExportBookSources,
+          ExportBookSources
+        >
+    with $Provider<ExportBookSources> {
+  /// Provides the book-source export (`docs/dev/roadmap.md` 5.8, ADR-0071 §决策 3).
+  ExportBookSourcesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'exportBookSourcesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$exportBookSourcesHash();
+
+  @$internal
+  @override
+  $ProviderElement<ExportBookSources> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  ExportBookSources create(Ref ref) {
+    return exportBookSources(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ExportBookSources value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ExportBookSources>(value),
+    );
+  }
+}
+
+String _$exportBookSourcesHash() => r'4061ca83c8c84aed3d669d2011b09424db446e2e';
+
 /// Provides the import use case (pasted text or a URL).
 
 @ProviderFor(importBookSources)

@@ -6,6 +6,10 @@ import 'package:flutter_reader/features/rules/domain/entities/rule_payload.dart'
 /// Turns a row's stored `payload` JSON into a typed [RulePayload] and back
 /// (`docs/dev/roadmap.md` M20, ADR-0070 §决策 1).
 ///
+/// It lives in `domain/` although the text is a storage format: the **shape** is a product decision
+/// (ADR-0070 owns the key names), and both the repository (`data/`) and the import/export use cases
+/// (`domain/`) must agree on it — a `domain` type may not import `data` (C-ARCH-1).
+///
 /// The stored shape is the table's format, so this file is where it is pinned down. Two guarantees
 /// matter more than validation:
 ///
@@ -68,11 +72,18 @@ RulePayload _decodeReplace(Map<String, Object?> json, String raw) {
     // 上游 `ReplaceRule.isRegex` 默认是 true，缺键时按正则处理与上游一致。
     isRegex: _bool(json, 'isRegex') ?? true,
     timeoutMs: _int(json, 'timeoutMs'),
+    group: _string(json, 'group'),
+    // 上游 `scopeContent` 默认 true、`scopeTitle` 默认 false（ADR-0071 §决策 4）。
+    scopeContent: _bool(json, 'scopeContent') ?? true,
+    scopeTitle: _bool(json, 'scopeTitle') ?? false,
     extra: _extra(json, const <String>{
       'pattern',
       'replacement',
       'isRegex',
       'timeoutMs',
+      'group',
+      'scopeContent',
+      'scopeTitle',
     }),
   );
 }
@@ -128,6 +139,9 @@ Map<String, Object?> _encodeReplace(ReplacePayload payload) =>
       'replacement': payload.replacement,
       'isRegex': payload.isRegex,
       'timeoutMs': payload.timeoutMs,
+      'group': payload.group,
+      'scopeContent': payload.scopeContent,
+      'scopeTitle': payload.scopeTitle,
     });
 
 Map<String, Object?> _encodeToc(TocPayload payload) => _mergeEncoding(

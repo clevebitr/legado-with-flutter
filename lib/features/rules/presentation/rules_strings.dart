@@ -10,6 +10,18 @@ String rulesTitle(AppLocalizations l10n, RuleKind kind) => switch (kind) {
   RuleKind.highlight => l10n.rulesHighlightTitle,
 };
 
+/// Which part of a chapter a purge rule rewrites, as one short label.
+///
+/// A rule that does not touch the body looks inert in a reading app, so the list says why: these
+/// labels are also what the import preview shows before anything is written (ADR-0071 §决策 4).
+String rulesScopeLabel(AppLocalizations l10n, ReplacePayload payload) =>
+    switch ((payload.scopeContent, payload.scopeTitle)) {
+      (true, true) => l10n.rulesScopeBoth,
+      (true, false) => l10n.rulesScopeContent,
+      (false, true) => l10n.rulesScopeTitle,
+      (false, false) => l10n.rulesScopeNone,
+    };
+
 /// One line of payload text for a list row.
 ///
 /// It shows what the rule actually does rather than its name twice: a purge rule reads

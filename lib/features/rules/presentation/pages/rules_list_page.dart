@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
+import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
+import 'package:flutter_reader/features/rules/di.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule_kind.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule_payload.dart';
+import 'package:flutter_reader/features/rules/domain/usecases/export_replace_rules.dart';
 import 'package:flutter_reader/features/rules/presentation/notifiers/rules_list_notifier.dart';
 import 'package:flutter_reader/features/rules/presentation/rules_route.dart';
 import 'package:flutter_reader/features/rules/presentation/rules_strings.dart';
@@ -34,6 +40,29 @@ class RulesListPage extends ConsumerWidget {
       appBar: AppBar(
         title: Text(rulesTitle(l10n, kind)),
         backgroundColor: tokens.colors.surface,
+        actions: <Widget>[
+          PopupMenuButton<_RulesMenuAction>(
+            tooltip: l10n.rulesListMenu,
+            onSelected: (_RulesMenuAction action) => switch (action) {
+              _RulesMenuAction.import => pushRulesRoute(
+                context,
+                const RulesRoute.import(),
+              ),
+              _RulesMenuAction.export => unawaited(_export(context, ref, l10n)),
+            },
+            itemBuilder: (BuildContext context) =>
+                <PopupMenuEntry<_RulesMenuAction>>[
+                  PopupMenuItem<_RulesMenuAction>(
+                    value: _RulesMenuAction.import,
+                    child: Text(l10n.actionImport),
+                  ),
+                  PopupMenuItem<_RulesMenuAction>(
+                    value: _RulesMenuAction.export,
+                    child: Text(l10n.rulesExportAction),
+                  ),
+                ],
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => pushRulesRoute(context, RulesRoute.edit(kind: kind)),
@@ -93,6 +122,49 @@ class RulesListPage extends ConsumerWidget {
     },
   );
 
+  /// Writes every purge rule of this kind to a file the user picks
+  /// (`docs/dev/roadmap.md` M23, ADR-0071 §决策 1).
+  ///
+  /// Only the 替换净化 list offers it: the exchange format **is** upstream's `ReplaceRule` array, and
+  /// the other three kinds have no such format to be compatible with.
+  Future<void> _export(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final ReplaceRuleExport document = await (await ref.read(
+      exportReplaceRulesProvider.future,
+    )).execute();
+
+    if (document.count == 0) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.rulesExportEmpty)));
+
+      return;
+    }
+
+    final ParseResult<bool> saved = await ref
+        .read(jsonFileSaverProvider)
+        .save(suggestedName: document.fileName, contents: document.contents);
+    if (!context.mounted) {
+      return;
+    }
+
+    final String message = switch (saved) {
+      // 取消保存对话框是 ParseSuccess(false)：什么也不用说。
+      ParseSuccess<bool>(data: false) => l10n.actionCancel,
+      ParseSuccess<bool>() =>
+        document.skipped == 0
+            ? l10n.rulesExportSaved(document.count)
+            : l10n.rulesExportSavedWithSkipped(
+                document.count,
+                document.skipped,
+              ),
+      ParseFailure<bool>() => l10n.rulesExportFailed,
+    };
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
   /// Turns a drag into the kind's new id order and stores it.
   void _onReorder(WidgetRef ref, List<Rule> rules, int oldIndex, int newIndex) {
     // 两个下标都是**移除之前**的坐标系，所以先取出被拖的那一行再插入目标位置。
@@ -104,6 +176,9 @@ class RulesListPage extends ConsumerWidget {
     ref.read(rulesListProvider(kind).notifier).reorder(order);
   }
 }
+
+/// What the list page's overflow menu can do (`docs/dev/roadmap.md` M23).
+enum _RulesMenuAction { import, export }
 
 /// One stored rule as a list row.
 class _Row extends StatelessWidget {
@@ -141,6 +216,8 @@ class _Row extends StatelessWidget {
       subtitle: Text(
         <String>[
           if (isBroken) l10n.rulesBroken else ruleSummary(l10n, rule.payload),
+          if (rule.payload case final ReplacePayload payload)
+            if (!payload.scopeContent) rulesScopeLabel(l10n, payload),
           if (rule.isBuiltIn) l10n.rulesBuiltIn,
         ].join(' · '),
         maxLines: 2,

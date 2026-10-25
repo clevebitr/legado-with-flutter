@@ -45,7 +45,7 @@ class BookSourceImportNotifier extends _$BookSourceImportNotifier {
   /// Asks the platform for a file and imports it; a cancelled dialog changes nothing.
   Future<void> pickFile() async {
     final ParseResult<String?> picked = await ref
-        .read(bookSourceFilePickerProvider)
+        .read(jsonFilePickerProvider)
         .pick(maxBytes: bookSourceImportSizeLimitBytes);
 
     switch (picked) {

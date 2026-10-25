@@ -21,12 +21,19 @@ sealed class RulesRoute with _$RulesRoute {
   const factory RulesRoute.edit({required RuleKind kind, int? ruleId}) =
       RulesEditRoute;
 
+  /// The 替换净化 import (paste / URL / file, then a ticked preview).
+  const factory RulesRoute.import() = RulesImportRoute;
+
   /// The path this route is served under.
   String get path => switch (this) {
     RulesListRoute(:final RuleKind kind) => '/rules/${kind.value}',
     RulesEditRoute(:final RuleKind kind) => '/rules/${kind.value}/edit',
+    RulesImportRoute() => _importPath,
   };
 }
+
+/// Path of [RulesImportRoute].
+const String _importPath = '/rules/import';
 
 /// Pushes [route] through the app's route table (ADR-0011 §4).
 void pushRulesRoute(BuildContext context, RulesRoute route) =>

@@ -123,119 +123,105 @@ String _$platformDynamicColorHash() =>
 ///
 /// Unsupported platforms get a no-op picker instead of an exception.
 
-@ProviderFor(bookSourceFilePicker)
-final bookSourceFilePickerProvider = BookSourceFilePickerProvider._();
+@ProviderFor(jsonFilePicker)
+final jsonFilePickerProvider = JsonFilePickerProvider._();
 
 /// Provides the platform file picker for book-source imports.
 ///
 /// Unsupported platforms get a no-op picker instead of an exception.
 
-final class BookSourceFilePickerProvider
-    extends
-        $FunctionalProvider<
-          BookSourceFilePicker,
-          BookSourceFilePicker,
-          BookSourceFilePicker
-        >
-    with $Provider<BookSourceFilePicker> {
+final class JsonFilePickerProvider
+    extends $FunctionalProvider<JsonFilePicker, JsonFilePicker, JsonFilePicker>
+    with $Provider<JsonFilePicker> {
   /// Provides the platform file picker for book-source imports.
   ///
   /// Unsupported platforms get a no-op picker instead of an exception.
-  BookSourceFilePickerProvider._()
+  JsonFilePickerProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'bookSourceFilePickerProvider',
+        name: r'jsonFilePickerProvider',
         isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$bookSourceFilePickerHash();
+  String debugGetCreateSourceHash() => _$jsonFilePickerHash();
 
   @$internal
   @override
-  $ProviderElement<BookSourceFilePicker> $createElement(
-    $ProviderPointer pointer,
-  ) => $ProviderElement(pointer);
+  $ProviderElement<JsonFilePicker> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
 
   @override
-  BookSourceFilePicker create(Ref ref) {
-    return bookSourceFilePicker(ref);
+  JsonFilePicker create(Ref ref) {
+    return jsonFilePicker(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(BookSourceFilePicker value) {
+  Override overrideWithValue(JsonFilePicker value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<BookSourceFilePicker>(value),
+      providerOverride: $SyncValueProvider<JsonFilePicker>(value),
     );
   }
 }
 
-String _$bookSourceFilePickerHash() =>
-    r'f7d7e3123b6a021aa45663689c93ced0c7b1817a';
+String _$jsonFilePickerHash() => r'2c6acd27ff8a29e555afbdc24db48da8f0c725e9';
 
 /// Provides the platform save dialog for single-source export.
 ///
 /// Unsupported platforms report `not saved` instead of throwing.
 
-@ProviderFor(bookSourceFileSaver)
-final bookSourceFileSaverProvider = BookSourceFileSaverProvider._();
+@ProviderFor(jsonFileSaver)
+final jsonFileSaverProvider = JsonFileSaverProvider._();
 
 /// Provides the platform save dialog for single-source export.
 ///
 /// Unsupported platforms report `not saved` instead of throwing.
 
-final class BookSourceFileSaverProvider
-    extends
-        $FunctionalProvider<
-          BookSourceFileSaver,
-          BookSourceFileSaver,
-          BookSourceFileSaver
-        >
-    with $Provider<BookSourceFileSaver> {
+final class JsonFileSaverProvider
+    extends $FunctionalProvider<JsonFileSaver, JsonFileSaver, JsonFileSaver>
+    with $Provider<JsonFileSaver> {
   /// Provides the platform save dialog for single-source export.
   ///
   /// Unsupported platforms report `not saved` instead of throwing.
-  BookSourceFileSaverProvider._()
+  JsonFileSaverProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'bookSourceFileSaverProvider',
+        name: r'jsonFileSaverProvider',
         isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$bookSourceFileSaverHash();
+  String debugGetCreateSourceHash() => _$jsonFileSaverHash();
 
   @$internal
   @override
-  $ProviderElement<BookSourceFileSaver> $createElement(
-    $ProviderPointer pointer,
-  ) => $ProviderElement(pointer);
+  $ProviderElement<JsonFileSaver> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
 
   @override
-  BookSourceFileSaver create(Ref ref) {
-    return bookSourceFileSaver(ref);
+  JsonFileSaver create(Ref ref) {
+    return jsonFileSaver(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(BookSourceFileSaver value) {
+  Override overrideWithValue(JsonFileSaver value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<BookSourceFileSaver>(value),
+      providerOverride: $SyncValueProvider<JsonFileSaver>(value),
     );
   }
 }
 
-String _$bookSourceFileSaverHash() =>
-    r'324c249ec6b41181bbadd92c67a5496c0926efbf';
+String _$jsonFileSaverHash() => r'51d513898a1bf349e8152385c6c8a72590d2add9';
 
 /// Provides the long-task marker a batch check holds while it runs.
 ///

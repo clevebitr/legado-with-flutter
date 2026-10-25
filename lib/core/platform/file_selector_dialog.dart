@@ -2,10 +2,10 @@
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/json_file_picker.dart';
 
 /// Opens the platform's JSON file dialog, or answers `null` when the user cancelled.
-Future<PickedBookSourceFile?> fileSelectorOpenJsonFile() async {
+Future<PickedJsonFile?> fileSelectorOpenJsonFile() async {
   final XFile? file = await openFile(
     acceptedTypeGroups: <XTypeGroup>[
       const XTypeGroup(
@@ -20,7 +20,7 @@ Future<PickedBookSourceFile?> fileSelectorOpenJsonFile() async {
     return null;
   }
 
-  return PickedBookSourceFile(name: file.name, bytes: await file.readAsBytes());
+  return PickedJsonFile(name: file.name, bytes: await file.readAsBytes());
 }
 
 /// Asks the user where to save [contents] and writes it, or returns `null` when they cancelled.

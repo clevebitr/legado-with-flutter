@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
+import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/rules/di.dart';
 import 'package:flutter_reader/features/rules/domain/entities/rule_kind.dart';
@@ -23,28 +26,37 @@ Future<void> _pump(
   WidgetTester tester,
   FakeRuleRepository repository, {
   RuleKind kind = RuleKind.replace,
+  JsonFileSaver? saver,
+  void Function(Object? arguments)? onPush,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
         ruleRepositoryProvider.overrideWith((Ref ref) async => repository),
         appLoggerProvider.overrideWithValue(AppLogger()),
+        jsonFileSaverProvider.overrideWithValue(
+          saver ?? const UnsupportedJsonFileSaver(),
+        ),
       ],
       child: MaterialApp(
         locale: const Locale('en'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: buildReaderTheme(fallbackLightColorScheme()),
-        onGenerateRoute: (RouteSettings settings) => MaterialPageRoute<void>(
-          settings: settings,
-          builder: (BuildContext context) => switch (settings.arguments) {
-            final RulesEditRoute route => RuleEditPage(
-              kind: route.kind,
-              ruleId: route.ruleId,
-            ),
-            _ => const SizedBox.shrink(),
-          },
-        ),
+        onGenerateRoute: (RouteSettings settings) {
+          onPush?.call(settings.arguments);
+
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (BuildContext context) => switch (settings.arguments) {
+              final RulesEditRoute route => RuleEditPage(
+                kind: route.kind,
+                ruleId: route.ruleId,
+              ),
+              _ => const SizedBox.shrink(),
+            },
+          );
+        },
         home: RulesListPage(kind: kind),
       ),
     ),
@@ -165,6 +177,77 @@ void main() {
       expect(page.ruleId, isNull);
     });
 
+    testWidgets('menu_whenOpened_offersImportAndExport', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester, FakeRuleRepository());
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.rulesListMenu));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.actionImport), findsOneWidget);
+      expect(find.text(l10n.rulesExportAction), findsOneWidget);
+    });
+
+    testWidgets('menu_whenImportIsChosen_opensTheImportRoute', (
+      WidgetTester tester,
+    ) async {
+      // 四类规则里只有净化有上游交换格式：入口挂在净化列表上（ADR-0071 §决策 2）。
+      final List<Object?> pushed = <Object?>[];
+      await _pump(tester, FakeRuleRepository(), onPush: pushed.add);
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.rulesListMenu));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.actionImport));
+      await tester.pumpAndSettle();
+
+      expect(pushed.single, isA<RulesImportRoute>());
+    });
+
+    testWidgets('export_whenChosen_writesTheUpstreamDocument', (
+      WidgetTester tester,
+    ) async {
+      final _RecordingSaver saver = _RecordingSaver();
+      await _pump(
+        tester,
+        FakeRuleRepository()..seed(
+          kind: RuleKind.replace,
+          name: '去广告',
+          payload: const RulePayload.replace(pattern: '广告', replacement: ''),
+        ),
+        saver: saver,
+      );
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.rulesListMenu));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.rulesExportAction));
+      await tester.pumpAndSettle();
+
+      expect(saver.savedName, 'replaceRules-1.json');
+      // 缩进过的上游数组（ADR-0071 §决策 1）：人也能读，上游也能导入。
+      expect(saver.savedContents, contains('"pattern": "广告"'));
+      expect(find.text(l10n.rulesExportSaved(1)), findsOneWidget);
+    });
+
+    testWidgets('export_givenNoRule_saysThereIsNothingToExport', (
+      WidgetTester tester,
+    ) async {
+      final _RecordingSaver saver = _RecordingSaver();
+      await _pump(tester, FakeRuleRepository(), saver: saver);
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.rulesListMenu));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.rulesExportAction));
+      await tester.pumpAndSettle();
+
+      expect(saver.savedContents, isNull);
+      expect(find.text(l10n.rulesExportEmpty), findsOneWidget);
+    });
+
     testWidgets('tap_whenARowIsChosen_opensThatRule', (
       WidgetTester tester,
     ) async {
@@ -184,4 +267,21 @@ void main() {
       expect(tester.widget<RuleEditPage>(find.byType(RuleEditPage)).ruleId, id);
     });
   });
+}
+
+/// A saver that records what the page asked to write.
+final class _RecordingSaver implements JsonFileSaver {
+  String? savedName;
+  String? savedContents;
+
+  @override
+  Future<ParseResult<bool>> save({
+    required String suggestedName,
+    required String contents,
+  }) async {
+    savedName = suggestedName;
+    savedContents = contents;
+
+    return const ParseSuccess<bool>(true);
+  }
 }

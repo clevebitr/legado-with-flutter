@@ -1,10 +1,10 @@
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
-import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
-import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
-import 'package:flutter_reader/core/platform/file_selector_book_source_file_picker.dart';
-import 'package:flutter_reader/core/platform/file_selector_book_source_file_saver.dart';
+import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/json_file_picker.dart';
+import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,8 +53,8 @@ void main() {
     });
   });
 
-  group('bookSourceFilePicker', () {
-    test('bookSourceFilePicker_givenAShippedPlatform_usesTheRealDialog', () {
+  group('jsonFilePicker', () {
+    test('jsonFilePicker_givenAShippedPlatform_usesTheRealDialog', () {
       // 三端（Android / iOS / Windows）都有官方实现，所以取真实选择器。
       for (final FakePlatformInfo platform in <FakePlatformInfo>[
         const FakePlatformInfo.android(),
@@ -68,13 +68,13 @@ void main() {
         );
 
         expect(
-          container.read(bookSourceFilePickerProvider),
-          isA<FileSelectorBookSourceFilePicker>(),
+          container.read(jsonFilePickerProvider),
+          isA<FileSelectorJsonFilePicker>(),
         );
       }
     });
 
-    test('bookSourceFilePicker_givenAnUnshippedPlatform_fallsBack', () {
+    test('jsonFilePicker_givenAnUnshippedPlatform_fallsBack', () {
       // platform.md §2：不支持的平台给 no-op 实现（答「没选」），而不是抛异常。
       final ProviderContainer container = ProviderContainer.test(
         overrides: <Override>[
@@ -85,13 +85,13 @@ void main() {
       );
 
       expect(
-        container.read(bookSourceFilePickerProvider),
-        isA<UnsupportedBookSourceFilePicker>(),
+        container.read(jsonFilePickerProvider),
+        isA<UnsupportedJsonFilePicker>(),
       );
     });
   });
-  group('bookSourceFileSaver', () {
-    test('bookSourceFileSaver_givenAShippedPlatform_usesTheRealDialog', () {
+  group('jsonFileSaver', () {
+    test('jsonFileSaver_givenAShippedPlatform_usesTheRealDialog', () {
       for (final FakePlatformInfo platform in <FakePlatformInfo>[
         const FakePlatformInfo.android(),
         const FakePlatformInfo.ios(),
@@ -104,13 +104,13 @@ void main() {
         );
 
         expect(
-          container.read(bookSourceFileSaverProvider),
-          isA<FileSelectorBookSourceFileSaver>(),
+          container.read(jsonFileSaverProvider),
+          isA<FileSelectorJsonFileSaver>(),
         );
       }
     });
 
-    test('bookSourceFileSaver_givenAnUnshippedPlatform_doesNotSave', () async {
+    test('jsonFileSaver_givenAnUnshippedPlatform_doesNotSave', () async {
       final ProviderContainer container = ProviderContainer.test(
         overrides: <Override>[
           platformInfoProvider.overrideWithValue(
@@ -120,12 +120,12 @@ void main() {
       );
 
       expect(
-        container.read(bookSourceFileSaverProvider),
-        isA<UnsupportedBookSourceFileSaver>(),
+        container.read(jsonFileSaverProvider),
+        isA<UnsupportedJsonFileSaver>(),
       );
       // 没对话框的平台 = 用户取消：`ParseSuccess(false)`，不是失败。
       final ParseResult<bool> saved = await container
-          .read(bookSourceFileSaverProvider)
+          .read(jsonFileSaverProvider)
           .save(suggestedName: 'a.json', contents: '{}');
       expect((saved as ParseSuccess<bool>).data, isFalse);
     });

@@ -1,17 +1,17 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
-import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
 import 'package:flutter_reader/core/platform/file_selector_dialog.dart';
+import 'package:flutter_reader/core/platform/json_file_saver.dart';
 
-/// [BookSourceFileSaver] backed by the `file_selector` plugin.
+/// [JsonFileSaver] backed by the `file_selector` plugin.
 ///
 /// A cancelled dialog answers `false`; a write failure travels as a [ParseFailure] of kind
 /// [ParseFailureKind.invalidBookSource].
-final class FileSelectorBookSourceFileSaver implements BookSourceFileSaver {
+final class FileSelectorJsonFileSaver implements JsonFileSaver {
   /// Creates the saver; [write] defaults to the real save dialog.
-  const FileSelectorBookSourceFileSaver({BookSourceFileWriter? write})
+  const FileSelectorJsonFileSaver({JsonFileWriter? write})
     : _write = write ?? fileSelectorSaveJsonFile;
 
-  final BookSourceFileWriter _write;
+  final JsonFileWriter _write;
 
   @override
   Future<ParseResult<bool>> save({

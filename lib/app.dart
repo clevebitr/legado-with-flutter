@@ -67,6 +67,7 @@ import 'package:flutter_reader/features/rules/domain/entities/rule_payload.dart'
 import 'package:flutter_reader/features/rules/domain/repositories/chapter_body_invalidator.dart';
 import 'package:flutter_reader/features/rules/domain/repositories/rule_repository.dart';
 import 'package:flutter_reader/features/rules/presentation/pages/rule_edit_page.dart';
+import 'package:flutter_reader/features/rules/presentation/pages/rules_import_page.dart';
 import 'package:flutter_reader/features/rules/presentation/pages/rules_list_page.dart';
 import 'package:flutter_reader/features/rules/presentation/rules_route.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
@@ -241,6 +242,7 @@ class ReaderApp extends ConsumerWidget {
       kind: route.kind,
       ruleId: route.ruleId,
     ),
+    RulesImportRoute() => const RulesImportPage(),
     // 落地页就是外壳（ADR-0055 §决策 5）：未知参数回落到它，而不是搜索页。
     _ => const AppShell(),
   };

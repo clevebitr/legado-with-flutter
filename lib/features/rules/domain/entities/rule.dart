@@ -39,5 +39,11 @@ abstract class RuleDraft with _$RuleDraft {
     required RulePayload payload,
     @Default(true) bool isEnabled,
     @Default(false) bool isBuiltIn,
+
+    /// Where the row should sit inside its kind; `null` appends (what「新增」does).
+    ///
+    /// An import is the one caller that needs it: the file carries an `order` per rule and the
+    /// imported list must come out in the file's order (ADR-0071 §决策 1).
+    int? sortOrder,
   }) = _RuleDraft;
 }

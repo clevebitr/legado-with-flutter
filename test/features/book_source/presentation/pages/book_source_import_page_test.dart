@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
-import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/json_file_picker.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
@@ -23,8 +23,8 @@ String _corpusFile() =>
 AppLocalizations _l10n(WidgetTester tester) =>
     localizationOf(tester, find.byType(BookSourceImportPage));
 
-/// A [BookSourceFilePicker] double that answers whatever a test pins.
-final class _FakePicker implements BookSourceFilePicker {
+/// A [JsonFilePicker] double that answers whatever a test pins.
+final class _FakePicker implements JsonFilePicker {
   _FakePicker(this._answer);
 
   final ParseResult<String?> _answer;

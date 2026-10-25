@@ -61,12 +61,19 @@ final class FakeRuleRepository implements RuleRepository {
   @override
   Future<void> create(RuleDraft draft) async {
     _guard();
-    seed(
-      kind: draft.kind,
-      name: draft.name,
-      payload: draft.payload,
-      isEnabled: draft.isEnabled,
-      isBuiltIn: draft.isBuiltIn,
+    // `sortOrder` 是导入才用得上的字段（ADR-0071 §决策 1）：给了就照给，没给就追加。
+    rows.add(
+      Rule(
+        id: _nextId++,
+        kind: draft.kind,
+        name: draft.name,
+        payload: draft.payload,
+        isEnabled: draft.isEnabled,
+        isBuiltIn: draft.isBuiltIn,
+        sortOrder:
+            draft.sortOrder ??
+            rows.where((Rule row) => row.kind == draft.kind).length,
+      ),
     );
   }
 

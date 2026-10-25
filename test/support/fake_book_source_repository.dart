@@ -242,6 +242,17 @@ final class FakeBookSourceRepository implements BookSourceRepository {
   }
 
   @override
+  Future<List<String>> exportPayloads({Set<int>? ids}) async => <String>[
+    for (final MapEntry<int, StoredBookSource> entry in _rows.entries)
+      if (ids == null || ids.isEmpty || ids.contains(entry.key))
+        jsonEncode(<String, Object?>{
+          ...entry.value.source.toJson(),
+          'enabled': entry.value.isEnabled,
+          'customOrder': entry.value.customOrder,
+        }),
+  ];
+
+  @override
   Future<void> setEnabledFor(List<int> ids, {required bool isEnabled}) async {
     for (final int id in ids) {
       await setEnabled(id: id, isEnabled: isEnabled);
