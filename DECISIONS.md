@@ -630,3 +630,22 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 6. `lib/core/storage/source_variables.dart` 要进 `tool/coverage_allowlist.txt`（drift 表定义是生成期输入）；同批加的 `core/platform/user_messages.dart` 其实**被测量**，登记会让门禁以「stale entry」失败——豁免表只登记真正未测量的文件。
 
 验证：format 0、analyze 0 issue、2346 用例全过、check_coverage exit 0（core 99.36 / domain 99.03 / data 95.65）、build_runner 无意外漂移（`settings_notifier.g.dart` 的 hash 漂移是 #34 记过的既存问题，已 revert）。设备级：`integration_test/js_bridge_test.dart` 42 例与 `on_disk_database_test.dart` 6 例在 **Windows 与 Android 模拟器**双端全绿（新增 7 条真引擎探针：重放、响应对象、pass 上限、Cookie、每源变量、toast、setContent）。
+
+## 2026-10-26 — M25/S1 jsLib 落地：字段 + 解析缓存 + 同一作用域执行 + 失败归因（ADR-0078）
+
+用户裁决（2026-10-26）：继续 M25，然后修提交问题。本轮做切片 **S1（jsLib）**，并顺手确认了「提交问题」的真实成因。
+
+**S1 落地形态**（行为面 → `book-source.md` §6；为什么 → ADR-0078 §实现注记；台账 → `engine-parity.md` A1 改「已对齐」）：
+- `BookSource.jsLib`（进 payload 往返 + 进指纹，库变即行为变）；`JsSourceInfo.jsLib` 只做**宿主侧载体**，`toJson` 仍只发 name/url/group；所有阶段经 `source.jsSourceInfo` 一处自动拿到，不必逐 usecase 透传。
+- `core/js/js_lib.dart` 的 `JsLibStore`：纯 JS 直通；JSON 对象只下载 `http(s)` 值、按对象序拼接、非 URL 值忽略；缓存按 `jsLib` 原文、上限 16（对齐上游 `LruCache`）、单飞、**失败不缓存**（瞬断可重试）；无 HTTP 端口时 URL 形态报 `unsupportedRule` 而不是「当没有库」。
+- 沙箱：worker 前奏新增 `__runRuleWithLib(lib, rule)` = 同一函数作用域里两次 `eval`，库的 `var`/`function` 对规则可见且不漏到 globalThis（上游靠 `preventExtensions`）。`_evaluationSource` 按 job 是否有 lib 二选一。
+- 归因：下载失败 → `ParseFailure(…, '<field>:js:lib')`；库自身抛错 → worker 信封带 `libError`，桥折成同一个 `js:lib`；规则自己的错仍是 `js:error`。引擎在解析失败时**不造 job**。
+
+**三个坑**：
+1. fake worker 的约定是「脚本不是 `fail`/`runaway`/`hold` 就自动回显」，所以桥侧新用例必须写 `script: 'hold'` 才会等到自己发的信封——否则测试在 `evaluate` 那一刻就成功了。
+2. worker 的**结果信封只搬了 ok/value/error 三个字段**，JS 侧新增的 `libError` 在 `_decodeEnvelope` 之后被丢掉了 → `js:lib` 从来没出现过。凡是「JS 前奏产出、桥要读」的标记，都必须同时加进 worker 的 `_toBridge.send`。
+3. `let`/`const` 在**第二次** eval 里看不到第一次 eval 的声明（两次 eval 的 let/const 各属自己的词法环境）；上游 Rhino 是 ES5 本来也不认，已登记为有意差异。
+
+**「提交问题」的真实成因（顺手修掉一半）**：工作树里除了上一轮未提交的 ADR-0077（测试精简）与 ADR-0078（台账）之外，还有 **4 个文件丢了 why-注释**（MainActivity.kt、in_app_web_view_page_fetcher.dart、in_app_webview_cookie_bridge.dart、long_running_task.dart）——MainActivity 的文档注释还被弄成语病（`still has no foreground service of its own / the only foreground service in the app is` 断句）。功能无变化，判定为更早某次自动化清理的误伤，已 `git checkout --` 还原。提交整理见下一步（按主题拆 Conventional Commits，提交后再跑 `build_runner` + `git diff --exit-code`）。
+
+验证：format 0 / analyze 0 issue / 全量 `flutter test` 2346+ 全过（新增 store 11 例、实体 3 例、指纹 1 例、引擎 2 例、桥 2 例）；真引擎探针 46 例在 **Windows 与 Android 模拟器**双端全绿（新增 4 条 jsLib 探针，含「库里 java.ajax 触发整条重放」与「上一个 job 的库不泄漏」）。

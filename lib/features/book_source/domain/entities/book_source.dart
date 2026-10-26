@@ -397,8 +397,11 @@ Map<String, String> _toStringMap(Map<Object?, Object?> raw) {
 /// The sandbox view of a book source; only `name`, `url` and `group` are exposed.
 extension BookSourceJsView on BookSource {
   /// The read-only object the sandbox receives as `source`.
+  ///
+  /// [jsLib] travels along but is **not** sent to the sandbox (`JsSourceInfo.toJson` drops it): it
+  /// is the rule engine's input for resolving the library (ADR-0078 S1).
   JsSourceInfo get jsSourceInfo =>
-      JsSourceInfo(name: name, url: url, group: group);
+      JsSourceInfo(name: name, url: url, group: group, jsLib: jsLib);
 }
 
 // 用序列化后的 Legado 键名比对，才能正确判断哪些键未被建模。

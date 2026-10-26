@@ -106,6 +106,7 @@ JsJob _job({
   String rulePath = 'searchRule.name',
   JsParseEvaluator? parseEvaluator,
   Map<String, String>? sourceHeaders,
+  String? jsLib,
 }) => JsJob(
   script: script,
   rulePath: rulePath,
@@ -115,6 +116,7 @@ JsJob _job({
   result: 'raw',
   sourceHeaders: sourceHeaders,
   parseEvaluator: parseEvaluator,
+  jsLib: jsLib,
 );
 
 /// The envelope a host call of binding [binding] travels in.
@@ -2340,6 +2342,45 @@ void main() {
         await _finish(fixture.workers.single, call),
         isA<ParseSuccess<Object?>>(),
       );
+    });
+  });
+
+  group('jsLib', () {
+    test('evaluate_givenAJobWithALibrary_carriesItIntoTheWorker', () async {
+      // 库脚本由引擎解析后随 job 下发（ADR-0078 S1）：worker 只负责把它跑在规则之前。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        // `hold` 让假 worker 不自动答复：这两条用例要自己决定结果信封。
+        _job(script: 'hold', jsLib: 'function sign() { return 1; }'),
+      );
+      await pumpEventQueue();
+
+      final Object? job = fixture.workers.single.sent.single['job'];
+      expect(
+        (job! as Map<String, Object?>)['jsLib'],
+        'function sign() { return 1; }',
+      );
+      await _finish(fixture.workers.single, call);
+    });
+
+    test('evaluate_givenALibraryFailure_failsAsJsLibNotJsError', () async {
+      // 库坏了要和规则自己出错区分开：两者的修法完全不同。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold', jsLib: 'function () {'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': false,
+        'error': 'SyntaxError: unexpected token',
+        'libError': true,
+        'elapsedMs': 1,
+      });
+
+      final ParseFailure<Never> failure = _failure(await call);
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name:js:lib');
     });
   });
 

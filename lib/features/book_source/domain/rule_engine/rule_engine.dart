@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cascadia/cascadia.dart' as cascadia;
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_lib.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
@@ -238,17 +239,23 @@ final class RuleEngine {
   /// (ADR-0076 §决策 1). It defaults to an unwired store, which behaves exactly like a source that
   /// never wrote a variable — which is what a unit test wants by default.
   ///
+  /// [jsLib] resolves a source's own JavaScript library before every job it runs (ADR-0078 S1).
+  /// The default store handles plain-JavaScript libraries only and reports a URL-shaped one as
+  /// unsupported; the app wires one that can download.
   RuleEngine({
     required this._logger,
     required this._jsBridge,
     required this._variables,
     SourceVariableStore? sourceVariables,
-  }) : _sourceVariables = sourceVariables ?? SourceVariableStore();
+    JsLibStore? jsLib,
+  }) : _sourceVariables = sourceVariables ?? SourceVariableStore(),
+       _jsLib = jsLib ?? JsLibStore();
 
   final AppLogger _logger;
   final JsBridge _jsBridge;
   final JsVariableStore _variables;
   final SourceVariableStore _sourceVariables;
+  final JsLibStore _jsLib;
 
   /// Evaluates one **whole-field** JavaScript expression and returns its raw value.
   ///
@@ -284,23 +291,46 @@ final class RuleEngine {
       return const ParseSuccess<Object?>(null);
     }
 
-    return _jsBridge.evaluate(
-      JsJob(
-        script: script,
-        rulePath: rulePath,
-        baseUrl: context.baseUrl,
-        page: context.page,
-        source: context.source,
-        sourceHeaders: context.headers,
-        variables: _variables.snapshot(context.source.url),
-        bookName: context.bookName,
-        chapterTitle: context.chapterTitle,
-        book: context.book,
-        result: result,
-        response: response,
-      ),
-    );
+    final ParseResult<String?> lib = await _jsLibOf(context, rulePath);
+    switch (lib) {
+      case ParseFailure<String?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        return failureAt<Object?>(kind: kind, rulePath: rulePath);
+      case ParseSuccess<String?>(:final String? data):
+        return _jsBridge.evaluate(
+          JsJob(
+            script: script,
+            rulePath: rulePath,
+            baseUrl: context.baseUrl,
+            page: context.page,
+            source: context.source,
+            sourceHeaders: context.headers,
+            variables: _variables.snapshot(context.source.url),
+            jsLib: data,
+            bookName: context.bookName,
+            chapterTitle: context.chapterTitle,
+            book: context.book,
+            result: result,
+            response: response,
+          ),
+        );
+    }
   }
+
+  /// The source's `jsLib` as runnable JavaScript, or `null` when it declares none
+  /// (ADR-0078 S1).
+  ///
+  /// Resolution happens **before** the job: the worker is an isolate and cannot fetch, and a
+  /// library that cannot be resolved must fail the rule with [jsLibMarker] instead of running it
+  /// without its helpers (C-SRC-4).
+  Future<ParseResult<String?>> _jsLibOf(JsPageContext context, String field) =>
+      _jsLib.resolve(
+        sourceUrl: context.source.url,
+        jsLib: context.source.jsLib,
+        rulePath: field,
+      );
 
   /// Returns every element matched by the **list** rule [rule] inside [scope].
   ///
@@ -971,6 +1001,14 @@ final class RuleEngine {
     final JsPageContext context = _jsContextOf(scope);
     // 每源变量是持久表：首个 job 前读一次，之后走内存（ADR-0076 §决策 1）。
     await _sourceVariables.ensureLoaded(context.source.url);
+    // 库脚本先解析（可能要下载），失败就是这条规则的失败（ADR-0078 S1）。
+    final ParseResult<String?> lib = await _jsLibOf(context, field);
+    if (lib case ParseFailure<String?>(
+      :final ParseFailureKind kind,
+      :final String rulePath,
+    )) {
+      return failureAt<Object?>(kind: kind, rulePath: rulePath);
+    }
     final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
       JsJob(
         script: scriptText,
@@ -983,6 +1021,11 @@ final class RuleEngine {
         parseEvaluator: _parseEvaluatorFor(scope, field: field),
         variables: _variables.snapshot(context.source.url),
         sourceVariables: _sourceVariables.snapshot(context.source.url),
+        jsLib: switch (lib) {
+          ParseSuccess<String?>(:final String? data) => data,
+          // 上面已经返回；这里给编译器一个不可能是别的值的分支。
+          ParseFailure<String?>() => null,
+        },
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
         book: context.book,

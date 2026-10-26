@@ -1108,6 +1108,69 @@ void main() {
     expect(messages.shown, <String>['请先登录']);
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_whenTheSourceHasAJsLib_runsItBeforeTheRule', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0078 S1：上游把 `jsLib` 当每个脚本的原型作用域，所以库里的 `function` 对规则可见。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "sign('abc') + '|' + libVersion",
+        jsLib:
+            'var libVersion = "v1";'
+            'function sign(value) { return crypto.md5(String(value)); }',
+      ),
+    );
+
+    expect(_value(result), '900150983cd24fb0d6963f7d28e17f72|v1');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheJsLibThrows_failsAsJsLibNotJsError', (
+    WidgetTester tester,
+  ) async {
+    // 库坏了要与规则自己报错区分开：修法完全不同（换库 vs 改规则）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: '1 + 1', jsLib: 'function broken( {'),
+    );
+
+    final ParseFailure<Object?> failure = result as ParseFailure<Object?>;
+    expect(failure.kind, ParseFailureKind.parseFailed);
+    expect(failure.rulePath, endsWith(':js:lib'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheJsLibUsesSyncFetch_replaysTheWholeJob', (
+    WidgetTester tester,
+  ) async {
+    // 库脚本与规则在同一趟里重跑：库里的 `java.ajax` 也走重放（ADR-0076 §决策 1）。
+    http.body = '<p>lib page</p>';
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "fetchPage('https://js.test/lib') + '|' + libReady",
+        jsLib:
+            'var libReady = "yes";'
+            'function fetchPage(url) { return java.ajax(url); }',
+      ),
+    );
+
+    expect(_value(result), '<p>lib page</p>|yes');
+    expect(http.requestedUrls, <String>['https://js.test/lib']);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheJsLibIsAbsent_leavesTheGlobalsAlone', (
+    WidgetTester tester,
+  ) async {
+    // 没有库的源不能被上一个 job 的库污染：每次 job 都是新的函数作用域。
+    await bridge.evaluate(
+      _job(script: 'libOnly', jsLib: 'var libOnly = "leaked";'),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'typeof libOnly'),
+    );
+
+    expect(_value(result), 'undefined');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('jsBridge_whenARuleSetsContent_readsTheReplacedPage', (
     WidgetTester tester,
   ) async {
@@ -1152,6 +1215,7 @@ JsJob _job({
   Map<String, String>? sourceHeaders,
   Map<String, String> variables = const <String, String>{},
   Map<String, String> sourceVariables = const <String, String>{},
+  String? jsLib,
   JsSourceInfo source = const JsSourceInfo(
     name: '示例书源',
     url: 'https://example-novel.test',
@@ -1171,6 +1235,7 @@ JsJob _job({
   sourceHeaders: sourceHeaders,
   variables: variables,
   sourceVariables: sourceVariables,
+  jsLib: jsLib,
   bookName: bookName,
   chapterTitle: chapterTitle,
   book: book,

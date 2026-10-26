@@ -86,6 +86,8 @@ RuleEngine ruleEngine(Ref ref) => RuleEngine(
   // 每源持久变量（`source.getVariable`，ADR-0076 §决策 1）：引擎只负责把快照下发，
   // 写穿由桥做（它拿到 job 的结果）。
   sourceVariables: ref.watch(sourceVariableStoreProvider),
+  // 书源自带的 JS 库（ADR-0078 S1）：规则执行前解析成可运行的脚本。
+  jsLib: ref.watch(jsLibStoreProvider),
 );
 
 /// Provides the page fetch + rule reading service the use cases are built on.

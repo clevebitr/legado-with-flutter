@@ -1,5 +1,6 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_lib.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -126,6 +127,7 @@ RuleEngine _engine([
   FakeLogPrinter? printer,
   JsBridge? jsBridge,
   JsVariableStore? variables,
+  JsLibStore? jsLib,
 ]) => RuleEngine(
   logger: AppLogger(
     level: LogLevel.debug,
@@ -133,6 +135,7 @@ RuleEngine _engine([
   ),
   variables: variables ?? JsVariableStore(),
   jsBridge: jsBridge ?? FakeJsBridge(),
+  jsLib: jsLib ?? JsLibStore(),
 );
 
 /// Parses [html]; every rule below is evaluated against the result.
@@ -150,6 +153,20 @@ RuleScope _pageWithContext(String html) => RuleScope.dom(
       name: '示例书源',
       url: 'https://example-novel.test',
       group: '分组',
+    ),
+  ),
+);
+
+/// A page scope whose source declares [jsLib] (`ADR-0078 S1`).
+RuleScope _pageWithLib(String html, String jsLib) => RuleScope.dom(
+  parser.parse(html),
+  body: html,
+  jsContext: JsPageContext(
+    baseUrl: 'https://example-novel.test/book/1/',
+    source: JsSourceInfo(
+      name: '示例书源',
+      url: 'https://example-novel.test',
+      jsLib: jsLib,
     ),
   ),
 );
@@ -510,6 +527,55 @@ void main() {
       expect(bridge.jobs.single.book?.author, '烽火戏诸侯');
       expect(bridge.jobs.single.book?.tocUrl, 'https://m.test/book/1/toc');
     });
+
+    test(
+      'extractFirst_givenASourceJsLib_passesTheResolvedLibraryToTheJob',
+      () async {
+        // 书源自带库脚本时，引擎先解析（可能要下载）再随 job 下发（ADR-0078 S1）。
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'signed';
+        final RuleScope scope = _pageWithLib(
+          '<p>x</p>',
+          'function sign() { return 1; }',
+        );
+
+        await _engine(
+          null,
+          bridge,
+        ).extractFirst('@js:sign()', scope, rulePath: 'searchRule.name');
+
+        expect(bridge.jobs.single.jsLib, 'function sign() { return 1; }');
+      },
+    );
+
+    test(
+      'extractFirst_givenALibraryThatCannotBeResolved_failsWithTheLibMarker',
+      () async {
+        // 库拿不到就不能「当没有库」跑下去：规则会因此全错，而错误看不出是库的问题（C-SRC-4）。
+        final FakeJsBridge bridge = FakeJsBridge()..result = 'signed';
+        final RuleScope scope = _pageWithLib(
+          '<p>x</p>',
+          '{"lib":"https://cdn.test/a.js"}',
+        );
+
+        final ParseResult<String?> result = await _engine(
+          null,
+          bridge,
+        ).extractFirst('@js:sign()', scope, rulePath: 'searchRule.name');
+
+        expect(
+          switch (result) {
+            ParseFailure<String?>(
+              :final ParseFailureKind kind,
+              :final String rulePath,
+            ) =>
+              (kind, rulePath),
+            ParseSuccess<String?>() => fail('Expected a failure.'),
+          },
+          (ParseFailureKind.unsupportedRule, 'searchRule.name:js:lib'),
+        );
+        expect(bridge.jobs, isEmpty);
+      },
+    );
 
     test('extractFirst_givenATemplateInsideAScript_expandsIt', () async {
       // 上游 makeUpRule 在执行脚本前展开整条规则里的 `{{…}}`（AnalyzeRule.kt:666-768）：

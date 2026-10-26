@@ -371,6 +371,8 @@ final class _Worker {
       'ok': decoded['ok'] == true,
       'value': decoded['value'],
       'error': decoded['error'],
+      // 库脚本（`jsLib`）的失败要单独标记：桥据此把 rulePath 标成 js:lib（ADR-0078 S1）。
+      'libError': decoded['libError'] == true,
       'elapsedMs': stopwatch.elapsedMilliseconds,
       'variables': _variables,
       'sourceVariables': _sourceVariables,
@@ -458,7 +460,15 @@ String _evaluationSource(Map<String, Object?> fields) {
   if (key != null) {
     buffer.writeln('globalThis.key = ${jsonEncode(key)};');
   }
-  buffer.write('__runRule(${jsonEncode(_asString(fields['script']))})');
+  final String script = _asString(fields['script']);
+  final Object? jsLib = fields['jsLib'];
+  if (jsLib is String && jsLib.isNotEmpty) {
+    buffer.write(
+      '__runRuleWithLib(${jsonEncode(jsLib)}, ${jsonEncode(script)})',
+    );
+  } else {
+    buffer.write('__runRule(${jsonEncode(script)})');
+  }
 
   return buffer.toString();
 }
@@ -517,6 +527,11 @@ globalThis.__runRule = function (scriptText) {
   } catch (error) {
     return __envelope({ ok: false, error: __errorMessage(error) });
   }
+  return __settle(value);
+};
+
+// `__runRule` 的收尾：Promise 的规则也要收敛成同一个信封。
+globalThis.__settle = function (value) {
   if (value && typeof value.then === 'function') {
     return value.then(
       function (settled) {
@@ -528,6 +543,32 @@ globalThis.__runRule = function (scriptText) {
     );
   }
   return __envelope({ ok: true, value: value === undefined ? null : value });
+};
+
+// 书源自带的 `jsLib`（ADR-0078 S1）：先把它跑进**本函数的变量环境**，再跑规则。
+//
+// 两次 `eval` 都在 `__runRuleWithLib` 的函数作用域里，所以库里的 `var` / `function`
+// 对规则是可见的；反过来它们不会漏到 globalThis（上游用 `preventExtensions` 达到同一效果）。
+// 差异：库顶层的 `let` / `const` 只属于第一次 eval 的词法环境，规则看不见——上游的 Rhino 是
+// ES5，本来也不认它们（登记在 book-source.md §6）。
+globalThis.__runRuleWithLib = function (libText, scriptText) {
+  try {
+    eval(libText);
+  } catch (error) {
+    // 库坏了就是这一条规则的失败，但错误要能一眼看出不是规则的错（rulePath 带 js:lib）。
+    return __envelope({
+      ok: false,
+      error: __errorMessage(error),
+      libError: true
+    });
+  }
+  var value;
+  try {
+    value = eval(scriptText);
+  } catch (error) {
+    return __envelope({ ok: false, error: __errorMessage(error) });
+  }
+  return __settle(value);
 };
 
 globalThis.__crypto = function (operation, value) {

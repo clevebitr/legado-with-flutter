@@ -283,6 +283,20 @@ void main() {
     test('fromLegadoJson_givenNoJsLib_answersNull', () {
       expect(BookSource.fromLegadoJson(_minimalJson()).jsLib, isNull);
     });
+
+    test('jsSourceInfo_carriesTheLibraryForTheEngineButNotForTheSandbox', () {
+      // `source` 绑定仍只有三个字段（防信息外泄），库脚本只给引擎用。
+      final BookSource source = BookSource.fromLegadoJson(
+        _minimalJson()..['jsLib'] = 'var lib = 1;',
+      );
+
+      expect(source.jsSourceInfo.jsLib, 'var lib = 1;');
+      expect(source.jsSourceInfo.toJson().keys, <String>[
+        'name',
+        'url',
+        'group',
+      ]);
+    });
   });
 
   group('BookSource extra retention', () {

@@ -5,7 +5,12 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 /// Only `name`, `url` and `group` are exposed; everything else stays on the host.
 final class JsSourceInfo {
   /// Creates the sandbox view of a book source.
-  const JsSourceInfo({required this.name, required this.url, this.group});
+  const JsSourceInfo({
+    required this.name,
+    required this.url,
+    this.group,
+    this.jsLib,
+  });
 
   /// The source's display name.
   final String name;
@@ -15,6 +20,13 @@ final class JsSourceInfo {
 
   /// The source's group, when it declares one.
   final String? group;
+
+  /// The source's `jsLib`, as declared (`book-source.md` §6).
+  ///
+  /// **Host-side only**: [toJson] does not send it, so the sandbox's `source` object stays the
+  /// three fields above (the whole entity is deliberately not exposed). The rule engine reads it
+  /// here and resolves it through `JsLibStore` before building the job.
+  final String? jsLib;
 
   /// The JSON object the sandbox receives as `source`.
   Map<String, Object?> toJson() => <String, Object?>{
@@ -182,6 +194,7 @@ final class JsJob {
     this.parseEvaluator,
     this.variables = const <String, String>{},
     this.sourceVariables = const <String, String>{},
+    this.jsLib,
     this.key,
     this.bookName,
     this.chapterTitle,
@@ -207,6 +220,13 @@ final class JsJob {
   /// app, so the bridge writes what the job reported back to storage
   /// (`SourceVariableStore.merge`).
   final Map<String, String> sourceVariables;
+
+  /// The source's **resolved** `jsLib`: the JavaScript the worker runs before the rule itself
+  /// (ADR-0078 S1).
+  ///
+  /// It is already the concatenation of everything the field declared (`JsLibStore.resolve`), so
+  /// the sandbox never has to fetch. `null` means the source declares no library.
+  final String? jsLib;
 
   /// The search keyword (the `key` binding) of a URL rule, or `null` otherwise.
   final String? key;
@@ -267,6 +287,7 @@ final class JsJob {
     'response': response?.toJson(),
     'variables': variables,
     'sourceVariables': sourceVariables,
+    'jsLib': jsLib,
     'key': key,
     'bookName': bookName,
     'chapterTitle': chapterTitle,

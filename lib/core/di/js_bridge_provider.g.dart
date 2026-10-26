@@ -118,3 +118,58 @@ final class JsVariableStoreProvider
 }
 
 String _$jsVariableStoreHash() => r'c6e15401e66da680841340a4e08b1644de9e2c08';
+
+/// Provides the resolver for a book source's own JavaScript library (`jsLib`, ADR-0078 S1).
+///
+/// `keepAlive` matters: the store caches the resolved text per library, so one page with twenty
+/// `@js:` fields downloads the library once — and a rebuild between stages would throw that away.
+
+@ProviderFor(jsLibStore)
+final jsLibStoreProvider = JsLibStoreProvider._();
+
+/// Provides the resolver for a book source's own JavaScript library (`jsLib`, ADR-0078 S1).
+///
+/// `keepAlive` matters: the store caches the resolved text per library, so one page with twenty
+/// `@js:` fields downloads the library once — and a rebuild between stages would throw that away.
+
+final class JsLibStoreProvider
+    extends $FunctionalProvider<JsLibStore, JsLibStore, JsLibStore>
+    with $Provider<JsLibStore> {
+  /// Provides the resolver for a book source's own JavaScript library (`jsLib`, ADR-0078 S1).
+  ///
+  /// `keepAlive` matters: the store caches the resolved text per library, so one page with twenty
+  /// `@js:` fields downloads the library once — and a rebuild between stages would throw that away.
+  JsLibStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'jsLibStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$jsLibStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<JsLibStore> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  JsLibStore create(Ref ref) {
+    return jsLibStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(JsLibStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<JsLibStore>(value),
+    );
+  }
+}
+
+String _$jsLibStoreHash() => r'a1fd59f7223168f628175c97b83ad7bae1edbe58';

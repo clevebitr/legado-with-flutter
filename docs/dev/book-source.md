@@ -49,6 +49,7 @@
 | `concurrentRate` | `concurrentRate` | `String?` | **M1** | 并发限速；语法、毫秒单位与「速率门 → 并发门」的合成归 §8（ADR-0036） |
 | `variableComment` | `variableComment` | `String?` | **M1** | 书源变量说明；**纯展示**，引擎不读（上游 `BookSource.kt:245-252` 只与校验注释拼接显示） |
 | `loginUrl` / `loginUi` / `loginCheckJs` | 同名 | `String?` ×3 | **M21a** | 三个字段都建模（导入/导出保真）。`loginCheckJs` 是**每次取页后运行的响应拦截器**（不是 true/false 检查），绑定与返回值见 §6；`loginUrl` 是登录入口打开的地址（URL 规则，后缀丢掉），`loginUi` 只保留原文（原生表单归 M21b/U15）。口径与三条登记差异见 ADR-0068（2026-10-24 增补） |
+| `jsLib` | `jsLib` | `String?` | **M25/S1** | 源内 JS 库：每条 `@js:` 规则执行**前**先把它跑进同一个函数作用域（纯 JS 原样跑；写成 `{名:http(s)地址}` 的 JSON 对象时逐条下载后按对象序拼接）。解析/缓存与失败语义见 §6（ADR-0078 S1） |
 | `lastUpdateTime` / `respondTime` / `weight` / `customOrder` | 同名 | `int?` | M0 | 仅用于展示与排序 |
 
 **子规则字段**（原版字段名 → Dart，全部 camelCase）：
@@ -57,7 +58,7 @@
 |---|---|---|
 | `SearchRule` | `bookList`、`name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl`、`updateTime`；`checkKeyWord` | M0（`updateTime` 为 M1；`checkKeyWord` 为 **5.10**） |
 | `ExploreRule` | 与 `SearchRule` 的九个列表字段**同形** + `updateTime`（上游 `BookListRule` 接口，`BookListRule.kt:6-18`；无 `checkKeyWord`） | M1 |
-| 书源级 | `bookSourceName`、`bookSourceUrl`、`bookSourceGroup`、`bookSourceType`、`enabled`、`header`、`searchUrl`、`exploreUrl`、`ruleSearch`、`ruleExplore`、`ruleBookInfo`、`ruleToc`、`ruleContent`、`concurrentRate`、`variableComment`、`loginUrl`、`loginUi`、`loginCheckJs` | M0 |
+| 书源级 | `bookSourceName`、`bookSourceUrl`、`bookSourceGroup`、`bookSourceType`、`enabled`、`header`、`searchUrl`、`exploreUrl`、`ruleSearch`、`ruleExplore`、`ruleBookInfo`、`ruleToc`、`ruleContent`、`concurrentRate`、`variableComment`、`loginUrl`、`loginUi`、`loginCheckJs`、`jsLib`（✅ M25/S1：每条 `@js:` 规则执行前先跑库脚本，见 §6） | M0 / M25 |
 | `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName`、`updateTime` | M0（`canReName`、`updateTime` 为 M1） |
 | `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
@@ -74,7 +75,7 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 >
 > **上游存在而本仓尚未建模的字段（清单的唯一出处是 `docs/dev/engine-parity.md`）：**
 > `BookInfoRule.downloadUrls` / `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay`、
-> `ContentRule.subContent` / `title` / `payAction` / `callBackJs`、书源级 `jsLib` / `bookUrlPattern` /
+> `ContentRule.subContent` / `title` / `payAction` / `callBackJs`、书源级 `bookUrlPattern` /
 > `coverDecodeJs` / `ruleReview` / `eventListener` / `customButton` / `homepageModules`。
 > 它们的处理口径固定：**保留在 `extra`**（导入/导出不变形）+ **不假装支持**（不生效即是不生效）+
 > **去向登记**（`engine-parity.md` 的切片或「有意差异 + 触发条件」）。本表不重列、不另开清单。
@@ -767,6 +768,23 @@ java.replaceFont(result, errorFont, correctFont);
 > 走①，所以那一路读不到 `java.setContent` 换掉的页面（§6「`java.setContent` 的边界」）；两条路径**共用
 > 同一实现点**，同一 (规则, scope) 的结果必然一致。URL 规则里**没有**页面 scope，该族命中即按
 > `js:parse-scope` 同族拒绝。
+
+**书源自带的库脚本（`jsLib`，M25/S1，ADR-0078 §切片 S1）：** 上游把 `jsLib` 当**每个脚本的原型作用域**
+（`SharedJsScope.kt:23-60`、`AnalyzeRule.kt:848`），所以源可以只写 `getSign(url)` 这样的调用。本仓的做法：
+
+1. 引擎在造 job **之前**把 `jsLib` 解析成可运行的 JS（`JsLibStore`）：纯 JS 原样用；**JSON 对象**形态只取
+   `http(s)://` 开头的值逐条下载，按对象序拼接（非 URL 值忽略，与上游的 `isAbsUrl()` 判定一致）。
+2. worker 把这份文本与规则**放在同一个函数作用域里**跑（先 `eval(lib)`，再 `eval(rule)`），因此库里的
+   `var` / `function` 对规则可见，而两者都不会漏到 `globalThis`（上游用 `preventExtensions` 达到同一效果）。
+3. 解析失败（下载不通）就是**这条规则**的失败，`rulePath` 带 `js:lib`；库自身抛错同样是 `js:lib`，
+   与规则自己的 `js:error` 分开，便于判断「换库」还是「改规则」。
+4. 缓存按 `jsLib` 原文、上限 16 条（与上游 `LruCache` 同数），失败不缓存；同一个源的一页里二十个
+   `@js:` 字段只解析一次。
+
+三条必须知道的差异：① 库顶层的 `let` / `const` 规则**看不见**（它们属于那次 `eval` 的词法环境，本仓用
+`var` / `function` 才有跨 eval 的可见性；上游 Rhino 是 ES5，本来也不认 `let`）；② 缓存只在内存里，
+重启后重新解析（上游把它落到磁盘 `ACache`）；③ `source.jsLib` **不在** `source` 绑定里（那个对象仍只有
+`name` / `url` / `group`，防信息外泄），需要库内容的规则请直接依赖库函数。
 
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
 `eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。

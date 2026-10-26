@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_lib.dart';
 import 'package:flutter_reader/core/js/js_sync_call.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
@@ -376,6 +377,19 @@ final class _WorkerSession {
 
     if (message['ok'] == true) {
       _completeInFlight(ParseSuccess<Object?>(message['value']));
+
+      return;
+    }
+
+    // 库脚本（`jsLib`）坏了要能和规则自己的错区分开：两者的修法完全不同（ADR-0078 S1）。
+    if (message['libError'] == true) {
+      _logger.warning('The source jsLib failed: field=$_field');
+      _completeInFlight(
+        failureAt<Object?>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: '$_field:$jsLibMarker',
+        ),
+      );
 
       return;
     }

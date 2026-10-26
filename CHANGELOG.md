@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Source-owned JavaScript libraries run before every rule (ADR-0078 S1, M25)
+
+- **`jsLib` is modelled and executed.** Upstream treats a source's own JS library as the prototype
+  scope of every script it runs, so a source can write `getSign(url)` and rely on the library for it.
+  Every such source used to fail with `js:error` on *every* rule — the field was neither modelled nor
+  registered anywhere. It is now `BookSource.jsLib` (part of the fingerprint, since it changes what
+  rules produce), resolved by `JsLibStore` and run by the worker **in the same function scope** as the
+  rule.
+- **Both shapes upstream accepts.** Plain JavaScript runs as-is; a JSON object is treated as a map of
+  absolute URLs whose scripts are downloaded and concatenated in object order (non-URL values ignored,
+  like upstream's `isAbsUrl()` check). The resolved text is cached per `jsLib` string, bounded at the
+  same 16 entries upstream's `LruCache` uses, single-flight per key, and **failures are not cached**.
+- **Failures stay attributable.** A library that cannot be downloaded, or that throws while being
+  evaluated, fails the rule with `js:lib` on its `rulePath` — distinct from the rule's own `js:error`,
+  because one is fixed by replacing the library and the other by editing the rule.
+- Registered differences (`book-source.md` §6): top-level `let`/`const` in a library are not visible to
+  the rule (Rhino is ES5 and would reject them too), the cache is in memory only, and `source.jsLib` is
+  deliberately not part of the sandbox's `source` object.
+
 ### Upstream's synchronous `java.*` dialect runs unchanged (ADR-0076, M24)
 
 - **Replay instead of blocking.** A QuickJS isolate cannot block on the host, so a synchronous call

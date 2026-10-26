@@ -6,6 +6,7 @@ import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/di/user_messages_provider.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_lib.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
@@ -45,3 +46,13 @@ JsBridge jsBridge(Ref ref) {
 /// One store per provider scope; nothing survives the operation that created it.
 @Riverpod(keepAlive: true)
 JsVariableStore jsVariableStore(Ref ref) => JsVariableStore();
+
+/// Provides the resolver for a book source's own JavaScript library (`jsLib`, ADR-0078 S1).
+///
+/// `keepAlive` matters: the store caches the resolved text per library, so one page with twenty
+/// `@js:` fields downloads the library once — and a rebuild between stages would throw that away.
+@Riverpod(keepAlive: true)
+JsLibStore jsLibStore(Ref ref) => JsLibStore(
+  http: ref.watch(httpClientProvider),
+  logger: ref.watch(appLoggerProvider),
+);
