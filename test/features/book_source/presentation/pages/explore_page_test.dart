@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
@@ -197,6 +198,32 @@ void main() {
       expect(find.text('玄幻'), findsOneWidget);
       expect(find.text('都市'), findsOneWidget);
       expect(find.text(l10n.actionRetry), findsOneWidget);
+    });
+
+    testWidgets('build_givenASectionHeader_showsItAsALabel', (
+      WidgetTester tester,
+    ) async {
+      // 真实 `exploreUrl` 用 `══ 推荐 ══` 这样的分组标题（没有地址）把 chip 分组：它是标题，
+      // 不是可点的分类（ADR-0069）。
+      await pumpBookSourcePage(
+        tester,
+        page: const ExplorePage(),
+        source: loadCorpusBookSource().copyWith(
+          exploreUrl: '══ 推荐 ══::&&玄幻::/list/c0.html',
+        ),
+        http: FakeHttpClient()
+          ..serve('https://example-novel.test/list/c0.html', '<div></div>'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('══ 推荐 ══'), findsOneWidget);
+      // 标题不是 chip：点它不会去请求空地址。
+      expect(
+        tester
+            .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+            .map((ChoiceChip chip) => (chip.label as Text).data),
+        <String>['玄幻'],
+      );
     });
 
     testWidgets('source_whenTheSelectedSourceChanges_reloadsItsCategories', (

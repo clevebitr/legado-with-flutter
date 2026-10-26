@@ -1,35 +1,64 @@
 import 'package:flutter/material.dart';
 
-/// The app-level destinations any page may open (ADR-0042).
+/// The app-level destinations any page may open.
 ///
-/// Cross-feature navigation cannot be a direct import: `features/A` must not import
-/// `features/B` (C-ARCH-2), and ADR-0041 的端口方案只覆盖 `domain/`（端口收发原语与实体），
-/// while opening a page needs a [BuildContext]. This is therefore the presentation-side twin of
-/// that mechanism: the **consumer** declares the port, the composition root binds it, and the
-/// port carries nothing but a context — never a route object of another feature.
-///
-/// The default implementation is an unbound no-op that logs a warning (never throws), so a
-/// forgotten binding shows up as an unresponsive button plus a log line instead of a crash
-/// (ADR-0041 §决策 2 的同一条理由).
+/// Features never import each other's routes; the composition root binds this
+/// port, and the default implementation logs instead of throwing.
 abstract interface class AppNavigation {
-  /// Opens the shelf page.
+  /// Opens the bookshelf page.
   void openBookshelf(BuildContext context);
 
   /// Opens the settings page.
   void openSettings(BuildContext context);
 
-  /// Opens the book-source management page (M18's 「我的」entry).
+  /// Opens the book-source management page.
   void openBookSources(BuildContext context);
 
-  /// Opens the about page (M18).
+  /// Opens the about page.
   void openAbout(BuildContext context);
 
-  /// Opens the reader on one book, optionally at a specific chapter (ADR-0042 §决策 2).
+  /// Opens the bookmark list.
+  void openBookmarks(BuildContext context);
+
+  /// Opens the reading records, grouped by day.
+  void openReadingRecords(BuildContext context);
+
+  /// Opens the 替换净化 rule list (`docs/dev/roadmap.md` M20).
   ///
-  /// The parameters are **primitives only**: the reader's own route object and its `ReaderBook`
-  /// belong to another feature, and passing them here would make this port a second cross-feature
-  /// interface (C-ARCH-2). A `null` [chapterUrl] means "resume where the reader stopped"; a
-  /// concrete one means "open this chapter", which is what a chapter row in the detail page means.
+  /// Four methods instead of one with a kind parameter: the port carries primitives only
+  /// (ADR-0042), and a stringly-typed kind would move a switch into every implementation.
+  void openReplaceRules(BuildContext context);
+
+  /// Opens the 目录规则 list.
+  void openTocRules(BuildContext context);
+
+  /// Opens the 字典规则 list.
+  void openDictRules(BuildContext context);
+
+  /// Opens the 高亮标签 list.
+  void openHighlightRules(BuildContext context);
+
+  /// Opens the per-source cache page (`docs/dev/roadmap.md` M22, ADR-0072 §决策 1).
+  void openCacheManage(BuildContext context);
+
+  /// Opens the cookie jar view (`docs/dev/roadmap.md` M22, ADR-0072 §决策 2).
+  void openCookies(BuildContext context);
+
+  /// Opens the backup and restore page (`docs/dev/roadmap.md` M22, ADR-0073).
+  void openBackup(BuildContext context);
+
+  /// Opens the reading records of one book.
+  void openBookReadingRecords(
+    BuildContext context, {
+    required String sourceUrl,
+    required String bookUrl,
+    required String bookName,
+  });
+
+  /// Opens the reader on one book, optionally at a specific chapter.
+  ///
+  /// Parameters are primitives only, and a `null` [chapterUrl] resumes where the
+  /// reader stopped.
   void openReader(
     BuildContext context, {
     required String sourceUrl,
@@ -42,7 +71,8 @@ abstract interface class AppNavigation {
 
 /// The answer when nothing bound [AppNavigation]: log and do nothing.
 final class UnboundAppNavigation implements AppNavigation {
-  /// Creates the unbound port; `_warn` receives one line per missed navigation.
+  /// Creates the unbound port; the callback receives one line per missed
+  /// navigation.
   const UnboundAppNavigation({required this._warn});
 
   final void Function(String message) _warn;
@@ -62,6 +92,54 @@ final class UnboundAppNavigation implements AppNavigation {
   @override
   void openAbout(BuildContext context) =>
       _warn('No AppNavigation is bound: the about entry does nothing.');
+
+  @override
+  void openBookmarks(BuildContext context) =>
+      _warn('No AppNavigation is bound: the bookmark entry does nothing.');
+
+  @override
+  void openReadingRecords(BuildContext context) => _warn(
+    'No AppNavigation is bound: the reading-record entry does nothing.',
+  );
+
+  @override
+  void openBookReadingRecords(
+    BuildContext context, {
+    required String sourceUrl,
+    required String bookUrl,
+    required String bookName,
+  }) => _warn(
+    'No AppNavigation is bound: the book reading-record entry does nothing.',
+  );
+
+  @override
+  void openReplaceRules(BuildContext context) =>
+      _warn('No AppNavigation is bound: the replace-rule entry does nothing.');
+
+  @override
+  void openTocRules(BuildContext context) =>
+      _warn('No AppNavigation is bound: the toc-rule entry does nothing.');
+
+  @override
+  void openDictRules(BuildContext context) =>
+      _warn('No AppNavigation is bound: the dict-rule entry does nothing.');
+
+  @override
+  void openHighlightRules(BuildContext context) => _warn(
+    'No AppNavigation is bound: the highlight-rule entry does nothing.',
+  );
+
+  @override
+  void openCacheManage(BuildContext context) =>
+      _warn('No AppNavigation is bound: the cache entry does nothing.');
+
+  @override
+  void openCookies(BuildContext context) =>
+      _warn('No AppNavigation is bound: the cookie entry does nothing.');
+
+  @override
+  void openBackup(BuildContext context) =>
+      _warn('No AppNavigation is bound: the backup entry does nothing.');
 
   @override
   void openReader(

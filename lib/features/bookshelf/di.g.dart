@@ -71,4 +71,4 @@ final class BookshelfRepositoryProvider
 }
 
 String _$bookshelfRepositoryHash() =>
-    r'80d97e9176258a5e88053d8382c9207e66f3d6a7';
+    r'bbd099b027e738d1eec40b8db3fb7d19df0ade6d';

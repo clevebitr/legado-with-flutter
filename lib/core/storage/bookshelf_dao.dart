@@ -17,26 +17,20 @@ final class BookshelfRow {
   final ReadingProgressRow? progress;
 }
 
-/// Row-level access to the shelf and the reading progress (`docs/dev/roadmap.md` 5.4).
+/// Row-level access to the shelf and the reading progress.
 ///
-/// The DAO owns the **storage shape** and the one ordering SQL decides: pinned first, then
-/// «recently read» (progress, falling back to when the row was last written), then insertion
-/// order. The business rules — what counts as the same book, and which fields an existing row
-/// keeps — live in `BookshelfRepositoryImpl`, for the same reason `BookSourceDao` keeps out of
-/// the fingerprint decision.
+/// Owns the storage shape and the shelf order; identity rules live in the repository.
 @DriftAccessor(tables: <Type>[Books, ReadingProgress])
 class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
     with _$BookshelfDaoMixin {
-  /// Creates the DAO; `clock` decides the row timestamps (`docs/dev/testing.md` §4).
+  /// Creates the DAO with an injected clock.
   BookshelfDao(super.attachedDatabase, {required this._clock});
 
   final Clock _clock;
 
   /// Every shelf entry, in the order the shelf page shows it.
   ///
-  /// «Recently read» is a left join on [ReadingProgress]: a book that was never opened has no
-  /// progress row, and SQLite sorts those `NULL`s last under `DESC`, which is exactly the
-  /// wanted fallback order (unread books by `updatedAt`, after the read ones).
+  /// Unopened books have no progress row; their `NULL`s sort last, after read ones.
   Future<List<BookshelfRow>> findAll() async {
     final JoinedSelectStatement<HasResultSet, dynamic> query =
         select(books).join(<Join<HasResultSet, dynamic>>[
@@ -78,8 +72,8 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
 
   /// Inserts a new shelf row and returns its generated id.
   ///
-  /// The caller already decided this identity is new (`BookshelfRepositoryImpl`); the unique
-  /// key would reject a duplicate anyway.
+  /// [addedAt] / [updatedAt] are optional so a restore can write back the times the backup carried
+  /// (`ADR-0073` §决策 3); an ordinary add uses the clock.
   Future<int> insertNew({
     required String sourceUrl,
     required String bookUrl,
@@ -90,6 +84,8 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
     required String? coverUrl,
     required String? intro,
     required String? lastChapter,
+    DateTime? addedAt,
+    DateTime? updatedAt,
   }) {
     final DateTime now = _clock.now();
 
@@ -104,16 +100,15 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
         coverUrl: Value<String?>(coverUrl),
         intro: Value<String?>(intro),
         lastChapter: Value<String?>(lastChapter),
-        addedAt: now,
-        updatedAt: now,
+        addedAt: addedAt ?? now,
+        updatedAt: updatedAt ?? now,
       ),
     );
   }
 
   /// Refreshes the page-derived columns of row [id], keeping every user-state column.
   ///
-  /// Re-adding an existing book is a refresh, not a reset: `status` / `isPinned` are the user's
-  /// and the same rule as ADR-0040 §决策 3 applies (an import must never undo user state).
+  /// Re-adding an existing book is a refresh, not a reset of `status` / `isPinned`.
   Future<void> refreshDetails({
     required int id,
     required String? tocUrl,
@@ -131,8 +126,7 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
       coverUrl: Value<String?>(coverUrl),
       intro: Value<String?>(intro),
       lastChapter: Value<String?>(lastChapter),
-      // 书名 / 作者只在书源声明了 `canReName` 时覆盖（ADR-0044 §决策 5）：
-      // `null` 表示「保留已存的值」，不是「写成 null」。
+      // 仅在书源声明了 `canReName` 时覆盖书名/作者；absent 表示保留已存值。
       name: rewritesTitle ? Value<String>(name) : const Value<String>.absent(),
       author: rewritesTitle
           ? Value<String?>(author)
@@ -154,11 +148,18 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
     ),
   );
 
-  /// Rewrites the identity of row [id] **in place** (ADR-0051 §决策 3).
+  /// Sets the user's own cover path, or clears it with `null`.
+  Future<void> setCustomCover({required int id, required String? path}) =>
+      (update(books)..where((Books table) => table.id.equals(id))).write(
+        BooksCompanion(
+          customCoverPath: Value<String?>(path),
+          updatedAt: Value<DateTime>(_clock.now()),
+        ),
+      );
+
+  /// Rewrites the identity of row [id] in place.
   ///
-  /// It exists because a source switch changes `(sourceUrl, bookUrl)` — the shelf's identity — and
-  /// deleting + re-inserting would lose `addedAt`, `status` and `isPinned`. The caller has already
-  /// established that the target identity has no row of its own.
+  /// Keeps `addedAt`, `status` and `isPinned` when a source switch changes the URL.
   Future<void> migrateIdentity({
     required int id,
     required String sourceUrl,
@@ -185,10 +186,34 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
   Future<int> deleteById(int id) =>
       (delete(books)..where((Books table) => table.id.equals(id))).go();
 
+  /// Deletes every row in [ids] together with its progress, and reports how many books went away.
+  ///
+  /// A leftover progress row would resurrect a deleted book as a recently-read entry.
+  Future<int> deleteByIds(List<int> ids) {
+    if (ids.isEmpty) {
+      return Future<int>.value(0);
+    }
+
+    return transaction(() async {
+      final List<BookRow> rows = await (select(
+        books,
+      )..where((Books table) => table.id.isIn(ids))).get();
+      for (final BookRow row in rows) {
+        await (delete(readingProgress)..where(
+              (ReadingProgress table) =>
+                  table.sourceUrl.equals(row.sourceUrl) &
+                  table.bookUrl.equals(row.bookUrl),
+            ))
+            .go();
+      }
+
+      return (delete(books)..where((Books table) => table.id.isIn(ids))).go();
+    });
+  }
+
   /// Deletes the shelf row at `(sourceUrl, bookUrl)` together with its progress.
   ///
-  /// Both go in one transaction: a leftover progress row would resurrect a deleted book as a
-  /// «recently read» entry the moment it is re-added.
+  /// Both go in one transaction so no leftover progress row can resurrect the book.
   Future<void> deleteIdentity({
     required String sourceUrl,
     required String bookUrl,
@@ -205,6 +230,34 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
         .go();
   });
 
+  /// Writes every user-state column of row [id] — the restore's merge (`ADR-0073` §决策 3).
+  ///
+  /// Separate from [updateUserState] because a restore also carries the group and the custom cover,
+  /// which the shelf's own actions write one at a time.
+  Future<void> restoreUserState({
+    required int id,
+    required int status,
+    required bool isPinned,
+    required int? groupId,
+    required String? customCoverPath,
+    String? tocUrl,
+  }) => (update(books)..where((Books table) => table.id.equals(id))).write(
+    BooksCompanion(
+      status: Value<int>(status),
+      isPinned: Value<bool>(isPinned),
+      groupId: Value<int?>(groupId),
+      customCoverPath: Value<String?>(customCoverPath),
+      // 本地没有目录地址时才补：有值说明本机已经解析过这个源，恢复不该把它改回去。
+      tocUrl: tocUrl == null
+          ? const Value<String?>.absent()
+          : Value<String?>(tocUrl),
+    ),
+  );
+
+  /// Every progress row, for the backup (`ADR-0073` §决策 1).
+  Future<List<ReadingProgressRow>> findAllProgress() =>
+      select(readingProgress).get();
+
   /// The progress row of `(sourceUrl, bookUrl)`, or `null`.
   Future<ReadingProgressRow?> findProgress({
     required String sourceUrl,
@@ -218,12 +271,17 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
           .getSingleOrNull();
 
   /// Writes the progress of one book, replacing the previous position.
+  ///
+  /// [updatedAt] is optional so a restore can keep the backup's instant, which is what the
+  /// 「最近阅读」ordering and the restore's own “do not move the user backwards” rule read
+  /// (`ADR-0073` §决策 3).
   Future<void> upsertProgress({
     required String sourceUrl,
     required String bookUrl,
     required String chapterUrl,
     required String? chapterName,
     required int charOffset,
+    DateTime? updatedAt,
   }) => into(readingProgress).insertOnConflictUpdate(
     ReadingProgressCompanion.insert(
       sourceUrl: sourceUrl,
@@ -231,7 +289,7 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
       chapterUrl: chapterUrl,
       chapterName: Value<String?>(chapterName),
       charOffset: Value<int>(charOffset),
-      updatedAt: _clock.now(),
+      updatedAt: updatedAt ?? _clock.now(),
     ),
   );
 

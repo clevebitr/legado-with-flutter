@@ -2,23 +2,29 @@ import 'dart:async';
 
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/preference_store_provider.dart';
+import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/platform/audio_service_playback_notification.dart';
 import 'package:flutter_reader/core/platform/playback_backend.dart';
 import 'package:flutter_reader/core/platform/playback_notification.dart';
+import 'package:flutter_reader/features/reader/data/bookmark_repository_impl.dart';
 import 'package:flutter_reader/features/reader/data/flutter_tts_speech_synthesizer.dart';
 import 'package:flutter_reader/features/reader/data/just_audio_playback_engine.dart';
 import 'package:flutter_reader/features/reader/data/media_kit_playback_engine.dart';
 import 'package:flutter_reader/features/reader/data/reader_settings_repository_impl.dart';
+import 'package:flutter_reader/features/reader/data/reading_record_repository_impl.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/audio_playback_engine.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/audio_track_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/book_source_switcher.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/bookmark_repository.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/manga_page_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_settings_repository.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_source_kind_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/reading_record_repository.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/speech_synthesizer.dart';
+import 'package:flutter_reader/features/reader/domain/usecases/search_in_book.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'di.g.dart';
@@ -63,6 +69,19 @@ ReaderSourceKindProvider readerSourceKindPort(Ref ref) =>
 ReadingProgressStore readerProgressStore(Ref ref) =>
     UnboundReadingProgressStore(logger: ref.watch(appLoggerProvider));
 
+/// Provides the bookmark store (`docs/dev/roadmap.md` M19, ADR-0066 §决策 3).
+///
+/// The reader owns this table, so the provider binds the real implementation here instead of
+/// waiting for the composition root: nothing outside the feature may write a bookmark.
+@Riverpod(keepAlive: true)
+BookmarkRepository bookmarkRepository(Ref ref) =>
+    BookmarkRepositoryImpl(ref.watch(bookmarkDaoProvider));
+
+/// Provides the reading-record store (`docs/dev/roadmap.md` M19, ADR-0066 §决策 4).
+@Riverpod(keepAlive: true)
+ReadingRecordRepository readingRecordRepository(Ref ref) =>
+    ReadingRecordRepositoryImpl(ref.watch(readRecordDaoProvider));
+
 /// Provides the source-switch port, **unbound** by default.
 ///
 /// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity
@@ -106,6 +125,14 @@ SpeechSynthesizer speechSynthesizer(Ref ref) {
 @riverpod
 AudioTrackProvider readerAudioTrack(Ref ref) =>
     UnboundAudioTrackProvider(logger: ref.watch(appLoggerProvider));
+
+/// Provides the in-book search (`docs/dev/roadmap.md` M20, ADR-0070 §决策 2).
+///
+/// It only needs the chapter-content port: the run is orchestrated here, and the politeness of the
+/// requests themselves stays inside `book_source` (rate gate + `HttpPolicy`).
+@riverpod
+SearchInBook searchInBook(Ref ref) =>
+    SearchInBook(content: ref.watch(readerChapterContentProvider));
 
 /// Provides the media-notification binding for this platform
 /// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 3/4).

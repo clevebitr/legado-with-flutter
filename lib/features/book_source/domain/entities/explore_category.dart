@@ -13,9 +13,13 @@ part 'explore_category.freezed.dart';
 ///
 /// [url] is the **raw** template the source wrote: it is rendered through the shared URL path
 /// when the category is opened (`{{page}}` / `{{baseUrl}}`, ADR-0035 §决策 5), not here.
+///
+/// A `null` url is a **section header**, not a broken entry: real `exploreUrl` scripts emit labels
+/// such as `══ 推荐 ══` with an empty url to group the chips under it (ADR-0069). Upstream keeps
+/// them as `ExploreKind(title, "")`; the page shows them as a non-clickable label.
 @freezed
 abstract class ExploreCategory with _$ExploreCategory {
   /// Creates a discover-page category.
-  const factory ExploreCategory({required String title, required String url}) =
+  const factory ExploreCategory({required String title, String? url}) =
       _ExploreCategory;
 }

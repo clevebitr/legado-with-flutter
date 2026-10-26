@@ -8,19 +8,10 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/platform/playback_notification.dart';
 
 /// The method channel the Android activity listens on for the notification permission.
-///
-/// It is spelled once here and once in `MainActivity.kt`; the two sides are one contract, and no
-/// Dart code outside this file may invoke it.
 const String notificationPermissionChannel =
     'flutter_reader/notification_permission';
 
-/// Picks the media-notification binding for this platform (C-PLT-1).
-///
-/// Android, iOS and Windows all show the current track in the system's own media surface:
-/// `audio_service` covers the first two and `audio_service_win` implements its platform interface
-/// with WinRT `SystemMediaTransportControls` (ADR-0062 §决策 4). Any other target gets the no-op
-/// binding, so playback still works while the app is in front. This function is the **only** place
-/// in the audio path that asks which platform it runs on.
+/// Picks the media-notification binding for this platform.
 PlaybackNotification createPlaybackNotification({required AppLogger logger}) {
   if (Platform.isAndroid || Platform.isIOS || Platform.isWindows) {
     return AudioServicePlaybackNotification(logger: logger);
@@ -29,12 +20,10 @@ PlaybackNotification createPlaybackNotification({required AppLogger logger}) {
   return const NoopPlaybackNotification();
 }
 
-/// [PlaybackNotification] backed by `audio_service` (ADR-0054 §决策 3/4).
+/// [PlaybackNotification] backed by `audio_service`.
 ///
-/// `AudioService.init` must run **once per process** and its handler outlives any page, so the
-/// handler is a file-level singleton: opening the player a second time reuses it and only replaces
-/// the callbacks. A second `init` would replace the engine and is the documented way to break
-/// headset buttons.
+/// `AudioService.init` must run once per process, so the handler is a file-level singleton and
+/// later attaches only replace its callbacks.
 final class AudioServicePlaybackNotification implements PlaybackNotification {
   /// Creates the binding.
   const AudioServicePlaybackNotification({required this._logger});
@@ -55,7 +44,7 @@ final class AudioServicePlaybackNotification implements PlaybackNotification {
     return _Handle(handler);
   }
 
-  /// Returns the shared handler, initialising `audio_service` the first time.
+  // 共享 handler 首次使用时初始化 audio_service。
   Future<_ReaderAudioHandler> _handlerOf(
     PlaybackNotificationControls controls,
   ) async {
@@ -70,8 +59,7 @@ final class AudioServicePlaybackNotification implements PlaybackNotification {
             androidNotificationChannelId: 'flutter_reader.playback',
             androidNotificationChannelName: 'Playback',
             androidNotificationOngoing: false,
-            // 暂停时不退出前台：Android 12+ 禁止后台重启前台服务，退出后再按播放会抛
-            // `ForegroundServiceStartNotAllowedException`（audio_service README 的同一建议）。
+            // 暂停时不退出前台：Android 12+ 禁止后台重启前台服务，否则再次播放会抛异常。
             androidStopForegroundOnPause: false,
           ),
         );
@@ -81,15 +69,11 @@ final class AudioServicePlaybackNotification implements PlaybackNotification {
     return handler;
   }
 
-  /// Asks Android 13+ for the notification permission, once per attach.
-  ///
-  /// The result is deliberately not awaited as a grant: a denied permission still leaves a working
-  /// foreground service, and blocking playback on a dialog answer would be worse than a missing
-  /// notification. A missing channel (host tests, other platforms) is a no-op.
   Future<void> _requestNotificationPermission() async {
     if (!Platform.isAndroid) {
       return;
     }
+    // 不等待授权结果：被拒也仍有可用的前台服务，阻塞播放比缺通知更糟。
     try {
       await const MethodChannel(notificationPermissionChannel)
           .invokeMethod<void>('request');
@@ -109,7 +93,7 @@ final class AudioServicePlaybackNotification implements PlaybackNotification {
   }
 }
 
-/// The handle the reader updates; it forwards to the shared handler's streams.
+// The handle the reader updates; it forwards to the shared handler's streams.
 final class _Handle implements PlaybackNotificationHandle {
   const _Handle(this._handler);
 
@@ -159,14 +143,11 @@ final class _Handle implements PlaybackNotificationHandle {
   }
 }
 
-/// The `audio_service` handler: it owns nothing but the callbacks.
-///
-/// The player itself is the reader's own engine, so the handler only forwards system actions to
-/// [controls] — the notification stays a **view** of the player, never a second source of truth.
+// audio_service 的 handler 只转发系统动作，播放器本身仍是朗读引擎。
 final class _ReaderAudioHandler extends BaseAudioHandler {
   _ReaderAudioHandler(this.controls);
 
-  /// The actions the current reader bound.
+  // 当前朗读绑定的动作。
   PlaybackNotificationControls controls;
 
   @override

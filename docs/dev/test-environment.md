@@ -75,6 +75,7 @@ flutter test integration_test/on_disk_database_test.dart -d emulator-5554
 | `integration_test/app_boot_test.dart` | 设备级 smoke：真实引擎 + 真实平台通道下应用能启动并渲染落地页 |
 | `integration_test/on_disk_database_test.dart` | 设备级验证：文件型 Drift 数据库（原生 SQLite + 后台 isolate）建库、落盘、跨连接读回 |
 | `integration_test/js_bridge_test.dart` | 设备级验证：真实 QuickJS 引擎 + 真实 worker isolate 上的 `JsBridge`（标量 / 数组结果、同步 `crypto.*`、`log.*` 转发、runaway → `js:timeout` 后 worker 仍可用、JS 异常 → `js:error`、`await http.get` / `http.post`、`await parse.getString`、元素级 scope → `js:parse-scope`、额度 → `js:quota`、白名单内外） |
+| `integration_test/web_view_test.dart` | 设备级验证：真实 headless WebView 渲染 + POST 提交（ADR-0061 / ADR-0062），以及 **WebView ↔ 应用 cookie 双向互操作**（桥写进去的 cookie 页面读得到、页面写下的 cookie 桥读得到，ADR-0068 §决策 4） |
 | `tool/test/common.ps1` | 共享工具：路径解析、命令执行与失败传播、Android 设备/模拟器辅助（**不单独执行**） |
 | `tool/test/run_unit.ps1` | 主机侧测试 + 覆盖率门禁 |
 | `tool/test/run_windows.ps1` | Windows 设备级用例 |

@@ -62,7 +62,35 @@ final class _NoContentCache implements ContentCache {
     required String sourceId,
     required String url,
     required String body,
+    String? bookUrl,
   }) async {}
+
+  @override
+  Future<int> countForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async => 0;
+
+  @override
+  Future<int> clearForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async => 0;
+
+  @override
+  Future<int> countForSource(String sourceId) async => 0;
+
+  @override
+  Future<int> clearForSource(String sourceId) async => 0;
+
+  @override
+  Future<int> countAll() async => 0;
+
+  @override
+  Future<int> clearExpired() async => 0;
+
+  @override
+  Future<void> clearAll() async {}
 }
 
 /// One stage of one source.

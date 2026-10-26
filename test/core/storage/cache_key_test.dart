@@ -98,5 +98,30 @@ void main() {
       expect(key, isNot(contains('example.com')));
       expect(key, hasLength(64));
     });
+
+    test('cacheScopeKeyFor_whenTheInputIsTheSame_answersTheSameDigest', () {
+      expect(
+        cacheScopeKeyFor(sourceId: 'a', bookUrl: 'b'),
+        cacheScopeKeyFor(sourceId: 'a', bookUrl: 'b'),
+      );
+    });
+
+    test('cacheScopeKeyFor_whenThePartsShift_answersDifferentDigests', () {
+      // 与 `cacheKeyFor` 同一条理由：分隔符让 ('ab','c') 与 ('a','bc') 不会撞。
+      expect(
+        cacheScopeKeyFor(sourceId: 'ab', bookUrl: 'c'),
+        isNot(cacheScopeKeyFor(sourceId: 'a', bookUrl: 'bc')),
+      );
+    });
+
+    test('cacheScopeKeyFor_whenCalled_doesNotEmbedTheArguments', () {
+      final String key = cacheScopeKeyFor(
+        sourceId: 'https://secret.test',
+        bookUrl: 'https://secret.test/book/1',
+      );
+
+      expect(key, isNot(contains('secret')));
+      expect(key, hasLength(64));
+    });
   });
 }

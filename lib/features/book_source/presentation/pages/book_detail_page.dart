@@ -9,9 +9,11 @@ import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/book_cache_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_queries.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_add_notifier.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_book_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -190,6 +192,15 @@ class BookDetailPage extends ConsumerWidget {
     onRetry: () => ref.invalidate(tocProvider(source, url)),
   );
 
+  /// The shelf's view of this book, or `null` while it loads (or when the port is unbound).
+  ShelfMembership? _membership(
+    WidgetRef ref,
+    String sourceUrl,
+    String bookUrl,
+  ) => ref
+      .watch(shelfMembershipProvider((sourceUrl: sourceUrl, bookUrl: bookUrl)))
+      .value;
+
   /// Builds the information block; an absent field is simply not shown.
   Widget _infoBlock(
     BuildContext context,
@@ -199,68 +210,85 @@ class BookDetailPage extends ConsumerWidget {
     M3ETheme tokens,
     AppLocalizations l10n,
     AsyncValue<ParseResult<List<Chapter>>> toc,
-  ) => Padding(
-    padding: EdgeInsets.all(tokens.spacing.lg),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        // 封面 + 元信息并排：封面是 S1（roadmap §3.9），源没有 `coverUrl` 时是占位块。
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            CoverImage(url: info.coverUrl, width: 84, height: 112),
-            SizedBox(width: tokens.spacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(info.name, style: tokens.typography.base.headlineSmall),
-                  SizedBox(height: tokens.spacing.xs),
-                  if (info.author case final String author)
-                    Text(
-                      l10n.bookSourceAuthorLine(author),
-                      style: tokens.typography.base.bodyMedium,
-                    ),
-                  if (info.kind case final String kind)
-                    Text(
-                      l10n.bookSourceKindLine(kind),
-                      style: tokens.typography.base.bodyMedium,
-                    ),
-                  if (info.lastChapter case final String chapter)
-                    Text(
-                      l10n.bookSourceLastChapterLine(chapter),
-                      style: tokens.typography.base.bodyMedium,
-                    ),
-                  if (info.updateTime case final String updated
-                      when updated.isNotEmpty)
-                    Text(
-                      l10n.bookSourceUpdateTimeLine(updated),
-                      style: tokens.typography.base.bodyMedium,
-                    ),
-                ],
+  ) {
+    final ShelfMembership? membership = _membership(ref, source.url, info.url);
+
+    return Padding(
+      padding: EdgeInsets.all(tokens.spacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          // 封面 + 元信息并排：封面是 S1（roadmap §3.9），源没有 `coverUrl` 时是占位块；
+          // 用户换过的本地封面优先（M19 批 B）。
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              CoverImage(
+                url: info.coverUrl,
+                localPath: membership?.customCoverPath,
+                width: 84,
+                height: 112,
               ),
-            ),
+              SizedBox(width: tokens.spacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      info.name,
+                      style: tokens.typography.base.headlineSmall,
+                    ),
+                    SizedBox(height: tokens.spacing.xs),
+                    if (info.author case final String author)
+                      Text(
+                        l10n.bookSourceAuthorLine(author),
+                        style: tokens.typography.base.bodyMedium,
+                      ),
+                    if (info.kind case final String kind)
+                      Text(
+                        l10n.bookSourceKindLine(kind),
+                        style: tokens.typography.base.bodyMedium,
+                      ),
+                    if (info.lastChapter case final String chapter)
+                      Text(
+                        l10n.bookSourceLastChapterLine(chapter),
+                        style: tokens.typography.base.bodyMedium,
+                      ),
+                    if (info.updateTime case final String updated
+                        when updated.isNotEmpty)
+                      Text(
+                        l10n.bookSourceUpdateTimeLine(updated),
+                        style: tokens.typography.base.bodyMedium,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (info.intro case final String intro
+              when intro.trim().isNotEmpty) ...[
+            SizedBox(height: tokens.spacing.md),
+            // 简介默认折三行：目录可能有上千条，一整段简介会把目录推到屏幕外。
+            _IntroText(text: intro, l10n: l10n, tokens: tokens),
           ],
-        ),
-        if (info.intro case final String intro
-            when intro.trim().isNotEmpty) ...[
           SizedBox(height: tokens.spacing.md),
-          // 简介默认折三行：目录可能有上千条，一整段简介会把目录推到屏幕外。
-          _IntroText(text: intro, l10n: l10n, tokens: tokens),
+          Wrap(
+            spacing: tokens.spacing.sm,
+            runSpacing: tokens.spacing.sm,
+            children: <Widget>[
+              _readButton(context, ref, source, info, l10n, toc),
+              _continueButton(context, ref, source, info, l10n),
+              _shelfButton(context, ref, source, info, l10n),
+              _readingRecordsButton(context, ref, source, info, l10n),
+              _groupButton(context, ref, source, info, membership, l10n),
+              _coverButton(context, ref, source, info, membership, l10n),
+              _bookCacheButton(context, ref, source, info, l10n),
+            ],
+          ),
         ],
-        SizedBox(height: tokens.spacing.md),
-        Wrap(
-          spacing: tokens.spacing.sm,
-          runSpacing: tokens.spacing.sm,
-          children: <Widget>[
-            _readButton(context, ref, source, info, l10n, toc),
-            _continueButton(context, ref, source, info, l10n),
-            _shelfButton(context, ref, source, info, l10n),
-          ],
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
   /// 「开始阅读」：从第一章进阅读器；目录还没读出来时不可点（没有可进的章节）。
   Widget _readButton(
@@ -300,6 +328,29 @@ class BookDetailPage extends ConsumerWidget {
     label: Text(l10n.bookSourceContinueReading),
   );
 
+  /// 「阅读记录」: opens the reader-owned record page for this book (ADR-0066 §决策 5).
+  ///
+  /// The page belongs to `reader`; this button only names the book to the port, so the detail page
+  /// keeps its zero imports of that feature (C-ARCH-2).
+  Widget _readingRecordsButton(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    AppLocalizations l10n,
+  ) => OutlinedButton.icon(
+    onPressed: () => ref
+        .read(appNavigationProvider)
+        .openBookReadingRecords(
+          context,
+          sourceUrl: source.url,
+          bookUrl: info.url,
+          bookName: info.name,
+        ),
+    icon: const Icon(Icons.history),
+    label: Text(l10n.bookSourceReadingRecords),
+  );
+
   /// Opens the reader through the presentation port (ADR-0042 §决策 2).
   ///
   /// [chapterUrl] `null` means “resume where the reader stopped”: the session restores the stored
@@ -320,6 +371,199 @@ class BookDetailPage extends ConsumerWidget {
         tocUrl: info.tocUrl,
         chapterUrl: chapterUrl,
       );
+
+  /// 「改分组」: moves the shelf row into a group (M19 batch B, ADR-0066 §决策 5).
+  ///
+  /// Disabled until the book is on the shelf: a group is a property of a shelf row, and inventing
+  /// one here would add the book behind the user's back.
+  Widget _groupButton(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    ShelfMembership? membership,
+    AppLocalizations l10n,
+  ) {
+    final ShelfMembership? known = membership;
+
+    return OutlinedButton.icon(
+      onPressed: known == null || !known.onShelf
+          ? null
+          : () => unawaited(
+              _openGroupSheet(context, ref, source, info, known, l10n),
+            ),
+      icon: const Icon(Icons.folder_outlined),
+      label: Text(l10n.bookSourceShelfGroup),
+    );
+  }
+
+  /// Shows the group choices and writes the picked one.
+  Future<void> _openGroupSheet(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    ShelfMembership membership,
+    AppLocalizations l10n,
+  ) async {
+    final ShelfBookKey key = (sourceUrl: source.url, bookUrl: info.url);
+    final int? chosen = await showDialog<int>(
+      context: context,
+      builder: (BuildContext dialogContext) => SimpleDialog(
+        title: Text(l10n.bookSourceShelfGroup),
+        children: <Widget>[
+          // 「未分组」用 -1 表示：`null` 在 `Navigator.pop` 里是「取消」，两者必须能区分。
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop(_ungroupedChoice),
+            child: Text(l10n.shelfGroupUngrouped),
+          ),
+          for (final ShelfGroupOption group in membership.groups)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(group.id),
+              child: Text(
+                group.id == membership.groupId ? '${group.name} ✓' : group.name,
+              ),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || !context.mounted) {
+      return;
+    }
+    final ParseResult<void> result = await ref
+        .read(shelfBookActionsProvider(key).notifier)
+        .assignGroup(chosen == _ungroupedChoice ? null : chosen);
+    if (!context.mounted || result is! ParseFailure<void>) {
+      return;
+    }
+    _showMessage(context, l10n.shelfWriteFailed);
+  }
+
+  /// 「换封面」/「恢复默认封面」 (M19 batch B).
+  Widget _coverButton(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    ShelfMembership? membership,
+    AppLocalizations l10n,
+  ) {
+    final bool onShelf = membership?.onShelf ?? false;
+    final bool hasCustomCover = membership?.customCoverPath != null;
+
+    return OutlinedButton.icon(
+      onPressed: onShelf
+          ? () => unawaited(
+              _changeCover(context, ref, source, info, hasCustomCover, l10n),
+            )
+          : null,
+      icon: const Icon(Icons.image_outlined),
+      label: Text(
+        hasCustomCover ? l10n.bookSourceResetCover : l10n.bookSourceChangeCover,
+      ),
+    );
+  }
+
+  /// Picks a cover, or clears the current one when the user already set one.
+  Future<void> _changeCover(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    bool hasCustomCover,
+    AppLocalizations l10n,
+  ) async {
+    final ShelfBookKey key = (sourceUrl: source.url, bookUrl: info.url);
+    final ShelfBookActions actions = ref.read(
+      shelfBookActionsProvider(key).notifier,
+    );
+    if (hasCustomCover) {
+      final ParseResult<void> result = await actions.resetCover();
+      if (!context.mounted || result is! ParseFailure<void>) {
+        return;
+      }
+      _showMessage(context, l10n.shelfWriteFailed);
+
+      return;
+    }
+    final ParseResult<String?> result = await actions.chooseCover();
+    if (!context.mounted || result is! ParseFailure<String?>) {
+      return;
+    }
+    _showMessage(context, l10n.shelfWriteFailed);
+  }
+
+  /// 「本书缓存」: how many chapters of this book are cached, with a clear action (M19).
+  Widget _bookCacheButton(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    AppLocalizations l10n,
+  ) {
+    final ShelfBookKey key = (sourceUrl: source.url, bookUrl: info.url);
+    final int? count = ref.watch(bookCacheCountProvider(key)).value;
+
+    return OutlinedButton.icon(
+      onPressed: count == null
+          ? null
+          : () => unawaited(_openBookCache(context, ref, key, count, l10n)),
+      icon: const Icon(Icons.download_done_outlined),
+      label: Text(
+        count == null
+            ? l10n.bookSourceBookCache
+            : '${l10n.bookSourceBookCache} · '
+                  '${l10n.bookSourceBookCacheCount(count)}',
+      ),
+    );
+  }
+
+  /// Shows this book's cache size and clears it on request.
+  Future<void> _openBookCache(
+    BuildContext context,
+    WidgetRef ref,
+    ShelfBookKey key,
+    int count,
+    AppLocalizations l10n,
+  ) async {
+    final bool? clear = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(l10n.bookSourceBookCache),
+        content: Text(l10n.bookSourceBookCacheCount(count)),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.actionCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.bookSourceBookCacheClear),
+          ),
+        ],
+      ),
+    );
+    if (clear != true || !context.mounted) {
+      return;
+    }
+    final ParseResult<int> result = await ref
+        .read(bookCacheActionsProvider(key).notifier)
+        .clear();
+    if (!context.mounted) {
+      return;
+    }
+    switch (result) {
+      case ParseSuccess<int>(:final int data):
+        _showMessage(context, l10n.bookSourceBookCacheCleared(data));
+      case ParseFailure<int>():
+        _showMessage(context, l10n.bookSourceBookCacheFailed);
+    }
+  }
+
+  /// Shows one transient message.
+  void _showMessage(BuildContext context, String message) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
 
   /// Builds the 「加入书架」 action (`docs/dev/roadmap.md` 5.4)。
   ///
@@ -384,6 +628,9 @@ class BookDetailPage extends ConsumerWidget {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 }
+
+/// The dialog answer that means 「未分组」 (`null` is reserved for “dismissed”).
+const int _ungroupedChoice = -1;
 
 /// The introduction, collapsed to three lines until asked to expand (S6, `roadmap.md` §3.9).
 ///

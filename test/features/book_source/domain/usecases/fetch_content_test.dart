@@ -5,9 +5,12 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
+import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,14 +65,57 @@ BookSource _purifyingSource(String rule) {
   );
 }
 
+/// Serves one rendered page for `ruleContent.webJs` (`docs/dev/roadmap.md` M21a).
+final class _FakeWebPages implements WebPageFetcher {
+  /// The HTML every render answers with.
+  String body = '<div id="content">渲染后的正文</div>';
+
+  /// The scripts the use case asked for, in order.
+  final List<String?> scripts = <String?>[];
+
+  /// When true the render fails instead of answering a page.
+  bool fail = false;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<ParseResult<FetchedWebPage>> fetch({
+    required String url,
+    Map<String, String>? headers,
+    required String rulePath,
+    WebPageRequestMethod method = WebPageRequestMethod.get,
+    String? body,
+    String? javaScript,
+    Duration? delayTime,
+    String? overrideUrlRegex,
+  }) async {
+    scripts.add(javaScript);
+    if (fail) {
+      return const ParseFailure<FetchedWebPage>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'contentRule.webJs',
+      );
+    }
+
+    return ParseSuccess<FetchedWebPage>(
+      FetchedWebPage(url: url, body: this.body),
+    );
+  }
+}
+
 /// Builds the page service under test around [http] and [bridge].
-PageFetchService _service(FakeHttpClient http, [FakeJsBridge? bridge]) =>
-    _serviceAndPrinter(http, bridge).pages;
+PageFetchService _service(
+  FakeHttpClient http, [
+  FakeJsBridge? bridge,
+  WebPageFetcher? webPages,
+]) => _serviceAndPrinter(http, bridge, webPages).pages;
 
 /// Builds the page service under test plus the printer its logger writes to.
 ({PageFetchService pages, FakeLogPrinter printer}) _serviceAndPrinter(
   FakeHttpClient http, [
   FakeJsBridge? bridge,
+  WebPageFetcher? webPages,
 ]) {
   final FakeLogPrinter printer = FakeLogPrinter();
   final AppLogger logger = AppLogger(level: LogLevel.debug, printer: printer);
@@ -83,6 +129,7 @@ PageFetchService _service(FakeHttpClient http, [FakeJsBridge? bridge]) =>
       ),
       http: http,
       logger: logger,
+      webPages: webPages,
     ),
     printer: printer,
   );
@@ -403,6 +450,56 @@ void main() {
       );
     });
 
+    test('execute_givenPurgeRules_appliesThemAfterReplaceRegex', () async {
+      // M20 的接线位置（ADR-0070 §决策 3）：源自己的 `replaceRegex` 先跑，净化规则后跑。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, _page('chapter_page.html'));
+      final FakeContentCache cache = FakeContentCache();
+
+      final String content = _data(
+        await FetchContent(
+          pages: _service(http),
+          cache: cache,
+          purifier: const ContentPurifier(
+            rules: _FixedPurgeRules(<PurgeRule>[
+              PurgeRule(pattern: '正文第一段。', replacement: 'P1', isRegex: false),
+            ]),
+          ),
+        ).execute(
+          _purifyingSource('##正文第二段。##'),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(content, 'P1\n\n正文第三段。');
+      // 缓存的是净化之后的成品：命中时不能再跑一遍引擎，也就不可能补上净化。
+      expect(cache.entries.values.single, content);
+    });
+
+    test('execute_givenABrokenPurgeRule_stillReturnsTheChapter', () async {
+      // ADR-0026 §决策 2：一条自己写的坏正则不该让整章读不出来。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, _page('chapter_page.html'));
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _serviceAndPrinter(http);
+
+      final String content = _data(
+        await FetchContent(
+          pages: service.pages,
+          cache: FakeContentCache(),
+          purifier: ContentPurifier(
+            rules: const _FixedPurgeRules(<PurgeRule>[
+              PurgeRule(pattern: '(', replacement: '-', isRegex: true),
+            ]),
+            logger: AppLogger(printer: service.printer),
+          ),
+        ).execute(_source(), const ChapterRequest(url: _chapterUrl)),
+      );
+
+      expect(content, '正文第一段。\n正文第二段。\n正文第三段。');
+      expect(service.printer.events, isNotEmpty);
+    });
+
     test(
       'execute_givenATemplateInTheExtractedUrl_rendersItBeforeRequesting',
       () async {
@@ -435,5 +532,94 @@ void main() {
         expect(content, '第一页。\n第二页。');
       },
     );
+
+    test('execute_givenWebJs_readsTheRenderedPageAndPurifiesIt', () async {
+      // ADR-0068 §决策 7：正文页由 WebView 渲染后，脚本的结果才是规则的输入。
+      final FakeHttpClient http = FakeHttpClient();
+      final _FakeWebPages web = _FakeWebPages();
+      final PageFetchService pages = _service(http, null, web);
+      final BookSource source = _source().copyWith(
+        contentRule: _source().contentRule.copyWith(
+          webJs: 'document.body.innerText',
+        ),
+      );
+      final FakeContentCache cache = FakeContentCache();
+
+      final ParseResult<String> result = await FetchContent(
+        pages: pages,
+        cache: cache,
+      ).execute(source, const ChapterRequest(url: _chapterUrl));
+
+      expect(_data(result), '渲染后的正文');
+      expect(web.scripts.single, 'document.body.innerText');
+      // 渲染路径不发明请求：普通 HTTP 一次都没发。
+      expect(http.requestedUrls, isEmpty);
+      // 成品同样进缓存（与普通读取一条语义）。
+      expect(cache.writes, hasLength(1));
+    });
+
+    test('execute_givenWebJsAndAFailingRenderer_mapsTheFailure', () async {
+      final _FakeWebPages web = _FakeWebPages()..fail = true;
+      final PageFetchService pages = _service(FakeHttpClient(), null, web);
+      final BookSource source = _source().copyWith(
+        contentRule: _source().contentRule.copyWith(webJs: 'document.title'),
+      );
+
+      final ParseResult<String> result = await FetchContent(
+        pages: pages,
+        cache: FakeContentCache(),
+      ).execute(source, const ChapterRequest(url: _chapterUrl));
+
+      expect(_failure(result).kind, ParseFailureKind.unsupportedRule);
+    });
+
+    test(
+      'execute_givenWebJsAndAContentRuleThatMisses_failsWithItsPath',
+      () async {
+        // 渲染成功但正文规则没命中：失败必须指向 `contentRule.content`，不是 webJs。
+        final _FakeWebPages web = _FakeWebPages()
+          ..body = '<div>没有任何可提取的节点</div>';
+        final PageFetchService pages = _service(FakeHttpClient(), null, web);
+        final BookSource source = _source().copyWith(
+          contentRule: _source().contentRule.copyWith(webJs: 'document.title'),
+        );
+
+        final ParseResult<String> result = await FetchContent(
+          pages: pages,
+          cache: FakeContentCache(),
+        ).execute(source, const ChapterRequest(url: _chapterUrl));
+
+        expect(_failure(result).rulePath, 'contentRule.content');
+      },
+    );
+
+    test('execute_givenWebJsWithoutAWebView_failsAsUnsupportedRule', () async {
+      final PageFetchService pages = _service(
+        FakeHttpClient(),
+        null,
+        const UnsupportedWebPageFetcher(),
+      );
+      final BookSource source = _source().copyWith(
+        contentRule: _source().contentRule.copyWith(webJs: 'document.title'),
+      );
+
+      final ParseResult<String> result = await FetchContent(
+        pages: pages,
+        cache: FakeContentCache(),
+      ).execute(source, const ChapterRequest(url: _chapterUrl));
+
+      expect(_failure(result).kind, ParseFailureKind.unsupportedRule);
+      expect(_failure(result).rulePath, 'contentRule.webJs');
+    });
   });
+}
+
+/// A [PurgeRuleSource] answering a fixed list (the rules feature owns the real one).
+final class _FixedPurgeRules implements PurgeRuleSource {
+  const _FixedPurgeRules(this._rules);
+
+  final List<PurgeRule> _rules;
+
+  @override
+  Future<List<PurgeRule>> purgeRules() async => _rules;
 }

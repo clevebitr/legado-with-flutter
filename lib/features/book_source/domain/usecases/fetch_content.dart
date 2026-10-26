@@ -1,22 +1,33 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
+import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
+import 'package:html/parser.dart' as html_parser;
 
 /// Reads the body of one chapter (`docs/dev/roadmap.md` 2.4, `ruleContent`).
 ///
 /// Paging follows `nextContentUrl` and the assembled body is purified by
-/// `replaceRegex` (`docs/dev/roadmap.md` 3.5, `book-source.md` §4.1). A finished body is remembered in
+/// `replaceRegex` (`docs/dev/roadmap.md` 3.5, `book-source.md` §4.1) and then by the user's
+/// 替换净化 rules (`docs/dev/roadmap.md` M20, ADR-0070 §决策 3). A finished body is remembered in
 /// [ContentCache], so re-entering the same chapter costs no request (`docs/dev/roadmap.md` 5.2).
 final class FetchContent {
   /// Creates the use case.
-  const FetchContent({required this._pages, required this._cache});
+  const FetchContent({
+    required this._pages,
+    required this._cache,
+    this._purifier = const ContentPurifier(),
+  });
 
   final PageFetchService _pages;
   final ContentCache _cache;
+
+  /// The user's purge rules; the default purges nothing, which is what「没接上净化」looks like.
+  final ContentPurifier _purifier;
 
   /// Fetches [request]'s URL and returns the chapter body as plain text.
   ///
@@ -43,6 +54,14 @@ final class FetchContent {
     _pages.applySourceRate(source);
     // `header` 写成规则时要在**第一个请求之前**求值（book-source.md §2、M12-A2）。
     final Map<String, String>? headers = await _pages.headersOf(source);
+
+    // `ruleContent.webJs`（M21a，ADR-0068 §决策 7）：正文页必须由 WebView 渲染后才能在页面里
+    // 执行脚本。这条路径不跟 `nextContentUrl` 翻页——脚本产出的是整段正文，再翻页没有语义。
+    final String? webJs = source.contentRule.webJs;
+    if (webJs != null && webJs.trim().isNotEmpty) {
+      return _readRendered(source, request, webJs, headers);
+    }
+
     final ParseResult<PageWalk> walk = await _pages.walk(
       rule: url,
       rulePath: 'ruleContent',
@@ -66,6 +85,9 @@ final class FetchContent {
       headers: headers,
       sourceId: source.url,
       source: source.jsSourceInfo,
+      login: source.loginGuard,
+      // `ruleContent.sourceRegex`：截取后的片段才是规则读的页面（ADR-0068 §决策 7）。
+      sourceRegex: source.contentRule.sourceRegex,
     );
 
     return switch (walk) {
@@ -76,10 +98,105 @@ final class FetchContent {
         failureAt<String>(kind: kind, rulePath: failedAt),
       ParseSuccess<PageWalk>(:final PageWalk data) => await _read(
         source,
-        url,
+        request,
         data,
       ),
     };
+  }
+
+  /// Reads a chapter whose page must be rendered before its script can run (`webJs`).
+  ///
+  /// The rendered body becomes the scope of `ruleContent.content`, and the result goes through the
+  /// same `replaceRegex` + cache as a plain read, so the rest of the pipeline cannot tell the two
+  /// paths apart.
+  Future<ParseResult<String>> _readRendered(
+    BookSource source,
+    ChapterRequest request,
+    String webJs,
+    Map<String, String>? headers,
+  ) async {
+    final ParseResult<String> rendered = await _pages.fetchRendered(
+      request.url,
+      rulePath: 'contentRule.webJs',
+      script: webJs,
+      headers: headers,
+      sourceId: source.url,
+      source: source.jsSourceInfo,
+      bookName: request.bookName,
+      chapterTitle: request.title,
+    );
+    final String html;
+    switch (rendered) {
+      case ParseFailure<String>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        return failureAt<String>(kind: kind, rulePath: failedAt);
+      case ParseSuccess<String>(:final String data):
+        html = data;
+    }
+
+    final ParseResult<String> body = await _pages.content(
+      source.contentRule.content,
+      RuleScope.dom(
+        html_parser.parse(html),
+        body: html,
+        jsContext: JsPageContext(
+          baseUrl: request.url,
+          source: source.jsSourceInfo,
+          headers: headers,
+          bookName: request.bookName,
+          chapterTitle: request.title,
+          book: JsBookInfo(
+            name: request.bookName,
+            author: request.author,
+            bookUrl: request.bookUrl,
+            tocUrl: request.tocUrl,
+            intro: request.intro,
+            kind: request.kind,
+          ),
+        ),
+      ),
+      'contentRule.content',
+    );
+    final String text;
+    switch (body) {
+      case ParseFailure<String>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ):
+        return failureAt<String>(kind: kind, rulePath: failedAt);
+      case ParseSuccess<String>(:final String data):
+        text = data;
+    }
+
+    // `replaceRegex` 与净化用同一个上下文：`@js:` 替换要在沙箱里读到同一页（ADR-0071 §决策 5）。
+    final JsPageContext jsContext = JsPageContext(
+      baseUrl: request.url,
+      source: source.jsSourceInfo,
+      headers: headers,
+      bookName: request.bookName,
+      chapterTitle: request.title,
+      book: _bookOf(request),
+    );
+    final String content = await _purifier.purgeContent(
+      await _pages.replaceContent(
+        source.contentRule.replaceRegex,
+        text,
+        'contentRule.replaceRegex',
+        sourceId: source.url,
+        jsContext: jsContext,
+      ),
+      context: jsContext,
+    );
+    await _cache.write(
+      sourceId: source.url,
+      url: request.url,
+      body: content,
+      bookUrl: request.bookUrl,
+    );
+
+    return ParseSuccess<String>(content);
   }
 
   /// Reads every walked page and joins the pieces into one body.
@@ -94,7 +211,7 @@ final class FetchContent {
   /// to each page (`BookContent.kt:190-193`).
   Future<ParseResult<String>> _read(
     BookSource source,
-    String url,
+    ChapterRequest request,
     PageWalk walk,
   ) async {
     final ParseFailure<Never>? stopped = walk.stoppedBy;
@@ -122,21 +239,45 @@ final class FetchContent {
       }
     }
 
-    final String content = await _pages.replaceContent(
-      source.contentRule.replaceRegex,
-      bodies.join('\n'),
-      'contentRule.replaceRegex',
-      sourceId: source.url,
-      // 净化规则拿得到它读的那一页：上游 `getString(replaceRegex, contentStr)` 同样有上下文。
-      jsContext: JsPageContext(
-        baseUrl: walk.pages.first.url,
-        source: source.jsSourceInfo,
-      ),
+    // 净化规则拿得到它读的那一页：上游 `getString(replaceRegex, contentStr)` 同样有上下文。
+    final JsPageContext jsContext = JsPageContext(
+      baseUrl: walk.pages.first.url,
+      source: source.jsSourceInfo,
+      bookName: request.bookName,
+      chapterTitle: request.title,
+      book: _bookOf(request),
     );
-    // 缓存的是**成品**：分页已拼好、`replaceRegex` 已跑过，所以命中可以直接跳过整个引擎。
+    final String content = await _purifier.purgeContent(
+      await _pages.replaceContent(
+        source.contentRule.replaceRegex,
+        bodies.join('\n'),
+        'contentRule.replaceRegex',
+        sourceId: source.url,
+        jsContext: jsContext,
+      ),
+      context: jsContext,
+    );
+    // 缓存的是**成品**：分页已拼好、`replaceRegex` 与净化规则都已跑过，所以命中可直接跳过整个引擎。
+    // 也正因为如此，改净化规则必须作废缓存（ADR-0070 增补 §7）。
     // 写只发生在成功路径上：失败在前面就已经返回，不会被当成内容存下来。
-    await _cache.write(sourceId: source.url, url: url, body: content);
+    await _cache.write(
+      sourceId: source.url,
+      url: request.url,
+      body: content,
+      // 章节正文知道它属于哪本书（`bookUrl` 本来就在请求上下文里），按书缓存因此不需要新参数。
+      bookUrl: request.bookUrl,
+    );
 
     return ParseSuccess<String>(content);
   }
 }
+
+/// The book bindings a purge script may read, taken from the request.
+JsBookInfo _bookOf(ChapterRequest request) => JsBookInfo(
+  name: request.bookName,
+  author: request.author,
+  bookUrl: request.bookUrl,
+  tocUrl: request.tocUrl,
+  intro: request.intro,
+  kind: request.kind,
+);

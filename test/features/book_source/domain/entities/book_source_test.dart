@@ -281,9 +281,6 @@ void main() {
           'enabledExplore',
           'enabledReview',
           'lastUpdateTime',
-          'loginCheckJs',
-          'loginUi',
-          'loginUrl',
           'respondTime',
           'ruleReview',
           'weight',
@@ -292,6 +289,10 @@ void main() {
       expect(source.extra['customOrder'], 60);
       expect(source.extra['lastUpdateTime'], 1676448109528);
       expect(source.extra['enabledReview'], isFalse);
+      // `loginUrl` / `loginUi` / `loginCheckJs` 自 M21a 第二刀起是建模字段（ADR-0068 增补）。
+      expect(source.loginUrl, 'https://example-novel.test/');
+      expect(source.loginUi, '');
+      expect(source.loginCheckJs, '');
 
       // `concurrentRate` 自 M1-b2 起是建模字段（原文保留，解析在请求层），
       // `ruleExplore` 自 M1-b1 起是建模字段，两者都不再落进 extra。
@@ -534,6 +535,45 @@ void main() {
     });
   });
 
+  group('ContentRule image fields (ADR-0069 G5)', () {
+    test(
+      'fromLegadoJson_givenImageStyleAndDecode_modelsThemInsteadOfExtras',
+      () {
+        // 图片源的这两个字段以前落进 `extra`：`imageStyle` 是版式，`imageDecode` 是图片字节
+        // 解密脚本（本仓执行不了，但必须保住原文并在命中时显式拒绝）。
+        final BookSource source = BookSource.fromLegadoJson(<String, Object?>{
+          'bookSourceName': '漫画源',
+          'bookSourceUrl': 'https://a.test',
+          'bookSourceType': 2,
+          'ruleSearch': <String, Object?>{'bookList': 'class.i'},
+          'ruleToc': <String, Object?>{'chapterList': 'class.c'},
+          'ruleContent': <String, Object?>{
+            'content': 'class.page@tag.img@src',
+            'imageStyle': 'full',
+            'imageDecode': '@js:decode(result)',
+          },
+        });
+
+        expect(source.contentRule.imageStyle, 'full');
+        expect(source.contentRule.imageDecode, '@js:decode(result)');
+        expect(source.contentRule.extra, isEmpty);
+      },
+    );
+
+    test('toJson_givenTheImageFields_writesTheLegadoKeysBack', () {
+      const ContentRule rule = ContentRule(
+        content: 'class.page@tag.img@src',
+        imageStyle: 'single',
+        imageDecode: '',
+      );
+
+      final Map<String, Object?> encoded = rule.toJson();
+
+      expect(encoded['imageStyle'], 'single');
+      expect(encoded['imageDecode'], '');
+    });
+  });
+
   group('BookSource serialisation', () {
     test('toJson_givenImportedSource_reproducesTheLegadoKeys', () {
       final BookSource source = BookSource.fromLegadoJson(_loadFixture());
@@ -581,7 +621,10 @@ void main() {
       expect(source.extra, isNotEmpty);
       expect(encoded.containsKey('extra'), isFalse);
       expect(encoded.containsKey('bookSourceComment'), isFalse);
-      expect(encoded.containsKey('loginUrl'), isFalse);
+      // 三个登录字段已经是建模字段，所以它们**会**出现在 toJson 里（导出保真）。
+      expect(encoded['loginUrl'], source.loginUrl);
+      expect(encoded['loginUi'], source.loginUi);
+      expect(encoded['loginCheckJs'], source.loginCheckJs);
     });
   });
 }

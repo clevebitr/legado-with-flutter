@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/reader/di.dart';
+import 'package:flutter_reader/features/reader/domain/entities/bookmark.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_settings.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reading_session.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
@@ -19,8 +22,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../support/fake_bookmark_repository.dart';
+import '../../../../support/fake_clock.dart';
 import '../../../../support/fake_log_printer.dart';
 import '../../../../support/fake_reader_ports.dart';
+import '../../../../support/fake_reading_record_repository.dart';
 import '../../../../support/offline_corpus.dart';
 
 /// The book every case opens.
@@ -49,6 +55,9 @@ typedef _Fixture = ({
   FakeChapterContentProvider content,
   FakeReadingProgressStore progress,
   FakeReaderSettingsRepository settings,
+  FakeBookmarkRepository bookmarks,
+  FakeReadingRecordRepository records,
+  FakeClock clock,
   FakeLogPrinter printer,
 });
 
@@ -57,6 +66,9 @@ _Fixture _fixture({
   FakeChapterListProvider? chapters,
   FakeReadingProgressStore? progress,
   ReaderSettings? settings,
+  FakeBookmarkRepository? bookmarks,
+  FakeReadingRecordRepository? records,
+  FakeClock? clock,
 }) {
   final FakeChapterListProvider list = chapters ?? FakeChapterListProvider();
   if (chapters == null) {
@@ -68,12 +80,20 @@ _Fixture _fixture({
   final FakeReadingProgressStore store = progress ?? FakeReadingProgressStore();
   final FakeReaderSettingsRepository readerSettings =
       FakeReaderSettingsRepository(initial: settings);
+  final FakeBookmarkRepository bookmarkStore =
+      bookmarks ?? FakeBookmarkRepository();
+  final FakeReadingRecordRepository recordStore =
+      records ?? FakeReadingRecordRepository();
+  final FakeClock fakeClock = clock ?? FakeClock();
   final FakeLogPrinter printer = FakeLogPrinter();
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       readerChapterListProvider.overrideWithValue(list),
       readerChapterContentProvider.overrideWithValue(content),
       readerProgressStoreProvider.overrideWithValue(store),
+      bookmarkRepositoryProvider.overrideWithValue(bookmarkStore),
+      readingRecordRepositoryProvider.overrideWithValue(recordStore),
+      clockProvider.overrideWithValue(fakeClock),
       readerSettingsRepositoryProvider.overrideWith(
         (Ref ref) async => readerSettings,
       ),
@@ -90,6 +110,9 @@ _Fixture _fixture({
     content: content,
     progress: store,
     settings: readerSettings,
+    bookmarks: bookmarkStore,
+    records: recordStore,
+    clock: fakeClock,
     printer: printer,
   );
 }
@@ -381,6 +404,101 @@ void main() {
 
       final Text body = tester.widget<Text>(_bodyFinder());
       expect(body.textSpan, isNull);
+    });
+  });
+
+  group('ReaderPage bookmarks', () {
+    testWidgets('bookmarkButton_whenTapped_addsTheCurrentPosition', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+      await _pump(tester, fixture);
+
+      await _showChrome(tester);
+      await tester.tap(find.byTooltip(_l10n(tester).bookmarkAdd));
+      await tester.pumpAndSettle();
+
+      expect(fixture.bookmarks.toggles, hasLength(1));
+      final BookmarkDraft draft = fixture.bookmarks.toggles.single;
+      expect(draft.chapterUrl, 'https://source.test/1.html');
+      expect(draft.bookName, '剑来');
+      expect(draft.tocUrl, 'https://source.test/book/1/toc');
+      expect(draft.excerpt, isNotNull);
+      expect(find.text(_l10n(tester).bookmarkAdded), findsOneWidget);
+    });
+
+    testWidgets('bookmarkButton_whenThePositionIsMarked_removesIt', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+      fixture.bookmarks.bookmarks.add(
+        Bookmark(
+          id: 1,
+          sourceUrl: _book.sourceUrl,
+          bookUrl: _book.bookUrl,
+          bookName: _book.name,
+          chapterUrl: 'https://source.test/1.html',
+          chapterName: '第1章 开端',
+          charOffset: 0,
+          createdAt: DateTime(2026, 10, 23),
+        ),
+      );
+      await _pump(tester, fixture);
+
+      await _showChrome(tester);
+      // 位置已被标记时按钮的提示是「取消书签」，图标也是实心的。
+      await tester.tap(find.byTooltip(_l10n(tester).bookmarkRemove));
+      await tester.pumpAndSettle();
+
+      expect(fixture.bookmarks.bookmarks, isEmpty);
+      expect(find.text(_l10n(tester).bookmarkRemoved), findsOneWidget);
+    });
+
+    testWidgets('bookmarkButton_whenTheWriteFails_showsTheFailureMessage', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+      fixture.bookmarks.writeFailure = Exception('disk is full');
+      await _pump(tester, fixture);
+
+      await _showChrome(tester);
+      await tester.tap(find.byTooltip(_l10n(tester).bookmarkAdd));
+      await tester.pumpAndSettle();
+
+      expect(find.text(_l10n(tester).bookmarkFailed), findsOneWidget);
+      expect(fixture.bookmarks.bookmarks, isEmpty);
+    });
+  });
+
+  group('ReaderPage reading records', () {
+    testWidgets('dispose_whenTheSessionLastedLongEnough_recordsIt', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+      await _pump(tester, fixture);
+      fixture.clock.advance(const Duration(minutes: 3));
+
+      // 离开阅读器：换掉整棵树，触发 dispose（记录在那一刻收尾，ADR-0066 §决策 4）。
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      final ReadingSession session = fixture.records.sessions.single;
+      expect(session.bookUrl, _book.bookUrl);
+      expect(session.bookName, _book.name);
+      expect(session.chapterUrl, 'https://source.test/1.html');
+      expect(session.durationSeconds, 180);
+    });
+
+    testWidgets('dispose_whenTheSessionWasTooShort_recordsNothing', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+      await _pump(tester, fixture);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      expect(fixture.records.sessions, isEmpty);
     });
   });
 }

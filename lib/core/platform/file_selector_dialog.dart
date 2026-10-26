@@ -2,18 +2,11 @@
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
+import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
+import 'package:flutter_reader/core/platform/json_file_picker.dart';
 
-/// The one place that talks to the `file_selector` plugin (`docs/dev/roadmap.md` 5.8's file import).
-///
-/// 本文件按 ADR-0019 登记在 `tool/coverage_allowlist.txt` 中豁免：它只在真实平台上可达
-/// （Windows / Android / iOS 的原生对话框），宿主 VM 里没有可用的平台通道，交互本身也无法自动化。
-/// 读字节、体积上限与 BOM 处理都在 `FileSelectorBookSourceFilePicker` 里，那一份由单测覆盖；
-/// 本文件由设备级构建与双端探针验证「能编译、能链接、应用能起来」（ADR-0039）。
-///
-/// A picker that returns `null` means the user cancelled (or the platform answered nothing), which
-/// the port turns into `ParseSuccess(null)`.
-Future<PickedBookSourceFile?> fileSelectorOpenJsonFile() async {
+/// Opens the platform's JSON file dialog, or answers `null` when the user cancelled.
+Future<PickedJsonFile?> fileSelectorOpenJsonFile() async {
   final XFile? file = await openFile(
     acceptedTypeGroups: <XTypeGroup>[
       const XTypeGroup(
@@ -28,14 +21,10 @@ Future<PickedBookSourceFile?> fileSelectorOpenJsonFile() async {
     return null;
   }
 
-  return PickedBookSourceFile(name: file.name, bytes: await file.readAsBytes());
+  return PickedJsonFile(name: file.name, bytes: await file.readAsBytes());
 }
 
 /// Asks the user where to save [contents] and writes it, or returns `null` when they cancelled.
-///
-/// The companion of [fileSelectorOpenJsonFile], with the same exemption (ADR-0019 second category):
-/// only a real platform has a save dialog. Everything that can be decided without one — which bytes
-/// are written, what happens on cancel, what the failure looks like — lives in the port's adapter.
 Future<String?> fileSelectorSaveJsonFile({
   required String suggestedName,
   required String contents,
@@ -55,6 +44,64 @@ Future<String?> fileSelectorSaveJsonFile({
   }
 
   await File(location.path).writeAsString(contents);
+
+  return location.path;
+}
+
+/// Opens the platform's archive dialog and reads the file, or answers `null` when cancelled.
+///
+/// The size is checked **before** [XFile.readAsBytes], so an oversized pick never enters memory
+/// (`ADR-0073` §决策 2 / C-SEC-5). Two MIME types because Windows reports `.zip` as
+/// `application/x-zip-compressed` while Android and iOS use `application/zip`.
+Future<BackupArchiveSelection?> fileSelectorOpenBackupArchive({
+  required int maxBytes,
+}) async {
+  final XFile? file = await openFile(
+    acceptedTypeGroups: <XTypeGroup>[
+      // 不写 label：它是用户可见文案，必须来自 l10n（C-UI-5），而这张表在 core/ 里。
+      const XTypeGroup(
+        extensions: <String>['zip'],
+        mimeTypes: <String>['application/zip', 'application/x-zip-compressed'],
+      ),
+    ],
+  );
+  if (file == null) {
+    return null;
+  }
+
+  final int length = await file.length();
+  if (length > maxBytes) {
+    return OversizedBackupArchive(name: file.name, length: length);
+  }
+
+  return PickedBackupArchive(name: file.name, bytes: await file.readAsBytes());
+}
+
+/// Opens the platform's folder dialog and answers the chosen path, or `null` when cancelled.
+///
+/// No type group: a folder is a folder, and `file_selector` filters files only.
+Future<String?> fileSelectorPickDirectory() => getDirectoryPath();
+
+/// Asks the user where to save [bytes] and writes them, or answers `null` when they cancelled.
+Future<String?> fileSelectorSaveBackupArchive({
+  required String suggestedName,
+  required List<int> bytes,
+}) async {
+  final FileSaveLocation? location = await getSaveLocation(
+    suggestedName: suggestedName,
+    acceptedTypeGroups: <XTypeGroup>[
+      // 不写 label：它是用户可见文案，必须来自 l10n（C-UI-5），而这张表在 core/ 里。
+      const XTypeGroup(
+        extensions: <String>['zip'],
+        mimeTypes: <String>['application/zip', 'application/x-zip-compressed'],
+      ),
+    ],
+  );
+  if (location == null) {
+    return null;
+  }
+
+  await File(location.path).writeAsBytes(bytes);
 
   return location.path;
 }

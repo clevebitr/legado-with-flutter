@@ -14,92 +14,137 @@ void main() {
       verifier = SchemaVerifier(GeneratedHelper());
     });
 
-    test('migration_whenSchemaIsCreated_matchesTheRecordedV6Schema', () async {
-      // 走 onCreate（`m.createAll()`）建库，再与 `drift_schemas/` 里 dump 出的
-      // v5 逐列比对：有人改了表却忘了重新 dump 时，这条会失败。
-      final InitializedSchema schema = await verifier.schemaAt(5);
+    test('migration_fromV6ToV7_addsGroupsBookmarksAndRecords', () async {
+      // M18 那一版（v6）升上来：新增 `book_groups` / `bookmarks` / `read_records` 三张表（含
+      // `bookmarks` 的唯一键与两张表的索引）、书架两列（`group_id` / `custom_cover_path`，
+      // 默认 null = 未分组 / 用书源封面）与缓存表的 `scope_key`（ADR-0066 §决策 6）。升级后的
+      // 结构必须与 `drift_schemas/drift_schema_v7.json` 逐列一致。
+      final InitializedSchema schema = await verifier.schemaAt(6);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 6);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV1ToV6_createsEveryTable', () async {
+    test('migration_fromV7ToV8_addsTheCookieJar', () async {
+      // M21a（ADR-0068 §决策 4）：只加 `cookies` 表与它的域索引；既有行不动。
+      final InitializedSchema schema = await verifier.schemaAt(7);
+      final ReaderDatabase database = ReaderDatabase(schema.newConnection());
+
+      await verifier.migrateAndValidate(database, 11);
+      await database.close();
+    });
+
+    test('migration_fromV8ToV9_addsTheRulesTable', () async {
+      // M20（ADR-0070 §决策 4）：只加 `rules` 表与「kind + 顺序」索引；既有行不动，也不在
+      // 迁移里插入内置规则。
+      final InitializedSchema schema = await verifier.schemaAt(8);
+      final ReaderDatabase database = ReaderDatabase(schema.newConnection());
+
+      await verifier.migrateAndValidate(database, 11);
+      await database.close();
+    });
+
+    test('migration_fromV10ToV11_addsTheLoginInfoColumn', () async {
+      // M22-a 第二批（ADR-0072 §决策 3）：`loginUi` 表单填出来的值按源存一列 JSON。
+      final InitializedSchema schema = await verifier.schemaAt(10);
+      final ReaderDatabase database = ReaderDatabase(schema.newConnection());
+
+      await verifier.migrateAndValidate(database, 11);
+      await database.close();
+    });
+
+    test('migration_fromV9ToV10_addsTheCacheSourceColumn', () async {
+      // M22-a（ADR-0072 §决策 1）：给缓存加「来源」列与索引，并清掉旧缓存——旧行没有来源摘要，
+      // 留着会让按源统计在 TTL 内少算。
+      final InitializedSchema schema = await verifier.schemaAt(9);
+      final ReaderDatabase database = ReaderDatabase(schema.newConnection());
+
+      await verifier.migrateAndValidate(database, 11);
+      await database.close();
+    });
+
+    test('migration_fromV1ToV11_createsEveryTable', () async {
       // 从 v1 建库再跑到最新版：v2 加 `book_sources`（ADR-0040），v3 加 `books` 与
       // `reading_progress`（ADR-0041 §决策 4），v4 给书源加 `comment` 列（ADR-0043），
       // v5 给书架加 `tocUrl` 列（ADR-0044），v6 加校验历史表与 `isExploreEnabled` 列
-      // （ADR-0052 §决策 1/3）。
+      // （ADR-0052 §决策 1/3），v7 加分组 / 书签 / 阅读记录与按书缓存列（ADR-0066），v8 加 Cookie jar
+      // （ADR-0068），v9 加规则表（ADR-0070），v10 给缓存加来源列、v11 给书源加登录信息列（ADR-0072）。
+      // 这条也是「新表已建好之后不要再 addColumn」的回归点：v1 的 `books` 走的是
+      // `createTable` 的当前形状。
       final InitializedSchema schema = await verifier.schemaAt(1);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 6);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV2ToV6_keepsTheImportedSources', () async {
+    test('migration_fromV2ToV11_keepsTheImportedSources', () async {
       // v3 只有新表、v4 只有一列可空值：从导入书源那一版升上来时，既有行必须原样保留，
       // 新列的初值就是 null。
       final InitializedSchema schema = await verifier.schemaAt(2);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 6);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV3ToV6_addsTheCommentAndTocColumns', () async {
+    test('migration_fromV3ToV11_addsTheCommentAndTocColumns', () async {
       // 5.4 / 5.6 那一版的库升上来：书架与阅读进度表已存在，两列分别在这一步补上。
       final InitializedSchema schema = await verifier.schemaAt(3);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 6);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV4ToV6_addsTheTocUrlColumn', () async {
+    test('migration_fromV4ToV11_addsTheTocUrlColumn', () async {
       // M10 那一版（v4）升上来：书源表多一列可空的目录地址（ADR-0044 §决策 3），
       // 再到 v6 时补校验历史表与探索开关列。
       final InitializedSchema schema = await verifier.schemaAt(4);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 6);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
-    test('migration_fromV5ToV6_addsTheCheckHistoryAndExploreFlag', () async {
+    test('migration_fromV5ToV11_addsTheCheckHistoryAndExploreFlag', () async {
       // M13 那一版（v5）升上来：书源与书架列不动，新增 `source_checks` 表与
       // `is_explore_enabled` 列，默认值让旧行保持「发现开着」（ADR-0052 §决策 1/3）。
       final InitializedSchema schema = await verifier.schemaAt(5);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 6);
+      await verifier.migrateAndValidate(database, 11);
       await database.close();
     });
 
     test(
       'migration_whenTheVersionIsBehindTheActualSchema_repairsTheDatabase',
       () async {
-        // 回归点（ADR-0056）：库的实际结构已经是 v6，`user_version` 却还停在 5。
+        // 回归点（ADR-0056）：库的实际结构已经是 v11，`user_version` 却还停在 8。
         // 真实成因是「用还没提交的表定义建过库」或迁移做到一半被杀 —— 用户机器上的
         // reader.db 就是这样，表现为打开库就抛 DriftRemoteException，前台看到的是
         // 「书源加载不出来」「导入失败」。
         //
-        // 旧实现在这里重跑 v6 步骤，`create index` 撞上已存在的索引直接抛，于是每次启动
-        // 都失败；现在每个步骤先问「对象在不在」，重跑是空操作。
-        final InitializedSchema schema = await verifier.schemaAt(6);
-        schema.rawDatabase.execute('PRAGMA user_version = 5');
+        // 旧实现在这里重跑版本步骤，`create index` 撞上已存在的索引直接抛，于是每次启动
+        // 都失败；现在每个步骤先问「对象在不在」，重跑是空操作。ADR-0066 的 v7 步骤同样走
+        // `createTable` + `sqlite_master` 询问，所以从「结构已是 v7、版本还是 6」的库上也
+        // 能重新打开。
+        final InitializedSchema schema = await verifier.schemaAt(11);
+        schema.rawDatabase.execute('PRAGMA user_version = 8');
         final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-        await verifier.migrateAndValidate(database, 6);
+        await verifier.migrateAndValidate(database, 11);
         final QueryRow version = await database
             .customSelect('PRAGMA user_version')
             .getSingle();
-        expect(version.data.values.single, 6);
+        expect(version.data.values.single, 11);
         await database.close();
       },
     );
 
-    test('schemaVersion_whenRead_isSix', () {
-      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 6);
+    test('schemaVersion_whenRead_isEleven', () {
+      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 11);
     });
   });
 }

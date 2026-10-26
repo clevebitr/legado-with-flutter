@@ -12,9 +12,7 @@ part 'explore_notifier.g.dart';
 
 /// What the discover page currently shows.
 ///
-/// A state machine rather than an `AsyncValue`, for the same reason the search form uses one:
-/// “no categories” (a source without a discover page), “this category failed” and “nothing opened
-/// yet” are three different screens, and they are all *successful* answers from the layers below.
+/// The state machine keeps "empty", "failed" and "not opened yet" distinguishable.
 @freezed
 sealed class ExploreState with _$ExploreState {
   /// No categories have been read yet.
@@ -24,7 +22,7 @@ sealed class ExploreState with _$ExploreState {
   const factory ExploreState.categories(List<ExploreCategory> categories) =
       ExploreCategories;
 
-  /// `exploreUrl` could not be read; [kind] is the message the UI shows (C-ERR-7).
+  /// `exploreUrl` could not be read; [kind] is the message the UI shows.
   const factory ExploreState.failedCategories(ParseFailureKind kind) =
       ExploreCategoriesFailed;
 
@@ -41,7 +39,7 @@ sealed class ExploreState with _$ExploreState {
     List<Book> books,
   ) = ExploreBooksLoaded;
 
-  /// [category] could not be read; the other categories are unaffected (`book-source.md` §9).
+  /// [category] could not be read; the other categories are unaffected.
   const factory ExploreState.failedBooks(
     List<ExploreCategory> categories,
     ExploreCategory category,
@@ -52,10 +50,7 @@ sealed class ExploreState with _$ExploreState {
 /// Drives the discover page: reads the categories once, then one category at a time.
 @riverpod
 class ExploreNotifier extends _$ExploreNotifier {
-  /// The category row the page keeps showing while one category is open.
-  ///
-  /// It is held here, not in the page, so that opening a category can only change what is *below*
-  /// the row: a failed category must not make the other categories disappear (`book-source.md` §9).
+  // 分类行保存在这里，打开分类失败时整行不会消失。
   List<ExploreCategory> _categories = const <ExploreCategory>[];
 
   @override
@@ -63,10 +58,7 @@ class ExploreNotifier extends _$ExploreNotifier {
 
   /// Reads [source]'s discover categories.
   ///
-  /// A collaborator that breaks its contract with an [Exception] is degraded to
-  /// [ParseFailureKind.parseFailed] — with a log line that carries the source but no page content
-  /// (C-ERR-8, C-SEC-4) — because a state stuck on “loading” is a hung screen with no way out.
-  /// An [Error] is deliberately not caught: it is a programming mistake (ADR-0022).
+  /// Unexpected exceptions degrade to a failed state; [Error]s are not caught.
   Future<void> loadCategories(BookSource source) async {
     state = const ExploreState.idle();
 
@@ -97,14 +89,17 @@ class ExploreNotifier extends _$ExploreNotifier {
   }
 
   /// Opens [category] and publishes the books it lists.
-  ///
-  /// Only this category changes: a failure replaces the list with a message that keeps the chosen
-  /// category visible, so the user can pick another one (`book-source.md` §9).
   Future<void> openCategory(
     BookSource source,
     ExploreCategory category, {
     int page = 1,
   }) async {
+    // 分组标题（`url == null`）不是可打开的页面：点它什么都不做，而不是拿空地址去请求
+    // （ADR-0069）。
+    if (category.url == null) {
+      return;
+    }
+
     state = ExploreState.loadingBooks(_categories, category);
 
     try {

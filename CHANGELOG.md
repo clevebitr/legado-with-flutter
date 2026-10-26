@@ -7,6 +7,225 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A theme you can colour, with a picture behind it (ADR-0075, M22-d part 1)
+
+- **Seed colour.** The settings page offers six presets plus 「默认」; the choice is stored as an
+  `int` and only decides the scheme when the platform reports no dynamic colour (dynamic colour still
+  wins, ADR-0004). The presets are derived from `defaultSeedColor` by hue rotation rather than added
+  as literals, so C-UI-1's one-literal rule still holds.
+- **Background image.** Picking one copies it into the app's own `backgrounds/` folder and stores only
+  the file name, so the theme survives the original file moving or an Android URI grant expiring.
+  Replacing it deletes the previous file; removing it clears both. The reader will use it in the next
+  slice (`useThemeBackground`).
+- New `LocalImageStore` (core) and `BackgroundImagePicker` port; settings keys
+  `settings.seedColor` / `settings.backgroundImage`.
+- Also fixes two API drifts found by `flutter analyze` on this tree: dio 5.11's
+  `RedirectRecord.location` is a `Uri`, and `HttpResponse` now requires `url` in the integration
+  test's fake client.
+
+### Backups grow up: scheduled, encrypted, overwritable, and on WebDAV (ADR-0074, M22-c)
+
+- **A backup location you choose.** 「我的 → 备份与恢复」writes the daily backup, the safety copy and
+  「保存到备份位置」 into the app's private folder by default, or into a folder picked through the
+  system dialog. A folder that disappears falls back to the private one and says so; 「另存为…」
+  keeps the system save dialog.
+- **Automatic backup, once a day.** After the shell's first frame the app writes a backup when the
+  switch is on and the last one is older than 24 h, then prunes the folder to the retention (1–30,
+  default 5; `1` is upstream's `onlyLatestBackup`). Only files matching `backup*.zip[.enc]` are ever
+  deleted. The timestamp advances only after a successful write, so a failure retries next start.
+- **Overwrite restore, with a safety net.** The preview now offers 「合并 / 覆盖」: overwrite clears the
+  seven tables in the same transaction and writes the archive back, but only after a timestamped
+  safety copy has been written to the backup location — if that copy fails, nothing is touched.
+  Preferences are merged in both modes.
+- **Whole-archive encryption (AES-256).** Setting a backup password encrypts the zip with
+  `archive`'s WinZip AES-256 (no new crypto dependency). An encrypted archive without a password
+  answers `backup.read.passwordRequired` and the page asks for it; a wrong one answers
+  `backup.read.badPassword`. The password lives in the platform key store
+  (`flutter_secure_storage`, BSD-3), never inside the backup.
+- **WebDAV.** Configure a collection URL, user name and password (password in the key store, plain
+  `http` only with the existing plaintext opt-in), then upload the current backup, list the remote
+  archives, restore one from the cloud, or delete one. Remote retention follows the same count.
+
+### The whole library leaves and comes back as one zip (ADR-0073, M22-b)
+
+- **New feature `backup`** (domain / data / presentation). 「我的 → 备份与恢复」exports
+  `backup<yyyy-MM-dd>.zip` and merges one back: `manifest.json` + one JSON per table (book sources,
+  shelf, reading progress, groups, bookmarks, reading records, rules) + `preferences.json`.
+- **Restoring merges, it never deletes.** Rows are addressed by natural keys (`sourceUrl + bookUrl`,
+  `url + fingerprint`, group *name*, `kind + name`, the bookmark quad), synthetic ids are never
+  carried, a shelf group travels as its name, and an existing row keeps its local user state unless
+  the archive is the authority for that column (progress only moves forward). Everything applies in
+  one transaction, and the archive is fully validated before the first row is written.
+- **A restore also brings the settings back.** `preferences.json` is the whole
+  `shared_preferences` snapshot, so the backup feature never learns a `settings.*` / `reader.*` key
+  name; a `RestoreCompletionHook` bound in the composition root invalidates the two `keepAlive`
+  setting providers so the theme and text scale change immediately.
+- **New dependency `archive ^4.5.2`** (MIT, pure Dart; it was already a transitive dev dependency).
+  Two new platform ports (`BackupArchiveSaver` / `BackupArchivePicker`) on `file_selector`; the
+  picker checks the file size *before* reading it, and the decoder checks the declared entry sizes
+  *before* inflating (64 MiB archive / 16 MiB entry / 64 MiB total / 32 entries).
+- **Not done, registered in `docs/dev/roadmap.md` §3.7:** WebDAV, scheduled automatic backups and
+  retention, overwrite-style restore, encrypted archives, reading an upstream Legado zip.
+
+### Two more engine gaps, the ones that made a whole image source read as empty (ADR-0069 G13–G14)
+
+- **`class.a b c` means "all of these classes".** Upstream hands the string to jsoup's
+  `getElementsByClass`, which requires every listed class; we treated the whole thing as one class
+  name, so every rule of `📷🔞美图网` matched nothing — list, detail, body and toc alike. `class.`
+  now builds `.a.b.c`. Single-class rules are unchanged.
+- **`java.getStringList` answers *values*, not element documents.** Upstream runs the whole rule
+  including its extraction segment, so `java.getStringList("@css:.box img@src")` is a list of URLs
+  (as strings). We routed it through the same channel as `parse.getElements` (element docs), so the
+  trailing `@src` became a selector and the chapter body came out empty. The two now have separate
+  semantics; `parse.getElements` keeps its typed element documents.
+- **`list.size` and `list.size()` both work.** One source uses the property in a comparison, another
+  calls it. `size` now resolves to a callable object whose `valueOf()` is the length, so both
+  spellings are correct (strict equality against a number is the only casualty, and no rule does it).
+
+Still registered: synchronous `java.post(...).body()` (G6) — a sandbox cannot block its host; that
+would need a deterministic replay design of its own.
+
+### The device log said "not a function"; it was four different bugs (ADR-0069 addendum)
+
+Running the same five sources on a device produced four kinds of warning, and each one traced to a
+different mistake:
+
+- **`contentRule.content` is a *value* read, not a list read.** Upstream calls `getString` for every
+  book type and joins multiple matches with a newline, so `$.data[*].image` + `@js:result.split("
+")`
+  receives a String. The manga path read the same rule as a list, so `result` was a List and the
+  script died with `not a function`. `RuleEngine.extractJoined` now implements `getString`
+  semantics, the manga stage uses it, and the sandbox's `result` for single-value rules is the
+  joined string (the field's own value is still the first match).
+- **`exploreUrl` section headers were being dropped.** Real scripts emit `══ 推荐 ══` entries with an
+  empty url to group the chips; upstream keeps them, we rejected them as "missing url". They are now
+  `url == null` categories rendered as non-clickable labels, and opening one touches no network.
+- **The default `User-Agent` was `flutter_reader`.** Several sites answer 403 before any rule runs.
+  The default is now upstream's desktop Chrome UA; a source's own `header` still wins.
+- **HTTP failures were undebuggable.** The `DioException` was logged through the redactor, so 403 and
+  a timeout looked identical. The failure line now carries `type=` and `status=` (the URL stays
+  redacted).
+
+### Close the syntax gaps a real "works upstream, not here" export exposed (ADR-0069)
+
+Five image sources that work in the reference implementation were fed through the engine one rule
+at a time, and every rejection was traced to its upstream implementation. Six of the nine gaps are
+closed:
+
+- **`java.encodeURI(str, charset)`** — the two-argument form real sources use to send a GBK keyword
+  to an old PHP search page. `charsetBytes` moved to `core/text/` and is now the one place that turns
+  text into declared-charset bytes (the URL template's keyword encoding uses it too).
+- **A trailing `.N` index on *any* segment** — `#image_div img.0@src` used to be read as the class
+  `0`. Plain CSS segments now peel a numeric tail as an index, like upstream's `ElementsSingle`.
+- **`,{…}` options on image and cover addresses** — gallery URLs that carry per-image headers no
+  longer become `c.jpg,{"headers":…}`: the manga stage merges the headers into the chapter's image
+  requests, and a cover's options are dropped with a warning (the cover loader cannot carry them yet).
+- **`imageStyle` / `imageDecode` are modelled.** `imageDecode` (per-image byte decryption) cannot run
+  in the sandbox, so a non-blank value now fails loudly as `unsupportedRule` instead of showing
+  encrypted bytes; `imageStyle: single` makes the reader fit one image per screen.
+- **Java `List.size`** — a prelude shim, because real content scripts loop with `list.size`. Without
+  it the loop silently ran zero times and the chapter came out empty.
+- **A chapter with no `chapterUrl` now reuses the toc page** instead of being dropped, which is what
+  upstream does and what a single-chapter image book needs.
+
+Registered instead of guessed (ADR-0069): synchronous `java.post/get/ajax` response objects (a
+sandbox cannot block its host), a non-JS `{{…}}` inside a *URL* rule, the `result` shape of a
+list-JSONPath + `@js:` content rule (needs the real response), per-URL cover headers and the
+`left`/`right` image-style alignment.
+
+### Fonts that lie: the third M21a cut reads a site's own TrueType tables (ADR-0068, M21a third cut)
+
+- **`java.queryTTF` / `java.queryBase64TTF` / `java.replaceFont` are implemented**, with no new
+  dependency: a small reader for a font's `sfnt` directory, its `cmap` (formats 0 / 4 / 6 / 12,
+  Unicode subtables only, with a fallback when the preferred one maps nothing) and its `post`
+  format 2.0 glyph names.
+- **Glyph names first, glyph ids second.** A site usually sends a *subset* font, which renumbers
+  glyphs but keeps their `uniXXXX` names; matching by id alone would silently swap the wrong
+  characters on real sources. Ids remain the fallback for fonts that keep no names.
+- **A font never enters the script.** `queryTTF` answers an opaque `{__ttf, id}` handle and
+  `replaceFont` hands it back; the real data stays in the worker's per-job registry, so a chapter
+  costs one small envelope instead of a JSON copy of every glyph. A stale handle says "unknown
+  font" instead of reading someone else's font.
+- **A byte door for fonts.** `java.queryTTF(url)` fetches through a new `getBytes` verb on the JS
+  http channel (base64 across the boundary), because the text door decodes binary bodies into
+  garbage — the same reason the captcha needed it. Because the network is async here, that form
+  returns a Promise (`await java.queryTTF(url)`); `queryBase64TTF` and `replaceFont` stay sync.
+- **`java.getFontGlyph` is deliberately absent:** the earlier ADR listed it, but upstream's
+  `JsExtensions.kt` has no such member, and inventing one would make a wrong spelling look legal.
+- A font that cannot be read fails *that call* (`java.queryTTF failed`), not the job: the
+  un-replaced body is still readable.
+
+### A session that vanished can be repaired, and a shell page can be cut open (ADR-0068, M21a second cut)
+
+- **`loginCheckJs` is a response interceptor, not a yes/no check.** After every fetched page the
+  source's script gets a `result` response object (`body` property plus `url()` / `code()` /
+  `headers()` / `header(name)` / `cookie()` / `isSuccessful()`) and its return value replaces the
+  page — which is how the real corpus sends the user to a login page and retries
+  (`java.startBrowserAwait(result.url(), '登录')`). Returning `null` keeps the response; returning
+  something that is not a response says `loginRequired` **when** the source declares `loginUrl` /
+  `loginUi`, and `parseFailed` otherwise.
+- **The three login fields are modelled** (`loginUrl` / `loginUi` / `loginCheckJs`), so an import no
+  longer parks them in `extra`, and the source list grew a 「登录 / 过验证」 row action that opens
+  `loginUrl` (or the source's own page) in the visible WebView; the cookies it earns are already in
+  the v8 jar. The native `loginUi` form is M21b's login/Cookie UI.
+- **`ruleContent.sourceRegex`** cuts the payload out of a shell page before the rules see it —
+  per page, including every `nextContentUrl` page — and **the `bodyJs` URL option** lets a script
+  assemble the body of a plain HTTP response. A cut that matches nothing is a failure, not an empty
+  chapter.
+- **Registered dialect differences** (`docs/dev/book-source.md` §6): the interceptor only sees 2xx
+  responses, `result.body()` (the method form some forks document) is not supported, and the
+  login-check-only `java.getStrResponse()` / `java.initUrl()` / `java.getHeaderMap()` stay named
+  rejections.
+- **Font anti-scraping is deliberately still unsupported.** The ADR now records the dependency and
+  licence evaluation (no third-party package qualifies; a ~150–200-line `cmap` reader is the plan)
+  and the one semantic decision left (the map is `code → glyphId`, not upstream's glyph *names*).
+- **`proxy` / `dnsIp` / `callTimeout` / `method: HEAD` / `encodedForm` are decided as *not done***,
+  each with the condition that would reopen it, instead of a standing 「收益未取证」.
+
+### Pass a site's human check, and keep the cookies (ADR-0068, M21a)
+
+- **A visible WebView for 「人机验证」.** `java.startBrowser(url, title)` opens the page and returns,
+  `java.startBrowserAwait(...)` waits for the user's 「完成」 and answers the page (re-fetched over
+  HTTP with the cookies the challenge earned, unless the rule says otherwise), and
+  `java.getVerificationCode(imageUrl)` asks for the characters in a captcha image. These calls do
+  **not** spend the per-rule JS quota and pause the job's wall-clock budget: they wait for a human,
+  not for the CPU.
+- **The cookie jar is persistent and shared.** Schema v8 adds a `cookies` table; the app jar is
+  hydrated before `runApp`, written through on every `Set-Cookie`, and the verification page seeds
+  the WebView with it and harvests what the page collected afterwards. A solved challenge now
+  survives the next request **and** the next launch.
+- **`webView` grew the fields real sources use.** `webViewDelayTime`, `webJs` (a script run inside
+  the rendered page, also available as `ruleContent.webJs`), `overrideUrlRegex`, `retry` and
+  `readTimeout` are modelled instead of being ignored; `HttpClient.getBytes` adds the byte door the
+  captcha (and later the font work) needs.
+- **A session that vanished is its own failure.** `ParseFailureKind.loginRequired` (10th kind) lets
+  the UI say 「去登录/去验证」 instead of the generic 「解析失败」.
+- **Known dialect difference:** because the sandbox cannot block a thread, `startBrowserAwait` and
+  `getVerificationCode` return **Promises** — rules must `await` them (upstream is synchronous).
+  Registered in `docs/dev/book-source.md` §6.
+- Not in this batch (registered in ADR-0068): `loginUrl`/`loginUi`/`loginCheckJs` fields,
+  `ruleContent.sourceRegex`, font anti-scraping, `proxy`/`dnsIp`/`callTimeout`/`HEAD`/`encodedForm`.
+
+### Shelf groups, bookmarks, reading records and a per-book cache (ADR-0066, M19)
+
+- **The shelf can be organised.** Groups are a real table (`book_groups`) and `books.group_id`
+  points at them, so the chip row filters, a management page creates/renames/reorders/deletes them
+  (deleting keeps the books, moving them back to ungrouped), and a long press starts a batch that
+  moves / pins / marks / deletes the selection in one write.
+- **The reader has bookmarks.** The toolbar's bookmark button is a toggle keyed by the exact
+  position (`source, book, chapter, offset`), so pressing it twice removes the mark instead of
+  stacking a duplicate. Bookmarks carry a title snapshot and an excerpt from the rendered body, so
+  the global list («我的 → 书签») renders offline and jumps back to the same sentence.
+- **Reading time is recorded.** One row per reader session ending after at least a minute; the
+  «我的 → 阅读记录» page groups them by day with a daily total, and the detail page shows the same
+  history for one book.
+- **The detail page can adjust a book.** Change its group, pick a local cover (copied into the app
+  directory, shown instead of the source's) or clear it again, and see/clear how many chapters of
+  that book are cached. Per-book cache lives in a new `cache_entries.scope_key` (a digest, like every
+  other key), so the count never needs to know what was read.
+- **Schema v6 → v7.** Three new tables plus two `books` columns and one `cache_entries` column, with
+  the re-entrant upgrade path ADR-0056 requires and migrations verified from v1 through v6.
+
 ### Three release channels come out of CI (ADR-0065, ADR-0067)
 
 - **正式版**（`release.yml`）：推 `v<版本>` tag 时构建并发布正式 Release；tag 与 `pubspec.yaml` 的版本

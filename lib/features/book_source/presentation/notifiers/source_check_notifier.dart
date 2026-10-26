@@ -21,7 +21,7 @@ part 'source_check_notifier.g.dart';
 abstract class SourceCheckEntry with _$SourceCheckEntry {
   /// Creates one row.
   const factory SourceCheckEntry({
-    /// The stored row's id, so the run can write its verdict back (`ADR-0043`).
+    /// The stored row's id, so the run can write its verdict back.
     required int sourceId,
 
     /// The source's name, snapshotted because the row may be gone by the time the check ends.
@@ -75,22 +75,9 @@ extension SourceCheckStateX on SourceCheckState {
       .length;
 }
 
-/// Runs the batch check (`docs/dev/roadmap.md` §5.10) and writes each verdict back.
+/// Runs the batch check and writes each verdict back.
 ///
-/// The notifier owns three things the domain does not:
-///
-/// * **concurrency**: at most the user's per-source budget runs at once
-///   (`concurrencySettingProvider`, the same number the request layer honours), because a batch of
-///   ten sources must not open ten times the connections one source is allowed;
-/// * **the long-task marker**: `LongRunningTask` is acquired for the whole batch and released in
-///   `finally`, so Android keeps the process awake without the UI having to know about it
-///   (ADR-0043 §决策 3);
-/// * **write-back and its two failures**: a deleted row becomes [SourceCheckFailure.sourceMissing]
-///   and a failed write becomes [SourceCheckFailure.saveFailed]; a **cancelled** report writes
-///   nothing at all (ADR-0043 §后果).
-///
-/// It is `keepAlive` so walking to the debug console and back does not lose a running batch: a
-/// check is minutes of work and must not be tied to one screen's lifetime.
+/// Owns concurrency, the long-task marker and write-back; kept alive so a run survives navigation.
 @Riverpod(keepAlive: true)
 class SourceCheck extends _$SourceCheck {
   TaskCancellation? _cancellation;
@@ -109,10 +96,7 @@ class SourceCheck extends _$SourceCheck {
   /// Asks the running batch to stop between stages.
   void cancel() => _cancellation?.cancel();
 
-  /// Checks [sources] and writes every verdict back.
-  ///
-  /// An empty [sources] does nothing: the page decides how to say "nothing selected", and a run
-  /// that reports "0 of 0 done" would look like a finished check.
+  /// Checks [sources] and writes every verdict back; an empty list does nothing.
   Future<void> start(List<StoredBookSource> sources) async {
     if (state.isRunning || sources.isEmpty) {
       return;
@@ -162,11 +146,6 @@ class SourceCheck extends _$SourceCheck {
     }
   }
 
-  /// Checks one source and folds its verdict into the state.
-  ///
-  /// The unexpected-failure boundary is deliberate: storage failures surface as exceptions (the
-  /// repository port is total only where it can be), and C-ERR-2 allows exactly one `on Exception`
-  /// in a presentation Notifier to turn that into a failure state instead of an unhandled error.
   Future<void> _check(
     int index,
     StoredBookSource stored,
@@ -238,14 +217,13 @@ class SourceCheck extends _$SourceCheck {
     }
   }
 
-  /// Writes [report] back and records the resulting status.
   Future<void> _apply(
     int index,
     StoredBookSource stored,
     SourceCheckReport report,
   ) async {
     if (report.status == SourceCheckStatus.cancelled) {
-      // 取消不算结论：不写回，也不报失败（ADR-0043 §后果）。
+      // 取消不算结论：不写回，也不报失败。
       _patch(
         index,
         (SourceCheckEntry entry) => entry.copyWith(
@@ -285,7 +263,7 @@ class SourceCheck extends _$SourceCheck {
       return;
     }
 
-    // 状态灯读的是列表里的投影（ADR-0052 §决策 1）：写完一条就让列表重读，而不是等用户重进。
+    // 状态灯读的是列表投影，写完一条就让列表重读，而不是等用户重进。
     ref.invalidate(bookSourceListDataProvider);
     if (!applied) {
       _patch(
@@ -312,11 +290,10 @@ class SourceCheck extends _$SourceCheck {
         elapsedMillis: report.elapsedMillis,
       ),
     );
-    // 分组与注释已写进书源，列表页读的是同一批行，所以让它重新读一次（5.5 的展示会用到）。
+    // 分组与注释已写进书源，列表页读的是同一批行，所以让它重新读一次。
     ref.invalidate(bookSourceListProvider);
   }
 
-  /// Rebuilds one row, leaving the batch's own fields alone.
   void _patch(
     int index,
     SourceCheckEntry Function(SourceCheckEntry entry) update,

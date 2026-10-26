@@ -8,20 +8,16 @@ part of 'preference_store_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the key-value store for light switches (C-NET-9).
+/// Provides the key-value store for lightweight switches.
 ///
-/// `keepAlive` because opening the platform store is the expensive part and every settings read
-/// goes through it; tests inject a fake by overriding this provider
-/// (`ProviderScope(overrides: …)`, `docs/dev/testing.md` §4).
+/// `keepAlive` because opening the platform store is the expensive part.
 
 @ProviderFor(preferenceStore)
 final preferenceStoreProvider = PreferenceStoreProvider._();
 
-/// Provides the key-value store for light switches (C-NET-9).
+/// Provides the key-value store for lightweight switches.
 ///
-/// `keepAlive` because opening the platform store is the expensive part and every settings read
-/// goes through it; tests inject a fake by overriding this provider
-/// (`ProviderScope(overrides: …)`, `docs/dev/testing.md` §4).
+/// `keepAlive` because opening the platform store is the expensive part.
 
 final class PreferenceStoreProvider
     extends
@@ -31,11 +27,9 @@ final class PreferenceStoreProvider
           FutureOr<PreferenceStore>
         >
     with $FutureModifier<PreferenceStore>, $FutureProvider<PreferenceStore> {
-  /// Provides the key-value store for light switches (C-NET-9).
+  /// Provides the key-value store for lightweight switches.
   ///
-  /// `keepAlive` because opening the platform store is the expensive part and every settings read
-  /// goes through it; tests inject a fake by overriding this provider
-  /// (`ProviderScope(overrides: …)`, `docs/dev/testing.md` §4).
+  /// `keepAlive` because opening the platform store is the expensive part.
   PreferenceStoreProvider._()
     : super(
         from: null,

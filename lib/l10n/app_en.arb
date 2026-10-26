@@ -1623,5 +1623,1175 @@
   "readerAudioPlainHttp": "This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.",
   "@readerAudioPlainHttp": {
     "description": "Shown when an audio track is http and the user has not opted in."
+  },
+  "bookSourceRowSignIn": "Sign in / pass check",
+  "@bookSourceRowSignIn": {
+    "description": "Row menu: opens the source's login page in the visible WebView."
+  },
+  "bookSourceSignInDone": "The site's cookies are saved; the source can be checked again.",
+  "@bookSourceSignInDone": {
+    "description": "Snackbar after the login / verification page finished."
+  },
+  "bookSourceSignInFailed": "The sign-in / verification did not finish.",
+  "@bookSourceSignInFailed": {
+    "description": "Snackbar when the login page failed for a reason other than the user closing it."
+  },
+  "bookSourceSignInUnsupported": "This platform has no WebView; finish the check in the system browser first.",
+  "@bookSourceSignInUnsupported": {
+    "description": "Snackbar when the platform cannot show a verification page."
+  },
+  "bookmarkTitle": "Bookmarks",
+  "@bookmarkTitle": {
+    "@description": "Bookmark list page title."
+  },
+  "bookmarkEmpty": "No bookmarks yet. Tap the bookmark button in the reader toolbar to mark your place.",
+  "@bookmarkEmpty": {
+    "@description": "Empty state of the bookmark list."
+  },
+  "bookmarkLoadFailed": "Bookmarks could not be loaded.",
+  "@bookmarkLoadFailed": {
+    "@description": "Failure state of the bookmark list."
+  },
+  "bookmarkAdd": "Add bookmark",
+  "@bookmarkAdd": {
+    "@description": "Toolbar tooltip when the current position is not bookmarked."
+  },
+  "bookmarkRemove": "Remove bookmark",
+  "@bookmarkRemove": {
+    "@description": "Toolbar tooltip when the current position is bookmarked."
+  },
+  "bookmarkAdded": "Bookmark added",
+  "@bookmarkAdded": {
+    "@description": "Snack bar after marking a position."
+  },
+  "bookmarkRemoved": "Bookmark removed",
+  "@bookmarkRemoved": {
+    "@description": "Snack bar after unmarking a position."
+  },
+  "bookmarkFailed": "The bookmark could not be saved.",
+  "@bookmarkFailed": {
+    "@description": "Snack bar when the bookmark write failed."
+  },
+  "bookmarkDeleteAction": "Delete bookmark",
+  "@bookmarkDeleteAction": {
+    "@description": "Tooltip of the delete button of a bookmark row."
+  },
+  "bookSourceReadingRecords": "Reading records",
+  "@bookSourceReadingRecords": {
+    "@description": "Detail page button that opens one book's reading records."
+  },
+  "readingRecordsTitle": "Reading records",
+  "@readingRecordsTitle": {
+    "@description": "Reading records page title."
+  },
+  "readingRecordsEmpty": "No reading records yet. Sessions shorter than a minute are not recorded.",
+  "@readingRecordsEmpty": {
+    "@description": "Empty state of the reading records page."
+  },
+  "readingRecordsLoadFailed": "Reading records could not be loaded.",
+  "@readingRecordsLoadFailed": {
+    "@description": "Failure state of the reading records pages."
+  },
+  "bookReadingRecordsTitle": "Reading records · {book}",
+  "@bookReadingRecordsTitle": {
+    "@description": "Title of one book's reading records; {book} is the book title.",
+    "placeholders": {
+      "book": {
+        "type": "String"
+      }
+    }
+  },
+  "bookReadingRecordsEmpty": "This book has no reading records yet.",
+  "@bookReadingRecordsEmpty": {
+    "@description": "Empty state of one book's reading records."
+  },
+  "readingRecordMinutes": "{minutes} min",
+  "@readingRecordMinutes": {
+    "@description": "Duration label in minutes; {minutes} is an integer.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "readingRecordHours": "{hours} h",
+  "@readingRecordHours": {
+    "@description": "Duration label in whole hours; {hours} is an integer.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "readingRecordHoursMinutes": "{hours} h {minutes} min",
+  "@readingRecordHoursMinutes": {
+    "@description": "Duration label in hours and minutes.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "myBookmarks": "Bookmarks",
+  "@myBookmarks": {
+    "@description": "My page entry that opens the bookmark list."
+  },
+  "myBookmarksBody": "Every position you marked",
+  "@myBookmarksBody": {
+    "@description": "Subtitle of the bookmark entry on the My page."
+  },
+  "myReadingRecords": "Reading records",
+  "@myReadingRecords": {
+    "@description": "My page entry that opens the reading records."
+  },
+  "myReadingRecordsBody": "What you read, by day",
+  "@myReadingRecordsBody": {
+    "@description": "Subtitle of the reading-record entry on the My page."
+  },
+  "shelfManageGroups": "Manage groups",
+  "@shelfManageGroups": {
+    "@description": "Shelf app bar action that opens the group management page."
+  },
+  "shelfGroupAll": "All",
+  "@shelfGroupAll": {
+    "@description": "Group filter chip that shows every shelf entry."
+  },
+  "shelfGroupUngrouped": "Ungrouped",
+  "@shelfGroupUngrouped": {
+    "@description": "Group filter chip and dialog option for books without a group."
+  },
+  "shelfGroupEmpty": "No books in this group yet.",
+  "@shelfGroupEmpty": {
+    "@description": "Empty state when the selected group has no books."
+  },
+  "shelfGroupsTitle": "Groups",
+  "@shelfGroupsTitle": {
+    "@description": "Group management page title."
+  },
+  "shelfGroupsEmpty": "No groups yet. Create one with the button below.",
+  "@shelfGroupsEmpty": {
+    "@description": "Empty state of the group management page."
+  },
+  "shelfGroupCreate": "New group",
+  "@shelfGroupCreate": {
+    "@description": "Label of the create-group action."
+  },
+  "shelfGroupCreateAction": "Create",
+  "@shelfGroupCreateAction": {
+    "@description": "Confirm button of the create-group dialog."
+  },
+  "shelfGroupNameHint": "Group name",
+  "@shelfGroupNameHint": {
+    "@description": "Hint of the group name text field."
+  },
+  "shelfGroupRename": "Rename",
+  "@shelfGroupRename": {
+    "@description": "Row action that renames a group."
+  },
+  "shelfGroupRenameTitle": "Rename group",
+  "@shelfGroupRenameTitle": {
+    "@description": "Title of the rename-group dialog."
+  },
+  "shelfGroupDelete": "Delete group",
+  "@shelfGroupDelete": {
+    "@description": "Row action that deletes a group."
+  },
+  "shelfGroupDeleteTitle": "Delete group",
+  "@shelfGroupDeleteTitle": {
+    "@description": "Title of the delete-group confirmation."
+  },
+  "shelfGroupDeleteBody": "The books go back to ungrouped and are not deleted.",
+  "@shelfGroupDeleteBody": {
+    "@description": "Body of the delete-group confirmation."
+  },
+  "shelfGroupNameTaken": "A group with this name already exists.",
+  "@shelfGroupNameTaken": {
+    "@description": "Shown when a group name is blank or taken."
+  },
+  "shelfSelectionExit": "Exit selection",
+  "@shelfSelectionExit": {
+    "@description": "Tooltip of the button that leaves batch mode."
+  },
+  "shelfSelectionCount": "{count} selected",
+  "@shelfSelectionCount": {
+    "@description": "Batch-mode title; {count} is the number of selected books.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shelfSelectionClear": "Clear selection",
+  "@shelfSelectionClear": {
+    "@description": "Tooltip of the deselect-all button."
+  },
+  "shelfSelectAll": "Select all",
+  "@shelfSelectAll": {
+    "@description": "Tooltip of the select-all button."
+  },
+  "shelfBatchAction": "Batch actions",
+  "@shelfBatchAction": {
+    "@description": "Tooltip of the batch action menu."
+  },
+  "shelfBatchGroup": "Move to group",
+  "@shelfBatchGroup": {
+    "@description": "Batch action that moves the selection into a group."
+  },
+  "bookSourceShelfGroup": "Move to group",
+  "@bookSourceShelfGroup": {
+    "@description": "Detail page button that changes the shelf group."
+  },
+  "bookSourceShelfGroupHint": "Add the book to the shelf before grouping it.",
+  "@bookSourceShelfGroupHint": {
+    "@description": "Shown when the book is not on the shelf."
+  },
+  "bookSourceChangeCover": "Change cover",
+  "@bookSourceChangeCover": {
+    "@description": "Detail page button that picks a local cover image."
+  },
+  "bookSourceResetCover": "Reset cover",
+  "@bookSourceResetCover": {
+    "@description": "Detail page button that goes back to the source's cover."
+  },
+  "bookSourceBookCache": "Book cache",
+  "@bookSourceBookCache": {
+    "@description": "Detail page label for this book's cached chapters."
+  },
+  "bookSourceBookCacheCount": "{count} chapters cached",
+  "@bookSourceBookCacheCount": {
+    "@description": "How many chapters of this book are cached; {count} is an integer.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceBookCacheClear": "Clear this book's cache",
+  "@bookSourceBookCacheClear": {
+    "@description": "Detail page button that clears this book's cached chapters."
+  },
+  "bookSourceBookCacheCleared": "Cleared {count} cached items",
+  "@bookSourceBookCacheCleared": {
+    "@description": "Snack bar after clearing a book's cache.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceBookCacheFailed": "The cache action failed.",
+  "@bookSourceBookCacheFailed": {
+    "@description": "Snack bar when clearing the book cache failed."
+  },
+  "sourceVerificationTitle": "{title} · {source}",
+  "@sourceVerificationTitle": {
+    "@description": "Verification page title: the rule's title and the source name.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceVerificationDone": "Done",
+  "@sourceVerificationDone": {
+    "@description": "Confirm button of the verification page; finishes the challenge."
+  },
+  "sourceVerificationFailed": "Verification was not completed.",
+  "@sourceVerificationFailed": {
+    "@description": "Shown when the verification page was closed without finishing."
+  },
+  "sourceCaptchaTitle": "Captcha · {source}",
+  "@sourceCaptchaTitle": {
+    "@description": "Captcha page title; {source} is the source name.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceCaptchaImage": "Captcha image",
+  "@sourceCaptchaImage": {
+    "@description": "Semantic label of the captcha image."
+  },
+  "sourceCaptchaHint": "Type the characters in the image",
+  "@sourceCaptchaHint": {
+    "@description": "Hint of the captcha text field."
+  },
+  "sourceCaptchaConfirm": "Confirm",
+  "@sourceCaptchaConfirm": {
+    "@description": "Confirm button of the captcha page."
+  },
+  "failureLoginRequired": "This source needs a sign-in or a fresh human check; open the source and finish it first.",
+  "@failureLoginRequired": {
+    "@description": "Failure message when a source answers that the session/login is gone (M21a)."
+  },
+  "mySectionRules": "Rules",
+  "@mySectionRules": {
+    "@description": "Section label of the rules management entries in the Me tab."
+  },
+  "rulesReplaceTitle": "Replace & clean",
+  "@rulesReplaceTitle": {
+    "@description": "Title of the replace/purge rules page, and of its row in the Me tab."
+  },
+  "rulesTocTitle": "Chapter rules",
+  "@rulesTocTitle": {
+    "@description": "Title of the local-text chapter-detection rules page."
+  },
+  "rulesDictTitle": "Dictionaries",
+  "@rulesDictTitle": {
+    "@description": "Title of the dictionary rules page."
+  },
+  "rulesHighlightTitle": "Highlight tags",
+  "@rulesHighlightTitle": {
+    "@description": "Title of the highlight tag rules page."
+  },
+  "rulesAdd": "Add rule",
+  "@rulesAdd": {
+    "@description": "Floating action button that opens an empty rule form."
+  },
+  "rulesEditTitle": "Edit rule",
+  "@rulesEditTitle": {
+    "@description": "App bar title of the rule form when it edits an existing rule."
+  },
+  "rulesEmpty": "No rules yet",
+  "@rulesEmpty": {
+    "@description": "Empty state of a rule list."
+  },
+  "rulesLoadFailed": "The rules could not be loaded.",
+  "@rulesLoadFailed": {
+    "@description": "Shown when the rule list cannot be read from the database."
+  },
+  "rulesGone": "This rule no longer exists.",
+  "@rulesGone": {
+    "@description": "Shown when the edited rule was deleted from under the form."
+  },
+  "rulesBroken": "Unreadable rule",
+  "@rulesBroken": {
+    "@description": "Badge of a stored rule whose payload this build cannot read."
+  },
+  "rulesBuiltIn": "Built-in",
+  "@rulesBuiltIn": {
+    "@description": "Badge of a rule that shipped with the app; it is still editable and deletable."
+  },
+  "rulesBrokenNotice": "This rule's stored content cannot be read. It is shown below; saving replaces it.",
+  "@rulesBrokenNotice": {
+    "@description": "Notice above the raw payload of an unreadable rule."
+  },
+  "rulesReorderHandle": "Reorder",
+  "@rulesReorderHandle": {
+    "@description": "Accessible name of the drag handle in a rule row."
+  },
+  "rulesNameLabel": "Name",
+  "@rulesNameLabel": {
+    "@description": "Label of the rule name field."
+  },
+  "rulesPatternLabel": "Find (regular expression or text)",
+  "@rulesPatternLabel": {
+    "@description": "Label of the pattern field of a purge or highlight rule."
+  },
+  "rulesReplacementLabel": "Replace with",
+  "@rulesReplacementLabel": {
+    "@description": "Label of the replacement field of a purge rule."
+  },
+  "rulesIsRegexLabel": "Use a regular expression",
+  "@rulesIsRegexLabel": {
+    "@description": "Switch that decides whether a purge rule's pattern is a regular expression."
+  },
+  "rulesRuleLabel": "Chapter title rule",
+  "@rulesRuleLabel": {
+    "@description": "Label of the chapter-detection expression of a local-text rule."
+  },
+  "rulesSerialNumberLabel": "Serial number (optional)",
+  "@rulesSerialNumberLabel": {
+    "@description": "Label of the optional serial number of a chapter rule."
+  },
+  "rulesUrlRuleLabel": "Lookup address",
+  "@rulesUrlRuleLabel": {
+    "@description": "Label of the address a dictionary looks a word up at."
+  },
+  "rulesShowRuleLabel": "Extract rule",
+  "@rulesShowRuleLabel": {
+    "@description": "Label of the rule that extracts the dictionary entry from the page."
+  },
+  "rulesColorLabel": "Colour, #AARRGGBB (optional)",
+  "@rulesColorLabel": {
+    "@description": "Label of the highlight colour field."
+  },
+  "rulesGroupLabel": "Group (optional)",
+  "@rulesGroupLabel": {
+    "@description": "Label of the highlight tag group field."
+  },
+  "rulesEnabledLabel": "Enabled",
+  "@rulesEnabledLabel": {
+    "@description": "Switch inside the rule form that turns the rule on or off."
+  },
+  "rulesRequired": "Required.",
+  "@rulesRequired": {
+    "@description": "Validation message for a required rule field."
+  },
+  "rulesInvalidRegex": "This is not a valid regular expression.",
+  "@rulesInvalidRegex": {
+    "@description": "Validation message for a pattern that does not compile."
+  },
+  "rulesInvalidColor": "Use #RRGGBB or #AARRGGBB.",
+  "@rulesInvalidColor": {
+    "@description": "Validation message for a colour that is not a hex colour."
+  },
+  "readerSearchAction": "Search in book",
+  "@readerSearchAction": {
+    "@description": "App bar action of the reader that opens the in-book search."
+  },
+  "readerSearchHint": "Search this book",
+  "@readerSearchHint": {
+    "@description": "Hint of the in-book search field."
+  },
+  "readerSearchStart": "Search",
+  "@readerSearchStart": {
+    "@description": "Accessible name of the in-book search button."
+  },
+  "readerSearchStop": "Stop",
+  "@readerSearchStop": {
+    "@description": "Button that cancels a running in-book search."
+  },
+  "readerSearchProgress": "Searched {scanned} of {total} chapters",
+  "@readerSearchProgress": {
+    "@description": "Progress line of a running in-book search.",
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSearchStopped": "Stopped after {scanned} of {total} chapters.",
+  "@readerSearchStopped": {
+    "@description": "Progress line after the user cancelled the search.",
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSearchBudgetSpent": "Time is up: stopped after {scanned} of {total} chapters.",
+  "@readerSearchBudgetSpent": {
+    "@description": "Progress line when the search run spent its time budget.",
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSearchEmpty": "Nothing found.",
+  "@readerSearchEmpty": {
+    "@description": "Shown when a finished in-book search matched nothing."
+  },
+  "readerSearchFailedChapters": "{count} chapters could not be read.",
+  "@readerSearchFailedChapters": {
+    "@description": "Note above the results when some chapters failed to load.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readerSearchUntitledChapter": "Untitled chapter",
+  "@readerSearchUntitledChapter": {
+    "@description": "Result row title when the chapter has no title."
+  },
+  "rulesImportTitle": "Import rules",
+  "@rulesImportTitle": {
+    "@description": "Title of the replace-rule import page."
+  },
+  "rulesImportTextLabel": "Rules JSON",
+  "@rulesImportTextLabel": {
+    "@description": "Label of the paste field of the replace-rule import."
+  },
+  "rulesImportTextHint": "Paste the contents of a 净化规则 JSON file",
+  "@rulesImportTextHint": {
+    "@description": "Hint of the paste field of the replace-rule import."
+  },
+  "rulesImportUrlLabel": "Or a URL",
+  "@rulesImportUrlLabel": {
+    "@description": "Label of the download-address field of the replace-rule import."
+  },
+  "rulesImportUrlHint": "https://…/replaceRules.json",
+  "@rulesImportUrlHint": {
+    "@description": "Hint of the download-address field of the replace-rule import."
+  },
+  "rulesImportFileAction": "Choose a JSON file",
+  "@rulesImportFileAction": {
+    "@description": "Button that opens the file dialog of the replace-rule import."
+  },
+  "rulesImportSelectAll": "Import all of them",
+  "@rulesImportSelectAll": {
+    "@description": "Checkbox that selects every usable entry of the import preview."
+  },
+  "rulesImportSelected": "{selected} of {usable} selected",
+  "@rulesImportSelected": {
+    "@description": "Count of ticked entries in the import preview.",
+    "placeholders": {
+      "selected": {
+        "type": "int"
+      },
+      "usable": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesImportCommit": "Import selected ({count})",
+  "@rulesImportCommit": {
+    "@description": "Commit button of the import preview.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesImportSucceeded": "Imported {created} new rules and updated {updated}.",
+  "@rulesImportSucceeded": {
+    "@description": "Outcome of an import with no skipped entries.",
+    "placeholders": {
+      "created": {
+        "type": "int"
+      },
+      "updated": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesImportSucceededWithSkipped": "Imported {created} new rules and updated {updated}; {skipped} entries were skipped as unreadable.",
+  "@rulesImportSucceededWithSkipped": {
+    "@description": "Outcome of an import where some entries could not be read.",
+    "placeholders": {
+      "created": {
+        "type": "int"
+      },
+      "updated": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesImportUntitled": "Untitled rule",
+  "@rulesImportUntitled": {
+    "@description": "Preview row title for an entry without a name."
+  },
+  "rulesImportUpdate": "Update",
+  "@rulesImportUpdate": {
+    "@description": "Badge of a preview entry that will rewrite a stored rule (same name and pattern)."
+  },
+  "rulesImportProblemFormat": "not a rule object",
+  "@rulesImportProblemFormat": {
+    "@description": "Preview badge for an entry that is not a JSON object."
+  },
+  "rulesImportProblemMissingPattern": "missing pattern",
+  "@rulesImportProblemMissingPattern": {
+    "@description": "Preview badge for an entry without a pattern."
+  },
+  "rulesExportAction": "Export",
+  "@rulesExportAction": {
+    "@description": "Menu action that writes every replace rule to a JSON file."
+  },
+  "rulesExportEmpty": "There are no rules to export.",
+  "@rulesExportEmpty": {
+    "@description": "Shown when an export would write nothing."
+  },
+  "rulesExportSaved": "Saved {count} rules.",
+  "@rulesExportSaved": {
+    "@description": "Outcome of a replace-rule export.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesExportSavedWithSkipped": "Saved {count} rules; {skipped} unreadable rules were left out.",
+  "@rulesExportSavedWithSkipped": {
+    "@description": "Outcome of an export that had to leave unreadable rules out.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesExportFailed": "Could not export the rules.",
+  "@rulesExportFailed": {
+    "@description": "Shown when writing the rules file failed."
+  },
+  "rulesScopeBoth": "title + body",
+  "@rulesScopeBoth": {
+    "@description": "Scope label: the rule rewrites both the chapter title and the body."
+  },
+  "rulesScopeContent": "body only",
+  "@rulesScopeContent": {
+    "@description": "Scope label: the rule rewrites only the chapter body."
+  },
+  "rulesScopeTitle": "title only",
+  "@rulesScopeTitle": {
+    "@description": "Scope label: the rule rewrites only the chapter title."
+  },
+  "rulesScopeNone": "not applied",
+  "@rulesScopeNone": {
+    "@description": "Scope label: the rule declares neither scope, so nothing runs it."
+  },
+  "bookSourceExportAll": "Export all",
+  "@bookSourceExportAll": {
+    "@description": "App bar action that writes every stored book source to a JSON file."
+  },
+  "bookSourceExportSelected": "Export selected ({count})",
+  "@bookSourceExportSelected": {
+    "@description": "Batch action that writes the ticked book sources to a JSON file.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceExportAllSaved": "Saved {count} book sources.",
+  "@bookSourceExportAllSaved": {
+    "@description": "Outcome of a batch book-source export.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceExportEmpty": "There are no book sources to export.",
+  "@bookSourceExportEmpty": {
+    "@description": "Shown when an export would write nothing."
+  },
+  "rulesListMenu": "More",
+  "@rulesListMenu": {
+    "@description": "Tooltip of the overflow menu of a rule list page."
+  },
+  "mySectionData": "Data",
+  "@mySectionData": {
+    "@description": "Section label of the cache and cookie entries in the Me tab."
+  },
+  "cacheManageTitle": "Cached chapters",
+  "@cacheManageTitle": {
+    "@description": "Title of the per-source cache page."
+  },
+  "cacheManageMore": "More",
+  "@cacheManageMore": {
+    "@description": "Tooltip of the cache page's overflow menu."
+  },
+  "cacheManageTotal": "{count} cached chapters in total",
+  "@cacheManageTotal": {
+    "@description": "Total line of the cache page.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cacheManageSourceCount": "{count} chapters",
+  "@cacheManageSourceCount": {
+    "@description": "How many cached chapters one book source holds.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cacheManageClearSource": "Clear this source",
+  "@cacheManageClearSource": {
+    "@description": "Row action of the cache page."
+  },
+  "cacheManageClearExpired": "Clear expired entries",
+  "@cacheManageClearExpired": {
+    "@description": "Overflow action of the cache page."
+  },
+  "cacheManageClearAll": "Clear the whole cache",
+  "@cacheManageClearAll": {
+    "@description": "Overflow action of the cache page."
+  },
+  "cacheManageClearAllTitle": "Clear the whole cache?",
+  "@cacheManageClearAllTitle": {
+    "@description": "Confirmation title of the cache page."
+  },
+  "cacheManageClearAllBody": "Cached chapters and probe results are downloaded again when needed.",
+  "@cacheManageClearAllBody": {
+    "@description": "Confirmation body of the cache page."
+  },
+  "cacheManageEmpty": "Nothing is cached.",
+  "@cacheManageEmpty": {
+    "@description": "Empty state of the cache page."
+  },
+  "cacheManageLoadFailed": "The cache could not be read.",
+  "@cacheManageLoadFailed": {
+    "@description": "Failure state of the cache page."
+  },
+  "myCookies": "Cookies",
+  "@myCookies": {
+    "@description": "Me tab entry of the cookie jar page."
+  },
+  "myCookiesBody": "What sites stored to keep you signed in",
+  "@myCookiesBody": {
+    "@description": "Subtitle of the cookie jar entry."
+  },
+  "cookieManageTitle": "Cookies",
+  "@cookieManageTitle": {
+    "@description": "Title of the cookie jar page."
+  },
+  "cookieManageMore": "More",
+  "@cookieManageMore": {
+    "@description": "Tooltip of the cookie page's overflow menu."
+  },
+  "cookieManageSession": "Until the app closes",
+  "@cookieManageSession": {
+    "@description": "Second line of a session cookie."
+  },
+  "cookieManageExpiresAt": "Expires {moment}",
+  "@cookieManageExpiresAt": {
+    "@description": "Second line of a cookie with an expiry.",
+    "placeholders": {
+      "moment": {
+        "type": "String"
+      }
+    }
+  },
+  "cookieManageDelete": "Delete this cookie",
+  "@cookieManageDelete": {
+    "@description": "Row action of the cookie page."
+  },
+  "cookieManageClearDomain": "Clear this domain",
+  "@cookieManageClearDomain": {
+    "@description": "Section action of the cookie page."
+  },
+  "cookieManageClearExpired": "Clear expired cookies",
+  "@cookieManageClearExpired": {
+    "@description": "Overflow action of the cookie page."
+  },
+  "cookieManageClearAll": "Clear all cookies",
+  "@cookieManageClearAll": {
+    "@description": "Overflow action of the cookie page."
+  },
+  "cookieManageClearAllTitle": "Clear all cookies?",
+  "@cookieManageClearAllTitle": {
+    "@description": "Confirmation title of the cookie page."
+  },
+  "cookieManageClearAllBody": "Every site will ask you to sign in again.",
+  "@cookieManageClearAllBody": {
+    "@description": "Confirmation body of the cookie page."
+  },
+  "cookieManageEmpty": "No cookies are stored.",
+  "@cookieManageEmpty": {
+    "@description": "Empty state of the cookie page."
+  },
+  "cookieManageLoadFailed": "The cookies could not be read.",
+  "@cookieManageLoadFailed": {
+    "@description": "Failure state of the cookie page."
+  },
+  "bookSourceLoginTitle": "Sign in",
+  "@bookSourceLoginTitle": {
+    "@description": "Title of the native login form page."
+  },
+  "bookSourceLoginLoadFailed": "The login form could not be read.",
+  "@bookSourceLoginLoadFailed": {
+    "@description": "Failure state of the login page when the source row or its form is unreadable."
+  },
+  "bookSourceLoginNoForm": "This source declares no login form.",
+  "@bookSourceLoginNoForm": {
+    "@description": "Shown when a source has a loginUrl but no loginUi."
+  },
+  "bookSourceLoginWorking": "Signing in…",
+  "@bookSourceLoginWorking": {
+    "@description": "Submit button label while the login script runs."
+  },
+  "bookSourceLoginDone": "Signed in. The source's own script reported success.",
+  "@bookSourceLoginDone": {
+    "@description": "Outcome line after a successful submit."
+  },
+  "myBackup": "Backup and restore",
+  "@myBackup": {
+    "@description": "我的页的数据分区入口。"
+  },
+  "myBackupBody": "Pack everything into one zip, or restore from one",
+  "@myBackupBody": {
+    "@description": "我的页该行的副标题。"
+  },
+  "backupTitle": "Backup and restore",
+  "@backupTitle": {
+    "@description": "备份与恢复页的标题。"
+  },
+  "backupExportTitle": "Export a backup",
+  "@backupExportTitle": {
+    "@description": "导出动作的标题。"
+  },
+  "backupExportBody": "Book sources, shelf, groups, bookmarks, reading records, rules and settings, packed into one zip.",
+  "@backupExportBody": {
+    "@description": "导出动作说明：zip 里包含哪些数据。"
+  },
+  "backupRestoreTitle": "Restore from a backup",
+  "@backupRestoreTitle": {
+    "@description": "恢复动作的标题。"
+  },
+  "backupRestoreBody": "See what the archive holds first, then merge it into this device.",
+  "@backupRestoreBody": {
+    "@description": "恢复动作说明：先预览再合并。"
+  },
+  "backupIncludeSecretsHint": "The archive is a plain file and includes book-source login data. Keep it somewhere you trust.",
+  "@backupIncludeSecretsHint": {
+    "@description": "导出前明示备份含明文登录信息。"
+  },
+  "backupWorkingExporting": "Packing…",
+  "@backupWorkingExporting": {
+    "@description": "导出进行中的进度文案。"
+  },
+  "backupWorkingReading": "Reading the archive…",
+  "@backupWorkingReading": {
+    "@description": "读取备份进行中的进度文案。"
+  },
+  "backupWorkingRestoring": "Restoring…",
+  "@backupWorkingRestoring": {
+    "@description": "恢复进行中的进度文案。"
+  },
+  "backupPreviewTitle": "What the archive holds",
+  "@backupPreviewTitle": {
+    "@description": "预览卡片的标题。"
+  },
+  "backupPreviewEmpty": "This archive holds no rows.",
+  "@backupPreviewEmpty": {
+    "@description": "备份里一张表都没有内容时的说明。"
+  },
+  "backupConfirmRestore": "Merge into this device",
+  "@backupConfirmRestore": {
+    "@description": "确认恢复的按钮。"
+  },
+  "backupMergeHint": "Restoring only merges: anything this device has that the archive lacks stays as it is.",
+  "@backupMergeHint": {
+    "@description": "恢复语义说明：只合并不删除。"
+  },
+  "backupTableBookSources": "Book sources",
+  "@backupTableBookSources": {
+    "@description": "预览里书源表的标签。"
+  },
+  "backupTableBooks": "Shelf",
+  "@backupTableBooks": {
+    "@description": "预览里书架表的标签。"
+  },
+  "backupTableReadingProgress": "Reading progress",
+  "@backupTableReadingProgress": {
+    "@description": "预览里阅读进度表的标签。"
+  },
+  "backupTableBookGroups": "Groups",
+  "@backupTableBookGroups": {
+    "@description": "预览里分组表的标签。"
+  },
+  "backupTableBookmarks": "Bookmarks",
+  "@backupTableBookmarks": {
+    "@description": "预览里书签表的标签。"
+  },
+  "backupTableReadRecords": "Reading records",
+  "@backupTableReadRecords": {
+    "@description": "预览里阅读记录表的标签。"
+  },
+  "backupTableRules": "Rules",
+  "@backupTableRules": {
+    "@description": "预览里规则表的标签。"
+  },
+  "backupExported": "Saved {fileName} ({count} rows).",
+  "@backupExported": {
+    "@description": "导出成功后的回执。",
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "backupPreviewMeta": "Written {createdAt} by version {appVersion}.",
+  "@backupPreviewMeta": {
+    "@description": "预览卡片里备份自身的信息行。",
+    "placeholders": {
+      "createdAt": {
+        "type": "String"
+      },
+      "appVersion": {
+        "type": "String"
+      }
+    }
+  },
+  "backupPreviewPreferences": "{count} settings",
+  "@backupPreviewPreferences": {
+    "@description": "预览里设置项的数量。",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "backupRestored": "Merged: {changed} rows written, {preferences} settings.",
+  "@backupRestored": {
+    "@description": "恢复成功后的回执。",
+    "placeholders": {
+      "changed": {
+        "type": "int"
+      },
+      "preferences": {
+        "type": "int"
+      }
+    }
+  },
+  "backupAutoTitle": "Automatic backup",
+  "@backupAutoTitle": {
+    "@description": "自动备份"
+  },
+  "backupAutoBody": "Backs up once a day at start-up when the last archive is older than a day.",
+  "@backupAutoBody": {
+    "@description": "启动时若距上次备份超过一天，就自动备份一次。"
+  },
+  "backupRetentionTitle": "Backups to keep",
+  "@backupRetentionTitle": {
+    "@description": "保留份数"
+  },
+  "backupRetentionBody": "Older archives beyond this count are deleted; only files this app wrote are removed.",
+  "@backupRetentionBody": {
+    "@description": "超出份数的旧备份会被删掉；只删本应用写的文件。"
+  },
+  "backupRetentionValue": "{count} files",
+  "@backupRetentionValue": {
+    "@description": "{count} 份",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "backupLocationTitle": "Backup location",
+  "@backupLocationTitle": {
+    "@description": "备份位置"
+  },
+  "backupLocationPrivate": "App private folder",
+  "@backupLocationPrivate": {
+    "@description": "应用私有目录"
+  },
+  "backupLocationChoose": "Choose a folder",
+  "@backupLocationChoose": {
+    "@description": "选择文件夹"
+  },
+  "backupLocationReset": "Use the private folder",
+  "@backupLocationReset": {
+    "@description": "恢复默认"
+  },
+  "backupLocationFallback": "The chosen folder is unavailable; archives go to the app's private folder for now.",
+  "@backupLocationFallback": {
+    "@description": "选的文件夹不可用，暂时写到应用私有目录。"
+  },
+  "backupPasswordTitle": "Backup password",
+  "@backupPasswordTitle": {
+    "@description": "备份口令"
+  },
+  "backupPasswordBody": "When set, whole archives are encrypted (AES-256); the password lives in the system key store.",
+  "@backupPasswordBody": {
+    "@description": "设置后备份整包加密（AES-256），口令存在系统密钥库。"
+  },
+  "backupPasswordChange": "Change the password",
+  "@backupPasswordChange": {
+    "@description": "修改口令"
+  },
+  "backupPasswordSet": "Set a password",
+  "@backupPasswordSet": {
+    "@description": "设置口令"
+  },
+  "backupPasswordClear": "Remove the password",
+  "@backupPasswordClear": {
+    "@description": "清除口令"
+  },
+  "backupPasswordStored": "Set (archives are encrypted)",
+  "@backupPasswordStored": {
+    "@description": "已设置（备份加密）"
+  },
+  "backupPasswordMissing": "Not set (archives stay unencrypted)",
+  "@backupPasswordMissing": {
+    "@description": "未设置（备份不加密）"
+  },
+  "backupPasswordStoreFailed": "The key store is unavailable, so the password was not stored: archives stay unencrypted.",
+  "@backupPasswordStoreFailed": {
+    "@description": "密钥库不可用，口令没存下：备份仍不加密。"
+  },
+  "backupSaveToLocation": "Save to the backup location",
+  "@backupSaveToLocation": {
+    "@description": "保存到备份位置"
+  },
+  "backupSaveAs": "Save as…",
+  "@backupSaveAs": {
+    "@description": "另存为…"
+  },
+  "backupRestoreFromFile": "Restore from a file",
+  "@backupRestoreFromFile": {
+    "@description": "从文件恢复"
+  },
+  "backupSavedTo": "Saved to {path}",
+  "@backupSavedTo": {
+    "@description": "已保存到 {path}",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "backupRemoteTitle": "Cloud backups",
+  "@backupRemoteTitle": {
+    "@description": "云端备份"
+  },
+  "backupRemoteEmpty": "No backup files on the server.",
+  "@backupRemoteEmpty": {
+    "@description": "云端没有备份文件。"
+  },
+  "backupRemoteRestore": "Restore from the cloud",
+  "@backupRemoteRestore": {
+    "@description": "从云端恢复"
+  },
+  "backupRemoteDelete": "Delete the cloud backup",
+  "@backupRemoteDelete": {
+    "@description": "删除云端备份"
+  },
+  "backupCloudUpload": "Upload the current backup",
+  "@backupCloudUpload": {
+    "@description": "上传当前备份"
+  },
+  "backupCloudRefresh": "Refresh the cloud list",
+  "@backupCloudRefresh": {
+    "@description": "刷新云端列表"
+  },
+  "backupWebDavTitle": "WebDAV",
+  "@backupWebDavTitle": {
+    "@description": "WebDAV"
+  },
+  "backupWebDavUrl": "URL (collection)",
+  "@backupWebDavUrl": {
+    "@description": "地址（集合目录）"
+  },
+  "backupWebDavUsername": "User name",
+  "@backupWebDavUsername": {
+    "@description": "账号"
+  },
+  "backupWebDavPassword": "Password",
+  "@backupWebDavPassword": {
+    "@description": "密码"
+  },
+  "backupWebDavSave": "Save the WebDAV configuration",
+  "@backupWebDavSave": {
+    "@description": "保存 WebDAV 配置"
+  },
+  "backupWebDavNotConfigured": "WebDAV is not configured yet.",
+  "@backupWebDavNotConfigured": {
+    "@description": "还没配置 WebDAV。"
+  },
+  "backupPasswordRequired": "This archive is encrypted and needs its password.",
+  "@backupPasswordRequired": {
+    "@description": "这份备份已加密，需要口令。"
+  },
+  "backupPasswordPrompt": "Enter the backup password",
+  "@backupPasswordPrompt": {
+    "@description": "输入备份口令"
+  },
+  "backupPasswordWrong": "That password is wrong; try again.",
+  "@backupPasswordWrong": {
+    "@description": "口令不对，请再试一次。"
+  },
+  "backupMergeMode": "Merge",
+  "@backupMergeMode": {
+    "@description": "合并"
+  },
+  "backupOverwriteMode": "Overwrite",
+  "@backupOverwriteMode": {
+    "@description": "覆盖"
+  },
+  "backupOverwriteWarning": "Overwriting clears this device's book sources, shelf, groups, bookmarks, reading records and rules first, then writes the archive; a safety copy is saved before it starts.",
+  "@backupOverwriteWarning": {
+    "@description": "覆盖会先清空本机的书源、书架、分组、书签、阅读记录与规则，再写入备份，并在恢复前自动保存一份安全副本。"
+  },
+  "backupOverwriteConfirm": "Overwrite this device",
+  "@backupOverwriteConfirm": {
+    "@description": "确认覆盖"
+  },
+  "backupSafetyCopy": "Safety copy saved first: {name}",
+  "@backupSafetyCopy": {
+    "@description": "已先保存安全副本：{name}",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "backupWorkSavingAs": "Saving…",
+  "@backupWorkSavingAs": {
+    "@description": "正在另存…"
+  },
+  "backupWorkUploading": "Uploading…",
+  "@backupWorkUploading": {
+    "@description": "正在上传…"
+  },
+  "backupWorkListingRemote": "Listing the cloud collection…",
+  "@backupWorkListingRemote": {
+    "@description": "正在读取云端列表…"
+  },
+  "backupWorkDownloading": "Downloading…",
+  "@backupWorkDownloading": {
+    "@description": "正在下载…"
+  },
+  "backupLocalTitle": "On this device",
+  "@backupLocalTitle": {
+    "@description": "本机备份"
+  },
+  "settingsSeedColor": "Colour",
+  "@settingsSeedColor": {
+    "@description": "配色"
+  },
+  "settingsSeedColorHint": "Dynamic colour wins when the platform has it; this decides the colours on devices that do not.",
+  "@settingsSeedColorHint": {
+    "@description": "有动态取色时系统配色优先；这里决定没有动态取色的设备用哪套颜色。"
+  },
+  "settingsSeedColorDefault": "Default",
+  "@settingsSeedColorDefault": {
+    "@description": "默认"
+  },
+  "settingsBackgroundImage": "Background",
+  "@settingsBackgroundImage": {
+    "@description": "背景图"
+  },
+  "settingsBackgroundImageNone": "Not set",
+  "@settingsBackgroundImageNone": {
+    "@description": "未设置"
+  },
+  "settingsBackgroundImageChoose": "Choose an image",
+  "@settingsBackgroundImageChoose": {
+    "@description": "选择图片"
+  },
+  "settingsBackgroundImageRemove": "Remove",
+  "@settingsBackgroundImageRemove": {
+    "@description": "移除"
+  },
+  "settingsBackgroundImageHint": "The image is copied into the app, so deleting the original is fine.",
+  "@settingsBackgroundImageHint": {
+    "@description": "图片会复制到应用目录，原图删除也不影响。"
+  },
+  "settingsBackgroundImageFailed": "The background image could not be saved; try again.",
+  "@settingsBackgroundImageFailed": {
+    "@description": "背景图没能保存，请再试一次。"
   }
 }

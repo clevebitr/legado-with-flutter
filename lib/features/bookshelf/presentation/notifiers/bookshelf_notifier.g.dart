@@ -60,7 +60,7 @@ final class BookshelfProvider
   Bookshelf create() => Bookshelf();
 }
 
-String _$bookshelfHash() => r'937d7c42f89df3095cb4026adaaa0ceac27edaa1';
+String _$bookshelfHash() => r'15dc2d8385519c1632b9fb130c210163d54d215c';
 
 /// The shelf, and the only place that changes it (`docs/dev/roadmap.md` 5.4)。
 ///

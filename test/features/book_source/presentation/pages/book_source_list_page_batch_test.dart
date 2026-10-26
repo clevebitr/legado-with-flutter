@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
-import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
+import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
@@ -30,7 +30,7 @@ AppLocalizations _l10n(WidgetTester tester) =>
 /// Seeds two sources and pumps the page.
 Future<FakeBookSourceRepository> _pump(
   WidgetTester tester, {
-  BookSourceFileSaver? saver,
+  JsonFileSaver? saver,
 }) async {
   final FakeBookSourceRepository repository = FakeBookSourceRepository()
     ..add(source: _source('甲', group: '精选'))
@@ -692,6 +692,48 @@ void main() {
     });
   });
 
+  group('BookSourceListPage export', () {
+    testWidgets('appBarExport_whenChosen_writesEverySourceAsOneArray', (
+      WidgetTester tester,
+    ) async {
+      // 5.8 的批量导出（ADR-0071 §决策 3）：一个文件、上游数组、未知键保真。
+      final _RecordingSaver saver = _RecordingSaver();
+      await _pump(tester, saver: saver);
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.bookSourceListMoreActions).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.bookSourceExportAll));
+      await tester.pumpAndSettle();
+
+      expect(saver.savedName, 'bookSources-2.json');
+      expect(saver.savedContents, isNotNull);
+      expect(saver.savedContents, contains('"bookSourceUrl"'));
+      expect(saver.savedContents, startsWith('['));
+      expect(find.text(l10n.bookSourceExportAllSaved(2)), findsOneWidget);
+    });
+
+    testWidgets('batchExport_whenChosen_writesOnlyTheTickedSources', (
+      WidgetTester tester,
+    ) async {
+      final _RecordingSaver saver = _RecordingSaver();
+      await _pump(tester, saver: saver);
+      final AppLocalizations l10n = _l10n(tester);
+
+      await tester.tap(find.byTooltip(l10n.bookSourceListSelectMode));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(Checkbox).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(l10n.bookSourceListMoreActions));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.bookSourceExportSelected(1)));
+      await tester.pumpAndSettle();
+
+      expect(saver.savedName, 'bookSources-1.json');
+      expect(find.text(l10n.bookSourceExportAllSaved(1)), findsOneWidget);
+    });
+  });
+
   group('BookSourceListPage row actions', () {
     testWidgets('row_whenExportIsChosen_copiesThePayload', (
       WidgetTester tester,
@@ -745,7 +787,8 @@ final class _FixedClock implements Clock {
 }
 
 /// A saver that records what the page asked to write.
-final class _RecordingSaver implements BookSourceFileSaver {
+final class _RecordingSaver implements JsonFileSaver {
+  String? savedName;
   String? savedContents;
 
   @override
@@ -753,6 +796,7 @@ final class _RecordingSaver implements BookSourceFileSaver {
     required String suggestedName,
     required String contents,
   }) async {
+    savedName = suggestedName;
     savedContents = contents;
 
     return const ParseSuccess<bool>(true);

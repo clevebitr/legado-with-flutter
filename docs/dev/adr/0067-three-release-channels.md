@@ -68,7 +68,9 @@ ADR-0065 把「门禁 + 三平台构建 + Release」塞进了同一个 `ci.yml`�
 
 - `ci.yml` 回到「只有门禁」的单一职责；发布相关的 187 行从它移出。
 - 新增两个 composite action（`version`、`wait-for-verify`）与一个可复用 workflow。
-- 首次验证只能靠真实触发：`workflow_dispatch` 先跑 `ci.yml`（门禁），再 dispatch `debug.yml`
-  （它必须等到门禁绿才打包）—— 这一对就是端到端证据，见 PR 描述。
+- 首次验证只能靠真实触发：合并到 `main` 后 `debug.yml` 自动开跑，它的 `gate` 先等到该提交的
+  `ci.yml` 绿；第一轮暴露了 Windows 侧的工具链问题（`windows-latest` 已是 VS 2026，MSVC 14.5x 把
+  `<experimental/coroutine>` 的弃用升级成硬错误，`just_audio_windows` 因此编译失败），修法与登记见
+  `docs/dev/platform.md` §8.1。
 - 已知限制：`wait-for-verify` 依赖 `gh run list --commit`（tag push 与分支 push 都能查到）；
   若组织的 Actions 保留期清掉了旧运行，重新跑一次 `ci.yml` 即可。

@@ -2,15 +2,17 @@ import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/js_bridge_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/di/preference_store_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
-import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_view_store_impl.dart';
 import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
 import 'package:flutter_reader/features/book_source/data/search_scope_store_impl.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
+import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
+import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_view_store.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
@@ -19,6 +21,7 @@ import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engi
 import 'package:flutter_reader/features/book_source/domain/usecases/aggregate_search_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/check_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/explore_books.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/export_book_sources.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_audio_tracks.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
@@ -26,24 +29,42 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_explor
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_manga_pages.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/resolve_login_form.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/run_source_debug.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/sign_in.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/switch_book_source.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'di.g.dart';
 
-/// Provides the persistence of the imported book sources (`docs/dev/roadmap.md` 5.1, ADR-0040).
-///
-/// This is the feature's first `data/` consumer; the review note of ADR-0021 records why it
-/// consumes the `domain/` model directly instead of a DTO.
+/// Provides persistence for the imported book sources.
 @Riverpod(keepAlive: true)
 BookSourceRepository bookSourceRepository(Ref ref) => BookSourceRepositoryImpl(
   dao: ref.watch(bookSourceDaoProvider),
   logger: ref.watch(appLoggerProvider),
 );
 
-/// Provides the import use case (pasted text or a URL, `docs/dev/roadmap.md` 5.1, ADR-0040 §决策 9).
+/// Provides the `loginUi` form resolver (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+@Riverpod(keepAlive: true)
+ResolveLoginForm resolveLoginForm(Ref ref) => ResolveLoginForm(
+  js: ref.watch(jsBridgeProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
+/// Provides the sign-in runner (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+@Riverpod(keepAlive: true)
+SignIn signIn(Ref ref) => SignIn(
+  js: ref.watch(jsBridgeProvider),
+  logger: ref.watch(appLoggerProvider),
+);
+
+/// Provides the book-source export (`docs/dev/roadmap.md` 5.8, ADR-0071 §决策 3).
+@Riverpod(keepAlive: true)
+ExportBookSources exportBookSources(Ref ref) =>
+    ExportBookSources(repository: ref.watch(bookSourceRepositoryProvider));
+
+/// Provides the import use case (pasted text or a URL).
 @Riverpod(keepAlive: true)
 ImportBookSources importBookSources(Ref ref) => ImportBookSources(
   repository: ref.watch(bookSourceRepositoryProvider),
@@ -51,11 +72,7 @@ ImportBookSources importBookSources(Ref ref) => ImportBookSources(
   logger: ref.watch(appLoggerProvider),
 );
 
-/// Provides the shelf writer the detail page uses (`docs/dev/roadmap.md` 5.4)。
-///
-/// The default is the **unbound** port: the composition root overrides it with the shelf's real
-/// writer (ADR-0041 §决策 2), which is why this feature names no shelf type at all — 「加入书架」
-/// 是一个端口，而不是一次 `features/bookshelf` 的 import（C-ARCH-2）。
+/// Provides the shelf writer the detail page uses; defaults to an unbound port.
 @Riverpod(keepAlive: true)
 BookshelfWriter bookshelfWriter(Ref ref) =>
     UnboundBookshelfWriter(logger: ref.watch(appLoggerProvider));
@@ -77,18 +94,6 @@ PageFetchService pageFetchService(Ref ref) => PageFetchService(
   webPages: ref.watch(webPageFetcherProvider),
 );
 
-/// Provides the WebView capability for `,{webView:…}` rules (ADR-0056).
-///
-/// The default is unsupported; the composition root binds `InAppWebViewPageFetcher`, so host
-/// tests keep using the plain HTTP path and a platform without WebView2 degrades instead of
-/// failing the source.
-///
-/// `keepAlive` for the same reason as the other app-wide services: `pageFetchService` is keepAlive
-/// and watches this one, and riverpod_lint forbids an auto-dispose dependency under a kept-alive
-/// provider (ADR-0010).
-@Riverpod(keepAlive: true)
-WebPageFetcher webPageFetcher(Ref ref) => const UnsupportedWebPageFetcher();
-
 /// Provides the search use case.
 @Riverpod(keepAlive: true)
 SearchBooks searchBooks(Ref ref) =>
@@ -104,10 +109,7 @@ FetchBookInfo fetchBookInfo(Ref ref) =>
 FetchToc fetchToc(Ref ref) =>
     FetchToc(pages: ref.watch(pageFetchServiceProvider));
 
-/// Provides the chapter body cache (`docs/dev/roadmap.md` 5.2, C-NET-6).
-///
-/// It reuses `CacheDao`, whose first production consumer was the charset cache: the key shape and
-/// the expiry column were already there, so 5.2 adds no column and no table.
+/// Provides the chapter body cache over the shared cache table.
 @Riverpod(keepAlive: true)
 ContentCache contentCache(Ref ref) => CacheDaoContentCache(
   ref.watch(cacheDaoProvider),
@@ -119,17 +121,36 @@ ContentCache contentCache(Ref ref) => CacheDaoContentCache(
 FetchContent fetchContent(Ref ref) => FetchContent(
   pages: ref.watch(pageFetchServiceProvider),
   cache: ref.watch(contentCacheProvider),
+  purifier: ref.watch(contentPurifierProvider),
 );
 
-/// Provides the use case that reads a manga chapter's image list
-/// (`docs/dev/roadmap.md` §3.10 M16, ADR-0053).
+/// Provides the purge-rule source, **unbound** by default.
+///
+/// The composition root overrides it with the rules feature's repository (ADR-0041 §决策 2), so
+/// reading never imports `features/rules`. The default purges nothing.
+@Riverpod(keepAlive: true)
+PurgeRuleSource purgeRuleSource(Ref ref) =>
+    UnboundPurgeRuleSource(logger: ref.watch(appLoggerProvider));
+
+/// Provides the purifier the chapter body goes through after the source's `replaceRegex`.
+///
+/// It carries the JS sandbox because a purge rule's replacement may be a `@js:` script
+/// (`docs/dev/roadmap.md` M23, ADR-0071 §决策 5); one job per rule per chapter.
+@Riverpod(keepAlive: true)
+ContentPurifier contentPurifier(Ref ref) => ContentPurifier(
+  rules: ref.watch(purgeRuleSourceProvider),
+  logger: ref.watch(appLoggerProvider),
+  js: ref.watch(jsBridgeProvider),
+);
+
+/// Provides the use case that reads a manga chapter's image list.
 @Riverpod(keepAlive: true)
 FetchMangaPages fetchMangaPages(Ref ref) => FetchMangaPages(
   pages: ref.watch(pageFetchServiceProvider),
   logger: ref.watch(appLoggerProvider),
 );
 
-/// Provides the audio-track reader (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 2).
+/// Provides the audio-track reader.
 @riverpod
 FetchAudioTracks fetchAudioTracks(Ref ref) =>
     FetchAudioTracks(pages: ref.watch(pageFetchServiceProvider));
@@ -147,11 +168,7 @@ FetchExploreCategories fetchExploreCategories(Ref ref) =>
 ExploreBooks exploreBooks(Ref ref) =>
     ExploreBooks(pages: ref.watch(pageFetchServiceProvider));
 
-/// Provides the batch check of `docs/dev/roadmap.md` §5.10.
-///
-/// It composes the same five use cases the pages use, so a check can never disagree with what
-/// "search" or "read the body" means — the only new thing here is the order and the group
-/// vocabulary (ADR-0043).
+/// Provides the batch check, composed from the same use cases the pages use.
 @Riverpod(keepAlive: true)
 CheckBookSource checkBookSource(Ref ref) => CheckBookSource(
   searchBooks: ref.watch(searchBooksProvider),
@@ -164,7 +181,7 @@ CheckBookSource checkBookSource(Ref ref) => CheckBookSource(
   logger: ref.watch(appLoggerProvider),
 );
 
-/// Provides the single-source debug console of `docs/dev/roadmap.md` §5.10.
+/// Provides the single-source debug console.
 @Riverpod(keepAlive: true)
 RunSourceDebug runSourceDebug(Ref ref) => RunSourceDebug(
   pages: ref.watch(pageFetchServiceProvider),
@@ -176,7 +193,7 @@ RunSourceDebug runSourceDebug(Ref ref) => RunSourceDebug(
   clock: ref.watch(clockProvider),
 );
 
-/// Provides the source switch of the reader (`docs/dev/roadmap.md` §3.9-R3, ADR-0051).
+/// Provides the source switch of the reader.
 @Riverpod(keepAlive: true)
 SwitchBookSource switchBookSource(Ref ref) => SwitchBookSource(
   search: ref.watch(searchBooksProvider),
@@ -184,21 +201,21 @@ SwitchBookSource switchBookSource(Ref ref) => SwitchBookSource(
   toc: ref.watch(fetchTocProvider),
 );
 
-/// Provides the list's own view state store (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
+/// Provides the list's view state store (sort key and group filter).
 @Riverpod(keepAlive: true)
 Future<BookSourceViewStore> bookSourceViewStore(Ref ref) async =>
     BookSourceViewStoreImpl(
       store: await ref.watch(preferenceStoreProvider.future),
     );
 
-/// Provides the aggregate search of `docs/dev/roadmap.md` 3.8 (ADR-0046).
+/// Provides the aggregate search.
 @Riverpod(keepAlive: true)
 AggregateSearchBooks aggregateSearchBooks(Ref ref) => AggregateSearchBooks(
   search: ref.watch(searchBooksProvider),
   logger: ref.watch(appLoggerProvider),
 );
 
-/// Provides the stored search scope (ADR-0046 §决策 1).
+/// Provides the stored search scope.
 @Riverpod(keepAlive: true)
 Future<SearchScopeStore> searchScopeStore(Ref ref) async =>
     SearchScopeStoreImpl(

@@ -4,8 +4,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'playback_notification.freezed.dart';
 
-/// What the media notification shows about the current track
-/// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 4).
+/// What the media notification shows about the current track.
 @freezed
 abstract class PlaybackNotificationMetadata
     with _$PlaybackNotificationMetadata {
@@ -28,12 +27,10 @@ abstract class PlaybackNotificationMetadata
   }) = _PlaybackNotificationMetadata;
 }
 
-/// The playback facts the notification and the lock screen render
-/// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 4).
+/// The playback facts the notification and the lock screen render.
 ///
-/// [position] is a **discontinuity**, not a tick: the system projects the playhead from the last
-/// reported position, speed and playing state, so the player only reports pauses, seeks and track
-/// changes instead of five updates a second.
+/// [position] is a discontinuity, not a tick: the system projects the playhead from it, so the
+/// player only reports pauses, seeks and track changes.
 @freezed
 abstract class PlaybackNotificationState with _$PlaybackNotificationState {
   /// Creates a notification state.
@@ -94,12 +91,7 @@ abstract interface class PlaybackNotificationHandle {
   Future<void> detach();
 }
 
-/// Shows playback in the system notification / lock screen
-/// (`docs/dev/roadmap.md` §3.10, ADR-0054 §决策 3/4).
-///
-/// Platforms without a media notification return `null` from [attach] and the caller simply keeps
-/// playing: this is the **deliberate Windows degradation** of ADR-0054 §决策 3, and no caller may
-/// branch on the platform itself (C-PLT-1).
+/// Shows playback in the system notification / lock screen.
 abstract interface class PlaybackNotification {
   /// Starts a notification session, or returns `null` when the platform has none.
   Future<PlaybackNotificationHandle?> attach({

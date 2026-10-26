@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_sort_order.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check_record.dart';
@@ -13,6 +15,10 @@ import 'package:flutter_reader/features/book_source/domain/entities/source_check
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_light.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
+import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
+import 'package:flutter_reader/features/book_source/domain/url_template.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/export_book_sources.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -141,6 +147,20 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
                     context,
                     const BookSourceRoute.importSources(),
                   ),
+                ),
+                // 全部导出放进溢出菜单：主工具条已经有 6 个按钮，再加一个会让标题在窄屏上被挤掉。
+                PopupMenuButton<_ViewAction>(
+                  tooltip: l10n.bookSourceListMoreActions,
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (_ViewAction action) =>
+                      unawaited(_exportSources(context, ref, l10n)),
+                  itemBuilder: (BuildContext context) =>
+                      <PopupMenuEntry<_ViewAction>>[
+                        PopupMenuItem<_ViewAction>(
+                          value: _ViewAction.groupByDomain,
+                          child: Text(l10n.bookSourceExportAll),
+                        ),
+                      ],
                 ),
               ],
             ),
@@ -283,6 +303,12 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
               itemBuilder: (BuildContext context) =>
                   <PopupMenuEntry<_BatchAction>>[
                     PopupMenuItem<_BatchAction>(
+                      value: _BatchAction.export,
+                      child: Text(
+                        l10n.bookSourceExportSelected(selected.length),
+                      ),
+                    ),
+                    PopupMenuItem<_BatchAction>(
                       value: _BatchAction.moveTop,
                       child: Text(l10n.bookSourceListBatchMoveTop),
                     ),
@@ -320,6 +346,8 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     required void Function(Future<void> Function()) run,
   }) {
     switch (action) {
+      case _BatchAction.export:
+        run(() => _exportSources(context, ref, l10n, ids: selected));
       case _BatchAction.moveTop:
         run(
           () => ref
@@ -1131,6 +1159,13 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
                       : l10n.bookSourceRowExploreEnable,
                 ),
               ),
+              // 只有声明了登录能力的源才给这个入口：否则它只是一个会打开首页的菜单项
+              // （ADR-0068 增补）。
+              if (source.source.loginGuard.isDeclared)
+                PopupMenuItem<_RowAction>(
+                  value: _RowAction.signIn,
+                  child: Text(l10n.bookSourceRowSignIn),
+                ),
               PopupMenuItem<_RowAction>(
                 value: _RowAction.debug,
                 child: Text(l10n.bookSourceCheckOpenDebug),
@@ -1180,6 +1215,8 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
             isExploreEnabled: !source.isExploreEnabled,
           ),
         );
+      case _RowAction.signIn:
+        unawaited(_signIn(context, ref, l10n, source));
       case _RowAction.debug:
         pushBookSourceRoute(
           context,
@@ -1199,6 +1236,94 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
       case _RowAction.delete:
         unawaited(_confirmDelete(context, ref, l10n, source));
     }
+  }
+
+  /// Opens the source's login page in the visible WebView (`loginUrl`, else the source URL).
+  ///
+  /// Cookies the page earns land in the v8 jar (`PersistentCookieManager`) and the next request
+  /// carries them, so this is the actionable half of `ParseFailureKind.loginRequired`
+  /// (ADR-0068 §决策 3/4 and its 2026-10-24 addendum). The native `loginUi` form is the M21b
+  /// login/Cookie management UI (`docs/dev/ui-gap.md` U15), not this entry.
+  ///
+  /// Reuses the same [SourceVerification] port the JS family pushes, so a source's own
+  /// `java.startBrowser` and this menu entry cannot behave differently.
+  Future<void> _signIn(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    StoredBookSource source,
+  ) async {
+    // 源声明了 `loginUi` 就有原生表单（ADR-0072 §决策 3）：表单页自己跑 `login()`；
+    // 只有 `loginUrl` 的源仍旧交给浏览器，两条路各自是最合适的那个。
+    final String? loginUi = source.source.loginUi;
+    if (loginUi != null && loginUi.trim().isNotEmpty) {
+      pushBookSourceRoute(context, BookSourceRoute.signIn(sourceId: source.id));
+
+      return;
+    }
+
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final SourceVerification verification = ref.read(
+      sourceVerificationProvider,
+    );
+    if (!verification.isSupported) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.bookSourceSignInUnsupported)),
+      );
+
+      return;
+    }
+
+    final ParseResult<SourceVerificationOutcome> outcome = await verification
+        .verify(
+          SourceVerificationRequest(
+            sourceUrl: source.source.url,
+            sourceName: source.source.name,
+            url: _signInUrl(source.source),
+            title: source.source.name,
+            headers: source.source.headers,
+          ),
+        );
+    if (!context.mounted) {
+      return;
+    }
+
+    switch (outcome) {
+      case ParseSuccess<SourceVerificationOutcome>():
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.bookSourceSignInDone)),
+        );
+      case ParseFailure<SourceVerificationOutcome>(
+        :final ParseFailureKind kind,
+      ):
+        // 用户自己关掉页面时什么都不说：那是「算了」，不是失败。
+        if (kind == ParseFailureKind.cancelled) {
+          return;
+        }
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.bookSourceSignInFailed)),
+        );
+    }
+  }
+
+  /// The address the login entry opens: `loginUrl` when it is an address, else the source URL.
+  ///
+  /// `loginUrl` is a **URL rule**, so it may carry the `,{…}` suffix of `book-source.md` §4.3
+  /// (the suffix is dropped here: the page does its own requests) or be a `@js:` script defining
+  /// `login()`; a script has no address to open, so the source's own page is shown instead — that
+  /// is where the human check usually lives.
+  String _signInUrl(BookSource source) {
+    final String? loginUrl = source.loginUrl;
+    if (loginUrl == null || loginUrl.trim().isEmpty) {
+      return source.url;
+    }
+
+    return switch (parseUrlRule(loginUrl, rulePath: 'loginUrl')) {
+      ParseSuccess<UrlRule>(:final UrlRule data)
+          when data.template.trim().toLowerCase().startsWith('http') =>
+        resolveAbsoluteUrl(data.template.trim(), source.url),
+      ParseFailure<UrlRule>() || ParseSuccess<UrlRule>() => source.url,
+    };
   }
 
   /// Runs the check on **one** source and reports what it found (ADR-0050 §决策 2's neighbour).
@@ -1234,6 +1359,48 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Writes every source (or the ticked [ids]) to a file the user picks
+  /// (`docs/dev/roadmap.md` 5.8, ADR-0071 §决策 3).
+  ///
+  /// The bytes are the stored payloads with `enabled` / `customOrder` written over the imported
+  /// values, so a re-import elsewhere reproduces the list the user is looking at.
+  Future<void> _exportSources(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n, {
+    Set<int>? ids,
+  }) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final ParseResult<BookSourceExport> exported = await ref
+        .read(exportBookSourcesProvider)
+        .execute(ids: ids);
+    final BookSourceExport document;
+    switch (exported) {
+      case ParseSuccess<BookSourceExport>(:final BookSourceExport data):
+        document = data;
+      case ParseFailure<BookSourceExport>():
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.bookSourceExportEmpty)),
+        );
+
+        return;
+    }
+
+    final ParseResult<bool> saved = await ref
+        .read(jsonFileSaverProvider)
+        .save(suggestedName: document.fileName, contents: document.contents);
+    if (!context.mounted) {
+      return;
+    }
+
+    final String message = switch (saved) {
+      ParseSuccess<bool>(data: false) => l10n.actionCancel,
+      ParseSuccess<bool>() => l10n.bookSourceExportAllSaved(document.count),
+      ParseFailure<bool>() => l10n.bookSourceExportFailed,
+    };
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
   /// Copies the source's JSON to the clipboard and offers to save it (ADR-0050 §决策 4).
   ///
   /// The bytes are the stored **payload**, so a re-import of the export produces the same source.
@@ -1247,10 +1414,12 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
     StoredBookSource source,
   ) async {
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-    final String? payload = await ref
+    // 走批量导出同一个方法：单条导出也要把 `enabled` / `customOrder` 换成当前用户态
+    // （ADR-0071 §决策 3 修订了 ADR-0050 §决策 4 的「字节就是 payload」）。
+    final List<String> payloads = await ref
         .read(bookSourceRepositoryProvider)
-        .payloadOf(source.id);
-    if (payload == null) {
+        .exportPayloads(ids: <int>{source.id});
+    if (payloads.isEmpty) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.bookSourceExportFailed)),
       );
@@ -1258,9 +1427,10 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
       return;
     }
 
+    final String payload = payloads.first;
     unawaited(_copyToClipboard(payload));
     final ParseResult<bool> saved = await ref
-        .read(bookSourceFileSaverProvider)
+        .read(jsonFileSaverProvider)
         .save(suggestedName: '${source.source.name}.json', contents: payload);
     if (!context.mounted) {
       return;
@@ -1465,13 +1635,29 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
 }
 
 /// The actions a row's menu offers.
-enum _RowAction { toggleExplore, debug, check, edit, export, comment, delete }
+enum _RowAction {
+  toggleExplore,
+  signIn,
+  debug,
+  check,
+  edit,
+  export,
+  comment,
+  delete,
+}
 
 /// The view-menu actions (`docs/dev/roadmap.md` §3.10 V4).
 enum _ViewAction { groupByDomain, manageGroups }
 
 /// The batch actions that live in the overflow menu (ADR-0052 §决策 4).
-enum _BatchAction { moveTop, moveBottom, removeGroup, exploreOn, exploreOff }
+enum _BatchAction {
+  export,
+  moveTop,
+  moveBottom,
+  removeGroup,
+  exploreOn,
+  exploreOff,
+}
 
 /// What to do with a group in the management dialog (ADR-0052 §决策 4).
 enum _GroupAction { rename, delete, selectSources, deleteSources }

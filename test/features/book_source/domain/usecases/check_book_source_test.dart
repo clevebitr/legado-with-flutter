@@ -215,6 +215,30 @@ void main() {
       ]);
     });
 
+    test('execute_givenItemsWithoutUrls_marksTheSearchInvalid', () async {
+      // 列表命中但每一条都读不出书址（逐条跳过）→ 搜索阶段「成功且为空」，仍判无效
+      // （`emptyGroup` 分支）。
+      final _Fixture fixture = _fixture(
+        FakeHttpClient()..serve(
+          _searchUrl,
+          '<div class="result"><span class="title">书甲</span></div>',
+        ),
+      );
+
+      final SourceCheckReport report = _report(
+        await fixture.check.execute(
+          _source(),
+          const SourceCheckSettings(keyword: _keyword),
+        ),
+      );
+
+      expect(report.invalidGroups, <String>[searchInvalidGroup]);
+      expect(
+        _stage(report, SourceCheckStage.search).status,
+        SourceCheckStatus.failed,
+      );
+    });
+
     test('execute_givenAnEmptySearch_marksTheSearchInvalid', () async {
       final _Fixture fixture = _fixture(
         FakeHttpClient()..serve(_searchUrl, '<div id="none"></div>'),
@@ -269,11 +293,11 @@ void main() {
       },
     );
 
-    test('execute_givenChaptersWithoutUrls_marksTheSearchTocInvalid', () async {
-      // 列表命中了、但每一条都没有 URL：`FetchToc` 成功而返回空列表，这一支只有在本用例里
-      // 走得到，也是「目录为空」的另一种样子。
+    test('execute_givenATocListThatMatchesNothing_invalidatesTheToc', () async {
+      // 目录列表规则一条都没命中：`FetchToc` 直接失败，目录阶段判无效。
+      // （「命中了但章节没有 URL」不再是无效：那一章会回落到目录页地址，ADR-0069 G8。）
       final FakeHttpClient http = _healthy()
-        ..serve(_tocUrl, '<dl><dd class="chapter"><a>第1章</a></dd></dl>');
+        ..serve(_tocUrl, '<dl><dd><a>第1章</a></dd></dl>');
 
       final SourceCheckReport report = _report(
         await _fixture(http).check

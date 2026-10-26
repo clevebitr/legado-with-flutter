@@ -8,24 +8,9 @@ import 'package:flutter_reader/features/book_source/domain/page_fetch_service.da
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 
-/// Reads the discover-page categories of one book source (`book-source.md` §4.2).
+/// Reads the discover-page categories of one book source.
 ///
-/// `exploreUrl` has two mutually exclusive forms, decided by its prefix (ADR-0035 §决策 3):
-///
-/// * **a category string** — entries `标题::URL` separated by runs of `&&` or newlines;
-/// * **one whole-field script** — `@js:…` or `<js>…</js>`, whose result may be a JSON array of
-///   objects or the very same separated string (both are read).
-///
-/// The script runs in the sandbox with the field's own bindings (ADR-0035 §决策 4): `baseUrl` is
-/// the **book source URL**, `page` is `1`, there is no `key` and no `result`, and `infoMap` — a
-/// host-side table M1 does not have — is a `js:error` rather than a silent `undefined`. The
-/// variables of `@put:` / `@get:` / `java.*` are the source's own (ADR-0034).
-///
-/// A field that names a script but is not one, a script that fails, or a result that is neither
-/// shape is a **field failure** (`parseFailed`) instead of an invented “ERROR:” category: the
-/// upstream behaviour of showing the error as content is registered as a deliberate difference
-/// (ADR-0035 §决策 4). Categories that the parse rejects are **logged and skipped**, so the rest of
-/// the discover page still opens (C-SRC-4).
+/// Supports the `标题::URL` string form and the whole-field `@js:` / `<js>` forms.
 final class FetchExploreCategories {
   /// Creates the use case.
   const FetchExploreCategories({required this._engine, required this._pages});
@@ -33,11 +18,9 @@ final class FetchExploreCategories {
   final RuleEngine _engine;
   final PageFetchService _pages;
 
-  /// Returns [source]'s discover categories, in the order its `exploreUrl` lists them.
+  /// Returns [source]'s discover categories in declaration order.
   ///
-  /// A source without an `exploreUrl` is a normal source, not a broken one: it answers an **empty
-  /// list**, which is what the discover page shows as its empty state. Only a *declared*
-  /// `exploreUrl` that cannot be read is a failure.
+  /// A source without `exploreUrl` answers an empty list, not a failure.
   Future<ParseResult<List<ExploreCategory>>> execute(BookSource source) async {
     final String text = (source.exploreUrl ?? '').trim();
     if (text.isEmpty) {
@@ -63,12 +46,11 @@ final class FetchExploreCategories {
     };
   }
 
-  /// Runs the whole-field script and reads its result (`ADR-0035 §决策 4`).
   Future<ParseResult<List<ExploreCategory>>> _evaluate(
     String script,
     BookSource source,
   ) async {
-    // `header` 写成规则时要先求值（book-source.md §2、M12-A2）。
+    // `header` 写成规则时要先求值。
     final Map<String, String>? headers = await _pages.headersOf(source);
     final ParseResult<Object?> evaluated = await _engine.evaluateJs(
       script,

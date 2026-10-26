@@ -15,6 +15,21 @@ final class FakeContentCache implements ContentCache {
   /// The keys written, in order.
   final List<String> writes = <String>[];
 
+  /// Per-source counts the page reads (`countForSource`).
+  final Map<String, int> sourceCounts = <String, int>{};
+
+  /// When set, [countForSource] throws it (a broken database).
+  Exception? sourceCountFailure;
+
+  /// What [countAll] answers.
+  int totalCount = 0;
+
+  /// The `bookUrl` of every write, in order (`null` for an unscoped write).
+  final List<String?> writeScopes = <String?>[];
+
+  /// The per-book counts/clears asked for, in order.
+  final List<String> scopeCalls = <String>[];
+
   @override
   Future<String?> read({required String sourceId, required String url}) async {
     reads.add('$sourceId|$url');
@@ -27,8 +42,70 @@ final class FakeContentCache implements ContentCache {
     required String sourceId,
     required String url,
     required String body,
+    String? bookUrl,
   }) async {
     writes.add('$sourceId|$url');
+    writeScopes.add(bookUrl);
     entries['$sourceId|$url'] = body;
+  }
+
+  @override
+  Future<int> countForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async {
+    scopeCalls.add('count|$sourceId|$bookUrl');
+
+    return entries.length;
+  }
+
+  @override
+  Future<int> clearForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async {
+    scopeCalls.add('clear|$sourceId|$bookUrl');
+    final int removed = entries.length;
+    entries.clear();
+
+    return removed;
+  }
+
+  @override
+  Future<int> countForSource(String sourceId) async {
+    scopeCalls.add('sourceCount|$sourceId');
+    final Exception? failure = sourceCountFailure;
+    if (failure != null) {
+      throw failure;
+    }
+
+    return sourceCounts[sourceId] ?? 0;
+  }
+
+  @override
+  Future<int> clearForSource(String sourceId) async {
+    scopeCalls.add('sourceClear|$sourceId');
+    final int removed = entries.length;
+    entries.clear();
+
+    return removed;
+  }
+
+  @override
+  Future<int> countAll() async => totalCount;
+
+  @override
+  Future<int> clearExpired() async {
+    scopeCalls.add('clearExpired');
+    final int removed = entries.length;
+    entries.clear();
+
+    return removed;
+  }
+
+  @override
+  Future<void> clearAll() async {
+    scopeCalls.add('clearAll');
+    entries.clear();
   }
 }

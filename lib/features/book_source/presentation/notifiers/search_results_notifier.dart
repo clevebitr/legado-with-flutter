@@ -11,8 +11,7 @@ part 'search_results_notifier.g.dart';
 
 /// What the search form currently shows.
 ///
-/// A state machine instead of an `AsyncValue`: "nothing searched yet" and "searched,
-/// no match" are both successful and empty, and the form has to tell them apart.
+/// A state machine so "nothing searched yet" and "searched, no match" stay distinguishable.
 @freezed
 sealed class SearchResultsState with _$SearchResultsState {
   /// Nothing was searched yet in this session.
@@ -25,7 +24,7 @@ sealed class SearchResultsState with _$SearchResultsState {
   const factory SearchResultsState.loaded(List<Book> books) =
       SearchResultsLoaded;
 
-  /// The source could not be searched; [kind] is the message the UI shows (C-ERR-7).
+  /// The source could not be searched; [kind] is the message the UI shows.
   const factory SearchResultsState.failed(ParseFailureKind kind) =
       SearchResultsFailed;
 }
@@ -38,17 +37,7 @@ class SearchResultsNotifier extends _$SearchResultsNotifier {
 
   /// Searches [source] for [keyword] and publishes the outcome.
   ///
-  /// The use case answers with a [ParseResult] instead of throwing (C-ERR-1), so a
-  /// normal failure is a value that needs no catch. A collaborator that breaks that
-  /// contract with an [Exception] is still degraded to
-  /// [ParseFailureKind.parseFailed] — with a log line that carries the source, never
-  /// the keyword (C-ERR-8) — because the alternative, a state stuck in
-  /// [SearchResultsSearching], is a hung screen with no way out.
-  ///
-  /// An [Error] is **not** caught: `avoid_catching_errors` is error-level (C-ERR-2)
-  /// because it means a programming mistake that has to be fixed rather than handled
-  /// here. That case leaves the state loading while the error surfaces in the logs,
-  /// which is the signal to fix it.
+  /// Unexpected exceptions become a failed state instead of a stuck loading state.
   Future<void> search(BookSource source, String keyword) async {
     state = const SearchResultsState.searching();
 

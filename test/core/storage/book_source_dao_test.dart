@@ -500,5 +500,16 @@ void main() {
 
       expect(await database.select(database.sourceChecks).get(), isEmpty);
     });
+
+    test('writeLoginInfo_givenJson_storesItAndNullClearsIt', () async {
+      // M22-a 第二批（ADR-0072 §决策 3）：登录信息是「按源的用户态」，只有登录页写它。
+      final int id = await insert();
+
+      await dao.writeLoginInfo(id: id, loginInfo: '{"账号":"n"}');
+      expect((await dao.findById(id))?.loginInfo, '{"账号":"n"}');
+
+      await dao.writeLoginInfo(id: id, loginInfo: null);
+      expect((await dao.findById(id))?.loginInfo, isNull);
+    });
   });
 }

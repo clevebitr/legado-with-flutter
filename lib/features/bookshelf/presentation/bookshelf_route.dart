@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/router/app_router.dart';
+import 'package:flutter_reader/features/bookshelf/presentation/pages/bookshelf_page.dart';
+import 'package:flutter_reader/features/bookshelf/presentation/pages/shelf_groups_page.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'bookshelf_route.freezed.dart';
@@ -15,14 +17,27 @@ sealed class BookshelfRoute with _$BookshelfRoute {
   /// The route that shows the shelf.
   const factory BookshelfRoute.shelf() = ShelfRoute;
 
+  /// The route that shows the group management page (M19).
+  const factory BookshelfRoute.groups() = ShelfGroupsRoute;
+
   /// The path this route is served under.
   String get path => switch (this) {
     ShelfRoute() => _shelfPath,
+    ShelfGroupsRoute() => _groupsPath,
   };
 }
 
 /// Path of [ShelfRoute].
 const String _shelfPath = '/shelf';
+
+/// Path of [ShelfGroupsRoute].
+const String _groupsPath = '/shelf/groups';
+
+/// The page for a shelf route (the composition root's page table calls this).
+Widget bookshelfPageFor(BookshelfRoute route) => switch (route) {
+  ShelfRoute() => const BookshelfPage(),
+  ShelfGroupsRoute() => const ShelfGroupsPage(),
+};
 
 /// Pushes [route] through the app's route table (ADR-0011 §4).
 void pushBookshelfRoute(BuildContext context, BookshelfRoute route) =>

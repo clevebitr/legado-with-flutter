@@ -1,6 +1,8 @@
 import 'package:flutter_reader/core/storage/bookshelf_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
+import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_candidate.dart';
+import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_group.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_status.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
 import 'package:flutter_reader/features/bookshelf/domain/repositories/bookshelf_repository.dart';
@@ -12,9 +14,10 @@ import 'package:flutter_reader/features/bookshelf/domain/repositories/bookshelf_
 /// else — the row shape, the ordering, the transaction around delete — stays in the DAO.
 final class BookshelfRepositoryImpl implements BookshelfRepository {
   /// Creates the repository.
-  const BookshelfRepositoryImpl({required this._dao});
+  const BookshelfRepositoryImpl({required this._dao, required this._groups});
 
   final BookshelfDao _dao;
+  final ShelfGroupDao _groups;
 
   @override
   Future<List<ShelvedBook>> getAll() async {
@@ -111,6 +114,108 @@ final class BookshelfRepositoryImpl implements BookshelfRepository {
   }
 
   @override
+  Future<void> removeMany(List<int> ids) async {
+    await _dao.deleteByIds(ids);
+  }
+
+  @override
+  Future<List<ShelfGroup>> getGroups() async =>
+      (await _groups.findAll()).map(_toGroup).toList();
+
+  @override
+  Future<ShelfGroup?> createGroup(String name) async {
+    final String trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    // 先问名字是否被占用，再插：唯一键保证并发下也不会出现两个同名分组，但那条异常会给用户看
+    // 一条「写入失败」，而这里想回答的是「这个名字已经有了」。
+    if (await _groups.findByName(trimmed) != null) {
+      return null;
+    }
+    final List<BookGroupRow> existing = await _groups.findAll();
+    final int id = await _groups.insertNew(
+      name: trimmed,
+      sortOrder: existing.length,
+    );
+
+    return ShelfGroup(id: id, name: trimmed, sortOrder: existing.length);
+  }
+
+  @override
+  Future<bool> renameGroup({required int id, required String name}) async {
+    final String trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    final BookGroupRow? other = await _groups.findByName(trimmed);
+    if (other != null && other.id != id) {
+      return false;
+    }
+    await _groups.rename(id: id, name: trimmed);
+
+    return true;
+  }
+
+  @override
+  Future<void> deleteGroup(int id) async {
+    await _groups.deleteById(id);
+  }
+
+  @override
+  Future<void> reorderGroups(List<int> ids) async {
+    await _groups.reorder(ids);
+  }
+
+  @override
+  Future<void> setGroupFor({
+    required List<int> ids,
+    required int? groupId,
+  }) async {
+    await _groups.setGroupFor(ids, groupId);
+  }
+
+  @override
+  Future<void> setPinnedFor({
+    required List<int> ids,
+    required bool isPinned,
+  }) async {
+    await _groups.setPinnedFor(ids, isPinned);
+  }
+
+  @override
+  Future<void> setStatusFor({
+    required List<int> ids,
+    required ShelfStatus status,
+  }) async {
+    await _groups.setStatusFor(ids, status.storageValue);
+  }
+
+  @override
+  Future<void> saveCustomCover({required int id, required String? path}) async {
+    await _dao.setCustomCover(id: id, path: path);
+  }
+
+  @override
+  Future<ShelvedBook?> findByUrl({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async {
+    final BookRow? row = await _dao.findIdentity(
+      sourceUrl: sourceUrl,
+      bookUrl: bookUrl,
+    );
+
+    return row == null
+        ? null
+        : _toShelvedBook(BookshelfRow(book: row, progress: null));
+  }
+
+  /// Maps one group row to the shelf's value object.
+  ShelfGroup _toGroup(BookGroupRow row) =>
+      ShelfGroup(id: row.id, name: row.name, sortOrder: row.sortOrder);
+
+  @override
   Future<ReadingProgressPosition?> findProgress({
     required String sourceUrl,
     required String bookUrl,
@@ -152,6 +257,8 @@ final class BookshelfRepositoryImpl implements BookshelfRepository {
     lastChapter: row.book.lastChapter,
     status: ShelfStatus.fromStorage(row.book.status),
     isPinned: row.book.isPinned,
+    groupId: row.book.groupId,
+    customCoverPath: row.book.customCoverPath,
     addedAt: row.book.addedAt,
     progress: _toProgress(row.progress),
   );

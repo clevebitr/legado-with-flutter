@@ -37,8 +37,31 @@ final class FakeAppNavigation implements AppNavigation {
   /// How many times the book-source management page was opened.
   int bookSourcesCalls = 0;
 
+  /// How many times the backup page was opened.
+  int backupCalls = 0;
+
   /// How many times the about page was opened.
   int aboutCalls = 0;
+
+  /// How many times the bookmark list was opened.
+  int bookmarksCalls = 0;
+
+  /// How many times the reading records were opened.
+  int readingRecordsCalls = 0;
+
+  /// How many times the per-source cache page was opened.
+  int cacheCalls = 0;
+
+  /// How many times the cookie jar was opened.
+  int cookieCalls = 0;
+
+  /// How many times each rule list was opened, keyed by the stored `kind` value.
+  final Map<String, int> ruleCalls = <String, int>{};
+
+  /// Every `openBookReadingRecords` call's arguments, in the order the port takes them.
+  final List<({String sourceUrl, String bookUrl, String bookName})>
+  bookReadingRecordsCalls =
+      <({String sourceUrl, String bookUrl, String bookName})>[];
 
   @override
   void openBookshelf(BuildContext context) => shelfCalls++;
@@ -51,6 +74,48 @@ final class FakeAppNavigation implements AppNavigation {
 
   @override
   void openAbout(BuildContext context) => aboutCalls++;
+
+  @override
+  void openBookmarks(BuildContext context) => bookmarksCalls++;
+
+  @override
+  void openReadingRecords(BuildContext context) => readingRecordsCalls++;
+
+  @override
+  void openCacheManage(BuildContext context) => cacheCalls++;
+
+  @override
+  void openBackup(BuildContext context) => backupCalls += 1;
+
+  @override
+  void openCookies(BuildContext context) => cookieCalls++;
+
+  @override
+  void openReplaceRules(BuildContext context) => _countRule('replace');
+
+  @override
+  void openTocRules(BuildContext context) => _countRule('toc');
+
+  @override
+  void openDictRules(BuildContext context) => _countRule('dict');
+
+  @override
+  void openHighlightRules(BuildContext context) => _countRule('highlight');
+
+  void _countRule(String kind) =>
+      ruleCalls.update(kind, (int count) => count + 1, ifAbsent: () => 1);
+
+  @override
+  void openBookReadingRecords(
+    BuildContext context, {
+    required String sourceUrl,
+    required String bookUrl,
+    required String bookName,
+  }) => bookReadingRecordsCalls.add((
+    sourceUrl: sourceUrl,
+    bookUrl: bookUrl,
+    bookName: bookName,
+  ));
 
   @override
   void openReader(

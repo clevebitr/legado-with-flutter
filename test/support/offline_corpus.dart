@@ -8,10 +8,14 @@ import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
+import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
-import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
-import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
+import 'package:flutter_reader/core/platform/background_image_picker.dart';
+import 'package:flutter_reader/core/platform/json_file_picker.dart';
+import 'package:flutter_reader/core/platform/json_file_saver.dart';
+import 'package:flutter_reader/core/platform/source_verification.dart';
+import 'package:flutter_reader/core/storage/local_image_store.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
@@ -30,6 +34,7 @@ import 'fake_app_navigation.dart';
 import 'fake_book_source_repository.dart';
 import 'fake_book_source_view_store.dart';
 import 'fake_bookshelf_repository.dart';
+import 'fake_bookshelf_writer.dart';
 import 'fake_content_cache.dart';
 import 'fake_http_client.dart';
 import 'fake_log_printer.dart';
@@ -133,6 +138,8 @@ Future<ProviderContainer?> pumpBookSourcePage(
   required FakeHttpClient http,
   FakeAppNavigation? navigation,
   FakeBookSourceRepository? repository,
+  FakeBookshelfWriter? writer,
+  FakeContentCache? contentCache,
 }) async {
   _fixViewSize(tester);
 
@@ -155,7 +162,10 @@ Future<ProviderContainer?> pumpBookSourcePage(
         appNavigationProvider.overrideWithValue(navigation),
       // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
       // （端口是 total，替身与适配器对页面是同一件事）。
-      contentCacheProvider.overrideWithValue(FakeContentCache()),
+      contentCacheProvider.overrideWithValue(
+        contentCache ?? FakeContentCache(),
+      ),
+      if (writer != null) bookshelfWriterProvider.overrideWithValue(writer),
       appLoggerProvider.overrideWithValue(_logger()),
     ],
   );
@@ -189,10 +199,11 @@ Future<void> pumpSourceManagementPage(
   required Widget page,
   required FakeBookSourceRepository repository,
   FakeHttpClient? http,
-  BookSourceFilePicker? picker,
+  JsonFilePicker? picker,
   FakeBookSourceViewStore? viewStore,
-  BookSourceFileSaver? saver,
+  JsonFileSaver? saver,
   Clock? clock,
+  SourceVerification? verification,
   void Function(Object? arguments)? onPush,
 }) async {
   _fixViewSize(tester);
@@ -204,12 +215,12 @@ Future<void> pumpSourceManagementPage(
         httpClientProvider.overrideWithValue(http ?? FakeHttpClient()),
         appLoggerProvider.overrideWithValue(_logger()),
         // 文件选择器的默认实现要走平台通道；测试永远覆盖端口（testing.md §4）。
-        bookSourceFilePickerProvider.overrideWithValue(
-          picker ?? const UnsupportedBookSourceFilePicker(),
+        jsonFilePickerProvider.overrideWithValue(
+          picker ?? const UnsupportedJsonFilePicker(),
         ),
         // 单条导出同理：保存对话框是平台通道，测试覆盖端口。
-        bookSourceFileSaverProvider.overrideWithValue(
-          saver ?? const UnsupportedBookSourceFileSaver(),
+        jsonFileSaverProvider.overrideWithValue(
+          saver ?? const UnsupportedJsonFileSaver(),
         ),
         // 5.5 起列表页还读「排序 + 分组筛选」这条视图偏好；宿主 VM 里没有平台存储，
         // 所以端口给内存替身（testing.md §4）。
@@ -218,6 +229,9 @@ Future<void> pumpSourceManagementPage(
         ),
         // 列表里的「上次校验 2 分钟前」由注入时钟换算（testing.md §4）。
         if (clock != null) clockProvider.overrideWithValue(clock),
+        // 可见 WebView 验证页是平台通道：需要断言「打开了哪个地址」的测试覆盖端口。
+        if (verification != null)
+          sourceVerificationProvider.overrideWithValue(verification),
       ],
       child: MaterialApp(
         locale: const Locale('en'),
@@ -361,6 +375,8 @@ Future<void> pumpSettingsPage(
   required Widget page,
   required FakeSettingsRepository repository,
   required FakeCachePurger purger,
+  BackgroundImagePicker? imagePicker,
+  LocalImageStore? imageStore,
 }) async {
   _fixViewSize(tester);
 
@@ -370,6 +386,10 @@ Future<void> pumpSettingsPage(
         settingsRepositoryProvider.overrideWith((Ref ref) async => repository),
         cachePurgerProvider.overrideWithValue(purger),
         appLoggerProvider.overrideWithValue(_logger()),
+        if (imagePicker != null)
+          backgroundImagePickerProvider.overrideWithValue(imagePicker),
+        if (imageStore != null)
+          localImageStoreProvider.overrideWithValue(imageStore),
       ],
       child: MaterialApp(
         locale: const Locale('en'),

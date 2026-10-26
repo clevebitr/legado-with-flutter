@@ -1,73 +1,144 @@
 import 'package:flutter_reader/core/di/logger_provider.dart';
-import 'package:flutter_reader/core/platform/book_source_file_picker.dart';
-import 'package:flutter_reader/core/platform/book_source_file_saver.dart';
+import 'package:flutter_reader/core/platform/background_image_picker.dart';
+import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
+import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
+import 'package:flutter_reader/core/platform/backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
-import 'package:flutter_reader/core/platform/file_selector_book_source_file_picker.dart';
-import 'package:flutter_reader/core/platform/file_selector_book_source_file_saver.dart';
+import 'package:flutter_reader/core/platform/file_selector_background_image_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
+import 'package:flutter_reader/core/platform/file_selector_backup_directory_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
+import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/flutter_secure_storage_secret_store.dart';
+import 'package:flutter_reader/core/platform/json_file_picker.dart';
+import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
+import 'package:flutter_reader/core/platform/secret_store.dart';
+import 'package:flutter_reader/core/platform/source_verification.dart';
+import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'platform_provider.g.dart';
 
-/// Provides the platform facts every other layer is allowed to branch on
-/// (C-PLT-1).
+/// Provides the platform facts other layers branch on.
 ///
 /// Tests override it with a fake to simulate Android or a desktop host.
 @Riverpod(keepAlive: true)
 PlatformInfo platformInfo(Ref ref) => const SystemPlatformInfo();
 
-/// Provides the platform dynamic color source, or `null` when the platform has
-/// none (`docs/dev/platform.md` §3).
+/// Provides the platform dynamic color source, or `null` when it has none.
 ///
-/// Named `platformDynamicColor` on purpose: the generated provider class is
-/// `<function>Provider`, so a function named `dynamicColor` would declare
-/// `DynamicColorProvider` and collide with the platform interface of the same
-/// name.
-///
-/// Consumers must handle `null` by falling back to the seed color; tests pin the
-/// fallback with `platformDynamicColorProvider.overrideWithValue(null)`
-/// (`docs/dev/testing.md` §5).
+/// The name avoids a generated-class collision with [DynamicColorProvider].
 @Riverpod(keepAlive: true)
 DynamicColorProvider? platformDynamicColor(Ref ref) =>
     resolveDynamicColorProvider(ref.watch(platformInfoProvider));
 
-/// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
+/// Provides the platform file picker for book-source imports.
 ///
-/// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
-/// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
-/// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
-/// plugin (`docs/dev/testing.md` §4).
+/// Unsupported platforms get a no-op picker instead of an exception.
 @Riverpod(keepAlive: true)
-BookSourceFilePicker bookSourceFilePicker(Ref ref) {
+JsonFilePicker jsonFilePicker(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 
   return platform.isMobile || platform.isDesktop
-      ? const FileSelectorBookSourceFilePicker()
-      : const UnsupportedBookSourceFilePicker();
+      ? const FileSelectorJsonFilePicker()
+      : const UnsupportedJsonFilePicker();
 }
 
-/// Provides the platform save dialog used by a single-source export
-/// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+/// Provides the platform save dialog for single-source export.
 ///
-/// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
-/// else gets “not saved”, and a test overrides the port rather than the plugin.
+/// Unsupported platforms report `not saved` instead of throwing.
 @Riverpod(keepAlive: true)
-BookSourceFileSaver bookSourceFileSaver(Ref ref) {
+JsonFileSaver jsonFileSaver(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 
   return platform.isMobile || platform.isDesktop
-      ? const FileSelectorBookSourceFileSaver()
-      : const UnsupportedBookSourceFileSaver();
+      ? const FileSelectorJsonFileSaver()
+      : const UnsupportedJsonFileSaver();
 }
 
-/// Provides the long-task marker a batch check holds while it runs
-/// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///
-/// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
-/// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+/// Unsupported platforms report `not saved` instead of throwing.
+@Riverpod(keepAlive: true)
+BackupArchiveSaver backupArchiveSaver(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBackupArchiveSaver()
+      : const UnsupportedBackupArchiveSaver();
+}
+
+/// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms answer “nothing picked” instead of throwing.
+@Riverpod(keepAlive: true)
+BackupArchivePicker backupArchivePicker(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBackupArchivePicker()
+      : const UnsupportedBackupArchivePicker();
+}
+
+/// Provides the platform key store for the backup and WebDAV passwords
+/// (`docs/dev/roadmap.md` M22, ADR-0074 §决策 5).
+///
+/// Only Android / iOS / Windows ship a key store here; the other platforms answer “not stored” and
+/// the backup page says the archive stays unencrypted rather than pretending otherwise.
+@Riverpod(keepAlive: true)
+SecretStore secretStore(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? FlutterSecureStorageSecretStore(logger: ref.watch(appLoggerProvider))
+      : UnsupportedSecretStore(logger: ref.watch(appLoggerProvider));
+}
+
+/// Provides the folder dialog the backup location is chosen with (ADR-0074 §决策 1).
+@Riverpod(keepAlive: true)
+BackupDirectoryPicker backupDirectoryPicker(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBackupDirectoryPicker()
+      : const UnsupportedBackupDirectoryPicker();
+}
+
+/// Provides the image dialog the theme background is chosen with (`ADR-0075` §决策 1).
+@Riverpod(keepAlive: true)
+BackgroundImagePicker backgroundImagePicker(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile || platform.isDesktop
+      ? const FileSelectorBackgroundImagePicker()
+      : const UnsupportedBackgroundImagePicker();
+}
+
+/// Provides the long-task marker a batch check holds while it runs.
+///
+/// Only Android has a real one; other platforms get a no-op.
 @Riverpod(keepAlive: true)
 LongRunningTask longRunningTask(Ref ref) =>
     ref.watch(platformInfoProvider).isAndroid
     ? MethodChannelLongRunningTask(logger: ref.watch(appLoggerProvider))
     : const UnsupportedLongRunningTask();
+
+/// Provides visible-WebView verification, unbound by default.
+///
+/// An unbound port answers `isSupported == false`, which surfaces as
+/// `unsupportedRule`.
+@Riverpod(keepAlive: true)
+SourceVerification sourceVerification(Ref ref) =>
+    UnboundSourceVerification(logger: ref.watch(appLoggerProvider));
+
+/// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
+///
+/// It lives in `core/di/` because two features use it (the source engine's page fetch and the JS
+/// sandbox) and `core/` may not import `features/` (C-ARCH-2). The real implementation is bound by
+/// the composition root; the default answers `unsupportedRule`, which makes a forgotten binding a
+/// readable failure instead of a rule that silently sees an unrendered page.
+@Riverpod(keepAlive: true)
+WebPageFetcher webPageFetcher(Ref ref) => const UnsupportedWebPageFetcher();

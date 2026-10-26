@@ -219,7 +219,7 @@ void main() {
       final CookieManager cookies = InMemoryCookieManager();
 
       cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
-        'session=abc; HttpOnly; SameSite=Lax; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Path=/',
+        'session=abc; HttpOnly; SameSite=Lax; Expires=Wed, 21 Oct 2036 07:28:00 GMT; Path=/',
       ]);
 
       expect(
@@ -227,5 +227,22 @@ void main() {
         'session=abc',
       );
     });
+
+    test(
+      'storeFromResponse_whenExpiresIsUnparsable_keepsItAsASessionCookie',
+      () {
+        // 解析不了的 Expires 当作「没有过期信息」：不丢 cookie，也不给出错误的过期时间。
+        final CookieManager cookies = InMemoryCookieManager();
+
+        cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+          'session=abc; Expires=not-a-date',
+        ]);
+
+        expect(
+          cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+          'session=abc',
+        );
+      },
+    );
   });
 }

@@ -281,6 +281,10 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
   Widget _pageTile(BuildContext context, int index, ReadingPage page) {
     final M3ETheme tokens = context.m3e;
 
+    // `SINGLE` 是「一张图占一屏」：按视口高度约束、在框内等比缩放；其余（含未实现的对齐分支）
+    // 仍是整宽顺排（ADR-0069 G5）。
+    final bool single = page.style == MangaImageStyle.single;
+
     return Padding(
       padding: EdgeInsets.symmetric(vertical: tokens.spacing.xs),
       child: _ZoomableImage(
@@ -289,7 +293,8 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
           key: ValueKey<String>('${page.url}#${_retries[index] ?? 0}'),
           image: _imageOf(page),
           width: double.infinity,
-          fit: BoxFit.fitWidth,
+          height: single ? MediaQuery.sizeOf(context).height : null,
+          fit: single ? BoxFit.contain : BoxFit.fitWidth,
           frameBuilder:
               (
                 BuildContext context,

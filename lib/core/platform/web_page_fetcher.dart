@@ -1,60 +1,50 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 
-/// One page loaded by a real WebView (`docs/dev/book-source.md` §4.3, ADR-0061).
-///
-/// [url] is the final URL after redirects and [body] is the rendered `outerHTML`. A rule that
-/// asked for `,{webView:…}` expects the DOM **after** the page's own scripts ran, which a plain
-/// HTTP client cannot produce.
+/// A page rendered by a real WebView: the final [url] and its `outerHTML` [body].
 final class FetchedWebPage {
   /// Creates a fetched page.
   const FetchedWebPage({required this.url, required this.body});
 
-  /// The final URL (after redirects).
+  /// The final URL, after redirects.
   final String url;
 
   /// The rendered HTML.
   final String body;
 }
 
-/// The verb a WebView request uses (`book-source.md` §4.3, ADR-0062).
-///
-/// It mirrors the URL rule's own `method`, but the port lives in `core/` and the rule dialect in
-/// `features/`, so the split is repeated here instead of importing upwards.
+/// The HTTP verb a WebView request uses.
 enum WebPageRequestMethod {
   /// A plain page load.
   get,
 
-  /// A load whose payload is the rule's rendered `body`.
+  /// A load whose payload is the rule's rendered body.
   post,
 }
 
-/// Loads a page in the platform's WebView for sources that declare `,{webView:…}`
-/// (`book-source.md` §4.3, ADR-0061).
-///
-/// The engine lives in `domain/` and a WebView needs the UI isolate, so the capability crosses
-/// this port: the use case calls it, the composition root binds the platform implementation, and
-/// a platform without a WebView answers [isSupported] `false` so the caller falls back to the
-/// plain HTTP request.
+/// Loads a page in the platform's WebView for sources that ask for `,{webView:…}`.
 abstract interface class WebPageFetcher {
   /// Whether this platform can render a page in a WebView.
   bool get isSupported;
 
-  /// Loads [url] and returns the rendered HTML.
+  /// Loads [url] and returns the rendered page.
   ///
-  /// [headers] are the source's own request headers; [rulePath] keeps a failure locatable
-  /// (C-SRC-8).
+  /// [body] is the rule's rendered payload and is ignored for [WebPageRequestMethod.get].
+  /// [javaScript] is `webJs` / `java.webView(url, js)`: a script evaluated **inside** the rendered
+  /// page whose string result becomes the body (ADR-0068 §决策 6). `null` returns the DOM.
   ///
-  /// [method] and [body] carry the URL rule's verb and payload, so a source that spells
-  /// `…,{“method”:”POST”,“body”:”k={{key}}”,“webView”:true}` posts **inside** the rendered page
-  /// instead of falling back to a plain GET that its site answers with an empty list
-  /// (ADR-0062 §决策 1). [body] is already rendered and is ignored for
-  /// [WebPageRequestMethod.get].
+  /// [delayTime] makes the port wait longer than its settle window before reading the page
+  /// (`webViewDelayTime`), for sites that fill the page after the load event. [overrideUrlRegex]
+  /// stops the load at the first navigation whose URL matches and answers that page
+  /// (`overrideUrlRegex`), which is how a source that redirects to a result page is read.
   Future<ParseResult<FetchedWebPage>> fetch({
     required String url,
     Map<String, String>? headers,
     required String rulePath,
     WebPageRequestMethod method = WebPageRequestMethod.get,
     String? body,
+    String? javaScript,
+    Duration? delayTime,
+    String? overrideUrlRegex,
   });
 }
 
@@ -73,6 +63,9 @@ final class UnsupportedWebPageFetcher implements WebPageFetcher {
     required String rulePath,
     WebPageRequestMethod method = WebPageRequestMethod.get,
     String? body,
+    String? javaScript,
+    Duration? delayTime,
+    String? overrideUrlRegex,
   }) async => const ParseFailure<FetchedWebPage>(
     kind: ParseFailureKind.unsupportedRule,
     rulePath: 'webView',

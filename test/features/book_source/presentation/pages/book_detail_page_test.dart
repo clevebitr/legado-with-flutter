@@ -1,11 +1,15 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_detail_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_app_navigation.dart';
+import '../../../../support/fake_bookshelf_writer.dart';
+import '../../../../support/fake_content_cache.dart';
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/offline_corpus.dart';
 
@@ -174,6 +178,33 @@ void main() {
       expect(navigation.readerCalls.single.chapterUrl, isNull);
     });
 
+    testWidgets('build_givenTheReadingRecordsAction_asksTheNavigationPort', (
+      WidgetTester tester,
+    ) async {
+      // M19：详情页只给「这一本书的阅读记录」一个入口，页面归 reader（ADR-0066 §决策 5）。
+      final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
+      final FakeAppNavigation navigation = FakeAppNavigation();
+
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: http,
+        navigation: navigation,
+      );
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      await tester.tap(find.text(l10n.bookSourceReadingRecords));
+      await tester.pump();
+
+      expect(navigation.bookReadingRecordsCalls, hasLength(1));
+      expect(navigation.bookReadingRecordsCalls.single.bookUrl, isNotEmpty);
+      expect(navigation.readerCalls, isEmpty);
+    });
+
     testWidgets('build_givenAnIntro_collapsesAndExpandsIt', (
       WidgetTester tester,
     ) async {
@@ -247,6 +278,191 @@ void main() {
 
       expect(find.text(l10n.failureParseFailed), findsOneWidget);
       expect(find.text(l10n.actionRetry), findsOneWidget);
+    });
+
+    testWidgets('build_givenABookThatIsNotOnTheShelf_disablesGroupAndCover', (
+      WidgetTester tester,
+    ) async {
+      // 分组与封面是书架行的属性：不在书架上时按钮置灰，而不是偷偷把书加进去。
+      final FakeBookshelfWriter writer = FakeBookshelfWriter();
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: serveCorpusPages(FakeHttpClient()),
+        writer: writer,
+      );
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      final Finder group = find.widgetWithText(
+        OutlinedButton,
+        l10n.bookSourceShelfGroup,
+      );
+      final Finder cover = find.widgetWithText(
+        OutlinedButton,
+        l10n.bookSourceChangeCover,
+      );
+
+      expect(tester.widget<OutlinedButton>(group).onPressed, isNull);
+      expect(tester.widget<OutlinedButton>(cover).onPressed, isNull);
+    });
+
+    testWidgets('group_whenAGroupIsChosen_asksTheShelfPort', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookshelfWriter writer = FakeBookshelfWriter()
+        ..membershipValue = const ShelfMembership(
+          onShelf: true,
+          groups: <ShelfGroupOption>[ShelfGroupOption(id: 7, name: '仙侠')],
+        );
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: serveCorpusPages(FakeHttpClient()),
+        writer: writer,
+      );
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      await tester.tap(
+        find.widgetWithText(OutlinedButton, l10n.bookSourceShelfGroup),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('仙侠'));
+      await tester.pumpAndSettle();
+
+      expect(writer.assignedGroups, <int?>[7]);
+    });
+
+    testWidgets('group_whenUngroupedIsChosen_writesNull', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookshelfWriter writer = FakeBookshelfWriter()
+        ..membershipValue = const ShelfMembership(
+          onShelf: true,
+          groupId: 7,
+          groups: <ShelfGroupOption>[ShelfGroupOption(id: 7, name: '仙侠')],
+        );
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: serveCorpusPages(FakeHttpClient()),
+        writer: writer,
+      );
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      await tester.tap(
+        find.widgetWithText(OutlinedButton, l10n.bookSourceShelfGroup),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.shelfGroupUngrouped));
+      await tester.pumpAndSettle();
+
+      expect(writer.assignedGroups, <int?>[null]);
+    });
+
+    testWidgets('cover_whenTheButtonIsTapped_asksForAnImage', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookshelfWriter writer = FakeBookshelfWriter()
+        ..membershipValue = const ShelfMembership(onShelf: true);
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: serveCorpusPages(FakeHttpClient()),
+        writer: writer,
+      );
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      await tester.tap(
+        find.widgetWithText(OutlinedButton, l10n.bookSourceChangeCover),
+      );
+      await tester.pumpAndSettle();
+
+      expect(writer.chooseCoverCalls, 1);
+      expect(writer.resetCoverCalls, 0);
+    });
+
+    testWidgets('cover_whenOneIsAlreadySet_offersTheReset', (
+      WidgetTester tester,
+    ) async {
+      final FakeBookshelfWriter writer = FakeBookshelfWriter()
+        ..membershipValue = const ShelfMembership(
+          onShelf: true,
+          customCoverPath: '/covers/abc.jpg',
+        );
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: serveCorpusPages(FakeHttpClient()),
+        writer: writer,
+      );
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      final Finder reset = find.widgetWithText(
+        OutlinedButton,
+        l10n.bookSourceResetCover,
+      );
+      expect(reset, findsOneWidget);
+
+      await tester.tap(reset);
+      await tester.pumpAndSettle();
+
+      expect(writer.resetCoverCalls, 1);
+    });
+
+    testWidgets('cache_givenCachedChapters_clearsThemOnRequest', (
+      WidgetTester tester,
+    ) async {
+      final FakeContentCache cache = FakeContentCache()
+        ..entries['https://source.test|https://source.test/1.html'] = '正文'
+        ..entries['https://source.test|https://source.test/2.html'] = '正文';
+      await pumpBookSourcePage(
+        tester,
+        page: const BookDetailPage(book: _book),
+        source: loadCorpusBookSource(),
+        http: serveCorpusPages(FakeHttpClient()),
+        contentCache: cache,
+      );
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(BookDetailPage),
+      );
+
+      // 按钮文案里带着数量：缓存 2 条 → 打开弹窗后显示 2 章。
+      await tester.tap(
+        find.widgetWithText(
+          OutlinedButton,
+          '${l10n.bookSourceBookCache} · '
+          '${l10n.bookSourceBookCacheCount(2)}',
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.bookSourceBookCacheCount(2)), findsWidgets);
+
+      await tester.tap(find.text(l10n.bookSourceBookCacheClear));
+      await tester.pumpAndSettle();
+
+      expect(cache.scopeCalls.last, startsWith('clear|'));
+      expect(find.text(l10n.bookSourceBookCacheCleared(2)), findsOneWidget);
     });
   });
 }

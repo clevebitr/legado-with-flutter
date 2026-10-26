@@ -4,6 +4,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
 import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
@@ -42,6 +43,7 @@ final class FetchBookInfo {
       headers: headers,
       sourceId: source.url,
       source: source.jsSourceInfo,
+      login: source.loginGuard,
     );
 
     return switch (fetched) {
@@ -64,6 +66,25 @@ final class FetchBookInfo {
           ),
         },
     };
+  }
+
+  /// [value] with a `,{…}` URL-option suffix removed, or `null` when it is absent.
+  ///
+  /// Same rule as the search list's cover (`BookListFields`): the corpus writes cover addresses as
+  /// URL rules, and the cover loader cannot carry their headers yet (ADR-0069 G4).
+  String? _coverOf(String? value, PageFetchService pages, String baseUrl) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    final String clean = stripUrlOptions(value);
+    if (clean != value) {
+      pages.warn(
+        'Cover URL options dropped (covers carry no request headers): '
+        'base=$baseUrl',
+      );
+    }
+
+    return clean;
   }
 
   /// Reads every `ruleBookInfo` field out of [scope].
@@ -139,7 +160,10 @@ final class FetchBookInfo {
         tocUrl: resolveUrlRule(toc == null || toc.isEmpty ? url : toc, url),
         author: author.dataOrNull,
         kind: kind.dataOrNull,
-        coverUrl: resolveAbsoluteUrlOrNull(coverUrl.dataOrNull, url),
+        coverUrl: resolveAbsoluteUrlOrNull(
+          _coverOf(coverUrl.dataOrNull, _pages, url),
+          url,
+        ),
         intro: intro.dataOrNull,
         lastChapter: lastChapter.dataOrNull,
         wordCount: wordCount.dataOrNull,

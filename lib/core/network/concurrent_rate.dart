@@ -1,10 +1,6 @@
-/// The rate gate one book source declares (`docs/dev/book-source.md` §8).
+/// A rate gate one book source declares.
 ///
-/// The pair is upstream's `accessLimit` / `interval`: at most [times] requests per
-/// [intervalMilliseconds] milliseconds (`ConcurrentRateLimiter.kt:17-46`, unit at `:86`).
-/// It is a **rate** bound, so it is dimensionally different from the same source's
-/// concurrency budget (`book-source.md` §8): both apply to a request, and ADR-0036 §决策 3
-/// fixes that they are never collapsed into one number.
+/// At most [times] requests per [intervalMilliseconds] milliseconds.
 final class ConcurrentRate {
   /// Creates a rate gate.
   const ConcurrentRate({
@@ -31,11 +27,9 @@ final class ConcurrentRate {
   String toString() => 'ConcurrentRate($times/$intervalMilliseconds)';
 }
 
-/// What one `concurrentRate` declaration asks for (`docs/dev/book-source.md` §8).
+/// What one `concurrentRate` declaration asks for.
 ///
-/// The three outcomes are kept apart on purpose, because ADR-0036 §决策 2 makes an illegal
-/// declaration **observable**: “no gate” and “this text is broken” must not look alike, or
-/// the second one silently keeps whatever the site had before.
+/// "No gate" and "broken declaration" are kept apart so an illegal text stays observable.
 final class ConcurrentRateDeclaration {
   const ConcurrentRateDeclaration._({this.rate, this.invalidReason});
 
@@ -63,26 +57,16 @@ final class ConcurrentRateDeclaration {
   bool get isInvalid => invalidReason != null;
 }
 
-/// Reads a `concurrentRate` declaration (`docs/dev/book-source.md` §8).
+/// Reads a `concurrentRate` declaration.
 ///
-/// | declaration | gate |
-/// |---|---|
-/// | absent, blank, `"0"` | none |
-/// | `n/m` | `n` requests per `m` milliseconds |
-/// | `x` | 1 request per `x` milliseconds |
-/// | anything else (`n <= 0`, `m <= 0`, `x <= 0`, non-integers) | invalid |
-///
-/// Both sides of `n/m` and the bare `x` are parsed as integers with their surrounding
-/// whitespace ignored, which is the one place this reader is more forgiving than upstream:
-/// `ConcurrentRateLimiter.kt:17-46` calls `toInt()` on the raw substring, so `"10 / 5"` throws
-/// there and falls back to a stale record. Here a declaration is either readable or reported.
+/// `n/m` means `n` requests per `m` ms, a bare `x` one per `x` ms; absent, blank or `"0"` means no gate, anything else is invalid.
 ConcurrentRateDeclaration parseConcurrentRate(String? declaration) {
   if (declaration == null || declaration.trim().isEmpty) {
     return const ConcurrentRateDeclaration.none();
   }
 
   final String text = declaration.trim();
-  // 上游把 `"0"` 当作「不限速」的另一种拼法（`ConcurrentRateLimiter.kt:52`）。
+  // "0" 沿用上游语义，表示不限速。
   if (text == '0') {
     return const ConcurrentRateDeclaration.none();
   }

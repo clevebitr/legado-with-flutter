@@ -57,6 +57,121 @@ void main() {
       expect(printer.events.single.message, contains('about'));
     });
 
+    test('openBookmarks_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openBookmarks(_FakeContext());
+
+      expect(printer.events.single.message, contains('bookmark'));
+    });
+
+    test('openReadingRecords_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openReadingRecords(_FakeContext());
+
+      expect(printer.events.single.message, contains('reading-record'));
+    });
+
+    test('openCacheManage_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openCacheManage(_FakeContext());
+
+      expect(printer.events.single.message, contains('cache'));
+    });
+
+    test('openCookies_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openCookies(_FakeContext());
+
+      expect(printer.events.single.message, contains('cookie'));
+    });
+
+    test('openBackup_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openBackup(_FakeContext());
+
+      expect(printer.events.single.message, contains('backup'));
+    });
+
+    test('openReplaceRules_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openReplaceRules(_FakeContext());
+
+      expect(printer.events.single.message, contains('replace-rule'));
+    });
+
+    test('openTocRules_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openTocRules(_FakeContext());
+
+      expect(printer.events.single.message, contains('toc-rule'));
+    });
+
+    test('openDictRules_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openDictRules(_FakeContext());
+
+      expect(printer.events.single.message, contains('dict-rule'));
+    });
+
+    test('openHighlightRules_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openHighlightRules(_FakeContext());
+
+      expect(printer.events.single.message, contains('highlight-rule'));
+    });
+
+    test('openBookReadingRecords_whenCalled_logsAndDoesNothing', () {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final UnboundAppNavigation navigation = UnboundAppNavigation(
+        warn: AppLogger(level: LogLevel.debug, printer: printer).warning,
+      );
+
+      navigation.openBookReadingRecords(
+        _FakeContext(),
+        sourceUrl: 'https://source.test',
+        bookUrl: 'https://source.test/book/1',
+        bookName: '剑来',
+      );
+
+      expect(printer.events.single.message, contains('book reading-record'));
+    });
+
     test('openReader_whenCalled_logsAndDoesNothing', () {
       // ADR-0042 §决策 2：打开阅读器也是这个端口，未绑定时同样只是一条 warning。
       final FakeLogPrinter printer = FakeLogPrinter();

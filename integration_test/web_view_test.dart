@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/platform/in_app_web_view_page_fetcher.dart';
+import 'package:flutter_reader/core/platform/in_app_webview_cookie_bridge.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -104,4 +106,84 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 2)),
   );
+
+  testWidgets('webViewCookieBridge_sharesCookiesWithTheWebView', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0068 §决策 4：用户在验证页里过完盾，Dart 侧的请求必须带着那套 cookie。这条探针在
+    // 真设备上验证两个方向：桥写进去的 cookie 页面读得到，页面写下的 cookie 桥读得到。
+    final HttpServer server = await HttpServer.bind(
+      InternetAddress.loopbackIPv4,
+      0,
+    );
+    server.listen((HttpRequest request) async {
+      request.response
+        ..headers.contentType = ContentType.html
+        // 页面把两个方向都写进 DOM：请求带的 cookie + 自己新种下的 cookie。
+        ..write(
+          '<html><body><div id="out">pending</div>'
+          '<script>'
+          'document.cookie = "frompage=2; path=/";'
+          'document.getElementById("out").textContent = '
+          '"sent=" + document.cookie;'
+          '</script></body></html>',
+        );
+      await request.response.close();
+    });
+
+    try {
+      final Uri target = Uri.parse('http://127.0.0.1:${server.port}/check');
+      const InAppWebViewCookieBridge bridge = InAppWebViewCookieBridge();
+      await bridge.write(
+        url: target,
+        cookies: <StoredCookie>[
+          const StoredCookie(
+            name: 'probe',
+            value: '1',
+            domain: '127.0.0.1',
+            path: '/',
+            isSecure: false,
+            isDeletion: false,
+          ),
+        ],
+      );
+
+      final ParseResult<FetchedWebPage> page =
+          await InAppWebViewPageFetcher(
+            logger: AppLogger(printer: SimplePrinter()),
+          ).fetch(
+            url: target.toString(),
+            rulePath: 'loginCheckJs',
+            // 页面加载完再给脚本一点时间：这一句是 iframe / 脚本时序的兜底。
+            delayTime: const Duration(milliseconds: 300),
+          );
+
+      expect(
+        page,
+        isA<ParseSuccess<FetchedWebPage>>(),
+        reason: 'the WebView must render the probe page',
+      );
+      final String body = (page as ParseSuccess<FetchedWebPage>).data.body;
+      expect(
+        body,
+        contains('probe=1'),
+        reason: 'the page must see the seeded cookie',
+      );
+
+      final List<StoredCookie> harvested = await bridge.read(target);
+
+      expect(
+        harvested.map((StoredCookie cookie) => cookie.name),
+        containsAll(<String>['probe', 'frompage']),
+      );
+      expect(
+        harvested
+            .firstWhere((StoredCookie cookie) => cookie.name == 'frompage')
+            .value,
+        '2',
+      );
+    } finally {
+      await server.close(force: true);
+    }
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

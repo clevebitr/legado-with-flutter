@@ -8,26 +8,23 @@ part of 'logger_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the application logger, the only log entry point (ADR-0006).
+/// Provides the application logger, the only log entry point.
 ///
-/// Tests inject a capturing printer with
-/// `appLoggerProvider.overrideWithValue(...)`.
+/// Tests override it with a capturing printer.
 
 @ProviderFor(appLogger)
 final appLoggerProvider = AppLoggerProvider._();
 
-/// Provides the application logger, the only log entry point (ADR-0006).
+/// Provides the application logger, the only log entry point.
 ///
-/// Tests inject a capturing printer with
-/// `appLoggerProvider.overrideWithValue(...)`.
+/// Tests override it with a capturing printer.
 
 final class AppLoggerProvider
     extends $FunctionalProvider<AppLogger, AppLogger, AppLogger>
     with $Provider<AppLogger> {
-  /// Provides the application logger, the only log entry point (ADR-0006).
+  /// Provides the application logger, the only log entry point.
   ///
-  /// Tests inject a capturing printer with
-  /// `appLoggerProvider.overrideWithValue(...)`.
+  /// Tests override it with a capturing printer.
   AppLoggerProvider._()
     : super(
         from: null,

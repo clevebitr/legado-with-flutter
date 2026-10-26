@@ -1,11 +1,7 @@
-/// The group tokens the batch check writes into a source's `bookSourceGroup`
-/// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 1).
+/// The group tokens the batch check writes into a source's `bookSourceGroup`.
 ///
-/// These strings are **data written into the book source**, not UI copy: a group is a user-visible
-/// tag the user may also assign by hand, and the values are upstream's own tokens
-/// (`BookSourceCheckRepository.kt:196-247`). They therefore live here instead of in ARB — ARB is
-/// for interface text (C-UI-5), and a localised group would stop matching what upstream and other
-/// clients write.
+/// They are data written into the source, not UI copy, so they never follow the interface
+/// language.
 library;
 
 /// The search stage produced no book.
@@ -42,10 +38,6 @@ const String jsInvalidGroup = 'js失效';
 const String siteInvalidGroup = '网站失效';
 
 /// Every group token the check owns, i.e. the ones a re-check clears first.
-///
-/// The three failure buckets ([checkTimeoutGroup], [jsInvalidGroup], [siteInvalidGroup]) are kept
-/// apart because they tell the user what to fix: a timeout is retried, a JS invalid source needs
-/// its script fixed, and a site invalid source is broken on the site's side.
 const Set<String> checkOwnedGroups = <String>{
   searchInvalidGroup,
   exploreInvalidGroup,
@@ -60,11 +52,7 @@ const Set<String> checkOwnedGroups = <String>{
   siteInvalidGroup,
 };
 
-/// Splits one `bookSourceGroup` value into its group names.
-///
-/// The separator set is upstream's (`AppPattern.kt:39`, `[,;，；]`), so a group written by upstream
-/// and one written here stay interchangeable; names are trimmed, empties dropped, and duplicates
-/// collapsed while keeping the first occurrence's order.
+/// Splits one `bookSourceGroup` value into trimmed, de-duplicated names.
 List<String> splitGroups(String? group) {
   if (group == null) {
     return <String>[];
@@ -81,21 +69,17 @@ List<String> splitGroups(String? group) {
   return names;
 }
 
-/// Joins [names] the way upstream does (`joinToString()`, i.e. a comma and a space).
+/// Joins [names] with a comma and a space.
 String joinGroups(Iterable<String> names) => names.join(', ');
 
 /// Whether [name] is a group the check should clear before it runs again.
 ///
-/// Upstream's rule is broader than [checkOwnedGroups]: any group containing `失效` and the literal
-/// `校验超时` are cleared (`BookSource.kt:243-249`). Keeping the broader rule means a group the user
-/// built by hand (`翻译失效`) survives, while anything a previous check wrote is replaced.
+/// Broader than [checkOwnedGroups]: any name containing `失效` is cleared, so a group the
+/// user built by hand as `翻译失效` does not survive either.
 bool isInvalidGroup(String name) =>
     name.contains('失效') || name == checkTimeoutGroup;
 
 /// Removes every invalid group from [group] and keeps the rest in order.
-///
-/// This is the "re-check starts from a clean slate" half of ADR-0043 §后果: without it a source
-/// that was fixed would collect groups forever and never look healthy again.
 String? withoutInvalidGroups(String? group) {
   final List<String> kept = splitGroups(group)
       .where((String name) => !isInvalidGroup(name))
@@ -126,15 +110,10 @@ String? withoutGroups(String? group, Iterable<String> names) {
   return kept.isEmpty ? null : joinGroups(kept);
 }
 
-/// Prefixes the error lines the check writes into `bookSourceComment`.
-///
-/// `// Error: ` is upstream's marker (`BookSource.kt:215-226`), and it is what makes the note
-/// removable: [withoutErrorComment] drops exactly these blocks and keeps the user's own comment.
+/// The marker every error note the check writes starts with.
 const String errorCommentMarker = '// Error: ';
 
 /// Prepends an error note to [comment], keeping whatever the user wrote after it.
-///
-/// The separator is a blank line, again upstream's shape: one note per run, the user's text below.
 String withErrorComment(String? comment, String message) {
   final String note = '$errorCommentMarker$message';
   final String? rest = withoutErrorComment(comment);
@@ -157,8 +136,8 @@ String? withoutErrorComment(String? comment) {
   return rest.isEmpty ? null : rest;
 }
 
-/// The group separators upstream splits on (`AppPattern.kt:39`).
+// 上游使用的分组分隔符。
 final RegExp _groupSeparator = RegExp('[,;，；]');
 
-/// The blank line upstream uses between comment blocks (`BookSource.kt:216`).
+// 上游用空行分隔注释块。
 final RegExp _commentSeparator = RegExp('\n\n');

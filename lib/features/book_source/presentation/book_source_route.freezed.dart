@@ -56,7 +56,7 @@ extension BookSourceRoutePatterns on BookSourceRoute {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( BookDetailRoute value)?  bookDetail,TResult Function( ExploreRoute value)?  explore,TResult Function( BookSourceListRoute value)?  importedSources,TResult Function( BookSourceImportRoute value)?  importSources,TResult Function( BookSourceCheckRoute value)?  checkSources,TResult Function( BookSourceDebugRoute value)?  debugSource,TResult Function( BookSourceEditRoute value)?  editSource,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( BookDetailRoute value)?  bookDetail,TResult Function( ExploreRoute value)?  explore,TResult Function( BookSourceListRoute value)?  importedSources,TResult Function( BookSourceImportRoute value)?  importSources,TResult Function( BookSourceCheckRoute value)?  checkSources,TResult Function( BookSourceDebugRoute value)?  debugSource,TResult Function( BookSourceEditRoute value)?  editSource,TResult Function( BookSourceCacheRoute value)?  cacheManage,TResult Function( BookSourceLoginRoute value)?  signIn,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
@@ -66,7 +66,9 @@ return importedSources(_that);case BookSourceImportRoute() when importSources !=
 return importSources(_that);case BookSourceCheckRoute() when checkSources != null:
 return checkSources(_that);case BookSourceDebugRoute() when debugSource != null:
 return debugSource(_that);case BookSourceEditRoute() when editSource != null:
-return editSource(_that);case _:
+return editSource(_that);case BookSourceCacheRoute() when cacheManage != null:
+return cacheManage(_that);case BookSourceLoginRoute() when signIn != null:
+return signIn(_that);case _:
   return orElse();
 
 }
@@ -84,7 +86,7 @@ return editSource(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( BookDetailRoute value)  bookDetail,required TResult Function( ExploreRoute value)  explore,required TResult Function( BookSourceListRoute value)  importedSources,required TResult Function( BookSourceImportRoute value)  importSources,required TResult Function( BookSourceCheckRoute value)  checkSources,required TResult Function( BookSourceDebugRoute value)  debugSource,required TResult Function( BookSourceEditRoute value)  editSource,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( BookDetailRoute value)  bookDetail,required TResult Function( ExploreRoute value)  explore,required TResult Function( BookSourceListRoute value)  importedSources,required TResult Function( BookSourceImportRoute value)  importSources,required TResult Function( BookSourceCheckRoute value)  checkSources,required TResult Function( BookSourceDebugRoute value)  debugSource,required TResult Function( BookSourceEditRoute value)  editSource,required TResult Function( BookSourceCacheRoute value)  cacheManage,required TResult Function( BookSourceLoginRoute value)  signIn,}){
 final _that = this;
 switch (_that) {
 case BookDetailRoute():
@@ -94,7 +96,9 @@ return importedSources(_that);case BookSourceImportRoute():
 return importSources(_that);case BookSourceCheckRoute():
 return checkSources(_that);case BookSourceDebugRoute():
 return debugSource(_that);case BookSourceEditRoute():
-return editSource(_that);}
+return editSource(_that);case BookSourceCacheRoute():
+return cacheManage(_that);case BookSourceLoginRoute():
+return signIn(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -108,7 +112,7 @@ return editSource(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( BookDetailRoute value)?  bookDetail,TResult? Function( ExploreRoute value)?  explore,TResult? Function( BookSourceListRoute value)?  importedSources,TResult? Function( BookSourceImportRoute value)?  importSources,TResult? Function( BookSourceCheckRoute value)?  checkSources,TResult? Function( BookSourceDebugRoute value)?  debugSource,TResult? Function( BookSourceEditRoute value)?  editSource,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( BookDetailRoute value)?  bookDetail,TResult? Function( ExploreRoute value)?  explore,TResult? Function( BookSourceListRoute value)?  importedSources,TResult? Function( BookSourceImportRoute value)?  importSources,TResult? Function( BookSourceCheckRoute value)?  checkSources,TResult? Function( BookSourceDebugRoute value)?  debugSource,TResult? Function( BookSourceEditRoute value)?  editSource,TResult? Function( BookSourceCacheRoute value)?  cacheManage,TResult? Function( BookSourceLoginRoute value)?  signIn,}){
 final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
@@ -118,7 +122,9 @@ return importedSources(_that);case BookSourceImportRoute() when importSources !=
 return importSources(_that);case BookSourceCheckRoute() when checkSources != null:
 return checkSources(_that);case BookSourceDebugRoute() when debugSource != null:
 return debugSource(_that);case BookSourceEditRoute() when editSource != null:
-return editSource(_that);case _:
+return editSource(_that);case BookSourceCacheRoute() when cacheManage != null:
+return cacheManage(_that);case BookSourceLoginRoute() when signIn != null:
+return signIn(_that);case _:
   return null;
 
 }
@@ -135,7 +141,7 @@ return editSource(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Book book)?  bookDetail,TResult Function()?  explore,TResult Function()?  importedSources,TResult Function()?  importSources,TResult Function( Set<int>? sourceIds,  String? group)?  checkSources,TResult Function( int? sourceId)?  debugSource,TResult Function( int sourceId)?  editSource,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Book book)?  bookDetail,TResult Function()?  explore,TResult Function()?  importedSources,TResult Function()?  importSources,TResult Function( Set<int>? sourceIds,  String? group)?  checkSources,TResult Function( int? sourceId)?  debugSource,TResult Function( int sourceId)?  editSource,TResult Function()?  cacheManage,TResult Function( int sourceId)?  signIn,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that.book);case ExploreRoute() when explore != null:
@@ -144,7 +150,9 @@ return importedSources();case BookSourceImportRoute() when importSources != null
 return importSources();case BookSourceCheckRoute() when checkSources != null:
 return checkSources(_that.sourceIds,_that.group);case BookSourceDebugRoute() when debugSource != null:
 return debugSource(_that.sourceId);case BookSourceEditRoute() when editSource != null:
-return editSource(_that.sourceId);case _:
+return editSource(_that.sourceId);case BookSourceCacheRoute() when cacheManage != null:
+return cacheManage();case BookSourceLoginRoute() when signIn != null:
+return signIn(_that.sourceId);case _:
   return orElse();
 
 }
@@ -162,7 +170,7 @@ return editSource(_that.sourceId);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Book book)  bookDetail,required TResult Function()  explore,required TResult Function()  importedSources,required TResult Function()  importSources,required TResult Function( Set<int>? sourceIds,  String? group)  checkSources,required TResult Function( int? sourceId)  debugSource,required TResult Function( int sourceId)  editSource,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Book book)  bookDetail,required TResult Function()  explore,required TResult Function()  importedSources,required TResult Function()  importSources,required TResult Function( Set<int>? sourceIds,  String? group)  checkSources,required TResult Function( int? sourceId)  debugSource,required TResult Function( int sourceId)  editSource,required TResult Function()  cacheManage,required TResult Function( int sourceId)  signIn,}) {final _that = this;
 switch (_that) {
 case BookDetailRoute():
 return bookDetail(_that.book);case ExploreRoute():
@@ -171,7 +179,9 @@ return importedSources();case BookSourceImportRoute():
 return importSources();case BookSourceCheckRoute():
 return checkSources(_that.sourceIds,_that.group);case BookSourceDebugRoute():
 return debugSource(_that.sourceId);case BookSourceEditRoute():
-return editSource(_that.sourceId);}
+return editSource(_that.sourceId);case BookSourceCacheRoute():
+return cacheManage();case BookSourceLoginRoute():
+return signIn(_that.sourceId);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -185,7 +195,7 @@ return editSource(_that.sourceId);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Book book)?  bookDetail,TResult? Function()?  explore,TResult? Function()?  importedSources,TResult? Function()?  importSources,TResult? Function( Set<int>? sourceIds,  String? group)?  checkSources,TResult? Function( int? sourceId)?  debugSource,TResult? Function( int sourceId)?  editSource,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Book book)?  bookDetail,TResult? Function()?  explore,TResult? Function()?  importedSources,TResult? Function()?  importSources,TResult? Function( Set<int>? sourceIds,  String? group)?  checkSources,TResult? Function( int? sourceId)?  debugSource,TResult? Function( int sourceId)?  editSource,TResult? Function()?  cacheManage,TResult? Function( int sourceId)?  signIn,}) {final _that = this;
 switch (_that) {
 case BookDetailRoute() when bookDetail != null:
 return bookDetail(_that.book);case ExploreRoute() when explore != null:
@@ -194,7 +204,9 @@ return importedSources();case BookSourceImportRoute() when importSources != null
 return importSources();case BookSourceCheckRoute() when checkSources != null:
 return checkSources(_that.sourceIds,_that.group);case BookSourceDebugRoute() when debugSource != null:
 return debugSource(_that.sourceId);case BookSourceEditRoute() when editSource != null:
-return editSource(_that.sourceId);case _:
+return editSource(_that.sourceId);case BookSourceCacheRoute() when cacheManage != null:
+return cacheManage();case BookSourceLoginRoute() when signIn != null:
+return signIn(_that.sourceId);case _:
   return null;
 
 }
@@ -581,6 +593,106 @@ class _$BookSourceEditRouteCopyWithImpl<$Res>
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') $Res call({Object? sourceId = null,}) {
   return _then(BookSourceEditRoute(
+sourceId: null == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class BookSourceCacheRoute extends BookSourceRoute {
+  const BookSourceCacheRoute(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceCacheRoute);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'BookSourceRoute.cacheManage()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class BookSourceLoginRoute extends BookSourceRoute {
+  const BookSourceLoginRoute({required this.sourceId}): super._();
+  
+
+ final  int sourceId;
+
+/// Create a copy of BookSourceRoute
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$BookSourceLoginRouteCopyWith<BookSourceLoginRoute> get copyWith => _$BookSourceLoginRouteCopyWithImpl<BookSourceLoginRoute>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is BookSourceLoginRoute&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,sourceId);
+}
+
+@override
+String toString() {
+    return 'BookSourceRoute.signIn(sourceId: $sourceId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $BookSourceLoginRouteCopyWith<$Res> implements $BookSourceRouteCopyWith<$Res> {
+  factory $BookSourceLoginRouteCopyWith(BookSourceLoginRoute value, $Res Function(BookSourceLoginRoute) _then) = _$BookSourceLoginRouteCopyWithImpl;
+@useResult
+$Res call({
+ int sourceId
+});
+
+
+
+
+}
+/// @nodoc
+class _$BookSourceLoginRouteCopyWithImpl<$Res>
+    implements $BookSourceLoginRouteCopyWith<$Res> {
+  _$BookSourceLoginRouteCopyWithImpl(this._self, this._then);
+
+  final BookSourceLoginRoute _self;
+  final $Res Function(BookSourceLoginRoute) _then;
+
+/// Create a copy of BookSourceRoute
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? sourceId = null,}) {
+  return _then(BookSourceLoginRoute(
 sourceId: null == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
 as int,
   ));

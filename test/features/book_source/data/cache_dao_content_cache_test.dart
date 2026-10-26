@@ -47,7 +47,12 @@ final class _FailingCacheDao extends CacheDao {
     required int page,
     required String payload,
     required Duration ttl,
+    String? scopeKey,
+    String? sourceKey,
   }) async => throw error;
+
+  @override
+  Future<int> deleteAll() async => throw error;
 }
 
 void main() {
@@ -125,6 +130,140 @@ void main() {
         failing.write(sourceId: sourceId, url: url, body: body),
         completes,
       );
+    });
+
+    test('write_givenABookUrl_recordsTheScopeOnTheEntry', () async {
+      await cache.write(
+        sourceId: sourceId,
+        url: url,
+        body: body,
+        bookUrl: 'https://example-novel.test/book/1',
+      );
+
+      expect(
+        await cache.countForBook(
+          sourceId: sourceId,
+          bookUrl: 'https://example-novel.test/book/1',
+        ),
+        1,
+      );
+      // 作用域不参与键计算：读仍是同一个入口。
+      expect(await cache.read(sourceId: sourceId, url: url), body);
+    });
+
+    test('countForBook_givenNoEntryForThatBook_answersZero', () async {
+      await cache.write(
+        sourceId: sourceId,
+        url: url,
+        body: body,
+        bookUrl: 'https://example-novel.test/book/1',
+      );
+
+      expect(
+        await cache.countForBook(
+          sourceId: sourceId,
+          bookUrl: 'https://example-novel.test/book/2',
+        ),
+        0,
+      );
+    });
+
+    test('clearForBook_givenTwoBooks_removesOnlyThatBook', () async {
+      await cache.write(
+        sourceId: sourceId,
+        url: url,
+        body: body,
+        bookUrl: 'https://example-novel.test/book/1',
+      );
+      await cache.write(
+        sourceId: sourceId,
+        url: 'https://example-novel.test/book/2/1.html',
+        body: body,
+        bookUrl: 'https://example-novel.test/book/2',
+      );
+
+      expect(
+        await cache.clearForBook(
+          sourceId: sourceId,
+          bookUrl: 'https://example-novel.test/book/1',
+        ),
+        1,
+      );
+      expect(await cache.read(sourceId: sourceId, url: url), isNull);
+      expect(
+        await cache.countForBook(
+          sourceId: sourceId,
+          bookUrl: 'https://example-novel.test/book/2',
+        ),
+        1,
+      );
+    });
+
+    test('countForSource_givenTwoSources_countsEach', () async {
+      await cache.write(sourceId: sourceId, url: url, body: body);
+      await cache.write(
+        sourceId: 'https://other.test',
+        url: 'https://other.test/1.html',
+        body: body,
+      );
+
+      expect(await cache.countForSource(sourceId), 1);
+      expect(await cache.countForSource('https://other.test'), 1);
+      expect(await cache.countForSource('https://none.test'), 0);
+      expect(await cache.countAll(), 2);
+    });
+
+    test('clearForSource_givenTwoSources_removesOnlyThatOne', () async {
+      await cache.write(sourceId: sourceId, url: url, body: body);
+      await cache.write(
+        sourceId: 'https://other.test',
+        url: 'https://other.test/1.html',
+        body: body,
+      );
+
+      expect(await cache.clearForSource(sourceId), 1);
+      expect(await cache.read(sourceId: sourceId, url: url), isNull);
+      expect(await cache.countAll(), 1);
+    });
+
+    test('clearExpired_givenAFreshEntry_keepsIt', () async {
+      await cache.write(sourceId: sourceId, url: url, body: body);
+
+      expect(await cache.clearExpired(), 0);
+      expect(await cache.read(sourceId: sourceId, url: url), body);
+    });
+
+    test('clearAll_givenStoredBodies_removesEveryEntry', () async {
+      // 净化规则一改，所有已缓存的「成品正文」都过期了（ADR-0070 增补 §7）。
+      await cache.write(sourceId: sourceId, url: url, body: body);
+      await cache.write(
+        sourceId: sourceId,
+        url: 'https://example-novel.test/book/2/1.html',
+        body: body,
+      );
+
+      await cache.clearAll();
+
+      expect(await cache.read(sourceId: sourceId, url: url), isNull);
+      expect(
+        await cache.read(
+          sourceId: sourceId,
+          url: 'https://example-novel.test/book/2/1.html',
+        ),
+        isNull,
+      );
+    });
+
+    test('clearAll_givenABrokenDatabase_completesAnyway', () async {
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final CacheDaoContentCache failing = CacheDaoContentCache(
+        _FailingCacheDao(database, error: Exception('database is gone')),
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      // 没删干净只会让旧正文多活一阵，不该把「改一条净化规则」变成一次失败（ADR-0033）。
+      await expectLater(failing.clearAll(), completes);
+      expect(printer.events, isNotEmpty);
     });
   });
 }

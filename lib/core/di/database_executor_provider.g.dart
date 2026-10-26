@@ -8,47 +8,26 @@ part of 'database_executor_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the executor of the on-disk database (ADR-0003).
+/// Provides the executor of the on-disk database.
 ///
-/// `drift_flutter` supplies the platform SQLite library and runs SQLite in a
-/// background isolate. That isolate cannot be reached from `flutter test`
-/// (`Channel was closed before receiving a response`), so this file is exempt
-/// from the coverage gate under ADR-0019's second category and must be verified
-/// by running the app or an integration test instead:
-///
-/// ```bash
-/// flutter run -d windows   # 首次启动即建库，日志无 DriftRemoteException 即通过
-/// ```
+/// SQLite runs in a background isolate that `flutter test` cannot reach, so this
+/// path is verified by running the app.
 
 @ProviderFor(databaseExecutor)
 final databaseExecutorProvider = DatabaseExecutorProvider._();
 
-/// Provides the executor of the on-disk database (ADR-0003).
+/// Provides the executor of the on-disk database.
 ///
-/// `drift_flutter` supplies the platform SQLite library and runs SQLite in a
-/// background isolate. That isolate cannot be reached from `flutter test`
-/// (`Channel was closed before receiving a response`), so this file is exempt
-/// from the coverage gate under ADR-0019's second category and must be verified
-/// by running the app or an integration test instead:
-///
-/// ```bash
-/// flutter run -d windows   # 首次启动即建库，日志无 DriftRemoteException 即通过
-/// ```
+/// SQLite runs in a background isolate that `flutter test` cannot reach, so this
+/// path is verified by running the app.
 
 final class DatabaseExecutorProvider
     extends $FunctionalProvider<QueryExecutor, QueryExecutor, QueryExecutor>
     with $Provider<QueryExecutor> {
-  /// Provides the executor of the on-disk database (ADR-0003).
+  /// Provides the executor of the on-disk database.
   ///
-  /// `drift_flutter` supplies the platform SQLite library and runs SQLite in a
-  /// background isolate. That isolate cannot be reached from `flutter test`
-  /// (`Channel was closed before receiving a response`), so this file is exempt
-  /// from the coverage gate under ADR-0019's second category and must be verified
-  /// by running the app or an integration test instead:
-  ///
-  /// ```bash
-  /// flutter run -d windows   # 首次启动即建库，日志无 DriftRemoteException 即通过
-  /// ```
+  /// SQLite runs in a background isolate that `flutter test` cannot reach, so this
+  /// path is verified by running the app.
   DatabaseExecutorProvider._()
     : super(
         from: null,

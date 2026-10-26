@@ -56,11 +56,12 @@ extension SettingsRoutePatterns on SettingsRoute {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( SettingsPageRoute value)?  settings,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( SettingsPageRoute value)?  settings,TResult Function( SettingsCookiesRoute value)?  cookies,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case SettingsPageRoute() when settings != null:
-return settings(_that);case _:
+return settings(_that);case SettingsCookiesRoute() when cookies != null:
+return cookies(_that);case _:
   return orElse();
 
 }
@@ -78,11 +79,12 @@ return settings(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( SettingsPageRoute value)  settings,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( SettingsPageRoute value)  settings,required TResult Function( SettingsCookiesRoute value)  cookies,}){
 final _that = this;
 switch (_that) {
 case SettingsPageRoute():
-return settings(_that);}
+return settings(_that);case SettingsCookiesRoute():
+return cookies(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -96,11 +98,12 @@ return settings(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( SettingsPageRoute value)?  settings,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( SettingsPageRoute value)?  settings,TResult? Function( SettingsCookiesRoute value)?  cookies,}){
 final _that = this;
 switch (_that) {
 case SettingsPageRoute() when settings != null:
-return settings(_that);case _:
+return settings(_that);case SettingsCookiesRoute() when cookies != null:
+return cookies(_that);case _:
   return null;
 
 }
@@ -117,10 +120,11 @@ return settings(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  settings,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  settings,TResult Function()?  cookies,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case SettingsPageRoute() when settings != null:
-return settings();case _:
+return settings();case SettingsCookiesRoute() when cookies != null:
+return cookies();case _:
   return orElse();
 
 }
@@ -138,10 +142,11 @@ return settings();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  settings,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  settings,required TResult Function()  cookies,}) {final _that = this;
 switch (_that) {
 case SettingsPageRoute():
-return settings();}
+return settings();case SettingsCookiesRoute():
+return cookies();}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -155,10 +160,11 @@ return settings();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  settings,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  settings,TResult? Function()?  cookies,}) {final _that = this;
 switch (_that) {
 case SettingsPageRoute() when settings != null:
-return settings();case _:
+return settings();case SettingsCookiesRoute() when cookies != null:
+return cookies();case _:
   return null;
 
 }
@@ -190,6 +196,38 @@ int get hashCode => runtimeType.hashCode;
 @override
 String toString() {
     return 'SettingsRoute.settings()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class SettingsCookiesRoute extends SettingsRoute {
+  const SettingsCookiesRoute(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is SettingsCookiesRoute);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'SettingsRoute.cookies()';
 }
 
 

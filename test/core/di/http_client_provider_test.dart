@@ -2,14 +2,16 @@ import 'package:drift/native.dart';
 import 'package:flutter_reader/core/di/database_executor_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
-import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
+import 'package:flutter_reader/core/network/persistent_cookie_manager.dart';
 import 'package:flutter_reader/core/network/request_limiter.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
+import 'package:flutter_reader/core/storage/cookie_dao_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -17,13 +19,30 @@ import '../../support/fake_log_printer.dart';
 
 void main() {
   group('cookieManager', () {
-    test('cookieManager_whenRead_returnsAnInMemoryStore', () {
-      final ProviderContainer container = ProviderContainer.test();
+    test('cookieManager_whenRead_returnsThePersistentJar', () {
+      // ADR-0068 §决策 4：cookie 必须跨启动保留，并和可见 WebView 共用同一套。
+      final ProviderContainer container = ProviderContainer.test(
+        overrides: <Override>[
+          databaseExecutorProvider.overrideWithValue(NativeDatabase.memory()),
+        ],
+      );
+      addTearDown(container.dispose);
 
       expect(
         container.read(cookieManagerProvider),
-        isA<InMemoryCookieManager>(),
+        isA<PersistentCookieManager>(),
       );
+    });
+
+    test('cookieStore_whenRead_isTheDaoAdapter', () {
+      final ProviderContainer container = ProviderContainer.test(
+        overrides: <Override>[
+          databaseExecutorProvider.overrideWithValue(NativeDatabase.memory()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(container.read(cookieStoreProvider), isA<CookieDaoStore>());
     });
   });
 
@@ -141,6 +160,15 @@ void main() {
         container.read(httpClientProvider),
         same(container.read(httpClientProvider)),
       );
+    });
+  });
+
+  group('sourceVerification', () {
+    test('whenNothingIsBound_answersTheUnboundPort', () {
+      // ADR-0068 §决策 3：绑定只发生在装配根；这里的默认值必须是「不可用」而不是挂起。
+      final ProviderContainer container = ProviderContainer.test();
+
+      expect(container.read(sourceVerificationProvider).isSupported, isFalse);
     });
   });
 }

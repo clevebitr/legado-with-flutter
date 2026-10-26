@@ -20,6 +20,31 @@ final class _RecordingWriter implements BookshelfWriter {
 
     return result;
   }
+
+  @override
+  Future<ShelfMembership> membership({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async => ShelfMembership.absent;
+
+  @override
+  Future<ParseResult<void>> assignGroup({
+    required String sourceUrl,
+    required String bookUrl,
+    required int? groupId,
+  }) async => const ParseSuccess<void>(null);
+
+  @override
+  Future<ParseResult<String?>> chooseCustomCover({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async => const ParseSuccess<String?>(null);
+
+  @override
+  Future<ParseResult<void>> resetCustomCover({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async => const ParseSuccess<void>(null);
 }
 
 void main() {

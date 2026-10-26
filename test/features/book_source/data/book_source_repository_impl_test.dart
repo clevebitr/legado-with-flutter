@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
@@ -441,6 +443,113 @@ void main() {
         contains('"bookSourceUrl":"https://a.test"'),
       );
       expect(await repository.payloadOf(999), isNull);
+    });
+
+    group('login info', () {
+      test('loginInfoOf_givenNoStoredValue_answersAnEmptyMap', () async {
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+
+        expect(await repository.loginInfoOf(id), isEmpty);
+        // 不存在的行也答空表，不抛：页面拿它就是「没登录过」。
+        expect(await repository.loginInfoOf(999), isEmpty);
+      });
+
+      test('saveLoginInfo_thenRead_roundTripsTheValues', () async {
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+
+        await repository.saveLoginInfo(id, <String, String>{
+          '账号': 'reader',
+          '密码': 'secret',
+        });
+
+        expect(await repository.loginInfoOf(id), <String, String>{
+          '账号': 'reader',
+          '密码': 'secret',
+        });
+      });
+
+      test('saveLoginInfo_givenAnEmptyMap_clearsTheColumn', () async {
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+        await repository.saveLoginInfo(id, <String, String>{'账号': 'reader'});
+
+        await repository.saveLoginInfo(id, <String, String>{});
+
+        expect(await repository.loginInfoOf(id), isEmpty);
+      });
+
+      test('loginInfoOf_givenABrokenColumn_answersAnEmptyMap', () async {
+        // 列里的内容读不懂就当「没登录过」，并记一条 warning——不是让页面崩掉的理由。
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+        await dao.writeLoginInfo(id: id, loginInfo: '{oops');
+
+        expect(await repository.loginInfoOf(id), isEmpty);
+        expect(printer.events, isNotEmpty);
+      });
+    });
+
+    group('exportPayloads', () {
+      test('exportPayloads_givenEverySource_answersThemAsStored', () async {
+        await repository.saveAll(<Map<String, Object?>>[
+          _entry(name: 'a', url: 'https://a.test'),
+          _entry(name: 'b', url: 'https://b.test'),
+        ]);
+
+        final List<String> payloads = await repository.exportPayloads();
+
+        expect(payloads, hasLength(2));
+        expect(payloads.first, contains('"bookSourceUrl":"https://a.test"'));
+      });
+
+      test('exportPayloads_givenIds_answersOnlyThose', () async {
+        await repository.saveAll(<Map<String, Object?>>[
+          _entry(name: 'a', url: 'https://a.test'),
+          _entry(name: 'b', url: 'https://b.test'),
+        ]);
+        final List<StoredBookSource> stored = await repository.getAll();
+
+        final List<String> payloads = await repository.exportPayloads(
+          ids: <int>{stored.first.id},
+        );
+
+        expect(payloads.single, contains('https://a.test'));
+        // 不存在的 id 不该变出一个空条目。
+        expect(await repository.exportPayloads(ids: <int>{999}), isEmpty);
+      });
+
+      test(
+        'exportPayloads_givenUserState_overwritesTheImportedValues',
+        () async {
+          // 文件里的 `enabled` / `customOrder` 是导入那一刻的快照；导出要带用户后来改的状态
+          // （ADR-0071 §决策 3）。
+          await repository.saveAll(<Map<String, Object?>>[
+            _entry(name: 'a', url: 'https://a.test', customOrder: 7),
+          ]);
+          final int id = (await repository.getAll()).single.id;
+          await repository.setEnabled(id: id, isEnabled: false);
+
+          final Map<String, Object?> exported = jsonDecode(
+            (await repository.exportPayloads()).single,
+          ) as Map<String, Object?>;
+
+          expect(exported['enabled'], isFalse);
+          expect(exported['customOrder'], 7);
+          // 其余键保持导入时的样子。
+          expect(exported['bookSourceName'], 'a');
+        },
+      );
+
+      test('exportPayloads_givenABrokenPayload_skipsItWithAWarning', () async {
+        await repository.saveAll(<Map<String, Object?>>[_entry()]);
+        final int id = (await repository.getAll()).single.id;
+        await dao.refreshPayload(id: id, payload: '{oops');
+
+        expect(await repository.exportPayloads(), isEmpty);
+        expect(printer.events, isNotEmpty);
+      });
     });
 
     test('setEnabledFor_givenASelection_flipsEveryRow', () async {

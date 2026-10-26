@@ -1,28 +1,30 @@
+import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/charset_cache.dart';
-import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_policy.dart';
+import 'package:flutter_reader/core/network/persistent_cookie_manager.dart';
 import 'package:flutter_reader/core/network/request_limiter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'http_client_provider.g.dart';
 
-/// Provides the cookie store shared by every request (C-NET-5).
+/// Provides the persistent cookie jar shared by every request.
 ///
-/// In-memory for now; persistence and expiry arrive with the storage phase
-/// (see the [CookieManager] contract).
+/// `main()` awaits [PersistentCookieManager.hydrate] before `runApp`.
 @Riverpod(keepAlive: true)
-CookieManager cookieManager(Ref ref) => InMemoryCookieManager();
+PersistentCookieManager cookieManager(Ref ref) => PersistentCookieManager(
+  store: ref.watch(cookieStoreProvider),
+  clock: ref.watch(clockProvider),
+  logger: ref.watch(appLoggerProvider),
+);
 
-/// Provides the network policy: timeout, retry bound, `User-Agent` and the
-/// plaintext-HTTP switch (C-NET-2, C-NET-4, C-SEC-2).
+/// Provides the network policy: timeouts, retry bound, `User-Agent` and
+/// plaintext HTTP.
 ///
-/// The concurrency budget comes from [concurrencySettingProvider], which the composition root
-/// binds to the settings feature; everything else still comes from the policy defaults, so
-/// nothing else may construct a policy of its own.
+/// The concurrency budget comes from [concurrencySetting].
 @Riverpod(keepAlive: true)
 HttpPolicy httpPolicy(Ref ref) => HttpPolicy(
   maxConcurrentRequestsPerSource: budgetOrDefault(
@@ -32,32 +34,22 @@ HttpPolicy httpPolicy(Ref ref) => HttpPolicy(
   allowPlainHttp: ref.watch(plainHttpSettingProvider),
 );
 
-/// The per-source concurrency budget the user chose, or `null` when nobody chose one.
+/// The per-source concurrency budget the user chose, or `null` when unset.
 ///
-/// Declared here so `core/` never imports a feature (C-ARCH-2): the composition root overrides
-/// it with a value read from the settings feature (ADR-0042 的同一条机制）。 `null` is the
-/// normal state before the settings are loaded and in tests that do not care.
+/// Declared in `core` so the composition root binds it without a feature import.
 @Riverpod(keepAlive: true)
 int? concurrencySetting(Ref ref) => null;
 
-/// Whether the user opted into plaintext `http://` (C-SEC-2).
+/// Whether the user opted into plaintext `http://`.
 ///
-/// Declared here for the same reason as [concurrencySetting]: `core/` must not import
-/// `features/settings` (C-ARCH-2), so the composition root binds it. It gates **both** the page
-/// loader (`HttpPolicy`) and the media player (the reader's audio notifier).
-///
-/// `keepAlive` like the rest of the app-wide services: `httpPolicy` is itself keepAlive and
-/// watches it, and an auto-dispose dependency under a kept-alive provider is what
-/// `riverpod_lint`'s `only_use_keep_alive_inside_keep_alive` rejects (ADR-0010).
+/// Bound by the composition root; gates both the HTTP client and the media
+/// player.
 @Riverpod(keepAlive: true)
 bool plainHttpSetting(Ref ref) => false;
 
 /// Maps a user-chosen budget to a value [RequestLimiter] can accept.
 ///
-/// The `assert` in [HttpPolicy] is stripped in release builds, and a budget of `0` would queue
-/// every request of that source forever (`docs/dev/roadmap.md` §3.7 explicitly requires an
-/// explicit check at the settings boundary). A non-positive value therefore falls back to the
-/// default with a warning instead of being trusted — the app keeps working and the log says why.
+/// A non-positive value falls back to the default with a warning.
 int budgetOrDefault(int? requested, AppLogger logger) {
   if (requested == null) {
     return defaultMaxConcurrentRequestsPerSource;
@@ -71,15 +63,9 @@ int budgetOrDefault(int? requested, AppLogger logger) {
   return defaultMaxConcurrentRequestsPerSource;
 }
 
-/// Provides the app-wide HTTP client (C-NET-1).
+/// Provides the app-wide HTTP client.
 ///
-/// The charset cache is wired here because the app is the only place that has both halves:
-/// the request layer that decodes a body and the TTL cache that can remember the result
-/// (`book-source.md` §5). It is the first production consumer of `CacheDao` (C-NET-6).
-///
-/// `keepAlive` is what keeps the concurrency budget meaningful: the budget lives on the
-/// [DioHttpClient] instance, so an auto-disposed client would be rebuilt between two operations
-/// and a batch download would get a fresh budget per batch (`docs/dev/roadmap.md` §3.7)。
+/// `keepAlive` keeps the per-source concurrency budget alive across operations.
 @Riverpod(keepAlive: true)
 HttpClient httpClient(Ref ref) => DioHttpClient(
   cookies: ref.watch(cookieManagerProvider),

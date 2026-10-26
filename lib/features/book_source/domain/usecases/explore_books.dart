@@ -5,6 +5,7 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/explore_category.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/source_login.dart';
 
 /// Opens one discover-page category and reads its book list (`book-source.md` §4.2).
 ///
@@ -53,10 +54,16 @@ final class ExploreBooks {
         : (explore.bookList ?? '');
     final String fieldPrefix = fallsBack ? 'searchRule' : 'exploreRule';
 
+    // 分组标题没有地址：这不是「打不开」，而是压根不该走到这里（notifier 会先挡掉）。
+    final String? categoryUrl = category.url;
+    if (categoryUrl == null) {
+      return const ParseSuccess<List<Book>>(<Book>[]);
+    }
+
     // 分类 URL 也是一条 **URL 规则**：它可以带 `,{…}` 后缀（POST / charset），见
     // `book-source.md` §4.3，所以走同一台 fetchRule。
     final ParseResult<FetchedPage> response = await _pages.fetchRule(
-      category.url,
+      categoryUrl,
       rulePath: 'exploreUrl',
       params: <String, String>{'page': '$page', 'baseUrl': source.url},
       context: JsPageContext(
@@ -68,6 +75,7 @@ final class ExploreBooks {
       headers: headers,
       sourceId: source.url,
       source: source.jsSourceInfo,
+      login: source.loginGuard,
     );
 
     return switch (response) {
