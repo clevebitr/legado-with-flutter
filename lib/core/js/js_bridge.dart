@@ -1,4 +1,5 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/network/http_policy.dart';
 
 /// The book source fields a rule sees as `source`.
 ///
@@ -245,6 +246,8 @@ final class JsJob {
     this.chapterTitle,
     this.book,
     this.loginInfo = const <String, String>{},
+    this.webViewUA = defaultUserAgent,
+    this.androidId,
   });
 
   /// The JavaScript the rule asked for, with the `@js:` flag already removed.
@@ -302,6 +305,19 @@ final class JsJob {
   /// signed in」, which is what a source that declares no `loginUi` always answers.
   final Map<String, String> loginInfo;
 
+  /// The `User-Agent` a WebView would send (`java.getWebViewUA`, M25/S3b).
+  ///
+  /// A constant per job: upstream reads the platform WebView's default UA once, which for us is the
+  /// desktop Chrome string every request already sends (`core/network/http_policy.dart`).
+  final String webViewUA;
+
+  /// The install id `java.androidId` answers with (M25/S3b), or `null` when the host has none.
+  ///
+  /// Upstream returns Android's `Settings.Secure.ANDROID_ID`; this repository has no such id, so the
+  /// assembly root passes a stable per-install value and the sandbox answers `''` when it is absent
+  /// (registered in `book-source.md` §6).
+  final String? androidId;
+
   /// The page the rule was read on (the `baseUrl` binding).
   final String baseUrl;
 
@@ -353,6 +369,8 @@ final class JsJob {
     'chapterTitle': chapterTitle,
     'book': book?.toJson(),
     'loginInfo': loginInfo,
+    'webViewUA': webViewUA,
+    'androidId': androidId,
   };
 }
 

@@ -198,6 +198,17 @@ MPL 1 / SDK 8，Risky items: none**。GPL / LGPL / AGPL / 无许可证 / 未识�
 > 手写实现的正确性风险远大于一个 MIT 纯 Dart 依赖；`book-source.md` §6 与 ADR-0078 记录了这一族的
 > 语义。两条结论并存：**备份不引入密码学依赖，`@js:` 沙箱引入 `pointycastle`。**
 
+**2026-10-26 增量（M25/S3b：简繁码表资产）：** 新增 `assets/zh/t2s.txt` 与 `assets/zh/s2t.txt`，
+由 **OpenCC**（https://github.com/BYVoid/OpenCC，**Apache-2.0**，`LICENSE` 已核实）的
+`TSCharacters/TSPhrases` 与 `STCharacters/STPhrases` 生成（来源、生成规则与输入/输出 sha256 见
+`assets/zh/README.md`）。这是**数据资产、不是 pub 依赖**，所以包计数不变（仍是 202 包 / BSD-3 113 /
+MIT 56 / Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none）。
+
+> **为什么不搬上游那份表：** 上游 legado 用 `com.github.liuyueyi.quick-chinese-transfer`，
+> 其 pom 没有 `<licenses>` 段、仓库也没有 LICENSE 文件 → 按 C-DEP-7（无许可一律禁止引入）不能复制。
+> 代价是行为与上游不完全相同（没有 `fixT2sDict()` 的港台排除词表），差异登记在
+> `docs/dev/book-source.md` §6。
+
 **直接依赖明细：**
 
 | 依赖 | 版本 | 许可证 |

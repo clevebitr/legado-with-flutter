@@ -1300,6 +1300,75 @@ void main() {
     );
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_whenThePureHelpersAreUsed_answersLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3b：UUID / 章节号 / URL 拆解 / HTML 格式化都在 worker 内同步完成（不联网、不占额度）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            'var u = java.randomUUID();'
+            "u.length + '|' + u.charAt(14) + '|' "
+            "+ java.toNumChapter('第一百二十三章 风起') + '|' "
+            "+ java.toURL('https://a.test:8443/p?k=v').origin + '|' "
+            "+ java.toURL('https://a.test/p?k=v').searchParams['k'] + '|' "
+            "+ java.htmlFormat('<p>正文</p><img src=\"https://a.test/1.jpg\">')",
+      ),
+    );
+
+    expect(
+      _value(result),
+      '36|4|第123章 风起|https://a.test:8443|v|'
+      '　　正文\n　　<img src="https://a.test/1.jpg">',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenT2sIsUsed_readsTheOpenCcTable', (
+    WidgetTester tester,
+  ) async {
+    // 码表是 Flutter 资产，随 worker 的 bootstrap 过来；这条探针验证整条资产链 + 最长匹配。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "java.t2s('漢字簡體測試')"),
+    );
+
+    expect(_value(result), '汉字简体测试');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenS2tIsUsed_readsTheOpenCcTable', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "java.s2t('汉字简体测试')"),
+    );
+
+    expect(_value(result), '漢字簡體測試');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheCacheIsUsed_survivesTheNextJob', (
+    WidgetTester tester,
+  ) async {
+    // 上游的 `cache` 是持久表；本仓只有内存 LRU，但至少跨 job（同一会话）要能读回。
+    await bridge.evaluate(
+      _job(script: "cache.put('token', 'abc'); cache.put('n', 7); 'ok'"),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "cache.get('token') + '|' + cache.getInt('n')"),
+    );
+
+    expect(_value(result), 'abc|7');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenWebViewUaIsRead_answersTheDesktopUserAgent', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'java.getWebViewUA()'),
+    );
+
+    expect(_value(result), contains('Mozilla/5.0'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('jsBridge_whenFormattingTitles_runsOncePerChapterInOneScope', (
     WidgetTester tester,
   ) async {

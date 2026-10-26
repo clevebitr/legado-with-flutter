@@ -3,12 +3,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 
+import 'package:flutter/services.dart' show rootBundle;
+
 import 'package:flutter_qjs_next/flutter_qjs.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_cache.dart';
 import 'package:flutter_reader/core/js/js_crypto.dart';
 import 'package:flutter_reader/core/js/js_fonts.dart';
+import 'package:flutter_reader/core/js/js_helpers.dart';
 import 'package:flutter_reader/core/js/js_sync_call.dart';
+import 'package:flutter_reader/core/js/zh_tables.dart';
 
 /// Starts the real worker: one isolate owning one reused QuickJS runtime.
 ///
@@ -46,6 +51,9 @@ Future<JsWorkerHandle> launchQuickJsWorker({
     fromWorker.sendPort,
     timeout.inMilliseconds,
     memoryLimit,
+    // 简繁码表是 Flutter 资产（`assets/zh/`）且后台 isolate 读不了资产，所以在主 isolate 读好、
+    // 随 bootstrap 一次性交给 worker（解析仍然懒：只有真用 `java.t2s/s2t` 的源才建表）。
+    await _readZhTables(),
   ], debugName: 'js-worker');
 
   return _IsolateWorkerHandle(
@@ -55,6 +63,15 @@ Future<JsWorkerHandle> launchQuickJsWorker({
     subscription: subscription,
     messages: messages,
   );
+}
+
+// 后台 isolate 读不到 Flutter 资产，所以码表在主 isolate 读好、随 bootstrap 一次性交过去。
+// 读失败不在这里吞：资产在 `pubspec.yaml` 里声明过，缺了就是构建问题，应该当场看得见。
+Future<Map<String, String>> _readZhTables() async {
+  final String t2s = await rootBundle.loadString('assets/zh/t2s.txt');
+  final String s2t = await rootBundle.loadString('assets/zh/s2t.txt');
+
+  return <String, String>{'t2s': t2s, 's2t': s2t};
 }
 
 final class _IsolateWorkerHandle implements JsWorkerHandle {
@@ -95,9 +112,13 @@ Future<void> _quickJsWorkerMain(List<Object?> bootstrap) async {
   final Object? port = bootstrap.isNotEmpty ? bootstrap[0] : null;
   final Object? timeoutMs = bootstrap.length > 1 ? bootstrap[1] : null;
   final Object? memoryLimit = bootstrap.length > 2 ? bootstrap[2] : null;
+  final Object? zhAssets = bootstrap.length > 3 ? bootstrap[3] : null;
   if (port is! SendPort || timeoutMs is! int || memoryLimit is! int) {
     return;
   }
+  final Map<Object?, Object?> tables = zhAssets is Map
+      ? zhAssets
+      : const <Object?, Object?>{};
 
   final ReceivePort fromBridge = ReceivePort();
   port.send(<String, Object?>{'type': 'ready', 'port': fromBridge.sendPort});
@@ -108,7 +129,14 @@ Future<void> _quickJsWorkerMain(List<Object?> bootstrap) async {
     // 不装 console / 定时器等 Web API，只留纯 ECMAScript；重绑防护靠每个 job 重跑前奏。
     webApis: const JsWebApis.none(),
   );
-  final _Worker worker = _Worker(runtime, port);
+  final _Worker worker = _Worker(
+    runtime,
+    port,
+    zhTables: ZhTables(
+      t2sText: tables['t2s'] is String ? tables['t2s'] as String : null,
+      s2tText: tables['s2t'] is String ? tables['s2t'] as String : null,
+    ),
+  );
   worker.installBindings();
 
   await for (final Object? raw in fromBridge) {
@@ -134,7 +162,7 @@ Future<void> _quickJsWorkerMain(List<Object?> bootstrap) async {
 
 // 一个 worker 的状态：复用的运行时，加上在途的绑定调用。
 final class _Worker {
-  _Worker(this._runtime, this._toBridge);
+  _Worker(this._runtime, this._toBridge, {required this._zhTables});
 
   final JavascriptRuntime _runtime;
   final SendPort _toBridge;
@@ -170,6 +198,15 @@ final class _Worker {
   // 本 job 创建的对称密码器（`java.createSymmetricCrypto` 的句柄表，M25/S3a）：同一套契约。
   final JsSymmetricRegistry _ciphers = JsSymmetricRegistry();
 
+  // `cache.*`（M25/S3b）：上游是持久表，本仓只做内存 LRU，随 worker 存亡。
+  final JsCacheStore _cacheStore = JsCacheStore();
+
+  // 两张简繁码表（`java.t2s` / `java.s2t`）：随 worker 存亡，解析懒（M25/S3b）。
+  final ZhTables _zhTables;
+
+  // 本 job 的 helper 上下文；码表在 `evaluate` 里按脚本内容先行加载。
+  JsHelperContext _helpers = const JsHelperContext();
+
   // sync 绑定在本隔离体内直接答复；http / parse 返回 Future，由引擎转成 Promise。
   void installBindings() {
     // `crypto.*` 与 `java.*` 的字节/密钥族是同一批纯计算：走同一个通道，由一个解码器分发
@@ -178,6 +215,13 @@ final class _Worker {
       'crypto',
       (Object? args) => applyJsCryptoCall(args, ciphers: _ciphers),
     );
+    // 纯计算族（M25/S3b）：UUID / 时间格式化 / 章节号 / URL 拆解 / HTML 格式化 / 简繁转换。
+    _runtime.onMessage(
+      jsHelperBinding,
+      (Object? args) => applyJsHelperCall(args, _helpers),
+    );
+    // `cache.*`（M25/S3b）：同一个 isolate 内的内存 LRU，同步回答。
+    _runtime.onMessage(jsCacheBinding, _cacheStore.apply);
     _runtime.onMessage('log', (Object? args) {
       if (args is! Map) {
         return null;
@@ -300,6 +344,21 @@ final class _Worker {
       fields['sourceVariables'],
     );
     _named = decodeJsNamedContext(fields);
+    // 简繁码表按需解析（`java.t2s` / `java.s2t`），并挂进本 job 的 helper 上下文。
+    final String? scriptText = fields['script'] is String
+        ? fields['script'] as String
+        : null;
+    final String? libText = fields['jsLib'] is String
+        ? fields['jsLib'] as String
+        : null;
+    final ({bool t2s, bool s2t}) needs = ZhTables.needsOf(
+      scriptText ?? '',
+      libText,
+    );
+    _helpers = JsHelperContext(
+      t2s: _zhTables.t2s(needed: needs.t2s),
+      s2t: _zhTables.s2t(needed: needs.s2t),
+    );
     final Stopwatch stopwatch = Stopwatch()..start();
     JsEvalResult result;
     while (true) {
@@ -459,6 +518,14 @@ String _evaluationSource(Map<String, Object?> fields) {
   if (key != null) {
     buffer.writeln('globalThis.key = ${jsonEncode(key)};');
   }
+  // `java.getWebViewUA` / `java.androidId` 是随 job 进来的常量（M25/S3b）；缺席时给空串，
+  // 而不是 `undefined`（规则拿它拼 header，空白比 `undefined` 更容易被发现）。
+  buffer.writeln(
+    'globalThis.__webViewUA = ${jsonEncode(fields['webViewUA'] ?? '')};',
+  );
+  buffer.writeln(
+    'globalThis.__androidId = ${jsonEncode(fields['androidId'] ?? '')};',
+  );
   final String script = _asString(fields['script']);
   if (fields['titleFormat'] == true) {
     // 标题格式化是「一条脚本跑 N 章」，不是「跑一次脚本」：不套 __runRule，直接进循环运行器。
@@ -625,6 +692,47 @@ globalThis.__formatTitles = function (libText, scriptText, chapters) {
   }
   return __envelope({ ok: true, value: titles });
 };
+
+globalThis.__helper = function (payload) {
+  var answer = sendMessage('helper', payload);
+  if (answer !== null && typeof answer === 'object' && answer.__error !== undefined) {
+    throw new Error(String(answer.__error));
+  }
+  return answer;
+};
+
+// `cache.*`（M25/S3b）：同一个 isolate 内的内存 LRU。上游是「内存 + 持久表」两层，
+// 本仓只做内存（差异登记在 book-source.md §6）。
+globalThis.cache = (function () {
+  var call = function (payload) {
+    var answer = sendMessage('cache', payload);
+    if (answer !== null && typeof answer === 'object' && answer.__error !== undefined) {
+      throw new Error(String(answer.__error));
+    }
+    return answer === undefined ? null : answer;
+  };
+  return Object.freeze({
+    put: function (key, value, saveTime) {
+      var payload = { operation: 'put', key: String(key), value: value };
+      if (typeof saveTime === 'number') { payload.saveTime = saveTime; }
+      return call(payload);
+    },
+    putMemory: function (key, value) {
+      return call({ operation: 'putMemory', key: String(key), value: value });
+    },
+    get: function (key) { return call({ operation: 'get', key: String(key) }); },
+    getFromMemory: function (key) {
+      return call({ operation: 'getFromMemory', key: String(key) });
+    },
+    getInt: function (key) { return call({ operation: 'getInt', key: String(key) }); },
+    getLong: function (key) { return call({ operation: 'getLong', key: String(key) }); },
+    getDouble: function (key) { return call({ operation: 'getDouble', key: String(key) }); },
+    delete: function (key) { return call({ operation: 'delete', key: String(key) }); },
+    deleteMemory: function (key) {
+      return call({ operation: 'deleteMemory', key: String(key) });
+    }
+  });
+})();
 
 globalThis.__crypto = function (operation, value) {
   var result = sendMessage(
@@ -968,11 +1076,9 @@ globalThis.__sandboxBook = function (data) {
 // 拼写，只能走 `ajax` 这一族（ADR-0076 §决策 1）。
 globalThis.__javaRejectedNames = [
   'ajaxAll', 'connect',
-  'webViewGetElements',
   'downloadFile', 'cacheFile', 'importScript',
   // 非对称与签名：上游有，但语料里没有；连模式都不在支持面内（book-source.md §11）。
-  'createAsymmetricCrypto', 'createSign',
-  'htmlFormat', 'refreshBookUrl'
+  'createAsymmetricCrypto', 'createSign'
 ];
 
 globalThis.__javaInteropNames = ['lang', 'security', 'util', 'net', 'io', 'nio', 'math', 'text'];
@@ -1240,6 +1346,43 @@ globalThis.java = (function () {
     tripleDESEncodeArgsBase64Str: function (data, key, mode, padding, iv) {
       return __symmetricCreate('DESede/' + mode + '/' + padding, __b64Bytes(key), iv)
         .encryptBase64(String(data));
+    },
+    // 纯计算族（M25/S3b）。`getWebViewUA` / `androidId` 是随 job 进来的常量（上游同样不读实时状态）。
+    randomUUID: function () {
+      return __helper({ operation: 'randomUUID' });
+    },
+    timeFormatUTC: function (time, format, sh) {
+      return __helper({
+        operation: 'timeFormatUTC',
+        value: (time === undefined || time === null) ? '' : time,
+        format: String(format),
+        sh: typeof sh === 'number' ? sh : Number(sh) || 0
+      });
+    },
+    toNumChapter: function (value) {
+      return __helper({ operation: 'toNumChapter', value: String(value) });
+    },
+    toURL: function (url, baseUrl) {
+      var payload = { operation: 'toURL', value: String(url) };
+      if (baseUrl !== undefined && baseUrl !== null) {
+        payload.baseUrl = String(baseUrl);
+      }
+      return __helper(payload);
+    },
+    htmlFormat: function (value) {
+      return __helper({ operation: 'htmlFormat', value: String(value) });
+    },
+    t2s: function (value) {
+      return __helper({ operation: 't2s', value: String(value) });
+    },
+    s2t: function (value) {
+      return __helper({ operation: 's2t', value: String(value) });
+    },
+    getWebViewUA: function () {
+      return globalThis.__webViewUA || '';
+    },
+    androidId: function () {
+      return globalThis.__androidId || '';
     },
     log: function (message) {
       sendMessage('log', JSON.stringify({ level: 'info', message: String(message) }));

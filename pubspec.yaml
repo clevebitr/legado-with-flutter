@@ -115,3 +115,7 @@ flutter:
     # `app/src/main/assets/defaultData/`，与本仓同许可（GPL-3.0），来源见 assets/rules/README.md。
     - assets/rules/txt_toc_rule.json
     - assets/rules/dict_rule.json
+    # 简繁转换码表（M25/S3b）：`java.t2s` / `java.s2t`。由 OpenCC（Apache-2.0）生成，
+    # 来源、生成规则与哈希见 assets/zh/README.md；登记见 NOTICE.md §5。
+    - assets/zh/t2s.txt
+    - assets/zh/s2t.txt
