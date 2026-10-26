@@ -120,7 +120,22 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
           if (state.isLoading || state.isBuffering)
             const LinearProgressIndicator(),
           SizedBox(height: tokens.spacing.lg),
-          Icon(Icons.headphones, color: Theme.of(context).colorScheme.primary),
+          // 音频页的主意象：圆形色块里的耳机，比一个 24dp 的裸图标更像「正在播放」。
+          Center(
+            child: Container(
+              width: tokens.spacing.xxl * 2,
+              height: tokens.spacing.xxl * 2,
+              decoration: BoxDecoration(
+                color: tokens.colors.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.headphones,
+                size: tokens.spacing.xl,
+                color: tokens.colors.onPrimaryContainer,
+              ),
+            ),
+          ),
           SizedBox(height: tokens.spacing.lg),
           Text(
             chapter.title,
@@ -147,6 +162,7 @@ class _AudioReaderViewState extends ConsumerState<AudioReaderView> {
           SizedBox(height: tokens.spacing.xl),
           _positionRow(tokens, state),
           SizedBox(height: tokens.spacing.md),
+          // 三个按钮在窄屏上也会各自保留 48dp 的点击区，`spaceEvenly` 不会把它们挤在一起。
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: <Widget>[

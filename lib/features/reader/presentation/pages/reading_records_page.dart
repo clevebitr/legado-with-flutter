@@ -34,7 +34,10 @@ class ReadingRecordsPage extends ConsumerWidget {
       body: switch (records) {
         AsyncData<List<ReadingRecord>>(:final List<ReadingRecord> value) =>
           value.isEmpty
-              ? StateMessage(message: l10n.readingRecordsEmpty)
+              ? StateMessage(
+                  message: l10n.readingRecordsEmpty,
+                  icon: Icons.history,
+                )
               : _days(context, groupRecordsByDay(value), tokens, l10n),
         AsyncError<List<ReadingRecord>>() => StateMessage(
           message: l10n.readingRecordsLoadFailed,
@@ -72,10 +75,15 @@ class ReadingRecordsPage extends ConsumerWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  Text(
-                    material.formatFullDate(day.day),
-                    style: tokens.typography.base.titleSmall,
+                  Expanded(
+                    child: Text(
+                      material.formatFullDate(day.day),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tokens.typography.base.titleSmall,
+                    ),
                   ),
+                  SizedBox(width: tokens.spacing.sm),
                   Text(
                     readingDurationLabel(l10n, day.total),
                     style: tokens.typography.base.labelMedium,

@@ -246,7 +246,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   Widget build(BuildContext context) {
     final AsyncValue<ParseResult<ReaderSourceKind>> kind = ref.watch(
-      readerSourceKindProvider(widget.book.sourceUrl),
+      readerSourceKindProvider(_book.sourceUrl),
     );
 
     return switch (kind) {
@@ -255,9 +255,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       ) =>
         switch (value) {
           ParseSuccess<ReaderSourceKind>(data: ReaderSourceKind.image) =>
-            MangaReaderPage(book: widget.book, chapterUrl: widget.chapterUrl),
+            MangaReaderPage(book: _book, chapterUrl: widget.chapterUrl),
           ParseSuccess<ReaderSourceKind>(data: ReaderSourceKind.audio) =>
-            AudioReaderView(book: widget.book),
+            AudioReaderView(book: _book),
           _ => _textReader(context),
         },
       // 端口不该失败（失败在适配器里被吸收成 text），真抛了也不能把书挡住。
@@ -350,7 +350,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             Positioned.fill(
               child: IgnorePointer(
                 child: ColoredBox(
-                  color: Colors.black.withValues(alpha: 1 - _brightness),
+                  // 亮度遮罩用主题的 scrim：它本来就是「压暗内容」的角色，避免硬编码黑色。
+                  color: tokens.colors.scrim.withValues(alpha: 1 - _brightness),
                 ),
               ),
             ),
@@ -395,26 +396,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     style: tokens.typography.base.labelSmall,
                   ),
                   Expanded(
-                    child: Slider(
-                      value: (scrubbing ?? index.toDouble()).clamp(
-                        0,
-                        (total - 1).toDouble(),
-                      ),
-                      max: (total - 1).toDouble(),
-                      divisions: total > 1 ? total - 1 : null,
-                      label: l10n.readerChapterProgress(
-                        (scrubbing ?? index).round() + 1,
-                        total,
-                      ),
-                      // 拖动只动标签（§决策 1）：每帧换章会引发每帧一次抓取。
-                      onChanged: total > 1
-                          ? (double value) => setState(() => _scrubbing = value)
-                          : null,
-                      onChangeEnd: (double value) {
-                        setState(() => _scrubbing = null);
-                        _jumpToChapter(value.round());
-                      },
-                    ),
+                    // 只有一章时没有可拖动的范围：`max == min` 会让 Slider 的归一化位置变成
+                    // NaN（调试包里就是一条画不出来的进度条）。空位取代它。
+                    child: total > 1
+                        ? Slider(
+                            value: (scrubbing ?? index.toDouble()).clamp(
+                              0,
+                              (total - 1).toDouble(),
+                            ),
+                            max: (total - 1).toDouble(),
+                            divisions: total - 1,
+                            label: l10n.readerChapterProgress(
+                              (scrubbing ?? index).round() + 1,
+                              total,
+                            ),
+                            // 拖动只动标签（§决策 1）：每帧换章会引发每帧一次抓取。
+                            onChanged: (double value) =>
+                                setState(() => _scrubbing = value),
+                            onChangeEnd: (double value) {
+                              setState(() => _scrubbing = null);
+                              _jumpToChapter(value.round());
+                            },
+                          )
+                        : const SizedBox.shrink(),
                   ),
                   Text(
                     l10n.readerChapterPercent(_chapterPercent),
@@ -422,52 +426,72 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   ),
                 ],
               ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: <Widget>[
-                IconButton(
-                  icon: const Icon(Icons.skip_previous),
-                  tooltip: l10n.readerPreviousChapter,
-                  onPressed: index > 0 ? () => _jumpToChapter(index - 1) : null,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.list),
-                  tooltip: l10n.readerTocAction,
-                  onPressed: () => _keepAlive(() => _openToc(known)),
-                ),
-                // 书签按钮是一个 toggle：同一位置再按一次就取消（ADR-0066 §决策 3）。
-                IconButton(
-                  icon: Icon(marked ? Icons.bookmark : Icons.bookmark_border),
-                  tooltip: marked ? l10n.bookmarkRemove : l10n.bookmarkAdd,
-                  onPressed: known.isEmpty
-                      ? null
-                      : () => _keepAlive(
-                          () => _toggleBookmark(known, index, l10n),
-                        ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.swap_horiz),
-                  tooltip: l10n.readerChangeSource,
-                  onPressed: () => _keepAlive(_openChangeSource),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.brightness_6_outlined),
-                  tooltip: l10n.readerBrightness,
-                  onPressed: () => _keepAlive(() => _openBrightness(tokens)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.volume_up),
-                  tooltip: l10n.readerTtsAction,
-                  onPressed: _openTts,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.skip_next),
-                  tooltip: l10n.readerNextChapter,
-                  onPressed: index + 1 < total
-                      ? () => _jumpToChapter(index + 1)
-                      : null,
-                ),
-              ],
+            // 七个按钮在 320dp 的窄屏上放不下一整行：宽度够时均匀分布，不够时横向滚动，
+            // 不会把「下一章」挤出屏幕（M14 起就是最容易出问题的一行）。
+            LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) =>
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: constraints.maxWidth,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: <Widget>[
+                          IconButton(
+                            icon: const Icon(Icons.skip_previous),
+                            tooltip: l10n.readerPreviousChapter,
+                            onPressed: index > 0
+                                ? () => _jumpToChapter(index - 1)
+                                : null,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.list),
+                            tooltip: l10n.readerTocAction,
+                            onPressed: () => _keepAlive(() => _openToc(known)),
+                          ),
+                          // 书签按钮是一个 toggle：同一位置再按一次就取消（ADR-0066 §决策 3）。
+                          IconButton(
+                            icon: Icon(
+                              marked ? Icons.bookmark : Icons.bookmark_border,
+                            ),
+                            tooltip: marked
+                                ? l10n.bookmarkRemove
+                                : l10n.bookmarkAdd,
+                            onPressed: known.isEmpty
+                                ? null
+                                : () => _keepAlive(
+                                    () => _toggleBookmark(known, index, l10n),
+                                  ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.swap_horiz),
+                            tooltip: l10n.readerChangeSource,
+                            onPressed: () => _keepAlive(_openChangeSource),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.brightness_6_outlined),
+                            tooltip: l10n.readerBrightness,
+                            onPressed: () =>
+                                _keepAlive(() => _openBrightness(tokens)),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.volume_up),
+                            tooltip: l10n.readerTtsAction,
+                            onPressed: _openTts,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.skip_next),
+                            tooltip: l10n.readerNextChapter,
+                            onPressed: index + 1 < total
+                                ? () => _jumpToChapter(index + 1)
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
             ),
           ],
         ),
@@ -578,6 +602,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final Object? picked = await showModalBottomSheet<Object?>(
       context: context,
+      isScrollControlled: true,
       builder: (BuildContext context) => ReaderSourceSheet(book: _book),
     );
     if (!mounted || picked is! ReaderSourceCandidate) {
@@ -984,15 +1009,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   double _paddingOf(ReaderSettings settings) =>
       readerPagePaddingOf(settings.pagePadding);
 
-  /// Opens the chapter list and jumps to the chosen chapter (ADR-0051 §决策 2).
   /// Opens the read-aloud sheet and remembers its notifier for the exit rule.
+  ///
+  /// 用 [_book] 而不是路由里的 `widget.book`：换源之后朗读必须跟着新源走，否则它会用旧源的
+  /// 章节地址去读正文。
   void _openTts() {
-    _tts = ref.read(readerTtsProvider(widget.book).notifier);
+    _tts = ref.read(readerTtsProvider(_book).notifier);
     unawaited(
       showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        builder: (BuildContext context) => ReaderTtsSheet(book: widget.book),
+        builder: (BuildContext context) => ReaderTtsSheet(book: _book),
       ),
     );
   }
@@ -1013,7 +1040,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         builder: (BuildContext context) => SizedBox(
           height: MediaQuery.sizeOf(context).height * 0.85,
           child: ReaderSearchSheet(
-            book: widget.book,
+            book: _book,
             chapters: chapters,
             fromIndex: _currentIndex,
             onSelected: (BookSearchHit hit) {
@@ -1054,6 +1081,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     unawaited(
       showModalBottomSheet<void>(
         context: context,
+        isScrollControlled: true,
         builder: (BuildContext context) => Consumer(
           builder: (BuildContext context, WidgetRef ref, Widget? child) {
             final ReaderSettings current =

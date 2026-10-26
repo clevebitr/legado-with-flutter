@@ -132,16 +132,22 @@ class _BookSourceCheckPageState extends ConsumerState<BookSourceCheckPage> {
           :final List<StoredBookSource> value,
         ) =>
           value.isEmpty
-              ? StateMessage(message: l10n.bookSourceCheckEmpty)
+              ? StateMessage(
+                  message: l10n.bookSourceCheckEmpty,
+                  icon: Icons.fact_check_outlined,
+                )
               : _body(l10n, value, state),
       },
-      bottomNavigationBar: sources.value == null || sources.value!.isEmpty
+      bottomNavigationBar: (sources.value?.isEmpty ?? true)
           ? null
           : _action(l10n, state),
     );
   }
 
   /// The scrollable half: controls, then one row per source.
+  ///
+  /// 行是懒加载的（C-PERF-2）：书源可以上千条，一次性建出全部 `CheckboxListTile` 会让进入
+  /// 页面的第一帧就卡住。前四项是固定头部，`index - _headerCount` 映射到书源。
   Widget _body(
     AppLocalizations l10n,
     List<StoredBookSource> sources,
@@ -150,17 +156,20 @@ class _BookSourceCheckPageState extends ConsumerState<BookSourceCheckPage> {
     final List<StoredBookSource> visible = _visible(sources);
     final Set<int> selected = _effectiveSelection(visible);
 
-    return ListView(
-      children: <Widget>[
-        _controls(l10n, state),
-        const Divider(),
-        _selectionFilters(l10n, sources),
-        _selectionHeader(l10n, selected, state),
-        for (final StoredBookSource source in visible)
-          _row(l10n, source, state, selected),
-      ],
+    return ListView.builder(
+      itemCount: visible.length + _headerCount,
+      itemBuilder: (BuildContext context, int index) => switch (index) {
+        0 => _controls(l10n, state),
+        1 => const Divider(),
+        2 => _selectionFilters(l10n, sources),
+        3 => _selectionHeader(l10n, selected, state),
+        _ => _row(l10n, visible[index - _headerCount], state, selected),
+      },
     );
   }
+
+  /// The four header rows: the controls, the divider, the filter chips and the selection line.
+  static const int _headerCount = 4;
 
   /// The group / type chips that decide which sources take part (5.10 的「书源测试分类」).
   ///
@@ -393,8 +402,9 @@ class _BookSourceCheckPageState extends ConsumerState<BookSourceCheckPage> {
           ? null
           : (bool? isChecked) => _toggleSelection(source.id, isChecked),
       title: Text(source.source.name),
-      subtitle: Text(subtitle),
-      isThreeLine: entry != null && entry.stages.isNotEmpty,
+      subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+      // 校验过的行可能有状态 + 原因 + 耗时（最多两行）；没校验的行保持两行总高度。
+      isThreeLine: entry != null,
       // 勾选框说「这次跑不跑」，右侧要么是调试入口，要么是本轮结论的状态灯（C-UI-7）。
       secondary: entry == null
           ? IconButton(

@@ -99,7 +99,10 @@ class CacheManagePage extends ConsumerWidget {
         ),
         Expanded(
           child: used.isEmpty
-              ? StateMessage(message: l10n.cacheManageEmpty)
+              ? StateMessage(
+                  message: l10n.cacheManageEmpty,
+                  icon: Icons.cloud_off_outlined,
+                )
               : ListView.builder(
                   itemCount: used.length,
                   itemBuilder: (BuildContext context, int index) {

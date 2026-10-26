@@ -31,7 +31,8 @@ class ReaderSettingsSheet extends StatelessWidget {
     final M3ETheme tokens = context.m3e;
 
     return SafeArea(
-      child: Padding(
+      // 七个控件在窄屏或大字号下放不进默认的 9/16 高度：整张面板可滚动。
+      child: SingleChildScrollView(
         padding: EdgeInsets.all(tokens.spacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,

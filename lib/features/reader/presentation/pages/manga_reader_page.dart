@@ -219,36 +219,44 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
   ) {
     _pageTotal = pages.length;
     _restorePage(chapter, pages.length, session.charOffset, settings.pageMode);
-    if (settings.pageMode == ReaderPageMode.paged) {
-      return _PagedManga(
-        // 换章就是一个新的 PageView 状态：initialPage 只在该章首次构建时读一次。
-        key: ValueKey<String>('${chapter.url}|${pages.length}'),
-        pages: pages,
-        initialPage: _page,
-        onPageChanged: (int index) => _onPageChanged(index, pages),
-        builder: (BuildContext context, int index) =>
-            _pageTile(context, index, pages[index]),
-      );
-    }
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: (ScrollNotification notification) {
-        if (notification is ScrollUpdateNotification ||
-            notification is ScrollEndNotification) {
-          _trackScroll(
-            pages.length,
-            settled: notification is ScrollEndNotification,
+    // 「一张图占一屏」的图片高度要用**列表视口**的高度：整块屏幕还要扣掉 AppBar、底栏与
+    // 系统栏，按屏幕高度画会让每一页都比视口高一点，滑动时出现半个页面的跳动。
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double viewport = constraints.maxHeight;
+        if (settings.pageMode == ReaderPageMode.paged) {
+          return _PagedManga(
+            // 换章就是一个新的 PageView 状态：initialPage 只在该章首次构建时读一次。
+            key: ValueKey<String>('${chapter.url}|${pages.length}'),
+            pages: pages,
+            initialPage: _page,
+            onPageChanged: (int index) => _onPageChanged(index, pages),
+            builder: (BuildContext context, int index) =>
+                _pageTile(context, index, pages[index], viewport),
           );
         }
 
-        return false;
+        return NotificationListener<ScrollNotification>(
+          onNotification: (ScrollNotification notification) {
+            if (notification is ScrollUpdateNotification ||
+                notification is ScrollEndNotification) {
+              _trackScroll(
+                pages.length,
+                settled: notification is ScrollEndNotification,
+              );
+            }
+
+            return false;
+          },
+          child: ListView.builder(
+            controller: _scroll,
+            itemCount: pages.length,
+            itemBuilder: (BuildContext context, int index) =>
+                _pageTile(context, index, pages[index], viewport),
+          ),
+        );
       },
-      child: ListView.builder(
-        controller: _scroll,
-        itemCount: pages.length,
-        itemBuilder: (BuildContext context, int index) =>
-            _pageTile(context, index, pages[index]),
-      ),
     );
   }
 
@@ -278,7 +286,15 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
   }
 
   /// One image, its own failure tile, and the header-carrying request.
-  Widget _pageTile(BuildContext context, int index, ReadingPage page) {
+  ///
+  /// [viewportHeight] is the height the surrounding list/page view really has; a `SINGLE` page
+  /// fills it exactly, so one image is one screenful and a swipe lands on the next page.
+  Widget _pageTile(
+    BuildContext context,
+    int index,
+    ReadingPage page,
+    double viewportHeight,
+  ) {
     final M3ETheme tokens = context.m3e;
 
     // `SINGLE` 是「一张图占一屏」：按视口高度约束、在框内等比缩放；其余（含未实现的对齐分支）
@@ -293,7 +309,7 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
           key: ValueKey<String>('${page.url}#${_retries[index] ?? 0}'),
           image: _imageOf(page),
           width: double.infinity,
-          height: single ? MediaQuery.sizeOf(context).height : null,
+          height: single ? viewportHeight - tokens.spacing.sm : null,
           fit: single ? BoxFit.contain : BoxFit.fitWidth,
           frameBuilder:
               (
@@ -464,12 +480,15 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
           ),
           Expanded(
             child: Center(
-              child: Text(
-                l10n.mangaPageIndicator(page, total),
-                style: tokens.typography.base.labelLarge?.copyWith(
-                  color: palette.foreground,
-                ),
-              ),
+              // 图片还没读到时 total 是 0：显示「1 / 0」比不显示更容易让人以为坏了。
+              child: total <= 0
+                  ? const SizedBox.shrink()
+                  : Text(
+                      l10n.mangaPageIndicator(page, total),
+                      style: tokens.typography.base.labelLarge?.copyWith(
+                        color: palette.foreground,
+                      ),
+                    ),
             ),
           ),
           IconButton(

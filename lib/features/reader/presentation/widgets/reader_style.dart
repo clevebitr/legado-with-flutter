@@ -50,13 +50,19 @@ TextStyle readerTextStyle({
   required double lineHeight,
   required Color foreground,
   ReaderFontFamily family = ReaderFontFamily.theme,
-}) => tokens.typography.base.bodyLarge!.copyWith(
-  fontSize: (tokens.typography.base.bodyLarge!.fontSize ?? 16) * fontScale,
-  height: lineHeight,
-  color: foreground,
-  // 平台通用族名（ADR-0051 §决策 4）：缺字体时 Flutter 回落到系统字体，不会出现豆腐块。
-  fontFamily: readerFontFamilyName(family),
-);
+}) {
+  // 主题没有 bodyLarge 时用基线的 16 号字：阅读正文永远不能因此变成默认的 14 号。
+  final TextStyle base =
+      tokens.typography.base.bodyLarge ?? const TextStyle(fontSize: 16);
+
+  return base.copyWith(
+    fontSize: (base.fontSize ?? 16) * fontScale,
+    height: lineHeight,
+    color: foreground,
+    // 平台通用族名（ADR-0051 §决策 4）：缺字体时 Flutter 回落到系统字体，不会出现豆腐块。
+    fontFamily: readerFontFamilyName(family),
+  );
+}
 
 /// The newline character the body layout joins paragraphs with.
 final String _newline = String.fromCharCode(10);

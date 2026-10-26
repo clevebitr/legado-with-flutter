@@ -244,14 +244,11 @@ class _ImportPreviewViewState extends ConsumerState<_ImportPreviewView> {
         SafeArea(
           child: Padding(
             padding: EdgeInsets.all(tokens.spacing.md),
-            child: Row(
+            // 主操作整行、次操作在下：大字号或窄屏时两个按钮并排会被挤爆（提交按钮的文字
+            // 还带条数，宽度不可预测）。
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                TextButton(
-                  onPressed: () =>
-                      ref.read(bookSourceImportProvider.notifier).restart(),
-                  child: Text(l10n.bookSourceImportBack),
-                ),
-                const Spacer(),
                 FilledButton.icon(
                   onPressed: _selected.isEmpty
                       ? null
@@ -262,6 +259,11 @@ class _ImportPreviewViewState extends ConsumerState<_ImportPreviewView> {
                         ),
                   icon: const Icon(Icons.file_download_done_outlined),
                   label: Text(l10n.bookSourceImportCommit(_selected.length)),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      ref.read(bookSourceImportProvider.notifier).restart(),
+                  child: Text(l10n.bookSourceImportBack),
                 ),
               ],
             ),

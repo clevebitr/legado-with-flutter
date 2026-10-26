@@ -94,7 +94,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
       body: switch (shelf) {
         AsyncData<List<ShelvedBook>>(:final List<ShelvedBook> value) =>
           value.isEmpty
-              ? StateMessage(message: l10n.shelfEmpty)
+              ? StateMessage(
+                  message: l10n.shelfEmpty,
+                  icon: Icons.library_books_outlined,
+                )
               : _body(context, value, groups, tokens, l10n),
         // 读取失败与「书架为空」是两件事：空态会误导用户以为书没了。
         AsyncError<List<ShelvedBook>>() => StateMessage(
@@ -140,7 +143,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
         Expanded(
           child: visible.isEmpty
               // 分组里没有书与「书架为空」不同：前者是筛选的结果，不是数据丢了。
-              ? StateMessage(message: l10n.shelfGroupEmpty)
+              ? StateMessage(
+                  message: l10n.shelfGroupEmpty,
+                  icon: Icons.filter_alt_off_outlined,
+                )
               : ListView.builder(
                   padding: EdgeInsets.symmetric(vertical: tokens.spacing.sm),
                   itemCount: visible.length,
@@ -197,17 +203,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
         CoverImage(
           url: book.coverUrl,
           localPath: book.customCoverPath,
-          width: 40,
-          height: 54,
+          // 宽高由间距令牌推导，保持书封约 3:4 的比例，不写死像素。
+          width: tokens.spacing.xxl + tokens.spacing.sm,
+          height: (tokens.spacing.xxl + tokens.spacing.sm) * 1.35,
         ),
         // 已读完仍然要在封面上留一个角标：封面替换掉了原来的图标位，状态不能丢。
         if (book.status == ShelfStatus.read)
           Positioned(
-            right: -4,
-            bottom: -4,
+            right: -tokens.spacing.xs,
+            bottom: -tokens.spacing.xs,
             child: Icon(
               Icons.check_circle,
-              size: 16,
+              size: tokens.spacing.lg,
               semanticLabel: l10n.shelfStatusRead,
             ),
           ),

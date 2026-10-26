@@ -72,7 +72,7 @@ class RulesListPage extends ConsumerWidget {
       body: switch (rules) {
         AsyncData<List<Rule>>(:final List<Rule> value) =>
           value.isEmpty
-              ? StateMessage(message: l10n.rulesEmpty)
+              ? StateMessage(message: l10n.rulesEmpty, icon: Icons.rule)
               : _list(context, ref, value, tokens, l10n),
         // 读不出来与「一条规则也没有」是两件事：空态会让人以为规则被删光了。
         AsyncError<List<Rule>>() => StateMessage(message: l10n.rulesLoadFailed),

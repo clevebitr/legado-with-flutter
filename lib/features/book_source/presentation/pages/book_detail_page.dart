@@ -215,77 +215,87 @@ class BookDetailPage extends ConsumerWidget {
 
     return Padding(
       padding: EdgeInsets.all(tokens.spacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          // 封面 + 元信息并排：封面是 S1（roadmap §3.9），源没有 `coverUrl` 时是占位块；
-          // 用户换过的本地封面优先（M19 批 B）。
-          Row(
+      // 书籍信息是一张卡片：与下面的目录拉开层次，长目录滚动时头部也有明确的边界。
+      child: Card(
+        margin: EdgeInsets.zero,
+        elevation: 0,
+        color: tokens.colors.surfaceContainerLow,
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: EdgeInsets.all(tokens.spacing.lg),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              CoverImage(
-                url: info.coverUrl,
-                localPath: membership?.customCoverPath,
-                width: 84,
-                height: 112,
-              ),
-              SizedBox(width: tokens.spacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      info.name,
-                      style: tokens.typography.base.headlineSmall,
+              // 封面 + 元信息并排：封面是 S1（roadmap §3.9），源没有 `coverUrl` 时是占位块；
+              // 用户换过的本地封面优先（M19 批 B）。
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  CoverImage(
+                    url: info.coverUrl,
+                    localPath: membership?.customCoverPath,
+                    width: 84,
+                    height: 112,
+                  ),
+                  SizedBox(width: tokens.spacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          info.name,
+                          style: tokens.typography.base.headlineSmall,
+                        ),
+                        SizedBox(height: tokens.spacing.xs),
+                        if (info.author case final String author)
+                          Text(
+                            l10n.bookSourceAuthorLine(author),
+                            style: tokens.typography.base.bodyMedium,
+                          ),
+                        if (info.kind case final String kind)
+                          Text(
+                            l10n.bookSourceKindLine(kind),
+                            style: tokens.typography.base.bodyMedium,
+                          ),
+                        if (info.lastChapter case final String chapter)
+                          Text(
+                            l10n.bookSourceLastChapterLine(chapter),
+                            style: tokens.typography.base.bodyMedium,
+                          ),
+                        if (info.updateTime case final String updated
+                            when updated.isNotEmpty)
+                          Text(
+                            l10n.bookSourceUpdateTimeLine(updated),
+                            style: tokens.typography.base.bodyMedium,
+                          ),
+                      ],
                     ),
-                    SizedBox(height: tokens.spacing.xs),
-                    if (info.author case final String author)
-                      Text(
-                        l10n.bookSourceAuthorLine(author),
-                        style: tokens.typography.base.bodyMedium,
-                      ),
-                    if (info.kind case final String kind)
-                      Text(
-                        l10n.bookSourceKindLine(kind),
-                        style: tokens.typography.base.bodyMedium,
-                      ),
-                    if (info.lastChapter case final String chapter)
-                      Text(
-                        l10n.bookSourceLastChapterLine(chapter),
-                        style: tokens.typography.base.bodyMedium,
-                      ),
-                    if (info.updateTime case final String updated
-                        when updated.isNotEmpty)
-                      Text(
-                        l10n.bookSourceUpdateTimeLine(updated),
-                        style: tokens.typography.base.bodyMedium,
-                      ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+              if (info.intro case final String intro
+                  when intro.trim().isNotEmpty) ...[
+                SizedBox(height: tokens.spacing.md),
+                // 简介默认折三行：目录可能有上千条，一整段简介会把目录推到屏幕外。
+                _IntroText(text: intro, l10n: l10n, tokens: tokens),
+              ],
+              SizedBox(height: tokens.spacing.md),
+              Wrap(
+                spacing: tokens.spacing.sm,
+                runSpacing: tokens.spacing.sm,
+                children: <Widget>[
+                  _readButton(context, ref, source, info, l10n, toc),
+                  _continueButton(context, ref, source, info, l10n),
+                  _shelfButton(context, ref, source, info, l10n),
+                  _readingRecordsButton(context, ref, source, info, l10n),
+                  _groupButton(context, ref, source, info, membership, l10n),
+                  _coverButton(context, ref, source, info, membership, l10n),
+                  _bookCacheButton(context, ref, source, info, l10n),
+                ],
               ),
             ],
           ),
-          if (info.intro case final String intro
-              when intro.trim().isNotEmpty) ...[
-            SizedBox(height: tokens.spacing.md),
-            // 简介默认折三行：目录可能有上千条，一整段简介会把目录推到屏幕外。
-            _IntroText(text: intro, l10n: l10n, tokens: tokens),
-          ],
-          SizedBox(height: tokens.spacing.md),
-          Wrap(
-            spacing: tokens.spacing.sm,
-            runSpacing: tokens.spacing.sm,
-            children: <Widget>[
-              _readButton(context, ref, source, info, l10n, toc),
-              _continueButton(context, ref, source, info, l10n),
-              _shelfButton(context, ref, source, info, l10n),
-              _readingRecordsButton(context, ref, source, info, l10n),
-              _groupButton(context, ref, source, info, membership, l10n),
-              _coverButton(context, ref, source, info, membership, l10n),
-              _bookCacheButton(context, ref, source, info, l10n),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -420,8 +430,12 @@ class BookDetailPage extends ConsumerWidget {
           for (final ShelfGroupOption group in membership.groups)
             SimpleDialogOption(
               onPressed: () => Navigator.of(dialogContext).pop(group.id),
-              child: Text(
-                group.id == membership.groupId ? '${group.name} ✓' : group.name,
+              child: Row(
+                children: <Widget>[
+                  Expanded(child: Text(group.name)),
+                  if (group.id == membership.groupId)
+                    Icon(Icons.check, semanticLabel: l10n.bookSourceShelfGroup),
+                ],
               ),
             ),
         ],

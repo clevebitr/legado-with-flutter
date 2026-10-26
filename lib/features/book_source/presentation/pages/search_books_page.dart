@@ -75,13 +75,8 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
         title: Text(l10n.bookSourceSearchTitle),
         backgroundColor: tokens.colors.surface,
         actions: <Widget>[
-          // 书架与设置都是**其他 feature** 的页面：经 AppNavigation 端口打开，而不是
-          // import 对方的 route（C-ARCH-2、ADR-0042）。
-          IconButton(
-            icon: const Icon(Icons.collections_bookmark_outlined),
-            tooltip: l10n.shelfTitle,
-            onPressed: () => navigation.openBookshelf(context),
-          ),
+          // 设置属于**其他 feature**：经 AppNavigation 端口打开，而不是 import 对方的 route
+          // （C-ARCH-2、ADR-0042）。书架不再放一个入口：它就是底部导航的第一个 tab。
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: l10n.settingsTitle,
@@ -138,11 +133,30 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     return Row(
       children: <Widget>[
         Expanded(
-          child: TextField(
-            controller: _keyword,
-            decoration: InputDecoration(hintText: l10n.bookSourceSearchHint),
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _submit(),
+          // 只重建输入框本身：每敲一个字都重建结果列表既浪费又会让滚动位置跳动。
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _keyword,
+            builder:
+                (BuildContext context, TextEditingValue value, Widget? _) =>
+                    TextField(
+                      controller: _keyword,
+                      decoration: InputDecoration(
+                        hintText: l10n.bookSourceSearchHint,
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: value.text.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.clear),
+                                tooltip: l10n.actionCancel,
+                                onPressed: _keyword.clear,
+                              ),
+                      ),
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) {
+                        FocusScope.of(context).unfocus();
+                        _submit();
+                      },
+                    ),
           ),
         ),
         SizedBox(width: tokens.spacing.sm),
@@ -168,7 +182,11 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
         Expanded(
           child: ActionChip(
             avatar: const Icon(Icons.filter_alt_outlined),
-            label: Text(_scopeLabel(l10n, scope, rows)),
+            label: Text(
+              _scopeLabel(l10n, scope, rows),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             onPressed: () => _openScopeSheet(l10n, scope, rows),
           ),
         ),
@@ -215,13 +233,6 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
                 style: tokens.typography.base.bodySmall,
               ),
             ),
-            // 范围已不存在的回退要说出来：否则「我选了一个分组，结果搜了全库」看起来就像
-            // 筛选坏了（ADR-0058）。
-            if (search.scopeFellBack)
-              Text(
-                l10n.searchScopeFellBack,
-                style: tokens.typography.base.bodySmall,
-              ),
             if (search.isRunning)
               TextButton(
                 onPressed: search.isPaused
@@ -238,6 +249,16 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
               ),
           ],
         ),
+        // 范围已不存在的回退要说出来：否则「我选了一个分组，结果搜了全库」看起来就像
+        // 筛选坏了（ADR-0058）。单独一行，窄屏上也不会把暂停/停止挤出屏幕。
+        if (search.scopeFellBack)
+          Padding(
+            padding: EdgeInsets.only(top: tokens.spacing.xs),
+            child: Text(
+              l10n.searchScopeFellBack,
+              style: tokens.typography.base.bodySmall,
+            ),
+          ),
       ],
     );
   }
@@ -256,6 +277,7 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     return switch (search.status) {
       AggregateSearchStatus.idle => StateMessage(
         message: l10n.bookSourceSearchPrompt,
+        icon: Icons.search,
       ),
       AggregateSearchStatus.running when search.books.isEmpty => const Center(
         child: CircularProgressIndicator(),
@@ -328,15 +350,22 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
       // 封面来自命中它的**第一个**源（ADR-0046 §决策 4 的单条合并口径）。
       leading: CoverImage(url: book.coverUrl, width: 48, height: 64),
       title: Text(book.name),
+      // 标题 + 两行副标题（作者/更新时间一行、来源数一行）：`isThreeLine` 与之对应，
+      // 有更新时间的命中不会因为三行副标题被截断。
       subtitle: Text(
         <String>[
-          if (author != null) l10n.bookSourceAuthorLine(author),
-          if (updated != null) l10n.bookSourceUpdateTimeLine(updated),
+          if (author != null || updated != null)
+            <String>[
+              if (author != null) l10n.bookSourceAuthorLine(author),
+              if (updated != null) l10n.bookSourceUpdateTimeLine(updated),
+            ].join(' · '),
           l10n.searchOriginsLine(book.origins.length),
         ].join('\n'),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
-      isThreeLine: author != null || updated != null,
-      onTap: () => _openHit(context, book, rows),
+      isThreeLine: true,
+      onTap: () => unawaited(_openHit(context, book, rows)),
     );
   }
 
@@ -344,11 +373,14 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
   ///
   /// The detail page reads the selected source, so the selection has to move first; a source that
   /// was deleted meanwhile is reported as a failure rather than opening the wrong one.
-  void _openHit(
+  ///
+  /// 选择写入后才推页：`select` 要读一次书源表，先推页会让详情页用上一个源发一轮请求
+  /// （然后才重建到正确的源），看起来就是先闪一下旧书 / 解析失败。
+  Future<void> _openHit(
     BuildContext context,
     SearchBook book,
     List<StoredBookSource> rows,
-  ) {
+  ) async {
     final String sourceUrl = book.origins.isEmpty ? '' : book.origins.first;
     StoredBookSource? stored;
     for (final StoredBookSource row in rows) {
@@ -358,14 +390,22 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
       }
     }
     if (stored == null) {
+      // 命中项的来源已被删除：不是「重试搜索」，而是这条结果已经没有可打开的源。
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).actionRetry)),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).bookSourceCheckFailureSourceMissing,
+          ),
+        ),
       );
 
       return;
     }
 
-    unawaited(ref.read(selectedBookSourceProvider.notifier).select(stored.id));
+    await ref.read(selectedBookSourceProvider.notifier).select(stored.id);
+    if (!context.mounted) {
+      return;
+    }
     pushBookSourceRoute(
       context,
       BookSourceRoute.bookDetail(

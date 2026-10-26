@@ -57,7 +57,11 @@ class BackupPage extends ConsumerWidget {
             title: Text(l10n.backupRetentionTitle),
             subtitle: Text(l10n.backupRetentionBody),
             trailing: DropdownButton<int>(
-              value: settings.retention,
+              // 恢复的偏好可能带来一个不在下拉项里的值（比如旧版本写下的 7）：
+              // `DropdownButton` 碰到这种值会断言失败，直接回落到默认份数。
+              value: _retentionChoices.contains(settings.retention)
+                  ? settings.retention
+                  : defaultBackupRetention,
               onChanged: (int? value) => value == null
                   ? null
                   : unawaited(
@@ -66,7 +70,7 @@ class BackupPage extends ConsumerWidget {
                           .setRetention(value),
                     ),
               items: <DropdownMenuItem<int>>[
-                for (final int value in const <int>[1, 3, 5, 10, 20, 30])
+                for (final int value in _retentionChoices)
                   DropdownMenuItem<int>(
                     value: value,
                     child: Text(l10n.backupRetentionValue(value)),
@@ -76,24 +80,24 @@ class BackupPage extends ConsumerWidget {
           ),
           _section(context, l10n.backupLocationTitle, tokens),
           ListTile(
-            title: Text(switch (settings.location) {
-              AppPrivateBackupLocation() => l10n.backupLocationPrivate,
-              FolderBackupLocation(:final String path) => path,
-            }),
+            title: Text(
+              switch (settings.location) {
+                AppPrivateBackupLocation() => l10n.backupLocationPrivate,
+                FolderBackupLocation(:final String path) => path,
+              },
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
             subtitle: Text(l10n.backupIncludeSecretsHint),
-            trailing: Wrap(
-              spacing: tokens.spacing.xs,
+          ),
+          // 位置路径可能很长：两个动作放到下一行右对齐，不把标题挤成一字一行。
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: tokens.spacing.lg),
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: tokens.spacing.sm,
+              runSpacing: tokens.spacing.xs,
               children: <Widget>[
-                TextButton(
-                  onPressed: isBusy
-                      ? null
-                      : () => unawaited(
-                          ref
-                              .read(backupSettingsControllerProvider.notifier)
-                              .chooseLocation(),
-                        ),
-                  child: Text(l10n.backupLocationChoose),
-                ),
                 TextButton(
                   onPressed: isBusy
                       ? null
@@ -103,6 +107,16 @@ class BackupPage extends ConsumerWidget {
                               .resetLocation(),
                         ),
                   child: Text(l10n.backupLocationReset),
+                ),
+                FilledButton.tonal(
+                  onPressed: isBusy
+                      ? null
+                      : () => unawaited(
+                          ref
+                              .read(backupSettingsControllerProvider.notifier)
+                              .chooseLocation(),
+                        ),
+                  child: Text(l10n.backupLocationChoose),
                 ),
               ],
             ),
@@ -686,6 +700,9 @@ class BackupPage extends ConsumerWidget {
         .confirmRestore(RestoreMode.overwrite);
   }
 }
+
+/// The retention values the dropdown offers.
+const List<int> _retentionChoices = <int>[1, 3, 5, 10, 20, 30];
 
 /// The three WebDAV fields the dialog collects.
 final class _WebDavInput {

@@ -89,9 +89,13 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.bookSourceExploreTitle)),
       body: switch (stored) {
-        null => StateMessage(message: l10n.bookSourceMissingSource),
+        null => StateMessage(
+          message: l10n.bookSourceMissingSource,
+          icon: Icons.book_outlined,
+        ),
         StoredBookSource(isExploreEnabled: false) => StateMessage(
           message: l10n.bookSourceExploreDisabled,
+          icon: Icons.explore_off_outlined,
         ),
         StoredBookSource(:final BookSource source) => _body(l10n, source),
       },
@@ -215,7 +219,11 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           // 封面是 S1（roadmap §3.9）：书源给了 `coverUrl` 就显示，没给就是占位块。
           leading: CoverImage(url: book.coverUrl, width: 48, height: 64),
           title: Text(book.name),
-          subtitle: book.author == null ? null : Text(book.author ?? ''),
+          // 空作者等于没有作者：不画一行空白，也不写「未知」。
+          subtitle: switch (book.author) {
+            final String author when author.isNotEmpty => Text(author),
+            _ => null,
+          },
           onTap: () => pushBookSourceRoute(
             context,
             BookSourceRoute.bookDetail(book: book),
