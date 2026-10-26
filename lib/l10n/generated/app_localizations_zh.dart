@@ -1140,4 +1140,803 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerAudioPlainHttp => '这条音轨使用明文 HTTP。请在设置中开启「允许明文 HTTP」后播放。';
+
+  @override
+  String get bookSourceRowSignIn => '登录 / 过验证';
+
+  @override
+  String get bookSourceSignInDone => '已保存该站的 Cookie，可以重新校验了。';
+
+  @override
+  String get bookSourceSignInFailed => '登录 / 验证未完成。';
+
+  @override
+  String get bookSourceSignInUnsupported => '该平台没有可用的 WebView，请先在系统浏览器里完成验证。';
+
+  @override
+  String get bookmarkTitle => '书签';
+
+  @override
+  String get bookmarkEmpty => '还没有书签。阅读时点击工具条上的书签按钮即可标记当前位置。';
+
+  @override
+  String get bookmarkLoadFailed => '书签加载失败。';
+
+  @override
+  String get bookmarkAdd => '添加书签';
+
+  @override
+  String get bookmarkRemove => '取消书签';
+
+  @override
+  String get bookmarkAdded => '已添加书签';
+
+  @override
+  String get bookmarkRemoved => '已取消书签';
+
+  @override
+  String get bookmarkFailed => '书签操作失败。';
+
+  @override
+  String get bookmarkDeleteAction => '删除书签';
+
+  @override
+  String get bookSourceReadingRecords => '阅读记录';
+
+  @override
+  String get readingRecordsTitle => '阅读记录';
+
+  @override
+  String get readingRecordsEmpty => '还没有阅读记录。读满一分钟的会话才会记录。';
+
+  @override
+  String get readingRecordsLoadFailed => '阅读记录加载失败。';
+
+  @override
+  String bookReadingRecordsTitle(String book) {
+    return '阅读记录 · $book';
+  }
+
+  @override
+  String get bookReadingRecordsEmpty => '这本书还没有阅读记录。';
+
+  @override
+  String readingRecordMinutes(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String readingRecordHours(int hours) {
+    return '$hours 小时';
+  }
+
+  @override
+  String readingRecordHoursMinutes(int hours, int minutes) {
+    return '$hours 小时 $minutes 分钟';
+  }
+
+  @override
+  String get myBookmarks => '书签';
+
+  @override
+  String get myBookmarksBody => '全部标记过的位置';
+
+  @override
+  String get myReadingRecords => '阅读记录';
+
+  @override
+  String get myReadingRecordsBody => '按天查看读过的书';
+
+  @override
+  String get shelfManageGroups => '管理分组';
+
+  @override
+  String get shelfGroupAll => '全部';
+
+  @override
+  String get shelfGroupUngrouped => '未分组';
+
+  @override
+  String get shelfGroupEmpty => '这个分组里还没有书。';
+
+  @override
+  String get shelfGroupsTitle => '分组管理';
+
+  @override
+  String get shelfGroupsEmpty => '还没有分组。点右下角新建一个。';
+
+  @override
+  String get shelfGroupCreate => '新建分组';
+
+  @override
+  String get shelfGroupCreateAction => '新建';
+
+  @override
+  String get shelfGroupNameHint => '分组名称';
+
+  @override
+  String get shelfGroupRename => '重命名';
+
+  @override
+  String get shelfGroupRenameTitle => '重命名分组';
+
+  @override
+  String get shelfGroupDelete => '删除分组';
+
+  @override
+  String get shelfGroupDeleteTitle => '删除分组';
+
+  @override
+  String get shelfGroupDeleteBody => '组里的书会回到「未分组」，不会被删除。';
+
+  @override
+  String get shelfGroupNameTaken => '已经有同名分组了。';
+
+  @override
+  String get shelfSelectionExit => '退出多选';
+
+  @override
+  String shelfSelectionCount(int count) {
+    return '已选 $count 本';
+  }
+
+  @override
+  String get shelfSelectionClear => '取消全选';
+
+  @override
+  String get shelfSelectAll => '全选';
+
+  @override
+  String get shelfBatchAction => '批量操作';
+
+  @override
+  String get shelfBatchGroup => '改分组';
+
+  @override
+  String get bookSourceShelfGroup => '改分组';
+
+  @override
+  String get bookSourceShelfGroupHint => '加入书架后才能分组。';
+
+  @override
+  String get bookSourceChangeCover => '换封面';
+
+  @override
+  String get bookSourceResetCover => '恢复默认封面';
+
+  @override
+  String get bookSourceBookCache => '本书缓存';
+
+  @override
+  String bookSourceBookCacheCount(int count) {
+    return '已缓存 $count 章';
+  }
+
+  @override
+  String get bookSourceBookCacheClear => '清理本书缓存';
+
+  @override
+  String bookSourceBookCacheCleared(int count) {
+    return '已清理 $count 项缓存';
+  }
+
+  @override
+  String get bookSourceBookCacheFailed => '缓存操作失败。';
+
+  @override
+  String sourceVerificationTitle(String title, String source) {
+    return '$title · $source';
+  }
+
+  @override
+  String get sourceVerificationDone => '完成';
+
+  @override
+  String get sourceVerificationFailed => '验证未完成。';
+
+  @override
+  String sourceCaptchaTitle(String source) {
+    return '图片验证码 · $source';
+  }
+
+  @override
+  String get sourceCaptchaImage => '验证码图片';
+
+  @override
+  String get sourceCaptchaHint => '输入图中的字符';
+
+  @override
+  String get sourceCaptchaConfirm => '确定';
+
+  @override
+  String get failureLoginRequired => '该书源需要登录或重新完成人机验证，请先在书源管理里打开验证。';
+
+  @override
+  String get mySectionRules => '规则';
+
+  @override
+  String get rulesReplaceTitle => '替换净化';
+
+  @override
+  String get rulesTocTitle => '目录规则';
+
+  @override
+  String get rulesDictTitle => '字典规则';
+
+  @override
+  String get rulesHighlightTitle => '高亮标签';
+
+  @override
+  String get rulesAdd => '新增规则';
+
+  @override
+  String get rulesEditTitle => '编辑规则';
+
+  @override
+  String get rulesEmpty => '还没有规则';
+
+  @override
+  String get rulesLoadFailed => '规则读取失败。';
+
+  @override
+  String get rulesGone => '这条规则已经不存在了。';
+
+  @override
+  String get rulesBroken => '规则损坏';
+
+  @override
+  String get rulesBuiltIn => '内置';
+
+  @override
+  String get rulesBrokenNotice => '这条规则存的内容读不懂，原文见下方；保存会用它替换掉。';
+
+  @override
+  String get rulesReorderHandle => '调整顺序';
+
+  @override
+  String get rulesNameLabel => '名称';
+
+  @override
+  String get rulesPatternLabel => '查找内容（正则或文本）';
+
+  @override
+  String get rulesReplacementLabel => '替换为';
+
+  @override
+  String get rulesIsRegexLabel => '按正则处理';
+
+  @override
+  String get rulesRuleLabel => '章节标题规则';
+
+  @override
+  String get rulesSerialNumberLabel => '序号（可空）';
+
+  @override
+  String get rulesUrlRuleLabel => '查询地址';
+
+  @override
+  String get rulesShowRuleLabel => '提取规则';
+
+  @override
+  String get rulesColorLabel => '颜色，#AARRGGBB（可空）';
+
+  @override
+  String get rulesGroupLabel => '分组（可空）';
+
+  @override
+  String get rulesEnabledLabel => '启用';
+
+  @override
+  String get rulesRequired => '不能为空。';
+
+  @override
+  String get rulesInvalidRegex => '这不是合法的正则表达式。';
+
+  @override
+  String get rulesInvalidColor => '请写 #RRGGBB 或 #AARRGGBB。';
+
+  @override
+  String get readerSearchAction => '搜索本书';
+
+  @override
+  String get readerSearchHint => '在本机这本书里找';
+
+  @override
+  String get readerSearchStart => '搜索';
+
+  @override
+  String get readerSearchStop => '停止';
+
+  @override
+  String readerSearchProgress(int scanned, int total) {
+    return '已搜 $scanned/$total 章';
+  }
+
+  @override
+  String readerSearchStopped(int scanned, int total) {
+    return '已停止，搜到 $scanned/$total 章。';
+  }
+
+  @override
+  String readerSearchBudgetSpent(int scanned, int total) {
+    return '时间用完，停在 $scanned/$total 章。';
+  }
+
+  @override
+  String get readerSearchEmpty => '没有找到。';
+
+  @override
+  String readerSearchFailedChapters(int count) {
+    return '有 $count 章读取失败。';
+  }
+
+  @override
+  String get readerSearchUntitledChapter => '无标题章节';
+
+  @override
+  String get rulesImportTitle => '导入规则';
+
+  @override
+  String get rulesImportTextLabel => '规则 JSON';
+
+  @override
+  String get rulesImportTextHint => '粘贴净化规则 JSON 文件的内容';
+
+  @override
+  String get rulesImportUrlLabel => '或填写下载地址';
+
+  @override
+  String get rulesImportUrlHint => 'https://…/replaceRules.json';
+
+  @override
+  String get rulesImportFileAction => '选择 JSON 文件';
+
+  @override
+  String get rulesImportSelectAll => '全部导入';
+
+  @override
+  String rulesImportSelected(int selected, int usable) {
+    return '已选 $selected/$usable';
+  }
+
+  @override
+  String rulesImportCommit(int count) {
+    return '导入选中（$count）';
+  }
+
+  @override
+  String rulesImportSucceeded(int created, int updated) {
+    return '新增 $created 条、更新 $updated 条。';
+  }
+
+  @override
+  String rulesImportSucceededWithSkipped(
+    int created,
+    int updated,
+    int skipped,
+  ) {
+    return '新增 $created 条、更新 $updated 条；$skipped 条读不懂已跳过。';
+  }
+
+  @override
+  String get rulesImportUntitled => '无名规则';
+
+  @override
+  String get rulesImportUpdate => '更新';
+
+  @override
+  String get rulesImportProblemFormat => '不是规则对象';
+
+  @override
+  String get rulesImportProblemMissingPattern => '缺少 pattern';
+
+  @override
+  String get rulesExportAction => '导出';
+
+  @override
+  String get rulesExportEmpty => '没有可导出的规则。';
+
+  @override
+  String rulesExportSaved(int count) {
+    return '已导出 $count 条规则。';
+  }
+
+  @override
+  String rulesExportSavedWithSkipped(int count, int skipped) {
+    return '已导出 $count 条；$skipped 条读不懂的没有导出。';
+  }
+
+  @override
+  String get rulesExportFailed => '规则导出失败。';
+
+  @override
+  String get rulesScopeBoth => '标题 + 正文';
+
+  @override
+  String get rulesScopeContent => '只改正文';
+
+  @override
+  String get rulesScopeTitle => '只改标题';
+
+  @override
+  String get rulesScopeNone => '不生效';
+
+  @override
+  String get bookSourceExportAll => '导出全部';
+
+  @override
+  String bookSourceExportSelected(int count) {
+    return '导出选中（$count）';
+  }
+
+  @override
+  String bookSourceExportAllSaved(int count) {
+    return '已导出 $count 个书源。';
+  }
+
+  @override
+  String get bookSourceExportEmpty => '没有可导出的书源。';
+
+  @override
+  String get rulesListMenu => '更多';
+
+  @override
+  String get mySectionData => '数据';
+
+  @override
+  String get cacheManageTitle => '缓存管理';
+
+  @override
+  String get cacheManageMore => '更多';
+
+  @override
+  String cacheManageTotal(int count) {
+    return '共 $count 章缓存';
+  }
+
+  @override
+  String cacheManageSourceCount(int count) {
+    return '$count 章';
+  }
+
+  @override
+  String get cacheManageClearSource => '清理该源缓存';
+
+  @override
+  String get cacheManageClearExpired => '清理过期条目';
+
+  @override
+  String get cacheManageClearAll => '清空全部缓存';
+
+  @override
+  String get cacheManageClearAllTitle => '清空全部缓存？';
+
+  @override
+  String get cacheManageClearAllBody => '缓存下来的正文与探测结果会在需要时重新下载。';
+
+  @override
+  String get cacheManageEmpty => '还没有缓存。';
+
+  @override
+  String get cacheManageLoadFailed => '缓存读取失败。';
+
+  @override
+  String get myCookies => 'Cookie 管理';
+
+  @override
+  String get myCookiesBody => '站点为保持登录存下的凭据';
+
+  @override
+  String get cookieManageTitle => 'Cookie 管理';
+
+  @override
+  String get cookieManageMore => '更多';
+
+  @override
+  String get cookieManageSession => '关闭应用前有效';
+
+  @override
+  String cookieManageExpiresAt(String moment) {
+    return '过期时间 $moment';
+  }
+
+  @override
+  String get cookieManageDelete => '删除这条 Cookie';
+
+  @override
+  String get cookieManageClearDomain => '清空该域';
+
+  @override
+  String get cookieManageClearExpired => '清理过期 Cookie';
+
+  @override
+  String get cookieManageClearAll => '清空全部 Cookie';
+
+  @override
+  String get cookieManageClearAllTitle => '清空全部 Cookie？';
+
+  @override
+  String get cookieManageClearAllBody => '所有站点都会要求你重新登录。';
+
+  @override
+  String get cookieManageEmpty => '没有存下任何 Cookie。';
+
+  @override
+  String get cookieManageLoadFailed => 'Cookie 读取失败。';
+
+  @override
+  String get bookSourceLoginTitle => '登录';
+
+  @override
+  String get bookSourceLoginLoadFailed => '登录表单读取失败。';
+
+  @override
+  String get bookSourceLoginNoForm => '这个书源没有声明登录表单。';
+
+  @override
+  String get bookSourceLoginWorking => '登录中…';
+
+  @override
+  String get bookSourceLoginDone => '已提交，书源自己的脚本没有报错。';
+
+  @override
+  String get myBackup => '备份与恢复';
+
+  @override
+  String get myBackupBody => '打成一个 zip，或从 zip 恢复';
+
+  @override
+  String get backupTitle => '备份与恢复';
+
+  @override
+  String get backupExportTitle => '导出备份';
+
+  @override
+  String get backupExportBody => '书源、书架、分组、书签、阅读记录、四类规则与设置，打成一个 zip。';
+
+  @override
+  String get backupRestoreTitle => '从备份恢复';
+
+  @override
+  String get backupRestoreBody => '先看备份里有什么，确认后按自然键合并进本机。';
+
+  @override
+  String get backupIncludeSecretsHint => '备份是明文文件，包含书源登录信息。请放在自己信任的位置。';
+
+  @override
+  String get backupWorkingExporting => '正在打包…';
+
+  @override
+  String get backupWorkingReading => '正在读取备份…';
+
+  @override
+  String get backupWorkingRestoring => '正在恢复…';
+
+  @override
+  String get backupPreviewTitle => '备份内容';
+
+  @override
+  String get backupPreviewEmpty => '这份备份里没有任何记录。';
+
+  @override
+  String get backupConfirmRestore => '合并进本机';
+
+  @override
+  String get backupMergeHint => '恢复只合并、不删除：本机已有且备份里没有的内容都保留。';
+
+  @override
+  String get backupTableBookSources => '书源';
+
+  @override
+  String get backupTableBooks => '书架';
+
+  @override
+  String get backupTableReadingProgress => '阅读进度';
+
+  @override
+  String get backupTableBookGroups => '分组';
+
+  @override
+  String get backupTableBookmarks => '书签';
+
+  @override
+  String get backupTableReadRecords => '阅读记录';
+
+  @override
+  String get backupTableRules => '规则';
+
+  @override
+  String backupExported(String fileName, int count) {
+    return '已保存 $fileName（$count 条记录）。';
+  }
+
+  @override
+  String backupPreviewMeta(String createdAt, String appVersion) {
+    return '备份于 $createdAt，写入版本 $appVersion。';
+  }
+
+  @override
+  String backupPreviewPreferences(int count) {
+    return '$count 项设置';
+  }
+
+  @override
+  String backupRestored(int changed, int preferences) {
+    return '已合并：写回 $changed 条记录、$preferences 项设置。';
+  }
+
+  @override
+  String get backupAutoTitle => '自动备份';
+
+  @override
+  String get backupAutoBody => '启动时若距上次备份超过一天，就自动备份一次。';
+
+  @override
+  String get backupRetentionTitle => '保留份数';
+
+  @override
+  String get backupRetentionBody => '超出份数的旧备份会被删掉；只删本应用写的文件。';
+
+  @override
+  String backupRetentionValue(int count) {
+    return '$count 份';
+  }
+
+  @override
+  String get backupLocationTitle => '备份位置';
+
+  @override
+  String get backupLocationPrivate => '应用私有目录';
+
+  @override
+  String get backupLocationChoose => '选择文件夹';
+
+  @override
+  String get backupLocationReset => '恢复默认';
+
+  @override
+  String get backupLocationFallback => '选的文件夹不可用，暂时写到应用私有目录。';
+
+  @override
+  String get backupPasswordTitle => '备份口令';
+
+  @override
+  String get backupPasswordBody => '设置后备份整包加密（AES-256），口令存在系统密钥库。';
+
+  @override
+  String get backupPasswordChange => '修改口令';
+
+  @override
+  String get backupPasswordSet => '设置口令';
+
+  @override
+  String get backupPasswordClear => '清除口令';
+
+  @override
+  String get backupPasswordStored => '已设置（备份加密）';
+
+  @override
+  String get backupPasswordMissing => '未设置（备份不加密）';
+
+  @override
+  String get backupPasswordStoreFailed => '密钥库不可用，口令没存下：备份仍不加密。';
+
+  @override
+  String get backupSaveToLocation => '保存到备份位置';
+
+  @override
+  String get backupSaveAs => '另存为…';
+
+  @override
+  String get backupRestoreFromFile => '从文件恢复';
+
+  @override
+  String backupSavedTo(String path) {
+    return '已保存到 $path';
+  }
+
+  @override
+  String get backupRemoteTitle => '云端备份';
+
+  @override
+  String get backupRemoteEmpty => '云端没有备份文件。';
+
+  @override
+  String get backupRemoteRestore => '从云端恢复';
+
+  @override
+  String get backupRemoteDelete => '删除云端备份';
+
+  @override
+  String get backupCloudUpload => '上传当前备份';
+
+  @override
+  String get backupCloudRefresh => '刷新云端列表';
+
+  @override
+  String get backupWebDavTitle => 'WebDAV';
+
+  @override
+  String get backupWebDavUrl => '地址（集合目录）';
+
+  @override
+  String get backupWebDavUsername => '账号';
+
+  @override
+  String get backupWebDavPassword => '密码';
+
+  @override
+  String get backupWebDavSave => '保存 WebDAV 配置';
+
+  @override
+  String get backupWebDavNotConfigured => '还没配置 WebDAV。';
+
+  @override
+  String get backupPasswordRequired => '这份备份已加密，需要口令。';
+
+  @override
+  String get backupPasswordPrompt => '输入备份口令';
+
+  @override
+  String get backupPasswordWrong => '口令不对，请再试一次。';
+
+  @override
+  String get backupMergeMode => '合并';
+
+  @override
+  String get backupOverwriteMode => '覆盖';
+
+  @override
+  String get backupOverwriteWarning =>
+      '覆盖会先清空本机的书源、书架、分组、书签、阅读记录与规则，再写入备份，并在恢复前自动保存一份安全副本。';
+
+  @override
+  String get backupOverwriteConfirm => '确认覆盖';
+
+  @override
+  String backupSafetyCopy(String name) {
+    return '已先保存安全副本：$name';
+  }
+
+  @override
+  String get backupWorkSavingAs => '正在另存…';
+
+  @override
+  String get backupWorkUploading => '正在上传…';
+
+  @override
+  String get backupWorkListingRemote => '正在读取云端列表…';
+
+  @override
+  String get backupWorkDownloading => '正在下载…';
+
+  @override
+  String get backupLocalTitle => '本机备份';
+
+  @override
+  String get settingsSeedColor => '配色';
+
+  @override
+  String get settingsSeedColorHint => '有动态取色时系统配色优先；这里决定没有动态取色的设备用哪套颜色。';
+
+  @override
+  String get settingsSeedColorDefault => '默认';
+
+  @override
+  String get settingsBackgroundImage => '背景图';
+
+  @override
+  String get settingsBackgroundImageNone => '未设置';
+
+  @override
+  String get settingsBackgroundImageChoose => '选择图片';
+
+  @override
+  String get settingsBackgroundImageRemove => '移除';
+
+  @override
+  String get settingsBackgroundImageHint => '图片会复制到应用目录，原图删除也不影响。';
+
+  @override
+  String get settingsBackgroundImageFailed => '背景图没能保存，请再试一次。';
 }

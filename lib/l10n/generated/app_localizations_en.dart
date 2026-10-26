@@ -1177,4 +1177,830 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get readerAudioPlainHttp =>
       'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.';
+
+  @override
+  String get bookSourceRowSignIn => 'Sign in / pass check';
+
+  @override
+  String get bookSourceSignInDone =>
+      'The site\'s cookies are saved; the source can be checked again.';
+
+  @override
+  String get bookSourceSignInFailed =>
+      'The sign-in / verification did not finish.';
+
+  @override
+  String get bookSourceSignInUnsupported =>
+      'This platform has no WebView; finish the check in the system browser first.';
+
+  @override
+  String get bookmarkTitle => 'Bookmarks';
+
+  @override
+  String get bookmarkEmpty =>
+      'No bookmarks yet. Tap the bookmark button in the reader toolbar to mark your place.';
+
+  @override
+  String get bookmarkLoadFailed => 'Bookmarks could not be loaded.';
+
+  @override
+  String get bookmarkAdd => 'Add bookmark';
+
+  @override
+  String get bookmarkRemove => 'Remove bookmark';
+
+  @override
+  String get bookmarkAdded => 'Bookmark added';
+
+  @override
+  String get bookmarkRemoved => 'Bookmark removed';
+
+  @override
+  String get bookmarkFailed => 'The bookmark could not be saved.';
+
+  @override
+  String get bookmarkDeleteAction => 'Delete bookmark';
+
+  @override
+  String get bookSourceReadingRecords => 'Reading records';
+
+  @override
+  String get readingRecordsTitle => 'Reading records';
+
+  @override
+  String get readingRecordsEmpty =>
+      'No reading records yet. Sessions shorter than a minute are not recorded.';
+
+  @override
+  String get readingRecordsLoadFailed => 'Reading records could not be loaded.';
+
+  @override
+  String bookReadingRecordsTitle(String book) {
+    return 'Reading records · $book';
+  }
+
+  @override
+  String get bookReadingRecordsEmpty => 'This book has no reading records yet.';
+
+  @override
+  String readingRecordMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String readingRecordHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String readingRecordHoursMinutes(int hours, int minutes) {
+    return '$hours h $minutes min';
+  }
+
+  @override
+  String get myBookmarks => 'Bookmarks';
+
+  @override
+  String get myBookmarksBody => 'Every position you marked';
+
+  @override
+  String get myReadingRecords => 'Reading records';
+
+  @override
+  String get myReadingRecordsBody => 'What you read, by day';
+
+  @override
+  String get shelfManageGroups => 'Manage groups';
+
+  @override
+  String get shelfGroupAll => 'All';
+
+  @override
+  String get shelfGroupUngrouped => 'Ungrouped';
+
+  @override
+  String get shelfGroupEmpty => 'No books in this group yet.';
+
+  @override
+  String get shelfGroupsTitle => 'Groups';
+
+  @override
+  String get shelfGroupsEmpty =>
+      'No groups yet. Create one with the button below.';
+
+  @override
+  String get shelfGroupCreate => 'New group';
+
+  @override
+  String get shelfGroupCreateAction => 'Create';
+
+  @override
+  String get shelfGroupNameHint => 'Group name';
+
+  @override
+  String get shelfGroupRename => 'Rename';
+
+  @override
+  String get shelfGroupRenameTitle => 'Rename group';
+
+  @override
+  String get shelfGroupDelete => 'Delete group';
+
+  @override
+  String get shelfGroupDeleteTitle => 'Delete group';
+
+  @override
+  String get shelfGroupDeleteBody =>
+      'The books go back to ungrouped and are not deleted.';
+
+  @override
+  String get shelfGroupNameTaken => 'A group with this name already exists.';
+
+  @override
+  String get shelfSelectionExit => 'Exit selection';
+
+  @override
+  String shelfSelectionCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String get shelfSelectionClear => 'Clear selection';
+
+  @override
+  String get shelfSelectAll => 'Select all';
+
+  @override
+  String get shelfBatchAction => 'Batch actions';
+
+  @override
+  String get shelfBatchGroup => 'Move to group';
+
+  @override
+  String get bookSourceShelfGroup => 'Move to group';
+
+  @override
+  String get bookSourceShelfGroupHint =>
+      'Add the book to the shelf before grouping it.';
+
+  @override
+  String get bookSourceChangeCover => 'Change cover';
+
+  @override
+  String get bookSourceResetCover => 'Reset cover';
+
+  @override
+  String get bookSourceBookCache => 'Book cache';
+
+  @override
+  String bookSourceBookCacheCount(int count) {
+    return '$count chapters cached';
+  }
+
+  @override
+  String get bookSourceBookCacheClear => 'Clear this book\'s cache';
+
+  @override
+  String bookSourceBookCacheCleared(int count) {
+    return 'Cleared $count cached items';
+  }
+
+  @override
+  String get bookSourceBookCacheFailed => 'The cache action failed.';
+
+  @override
+  String sourceVerificationTitle(String title, String source) {
+    return '$title · $source';
+  }
+
+  @override
+  String get sourceVerificationDone => 'Done';
+
+  @override
+  String get sourceVerificationFailed => 'Verification was not completed.';
+
+  @override
+  String sourceCaptchaTitle(String source) {
+    return 'Captcha · $source';
+  }
+
+  @override
+  String get sourceCaptchaImage => 'Captcha image';
+
+  @override
+  String get sourceCaptchaHint => 'Type the characters in the image';
+
+  @override
+  String get sourceCaptchaConfirm => 'Confirm';
+
+  @override
+  String get failureLoginRequired =>
+      'This source needs a sign-in or a fresh human check; open the source and finish it first.';
+
+  @override
+  String get mySectionRules => 'Rules';
+
+  @override
+  String get rulesReplaceTitle => 'Replace & clean';
+
+  @override
+  String get rulesTocTitle => 'Chapter rules';
+
+  @override
+  String get rulesDictTitle => 'Dictionaries';
+
+  @override
+  String get rulesHighlightTitle => 'Highlight tags';
+
+  @override
+  String get rulesAdd => 'Add rule';
+
+  @override
+  String get rulesEditTitle => 'Edit rule';
+
+  @override
+  String get rulesEmpty => 'No rules yet';
+
+  @override
+  String get rulesLoadFailed => 'The rules could not be loaded.';
+
+  @override
+  String get rulesGone => 'This rule no longer exists.';
+
+  @override
+  String get rulesBroken => 'Unreadable rule';
+
+  @override
+  String get rulesBuiltIn => 'Built-in';
+
+  @override
+  String get rulesBrokenNotice =>
+      'This rule\'s stored content cannot be read. It is shown below; saving replaces it.';
+
+  @override
+  String get rulesReorderHandle => 'Reorder';
+
+  @override
+  String get rulesNameLabel => 'Name';
+
+  @override
+  String get rulesPatternLabel => 'Find (regular expression or text)';
+
+  @override
+  String get rulesReplacementLabel => 'Replace with';
+
+  @override
+  String get rulesIsRegexLabel => 'Use a regular expression';
+
+  @override
+  String get rulesRuleLabel => 'Chapter title rule';
+
+  @override
+  String get rulesSerialNumberLabel => 'Serial number (optional)';
+
+  @override
+  String get rulesUrlRuleLabel => 'Lookup address';
+
+  @override
+  String get rulesShowRuleLabel => 'Extract rule';
+
+  @override
+  String get rulesColorLabel => 'Colour, #AARRGGBB (optional)';
+
+  @override
+  String get rulesGroupLabel => 'Group (optional)';
+
+  @override
+  String get rulesEnabledLabel => 'Enabled';
+
+  @override
+  String get rulesRequired => 'Required.';
+
+  @override
+  String get rulesInvalidRegex => 'This is not a valid regular expression.';
+
+  @override
+  String get rulesInvalidColor => 'Use #RRGGBB or #AARRGGBB.';
+
+  @override
+  String get readerSearchAction => 'Search in book';
+
+  @override
+  String get readerSearchHint => 'Search this book';
+
+  @override
+  String get readerSearchStart => 'Search';
+
+  @override
+  String get readerSearchStop => 'Stop';
+
+  @override
+  String readerSearchProgress(int scanned, int total) {
+    return 'Searched $scanned of $total chapters';
+  }
+
+  @override
+  String readerSearchStopped(int scanned, int total) {
+    return 'Stopped after $scanned of $total chapters.';
+  }
+
+  @override
+  String readerSearchBudgetSpent(int scanned, int total) {
+    return 'Time is up: stopped after $scanned of $total chapters.';
+  }
+
+  @override
+  String get readerSearchEmpty => 'Nothing found.';
+
+  @override
+  String readerSearchFailedChapters(int count) {
+    return '$count chapters could not be read.';
+  }
+
+  @override
+  String get readerSearchUntitledChapter => 'Untitled chapter';
+
+  @override
+  String get rulesImportTitle => 'Import rules';
+
+  @override
+  String get rulesImportTextLabel => 'Rules JSON';
+
+  @override
+  String get rulesImportTextHint => 'Paste the contents of a 净化规则 JSON file';
+
+  @override
+  String get rulesImportUrlLabel => 'Or a URL';
+
+  @override
+  String get rulesImportUrlHint => 'https://…/replaceRules.json';
+
+  @override
+  String get rulesImportFileAction => 'Choose a JSON file';
+
+  @override
+  String get rulesImportSelectAll => 'Import all of them';
+
+  @override
+  String rulesImportSelected(int selected, int usable) {
+    return '$selected of $usable selected';
+  }
+
+  @override
+  String rulesImportCommit(int count) {
+    return 'Import selected ($count)';
+  }
+
+  @override
+  String rulesImportSucceeded(int created, int updated) {
+    return 'Imported $created new rules and updated $updated.';
+  }
+
+  @override
+  String rulesImportSucceededWithSkipped(
+    int created,
+    int updated,
+    int skipped,
+  ) {
+    return 'Imported $created new rules and updated $updated; $skipped entries were skipped as unreadable.';
+  }
+
+  @override
+  String get rulesImportUntitled => 'Untitled rule';
+
+  @override
+  String get rulesImportUpdate => 'Update';
+
+  @override
+  String get rulesImportProblemFormat => 'not a rule object';
+
+  @override
+  String get rulesImportProblemMissingPattern => 'missing pattern';
+
+  @override
+  String get rulesExportAction => 'Export';
+
+  @override
+  String get rulesExportEmpty => 'There are no rules to export.';
+
+  @override
+  String rulesExportSaved(int count) {
+    return 'Saved $count rules.';
+  }
+
+  @override
+  String rulesExportSavedWithSkipped(int count, int skipped) {
+    return 'Saved $count rules; $skipped unreadable rules were left out.';
+  }
+
+  @override
+  String get rulesExportFailed => 'Could not export the rules.';
+
+  @override
+  String get rulesScopeBoth => 'title + body';
+
+  @override
+  String get rulesScopeContent => 'body only';
+
+  @override
+  String get rulesScopeTitle => 'title only';
+
+  @override
+  String get rulesScopeNone => 'not applied';
+
+  @override
+  String get bookSourceExportAll => 'Export all';
+
+  @override
+  String bookSourceExportSelected(int count) {
+    return 'Export selected ($count)';
+  }
+
+  @override
+  String bookSourceExportAllSaved(int count) {
+    return 'Saved $count book sources.';
+  }
+
+  @override
+  String get bookSourceExportEmpty => 'There are no book sources to export.';
+
+  @override
+  String get rulesListMenu => 'More';
+
+  @override
+  String get mySectionData => 'Data';
+
+  @override
+  String get cacheManageTitle => 'Cached chapters';
+
+  @override
+  String get cacheManageMore => 'More';
+
+  @override
+  String cacheManageTotal(int count) {
+    return '$count cached chapters in total';
+  }
+
+  @override
+  String cacheManageSourceCount(int count) {
+    return '$count chapters';
+  }
+
+  @override
+  String get cacheManageClearSource => 'Clear this source';
+
+  @override
+  String get cacheManageClearExpired => 'Clear expired entries';
+
+  @override
+  String get cacheManageClearAll => 'Clear the whole cache';
+
+  @override
+  String get cacheManageClearAllTitle => 'Clear the whole cache?';
+
+  @override
+  String get cacheManageClearAllBody =>
+      'Cached chapters and probe results are downloaded again when needed.';
+
+  @override
+  String get cacheManageEmpty => 'Nothing is cached.';
+
+  @override
+  String get cacheManageLoadFailed => 'The cache could not be read.';
+
+  @override
+  String get myCookies => 'Cookies';
+
+  @override
+  String get myCookiesBody => 'What sites stored to keep you signed in';
+
+  @override
+  String get cookieManageTitle => 'Cookies';
+
+  @override
+  String get cookieManageMore => 'More';
+
+  @override
+  String get cookieManageSession => 'Until the app closes';
+
+  @override
+  String cookieManageExpiresAt(String moment) {
+    return 'Expires $moment';
+  }
+
+  @override
+  String get cookieManageDelete => 'Delete this cookie';
+
+  @override
+  String get cookieManageClearDomain => 'Clear this domain';
+
+  @override
+  String get cookieManageClearExpired => 'Clear expired cookies';
+
+  @override
+  String get cookieManageClearAll => 'Clear all cookies';
+
+  @override
+  String get cookieManageClearAllTitle => 'Clear all cookies?';
+
+  @override
+  String get cookieManageClearAllBody =>
+      'Every site will ask you to sign in again.';
+
+  @override
+  String get cookieManageEmpty => 'No cookies are stored.';
+
+  @override
+  String get cookieManageLoadFailed => 'The cookies could not be read.';
+
+  @override
+  String get bookSourceLoginTitle => 'Sign in';
+
+  @override
+  String get bookSourceLoginLoadFailed => 'The login form could not be read.';
+
+  @override
+  String get bookSourceLoginNoForm => 'This source declares no login form.';
+
+  @override
+  String get bookSourceLoginWorking => 'Signing in…';
+
+  @override
+  String get bookSourceLoginDone =>
+      'Signed in. The source\'s own script reported success.';
+
+  @override
+  String get myBackup => 'Backup and restore';
+
+  @override
+  String get myBackupBody =>
+      'Pack everything into one zip, or restore from one';
+
+  @override
+  String get backupTitle => 'Backup and restore';
+
+  @override
+  String get backupExportTitle => 'Export a backup';
+
+  @override
+  String get backupExportBody =>
+      'Book sources, shelf, groups, bookmarks, reading records, rules and settings, packed into one zip.';
+
+  @override
+  String get backupRestoreTitle => 'Restore from a backup';
+
+  @override
+  String get backupRestoreBody =>
+      'See what the archive holds first, then merge it into this device.';
+
+  @override
+  String get backupIncludeSecretsHint =>
+      'The archive is a plain file and includes book-source login data. Keep it somewhere you trust.';
+
+  @override
+  String get backupWorkingExporting => 'Packing…';
+
+  @override
+  String get backupWorkingReading => 'Reading the archive…';
+
+  @override
+  String get backupWorkingRestoring => 'Restoring…';
+
+  @override
+  String get backupPreviewTitle => 'What the archive holds';
+
+  @override
+  String get backupPreviewEmpty => 'This archive holds no rows.';
+
+  @override
+  String get backupConfirmRestore => 'Merge into this device';
+
+  @override
+  String get backupMergeHint =>
+      'Restoring only merges: anything this device has that the archive lacks stays as it is.';
+
+  @override
+  String get backupTableBookSources => 'Book sources';
+
+  @override
+  String get backupTableBooks => 'Shelf';
+
+  @override
+  String get backupTableReadingProgress => 'Reading progress';
+
+  @override
+  String get backupTableBookGroups => 'Groups';
+
+  @override
+  String get backupTableBookmarks => 'Bookmarks';
+
+  @override
+  String get backupTableReadRecords => 'Reading records';
+
+  @override
+  String get backupTableRules => 'Rules';
+
+  @override
+  String backupExported(String fileName, int count) {
+    return 'Saved $fileName ($count rows).';
+  }
+
+  @override
+  String backupPreviewMeta(String createdAt, String appVersion) {
+    return 'Written $createdAt by version $appVersion.';
+  }
+
+  @override
+  String backupPreviewPreferences(int count) {
+    return '$count settings';
+  }
+
+  @override
+  String backupRestored(int changed, int preferences) {
+    return 'Merged: $changed rows written, $preferences settings.';
+  }
+
+  @override
+  String get backupAutoTitle => 'Automatic backup';
+
+  @override
+  String get backupAutoBody =>
+      'Backs up once a day at start-up when the last archive is older than a day.';
+
+  @override
+  String get backupRetentionTitle => 'Backups to keep';
+
+  @override
+  String get backupRetentionBody =>
+      'Older archives beyond this count are deleted; only files this app wrote are removed.';
+
+  @override
+  String backupRetentionValue(int count) {
+    return '$count files';
+  }
+
+  @override
+  String get backupLocationTitle => 'Backup location';
+
+  @override
+  String get backupLocationPrivate => 'App private folder';
+
+  @override
+  String get backupLocationChoose => 'Choose a folder';
+
+  @override
+  String get backupLocationReset => 'Use the private folder';
+
+  @override
+  String get backupLocationFallback =>
+      'The chosen folder is unavailable; archives go to the app\'s private folder for now.';
+
+  @override
+  String get backupPasswordTitle => 'Backup password';
+
+  @override
+  String get backupPasswordBody =>
+      'When set, whole archives are encrypted (AES-256); the password lives in the system key store.';
+
+  @override
+  String get backupPasswordChange => 'Change the password';
+
+  @override
+  String get backupPasswordSet => 'Set a password';
+
+  @override
+  String get backupPasswordClear => 'Remove the password';
+
+  @override
+  String get backupPasswordStored => 'Set (archives are encrypted)';
+
+  @override
+  String get backupPasswordMissing => 'Not set (archives stay unencrypted)';
+
+  @override
+  String get backupPasswordStoreFailed =>
+      'The key store is unavailable, so the password was not stored: archives stay unencrypted.';
+
+  @override
+  String get backupSaveToLocation => 'Save to the backup location';
+
+  @override
+  String get backupSaveAs => 'Save as…';
+
+  @override
+  String get backupRestoreFromFile => 'Restore from a file';
+
+  @override
+  String backupSavedTo(String path) {
+    return 'Saved to $path';
+  }
+
+  @override
+  String get backupRemoteTitle => 'Cloud backups';
+
+  @override
+  String get backupRemoteEmpty => 'No backup files on the server.';
+
+  @override
+  String get backupRemoteRestore => 'Restore from the cloud';
+
+  @override
+  String get backupRemoteDelete => 'Delete the cloud backup';
+
+  @override
+  String get backupCloudUpload => 'Upload the current backup';
+
+  @override
+  String get backupCloudRefresh => 'Refresh the cloud list';
+
+  @override
+  String get backupWebDavTitle => 'WebDAV';
+
+  @override
+  String get backupWebDavUrl => 'URL (collection)';
+
+  @override
+  String get backupWebDavUsername => 'User name';
+
+  @override
+  String get backupWebDavPassword => 'Password';
+
+  @override
+  String get backupWebDavSave => 'Save the WebDAV configuration';
+
+  @override
+  String get backupWebDavNotConfigured => 'WebDAV is not configured yet.';
+
+  @override
+  String get backupPasswordRequired =>
+      'This archive is encrypted and needs its password.';
+
+  @override
+  String get backupPasswordPrompt => 'Enter the backup password';
+
+  @override
+  String get backupPasswordWrong => 'That password is wrong; try again.';
+
+  @override
+  String get backupMergeMode => 'Merge';
+
+  @override
+  String get backupOverwriteMode => 'Overwrite';
+
+  @override
+  String get backupOverwriteWarning =>
+      'Overwriting clears this device\'s book sources, shelf, groups, bookmarks, reading records and rules first, then writes the archive; a safety copy is saved before it starts.';
+
+  @override
+  String get backupOverwriteConfirm => 'Overwrite this device';
+
+  @override
+  String backupSafetyCopy(String name) {
+    return 'Safety copy saved first: $name';
+  }
+
+  @override
+  String get backupWorkSavingAs => 'Saving…';
+
+  @override
+  String get backupWorkUploading => 'Uploading…';
+
+  @override
+  String get backupWorkListingRemote => 'Listing the cloud collection…';
+
+  @override
+  String get backupWorkDownloading => 'Downloading…';
+
+  @override
+  String get backupLocalTitle => 'On this device';
+
+  @override
+  String get settingsSeedColor => 'Colour';
+
+  @override
+  String get settingsSeedColorHint =>
+      'Dynamic colour wins when the platform has it; this decides the colours on devices that do not.';
+
+  @override
+  String get settingsSeedColorDefault => 'Default';
+
+  @override
+  String get settingsBackgroundImage => 'Background';
+
+  @override
+  String get settingsBackgroundImageNone => 'Not set';
+
+  @override
+  String get settingsBackgroundImageChoose => 'Choose an image';
+
+  @override
+  String get settingsBackgroundImageRemove => 'Remove';
+
+  @override
+  String get settingsBackgroundImageHint =>
+      'The image is copied into the app, so deleting the original is fine.';
+
+  @override
+  String get settingsBackgroundImageFailed =>
+      'The background image could not be saved; try again.';
 }
