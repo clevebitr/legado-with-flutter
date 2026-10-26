@@ -85,3 +85,34 @@ POST /sscc/?<16 hex>       -> 搜索结果（含 /lk/ 链接）
   看到的错误信息要能指出「重放超限」。
 - 未做（本 ADR 不含）：`java.refreshBookUrl`、`java.importScript`、`java.cacheFile`、`java.downloadFile`、
   Rhino Java 互操作。
+
+## 实现注记（2026-10-26，M24 落地）
+
+决策 1–4 全部落地。落地时定死的细节（行为面归 `docs/dev/book-source.md` §6，这里只记「为什么这么定」）：
+
+1. **哨兵与重跑放在 worker，答案缓存在 worker**（`lib/core/js/js_sync_call.dart` 的 `JsSyncCache`）：
+   `java.*` 的同步调用先问缓存，命中就当场答复；未命中时 worker 记下 `{op, url, body, key}` 并回一个
+   失败信封（脚本抛错、停下），`evaluate` 在脚本结束后取一次页、把**答案或失败**都写进缓存，然后
+   `while` 重跑整条脚本。哨兵走**状态**而不是只走异常：规则自己的 `try/catch` 即使吞掉它，worker
+   仍然知道这一趟作废，结果不会错。
+2. **失败也缓存**：否则一条 `try { java.ajax(a) } catch { java.ajax(a) }` 会在同一趟里无限重放。
+   缓存的失败在下一趟以抛错形式交给脚本——这正是上游「Java 抛异常、规则可以换镜像」的语义。
+3. **pass 上限 16 是 worker 的常量**（`defaultJsMaxReplayPasses`），超限时 worker 在结果信封里带
+   `replayLimit: true`，桥把它翻成 `rulePath` 上的 `js:replay`（`js:timeout` 会误导排查方向）。
+4. **每趟重跑重新计「每规则调用额度」，同步取页期间暂停硬预算**：额度数的是 CPU 侧往返，预算是
+   给 CPU 的（与 ADR-0068 §决策 5 对人机验证的口径一致）。等掉的时间从 `elapsedMs` 扣掉，
+   否则 8 次取页就能把 5 秒预算用光。
+5. **Cookie 三个动词与 `java.getCookie` 也走同步通道**：值上同步才有「set 之后立刻 get 得到」的
+   顺序保证，而顺序是这条链路的全部意义。`cookie.getCookie(url)` 不带名字时答整条 `Cookie` 头，
+   与上游 `CookieManager.getCookie` 一致。
+6. **验证族不做「同步化」，改做答案记忆**：它们本来就是 Promise（ADR-0068 §决策 5），重放时按
+   `op+url` 直接答上次的答案即可满足「只弹一次窗」。`await` 一个已缓存的值与 `await` 一个新值对
+   规则无差别，所以没必要为此改形态。
+7. **每源变量落 Drift 新表 `source_variables`（v12）**，而不是塞进 `book_sources` 的 payload：
+   payload 是「导入时逐字节保真」的那份 JSON（5.8 导出保真的依据），运行期写入放进去就会污染
+   导出。表以 `(source_url, name)` 为主键，删除书源不清理（登记在 `roadmap.md` §3.7）。
+8. **`java.setContent` 只换同一 job 内后续规则读的页级 scope**：`parse.*` 请求带上覆盖后的正文，
+   引擎据此重建一个 `DomScope`（同 baseUrl / 同页码 / 同 source）。字面量首参的 `java.getString`
+   仍走引擎内联（ADR-0037 §决策 3①），登记为差异。
+9. **`java.toast/longToast` 走 core 端口 `UserMessages`**，装配根绑成 snack bar；同一 job 内按文本
+   去重（重放会把同一行再走一遍）。端口是一次性的，规则永远不等它。

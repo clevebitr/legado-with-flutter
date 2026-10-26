@@ -267,6 +267,24 @@ void main() {
     });
   });
 
+  group('BookSource jsLib (ADR-0078 S1)', () {
+    test('fromLegadoJson_givenAJsLib_modelsItAndKeepsItOutOfExtra', () {
+      // 库脚本是行为字段：建模之后必须能读写，也不该再留在 extra 里（那会变成「未知键」）。
+      final Map<String, Object?> json = _minimalJson()
+        ..['jsLib'] = 'function sign(url) { return url; }';
+
+      final BookSource source = BookSource.fromLegadoJson(json);
+
+      expect(source.jsLib, 'function sign(url) { return url; }');
+      expect(source.extra.containsKey('jsLib'), isFalse);
+      expect(source.toJson()['jsLib'], 'function sign(url) { return url; }');
+    });
+
+    test('fromLegadoJson_givenNoJsLib_answersNull', () {
+      expect(BookSource.fromLegadoJson(_minimalJson()).jsLib, isNull);
+    });
+  });
+
   group('BookSource extra retention', () {
     test('fromLegadoJson_givenRealExport_keepsTheUnmodelledTopLevelKeys', () {
       final BookSource source = BookSource.fromLegadoJson(_loadFixture());

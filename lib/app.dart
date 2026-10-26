@@ -6,6 +6,7 @@ import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
+import 'package:flutter_reader/core/di/user_messages_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
@@ -14,6 +15,7 @@ import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/in_app_web_view_page_fetcher.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
+import 'package:flutter_reader/core/platform/user_messages.dart';
 import 'package:flutter_reader/core/router/app_navigation.dart';
 import 'package:flutter_reader/core/router/app_router.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
@@ -146,6 +148,9 @@ List<Override> appProviderOverrides() => <Override>[
   // 恢复写过设置之后要让界面重读（ADR-0073 §决策 3）：端口由 `backup` 声明，这里绑到
   // settings 与 reader 的 keepAlive provider —— 它们不失效就会一直显示恢复前的主题与字号。
   restoreCompletionHookProvider.overrideWith(_RestoreHook.new),
+  // `java.toast` / `java.longToast` 要贴到界面上（ADR-0076 §决策 1）：`core/` 不认识 widget，
+  // 所以由装配根把它绑成一个 snack bar。规则永远不等这条消息。
+  userMessagesProvider.overrideWith((Ref ref) => const _RootUserMessages()),
 ];
 
 /// `PurgeRuleSource` bound to the rules feature, which owns the table (ADR-0070 §决策 3).
@@ -216,6 +221,26 @@ final class _RestoreHook implements RestoreCompletionHook {
   }
 }
 
+/// `UserMessages` bound to the root `ScaffoldMessenger`.
+///
+/// A snack bar is the desktop-and-mobile answer to Android's `Toast`: it shows the text a rule asked
+/// the user to read and disappears on its own. When no messenger is mounted (a headless test, the
+/// app before the first frame) the message is dropped — the bridge already logged it, and a toast
+/// must never fail a rule.
+final class _RootUserMessages implements UserMessages {
+  const _RootUserMessages();
+
+  @override
+  void show(String message) {
+    final ScaffoldMessengerState? messenger =
+        appScaffoldMessengerKey.currentState;
+    if (messenger == null) {
+      return;
+    }
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
 /// The root navigator key (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 3).
 ///
 /// The verification page is pushed from code that has no `BuildContext`: a JS rule
@@ -223,6 +248,13 @@ final class _RestoreHook implements RestoreCompletionHook {
 /// plain object in this file. A `navigatorKey` is the smallest way to give it the root navigator;
 /// everything the UI itself starts keeps going through `Navigator` / `AppRouter`.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
+/// The messenger key `java.toast` / `java.longToast` show through (`ADR-0076 §决策 1`).
+///
+/// Same reason as [appNavigatorKey]: the message is raised from a plain object that has no
+/// `BuildContext`, so the root `MaterialApp` is handed this key and the port reads its state.
+final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 /// Root widget: wires theming, localization and the route table.
 ///
@@ -307,6 +339,7 @@ class ReaderApp extends ConsumerWidget {
     AppSettings settings,
   ) => MaterialApp(
     navigatorKey: appNavigatorKey,
+    scaffoldMessengerKey: appScaffoldMessengerKey,
     onGenerateTitle: (BuildContext context) =>
         AppLocalizations.of(context).appTitle,
     localizationsDelegates: AppLocalizations.localizationsDelegates,

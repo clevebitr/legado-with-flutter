@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/storage/cookies.dart';
 import 'package:flutter_reader/core/storage/read_records.dart';
 import 'package:flutter_reader/core/storage/rules.dart';
 import 'package:flutter_reader/core/storage/source_checks.dart';
+import 'package:flutter_reader/core/storage/source_variables.dart';
 
 part 'database.g.dart';
 
@@ -24,6 +25,7 @@ part 'database.g.dart';
     ReadRecords,
     Cookies,
     Rules,
+    SourceVariables,
   ],
 )
 class ReaderDatabase extends _$ReaderDatabase {
@@ -31,7 +33,7 @@ class ReaderDatabase extends _$ReaderDatabase {
   ReaderDatabase(super.e);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -116,6 +118,13 @@ class ReaderDatabase extends _$ReaderDatabase {
           await m.create(cacheEntriesSource);
         }
         await delete(cacheEntries).go();
+      }
+      // v12 新增每源变量表（ADR-0076 §决策 1）：只建表与索引，既有行不动。
+      if (from < 12) {
+        await m.createTable(sourceVariables);
+        if (!await _hasSchemaObject(sourceVariablesSource.entityName)) {
+          await m.create(sourceVariablesSource);
+        }
       }
     },
   );

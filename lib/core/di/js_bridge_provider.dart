@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
+import 'package:flutter_reader/core/di/storage_provider.dart';
+import 'package:flutter_reader/core/di/user_messages_provider.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
@@ -26,6 +28,11 @@ JsBridge jsBridge(Ref ref) {
     // 实现在装配根绑定，沙箱本身不认识页面。
     verification: ref.watch(sourceVerificationProvider),
     webPages: ref.watch(webPageFetcherProvider),
+    // 同步族读写的是 App 的同一份 Cookie 宗（`http.*` 与 WebView 也用它），每源变量写穿数据库，
+    // toast 交给装配根绑定的提示通道（ADR-0076 §决策 1）。
+    cookies: ref.watch(cookieManagerProvider),
+    sourceVariables: ref.watch(sourceVariableStoreProvider),
+    userMessages: ref.watch(userMessagesProvider),
   );
   ref.onDispose(() => unawaited(bridge.dispose()));
 

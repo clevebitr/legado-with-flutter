@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upstream's synchronous `java.*` dialect runs unchanged (ADR-0076, M24)
+
+- **Replay instead of blocking.** A QuickJS isolate cannot block on the host, so a synchronous call
+  the script has never made raises a sentinel; the worker fetches the page once, caches it (failures
+  included) and **runs the rule again from its first line** — on that pass the call answers the
+  cached value. `java.ajax` / `java.post` / `java.head` / `java.getCookie` therefore return values,
+  not Promises, exactly as upstream's Rhino does. Pass limit 16; past it the field fails with
+  `js:replay` («this rule cannot be replayed»), never a misleading `js:timeout`.
+- **`java.post(url, body, headers)` answers a response object** (`body` property, `url()` / `code()` /
+  `header(name)` / …), the same shape `loginCheckJs` already sees, so a rule can read the `Location`
+  of a `302` and re-issue the address. `HttpClient` grew a `head` for the matching verb.
+- **`cookie.getCookie` / `setCookie` / `removeCookie`** are wired to the app's cookie jar (per-pair
+  writes, `Max-Age=0` deletion); `java.setContent(html)` replaces the page scope the rest of the
+  job reads; `java.toast` / `longToast` reach the UI through a new `UserMessages` port (a snack bar at
+  the composition root, deduplicated per job).
+- **`source.getVariable` / `setVariable` / `putVariable`** now persist per source: new Drift table
+  `source_variables` (schema v12, dump + generated migrations + migration and on-disk tests). The
+  variables are not the rule variables (`java.put`), and they no longer live in the source payload,
+  which stays byte-faithful for export.
+- **Human verification is asked once.** `getVerificationCode` / `startBrowserAwait` / `startBrowser`
+  remember their answer per `op+url`, so a replay pass cannot pop a second dialog.
+- Registered differences (`book-source.md` §6, `roadmap.md` §3.7): non-idempotent rules run their
+  side effects once per pass; `java.get(url)` / `ajaxAll` / `connect` stay rejected; a literal-first
+  `java.getString` still cannot see `setContent`; deleting a source keeps its variables.
+
 ### Tests carry behaviour, not lines (ADR-0077)
 
 - **Coverage thresholds: `core` / `domain` 100% → 95%** (`data` stays ≥80%). 100% had saturated:

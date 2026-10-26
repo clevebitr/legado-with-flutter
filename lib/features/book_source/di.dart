@@ -83,6 +83,9 @@ RuleEngine ruleEngine(Ref ref) => RuleEngine(
   logger: ref.watch(appLoggerProvider),
   jsBridge: ref.watch(jsBridgeProvider),
   variables: ref.watch(jsVariableStoreProvider),
+  // 每源持久变量（`source.getVariable`，ADR-0076 §决策 1）：引擎只负责把快照下发，
+  // 写穿由桥做（它拿到 job 的结果）。
+  sourceVariables: ref.watch(sourceVariableStoreProvider),
 );
 
 /// Provides the page fetch + rule reading service the use cases are built on.

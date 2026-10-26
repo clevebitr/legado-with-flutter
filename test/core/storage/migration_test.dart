@@ -134,17 +134,27 @@ void main() {
         schema.rawDatabase.execute('PRAGMA user_version = 8');
         final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-        await verifier.migrateAndValidate(database, 11);
+        await verifier.migrateAndValidate(database, 12);
         final QueryRow version = await database
             .customSelect('PRAGMA user_version')
             .getSingle();
-        expect(version.data.values.single, 11);
+        expect(version.data.values.single, 12);
         await database.close();
       },
     );
 
-    test('schemaVersion_whenRead_isEleven', () {
-      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 11);
+    test('migration_fromV11ToV12_addsTheSourceVariablesTable', () async {
+      // M24（ADR-0076 §决策 1）：`source.getVariable` / `setVariable` 的每源持久变量只加一张表
+      // 与它的来源索引；既有行不动，也不建外键（书源删掉后残留行只是小抄，不是数据）。
+      final InitializedSchema schema = await verifier.schemaAt(11);
+      final ReaderDatabase database = ReaderDatabase(schema.newConnection());
+
+      await verifier.migrateAndValidate(database, 12);
+      await database.close();
+    });
+
+    test('schemaVersion_whenRead_isTwelve', () {
+      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 12);
     });
   });
 }

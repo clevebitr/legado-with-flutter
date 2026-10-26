@@ -41,6 +41,7 @@ _BookSource _$BookSourceFromJson(Map<String, dynamic> json) => $checkedCreate(
       loginUrl: $checkedConvert('loginUrl', (v) => v as String?),
       loginUi: $checkedConvert('loginUi', (v) => v as String?),
       loginCheckJs: $checkedConvert('loginCheckJs', (v) => v as String?),
+      jsLib: $checkedConvert('jsLib', (v) => v as String?),
       bookInfoRule: $checkedConvert(
         'ruleBookInfo',
         (v) =>
@@ -89,6 +90,7 @@ Map<String, dynamic> _$BookSourceToJson(_BookSource instance) =>
       'loginUrl': instance.loginUrl,
       'loginUi': instance.loginUi,
       'loginCheckJs': instance.loginCheckJs,
+      'jsLib': instance.jsLib,
       'ruleBookInfo': instance.bookInfoRule,
       'ruleToc': instance.tocRule,
       'ruleContent': instance.contentRule,

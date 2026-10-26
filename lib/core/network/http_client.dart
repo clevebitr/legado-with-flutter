@@ -62,6 +62,21 @@ abstract interface class HttpClient {
     Duration? receiveTimeout,
   });
 
+  /// Sends a HEAD to [url]: the response without its body.
+  ///
+  /// Used by the sandbox's synchronous `java.head(url)` (ADR-0076 §决策 1), which upstream answers
+  /// with a whole `StrResponse` so a rule can read `header('Location')`. Every other rule of [get]
+  /// still applies — the address, the budget, the retry bound and the header policy are the same.
+  Future<ParseResult<HttpResponse>> head(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxRetries,
+    Duration? receiveTimeout,
+  });
+
   /// Applies the `concurrentRate` [sourceId] declares to that source's budget.
   ///
   /// [concurrentRate] is raw text; `null`, blank and `"0"` mean no gate, and illegal text warns.
@@ -195,6 +210,26 @@ final class DioHttpClient implements HttpClient {
     sourceId: sourceId,
     maxBytes: maxBytes,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
+  );
+
+  @override
+  Future<ParseResult<HttpResponse>> head(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxRetries,
+    Duration? receiveTimeout,
+  }) => _request(
+    method: 'HEAD',
+    url: url,
+    rulePath: rulePath,
+    headers: headers,
+    keyword: keyword,
+    sourceId: sourceId,
     maxRetries: maxRetries,
     receiveTimeout: receiveTimeout,
   );

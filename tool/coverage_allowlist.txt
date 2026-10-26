@@ -100,3 +100,5 @@ lib/features/backup/domain/entities/restore_mode.dart  # 纯 enum 声明，属�
 lib/features/backup/domain/repositories/backup_settings_repository.dart  # 纯接口声明，属「无可测量行」子情形；契约由 BackupSettingsRepositoryImpl 与其测试、FakeBackupSettingsRepository 行使
 lib/features/backup/domain/repositories/local_backup_store.dart  # 纯接口声明，属「无可测量行」子情形；契约由 FileSystemLocalBackupStore 与其测试行使
 lib/features/backup/domain/repositories/remote_backup_store.dart  # 纯接口声明，属「无可测量行」子情形；契约由 WebDavRemoteBackupStore 与其测试、FakeRemoteBackupStore 行使
+# --- M24 同步 java.* 重放层（ADR-0076）新增的豁免项 ---
+lib/core/storage/source_variables.dart  # 同上：drift 表定义（列 getter 与主键只在生成期被分析）；正确性由 migration_test.dart（与 drift_schemas/drift_schema_v12.json 逐列比对）、source_variable_dao_test.dart 与 integration_test/on_disk_database_test.dart 保证

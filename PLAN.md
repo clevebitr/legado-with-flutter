@@ -3,7 +3,7 @@
 > 由 `plan` 工具维护，请勿直接编辑。步骤级进度以 `todo` 工具为准；决策与踩坑写入 DECISIONS.md。
 
 <!-- plan-bridge:state -->
-current: M8
+current: M25
 auto-breakpoint: false
 <!-- /plan-bridge:state -->
 
@@ -34,9 +34,12 @@ auto-breakpoint: false
 - [x] M23 — M23 — 规则/书源导入导出 + 净化 scope 与 @js:（ADR-0071）
 - [x] M22b — M22b — 备份恢复：
 - [x] M22c — M22c — 备份增强：自动/加密/覆盖/WebDAV（#32）
-- [ ] M24 — M24 — 同步 java.* 重放层（ADR-0076，详见 #33）
+- [x] M24 — M24 — 同步 java.* 重放层（ADR-0076，详见 #33）
+- [ ] M25 — M25 — 引擎对齐上游行为：字段/语法/方言（详见 #35）
+- [ ] M26 — M26 — 引擎高性能重构：指标 P1-P6（详见 #36）
+- [ ] M27 — M27 — 语料回归与差异台账清零（详见 #37）
 
-## Current: M8 — 5.7 缓存清理 + 5.8 导出保真
+## Current: M25 — M25 — 引擎对齐上游行为：字段/语法/方言（详见 #35）
 
-goal: 同步 java.* 重放层（ADR-0076）
-breakpoint: 重放引擎未开工；兼容版源已交付
+goal: 引擎行为对齐上游 + 高性能（详见 #35-#37）
+breakpoint: M24 已闭环（#38）；台账下一步 S1 jsLib（ADR-0078）

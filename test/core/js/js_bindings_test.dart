@@ -326,6 +326,157 @@ void main() {
         }),
         isNull,
       );
+      expect(
+        decodeJsParseRequest(<String, Object?>{
+          'operation': 'getString',
+          'rule': 'a',
+          'content': 1,
+        }),
+        isNull,
+      );
+    });
+
+    test('decodeJsParseRequest_givenASetContent_keepsThePageOverride', () {
+      // `java.setContent(html)` 之后，`parse.*` 带着替换后的正文来问宿主（ADR-0076 §决策 1）。
+      final JsParseRequest? request = decodeJsParseRequest(<String, Object?>{
+        'operation': 'getString',
+        'rule': 'id.c@text',
+        'content': '<html><div id="c">新</div></html>',
+      });
+
+      expect(request?.content, '<html><div id="c">新</div></html>');
+      expect(request?.doc, isNull);
+    });
+  });
+
+  group('applyJsSourceCall', () {
+    test('applyJsSourceCall_givenAGet_answersTheStoredValue', () {
+      final Map<String, String?> variables = <String, String?>{'token': 'abc'};
+
+      expect(
+        jsonDecode(
+          applyJsSourceCall(variables, <String, Object?>{
+            'operation': 'get',
+            'key': 'token',
+          }),
+        ),
+        <String, Object?>{'ok': true, 'value': 'abc'},
+      );
+    });
+
+    test('applyJsSourceCall_givenAnUnwrittenKey_answersAnEmptyString', () {
+      // 上游 `getVariable` 不区分「没有」与「空」。
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'get',
+            'key': 'missing',
+          }),
+        ),
+        <String, Object?>{'ok': true, 'value': ''},
+      );
+    });
+
+    test('applyJsSourceCall_givenAPut_writesTheMap', () {
+      final Map<String, String?> variables = <String, String?>{};
+
+      expect(
+        applyJsSourceCall(variables, <String, Object?>{
+          'operation': 'put',
+          'key': 'token',
+          'value': 'abc',
+        }),
+        '{"ok":true}',
+      );
+      expect(variables, <String, String?>{'token': 'abc'});
+    });
+
+    test('applyJsSourceCall_givenANullValue_clearsTheKey', () {
+      final Map<String, String?> variables = <String, String?>{'token': 'abc'};
+
+      applyJsSourceCall(variables, <String, Object?>{
+        'operation': 'put',
+        'key': 'token',
+      });
+
+      expect(variables['token'], isNull);
+    });
+
+    test('applyJsSourceCall_givenUnusableArguments_answersAFailure', () {
+      expect(
+        applyJsSourceCall(<String, String?>{}, 'nonsense'),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'get',
+        }),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'delete',
+          'key': 'a',
+        }),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'put',
+          'key': 'a',
+          'value': 1,
+        }),
+        '{"ok":false}',
+      );
+    });
+  });
+
+  group('decodeJsToastRequest', () {
+    test('decodeJsToastRequest_givenAMessage_readsItAndTheLength', () {
+      expect(
+        decodeJsToastRequest(<String, Object?>{'message': '请先登录', 'long': true})
+            ?.message,
+        '请先登录',
+      );
+      expect(
+        decodeJsToastRequest(<String, Object?>{'message': '请先登录', 'long': true})
+            ?.isLong,
+        isTrue,
+      );
+      expect(
+        decodeJsToastRequest(<String, Object?>{'message': 'x'})?.isLong,
+        isFalse,
+      );
+    });
+
+    test('decodeJsToastRequest_givenUnusableArguments_returnsNull', () {
+      expect(decodeJsToastRequest(null), isNull);
+      expect(decodeJsToastRequest(<String, Object?>{'message': 1}), isNull);
+      expect(decodeJsToastRequest(<String, Object?>{'message': '   '}), isNull);
+      expect(
+        decodeJsToastRequest(<String, Object?>{'message': 'x', 'long': 'yes'}),
+        isNull,
+      );
+    });
+  });
+
+  group('jsResponsePayload', () {
+    test('jsResponsePayload_givenAHeadersMap_joinsRepeatedValues', () {
+      // 与 `loginCheckJs` 看到的 result 同形：头名保持原样、多值用逗号拼。
+      final Map<String, Object?> payload = jsResponsePayload(
+        url: 'https://a.test/next',
+        body: '<html></html>',
+        code: 200,
+        headers: <String, List<String>>{
+          'set-cookie': <String>['a=1', 'b=2'],
+        },
+      );
+
+      expect(payload[jsResponseMarker], isTrue);
+      expect(payload['body'], '<html></html>');
+      expect(payload['__url'], 'https://a.test/next');
+      expect(payload['__code'], 200);
+      expect(payload['__headers'], <String, String>{'set-cookie': 'a=1, b=2'});
     });
   });
 

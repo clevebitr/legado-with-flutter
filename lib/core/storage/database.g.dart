@@ -5843,6 +5843,325 @@ class RulesCompanion extends UpdateCompanion<RuleRow> {
   }
 }
 
+class $SourceVariablesTable extends SourceVariables
+    with TableInfo<$SourceVariablesTable, SourceVariableRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SourceVariablesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sourceUrlMeta = const VerificationMeta(
+    'sourceUrl',
+  );
+  @override
+  late final GeneratedColumn<String> sourceUrl = GeneratedColumn<String>(
+    'source_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'value',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [sourceUrl, name, value, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'source_variables';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SourceVariableRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('source_url')) {
+      context.handle(
+        _sourceUrlMeta,
+        sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceUrlMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sourceUrl, name};
+  @override
+  SourceVariableRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SourceVariableRow(
+      sourceUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_url'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SourceVariablesTable createAlias(String alias) {
+    return $SourceVariablesTable(attachedDatabase, alias);
+  }
+}
+
+class SourceVariableRow extends DataClass
+    implements Insertable<SourceVariableRow> {
+  /// `bookSourceUrl` of the source the variable belongs to.
+  final String sourceUrl;
+
+  /// The variable's name.
+  final String name;
+
+  /// The variable's value; upstream's map holds strings only.
+  final String value;
+
+  /// When the row was last written; a diagnostic column, not part of the value.
+  final DateTime updatedAt;
+  const SourceVariableRow({
+    required this.sourceUrl,
+    required this.name,
+    required this.value,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['source_url'] = Variable<String>(sourceUrl);
+    map['name'] = Variable<String>(name);
+    map['value'] = Variable<String>(value);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  SourceVariablesCompanion toCompanion(bool nullToAbsent) {
+    return SourceVariablesCompanion(
+      sourceUrl: Value(sourceUrl),
+      name: Value(name),
+      value: Value(value),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SourceVariableRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SourceVariableRow(
+      sourceUrl: serializer.fromJson<String>(json['sourceUrl']),
+      name: serializer.fromJson<String>(json['name']),
+      value: serializer.fromJson<String>(json['value']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sourceUrl': serializer.toJson<String>(sourceUrl),
+      'name': serializer.toJson<String>(name),
+      'value': serializer.toJson<String>(value),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  SourceVariableRow copyWith({
+    String? sourceUrl,
+    String? name,
+    String? value,
+    DateTime? updatedAt,
+  }) => SourceVariableRow(
+    sourceUrl: sourceUrl ?? this.sourceUrl,
+    name: name ?? this.name,
+    value: value ?? this.value,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SourceVariableRow copyWithCompanion(SourceVariablesCompanion data) {
+    return SourceVariableRow(
+      sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
+      name: data.name.present ? data.name.value : this.name,
+      value: data.value.present ? data.value.value : this.value,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceVariableRow(')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('name: $name, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(sourceUrl, name, value, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SourceVariableRow &&
+          other.sourceUrl == this.sourceUrl &&
+          other.name == this.name &&
+          other.value == this.value &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SourceVariablesCompanion extends UpdateCompanion<SourceVariableRow> {
+  final Value<String> sourceUrl;
+  final Value<String> name;
+  final Value<String> value;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const SourceVariablesCompanion({
+    this.sourceUrl = const Value.absent(),
+    this.name = const Value.absent(),
+    this.value = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SourceVariablesCompanion.insert({
+    required String sourceUrl,
+    required String name,
+    required String value,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : sourceUrl = Value(sourceUrl),
+       name = Value(name),
+       value = Value(value),
+       updatedAt = Value(updatedAt);
+  static Insertable<SourceVariableRow> custom({
+    Expression<String>? sourceUrl,
+    Expression<String>? name,
+    Expression<String>? value,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sourceUrl != null) 'source_url': sourceUrl,
+      if (name != null) 'name': name,
+      if (value != null) 'value': value,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SourceVariablesCompanion copyWith({
+    Value<String>? sourceUrl,
+    Value<String>? name,
+    Value<String>? value,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SourceVariablesCompanion(
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      name: name ?? this.name,
+      value: value ?? this.value,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sourceUrl.present) {
+      map['source_url'] = Variable<String>(sourceUrl.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceVariablesCompanion(')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('name: $name, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ReaderDatabase extends GeneratedDatabase {
   _$ReaderDatabase(QueryExecutor e) : super(e);
   $ReaderDatabaseManager get managers => $ReaderDatabaseManager(this);
@@ -5858,6 +6177,9 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
   late final $ReadRecordsTable readRecords = $ReadRecordsTable(this);
   late final $CookiesTable cookies = $CookiesTable(this);
   late final $RulesTable rules = $RulesTable(this);
+  late final $SourceVariablesTable sourceVariables = $SourceVariablesTable(
+    this,
+  );
   late final Index cacheEntriesSource = Index(
     'cache_entries_source',
     'CREATE INDEX cache_entries_source ON cache_entries (source_key)',
@@ -5886,6 +6208,10 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
     'rules_kind_order',
     'CREATE INDEX rules_kind_order ON rules (kind, sort_order)',
   );
+  late final Index sourceVariablesSource = Index(
+    'source_variables_source',
+    'CREATE INDEX source_variables_source ON source_variables (source_url)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5901,6 +6227,7 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
     readRecords,
     cookies,
     rules,
+    sourceVariables,
     cacheEntriesSource,
     sourceChecksSourceChecked,
     bookmarksBook,
@@ -5908,6 +6235,7 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
     readRecordsEnded,
     cookiesDomain,
     rulesKindOrder,
+    sourceVariablesSource,
   ];
 }
 
@@ -8765,6 +9093,206 @@ typedef $$RulesTableProcessedTableManager =
       RuleRow,
       PrefetchHooks Function()
     >;
+typedef $$SourceVariablesTableCreateCompanionBuilder =
+    SourceVariablesCompanion Function({
+      required String sourceUrl,
+      required String name,
+      required String value,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SourceVariablesTableUpdateCompanionBuilder =
+    SourceVariablesCompanion Function({
+      Value<String> sourceUrl,
+      Value<String> name,
+      Value<String> value,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$SourceVariablesTableFilterComposer
+    extends Composer<_$ReaderDatabase, $SourceVariablesTable> {
+  $$SourceVariablesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SourceVariablesTableOrderingComposer
+    extends Composer<_$ReaderDatabase, $SourceVariablesTable> {
+  $$SourceVariablesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SourceVariablesTableAnnotationComposer
+    extends Composer<_$ReaderDatabase, $SourceVariablesTable> {
+  $$SourceVariablesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get sourceUrl =>
+      $composableBuilder(column: $table.sourceUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SourceVariablesTableTableManager
+    extends
+        RootTableManager<
+          _$ReaderDatabase,
+          $SourceVariablesTable,
+          SourceVariableRow,
+          $$SourceVariablesTableFilterComposer,
+          $$SourceVariablesTableOrderingComposer,
+          $$SourceVariablesTableAnnotationComposer,
+          $$SourceVariablesTableCreateCompanionBuilder,
+          $$SourceVariablesTableUpdateCompanionBuilder,
+          (
+            SourceVariableRow,
+            BaseReferences<
+              _$ReaderDatabase,
+              $SourceVariablesTable,
+              SourceVariableRow
+            >,
+          ),
+          SourceVariableRow,
+          PrefetchHooks Function()
+        > {
+  $$SourceVariablesTableTableManager(
+    _$ReaderDatabase db,
+    $SourceVariablesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SourceVariablesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SourceVariablesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SourceVariablesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> sourceUrl = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> value = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SourceVariablesCompanion(
+                sourceUrl: sourceUrl,
+                name: name,
+                value: value,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String sourceUrl,
+                required String name,
+                required String value,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SourceVariablesCompanion.insert(
+                sourceUrl: sourceUrl,
+                name: name,
+                value: value,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SourceVariablesTable, SourceVariableRow>(table),
+                  BaseReferences<
+                    _$ReaderDatabase,
+                    $SourceVariablesTable,
+                    SourceVariableRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SourceVariablesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ReaderDatabase,
+      $SourceVariablesTable,
+      SourceVariableRow,
+      $$SourceVariablesTableFilterComposer,
+      $$SourceVariablesTableOrderingComposer,
+      $$SourceVariablesTableAnnotationComposer,
+      $$SourceVariablesTableCreateCompanionBuilder,
+      $$SourceVariablesTableUpdateCompanionBuilder,
+      (
+        SourceVariableRow,
+        BaseReferences<
+          _$ReaderDatabase,
+          $SourceVariablesTable,
+          SourceVariableRow
+        >,
+      ),
+      SourceVariableRow,
+      PrefetchHooks Function()
+    >;
 
 class $ReaderDatabaseManager {
   final _$ReaderDatabase _db;
@@ -8789,4 +9317,6 @@ class $ReaderDatabaseManager {
       $$CookiesTableTableManager(_db, _db.cookies);
   $$RulesTableTableManager get rules =>
       $$RulesTableTableManager(_db, _db.rules);
+  $$SourceVariablesTableTableManager get sourceVariables =>
+      $$SourceVariablesTableTableManager(_db, _db.sourceVariables);
 }

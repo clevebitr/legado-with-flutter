@@ -57,6 +57,7 @@
 |---|---|---|
 | `SearchRule` | `bookList`、`name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl`、`updateTime`；`checkKeyWord` | M0（`updateTime` 为 M1；`checkKeyWord` 为 **5.10**） |
 | `ExploreRule` | 与 `SearchRule` 的九个列表字段**同形** + `updateTime`（上游 `BookListRule` 接口，`BookListRule.kt:6-18`；无 `checkKeyWord`） | M1 |
+| 书源级 | `bookSourceName`、`bookSourceUrl`、`bookSourceGroup`、`bookSourceType`、`enabled`、`header`、`searchUrl`、`exploreUrl`、`ruleSearch`、`ruleExplore`、`ruleBookInfo`、`ruleToc`、`ruleContent`、`concurrentRate`、`variableComment`、`loginUrl`、`loginUi`、`loginCheckJs` | M0 |
 | `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName`、`updateTime` | M0（`canReName`、`updateTime` 为 M1） |
 | `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
@@ -69,10 +70,14 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 在 `extra` 中承载，以便导出时不丢信息。
 
 > **列表类规则的「同形」约束（M1-b0 裁决，ADR-0035 §决策 1）：** `SearchRule` 与 `ExploreRule` 的九个
-> 列表字段由上游 `BookListRule` 接口固定，两者**必须同批**增减字段，不得只改一处；
-> 上游确实存在而本仓尚未建模的字段（`BookInfoRule.downloadUrls` /
-> `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay`）按「保留在 `extra` +
-> 去向登记」处理，清单与去向见 `docs/dev/roadmap.md` §3.7，不得在此处另开一份。
+> 列表字段由上游 `BookListRule` 接口固定，两者**必须同批**增减字段，不得只改一处。
+>
+> **上游存在而本仓尚未建模的字段（清单的唯一出处是 `docs/dev/engine-parity.md`）：**
+> `BookInfoRule.downloadUrls` / `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay`、
+> `ContentRule.subContent` / `title` / `payAction` / `callBackJs`、书源级 `jsLib` / `bookUrlPattern` /
+> `coverDecodeJs` / `ruleReview` / `eventListener` / `customButton` / `homepageModules`。
+> 它们的处理口径固定：**保留在 `extra`**（导入/导出不变形）+ **不假装支持**（不生效即是不生效）+
+> **去向登记**（`engine-parity.md` 的切片或「有意差异 + 触发条件」）。本表不重列、不另开清单。
 > `SearchRule.checkKeyWord` **不在此列**：它属「校验 / 调试的默认关键词」，已随 5.10 建模
 > （判据与默认值见 ADR-0043 §决策 2）。
 >
@@ -102,8 +107,9 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > 必然全空。
 > **本仓口径与登记差异：** `init` 复用列表规则的元素语义（`RuleEngine.selectAll`）——JSON 规则
 > 给出 `JsonScope`（后续字段从该子结构读），DOM 规则给出命中元素的 `DomScope`；命中多个时
-> **取第一个**，命中零个按 §7 报 `parseFailed`。**差异：** `init` 本身是裸 `@js:` 时报
-> `unsupported:@js:list`（列表规则尚无「JS 返回元素」的契约，见 §3 的 #14 注记）。
+> **取第一个**，命中零个按 §7 报 `parseFailed`。`init` 整条写成 `@js:` 或 `<js>…</js>` 时按
+> 列表规则的 JS 段求值（脚本返回数组即 scope 列表，见 §3 的 #14 注记补充）；**列表规则尾部**
+> 的 `@js:`（`class.a@js:…`）仍报 `unsupported:@js:list`，去向见 `docs/dev/engine-parity.md` S4。
 
 > **层归属与 `extra` 的落地形态**见 ADR-0021（模型位于 `domain/entities/`；`extra` 由
 > `fromLegadoJson` 逐层填充）。本表只拥有字段映射与分期。
@@ -251,7 +257,10 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 
 > **#14 注记（2026-10-12，随 3.4 落地；状态列已确认于 3.7）：** 值规则上的**终段** `@js:`
 > 已实现（`@js:` 贪婪吞掉本条规则剩余部分，与上游 `AppPattern.JS_PATTERN` 同形）；**列表规则**
-> 上的 `@js:` 报 `unsupported:@js:list`（尚无「JS 返回一列元素」的契约）。白名单绑定、配额与四条边界
+> 上的 `@js:` 当时报 `unsupported:@js:list`（尚无「JS 返回一列元素」的契约）——**该句已被 M12
+> 部分取代**：整条规则为 JS、或规则体内出现 `<js>…</js>` 时，脚本返回数组即条目；只有
+> **尾部** `@js:`（`class.list@tag.li@js:result`，上游同样支持）仍报 `unsupported:@js:list`，
+> 去向见 `docs/dev/engine-parity.md` S4。白名单绑定、配额与四条边界
 > （`js:timeout` / `js:error` / `js:parse-scope` / `js:parse-recursion` / `js:quota`）的唯一出处是
 > §6。**真实源证据（3.7，2026-10-12）：** 语料 `legado_js_rules_source.json`（猫耳FM，已脱敏）
 > 在活站点上跑通搜索 30 条 + 目录 34 条，两条逐项 `@js:`（`$.id@js:'…'+result` 与
@@ -328,7 +337,7 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > 「`class` / `id` / `tag` / `text` / `children`，**或一段原始 CSS**」。类型不在这五个之内时
 > （`.searchresult`、`li`、`dd`、`p`、`tr!0`、`#txt`、`div.item`），该段整体作为 CSS 选择器交给
 > cascadia；`!` / `[...]` 后缀仍按位置解析（`tr!0` 不是合法 CSS）。`unsupportedRule` 只留给真正
-> 未实现的标志（`@xpath:` / 裸 `//` / `<js>` / `:正则` / M1 模板）。依据：G2b spot-check 实测
+> 未实现的标志（`@xpath:` / 裸 `//` / `:正则` / `@webJs`）。依据：G2b spot-check 实测
 > **197 条 M0 源中 137 条（69.5%）** 依赖该写法（复算命令与输出见 `tool/spot_check/README.md` §3；
 > ADR-0032 §背景的原始 157/270 已作废）。
 >
@@ -409,6 +418,13 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 > 额外多一个 `key`（搜索关键词；ADR-0034 §决策 3）；`result` 尚未取页面，保持不绑。
 > 脚本结果里的整数不带 `.0`（上游对整数结果的格式化，`AnalyzeUrl.kt:203-207`），
 > 未闭合的 `{{` 与渲染失败的 `{{…}}` 都是该字段的 `ParseFailed`（不把字面 `{{…}}` 交给请求层）。
+
+> **尚缺的三条 URL 方言（2026-10-26 登记，去向 `docs/dev/engine-parity.md` S4）：** 本节的模板语义
+> 只覆盖 `{{key}}` / `{{page}}` / `{{baseUrl}}` / `{{…}}` 四类，上游还有三处**没有**对应实现：
+> ① 页码取值 `<1,2,3>`（按 `page` 取第 n 个、超出取末值，`AnalyzeUrl.kt:777`）；② 段链 `@result`
+> （URL 由「字面段 + `@js:`/`<js>` 段」串联，字面段里的 `@result` 引用上一段产出，`:157-176`）；
+> ③ GET query 的**全量**按 `charset` 编码（本仓只编 `{{key}}`，`:268-273`、`:295-300`）。
+> 命中前两者的真实源现在会拿到字面文本/未转码参数（响亮失败或 404，不静默成功）。
 
 ### 4.1 目录与正文的特殊规则
 
@@ -647,9 +663,17 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `parse.getString(rule, doc)` | `String` | 复用规则引擎，可递归 | M0 |
 | `parse.getElements(rule, doc)` | `List` | 同上 | M0 |
 | `java.put(key, value)` / `java.get(key)` | `void` / `String` | 规则变量，与 `@put:` / `@get:` 是同一份（ADR-0034）；**仅 JS 内可用** | M1 |
+| `java.ajax(url[, headers])` | `String` | **同步**返回正文（上游写法）。未命中本 job 的取页缓存时抛哨兵，worker 取页后**从头重跑**；失败抛错，规则自己的 `try` / `catch` 可用（ADR-0076 §决策 1，语义见下方「同步族」） | M24 |
+| `java.post(url, body, headers)` | 响应对象 | **同步**返回响应对象（与 `loginCheckJs` 的 `result` 同形：`body` 属性 + `url()` / `code()` / `header(name)` …），规则靠它读 `Location` | M24 |
+| `java.head(url)` | 响应对象 | 同上，动词是 `HEAD`（`HttpClient.head`），正文为空 | M24 |
+| `java.getCookie(url[, key])` | `String?` | 读 Cookie 宗；带 `key` 时给该 cookie 的值（没有则 `null`），不带时给整条 `Cookie` 头（没有则 `''`） | M24 |
+| `cookie.getCookie(url[, key])` / `cookie.setCookie(url, value)` / `cookie.removeCookie(url, key)` | `String?` / `void` / `void` | 与 `java.getCookie` 同一通道的上游另一种拼写；`setCookie` 可传一对也可传整条 `a=1; b=2`（逐对落宗），`removeCookie` 等价「空值 + `Max-Age=0`」 | M24 |
+| `java.setContent(html)` | `void` | 把本 job 的页级 scope 换成这份 HTML：随后的 `java.getString*` / `parse.*` 读新页面（`result` 绑定不变） | M24 |
+| `java.toast(msg)` / `java.longToast(msg)` | `void` | 转发到装配根绑定的 `UserMessages`（snack bar），同一 job 内同句只贴一次，同时记 info 日志 | M24 |
+| `source.getVariable(key)` / `setVariable(key, value)` / `putVariable(k, v)` | `String` / `void` | **每源持久变量**（Drift 表 `source_variables`），与 `java.get` / `put` 的规则变量**不是**同一张表；`setVariable` 写 `null` 删键 | M24 |
 | `java.startBrowser(url, title[, html])` | `void` | 打开**可见 WebView**让用户过人机验证；不等结果（ADR-0068 §决策 5） | M21a |
-| `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])` | `Promise<{url, body}>` | 同上但等用户按「完成」，成功后按需用新 cookie 重取；**本仓返回 Promise，规则里要 `await`**（上游是同步，差异见注记） | M21a |
-| `java.getVerificationCode(imageUrl)` | `Promise<String>` | 图片验证码对话框，返回用户输入的字符串；**需 `await`** | M21a |
+| `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])` | `Promise<{url, body}>` | 同上但等用户按「完成」，成功后按需用新 cookie 重取；**本仓返回 Promise，规则里要 `await`**（上游是同步，差异见注记）。同一个 `op+url` 在一个 job 里只问一次：重放的那一趟直接拿到上次的答案（ADR-0076 §决策 4） | M21a / M24 |
+| `java.getVerificationCode(imageUrl)` | `Promise<String>` | 图片验证码对话框，返回用户输入的字符串；**需 `await`**。答案同样按 `op+url` 记忆，重放不重复弹窗 | M21a / M24 |
 | `java.webView(url[, js])` / `webViewGetString(url[, js])` | `Promise<String>` | 隐藏 WebView 渲染（可执行 `js`），结果是 body | M21a |
 | `java.queryTTF(data)` | 句柄对象 | 字体反解（见下方注记）：`data` 认 **base64**（含 `data:…;base64,` 前缀与换行）与 **url**；url 走字节门并返回 Promise，规则要 `await` | M21a |
 | `java.queryBase64TTF(data)` | 句柄对象 | 同上的 base64 专用形态（上游已弃用，真实语料仍在用） | M21a |
@@ -714,11 +738,35 @@ java.replaceFont(result, errorFont, correctFont);
 | `getString(rule, false)` | 接受（`false` = 不 unescape，正是本仓行为）；`(rule, true)` 与三参形态**具名拒绝** | ✅ 已落地（M1-b1b） |
 | 列表返回值 | JS `Array`；沙箱另装 `Array.prototype.toArray()`（返回 `this`），配上游 Java `List.toArray()` 习惯用法（语料 38 处） | ✅ 已落地（M1-b1b） |
 | 多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)` / `encodeURI` 两参 …） | 具名拒绝：本仓没有 flags / charset 语义，猜一个只会静默给不同结果 | 拒绝 |
+| `ajax(url[, headers])` / `post(url, body, headers)` / `head(url)` / `getCookie(url[, key])` / `setContent(html)` / `toast(msg)` / `longToast(msg)` | 同步族与提示族；语义见上方绑定表与「同步族」注记 | ✅ M24（ADR-0076） |
 | 其余成员 | 见 §11 的具名拒绝清单（抛错存根，Rhino 互操作类用抛错 Proxy） | M2 |
 
-> **规则求值族的时机（登记差异）：** ①在脚本执行前求值，②在脚本执行到那一行时求值。脚本无法改变
-> scope（`java.setContent` 属 M2），所以这个时机差在实践中不可观测；两条路径**共用同一实现点**，
-> 同一 (规则, scope) 的结果必然一致。URL 规则里**没有**页面 scope，该族命中即按 `js:parse-scope` 同族拒绝。
+**同步族（M24，ADR-0076 §决策 1）：** 上游的 Rhino 可以阻塞线程直到页面回来，所以 `java.ajax` 是**同步**的；
+本仓的 QuickJS 在独立 isolate 里，宿主的回答只能是 Future，因此用「**取页缓存 + 从头重跑**」仿真：
+
+1. 脚本命中一个本 job 还没取过的同步调用 → worker 抛哨兵，记下 `{op, url, body, key}`；
+2. 桥取一次页（或读一次 Cookie 宗），答案连同失败一起记进缓存，然后脚本**从第一行重跑**；
+3. 重跑时同一个调用同步拿到缓存里的值（失败则抛错，规则自己的 `try` / `catch` 照常工作）。
+
+规则作者必须知道四件事：
+
+- **整条规则会重跑 n 次**（n = 不同同步调用的个数）。`java.put` / `source.setVariable` 这类写入每趟重做，
+  幂等；**非幂等副作用（外部计数、发消息）会被重复执行**，这是这条路线明写的代价。
+- **pass 上限 16**：不同同步调用（含 `java.post` / `java.head` / Cookie 三个动词）超过 16 个时该字段失败，
+  `rulePath` 带 `js:replay`——意思是「这条规则重放不了」，不是超时。
+- **取页的时间不算脚本预算**：同步取页期间硬预算暂停、等掉的时间从 `elapsedMs` 扣掉，且每趟重跑
+  重新拥有一次调用额度（额度的单位是「一趟」，不是「一个 job」）。
+- **验证类只问一次**：`getVerificationCode` / `startBrowserAwait` / `startBrowser` 按 `op+url` 记答案，
+  重放的那趟直接答上次的结果，不会再弹一次窗（它们的形态仍是 Promise，规则要 `await`）。
+
+> **`java.setContent` 的边界：** 它只换**同一 job 内后续** `java.getString*` / `parse.*` 读的页级 scope；
+> `result` 绑定与已经算出的值不变，也不影响 job 之外的阶段。首参是字符串字面量的 `java.getString`
+> 会被引擎在 job 之前内联（见上表），因此那一路看不到 `setContent`。
+
+> **规则求值族的时机（登记差异）：** ①在脚本执行前求值，②在脚本执行到那一行时求值。首参是字面量时
+> 走①，所以那一路读不到 `java.setContent` 换掉的页面（§6「`java.setContent` 的边界」）；两条路径**共用
+> 同一实现点**，同一 (规则, scope) 的结果必然一致。URL 规则里**没有**页面 scope，该族命中即按
+> `js:parse-scope` 同族拒绝。
 
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
 `eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。
@@ -726,12 +774,14 @@ java.replaceFont(result, errorFont, correctFont);
 > **JS 侧形态（本表是唯一出处；ADR-0029 §决策 3，2026-10-11 生效）：** 本表「形态」列描述的是**值类型**；
 > 调用能否同步取值另有一层，判定标准是「该绑定是否需要在别处执行」：
 >
-> - **立即返回值（同步）**：`java.put` / `java.get`、`log.*`、`crypto.*`。
->   前提是它们只在运行时所在 isolate 内完成（变量存 Dart 侧、按 `sourceId` 键控，见 ADR-0030 §决策 4）；
+> - **立即返回值（同步）**：`java.put` / `java.get` / `source.getVariable` / `source.setVariable`、`log.*`、
+>   `crypto.*`、`java.timeFormat`，以及**重放层**里的 `java.ajax` / `java.post` / `java.head` / `java.getCookie` /
+>   `cookie.*`（ADR-0076 §决策 1：它们值上同步，背后是「未命中则抛哨兵 → 取页 → 从头重跑」）。
+>   前提是它们要么只在运行时所在 isolate 内完成（变量存 Dart 侧、按 `sourceId` 键控，见 ADR-0030 §决策 4），
+>   要么由重放层兑现「值上同步」；
 > - **返回 Promise（规则**必须** `await`）**：`http.get` / `http.post`（唯一实现是 `core/network/HttpClient`，
->   C-NET-1）、`parse.getString` / `parse.getElements`（引擎与 scope 不在该 isolate）。
->   **同步写法不在支持面**，不得写成 `result.replace(...)` 式的同步链；仅凭 3.7 真实语料证据 + 新 ADR
->   才可追加（ADR-0029 §决策 4）。
+>   C-NET-1）、`parse.getString` / `parse.getElements`（引擎与 scope 不在该 isolate）、验证族与 `java.webView*`。
+>   仅凭 3.7 真实语料证据 + 新 ADR 才可追加（ADR-0029 §决策 4）；重放层就是那条新 ADR。
 >
 > **`parse.*` 的 scope 边界（ADR-0029 §决策 5）：** 3.3 只承诺**页级 scope**（worker 侧用页面 body 重建）；
 > 元素级 scope 命中时报 `unsupportedRule` / `parseFailed`，`rulePath` 用 `js:parse-scope`。
@@ -755,10 +805,11 @@ java.replaceFont(result, errorFont, correctFont);
 >   连接符；`result` 的形态按上游：`getString` 语义（单值字段）给**字符串**，`getStringList`
 >   语义（多值字段，如 `nextTocUrl`）给**列表**，列表返回值也保持列表（§4.1 的 URL 数组靠它）；
 >   `##` 替换在脚本**之后**应用（上游同一 `SourceRule` 的 `replaceRegex` 也是最后跑）。
-> - **未落的边界（显式报错，不静默）：** 列表规则（`bookList` / `chapterList`）上的 `@js:` 报
->   `unsupported:@js:list`（它要的是「JS 返回一列元素」的契约——上游 `getElements` 的
->   `Mode.Js` 分支，`AnalyzeRule.kt:439`——尚未成型）；`<js>…</js>` 仍按矩阵 #31 拒（M2；
->   `exploreUrl` 整字段那一个例外见矩阵 #31 的注记与 §4.2）。
+> - **列表规则的 JS 边界（M12 落定）：** 整条规则就是 JS（裸 `@js:` 开头）或规则体内出现
+>   `<js>…</js>` 时走**分段链**，脚本返回的数组逐项成为条目（上游 `getElements` 的 `Mode.Js`
+>   分支，`AnalyzeRule.kt:439`）；**只有尾部 `@js:`**（`class.list@tag.li@js:result`）仍报
+>   `unsupported:@js:list`——上游把这种形态当「选择器段 + JS 段」的链，本仓尚未打通，去向见
+>   `docs/dev/engine-parity.md` S4。`exploreUrl` 整字段的 `<js>` 另见 §4.2。
 > - **独立 `@js:` 的 `result`：** 整页 scope 给 responseBody；**元素 scope**（逐项字段，如
 >   `searchRule.name`）给它自己的 `outerHtml`——沙箱里没有 DOM 句柄可交（ADR-0029 §决策 5），
 >   但规则总得看见它所属的那一项；JSON 条目 scope 给该条目的 JSON 文本。
@@ -1052,31 +1103,18 @@ java.replaceFont(result, errorFont, correctFont);
   `source.getLoginInfo()` / `getLoginInfoMap()` **已实现**（M22-a，ADR-0072 §决策 3），但登录信息目前只喂给
   登录自己的脚本 job，页面请求的 job 里还读不到（登记在 `roadmap.md` §3.7）
 - 图片字节解密 `ruleContent.imageDecode`（非空即显式 `unsupportedRule`，ADR-0069 G5）
-- **同步**返回响应对象的 `java.post` / `java.get` / `java.ajax*` / `java.head` / `java.connect`：
-  沙箱阻塞不了宿主，规则要写 `await http.post(...)`（ADR-0069 G6 登记差异）
-- RSS / 订阅源、朗读规则
-- 需要浏览器 DOM/BOM 的网页 JS、依赖 Android WebView 行为的规则
-- 提取段里的嵌套规则（矩阵 #30：末段本身是一条规则，如 `class.a@css:.b`；命中报 `unsupported:nested-rule`）
-- `<js>…</js>` JS 包装（矩阵 #31：任意位置、可作分隔符；命中报 `unsupported:<js>`）
-  —— **唯一例外：** 整个 `exploreUrl` 字段就是一个 `<js>…</js>` 时，按发现页整字段 JS 支持
-  （§4.2、ADR-0035 §决策 6）；它在规则体内的分隔符用法仍属 M2。
-- 发现页的**表单型分类**（`type` 为 `text` / `button` / `toggle` / `select`，以及 `chars` / `default` /
-  `action` / `style`）：M1 只支持 `type` 缺省或 `url`；命中报 `unsupportedRule` 并记录，
-  其余分类照常（§4.2）。
-- 发现页整字段 JS 的 `infoMap` 绑定、分类参数传递（`args` / 临时变量）与排名模块
-  （`executeForRanking` 一套）：均不在 M1；`infoMap` 命中即 `js:error`（§4.2）。
-- `java.timeFormatUTC(time, format, sh)`（带时区偏移与自定义 pattern）：不在 M1；
-  `java.timeFormat` 的语义见 §6。
 - **`java.*` 的具名拒绝族（ADR-0037 §决策 5；形态与实现档位见 §6 的兼容面表）：**
-  **其中 `get` / `put` 不在拒绝族里：** §6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**读写（ADR-0034），名字被占用；上游那套同步返回 body 的 `get(url)` / `post(url)` 因此没有可用拼写，只能靠 `ajax` 族具名拒绝（`java.post` 也已登记具名拒绝）。另：`base64Encode` / `base64Decode` 的多参重载**具名拒绝**（本仓没有 `flags` / `charset` 语义）。
-  `ajax` / `get` / `post` / `head` / `ajaxAll` / `connect`（上游**同步**返回 body，与本仓 `http.*` 的
-  Promise 形态冲突）、`webViewGetElements`（本仓没有元素列表形态的渲染接口）、
-  `downloadFile` / `cacheFile` / `importScript` / `getCookie`（沙箱禁忌或需要平台能力）、
-  `setContent`（脚本中途改 scope，
-  需要一个规则 / 作用域 API）、`toast` / `longToast`（UI）、`base64DecodeToByteArray` /
-  `hexDecodeToByteArray`（Rhino 字节数组；语料里 326/328 处直接喂给 `IvParameterSpec` /
-  `SecretKeySpec`，即密钥类 crypto）、`createSymmetricCrypto` / `aes*` / `des*` / `HMac*`（密钥类 crypto）、
+  其中 `get` / `put` 不在拒绝族里——§6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**
+  读写（ADR-0034），名字被占用，上游那套同步返回 body 的 `get(url)` 因此仍无可用拼写。
+  **重放层落地后仍拒绝的：** `ajaxAll` / `connect`（上游同步返回响应对象，只要整表的规则才需要）、
+  `webViewGetElements`（本仓没有元素列表形态的渲染接口）、`downloadFile` / `cacheFile` / `importScript`
+  （沙箱禁忌或需要平台能力）、`base64DecodeToByteArray` / `hexDecodeToByteArray`（Rhino 字节数组；
+  语料里 326/328 处直接喂给 `IvParameterSpec` / `SecretKeySpec`，即密钥类 crypto）、
+  `createSymmetricCrypto` / `aes*` / `des*` / `HMac*`（密钥类 crypto）、
   `md5Encode16` / `htmlFormat` / `refreshBookUrl`（零散）——命中即抛**可读错误**，不得落到
-  `undefined is not a function`。
+  `undefined is not a function`。多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)`）
+  同样具名拒绝：本仓没有 flags / charset 语义。
+  **已随 M24 落地、不再拒绝：** `java.ajax` / `java.post` / `java.head` / `java.getCookie` / `java.setContent` /
+  `java.toast` / `java.longToast` / `cookie.*` / `source.getVariable`（语义见 §6）。
 - Rhino Java 互操作（`java.lang` / `java.security` / `java.util` / `java.net`，以及 `Packages.*`）：
   `new java.util.ArrayList()` 这类写法命中**抛错 Proxy**，报可读原因。

@@ -7,10 +7,13 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
+import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/platform/user_messages.dart';
 import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
@@ -40,15 +43,26 @@ void main() {
   late _ProbeHttpClient http;
   // 变量表由桥与引擎共用：脚本 `java.put` 写进去的，`@get:` 与 `{{…}}` 要能读到（ADR-0034）。
   final JsVariableStore variables = JsVariableStore();
+  // 同步族（ADR-0076 §决策 1）要的三件东西：Cookie 宗、每源变量、提示通道。
+  late InMemoryCookieManager cookies;
+  late SourceVariableStore sourceVariables;
+  late _CollectingMessages messages;
 
   setUp(() {
     printer = _CollectingPrinter();
     http = _ProbeHttpClient();
+    cookies = InMemoryCookieManager();
+    // 真实存储的读写在 `source_variable_dao_test` 里；探针只需要「值能存、能取回」。
+    sourceVariables = SourceVariableStore();
+    messages = _CollectingMessages();
     bridge = QuickJsWorkerBridge(
       logger: AppLogger(level: LogLevel.debug, printer: printer),
       launch: launchQuickJsWorker,
       http: http,
       variables: variables,
+      cookies: cookies,
+      sourceVariables: sourceVariables,
+      userMessages: messages,
     );
   });
 
@@ -901,7 +915,9 @@ void main() {
     // `Packages.*` 是 Rhino 的另一条互操作入口（`Packages.java.lang.…`），同样具名拒绝——
     // 不然它是 `Packages is not defined` 这种更难懂的错误。
     for (final String script in <String>[
-      "java.ajax('https://a.test')",
+      // `java.ajax` / `getCookie` / `toast` 已随重放层落地（ADR-0076 §决策 1），这里改用仍然
+      // 具名拒绝的两个：一个是零散成员，一个是 Rhino 互操作入口。
+      "java.refreshBookUrl('https://a.test')",
       "Packages.java.lang.String('x')",
     ]) {
       final ParseResult<Object?> result = await bridge.evaluate(
@@ -950,6 +966,179 @@ void main() {
 
     expect(_value(result), 'One|1');
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets(
+    'jsBridge_whenARuleReadsSyncPages_answersEveryValueAfterReplays',
+    (WidgetTester tester) async {
+      http.body = '<p>第一页</p>';
+
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script:
+              "var a = java.ajax('https://js.test/1');"
+              "var b = java.ajax('https://js.test/2');"
+              "a + '|' + b + '|' + java.ajax('https://js.test/1')",
+        ),
+      );
+
+      expect(_value(result), '<p>第一页</p>|<p>第一页</p>|<p>第一页</p>');
+      // 三个调用、两个不同地址：每次都从头重跑，但每趟只新取一页。
+      expect(http.requestedUrls, <String>[
+        'https://js.test/1',
+        'https://js.test/2',
+      ]);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets(
+    'jsBridge_whenARulePostsAndReadsTheLocation_seesTheResponseObject',
+    (WidgetTester tester) async {
+      // 触发源的核心写法：POST 之后读 302 的目标地址，再按它重发（ADR-0076 §背景）。
+      http.responseHeaders = <String, List<String>>{
+        'location': <String>['?9bdb14'],
+      };
+
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script:
+              "var res = java.post('https://js.test/sscc/', 'kw=x', "
+              "{'Content-Type': 'application/x-www-form-urlencoded'});"
+              "res.header('Location') + '|' + res.code() + '|' + res.url()",
+        ),
+      );
+
+      expect(_value(result), '?9bdb14|200|https://js.test/');
+      expect(http.requestedMethods.last, 'POST');
+      expect(http.lastBody, 'kw=x');
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets('jsBridge_whenARuleKeepsCallingJavaAjax_stopsAtTheReplayLimit', (
+    WidgetTester tester,
+  ) async {
+    // 超过 16 趟就报 `js:replay`：这是「这条规则重放不了」，不是超时。
+    http.body = 'x';
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var all = '';"
+            "for (var i = 0; i < 20; i++) { all += java.ajax('https://js.test/' + i); }"
+            'all',
+      ),
+    );
+
+    final ParseFailure<Object?> failure = result as ParseFailure<Object?>;
+    expect(failure.kind, ParseFailureKind.parseFailed);
+    expect(failure.rulePath, endsWith(':js:replay'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleUsesCookies_readsAndWritesTheJar', (
+    WidgetTester tester,
+  ) async {
+    cookies.storeFromResponse(Uri.parse('https://js.test/'), <String>[
+      'token=abc123; Path=/',
+    ]);
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var token = java.getCookie('https://js.test/', 'token');"
+            "cookie.setCookie('https://js.test/', 'added=1');"
+            "token + '|' + cookie.getCookie('https://js.test/', 'added')",
+      ),
+    );
+
+    expect(_value(result), 'abc123|1');
+    expect(
+      cookies.cookieHeaderFor(Uri.parse('https://js.test/')),
+      contains('added=1'),
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets(
+    'jsBridge_whenARuleStoresASourceVariable_persistsItForTheNextJob',
+    (WidgetTester tester) async {
+      // 每源变量是**持久**的：第一个 job 写进去的，第二个 job 读得到（ADR-0076 §决策 1）。
+      await bridge.evaluate(
+        _job(
+          script: "source.setVariable('token', 'abc'); 'written'",
+          source: const JsSourceInfo(
+            name: '示例书源',
+            url: 'https://example-novel.test',
+          ),
+        ),
+      );
+
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script:
+              "source.getVariable('token') + '|' + source.getVariable('none')",
+          source: const JsSourceInfo(
+            name: '示例书源',
+            url: 'https://example-novel.test',
+          ),
+          // 生产链上这张快照由规则引擎下发（`RuleEngine._runScript`）；这里直接喂给 job。
+          sourceVariables: sourceVariables.snapshot(
+            'https://example-novel.test',
+          ),
+        ),
+      );
+
+      expect(_value(result), 'abc|');
+      expect(
+        sourceVariables.snapshot('https://example-novel.test'),
+        <String, String>{'token': 'abc'},
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets('jsBridge_whenARuleToasts_reachesTheUserMessagesPortOnce', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "java.toast('请先登录'); java.longToast('请先登录'); 'done'"),
+    );
+
+    expect(_value(result), 'done');
+    // 重放会把同一行再走一遍，但同一句在一个 job 里只贴一次。
+    expect(messages.shown, <String>['请先登录']);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleSetsContent_readsTheReplacedPage', (
+    WidgetTester tester,
+  ) async {
+    // `java.setContent(html)` 换掉页级 scope：同一 job 内后面的 `java.getString` 读新页面
+    // （ADR-0076 §决策 1）。上游常写成「先取页，再 setContent，再抽字段」。
+    const String pageHtml = '<ul class="list"><li class="odd">旧</li></ul>';
+    final RuleEngine engine = RuleEngine(
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      jsBridge: bridge,
+      variables: variables,
+    );
+    final RuleScope scope = RuleScope.dom(
+      parser.parse(pageHtml),
+      body: pageHtml,
+      jsContext: const JsPageContext(
+        baseUrl: 'https://example-novel.test/search',
+      ),
+    );
+
+    // 规则参数写成变量，才走**运行时**的 `parse.*` 通道：字面量首参会被引擎在 job 之前内联
+    // （ADR-0037 §决策 3①），那样就绕过了 setContent。
+    final ParseResult<String?> result = await engine.extractFirst(
+      "@js:java.setContent('<ul class=\"list\"><li class=\"odd\">新</li></ul>');"
+      "var selector = 'class' + '.odd.0@text';"
+      'java.getString(selector)',
+      scope,
+      rulePath: 'contentRule.content',
+    );
+
+    expect(_value(result), '新');
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }
 
 /// A job whose script decides the behaviour; the variables are the §6 bindings.
@@ -962,6 +1151,7 @@ JsJob _job({
   required String script,
   Map<String, String>? sourceHeaders,
   Map<String, String> variables = const <String, String>{},
+  Map<String, String> sourceVariables = const <String, String>{},
   JsSourceInfo source = const JsSourceInfo(
     name: '示例书源',
     url: 'https://example-novel.test',
@@ -980,6 +1170,7 @@ JsJob _job({
   response: response,
   sourceHeaders: sourceHeaders,
   variables: variables,
+  sourceVariables: sourceVariables,
   bookName: bookName,
   chapterTitle: chapterTitle,
   book: book,
@@ -1024,6 +1215,9 @@ final class _ProbeHttpClient implements HttpClient {
 
   /// The body served for every request.
   String body = '';
+
+  /// The response headers served with every request.
+  Map<String, List<String>> responseHeaders = const <String, List<String>>{};
 
   /// The bytes served to `getBytes` (the font byte door); falls back to [body] when unset.
   Uint8List? bytes;
@@ -1109,15 +1303,50 @@ final class _ProbeHttpClient implements HttpClient {
     return _answer();
   }
 
-  /// The canned 200 with [body].
+  @override
+  Future<ParseResult<HttpResponse>> head(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxRetries,
+    Duration? receiveTimeout,
+  }) async {
+    requestedUrls.add(url);
+    requestedMethods.add('HEAD');
+    lastHeaders = headers;
+    lastSourceId = sourceId;
+
+    // HEAD 没有正文：上游 `java.head` 就只要响应头（ADR-0076 §决策 1）。
+    return ParseSuccess<HttpResponse>(
+      HttpResponse(
+        statusCode: 200,
+        headers: responseHeaders,
+        body: '',
+        url: 'https://js.test/',
+      ),
+    );
+  }
+
+  /// The canned 200 with [body] and [responseHeaders].
   ParseResult<HttpResponse> _answer() => ParseSuccess<HttpResponse>(
     HttpResponse(
       statusCode: 200,
-      headers: const <String, List<String>>{},
+      headers: responseHeaders,
       body: body,
       url: 'https://js.test/',
     ),
   );
+}
+
+/// Collects `java.toast` messages; the real port shows a snack bar.
+final class _CollectingMessages implements UserMessages {
+  /// Every message, in order.
+  final List<String> shown = <String>[];
+
+  @override
+  void show(String message) => shown.add(message);
 }
 
 /// A [PurgeRuleSource] answering a fixed list (the device test's rules are written inline).

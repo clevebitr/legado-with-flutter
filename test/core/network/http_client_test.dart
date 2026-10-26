@@ -755,6 +755,44 @@ void main() {
       );
     });
 
+    test('head_whenServerAnswers_sendsTheHeadMethodWithoutABody', () async {
+      // `java.head(url)` 的宿主侧（ADR-0076 §决策 1）：只要响应头，所以是 HEAD，
+      // 其余规则（地址校验、预算、重试、头策略）与 GET 完全一致。
+      final _Fixture fixture = _buildClient();
+      fixture.adapter.enqueueResponse(
+        bytes: const <int>[],
+        headers: <String, List<String>>{
+          'location': <String>['/next'],
+        },
+      );
+
+      final HttpResponse response = _expectSuccess(
+        await fixture.client.head(
+          'https://example.com/page',
+          rulePath: 'java.head',
+        ),
+      );
+
+      expect(response.body, isEmpty);
+      expect(response.headers['location'], <String>['/next']);
+      expect(fixture.adapter.requests.single.method, 'HEAD');
+    });
+
+    test('head_sharesTheGetRejectionPolicy', () async {
+      final _Fixture fixture = _buildClient();
+
+      expect(
+        _expectFailure(
+          await fixture.client.head(
+            'http://example.com/a',
+            rulePath: 'java.head',
+          ),
+        ),
+        ParseFailureKind.networkFailed,
+      );
+      expect(fixture.adapter.requests, isEmpty);
+    });
+
     test('post_whenTheBodyIsAbsent_sendsAnEmptyPayload', () async {
       // `http.post` 的 options 里没有 body 时不能凭空造一个：POST 与 GET 共用同一条
       // 决策路径，唯一差别就是 method 与 data。

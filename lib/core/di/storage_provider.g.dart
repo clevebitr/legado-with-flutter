@@ -376,6 +376,123 @@ final class CookieStoreProvider
 
 String _$cookieStoreHash() => r'e3128f6c0f9a0a2cd719894aa2a6df4aa54bdb47';
 
+/// Provides the DAO of the per-source variables (`source.getVariable`, ADR-0076 §决策 1).
+
+@ProviderFor(sourceVariableDao)
+final sourceVariableDaoProvider = SourceVariableDaoProvider._();
+
+/// Provides the DAO of the per-source variables (`source.getVariable`, ADR-0076 §决策 1).
+
+final class SourceVariableDaoProvider
+    extends
+        $FunctionalProvider<
+          SourceVariableDao,
+          SourceVariableDao,
+          SourceVariableDao
+        >
+    with $Provider<SourceVariableDao> {
+  /// Provides the DAO of the per-source variables (`source.getVariable`, ADR-0076 §决策 1).
+  SourceVariableDaoProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sourceVariableDaoProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sourceVariableDaoHash();
+
+  @$internal
+  @override
+  $ProviderElement<SourceVariableDao> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SourceVariableDao create(Ref ref) {
+    return sourceVariableDao(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SourceVariableDao value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SourceVariableDao>(value),
+    );
+  }
+}
+
+String _$sourceVariableDaoHash() => r'd70a044b4e44310913262cb929888401d27febb5';
+
+/// Provides the per-source variable store the rule engine seeds jobs from and the bridge writes
+/// through.
+///
+/// `keepAlive` matters: the store holds an in-memory copy per source, and a rebuild between two
+/// stages (search → detail → toc) would read the table again for no reason.
+
+@ProviderFor(sourceVariableStore)
+final sourceVariableStoreProvider = SourceVariableStoreProvider._();
+
+/// Provides the per-source variable store the rule engine seeds jobs from and the bridge writes
+/// through.
+///
+/// `keepAlive` matters: the store holds an in-memory copy per source, and a rebuild between two
+/// stages (search → detail → toc) would read the table again for no reason.
+
+final class SourceVariableStoreProvider
+    extends
+        $FunctionalProvider<
+          SourceVariableStore,
+          SourceVariableStore,
+          SourceVariableStore
+        >
+    with $Provider<SourceVariableStore> {
+  /// Provides the per-source variable store the rule engine seeds jobs from and the bridge writes
+  /// through.
+  ///
+  /// `keepAlive` matters: the store holds an in-memory copy per source, and a rebuild between two
+  /// stages (search → detail → toc) would read the table again for no reason.
+  SourceVariableStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sourceVariableStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sourceVariableStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<SourceVariableStore> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SourceVariableStore create(Ref ref) {
+    return sourceVariableStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SourceVariableStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SourceVariableStore>(value),
+    );
+  }
+}
+
+String _$sourceVariableStoreHash() =>
+    r'6a781f1a467108c9c9da87d80111e7f84197b07b';
+
 /// Provides the DAO of the reading records.
 
 @ProviderFor(readRecordDao)

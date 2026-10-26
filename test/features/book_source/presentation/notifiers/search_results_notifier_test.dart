@@ -1,6 +1,8 @@
 import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/search_results_notifier.dart';
@@ -8,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../support/fake_cookie_store.dart';
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/fake_log_printer.dart';
 import '../../../../support/offline_corpus.dart';
@@ -27,6 +30,12 @@ void main() {
             appLoggerProvider.overrideWithValue(
               AppLogger(level: LogLevel.debug, printer: printer),
             ),
+            // 每源变量表（ADR-0076 §决策 1）默认写穿数据库；这两条用例要的是「协作者抛异常」，
+            // 不是存储，所以换成不落盘的 store 与内存 Cookie 宗。
+            sourceVariableStoreProvider.overrideWithValue(
+              SourceVariableStore(),
+            ),
+            cookieStoreProvider.overrideWithValue(FakeCookieStore()),
           ],
         );
         addTearDown(container.dispose);
@@ -68,6 +77,12 @@ void main() {
             appLoggerProvider.overrideWithValue(
               AppLogger(level: LogLevel.debug, printer: printer),
             ),
+            // 每源变量表（ADR-0076 §决策 1）默认写穿数据库；这两条用例要的是「协作者抛异常」，
+            // 不是存储，所以换成不落盘的 store 与内存 Cookie 宗。
+            sourceVariableStoreProvider.overrideWithValue(
+              SourceVariableStore(),
+            ),
+            cookieStoreProvider.overrideWithValue(FakeCookieStore()),
           ],
         );
         addTearDown(container.dispose);

@@ -8,9 +8,12 @@ import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
+import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
+import 'package:flutter_reader/core/platform/user_messages.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
@@ -26,6 +29,9 @@ typedef _Fixture = ({
   List<FakeJsWorkerHandle> workers,
   FakeHttpClient http,
   JsVariableStore variables,
+  SourceVariableStore sourceVariables,
+  InMemoryCookieManager cookies,
+  _FakeUserMessages messages,
   _FakeVerification verification,
   _FakeWebPages webPages,
 });
@@ -41,6 +47,9 @@ _Fixture _buildBridge({
   Duration killGrace = const Duration(seconds: 2),
   int maxBindingCalls = defaultJsMaxBindingCalls,
   JsVariableStore? variables,
+  SourceVariableStore? sourceVariables,
+  InMemoryCookieManager? cookies,
+  bool bindCookies = true,
   void Function(FakeJsWorkerHandle worker)? configure,
   _FakeVerification? verification,
   _FakeWebPages? webPages,
@@ -49,6 +58,10 @@ _Fixture _buildBridge({
   final List<FakeJsWorkerHandle> workers = <FakeJsWorkerHandle>[];
   final FakeHttpClient http = FakeHttpClient();
   final JsVariableStore store = variables ?? JsVariableStore();
+  final SourceVariableStore sourceStore =
+      sourceVariables ?? SourceVariableStore();
+  final InMemoryCookieManager cookieJar = cookies ?? InMemoryCookieManager();
+  final _FakeUserMessages messages = _FakeUserMessages();
   final _FakeVerification fakeVerification =
       verification ?? _FakeVerification();
   final _FakeWebPages fakePages = webPages ?? _FakeWebPages();
@@ -71,11 +84,17 @@ _Fixture _buildBridge({
       maxBindingCalls: maxBindingCalls,
       verification: fakeVerification,
       webPages: fakePages,
+      cookies: bindCookies ? cookieJar : null,
+      sourceVariables: sourceStore,
+      userMessages: messages,
     ),
     printer: printer,
     workers: workers,
     http: http,
     variables: store,
+    sourceVariables: sourceStore,
+    cookies: cookieJar,
+    messages: messages,
     verification: fakeVerification,
     webPages: fakePages,
   );
@@ -127,6 +146,24 @@ Object? _scriptOf(Map<String, Object?> envelope) {
   final Object? job = envelope['job'];
 
   return job is Map ? job['script'] : null;
+}
+
+/// Ends the in-flight `hold` job so a test does not wait for the bridge's budget.
+///
+/// The bridge's timers are the only thing left running once a test has seen its reply; folding the
+/// ending into one place keeps the suite free of five-second waits (`docs/dev/testing.md` §8).
+Future<ParseResult<Object?>> _finish(
+  FakeJsWorkerHandle worker,
+  Future<ParseResult<Object?>> call,
+) {
+  worker.emit(<String, Object?>{
+    'type': 'result',
+    'ok': true,
+    'value': 'done',
+    'elapsedMs': 0,
+  });
+
+  return call;
 }
 
 /// Returns the failure of [result], failing the test when it succeeded.
@@ -194,6 +231,15 @@ final class _FakeVerification implements SourceVerification {
 
     return code;
   }
+}
+
+/// Records the messages a rule asked the UI to show (`java.toast`).
+final class _FakeUserMessages implements UserMessages {
+  /// Every message, in order.
+  final List<String> messages = <String>[];
+
+  @override
+  void show(String message) => messages.add(message);
 }
 
 /// Serves rendered pages for `java.webView` (the real one is a WebView).
@@ -1794,6 +1840,560 @@ void main() {
       expect(
         ((await call) as ParseFailure<Object?>).kind,
         ParseFailureKind.unsupportedRule,
+      );
+    });
+  });
+
+  group('synchronous channel', () {
+    test('syncAjax_whenARuleAsksForAPage_fetchesAndAnswersTheBody', () async {
+      // 上游写 `java.ajax(url)` 直接拿正文：worker 未命中缓存时把这通电话打到这里。
+      final _Fixture fixture = _buildBridge();
+      fixture.http.serve('https://example-novel.test/chapter', '<p>x</p>');
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'ajax',
+          'url': 'https://example-novel.test/chapter',
+          'headers': <String, Object?>{
+            'Referer': 'https://example-novel.test/',
+          },
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(
+        _replies(worker).single['value'],
+        '<p>x</p>',
+        reason: '同步取页的答案就是正文本身',
+      );
+      expect(fixture.http.requestedMethods, <String>['GET']);
+      expect(
+        fixture.http.requestedHeaders.single,
+        containsPair('Referer', 'https://example-novel.test/'),
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('syncPost_whenARulePostsAForm_answersTheResponseView', () async {
+      // 上游 `java.post(url, body, headers).header("Location")`：响应对象的形状与
+      // `http.* {response:true}` / `loginCheckJs` 的 result 相同（ADR-0076 §决策 2）。
+      final _Fixture fixture = _buildBridge();
+      fixture.http.serve(
+        'https://example-novel.test/sscc/',
+        '',
+        headers: <String, List<String>>{
+          'location': <String>['?9bdb14'],
+        },
+        finalUrl: 'https://example-novel.test/sscc/?9bdb14',
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'post',
+          'url': 'https://example-novel.test/sscc/',
+          'body': 'keyword=x',
+        }),
+      );
+      await pumpEventQueue();
+
+      final Object? value = _replies(worker).single['value'];
+      expect(value, isA<Map<String, Object?>>());
+      final Map<String, Object?> response = value! as Map<String, Object?>;
+      expect(response[jsResponseMarker], isTrue);
+      expect(response['__url'], 'https://example-novel.test/sscc/?9bdb14');
+      expect(response['__code'], 200);
+      expect(
+        (response['__headers']! as Map<String, Object?>)['location'],
+        '?9bdb14',
+      );
+      expect(fixture.http.requestedMethods, <String>['POST']);
+      expect(fixture.http.requestedBodies.single, 'keyword=x');
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('syncHead_whenARuleAsksForHeaders_usesTheHeadVerb', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.http.serve('https://example-novel.test/head', '');
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'head',
+          'url': 'https://example-novel.test/head',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(fixture.http.requestedMethods, <String>['HEAD']);
+      final Map<String, Object?> reply = _replies(fixture.workers.single)
+          .single;
+      expect(
+        (reply['value']! as Map<String, Object?>)[jsResponseMarker],
+        isTrue,
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('syncAjax_whenTheFetchFails_rejectsTheCallButNotTheJob', () async {
+      // 上游 `java.ajax` 失败是抛错：规则自己的 try/catch 换镜像仍然要能工作，所以这里只拒绝
+      // 这一次调用（worker 会把失败也记进缓存，重放因此不会变成死循环）。
+      final _Fixture fixture = _buildBridge();
+      fixture.http.failWith(
+        'https://example-novel.test/x',
+        ParseFailureKind.networkFailed,
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'ajax',
+          'url': 'https://example-novel.test/x',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(_replies(worker).single['ok'], isFalse);
+      expect(_replies(worker).single['fatal'], isFalse);
+      expect(_replies(worker).single['message'], 'networkFailed');
+
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'mirror',
+        'elapsedMs': 0,
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+    });
+
+    test('syncCall_whenTheJobAlreadyEnded_isRejected', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+        'elapsedMs': 0,
+      });
+      await call;
+      worker.emit(
+        _hostCall(2, jsSyncBinding, <String, Object?>{
+          'operation': 'ajax',
+          'url': 'https://example-novel.test/late',
+        }),
+      );
+      await pumpEventQueue();
+
+      // 没有在途 job：这通电话没有收件人，必须显式拒绝而不是静默。
+      expect(_replies(worker).last['ok'], isFalse);
+      expect(fixture.http.requestedUrls, isEmpty);
+    });
+
+    test('syncCall_whenTheArgumentsAreMalformed_isRejected', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{'operation': 'fetch'}),
+      );
+      await pumpEventQueue();
+
+      expect(_replies(worker).single['message'], 'malformed synchronous call');
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+  });
+
+  group('cookies', () {
+    test('getCookie_whenTheJarHasTheCookie_answersItsValue', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.cookies.storeFromResponse(
+        Uri.parse('https://example-novel.test/'),
+        <String>['token=abc123; Path=/'],
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'cookieGet',
+          'url': 'https://example-novel.test/page',
+          'key': 'token',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(_replies(worker).single['value'], 'abc123');
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('getCookie_withoutAName_answersTheWholeHeader', () async {
+      // 上游 `cookie.getCookie(url)` 给的是整条 Cookie 头，规则常常直接拼进请求头。
+      final _Fixture fixture = _buildBridge();
+      fixture.cookies.storeFromResponse(
+        Uri.parse('https://example-novel.test/'),
+        <String>['a=1', 'b=2'],
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'getCookie',
+          'url': 'https://example-novel.test/',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(_replies(fixture.workers.single).single['value'], 'a=1; b=2');
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('getCookie_givenNoJarEntry_answersAnEmptyHeader', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'getCookie',
+          'url': 'https://example-novel.test/',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(_replies(fixture.workers.single).single['value'], '');
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('setCookie_givenSeveralPairs_storesEveryPair', () async {
+      // `cookie.setCookie(url, 'a=1; b=2')` 是整条头；第二对不是第一对的属性。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'cookieSet',
+          'url': 'https://example-novel.test/',
+          'body': 'a=1; b=2',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(_replies(worker).single['ok'], isTrue);
+      expect(
+        fixture.cookies.cookieHeaderFor(
+          Uri.parse('https://example-novel.test/'),
+        ),
+        'a=1; b=2',
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('setCookie_givenGarbage_isRejectedAsUnsupported', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'cookieSet',
+          'url': 'https://example-novel.test/',
+          'body': 'no-equals-sign',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(
+        _replies(fixture.workers.single).single['message'],
+        ParseFailureKind.unsupportedRule.name,
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('removeCookie_whenCalled_dropsIt', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.cookies.storeFromResponse(
+        Uri.parse('https://example-novel.test/'),
+        <String>['a=1', 'b=2'],
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'cookieRemove',
+          'url': 'https://example-novel.test/',
+          'key': 'a',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(
+        fixture.cookies.cookieHeaderFor(
+          Uri.parse('https://example-novel.test/'),
+        ),
+        'b=2',
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('cookieVerbs_givenNoJarOrNoName_areRejectedAsUnsupported', () async {
+      // 两种「做不到」：装配根没给 Cookie 宗，或者删除没给名字。两者都必须显式拒绝。
+      final _Fixture fixture = _buildBridge(bindCookies: false);
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'cookieGet',
+          'url': 'https://example-novel.test/',
+          'key': 'token',
+        }),
+      );
+      worker.emit(
+        _hostCall(2, jsSyncBinding, <String, Object?>{
+          'operation': 'cookieSet',
+          'url': 'https://example-novel.test/',
+          'body': 'a=1',
+        }),
+      );
+      worker.emit(
+        _hostCall(3, jsSyncBinding, <String, Object?>{
+          'operation': 'cookieRemove',
+          'url': 'https://example-novel.test/',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(
+        _replies(worker).map((Map<String, Object?> reply) => reply['message']),
+        everyElement(ParseFailureKind.unsupportedRule.name),
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+  });
+
+  group('source variables', () {
+    test('evaluate_givenAReportedSourceVariable_writesItToTheStore', () async {
+      // `source.setVariable` 与 `java.put` 走同一条回传路径，但落的是持久表（ADR-0076 §决策 1）。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'sourceVariables': <String, String?>{'token': 'abc'},
+      });
+      await call;
+
+      expect(
+        fixture.sourceVariables.snapshot('https://example-novel.test'),
+        <String, String>{'token': 'abc'},
+      );
+    });
+
+    test('evaluate_givenAClearedSourceVariable_removesIt', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.sourceVariables.merge(
+        'https://example-novel.test',
+        <String, String?>{'token': 'abc'},
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'sourceVariables': <String, String?>{'token': null},
+      });
+      await call;
+
+      expect(
+        fixture.sourceVariables.snapshot('https://example-novel.test'),
+        isEmpty,
+      );
+    });
+  });
+
+  group('toasts', () {
+    test('toast_whenARuleAsks_showsItOnceAndLogsIt', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsToastBinding, <String, Object?>{
+          'message': '请先登录',
+          'long': false,
+        }),
+      );
+      await pumpEventQueue();
+      // 重放会把同一行再走一遍：同一句在一个 job 里只贴一次。
+      worker.emit(
+        _hostCall(2, jsToastBinding, <String, Object?>{
+          'message': '请先登录',
+          'long': true,
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(fixture.messages.messages, <String>['请先登录']);
+      expect(
+        _replies(worker)
+            .every((Map<String, Object?> reply) => reply['ok'] == true),
+        isTrue,
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('toast_givenAMalformedCall_isRejected', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(
+        _hostCall(1, jsToastBinding, <String, Object?>{'message': '   '}),
+      );
+      await pumpEventQueue();
+
+      expect(
+        _replies(fixture.workers.single).single['message'],
+        'malformed toast call',
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+  });
+
+  group('replay limits', () {
+    test('evaluate_givenAReplayLimitReport_failsAsJsReplay', () async {
+      // 超过 pass 上限是一个**自己的**边界：报 js:replay，而不是 js:timeout。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': false,
+        'error': 'replay limit exceeded',
+        'replayLimit': true,
+        'elapsedMs': 1,
+      });
+
+      final ParseFailure<Never> failure = _failure(await call);
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.name:js:replay');
+    });
+  });
+
+  group('verification memory', () {
+    test('imageCode_whenTheSameCallRepeats_asksTheUserOnlyOnce', () async {
+      // 重放会把整条规则重跑：同一张验证码不能被问第二遍（ADR-0076 §决策 4）。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      for (int callId = 1; callId <= 2; callId++) {
+        worker.emit(
+          _hostCall(callId, jsVerifyBinding, <String, Object?>{
+            'operation': 'imageCode',
+            'url': 'https://example-novel.test/code.asp',
+          }),
+        );
+        await pumpEventQueue();
+      }
+
+      expect(fixture.verification.captchas, <String>[
+        'https://example-novel.test/code.asp',
+      ]);
+      expect(
+        _replies(worker).map((Map<String, Object?> reply) => reply['value']),
+        <Object?>['A7bC', 'A7bC'],
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
       );
     });
   });

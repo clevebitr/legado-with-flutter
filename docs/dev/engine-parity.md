@@ -37,7 +37,7 @@
 
 | 能力 | 上游证据 | 本仓现状 | 语料命中 | 去向 |
 |---|---|---|---|---|
-| ⚠ `jsLib`（源内 JS 库，作为每个脚本的 prototype scope） | `BaseSource.kt:335-339`、`AnalyzeRule.kt:848`、`SharedJsScope.kt:23-60` | **未建模**（`BookSource` 无字段，`extra`），引擎不执行 → 依赖库函数的源每条规则 `js:error` | | **S1** |
+| ✅ `jsLib`（源内 JS 库，作为每个脚本的 prototype scope） | `BaseSource.kt:335-339`、`AnalyzeRule.kt:848`、`SharedJsScope.kt:23-60` | **已对齐**（M25/S1）：字段建模为 `BookSource.jsLib`；`JsLibStore` 解析（纯 JS 直通 / JSON 对象里的 http(s) 值逐条下载按序拼接，缓存 16 条、失败不缓存）→ worker 在同一函数作用域里先跑库再跑规则；库失败与规则失败分开（`js:lib`）。三条有意差异：库顶 `let`/`const` 规则不可见（Rhino ES5 同样不认）、缓存只在内存、`source.jsLib` 不在 `source` 绑定里 | 待 M27 | 已对齐（`book-source.md` §6） |
 | ⚠ `coverDecodeJs`（封面二次解密） | `ImageUtils.kt:66-69` | 未建模 | | S1 之后按需（M27 普查决定） |
 | ⚠ `ruleReview`（段评九字段） | `rule/ReviewRule.kt:9-20` | 未建模 | | M27 后另立里程碑（要 UI） |
 | ⚠ `bookUrlPattern`（搜索 URL 命中即按详情页解析；`bookList` 为空时回落详情页） | `BookList.kt:62-84`、`:100-110` | 未建模 → 单书站搜不到东西 | | **S2** |
@@ -113,7 +113,7 @@
 | ⚠ `source.getKey` / `getTag` / `getLoginHeader` / `putLoginHeader` / `login()` | `BaseSource.kt:80-140` | 部分（有 `name/url/group`、`getVariable`、`getLoginInfo*`） | | **S3** |
 | `java.timeFormatUTC` / `htmlFormat` / `t2s` / `s2t` / `toNumChapter` / `refreshBookUrl` / `randomUUID` / `androidId` / `openUrl` / `getWebViewUA` / `toURL` / `webViewGetElements` / `ajaxAll` / `connect` | `JsExtensions.kt` 各节 | 具名拒绝 | | 按普查逐个决定（`timeFormatUTC`/`htmlFormat`/`t2s`/`s2t` 纯计算，优先） |
 | 文件/压缩包族（`readFile` / `unzipFile` / `getZipStringContent` …）、Rhino Java 互操作（`Packages.*`） | `JsExtensions.kt:727-976` | 具名拒绝 | | 有意差异（沙箱禁忌，C-SRC-3） |
-| 已对齐（对照用） | `java.ajax/post/head/getCookie/setContent/toast`、`cookie.*`、`source.getVariable`、`queryTTF`/`queryBase64TTF`/`replaceFont`、`startBrowser*`/`getVerificationCode`/`webView*`、`getString*`/`getElements` | 已落地（ADR-0068 / 0076） | | 已对齐 |
+| 已对齐（对照用） | `java.ajax/post/head/getCookie/setContent/toast`、`cookie.*`、`source.getVariable`、`queryTTF`/`queryBase64TTF`/`replaceFont`、`startBrowser*`/`getVerificationCode`/`webView*`、`getString*`/`getElements`；以及**执行前注入的 `jsLib` 库作用域**（S1） | 已落地（ADR-0068 / 0076 / 0078 S1） | | 已对齐 |
 
 ## 6. E — 非文本书源
 
@@ -131,7 +131,7 @@
 
 | 片 | 内容 | 主要落点 | 依赖 |
 |---|---|---|---|
-| **S1** | `jsLib` | `core/js/*`（job 前跑库脚本 + 按 `sourceId`+hash 缓存）、`BookSource` 字段 | — |
+| **S1** ✅ | `jsLib` | `core/js/js_lib.dart`（解析 + 缓存）、`BookSource.jsLib`、worker 前奏 `__runRuleWithLib`、`RuleEngine._jsLibOf` | — |
 | **S2** | 阶段字段族 + `bookUrlPattern` + 目录去重/元数据 | `BookSource`/`Chapter` 模型、`FetchContent`/`FetchToc`/`FetchBookInfo` | S1（同属字段建模，可并行） |
 | **S3** | 密钥类 crypto + 绑注入面 | `core/js/js_bindings.dart`、`quickjs_worker.dart` | 语料普查（优先级） |
 | **S4** | URL 方言五条 + 列表尾部 `@js:` | `url_rule.dart`、`rule_engine.dart` | — |
@@ -151,7 +151,7 @@
 
 | 能力 | L1 源数 / 次数 | L2 源数 / 次数 | 备注 |
 |---|---|---|---|
-| `jsLib` | | | |
+| `jsLib` | 待 M27 | 待 M27 | 本仓已支持（S1），统计待 `batch_probe.dart` 补 |
 | 密钥类 crypto | | | |
 | `subContent` / `title` | | | |
 | `isVolume` / `isPay` / `formatJs` / `preUpdateJs` | | | |

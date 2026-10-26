@@ -609,3 +609,24 @@ G2 一条单测：矩阵「已确认」行的语法各有 ≥1 条用例（现�
 G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine-parity.md，PR 里可对照。
 
 不在本里程碑：为对齐而引入上游 Android 专属行为（WebView 特有 JS、Rhino 类型系统）；这些以「有意的差异」登记。
+
+## 2026-10-26 — M24 落地：同步 java.* 重放层（ADR-0076）+ 每源变量表 v12 + toast 端口
+
+用户裁决全量做完切片 1–4（不做「只做一片」），三个落地前的岔口也一并定了：每源变量落 **Drift 新表** `source_variables`（不放 book_sources payload，导出保真不动）、`java.toast` 落 **core 端口 `UserMessages` + 装配根 snack bar**、本轮范围含文档。
+
+落地形态（行为面归 book-source.md §6，为什么归 ADR-0076 §实现注记）：
+- worker 内 `JsSyncCache` + `while` 重放循环；同步调用未命中 → 记 `{op,url,body,key}` + 回失败信封 → `evaluate` 取页 → 写缓存（**失败也缓存**）→ 从第一行重跑。哨兵走状态，规则 try/catch 吞掉也不影响正确性。
+- 桥侧新绑定 `sync`（ajax/post/head/getCookie/cookie.*）、`toast`；`HttpClient` 新增 `head`；`parse.*` 带上 `java.setContent` 的覆盖正文。
+- 验证族不改成同步，只按 `op+url` 记忆答案（形态仍是 Promise，`await` 一个缓存值无差别）。
+- 预算口径：同步取页期间暂停硬预算、等掉的时间从 elapsedMs 扣、**每趟重置每规则调用额度**；pass 上限 16 → `js:replay`。
+- schema v12（dump + generated_migrations + migration_test v11→v12 + on_disk 真实写入）。
+
+踩坑（值得记住的六条）：
+1. **`sendMessage` 的每个绑定都必须在 worker 的 `runtime.onMessage` 注册过**，否则它根本到不了桥：`toast` 第一次就漏了，真引擎探针才发现（`_serveToast` 从没被调用）。
+2. `Uri.tryParse` 对任意字符串几乎不返回 null（`'not a url'`、`'%'`、`'http://'` 都能解析），所以「畸形 URL」分支是死代码——Cookie 动词改成直接 `Uri.parse`，宗里没域就答空。
+3. `_job()` 这类测试助手不传 `sourceVariables` 时，job 的快照是空的：真引擎探针里「写进去读不回来」不是实现错了，是测试没喂快照（生产链由 `RuleEngine._runScript` 下发）。
+4. 首参是**字面量**的 `java.getString` 由引擎在 job 之前内联（ADR-0037 §决策 3①），所以「先 setContent 再写字面量规则」看不到覆盖——探针必须把选择器写成变量才会走运行时通道。
+5. 桥现在 watch `cookieManagerProvider`（同步族要 Cookie 宗），于是任何读真实 `ruleEngineProvider` 的用例都会拉出数据库；`search_results_notifier_test` 用 `cookieStoreProvider.overrideWithValue(FakeCookieStore())` 挡住（新增 test/support/fake_cookie_store.dart）。
+6. `lib/core/storage/source_variables.dart` 要进 `tool/coverage_allowlist.txt`（drift 表定义是生成期输入）；同批加的 `core/platform/user_messages.dart` 其实**被测量**，登记会让门禁以「stale entry」失败——豁免表只登记真正未测量的文件。
+
+验证：format 0、analyze 0 issue、2346 用例全过、check_coverage exit 0（core 99.36 / domain 99.03 / data 95.65）、build_runner 无意外漂移（`settings_notifier.g.dart` 的 hash 漂移是 #34 记过的既存问题，已 revert）。设备级：`integration_test/js_bridge_test.dart` 42 例与 `on_disk_database_test.dart` 6 例在 **Windows 与 Android 模拟器**双端全绿（新增 7 条真引擎探针：重放、响应对象、pass 上限、Cookie、每源变量、toast、setContent）。

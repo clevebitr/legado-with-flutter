@@ -7,6 +7,7 @@ import 'package:flutter_qjs_next/flutter_qjs.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_fonts.dart';
+import 'package:flutter_reader/core/js/js_sync_call.dart';
 
 /// Starts the real worker: one isolate owning one reused QuickJS runtime.
 ///
@@ -143,6 +144,21 @@ final class _Worker {
   // 当前 job 的变量表：从快照播种，随结果回传；null 表示脚本删除了该变量。
   Map<String, String?> _variables = <String, String?>{};
 
+  // 当前 job 的**每源**变量表（`source.getVariable`），同样从快照播种、随结果回传。
+  Map<String, String?> _sourceVariables = <String, String?>{};
+
+  // 一趟重放已经拿到的同步答案；下一趟从这里同步返回（ADR-0076 §决策 1）。
+  final JsSyncCache _syncCache = JsSyncCache();
+
+  // 本趟遇到但缓存里没有的同步调用；非 null 表示这趟作废、取页后重跑。
+  JsSyncRequest? _pendingSync;
+
+  // 本 job 已经取过几次页。
+  int _passes = 0;
+
+  // `java.setContent` 换掉的页级 scope；`parse.*` 携带它去宿主。每趟重置（重跑会再设一次）。
+  String? _contentOverride;
+
   // bookName / title 的内置值；阶段不知道时为空。
   Map<String, String> _named = const <String, String>{};
 
@@ -183,7 +199,7 @@ final class _Worker {
     );
     _runtime.onMessage(
       jsParseBinding,
-      (Object? args) => _callHost(jsParseBinding, args),
+      (Object? args) => _callHost(jsParseBinding, _withPageContent(args)),
     );
     // 验证族（ADR-0068 §决策 5）：等的是人，桥会暂停硬预算并免掉调用额度。
     _runtime.onMessage(
@@ -192,16 +208,79 @@ final class _Worker {
     );
     // java.* 在本 isolate 内完成，所以 JS 同步拿到值。
     _runtime.onMessage(jsJavaBinding, _applyJava);
+    // toast 是单向的：转发给宿主后不等它，规则不会被一条提示挡住（ADR-0076 §决策 1）。
+    _runtime.onMessage(jsToastBinding, (Object? args) {
+      unawaited(_notify(jsToastBinding, args));
+
+      return '';
+    });
+    // 每源变量也只在 isolate 内转一图：快照进来、写入随结果出去。
+    _runtime.onMessage(
+      jsSourceBinding,
+      (Object? args) => applyJsSourceCall(_sourceVariables, args),
+    );
+    // 同步族先问缓存；命中就当场答复，未命中就抛哨兵，由 evaluate 取页后重跑。
+    _runtime.onMessage(jsSyncBinding, _applySync);
   }
 
-  Object? _applyJava(Object? args) =>
-      applyJsJavaCall(_variables, args, named: _named, fonts: _fonts);
+  Object? _applySync(Object? args) {
+    final JsSyncRequest? request = decodeJsSyncRequest(args);
+    if (request == null) {
+      return jsonEncode(<String, Object?>{
+        'ok': false,
+        'message': 'malformed synchronous call',
+      });
+    }
+    final JsSyncEntry? cached = _syncCache.lookup(request);
+    if (cached != null) {
+      return jsonEncode(cached.toEnvelope());
+    }
+    // 第一次见到这个调用：记下来，答复一个失败信封让脚本停下（规则自己的 try/catch 也能拖住它，
+    // 但 evaluate 在脚本结束后仍然会重跑，所以吞掉哨兵不会让结果错）。
+    _pendingSync = request;
+
+    return jsonEncode(<String, Object?>{
+      'ok': false,
+      'message': 'replay pending',
+    });
+  }
+
+  Object? _applyJava(Object? args) {
+    // `java.setContent(html)` 只是换掉本 job 的页级 scope，不离开 isolate、也不回传变量。
+    if (args is Map && args['operation'] == 'setContent') {
+      final Object? value = args['value'];
+      if (value is! String) {
+        return '{"ok":false}';
+      }
+      _contentOverride = value;
+
+      return '{"ok":true}';
+    }
+
+    return applyJsJavaCall(_variables, args, named: _named, fonts: _fonts);
+  }
+
+  // `java.setContent` 之后的 `parse.*` 一律带覆盖后的正文：宿主据此重建页级 scope。
+  Object? _withPageContent(Object? args) {
+    final String? content = _contentOverride;
+    if (content == null || args is! Map) {
+      return args;
+    }
+    final Map<Object?, Object?> extended = Map<Object?, Object?>.of(args);
+    extended['content'] = content;
+
+    return extended;
+  }
 
   Future<void> evaluate(Object? job) async {
     // 上一个 job 未答复的调用不再有意义，桥也已经不再认它。
     _pending.clear();
     _variables = <String, String?>{};
+    _sourceVariables = <String, String?>{};
     _fonts.clear();
+    _syncCache.clear();
+    _pendingSync = null;
+    _passes = 0;
     if (job is! Map) {
       _toBridge.send(<String, Object?>{
         'type': 'result',
@@ -214,14 +293,48 @@ final class _Worker {
     }
 
     final Map<String, Object?> fields = Map<String, Object?>.from(job);
-    _variables = decodeJsVariables(fields['variables']);
+    // 每趟重跑都从快照重新播种：只有取页成功的那一趟的写入才算数（ADR-0076 §决策 1）。
+    final Map<String, String?> seedVariables = decodeJsVariables(
+      fields['variables'],
+    );
+    final Map<String, String?> seedSourceVariables = decodeJsVariables(
+      fields['sourceVariables'],
+    );
     _named = decodeJsNamedContext(fields);
     final Stopwatch stopwatch = Stopwatch()..start();
-    JsEvalResult result = _runtime.evaluate(_evaluationSource(fields));
-    if (result.rawResult is Future) {
-      // 脚本停在 Promise 上：引擎把 JS Promise 换成 Dart Future，等待期间主循环继续
-      // 分发 hostResult，所以这里可以安全地等。
-      result = await _runtime.handlePromise(result);
+    JsEvalResult result;
+    while (true) {
+      _variables = Map<String, String?>.of(seedVariables);
+      _sourceVariables = Map<String, String?>.of(seedSourceVariables);
+      _contentOverride = null;
+      _pendingSync = null;
+      result = _runtime.evaluate(_evaluationSource(fields));
+      if (result.rawResult is Future) {
+        // 脚本停在 Promise 上：引擎把 JS Promise 换成 Dart Future，等待期间主循环继续
+        // 分发 hostResult，所以这里可以安全地等。
+        result = await _runtime.handlePromise(result);
+      }
+      final JsSyncRequest? pending = _pendingSync;
+      if (pending == null) {
+        break;
+      }
+      if (_passes >= defaultJsMaxReplayPasses) {
+        // 超过上限就停：与其让规则重跑 16 次后超时，不如告诉调用方「这条源重放不了」。
+        stopwatch.stop();
+        _toBridge.send(<String, Object?>{
+          'type': 'result',
+          'ok': false,
+          'error': 'replay limit exceeded',
+          'replayLimit': true,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+          'variables': _variables,
+          'sourceVariables': _sourceVariables,
+        });
+
+        return;
+      }
+      _passes++;
+      _syncCache.store(pending, await _fetchSync(pending));
     }
     stopwatch.stop();
 
@@ -233,6 +346,7 @@ final class _Worker {
         'elapsedMs': stopwatch.elapsedMilliseconds,
         // 脚本报错前可能已经 java.put：上游的写入立即生效，失败也要回传。
         'variables': _variables,
+        'sourceVariables': _sourceVariables,
       });
 
       return;
@@ -246,6 +360,7 @@ final class _Worker {
         'error': 'unreadable result envelope',
         'elapsedMs': stopwatch.elapsedMilliseconds,
         'variables': _variables,
+        'sourceVariables': _sourceVariables,
       });
 
       return;
@@ -258,7 +373,28 @@ final class _Worker {
       'error': decoded['error'],
       'elapsedMs': stopwatch.elapsedMilliseconds,
       'variables': _variables,
+      'sourceVariables': _sourceVariables,
     });
+  }
+
+  // 单向转发：答复到了也只是清掉 callId，规则不会等它。
+  Future<void> _notify(String binding, Object? args) async {
+    try {
+      await _callHost(binding, args);
+    } on Exception {
+      // 宿主不收就不收：提示是一句可有可无的话，不该让规则失败。
+    }
+  }
+
+  // 取一次页并把答案记进缓存。传输失败也是答案（规则自己的 try/catch 靠它工作）。
+  Future<JsSyncEntry> _fetchSync(JsSyncRequest request) async {
+    try {
+      final Object? value = await _callHost(jsSyncBinding, request.toJson());
+
+      return JsSyncEntry.value(value);
+    } on Exception catch (error) {
+      return JsSyncEntry.failure(_plainMessage(error));
+    }
   }
 
   // 答复失败会拒绝脚本的 Promise；是否连 job 一起判失败由桥决定。
@@ -328,6 +464,10 @@ String _evaluationSource(Map<String, Object?> fields) {
 }
 
 String _asString(Object? value) => value is String ? value : '';
+
+// 桥把失败写成 kind 名，包在 Exception 里；沙箱只该看到那个名字。
+String _plainMessage(Exception error) =>
+    error.toString().replaceFirst(RegExp(r'^Exception: '), '');
 
 // 语法错误会让前奏本身不可解析，这里返回 null，由调用方报 js:error。
 Map<String, Object?>? _decodeEnvelope(String raw) {
@@ -459,6 +599,69 @@ globalThis.__javaRejected = function (name) {
   };
 };
 
+// 同步族（ADR-0076 §决策 1）：上游在这里阻塞 Rhino 线程，本仓用「取页缓存 + 从头重跑」仿真。
+// 命中缓存就当场返回；未命中则收到一个失败信封（worker 同时记下这次调用），脚本停在这一行，
+// 宿主取完页后整条规则从头重跑，下一趟这个调用会同步拿到值。
+globalThis.__sync = function (operation, payload) {
+  var envelope = null;
+  try {
+    envelope = JSON.parse(String(sendMessage('sync', JSON.stringify(payload))));
+  } catch (error) {
+    envelope = null;
+  }
+  if (!envelope) {
+    throw new Error('java.' + operation + ' failed');
+  }
+  if (envelope.ok === true) {
+    return (envelope.value === undefined) ? null : envelope.value;
+  }
+  throw new Error('java.' + operation + ' failed: ' + String(envelope.message));
+};
+
+// 拼一次同步调用的信封：缺省的 body / key / headers 不送，与宿主的解码一一对应。
+globalThis.__syncCall = function (operation, call) {
+  var payload = { operation: operation, url: String(call.url) };
+  if (call.body !== undefined && call.body !== null) {
+    payload.body = String(call.body);
+  }
+  if (call.key !== undefined && call.key !== null) {
+    payload.key = String(call.key);
+  }
+  if (call.headers !== undefined && call.headers !== null) {
+    payload.headers = __headerMap(call.headers);
+  }
+  return payload;
+};
+
+globalThis.__headerMap = function (headers) {
+  if (typeof headers !== 'object') {
+    throw new Error('java.ajax: headers must be an object');
+  }
+  var map = {};
+  for (var key in headers) {
+    if (Object.prototype.hasOwnProperty.call(headers, key)) {
+      map[key] = String(headers[key]);
+    }
+  }
+  return map;
+};
+
+// 每源变量（`source.getVariable` / `setVariable`）：与 `java.get` 同一条 isolate 内通道，
+// 但存的是**持久**表（随结果回传，由桥写穿存储）。
+globalThis.__sourceCall = function (call) {
+  var envelope = null;
+  try {
+    envelope = JSON.parse(String(sendMessage('source', JSON.stringify(call))));
+  } catch (error) {
+    envelope = null;
+  }
+  if (!envelope || envelope.ok !== true) {
+    throw new Error('source.' + call.operation + ' failed');
+  }
+  return (envelope.value === null || envelope.value === undefined)
+    ? '' : String(envelope.value);
+};
+
 // 沙箱的 `book` 对象（ADR-0061 §决策 5 的数据面 + ADR-0062 §决策 2 的方法面）。
 //
 // 数据字段从 `JsBookInfo` 的 JSON 拷来，方法分两类：
@@ -535,6 +738,19 @@ globalThis.__sandboxSource = function (data, loginInfo) {
   source.getLoginInfo = function () {
     return JSON.stringify(source.getLoginInfoMap());
   };
+  // 每源持久变量（ADR-0076 §决策 1）：与 `java.get` / `java.put` 的规则变量不是同一张表，
+  // 差别在持久性（`book-source.md` §6）。`putVariable` 是上游的另一种拼写，指同一件事。
+  source.getVariable = function (key) {
+    return __sourceCall({ operation: 'get', key: String(key) });
+  };
+  source.setVariable = function (key, value) {
+    var call = { operation: 'put', key: String(key) };
+    if (value !== undefined && value !== null) {
+      call.value = String(value);
+    }
+    __sourceCall(call);
+  };
+  source.putVariable = source.setVariable;
   return Object.freeze(source);
 };
 
@@ -577,13 +793,12 @@ globalThis.__sandboxBook = function (data) {
 };
 
 // 注意：`get` / `put` **不在**这个列表里——`book-source.md` §6 把 `java.get(key)` / `java.put(key,value)`
-// 定义为**变量**读写（ADR-0034），它们的名字被占用；上游那套同步 HTTP 的 `get(url)` / `post(url)`
-// 因此没有可用的拼写，只能靠 `ajax` 这一族具名拒绝（ADR-0037 §决策 5）。
+// 定义为**变量**读写（ADR-0034），它们的名字被占用；上游那套同步 HTTP 的 `get(url)` 仍然没有可用
+// 拼写，只能走 `ajax` 这一族（ADR-0076 §决策 1）。
 globalThis.__javaRejectedNames = [
-  'ajax', 'post', 'head', 'ajaxAll', 'connect',
+  'ajaxAll', 'connect',
   'webViewGetElements',
-  'downloadFile', 'cacheFile', 'importScript', 'getCookie',
-  'setContent', 'toast', 'longToast',
+  'downloadFile', 'cacheFile', 'importScript',
   'base64DecodeToByteArray', 'hexDecodeToByteArray',
   'createSymmetricCrypto', 'aesBase64DecodeToString', 'aesEncodeToString', 'aesDecodeToString',
   'desBase64DecodeToString', 'HMacHex', 'HMacBase64',
@@ -621,6 +836,19 @@ globalThis.__verify = function (operation, url, title, refetchAfterSuccess, html
   return sendMessage('verify', JSON.stringify(payload));
 };
 
+// `cookie` 对象（ADR-0076 §决策 1）：与 `java.getCookie` 同一通道，只是上游的另一种拼写。
+globalThis.cookie = Object.freeze({
+  getCookie: function (url, key) {
+    return __sync('cookieGet', __syncCall('cookieGet', { url: url, key: key }));
+  },
+  setCookie: function (url, value) {
+    return __sync('cookieSet', __syncCall('cookieSet', { url: url, body: value }));
+  },
+  removeCookie: function (url, key) {
+    return __sync('cookieRemove', __syncCall('cookieRemove', { url: url, key: key }));
+  }
+});
+
 // 查询一个字体并拿回句柄；不是字体/认不出 cmap 时抛错（规则可以 catch 后保留原文）。
 globalThis.__queryTtf = function (data) {
   return __javaObject({ operation: 'queryTtf', value: String(data) });
@@ -637,6 +865,38 @@ globalThis.java = (function () {
     },
     get: function (key) {
       return __java({ operation: 'get', key: String(key) });
+    },
+    // 同步族（ADR-0076 §决策 1）：上游在这里同步拿页面 / 响应 / Cookie。
+    // `ajax` 答正文；`post` / `head` 答响应对象（规则读 `header('Location')`）；
+    // 传输失败抛错，规则自己的 try/catch 照常可用。
+    ajax: function (url, headers) {
+      return __sync('ajax', __syncCall('ajax', { url: url, headers: headers }));
+    },
+    post: function (url, body, headers) {
+      return __sandboxValue(__sync('post', __syncCall('post', {
+        url: url, body: body, headers: headers
+      })));
+    },
+    head: function (url) {
+      return __sandboxValue(__sync('head', __syncCall('head', { url: url })));
+    },
+    getCookie: function (url, key) {
+      return __sync('getCookie', __syncCall('getCookie', { url: url, key: key }));
+    },
+    // `java.setContent(html)`：把页级 scope 换成这份 HTML（同一 job 内后续规则读它）。
+    // 与重放无关：只是在 worker 里记一个值，`parse.*` 调用会带着它去宿主。
+    setContent: function (content) {
+      __java({
+        operation: 'setContent',
+        value: (content === undefined || content === null) ? '' : String(content)
+      });
+    },
+    // 提示族（ADR-0076 §决策 1）：一次性 UI 事件，不等结果、不占额度。
+    toast: function (message) {
+      sendMessage('toast', JSON.stringify({ message: String(message), long: false }));
+    },
+    longToast: function (message) {
+      sendMessage('toast', JSON.stringify({ message: String(message), long: true }));
     },
     timeFormat: function (time) {
       // 时间戳原样送（数字保持数字、字符串保持字符串）：能不能读出来由宿主定（§6）。

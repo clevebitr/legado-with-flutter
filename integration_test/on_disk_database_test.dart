@@ -11,6 +11,7 @@ import 'package:flutter_reader/core/storage/cookie_dao.dart';
 import 'package:flutter_reader/core/storage/database.dart';
 import 'package:flutter_reader/core/storage/read_record_dao.dart';
 import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
+import 'package:flutter_reader/core/storage/source_variable_dao.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -423,6 +424,50 @@ void main() {
       expect(row.isSecure, isTrue);
     } finally {
       readerCookies.close();
+      reader.dispose();
+    }
+  });
+
+  testWidgets('sourceVariableDao_whenReopened_keepsThePerSourceVariables', (
+    WidgetTester tester,
+  ) async {
+    // M24（ADR-0076 §决策 1）：`source.setVariable` 写的是**持久**表，规则下一次运行要读得到。
+    final ProviderContainer writer = ProviderContainer();
+    final ProviderSubscription<SourceVariableDao> writerVariables = writer
+        .listen<SourceVariableDao>(
+          sourceVariableDaoProvider,
+          (SourceVariableDao? previous, SourceVariableDao next) {},
+        );
+    try {
+      await writer
+          .read(sourceVariableDaoProvider)
+          .upsert(
+            sourceUrl: 'https://example.com',
+            name: 'token',
+            value: 'integration',
+          );
+    } finally {
+      writerVariables.close();
+      writer.dispose();
+    }
+
+    final ProviderContainer reader = ProviderContainer();
+    final ProviderSubscription<SourceVariableDao> readerVariables = reader
+        .listen<SourceVariableDao>(
+          sourceVariableDaoProvider,
+          (SourceVariableDao? previous, SourceVariableDao next) {},
+        );
+    try {
+      final SourceVariableRow row =
+          (await reader
+                  .read(sourceVariableDaoProvider)
+                  .findAll('https://example.com'))
+              .single;
+
+      expect(row.name, 'token');
+      expect(row.value, 'integration');
+    } finally {
+      readerVariables.close();
       reader.dispose();
     }
   });

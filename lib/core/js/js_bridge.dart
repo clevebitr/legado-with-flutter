@@ -78,6 +78,7 @@ final class JsParseRequest {
     required this.wantsList,
     this.wantsValues = false,
     this.doc,
+    this.content,
   });
 
   /// The nested rule the script asked to evaluate.
@@ -96,6 +97,14 @@ final class JsParseRequest {
 
   /// The `doc` argument the rule passed, or `null` when it passed none.
   final String? doc;
+
+  /// The page body a `java.setContent(html)` in the same script replaced the scope with, or `null`
+  /// when the rule never called it.
+  ///
+  /// Upstream's `setContent` swaps the content later rules read inside the same evaluation; here
+  /// the page scope lives on the host, so the override travels with every `parse.*` call that
+  /// follows it (`book-source.md` §6).
+  final String? content;
 }
 
 /// The `rulePath` marker of a `parse.*` call without a page-level scope.
@@ -172,6 +181,7 @@ final class JsJob {
     this.sourceHeaders,
     this.parseEvaluator,
     this.variables = const <String, String>{},
+    this.sourceVariables = const <String, String>{},
     this.key,
     this.bookName,
     this.chapterTitle,
@@ -189,6 +199,14 @@ final class JsJob {
   ///
   /// A snapshot taken when the job is built; writes travel back with the result.
   final Map<String, String> variables;
+
+  /// The variables the script reads and writes through `source.getVariable` / `setVariable`
+  /// (ADR-0076 §决策 1).
+  ///
+  /// A snapshot of the **persisted** per-source map: unlike [variables] these values outlive the
+  /// app, so the bridge writes what the job reported back to storage
+  /// (`SourceVariableStore.merge`).
+  final Map<String, String> sourceVariables;
 
   /// The search keyword (the `key` binding) of a URL rule, or `null` otherwise.
   final String? key;
@@ -248,6 +266,7 @@ final class JsJob {
     'result': result,
     'response': response?.toJson(),
     'variables': variables,
+    'sourceVariables': sourceVariables,
     'key': key,
     'bookName': bookName,
     'chapterTitle': chapterTitle,

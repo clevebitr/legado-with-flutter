@@ -35,6 +35,23 @@ const String jsHttpBinding = 'http';
 /// The binding name of `parse.*` in a [JsHostCall].
 const String jsParseBinding = 'parse';
 
+/// The binding name of the **synchronous** `java.*` / `cookie.*` family (ADR-0076 §决策 1).
+///
+/// The worker answers this name from its own per-job replay cache; a call it has not seen before
+/// travels to the bridge under the same name, which fetches once and lets the script start over.
+const String jsSyncBinding = 'sync';
+
+/// The binding name of `java.toast` / `java.longToast`.
+///
+/// A one-way channel: the rule never reads anything back, so nothing here can suspend it.
+const String jsToastBinding = 'toast';
+
+/// The binding name of `source.getVariable` / `setVariable` / `putVariable`.
+///
+/// Answered inside the worker (the map travels with the job and back with the result), which is
+/// what makes it synchronous without a replay pass.
+const String jsSourceBinding = 'source';
+
 /// The binding name of `java.*`, which the worker answers inside its own isolate.
 const String jsJavaBinding = 'java';
 
@@ -774,6 +791,100 @@ Map<String, String?> decodeJsVariables(Object? value) {
   return variables;
 }
 
+/// Applies one `source.getVariable` / `setVariable` / `putVariable` call and returns a JSON
+/// envelope.
+///
+/// The map is the job's own copy of the source's variables: seeded from the store when the job is
+/// built and returned with the result, exactly like the rule variables (ADR-0034 §决策 1). A write
+/// is therefore visible to later reads in the same job, and persists because the bridge merges the
+/// returned map back into the store.
+String applyJsSourceCall(Map<String, String?> variables, Object? args) {
+  final Map<String, Object?>? call = _jsonObjectOf(args);
+  if (call == null) {
+    return '{"ok":false}';
+  }
+  final Object? key = call['key'];
+  final Object? value = call['value'];
+  if (key is! String) {
+    return '{"ok":false}';
+  }
+
+  switch (call['operation']) {
+    case 'get':
+      return jsonEncode(<String, Object?>{
+        'ok': true,
+        // 未写过的变量答空串：上游的 `getVariable` 同样不区分「没有」与「空」。
+        'value': variables[key] ?? '',
+      });
+    case 'put':
+      if (value is! String?) {
+        return '{"ok":false}';
+      }
+      variables[key] = value;
+
+      return '{"ok":true}';
+    default:
+      return '{"ok":false}';
+  }
+}
+
+/// One `java.toast` / `java.longToast` call.
+final class JsToastRequest {
+  /// Creates a toast request.
+  const JsToastRequest({required this.message, this.isLong = false});
+
+  /// The text the rule wants the user to see.
+  final String message;
+
+  /// Whether the rule asked for the long toast.
+  ///
+  /// Both spellings land in the same place here (a snack bar); the flag is kept so the log line can
+  /// say which one the rule used.
+  final bool isLong;
+}
+
+/// Reads one toast call's arguments, or `null` when they are unusable.
+///
+/// The arguments are JSON: `{message, long}`.
+JsToastRequest? decodeJsToastRequest(Object? args) {
+  final Map<String, Object?>? call = _jsonObjectOf(args);
+  if (call == null) {
+    return null;
+  }
+  final Object? message = call['message'];
+  final Object? isLong = call['long'];
+  if (message is! String || isLong is! bool?) {
+    return null;
+  }
+  final String text = message.trim();
+  if (text.isEmpty) {
+    return null;
+  }
+
+  return JsToastRequest(message: text, isLong: isLong ?? false);
+}
+
+/// The `loginCheckJs`-shaped response object a rule can read (`book-source.md` §6).
+///
+/// Shared by the async `http.*` door and the synchronous `java.ajax` family so both hand the script
+/// the same shape: a `body` property plus `url()` / `code()` / `headers()` methods, which the
+/// prelude adds (`__sandboxValue`).
+Map<String, Object?> jsResponsePayload({
+  required String url,
+  required String body,
+  required int code,
+  required Map<String, List<String>> headers,
+}) => <String, Object?>{
+  jsResponseMarker: true,
+  'body': body,
+  '__url': url,
+  '__code': code,
+  '__headers': <String, String>{
+    for (final MapEntry<String, List<String>> entry in headers.entries)
+      entry.key: entry.value.join(', '),
+  },
+};
+
 /// Reads one `parse.*` call's arguments, or `null` when they are unusable.
 ///
 /// `parse.getString` and `parse.getElements` differ only in
@@ -791,10 +902,11 @@ JsParseRequest? decodeJsParseRequest(Object? args) {
   };
   final Object? rule = call['rule'];
   final Object? doc = call['doc'];
+  final Object? content = call['content'];
   if (wantsList == null || rule is! String) {
     return null;
   }
-  if (doc is! String?) {
+  if (doc is! String? || content is! String?) {
     return null;
   }
 
@@ -804,6 +916,7 @@ JsParseRequest? decodeJsParseRequest(Object? args) {
     // `java.getStringList` 要**抽取值**（上游语义），`parse.getElements` 要元素文档。
     wantsValues: call['operation'] == 'getStringList',
     doc: doc,
+    content: content,
   );
 }
 

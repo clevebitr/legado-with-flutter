@@ -76,6 +76,14 @@ abstract class BookSource with _$BookSource {
     /// replaces the response with whatever the script returns (see `book-source.md` §6 and the
     /// ADR-0068 addendum). Blank means "no interceptor".
     String? loginCheckJs,
+
+    /// The source's own JavaScript library (`jsLib`), run **before** every `@js:` rule of the same
+    /// source (ADR-0078 S1).
+    ///
+    /// It holds either plain JavaScript or a JSON object whose values are absolute URLs of scripts
+    /// to download (upstream `SharedJsScope.kt:23-60`); the resolved text is what the sandbox runs.
+    /// Blank means "no library".
+    String? jsLib,
     @JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,
     @JsonKey(name: 'ruleToc') required TocRule tocRule,
     @JsonKey(name: 'ruleContent') required ContentRule contentRule,

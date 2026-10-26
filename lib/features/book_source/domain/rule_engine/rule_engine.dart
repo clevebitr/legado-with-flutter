@@ -4,6 +4,7 @@ import 'package:cascadia/cascadia.dart' as cascadia;
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
+import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
@@ -232,15 +233,22 @@ final class RuleEngine {
   /// (`book-source.md` §6). The engine reads it for `@get:` and `{{name}}`, writes it for
   /// `@put:`, and the bridge applies what a script wrote through `java.put` — one store,
   /// two ends (ADR-0034 §决策 1).
+  ///
+  /// [sourceVariables] is the **persisted** map behind `source.getVariable` / `setVariable`
+  /// (ADR-0076 §决策 1). It defaults to an unwired store, which behaves exactly like a source that
+  /// never wrote a variable — which is what a unit test wants by default.
+  ///
   RuleEngine({
     required this._logger,
     required this._jsBridge,
     required this._variables,
-  });
+    SourceVariableStore? sourceVariables,
+  }) : _sourceVariables = sourceVariables ?? SourceVariableStore();
 
   final AppLogger _logger;
   final JsBridge _jsBridge;
   final JsVariableStore _variables;
+  final SourceVariableStore _sourceVariables;
 
   /// Evaluates one **whole-field** JavaScript expression and returns its raw value.
   ///
@@ -961,6 +969,8 @@ final class RuleEngine {
     }
 
     final JsPageContext context = _jsContextOf(scope);
+    // 每源变量是持久表：首个 job 前读一次，之后走内存（ADR-0076 §决策 1）。
+    await _sourceVariables.ensureLoaded(context.source.url);
     final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
       JsJob(
         script: scriptText,
@@ -972,6 +982,7 @@ final class RuleEngine {
         sourceHeaders: context.headers,
         parseEvaluator: _parseEvaluatorFor(scope, field: field),
         variables: _variables.snapshot(context.source.url),
+        sourceVariables: _sourceVariables.snapshot(context.source.url),
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
         book: context.book,
@@ -2042,7 +2053,10 @@ final class RuleEngine {
     RuleScope scope, {
     required String field,
   }) => (JsParseRequest request) async {
-    final String? page = _pageBodyOf(scope);
+    // `java.setContent(html)` 换掉页级 scope（ADR-0076 §决策 1）：上游在同一个评价里换 content，
+    // 本仓的 scope 在宿主上，所以按覆盖后的正文重建一个页级 scope 再求值。
+    final RuleScope effective = _withContent(scope, request.content);
+    final String? page = _pageBodyOf(effective);
     if (page == null || (request.doc != null && request.doc != page)) {
       return failureAt<Object?>(
         kind: ParseFailureKind.unsupportedRule,
@@ -2054,7 +2068,7 @@ final class RuleEngine {
       // `java.getStringList`：抽取值（上游 `AnalyzeRule.getStringList` 会跑提取段）。
       return switch (await _evaluate(
         request.rule,
-        scope,
+        effective,
         rulePath: field,
         single: false,
         allowJs: false,
@@ -2070,7 +2084,11 @@ final class RuleEngine {
     }
 
     if (request.wantsList) {
-      return switch (await selectAll(request.rule, scope, rulePath: field)) {
+      return switch (await selectAll(
+        request.rule,
+        effective,
+        rulePath: field,
+      )) {
         ParseFailure<List<RuleScope>>(
           :final ParseFailureKind kind,
           :final String rulePath,
@@ -2085,7 +2103,7 @@ final class RuleEngine {
 
     return switch (await _evaluate(
       request.rule,
-      scope,
+      effective,
       rulePath: field,
       single: true,
       allowJs: false,
@@ -2100,6 +2118,28 @@ final class RuleEngine {
         ParseSuccess<Object?>(data.join(_valueSeparator)),
     };
   };
+
+  /// The scope a `parse.*` request has to be evaluated against: `java.setContent(html)` replaces
+  /// body a rule reads inside the same job (ADR-0076 §决策 1).
+  ///
+  /// Upstream mutates `AnalyzeUrl.content` in place; here the page scope lives on the host, so the
+  /// override arrives with the call and the engine rebuilds a page scope around it — same URL, same
+  /// page number, same source, new body.
+  RuleScope _withContent(RuleScope scope, String? content) {
+    if (content == null) {
+      return scope;
+    }
+    final JsPageContext? context = switch (scope) {
+      DomScope(:final JsPageContext? jsContext) => jsContext,
+      JsonScope(:final JsPageContext? jsContext) => jsContext,
+    };
+
+    return RuleScope.dom(
+      html_parser.parse(content),
+      body: content,
+      jsContext: context,
+    );
+  }
 
   /// The response body [scope] carries, or `null` when it is not a page scope.
   String? _pageBodyOf(RuleScope scope) => switch (scope) {
