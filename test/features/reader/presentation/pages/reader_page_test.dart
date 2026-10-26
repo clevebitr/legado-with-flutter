@@ -4,17 +4,21 @@ import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/platform/playback_notification.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/reader/di.dart';
+import 'package:flutter_reader/features/reader/domain/entities/audio_track.dart';
 import 'package:flutter_reader/features/reader/domain/entities/bookmark.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_settings.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reader_source_kind.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_session.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -22,6 +26,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../../support/fake_audio_ports.dart';
 import '../../../../support/fake_bookmark_repository.dart';
 import '../../../../support/fake_clock.dart';
 import '../../../../support/fake_log_printer.dart';
@@ -69,6 +74,7 @@ _Fixture _fixture({
   FakeBookmarkRepository? bookmarks,
   FakeReadingRecordRepository? records,
   FakeClock? clock,
+  ReaderSourceKind kind = ReaderSourceKind.text,
 }) {
   final FakeChapterListProvider list = chapters ?? FakeChapterListProvider();
   if (chapters == null) {
@@ -96,6 +102,22 @@ _Fixture _fixture({
       clockProvider.overrideWithValue(fakeClock),
       readerSettingsRepositoryProvider.overrideWith(
         (Ref ref) async => readerSettings,
+      ),
+      readerSourceKindPortProvider.overrideWithValue(
+        FakeReaderSourceKindProvider()..kind = kind,
+      ),
+      readerAudioTrackProvider.overrideWithValue(
+        FakeAudioTrackProvider()
+          ..tracks['https://source.test/1.html'] = <ReaderAudioTrack>[
+            const ReaderAudioTrack(url: 'https://cdn.test/1.mp3'),
+          ]
+          ..tracks['https://source.test/2.html'] = <ReaderAudioTrack>[
+            const ReaderAudioTrack(url: 'https://cdn.test/2.mp3'),
+          ],
+      ),
+      audioPlaybackEngineProvider.overrideWithValue(FakeAudioPlaybackEngine()),
+      playbackNotificationProvider.overrideWithValue(
+        const NoopPlaybackNotification(),
       ),
       appLoggerProvider.overrideWithValue(
         AppLogger(level: LogLevel.debug, printer: printer),
@@ -164,6 +186,27 @@ Future<void> _openSettings(WidgetTester tester) async {
 }
 
 void main() {
+  group('ReaderPage dispatch', () {
+    testWidgets('build_givenAnAudioSource_opensThePlayer', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester, _fixture(kind: ReaderSourceKind.audio));
+
+      expect(find.byType(AudioReaderView), findsOneWidget);
+      // 音频书不去抓正文：文本视图根本不存在。
+      expect(_bodyFinder(), findsNothing);
+    });
+
+    testWidgets('build_givenATextSource_keepsTheTextReader', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester, _fixture(kind: ReaderSourceKind.text));
+
+      expect(find.byType(AudioReaderView), findsNothing);
+      expect(_bodyFinder(), findsOneWidget);
+    });
+  });
+
   group('ReaderPage', () {
     testWidgets('build_givenAChapterList_showsTheFirstChapter', (
       WidgetTester tester,

@@ -7,7 +7,9 @@
 ///     dart run tool/check_coverage.dart --file=coverage/lcov.info --data=85
 ///     dart run tool/check_coverage.dart --allowlist=     # ignore the allowlist
 ///
-/// Thresholds default to `docs/dev/testing.md`: core 100%, domain 100%, data 80%.
+/// Thresholds default to `docs/dev/testing.md`: core 95%, domain 95%, data 80%
+/// (ADR-0077 lowered core/domain from 100% so tests can carry behaviour instead
+/// of every reachable line).
 /// They may be raised per invocation but never lowered without an ADR.
 ///
 /// Thresholds alone are not enough: lcov only measures libraries that a test
@@ -38,8 +40,8 @@ const String _defaultAllowlistPath = 'tool/coverage_allowlist.txt';
 
 /// Minimum line-coverage percentage required per architectural layer.
 const Map<String, double> _defaultThresholds = <String, double>{
-  'core': 100,
-  'domain': 100,
+  'core': 95,
+  'domain': 95,
   'data': 80,
 };
 

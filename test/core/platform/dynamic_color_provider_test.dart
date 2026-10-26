@@ -5,52 +5,46 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/fake_platform_info.dart';
 
 void main() {
-  group('resolveDynamicColorProvider', () {
-    test(
-      'resolveDynamicColorProvider_whenPlatformIsAndroid_returnsSystemProvider',
-      () {
-        expect(
-          resolveDynamicColorProvider(const FakePlatformInfo.android()),
-          isA<SystemDynamicColorProvider>(),
-        );
-      },
-    );
+  test('resolveDynamicColorProvider_givenThePlatform_answersItsPort', () {
+    // platform.md §3 / C-PLT-4：只有 Android 支持动态取色；iOS 与桌面走默认种子色
+    // （null 表示「不用系统取色」）。
+    const Map<String, (FakePlatformInfo, Type?)> cases =
+        <String, (FakePlatformInfo, Type?)>{
+          'android': (FakePlatformInfo.android(), SystemDynamicColorProvider),
+          'ios': (FakePlatformInfo.ios(), null),
+          'desktop': (FakePlatformInfo.desktop(), null),
+        };
 
-    test('resolveDynamicColorProvider_whenPlatformIsIos_returnsNull', () {
-      // platform.md §3：iOS 不支持动态取色，走默认种子色（C-PLT-4）。
-      expect(resolveDynamicColorProvider(const FakePlatformInfo.ios()), isNull);
-    });
-
-    test('resolveDynamicColorProvider_whenPlatformIsDesktop_returnsNull', () {
-      expect(
-        resolveDynamicColorProvider(const FakePlatformInfo.desktop()),
-        isNull,
+    for (final MapEntry<String, (FakePlatformInfo, Type?)> entry
+        in cases.entries) {
+      final DynamicColorProvider? resolved = resolveDynamicColorProvider(
+        entry.value.$1,
       );
-    });
+
+      expect(resolved?.runtimeType, entry.value.$2, reason: entry.key);
+    }
   });
 
-  group('SystemDynamicColorProvider', () {
-    testWidgets(
-      'resolve_whenPlatformHasNoDynamicColor_handsNullSchemesToTheBuilder',
-      (WidgetTester tester) async {
-        ColorScheme? lightScheme;
-        ColorScheme? darkScheme;
+  testWidgets(
+    'resolve_whenPlatformHasNoDynamicColor_handsNullSchemesToTheBuilder',
+    (WidgetTester tester) async {
+      ColorScheme? lightScheme;
+      ColorScheme? darkScheme;
 
-        await tester.pumpWidget(
-          const SystemDynamicColorProvider().resolve((
-            ColorScheme? light,
-            ColorScheme? dark,
-          ) {
-            lightScheme = light;
-            darkScheme = dark;
-            return const SizedBox.shrink();
-          }),
-        );
-        await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        const SystemDynamicColorProvider().resolve((
+          ColorScheme? light,
+          ColorScheme? dark,
+        ) {
+          lightScheme = light;
+          darkScheme = dark;
+          return const SizedBox.shrink();
+        }),
+      );
+      await tester.pumpAndSettle();
 
-        expect(lightScheme, isNull);
-        expect(darkScheme, isNull);
-      },
-    );
-  });
+      expect(lightScheme, isNull);
+      expect(darkScheme, isNull);
+    },
+  );
 }

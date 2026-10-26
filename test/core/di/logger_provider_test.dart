@@ -5,21 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 void main() {
-  group('appLogger', () {
-    test('appLogger_whenNoLogLevelIsDefined_usesTheInfoDefault', () {
-      final ProviderContainer container = ProviderContainer.test();
+  test('appLogger_whenNoLogLevelIsDefined_usesTheInfoDefault', () {
+    final AppLogger logger = ProviderContainer.test().read(appLoggerProvider);
 
-      expect(container.read(appLoggerProvider), isA<AppLogger>());
-      expect(container.read(appLoggerProvider).level, LogLevel.info);
-    });
-
-    test('appLogger_whenOverridden_returnsTheInjectedLogger', () {
-      final AppLogger injected = AppLogger(level: LogLevel.debug);
-      final ProviderContainer container = ProviderContainer.test(
-        overrides: <Override>[appLoggerProvider.overrideWithValue(injected)],
-      );
-
-      expect(container.read(appLoggerProvider), same(injected));
-    });
+    expect(logger, isA<AppLogger>());
+    expect(logger.level, LogLevel.info);
   });
 }

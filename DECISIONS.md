@@ -501,3 +501,18 @@ M22-a 第二批落地（ADR-0072 §决策 3 + 实现注记）：loginUi 表单 +
 已落地的前置（2026-10-25）：`HttpResponse.url`（跟随重定向后的地址，页面 baseUrl / loginCheckJs 的 url() 都改用它）+ `http.* {response:true}` 返回响应对象（与 loginCheckJs 的 result 同形）。
 
 未做且不在本里程碑：`java.importScript` / `cacheFile` / `downloadFile` / `refreshBookUrl` / Rhino Java 互操作。
+
+## 2026-10-26 — 测试精简第一轮（ADR-0077）已完成：门禁降到 95%，删 plumbing + 合并拆分文件
+
+用户判定「过度测试严重」，裁决：core/domain 覆盖率 100%→95% + 写 ADR，data 保持 80%；优先精简 book_source / 页面 Widget / DI 装配；允许合并同目标多文件、删 plumbing、表驱动、抽 harness。
+
+已完成（门禁全绿：format / analyze 0 issue / 2279 用例 / check_coverage exit 0）：
+- ADR-0077 + testing.md §2 阈值表 + §3 表驱动约定 + §8 措辞回链；check_coverage.dart 默认值 95/95/80。
+- 数据：237 文件 / 61847 行 / 2371 个 test 调用点 → 234 / 61090 / 2324（-3 文件、-757 行、-47 用例）。覆盖率：core 100%、domain 99.12%、data 95.65%。
+- DI/provider 装配测试 990→674 行（platform 370→175、storage 145→110、http 133→118，其余各削一条纯类型断言）。
+- 3 组「同目标两文件」按 C-TEST-4 合并：book_source_list_page(+_batch)、book_source_list_notifier(+_view)、reader_page(+_audio)。
+- 表驱动合并同构用例：状态灯 2→1、工具栏交接 2→1、登录结果 2→1、平台端口 14→7、DAO 装配 8→4、动态取色 3→1。
+
+踩坑：① 合并同一个页面/Notifier 的两个测试文件时，两个文件各自有私有 helper（`_source`/`_l10n`/`_pump`/`_fixture`），必须先确认签名差异再拼，否则会出现「顶层 group」与重复声明；② 表驱动里第二次 `pump` 同一棵树不会重置 Navigator —— 上一轮 push 过占位路由时要先 `pumpWidget(SizedBox.shrink())`；③ 删掉「只为读 provider 断言类型」的用例后要复查「未测量源文件」判定（clock/web_dav 的 provider 测试因此保留）；④ `dart run build_runner build` 在本地会改写 `storage_provider.g.dart` / `settings_notifier.g.dart` 的 hash（与本轮改动无关，属既存漂移），已 revert，需要单独确认 CI 是否也红。
+
+下一步待定：唯一还能大幅减量的手段是把 rule_engine_test(4854 行/269 例) 与 js 测试(2766 行/113 例) 的 Legado 矩阵改成表驱动（估 -2.5k 行，行为断言不变，但风险与工作量都高）。

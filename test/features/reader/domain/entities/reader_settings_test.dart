@@ -104,35 +104,5 @@ void main() {
       expect(low.fontScale, minReaderFontScale);
       expect(low.lineHeight, minReaderLineHeight);
     });
-
-    test('copyWith_givenNewValues_replacesOnlyThem', () {
-      const ReaderSettings settings = ReaderSettings.defaults;
-
-      final ReaderSettings updated = settings.copyWith(
-        background: ReaderBackground.dark,
-        pageMode: ReaderPageMode.paged,
-      );
-
-      expect(updated.background, ReaderBackground.dark);
-      expect(updated.pageMode, ReaderPageMode.paged);
-      expect(updated.fontScale, settings.fontScale);
-      expect(updated.lineHeight, settings.lineHeight);
-    });
-
-    test('copyWith_givenNothing_keepsEveryValue', () {
-      const ReaderSettings settings = ReaderSettings.defaults;
-
-      expect(settings.copyWith(), settings);
-    });
-
-    test('equality_givenTheSameValues_isEqual', () {
-      final ReaderSettings left = ReaderSettings(fontScale: 1.2);
-      final ReaderSettings right = ReaderSettings(fontScale: 1.2);
-
-      expect(left, right);
-      expect(left.hashCode, right.hashCode);
-      expect(left == left.copyWith(pageMode: ReaderPageMode.paged), isFalse);
-      expect(left == Object(), isFalse);
-    });
   });
 }

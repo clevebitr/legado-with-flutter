@@ -35,27 +35,6 @@ void main() {
       expect(BackupSettings.defaults.isWebDavConfigured, isFalse);
     });
 
-    test('copyWith_givenEveryField_replacesThemAll', () {
-      final BackupSettings next = BackupSettings.defaults.copyWith(
-        isAutoEnabled: true,
-        retention: 10,
-        location: const FolderBackupLocation('/tmp'),
-        hasPassword: true,
-        webDavUrl: 'https://dav.test/backups',
-        webDavUsername: 'u',
-        hasWebDavPassword: true,
-        lastAutoBackupAt: DateTime.utc(2026, 10, 25),
-      );
-
-      expect(next.isAutoEnabled, isTrue);
-      expect(next.retention, 10);
-      expect(next.location, const FolderBackupLocation('/tmp'));
-      expect(next.hasPassword, isTrue);
-      expect(next.isWebDavConfigured, isTrue);
-      expect(next.hasWebDavPassword, isTrue);
-      expect(next.lastAutoBackupAt, DateTime.utc(2026, 10, 25));
-    });
-
     test('copyWith_givenNoInstant_keepsTheStoredOne', () {
       final BackupSettings next = BackupSettings(
         lastAutoBackupAt: DateTime.utc(2026),

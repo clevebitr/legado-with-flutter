@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tests carry behaviour, not lines (ADR-0077)
+
+- **Coverage thresholds: `core` / `domain` 100% → 95%** (`data` stays ≥80%). 100% had saturated:
+  the two layers were reported at exactly `2643/2643` and `4636/4636`, so plumbing
+  (`copyWith` / `==` / `hashCode` / DI wiring / single-branch fallbacks) each needed its own test
+  to keep the gate green. The ADR keeps the rule "no new production file without a test" intact
+  (the unmeasured-file check is unchanged) and only allows deleting tests that assert *that a line
+  ran*, never tests that assert behaviour. Thresholds may still only go up.
+- **Tests that existed for the gate are gone** (≈80 cases / 700 lines): pure `==` / `hashCode` /
+  `toString` boilerplate on freezed entities, `copyWith`-keeps-every-other-field cases, and the
+  14 tests that only read a provider to assert its implementation type.
+- **One target, one test file** (C-TEST-4): three test pairs that had drifted into two files are
+  merged and the extras deleted — `book_source_list_page` (+`_batch`), `book_source_list_notifier`
+  (+`_view`), `reader_page` (+`_audio`). Same-page/provider assertions that were isomorphic
+  (status lights, toolbar hand-over, sign-in outcomes, DAO wiring, platform ports) are now
+  table-driven, so one case states the rule instead of one case per row.
+
 ### A theme you can colour, with a picture behind it (ADR-0075, M22-d part 1)
 
 - **Seed colour.** The settings page offers six presets plus 「默认」; the choice is stored as an

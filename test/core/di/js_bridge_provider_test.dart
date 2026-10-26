@@ -6,34 +6,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 void main() {
-  group('jsBridge', () {
-    /// A container whose database executor is the in-memory one.
-    ///
-    /// The bridge watches the app-wide HTTP client (3.4 的 `http.*`), which now also wires
-    /// the charset cache on top of `CacheDao` — reading the provider graph therefore needs a
-    /// database. `database_executor_provider.dart` is device-only (drift_flutter uses a
-    /// platform channel), so the test overrides it with `NativeDatabase.memory()`, exactly
-    /// like `cache_dao_test.dart` does.
-    ProviderContainer containerForTest() => ProviderContainer.test(
+  test('jsBridge_whenRead_returnsTheQuickJsBridgeWithoutStartingAWorker', () {
+    // 桥监听应用级 HTTP 客户端（3.4 的 `http.*`），而它现在把 charset 缓存挂在
+    // `CacheDao` 上，所以读 provider 图需要一个数据库；设备侧 executor 走平台通道，
+    // 因此换成内存 executor（与 `cache_dao_test.dart` 一致）。
+    final ProviderContainer container = ProviderContainer.test(
       overrides: <Override>[
         databaseExecutorProvider.overrideWithValue(NativeDatabase.memory()),
       ],
     );
+    addTearDown(container.dispose);
 
-    test('jsBridge_whenRead_returnsTheQuickJsBridgeWithoutStartingAWorker', () {
-      final ProviderContainer container = containerForTest();
-
-      // 读 provider 只构造桥，不拉起 worker：worker 懒创建（ADR-0030 §决策 6），
-      // 所以宿主 VM 上不需要原生库，也就能被覆盖率门禁测到。
-      expect(container.read(jsBridgeProvider), isA<QuickJsWorkerBridge>());
-    });
-
-    test('jsBridge_whenTheScopeIsDisposed_releasesTheBridge', () {
-      final ProviderContainer container = containerForTest();
-      container.read(jsBridgeProvider);
-
-      // 释放作用域必须能正常走完（没有 worker 时是一次空释放）。
-      expect(container.dispose, returnsNormally);
-    });
+    // 读 provider 只构造桥，不拉起 worker：worker 懒创建（ADR-0030 §决策 6），
+    // 所以宿主 VM 上不需要原生库，也就能被覆盖率门禁测到。
+    expect(container.read(jsBridgeProvider), isA<QuickJsWorkerBridge>());
   });
 }

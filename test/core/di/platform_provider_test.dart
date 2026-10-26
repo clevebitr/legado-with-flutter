@@ -4,7 +4,6 @@ import 'package:flutter_reader/core/platform/background_image_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/backup_directory_picker.dart';
-import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/file_selector_background_image_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
@@ -22,346 +21,173 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../support/fake_platform_info.dart';
 
-void main() {
-  group('platformInfo', () {
-    test('platformInfo_whenRead_returnsTheSystemImplementation', () {
-      final ProviderContainer container = ProviderContainer.test();
+/// One platform-backed port: its name, the implementation a shipped platform
+/// must get, and how to read it from a container.
+typedef _Port = (String, Type, Object Function(ProviderContainer));
 
-      expect(container.read(platformInfoProvider), isA<SystemPlatformInfo>());
-    });
-  });
+/// The three platforms the app ships, keyed by the fake that reports them.
+const Map<String, FakePlatformInfo> _shippedPlatforms =
+    <String, FakePlatformInfo>{
+      'android': FakePlatformInfo.android(),
+      'ios': FakePlatformInfo.ios(),
+      'desktop': FakePlatformInfo.desktop(),
+    };
 
-  group('platformDynamicColor', () {
-    test(
-      'platformDynamicColor_whenPlatformIsAndroid_returnsTheSystemProvider',
-      () {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(
-              const FakePlatformInfo.android(),
-            ),
-          ],
-        );
+/// Ports whose real implementation is available on every shipped platform.
+const List<_Port> _dialogPorts = <_Port>[
+  ('jsonFilePicker', FileSelectorJsonFilePicker, _jsonFilePicker),
+  ('jsonFileSaver', FileSelectorJsonFileSaver, _jsonFileSaver),
+  ('backupArchiveSaver', FileSelectorBackupArchiveSaver, _archiveSaver),
+  ('backupArchivePicker', FileSelectorBackupArchivePicker, _archivePicker),
+  (
+    'backupDirectoryPicker',
+    FileSelectorBackupDirectoryPicker,
+    _directoryPicker,
+  ),
+  ('backgroundImagePicker', FileSelectorBackgroundImagePicker, _imagePicker),
+  ('secretStore', FlutterSecureStorageSecretStore, _secretStore),
+];
 
-        expect(
-          container.read(platformDynamicColorProvider),
-          isA<SystemDynamicColorProvider>(),
-        );
-      },
+Object _jsonFilePicker(ProviderContainer container) =>
+    container.read(jsonFilePickerProvider);
+Object _jsonFileSaver(ProviderContainer container) =>
+    container.read(jsonFileSaverProvider);
+Object _archiveSaver(ProviderContainer container) =>
+    container.read(backupArchiveSaverProvider);
+Object _archivePicker(ProviderContainer container) =>
+    container.read(backupArchivePickerProvider);
+Object _directoryPicker(ProviderContainer container) =>
+    container.read(backupDirectoryPickerProvider);
+Object _imagePicker(ProviderContainer container) =>
+    container.read(backgroundImagePickerProvider);
+Object _secretStore(ProviderContainer container) =>
+    container.read(secretStoreProvider);
+
+/// A container whose platform is [platform].
+ProviderContainer _containerFor(PlatformInfo platform) =>
+    ProviderContainer.test(
+      overrides: <Override>[platformInfoProvider.overrideWithValue(platform)],
     );
 
-    test('platformDynamicColor_whenPlatformIsDesktop_returnsNull', () {
-      final ProviderContainer container = ProviderContainer.test(
-        overrides: <Override>[
-          platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo.desktop(),
-          ),
-        ],
-      );
+const FakePlatformInfo _android = FakePlatformInfo.android();
+const FakePlatformInfo _desktop = FakePlatformInfo.desktop();
+const FakePlatformInfo _unsupported = FakePlatformInfo.unsupported();
 
-      expect(container.read(platformDynamicColorProvider), isNull);
-    });
+void main() {
+  test('platformInfo_whenRead_returnsTheSystemImplementation', () {
+    expect(
+      ProviderContainer.test().read(platformInfoProvider),
+      isA<SystemPlatformInfo>(),
+    );
   });
 
-  group('jsonFilePicker', () {
-    test('jsonFilePicker_givenAShippedPlatform_usesTheRealDialog', () {
-      // 三端（Android / iOS / Windows）都有官方实现，所以取真实选择器。
-      for (final FakePlatformInfo platform in <FakePlatformInfo>[
-        const FakePlatformInfo.android(),
-        const FakePlatformInfo.ios(),
-        const FakePlatformInfo.desktop(),
-      ]) {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(platform),
-          ],
-        );
+  test('dialogPorts_givenAShippedPlatform_useTheRealDialogOrKeyStore', () {
+    // 三端（Android / iOS / Windows 桌面）都有官方实现，所以取真实端口。
+    for (final MapEntry<String, FakePlatformInfo> platform
+        in _shippedPlatforms.entries) {
+      final ProviderContainer container = _containerFor(platform.value);
 
+      for (final _Port port in _dialogPorts) {
         expect(
-          container.read(jsonFilePickerProvider),
-          isA<FileSelectorJsonFilePicker>(),
+          port.$3(container).runtimeType,
+          port.$2,
+          reason: '${port.$1} on ${platform.key}',
         );
       }
-    });
-
-    test('jsonFilePicker_givenAnUnshippedPlatform_fallsBack', () {
-      // platform.md §2：不支持的平台给 no-op 实现（答「没选」），而不是抛异常。
-      final ProviderContainer container = ProviderContainer.test(
-        overrides: <Override>[
-          platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo.unsupported(),
-          ),
-        ],
-      );
-
-      expect(
-        container.read(jsonFilePickerProvider),
-        isA<UnsupportedJsonFilePicker>(),
-      );
-    });
+    }
   });
-  group('jsonFileSaver', () {
-    test('jsonFileSaver_givenAShippedPlatform_usesTheRealDialog', () {
-      for (final FakePlatformInfo platform in <FakePlatformInfo>[
-        const FakePlatformInfo.android(),
-        const FakePlatformInfo.ios(),
-        const FakePlatformInfo.desktop(),
-      ]) {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(platform),
-          ],
-        );
 
-        expect(
-          container.read(jsonFileSaverProvider),
-          isA<FileSelectorJsonFileSaver>(),
-        );
-      }
-    });
-
-    test('jsonFileSaver_givenAnUnshippedPlatform_doesNotSave', () async {
-      final ProviderContainer container = ProviderContainer.test(
-        overrides: <Override>[
-          platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo.unsupported(),
-          ),
-        ],
-      );
+  group('unsupported platform', () {
+    test('filePorts_answerNotSavedInsteadOfThrowing', () async {
+      // platform.md §2：没有该能力的平台给 no-op 实现，调用方不必判断平台。
+      final ProviderContainer container = _containerFor(_unsupported);
 
       expect(
         container.read(jsonFileSaverProvider),
         isA<UnsupportedJsonFileSaver>(),
       );
-      // 没对话框的平台 = 用户取消：`ParseSuccess(false)`，不是失败。
       final ParseResult<bool> saved = await container
           .read(jsonFileSaverProvider)
           .save(suggestedName: 'a.json', contents: '{}');
+      // 没对话框的平台 = 用户取消：`ParseSuccess(false)`，不是失败。
       expect((saved as ParseSuccess<bool>).data, isFalse);
-    });
-  });
 
-  group('backupArchiveSaver', () {
-    test('backupArchiveSaver_givenAShippedPlatform_usesTheRealDialog', () {
-      for (final FakePlatformInfo platform in <FakePlatformInfo>[
-        const FakePlatformInfo.android(),
-        const FakePlatformInfo.ios(),
-        const FakePlatformInfo.desktop(),
-      ]) {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(platform),
-          ],
-        );
-
-        expect(
-          container.read(backupArchiveSaverProvider),
-          isA<FileSelectorBackupArchiveSaver>(),
-        );
-      }
+      expect(
+        container.read(jsonFilePickerProvider),
+        isA<UnsupportedJsonFilePicker>(),
+      );
+      // JSON 导入走「解析失败」而不是「空数据」，由调用方显示导入错误。
+      expect(
+        (await container.read(jsonFilePickerProvider).pick(maxBytes: 8))
+            .dataOrNull,
+        isNull,
+      );
     });
 
-    test('backupArchiveSaver_givenAnUnshippedPlatform_doesNotSave', () async {
-      final ProviderContainer container = ProviderContainer.test(
-        overrides: <Override>[
-          platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo.unsupported(),
-          ),
-        ],
-      );
+    test('backupPorts_pickAndSaveNothing', () async {
+      final ProviderContainer container = _containerFor(_unsupported);
 
-      final BackupArchiveSaver saver = container.read(
-        backupArchiveSaverProvider,
+      expect(
+        container.read(backupArchiveSaverProvider),
+        isA<UnsupportedBackupArchiveSaver>(),
       );
-      expect(saver, isA<UnsupportedBackupArchiveSaver>());
-      final ParseResult<bool> saved = await saver.save(
-        suggestedName: 'backup.zip',
-        bytes: <int>[1],
-      );
+      final ParseResult<bool> saved = await container
+          .read(backupArchiveSaverProvider)
+          .save(suggestedName: 'backup.zip', bytes: <int>[1]);
       expect((saved as ParseSuccess<bool>).data, isFalse);
-    });
-  });
 
-  group('backupArchivePicker', () {
-    test('backupArchivePicker_givenAShippedPlatform_usesTheRealDialog', () {
-      for (final FakePlatformInfo platform in <FakePlatformInfo>[
-        const FakePlatformInfo.android(),
-        const FakePlatformInfo.ios(),
-        const FakePlatformInfo.desktop(),
-      ]) {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(platform),
-          ],
-        );
-
-        expect(
-          container.read(backupArchivePickerProvider),
-          isA<FileSelectorBackupArchivePicker>(),
-        );
-      }
-    });
-
-    test('backupArchivePicker_givenAnUnshippedPlatform_picksNothing', () async {
-      final ProviderContainer container = ProviderContainer.test(
-        overrides: <Override>[
-          platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo.unsupported(),
-          ),
-        ],
+      expect(
+        container.read(backupArchivePickerProvider),
+        isA<UnsupportedBackupArchivePicker>(),
+      );
+      expect(
+        (await container.read(backupArchivePickerProvider).pick(maxBytes: 8))
+            .dataOrNull,
+        isNull,
       );
 
-      final BackupArchivePicker picker = container.read(
-        backupArchivePickerProvider,
+      expect(
+        container.read(backupDirectoryPickerProvider),
+        isA<UnsupportedBackupDirectoryPicker>(),
       );
-      expect(picker, isA<UnsupportedBackupArchivePicker>());
-      expect((await picker.pick(maxBytes: 8)).dataOrNull, isNull);
-    });
-  });
+      expect(
+        (await container.read(backupDirectoryPickerProvider).pick()).dataOrNull,
+        isNull,
+      );
 
-  group('secretStore', () {
-    test('secretStore_givenAShippedPlatform_usesThePlatformKeyStore', () {
-      for (final FakePlatformInfo platform in <FakePlatformInfo>[
-        const FakePlatformInfo.android(),
-        const FakePlatformInfo.ios(),
-        const FakePlatformInfo.desktop(),
-      ]) {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(platform),
-          ],
-        );
-
-        expect(
-          container.read(secretStoreProvider),
-          isA<FlutterSecureStorageSecretStore>(),
-        );
-      }
+      expect(
+        container.read(backgroundImagePickerProvider),
+        isA<UnsupportedBackgroundImagePicker>(),
+      );
+      expect(
+        await container.read(backgroundImagePickerProvider).pick(),
+        isNull,
+      );
     });
 
-    test('secretStore_givenAnUnshippedPlatform_doesNotStore', () async {
-      final ProviderContainer container = ProviderContainer.test(
-        overrides: <Override>[
-          platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo.unsupported(),
-          ),
-        ],
-      );
+    test('secretStore_forgetsEverything', () async {
+      final ProviderContainer container = _containerFor(_unsupported);
 
       final SecretStore store = container.read(secretStoreProvider);
+
       expect(store, isA<UnsupportedSecretStore>());
       expect(await store.write('k', 'v'), isFalse);
       expect(await store.read('k'), isNull);
     });
   });
 
-  group('backupDirectoryPicker', () {
-    test('backupDirectoryPicker_givenAShippedPlatform_usesTheRealDialog', () {
-      for (final FakePlatformInfo platform in <FakePlatformInfo>[
-        const FakePlatformInfo.android(),
-        const FakePlatformInfo.ios(),
-        const FakePlatformInfo.desktop(),
-      ]) {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(platform),
-          ],
-        );
-
-        expect(
-          container.read(backupDirectoryPickerProvider),
-          isA<FileSelectorBackupDirectoryPicker>(),
-        );
-      }
-    });
-
-    test(
-      'backupDirectoryPicker_givenAnUnshippedPlatform_picksNothing',
-      () async {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(
-              const FakePlatformInfo.unsupported(),
-            ),
-          ],
-        );
-
-        final BackupDirectoryPicker picker = container.read(
-          backupDirectoryPickerProvider,
-        );
-        expect(picker, isA<UnsupportedBackupDirectoryPicker>());
-        expect((await picker.pick()).dataOrNull, isNull);
-      },
-    );
-  });
-
-  group('backgroundImagePicker', () {
-    test('backgroundImagePicker_givenAShippedPlatform_usesTheRealDialog', () {
-      for (final FakePlatformInfo platform in <FakePlatformInfo>[
-        const FakePlatformInfo.android(),
-        const FakePlatformInfo.ios(),
-        const FakePlatformInfo.desktop(),
-      ]) {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(platform),
-          ],
-        );
-
-        expect(
-          container.read(backgroundImagePickerProvider),
-          isA<FileSelectorBackgroundImagePicker>(),
-        );
-      }
-    });
-
-    test(
-      'backgroundImagePicker_givenAnUnshippedPlatform_picksNothing',
-      () async {
-        final ProviderContainer container = ProviderContainer.test(
-          overrides: <Override>[
-            platformInfoProvider.overrideWithValue(
-              const FakePlatformInfo.unsupported(),
-            ),
-          ],
-        );
-
-        final BackgroundImagePicker picker = container.read(
-          backgroundImagePickerProvider,
-        );
-        expect(picker, isA<UnsupportedBackgroundImagePicker>());
-        expect(await picker.pick(), isNull);
-      },
-    );
-  });
-
   group('longRunningTask', () {
     test('longRunningTask_whenPlatformIsAndroid_holdsAWakeLock', () {
-      final ProviderContainer container = ProviderContainer.test(
-        overrides: <Override>[
-          platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo.android(),
-          ),
-        ],
-      );
-
       expect(
-        container.read(longRunningTaskProvider),
+        _containerFor(_android).read(longRunningTaskProvider),
         isA<MethodChannelLongRunningTask>(),
       );
     });
 
     test('longRunningTask_whenPlatformIsDesktop_isTheNoOpPort', () {
       // platform.md §2 / §7：没有该能力的平台给 no-op，调用方不必判断平台。
-      final ProviderContainer container = ProviderContainer.test(
-        overrides: <Override>[
-          platformInfoProvider.overrideWithValue(
-            const FakePlatformInfo.desktop(),
-          ),
-        ],
-      );
-
-      final LongRunningTask task = container.read(longRunningTaskProvider);
+      final LongRunningTask task = _containerFor(_desktop)
+          .read(longRunningTaskProvider);
 
       expect(task, isA<UnsupportedLongRunningTask>());
       expect(task.isSupported, isFalse);

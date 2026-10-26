@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:drift/drift.dart' show DatabaseAccessor, GeneratedDatabase;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_reader/core/di/database_executor_provider.dart';
@@ -32,114 +33,88 @@ ProviderContainer _memoryContainer() => ProviderContainer.test(
   ],
 );
 
+/// The DAO providers and the DAO type each one must build.
+final Map<String, (Type, Object Function(ProviderContainer))> _daoProviders =
+    <String, (Type, Object Function(ProviderContainer))>{
+      'shelfGroupDao': (ShelfGroupDao, _shelfGroupDao),
+      'bookmarkDao': (BookmarkDao, _bookmarkDao),
+      'readRecordDao': (ReadRecordDao, _readRecordDao),
+      'ruleDao': (RuleDao, _ruleDao),
+      'cacheDao': (CacheDao, _cacheDao),
+    };
+
+Object _shelfGroupDao(ProviderContainer container) =>
+    container.read(shelfGroupDaoProvider);
+Object _bookmarkDao(ProviderContainer container) =>
+    container.read(bookmarkDaoProvider);
+Object _readRecordDao(ProviderContainer container) =>
+    container.read(readRecordDaoProvider);
+Object _ruleDao(ProviderContainer container) => container.read(ruleDaoProvider);
+Object _cacheDao(ProviderContainer container) =>
+    container.read(cacheDaoProvider);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('databaseFilePath', () {
-    test(
-      'databaseFilePath_whenPlatformDirectoryIsKnown_endsWithReaderDb',
-      () async {
-        final Directory directory = Directory.systemTemp.createTempSync(
-          'reader_db_test',
-        );
-        addTearDown(() {
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-              .setMockMethodCallHandler(_pathProviderChannel, null);
-          if (directory.existsSync()) {
-            directory.deleteSync(recursive: true);
-          }
-        });
+  test(
+    'databaseFilePath_whenPlatformDirectoryIsKnown_endsWithReaderDb',
+    () async {
+      final Directory directory = Directory.systemTemp.createTempSync(
+        'reader_db_test',
+      );
+      addTearDown(() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(
-              _pathProviderChannel,
-              (MethodCall call) async => directory.path,
-            );
-        final ProviderContainer container = ProviderContainer.test();
+            .setMockMethodCallHandler(_pathProviderChannel, null);
+        if (directory.existsSync()) {
+          directory.deleteSync(recursive: true);
+        }
+      });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            _pathProviderChannel,
+            (MethodCall call) async => directory.path,
+          );
 
-        final String path = await container.read(
-          databaseFilePathProvider.future,
-        );
+      final String path = await ProviderContainer.test().read(
+        databaseFilePathProvider.future,
+      );
 
-        expect(File(path).parent.path, directory.path);
-        expect(path, endsWith('reader.db'));
-      },
+      expect(File(path).parent.path, directory.path);
+      expect(path, endsWith('reader.db'));
+    },
+  );
+
+  test('readerDatabase_whenReadTwice_returnsTheSameInstance', () {
+    final ProviderContainer container = _memoryContainer();
+
+    expect(
+      container.read(readerDatabaseProvider),
+      same(container.read(readerDatabaseProvider)),
     );
   });
 
-  group('readerDatabase', () {
-    test('readerDatabase_whenReadTwice_returnsTheSameInstance', () {
-      final ProviderContainer container = _memoryContainer();
+  test('daoProviders_whenRead_buildTheirDaoOnTheSharedDatabase', () {
+    final ProviderContainer container = _memoryContainer();
+    final Object database = container.read(readerDatabaseProvider);
 
+    for (final MapEntry<String, (Type, Object Function(ProviderContainer))> dao
+        in _daoProviders.entries) {
+      final Object built = dao.value.$2(container);
+
+      expect(built.runtimeType, dao.value.$1, reason: dao.key);
+      // 所有 DAO 必须挂在同一个连接上，否则测试里会悄悄各建一个库。
       expect(
-        container.read(readerDatabaseProvider),
-        same(container.read(readerDatabaseProvider)),
+        (built as DatabaseAccessor<GeneratedDatabase>).attachedDatabase,
+        same(database),
+        reason: dao.key,
       );
-    });
-  });
-
-  group('shelfGroupDao', () {
-    test('shelfGroupDao_whenRead_returnsADaoOnTheSharedDatabase', () {
-      final ProviderContainer container = _memoryContainer();
-
-      expect(container.read(shelfGroupDaoProvider), isA<ShelfGroupDao>());
-      expect(
-        container.read(shelfGroupDaoProvider).attachedDatabase,
-        same(container.read(readerDatabaseProvider)),
-      );
-    });
-  });
-
-  group('bookmarkDao', () {
-    test('bookmarkDao_whenRead_returnsADaoOnTheSharedDatabase', () {
-      final ProviderContainer container = _memoryContainer();
-
-      expect(container.read(bookmarkDaoProvider), isA<BookmarkDao>());
-      expect(
-        container.read(bookmarkDaoProvider).attachedDatabase,
-        same(container.read(readerDatabaseProvider)),
-      );
-    });
-  });
-
-  group('readRecordDao', () {
-    test('readRecordDao_whenRead_returnsADaoOnTheSharedDatabase', () {
-      final ProviderContainer container = _memoryContainer();
-
-      expect(container.read(readRecordDaoProvider), isA<ReadRecordDao>());
-      expect(
-        container.read(readRecordDaoProvider).attachedDatabase,
-        same(container.read(readerDatabaseProvider)),
-      );
-    });
-  });
-
-  group('ruleDao', () {
-    test('ruleDao_whenRead_returnsADaoOnTheSharedDatabase', () {
-      final ProviderContainer container = _memoryContainer();
-
-      expect(container.read(ruleDaoProvider), isA<RuleDao>());
-      expect(
-        container.read(ruleDaoProvider).attachedDatabase,
-        same(container.read(readerDatabaseProvider)),
-      );
-    });
-  });
-
-  group('cacheDao', () {
-    test('cacheDao_whenRead_returnsADaoOnTheSharedDatabase', () {
-      final ProviderContainer container = _memoryContainer();
-
-      expect(container.read(cacheDaoProvider), isA<CacheDao>());
-      expect(
-        container.read(cacheDaoProvider).attachedDatabase,
-        same(container.read(readerDatabaseProvider)),
-      );
-    });
+    }
   });
 
   test('localImageStore_whenRead_answersTheStore', () {
-    final ProviderContainer container = ProviderContainer.test();
-
-    expect(container.read(localImageStoreProvider), isA<LocalImageStore>());
+    expect(
+      ProviderContainer.test().read(localImageStoreProvider),
+      isA<LocalImageStore>(),
+    );
   });
 }
