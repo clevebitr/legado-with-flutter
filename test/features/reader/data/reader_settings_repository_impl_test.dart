@@ -28,6 +28,7 @@ void main() {
       final ReaderSettings settings = ReaderSettings(
         fontScale: 1.4,
         lineHeight: 2,
+        brightness: 0.6,
         background: ReaderBackground.sepia,
         pageMode: ReaderPageMode.paged,
       );
@@ -78,6 +79,14 @@ void main() {
 
       expect(settings.fontScale, maxReaderFontScale);
       expect(settings.lineHeight, minReaderLineHeight);
+    });
+
+    test('load_givenAnOutOfRangeBrightness_clampsIt', () async {
+      final ReaderSettingsRepositoryImpl repository = await _repository(
+        <String, Object>{'reader.brightness': 0.1},
+      );
+
+      expect((await repository.load()).brightness, minReaderBrightness);
     });
 
     test('load_givenAnUnknownEnumIndex_fallsBackToTheDefault', () async {

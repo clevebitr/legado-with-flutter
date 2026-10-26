@@ -6,14 +6,18 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
+import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/switch_book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_cache_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_queries.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_add_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_book_notifier.dart';
+import 'package:flutter_reader/features/book_source/presentation/widgets/change_book_source_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -23,7 +27,7 @@ import 'package:m3e_design/m3e_design.dart';
 /// The two stages fail independently: a chapter list that cannot be read still
 /// shows the information that was read, and each section has its own retry
 /// (`docs/dev/book-source.md` §9).
-class BookDetailPage extends ConsumerWidget {
+class BookDetailPage extends ConsumerStatefulWidget {
   /// Creates the page.
   const BookDetailPage({required this.book, super.key});
 
@@ -31,7 +35,16 @@ class BookDetailPage extends ConsumerWidget {
   final Book book;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BookDetailPage> createState() => _BookDetailPageState();
+}
+
+/// State of the detail page: the hit and, after a source switch, the new identity.
+class _BookDetailPageState extends ConsumerState<BookDetailPage> {
+  /// The book this page shows; a source switch replaces it in place.
+  late Book _book = widget.book;
+
+  @override
+  Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final M3ETheme tokens = context.m3e;
     final BookSource? source = ref.watch(currentBookSourceProvider);
@@ -57,7 +70,7 @@ class BookDetailPage extends ConsumerWidget {
     AppLocalizations l10n,
   ) {
     final AsyncValue<ParseResult<BookInfo>> info = ref.watch(
-      bookInfoProvider(source, book),
+      bookInfoProvider(source, _book),
     );
 
     return switch (info) {
@@ -74,13 +87,13 @@ class BookDetailPage extends ConsumerWidget {
           ParseFailure<BookInfo>(:final ParseFailureKind kind) =>
             FailureMessage(
               kind: kind,
-              onRetry: () => ref.invalidate(bookInfoProvider(source, book)),
+              onRetry: () => ref.invalidate(bookInfoProvider(source, _book)),
             ),
         },
       // 用例按 C-ERR-1 不抛异常：这里只兜住意外错误，避免用户看到白屏。
       AsyncError<ParseResult<BookInfo>>() => FailureMessage(
         kind: ParseFailureKind.parseFailed,
-        onRetry: () => ref.invalidate(bookInfoProvider(source, book)),
+        onRetry: () => ref.invalidate(bookInfoProvider(source, _book)),
       ),
       _ => const Center(child: CircularProgressIndicator()),
     };
@@ -287,6 +300,14 @@ class BookDetailPage extends ConsumerWidget {
                   _readButton(context, ref, source, info, l10n, toc),
                   _continueButton(context, ref, source, info, l10n),
                   _shelfButton(context, ref, source, info, l10n),
+                  _changeSourceButton(
+                    context,
+                    ref,
+                    source,
+                    info,
+                    membership,
+                    l10n,
+                  ),
                   _readingRecordsButton(context, ref, source, info, l10n),
                   _groupButton(context, ref, source, info, membership, l10n),
                   _coverButton(context, ref, source, info, membership, l10n),
@@ -337,6 +358,139 @@ class BookDetailPage extends ConsumerWidget {
     icon: const Icon(Icons.play_arrow_outlined),
     label: Text(l10n.bookSourceContinueReading),
   );
+
+  /// 「换源」: finds another enabled text source and switches this page onto it in place.
+  ///
+  /// The switch keeps the shelf identity (the row's URL is rewritten, its progress follows the row)
+  /// and moves the global selected source, so every other parsing page follows the new one.
+  Widget _changeSourceButton(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    ShelfMembership? membership,
+    AppLocalizations l10n,
+  ) => OutlinedButton.icon(
+    onPressed: () =>
+        unawaited(_changeSource(context, ref, source, info, membership, l10n)),
+    icon: const Icon(Icons.swap_horiz),
+    label: Text(l10n.readerChangeSource),
+  );
+
+  /// Runs the change-source flow: candidates → switch → selected source → shelf → page.
+  Future<void> _changeSource(
+    BuildContext context,
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    ShelfMembership? membership,
+    AppLocalizations l10n,
+  ) async {
+    final SourceCandidate? candidate =
+        await showModalBottomSheet<SourceCandidate>(
+          context: context,
+          isScrollControlled: true,
+          builder: (BuildContext context) => ChangeBookSourceSheet(
+            bookName: info.name,
+            currentSourceUrl: source.url,
+          ),
+        );
+    if (candidate == null || !mounted) {
+      return;
+    }
+
+    final List<StoredBookSource> rows = await ref.read(
+      bookSourceListProvider.future,
+    );
+    if (!mounted) {
+      return;
+    }
+    BookSource? target;
+    for (final StoredBookSource row in rows) {
+      if (row.source.url == candidate.sourceUrl) {
+        target = row.source;
+        break;
+      }
+    }
+    if (target == null) {
+      _showMessage(context, l10n.readerSourceFailed);
+
+      return;
+    }
+    final BookSource targetSource = target;
+
+    // 换源要重拉详情与目录，可能几秒：盖一层不可取消的进度，避免用户以为按钮没反应。
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) => PopScope(
+          canPop: false,
+          child: const Center(child: CircularProgressIndicator()),
+        ),
+      ),
+    );
+
+    ParseResult<SourceSwitchResult>? switched;
+    try {
+      switched = await ref
+          .read(switchBookSourceProvider)
+          .switchTo(
+            target: targetSource,
+            candidate: candidate,
+            currentChapterName: membership?.progressChapterName ?? '',
+            currentChapterIndex: 0,
+          );
+      if (switched case ParseSuccess<SourceSwitchResult>(
+        :final SourceSwitchResult data,
+      )) {
+        for (final StoredBookSource row in rows) {
+          if (row.source.url == data.sourceUrl) {
+            await ref.read(selectedBookSourceProvider.notifier).select(row.id);
+            break;
+          }
+        }
+        // 不在书架上时端口会直接返回成功；不要用 membership 判断，避免它仍在加载时漏掉迁移。
+        await ref
+            .read(bookshelfWriterProvider)
+            .migrateIdentity(
+              sourceUrl: source.url,
+              bookUrl: info.url,
+              newSourceUrl: data.sourceUrl,
+              newBookUrl: data.bookUrl,
+              newTocUrl: data.tocUrl,
+              newName: data.bookName,
+              newAuthor: data.author,
+              newCoverUrl: data.coverUrl,
+              newLastChapter: data.lastChapter,
+            );
+        if (mounted) {
+          setState(() {
+            _book = Book(
+              name: data.bookName,
+              url: data.bookUrl,
+              author: data.author,
+              kind: info.kind,
+              coverUrl: data.coverUrl,
+              intro: info.intro,
+              lastChapter: data.lastChapter,
+              updateTime: info.updateTime,
+            );
+          });
+        }
+      }
+    } finally {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    if (switched is ParseFailure<SourceSwitchResult>) {
+      _showMessage(context, l10n.readerSourceFailed);
+    }
+  }
 
   /// 「阅读记录」: opens the reader-owned record page for this book (ADR-0066 §决策 5).
   ///

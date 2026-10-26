@@ -131,6 +131,34 @@ void main() {
         expect(printer.events.single.message, contains('resetting the cover'));
       },
     );
+
+    test(
+      'migrateIdentity_whenNothingIsBound_answersALocatableFailure',
+      () async {
+        final FakeLogPrinter printer = FakeLogPrinter();
+        final UnboundBookshelfWriter writer = UnboundBookshelfWriter(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+        );
+
+        final ParseResult<void> result = await writer.migrateIdentity(
+          sourceUrl: 'https://source.test',
+          bookUrl: 'https://source.test/book/1',
+          newSourceUrl: 'https://other.test',
+          newBookUrl: 'https://other.test/book/1',
+          newTocUrl: 'https://other.test/book/1/',
+          newName: '剑来',
+        );
+
+        expect(
+          (result as ParseFailure<void>).rulePath,
+          'shelf.writer.migrateIdentity',
+        );
+        expect(
+          printer.events.single.message,
+          contains('migrating the shelf identity'),
+        );
+      },
+    );
   });
 }
 

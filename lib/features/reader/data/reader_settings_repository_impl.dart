@@ -14,6 +14,9 @@ const String _lineHeightKey = 'reader.lineHeight';
 /// `shared_preferences` key of the background palette index.
 const String _backgroundKey = 'reader.background';
 
+/// `shared_preferences` key of the in-page dimming overlay brightness.
+const String _brightnessKey = 'reader.brightness';
+
 /// `shared_preferences` key of the page mode index.
 const String _pageModeKey = 'reader.pageMode';
 
@@ -59,6 +62,7 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
   Future<ReaderSettings> load() async => ReaderSettings(
     fontScale: _store.readDouble(_fontScaleKey) ?? defaultReaderFontScale,
     lineHeight: _store.readDouble(_lineHeightKey) ?? defaultReaderLineHeight,
+    brightness: _store.readDouble(_brightnessKey) ?? defaultReaderBrightness,
     background: _backgroundOf(_store.readInt(_backgroundKey)),
     pageMode: _pageModeOf(_store.readInt(_pageModeKey)),
     fontFamily: _fontFamilyOf(_store.readInt(_fontFamilyKey)),
@@ -77,6 +81,7 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     // 存的是**钳制后**的值：读回来的永远是 UI 能表示的范围（与 `SettingsRepositoryImpl` 同口径）。
     await _store.writeDouble(_fontScaleKey, settings.fontScale);
     await _store.writeDouble(_lineHeightKey, settings.lineHeight);
+    await _store.writeDouble(_brightnessKey, settings.brightness);
     await _store.writeInt(_backgroundKey, settings.background.index);
     await _store.writeInt(_pageModeKey, settings.pageMode.index);
     await _store.writeInt(_fontFamilyKey, settings.fontFamily.index);

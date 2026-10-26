@@ -1,6 +1,7 @@
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/app_reader_exit_guard.dart';
 import 'package:flutter_reader/app_shell.dart';
 import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/di/http_client_provider.dart';
@@ -307,6 +308,10 @@ class ReaderApp extends ConsumerWidget {
     final BookshelfRoute route => bookshelfPageFor(route),
     SettingsPageRoute() => const SettingsPage(),
     final BookDetailRoute route => BookDetailPage(book: route.book),
+    final ReaderReadRoute route => ReaderExitGuard(
+      book: route.book,
+      child: readerPageFor(route),
+    ),
     final ReaderRoute route => readerPageFor(route),
     AboutRoute() => const AboutPage(),
     LegalNoticesRoute() => const LegalNoticesPage(),
@@ -565,7 +570,7 @@ final class _SourceSwitcher implements BookSourceSwitcher {
     final List<ShelvedBook> rows = await shelf.getAll();
     for (final ShelvedBook row in rows) {
       if (row.sourceUrl == book.sourceUrl && row.bookUrl == book.bookUrl) {
-        await shelf.migrateIdentity(
+        final bool migrated = await shelf.migrateIdentity(
           id: row.id,
           sourceUrl: result.sourceUrl,
           bookUrl: result.bookUrl,
@@ -575,6 +580,10 @@ final class _SourceSwitcher implements BookSourceSwitcher {
           coverUrl: result.coverUrl,
           lastChapter: result.lastChapter,
         );
+        // 书架是 keepAlive 的：不改写它，退出阅读器时守护还会拿旧身份判断「在不在书架」。
+        if (migrated) {
+          _ref.invalidate(bookshelfProvider);
+        }
         break;
       }
     }
@@ -696,6 +705,7 @@ final class _ShelfWriter implements BookshelfWriter {
       onShelf: true,
       groupId: book.groupId,
       customCoverPath: book.customCoverPath,
+      progressChapterName: book.progress?.chapterName,
       groups: options,
     );
   }
@@ -778,6 +788,55 @@ final class _ShelfWriter implements BookshelfWriter {
     _ref.invalidate(bookshelfProvider);
 
     return const ParseResult<void>.success(null);
+  }
+
+  @override
+  Future<ParseResult<void>> migrateIdentity({
+    required String sourceUrl,
+    required String bookUrl,
+    required String newSourceUrl,
+    required String newBookUrl,
+    required String newTocUrl,
+    required String newName,
+    String? newAuthor,
+    String? newCoverUrl,
+    String? newLastChapter,
+  }) async {
+    try {
+      final BookshelfRepository repository = _ref.read(
+        bookshelfRepositoryProvider,
+      );
+      final ShelvedBook? book = await repository.findByUrl(
+        sourceUrl: sourceUrl,
+        bookUrl: bookUrl,
+      );
+      if (book == null) {
+        return const ParseSuccess<void>(null);
+      }
+      await repository.migrateIdentity(
+        id: book.id,
+        sourceUrl: newSourceUrl,
+        bookUrl: newBookUrl,
+        tocUrl: newTocUrl,
+        name: newName,
+        author: newAuthor,
+        coverUrl: newCoverUrl,
+        lastChapter: newLastChapter,
+      );
+      // 书架与「我的」里的分组/封面入口都读 keepAlive 的书架：身份变了要重读。
+      _ref.invalidate(bookshelfProvider);
+
+      return const ParseSuccess<void>(null);
+    } on Exception catch (error, stackTrace) {
+      _ref
+          .read(appLoggerProvider)
+          .warning('Migrating the shelf identity failed.', error, stackTrace);
+
+      return const ParseFailure<void>(
+        kind: ParseFailureKind.parseFailed,
+        rulePath: 'shelf.migrateIdentity',
+      );
+    }
   }
 }
 

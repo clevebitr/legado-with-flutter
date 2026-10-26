@@ -44,6 +44,7 @@ void main() {
 
       expect(settings.fontScale, defaultReaderFontScale);
       expect(settings.lineHeight, defaultReaderLineHeight);
+      expect(settings.brightness, defaultReaderBrightness);
       expect(settings.background, ReaderBackground.system);
       expect(settings.pageMode, ReaderPageMode.scroll);
     });
@@ -66,6 +67,21 @@ void main() {
       expect(high.ttsPitch, maxTtsPitch);
       expect(low.ttsRate, minTtsRate);
       expect(low.ttsPitch, minTtsPitch);
+    });
+
+    test('ReaderSettings_givenOutOfRangeBrightness_clampsIt', () {
+      expect(ReaderSettings(brightness: 0).brightness, minReaderBrightness);
+      expect(ReaderSettings(brightness: 2).brightness, maxReaderBrightness);
+    });
+
+    test('copyWith_givenABrightness_keepsTheOtherAxes', () {
+      final ReaderSettings dimmed = ReaderSettings.defaults.copyWith(
+        brightness: 0.6,
+      );
+
+      expect(dimmed.brightness, 0.6);
+      expect(dimmed.fontScale, ReaderSettings.defaults.fontScale);
+      expect(dimmed.background, ReaderSettings.defaults.background);
     });
 
     test('copyWith_givenClearTtsVoice_dropsTheStoredVoice', () {

@@ -16,6 +16,15 @@ const double maxReaderLineHeight = 2.4;
 /// The line spacing multiplier a reader starts with.
 const double defaultReaderLineHeight = 1.6;
 
+/// The darkest the in-page dimming overlay may go (`ADR-0075 §决策 2`).
+const double minReaderBrightness = 0.4;
+
+/// The brightest the in-page dimming overlay may go (no dimming).
+const double maxReaderBrightness = 1;
+
+/// The brightness a reader starts with (no dimming).
+const double defaultReaderBrightness = 1;
+
 /// How the reader turns pages (`docs/dev/roadmap.md` 5.3, ADR-0044 §决策 4).
 enum ReaderPageMode {
   /// One vertically scrolling body.
@@ -105,6 +114,7 @@ final class ReaderSettings {
   const ReaderSettings._({
     required this.fontScale,
     required this.lineHeight,
+    required this.brightness,
     required this.background,
     required this.pageMode,
     required this.fontFamily,
@@ -122,6 +132,7 @@ final class ReaderSettings {
   factory ReaderSettings({
     double fontScale = defaultReaderFontScale,
     double lineHeight = defaultReaderLineHeight,
+    double brightness = defaultReaderBrightness,
     ReaderBackground background = ReaderBackground.system,
     ReaderPageMode pageMode = ReaderPageMode.scroll,
     ReaderFontFamily fontFamily = ReaderFontFamily.theme,
@@ -136,6 +147,7 @@ final class ReaderSettings {
   }) => ReaderSettings._(
     fontScale: fontScale.clamp(minReaderFontScale, maxReaderFontScale),
     lineHeight: lineHeight.clamp(minReaderLineHeight, maxReaderLineHeight),
+    brightness: brightness.clamp(minReaderBrightness, maxReaderBrightness),
     background: background,
     pageMode: pageMode,
     fontFamily: fontFamily,
@@ -154,6 +166,7 @@ final class ReaderSettings {
   static const ReaderSettings defaults = ReaderSettings._(
     fontScale: defaultReaderFontScale,
     lineHeight: defaultReaderLineHeight,
+    brightness: defaultReaderBrightness,
     background: ReaderBackground.system,
     pageMode: ReaderPageMode.scroll,
     fontFamily: ReaderFontFamily.theme,
@@ -172,6 +185,12 @@ final class ReaderSettings {
 
   /// Line height multiplier for the body text.
   final double lineHeight;
+
+  /// The opacity of the in-page dimming overlay (`ADR-0075 §决策 2`), 0.4–1.
+  ///
+  /// It is an **app-level mask**, not the system brightness: the reader can only dim, and leaving
+  /// the page restores the system untouched.
+  final double brightness;
 
   /// Which derived surface the page paints.
   final ReaderBackground background;
@@ -210,6 +229,7 @@ final class ReaderSettings {
   ReaderSettings copyWith({
     double? fontScale,
     double? lineHeight,
+    double? brightness,
     ReaderBackground? background,
     ReaderPageMode? pageMode,
     ReaderFontFamily? fontFamily,
@@ -225,6 +245,7 @@ final class ReaderSettings {
   }) => ReaderSettings(
     fontScale: fontScale ?? this.fontScale,
     lineHeight: lineHeight ?? this.lineHeight,
+    brightness: brightness ?? this.brightness,
     background: background ?? this.background,
     pageMode: pageMode ?? this.pageMode,
     fontFamily: fontFamily ?? this.fontFamily,
@@ -245,6 +266,7 @@ final class ReaderSettings {
       other is ReaderSettings &&
       other.fontScale == fontScale &&
       other.lineHeight == lineHeight &&
+      other.brightness == brightness &&
       other.background == background &&
       other.pageMode == pageMode &&
       other.fontFamily == fontFamily &&
@@ -261,6 +283,7 @@ final class ReaderSettings {
   int get hashCode => Object.hash(
     fontScale,
     lineHeight,
+    brightness,
     background,
     pageMode,
     fontFamily,

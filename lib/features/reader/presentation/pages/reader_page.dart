@@ -26,6 +26,7 @@ import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/manga_reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_book_scope.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_search_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
@@ -126,8 +127,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// Counts down while the chrome is shown; every interaction restarts it (4 s, §决策 1).
   Timer? _chromeTimer;
 
-  /// The dimming overlay's opacity, 0..1 (1 = no dimming). App-level, not system brightness.
-  double _brightness = 1;
+  /// The dimming overlay's opacity while the slider is being dragged, or `null` to follow the
+  /// stored [ReaderSettings.brightness]. App-level, not system brightness.
+  double? _brightnessOverride;
+
+  /// Whether the last slider release is still being written; the sheet's close must not clear the
+  /// override before that write lands.
+  bool _brightnessSaving = false;
 
   /// The session the last build saw, so the tool bar can show the chapter position.
   ReaderSessionState? _lastSession;
@@ -276,6 +282,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       tokens,
       settings.background,
     );
+    // 拖动时用本地预览，松手后跟随已存的值（ADR-0075 §决策 2）。
+    final double brightness = _brightnessOverride ?? settings.brightness;
     final AsyncValue<ParseResult<List<ReadingChapter>>> chapters = ref.watch(
       readerChaptersProvider(_book),
     );
@@ -346,12 +354,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             },
           ),
           // 亮度是**应用级遮罩**（ADR-0051 §决策 1）：不碰系统亮度，三端行为一致。
-          if (_brightness < 1)
+          if (brightness < 1)
             Positioned.fill(
               child: IgnorePointer(
                 child: ColoredBox(
                   // 亮度遮罩用主题的 scrim：它本来就是「压暗内容」的角色，避免硬编码黑色。
-                  color: tokens.colors.scrim.withValues(alpha: 1 - _brightness),
+                  color: tokens.colors.scrim.withValues(alpha: 1 - brightness),
                 ),
               ),
             ),
@@ -633,6 +641,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           _restoredChapterUrl = null;
           _lastBody = null;
         });
+        // 退出守护要按换源后的身份判断「在不在书架」，否则会拿旧 URL 再问一次。
+        ReaderBookScope.maybeOf(context)?.value = data.book;
         // 新身份上的会话从零开始：直接告诉它对齐到哪一章（进度也由它在新身份下落盘）。
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) {
@@ -653,39 +663,68 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
-  /// Opens the brightness slider (an app-level overlay, ADR-0051 §决策 1).
+  /// Opens the brightness slider (an app-level overlay, ADR-0051 §决策 1 / ADR-0075 §决策 2).
+  ///
+  /// 拖动只改本地遮罩，松手才写设置：每一帧写 `shared_preferences` 会让滑动卡顿。
   void _openBrightness(M3ETheme tokens) {
+    final ReaderSettings initial =
+        ref.read(readerSettingsProvider).value ?? ReaderSettings.defaults;
+
     unawaited(
       showModalBottomSheet<void>(
         context: context,
         builder: (BuildContext context) => StatefulBuilder(
-          builder: (BuildContext context, StateSetter setSheetState) =>
-              SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.all(tokens.spacing.lg),
-                  child: Row(
-                    children: <Widget>[
-                      const Icon(Icons.brightness_low),
-                      Expanded(
-                        child: Slider(
-                          value: _brightness,
-                          min: 0.2,
-                          max: 1,
-                          divisions: 16,
-                          label: '${(_brightness * 100).round()}%',
-                          onChanged: (double value) {
-                            setSheetState(() {});
-                            setState(() => _brightness = value);
-                          },
-                        ),
+          builder: (BuildContext context, StateSetter setSheetState) {
+            final ReaderSettings current =
+                ref.read(readerSettingsProvider).value ?? initial;
+            final double value = _brightnessOverride ?? current.brightness;
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.all(tokens.spacing.lg),
+                child: Row(
+                  children: <Widget>[
+                    const Icon(Icons.brightness_low),
+                    Expanded(
+                      child: Slider(
+                        value: value,
+                        min: minReaderBrightness,
+                        max: maxReaderBrightness,
+                        divisions: 12,
+                        label: '${(value * 100).round()}%',
+                        onChanged: (double next) {
+                          setSheetState(() {});
+                          setState(() => _brightnessOverride = next);
+                        },
+                        onChangeEnd: (double next) {
+                          _brightnessSaving = true;
+                          unawaited(
+                            ref
+                                .read(readerSettingsProvider.notifier)
+                                .apply(current.copyWith(brightness: next))
+                                .whenComplete(() {
+                                  _brightnessSaving = false;
+                                  if (mounted) {
+                                    setState(() => _brightnessOverride = null);
+                                  }
+                                }),
+                          );
+                        },
                       ),
-                      const Icon(Icons.brightness_high),
-                    ],
-                  ),
+                    ),
+                    const Icon(Icons.brightness_high),
+                  ],
                 ),
               ),
+            );
+          },
         ),
-      ),
+      ).whenComplete(() {
+        // 没松手就被关掉时，不在页面上留下一个没存盘的遮罩；正在落盘的写入交给它自己清理。
+        if (!_brightnessSaving && mounted) {
+          setState(() => _brightnessOverride = null);
+        }
+      }),
     );
   }
 
@@ -778,6 +817,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _lastSession = session;
     _lastChapterUrl = chapter.url;
     _lastChapterName = chapter.title.isEmpty ? null : chapter.title;
+
+    // L1 预取：进入本章时把下一章正文读进正文缓存，翻章时直接命中而不等网络。
+    // 监听（而不是 `read`）让 autoDispose 的 provider 活到内容到达；回调本身不重建页面。
+    if (session.chapterIndex + 1 < chapters.length) {
+      final ReadingChapter nextChapter = chapters[session.chapterIndex + 1];
+      ref.listen(
+        readerContentProvider((_book, nextChapter.url)),
+        (
+          AsyncValue<ParseResult<String>>? previous,
+          AsyncValue<ParseResult<String>> next,
+        ) {},
+      );
+    }
+
     final M3ETheme tokens = context.m3e;
     final TextStyle style = readerTextStyle(
       tokens: tokens,

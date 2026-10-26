@@ -86,4 +86,44 @@ final class FakeBookshelfWriter implements BookshelfWriter {
 
     return writeResult;
   }
+
+  /// Every identity migration asked for, as the old and new `(source, book)` pairs.
+  final List<
+    ({String sourceUrl, String bookUrl, String newSourceUrl, String newBookUrl})
+  >
+  migrations =
+      <
+        ({
+          String sourceUrl,
+          String bookUrl,
+          String newSourceUrl,
+          String newBookUrl,
+        })
+      >[];
+
+  @override
+  Future<ParseResult<void>> migrateIdentity({
+    required String sourceUrl,
+    required String bookUrl,
+    required String newSourceUrl,
+    required String newBookUrl,
+    required String newTocUrl,
+    required String newName,
+    String? newAuthor,
+    String? newCoverUrl,
+    String? newLastChapter,
+  }) async {
+    migrations.add((
+      sourceUrl: sourceUrl,
+      bookUrl: bookUrl,
+      newSourceUrl: newSourceUrl,
+      newBookUrl: newBookUrl,
+    ));
+    final Exception? failure = throwOnWrite;
+    if (failure != null) {
+      throw failure;
+    }
+
+    return writeResult;
+  }
 }
