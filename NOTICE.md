@@ -186,6 +186,18 @@ GPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_c
 > 构建）。它们与 GPL-3.0 兼容（FSF 认定，动态链接），本项目只允许这一处 LGPL（ADR-0061
 > §决策 2）；用户可用同版本动态库替换，符合 LGPL-2.1 §6 的可替换要求。
 
+**2026-10-26 增量（引擎对齐 S3a：密钥类 crypto）：** `dependencies` 新增 `pointycastle ^4.0.0`
+（Bouncy Castle 风格的 **MIT**，纯 Dart；传递依赖 `collection` 与 `convert` 均已在基线内）。
+`dart run tool/scan_licenses.dart` 复算：**202 包 / BSD-3 113 / MIT 56 / Apache 18 / BSD-2 6 /
+MPL 1 / SDK 8，Risky items: none**。GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有
+`enough_convert`。
+
+> **为什么改了 §5 前面的结论：** 2026-10-25 那条「评估后未采用 `pointycastle`」说的是**备份加密**
+> （那里整包用 `archive` 自带的 WinZip AES 就够，不该为它拉一个密码学库）。S3a 不同：
+> `java.createSymmetricCrypto` 要支持 AES / DES / DESede × ECB / CBC × PKCS5 / NoPadding，
+> 手写实现的正确性风险远大于一个 MIT 纯 Dart 依赖；`book-source.md` §6 与 ADR-0078 记录了这一族的
+> 语义。两条结论并存：**备份不引入密码学依赖，`@js:` 沙箱引入 `pointycastle`。**
+
 **直接依赖明细：**
 
 | 依赖 | 版本 | 许可证 |
@@ -226,6 +238,7 @@ GPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_c
 | `flutter_tts` | 4.2.5 | MIT |
 | `media_kit` | 1.2.6 | MIT |
 | `media_kit_libs_windows_audio` | 1.0.9 | MIT（随包 libmpv / FFmpeg 动态库：LGPL-2.1+，手工登记） |
+| `pointycastle` | 4.0.0 | MIT |
 | `flutter_inappwebview` | 6.1.5 | Apache-2.0 |
 | `mocktail`（dev） | 1.0.5 | MIT |
 | `flutter` / `flutter_localizations` / `flutter_test` / `integration_test`（SDK） | 3.47.7 | BSD-3-Clause（Flutter SDK） |

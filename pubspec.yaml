@@ -78,6 +78,7 @@ dependencies:
   media_kit_libs_windows_audio: ^1.0.9
   flutter_inappwebview: ^6.1.5
   flutter_secure_storage: ^11.2.0
+  pointycastle: ^4.0.0
 
 dev_dependencies:
   flutter_test:

@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:flutter_qjs_next/flutter_qjs.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_crypto.dart';
 import 'package:flutter_reader/core/js/js_fonts.dart';
 import 'package:flutter_reader/core/js/js_sync_call.dart';
 
@@ -166,20 +167,17 @@ final class _Worker {
   // 字体不进脚本、也不跨 job：一个 job 结束时清空，句柄 id 不复用。
   final JsFontRegistry _fonts = JsFontRegistry();
 
+  // 本 job 创建的对称密码器（`java.createSymmetricCrypto` 的句柄表，M25/S3a）：同一套契约。
+  final JsSymmetricRegistry _ciphers = JsSymmetricRegistry();
+
   // sync 绑定在本隔离体内直接答复；http / parse 返回 Future，由引擎转成 Promise。
   void installBindings() {
-    _runtime.onMessage('crypto', (Object? args) {
-      if (args is! Map) {
-        return null;
-      }
-      final Object? operation = args['operation'];
-      final Object? value = args['value'];
-      if (operation is! String || value is! String) {
-        return null;
-      }
-
-      return applyCryptoOperation(operation, value);
-    });
+    // `crypto.*` 与 `java.*` 的字节/密钥族是同一批纯计算：走同一个通道，由一个解码器分发
+    // （M25/S3a）。载荷可能是 JSON 字符串（老的四个 `crypto.*` 动词）或对象（字节族要原样过桥）。
+    _runtime.onMessage(
+      'crypto',
+      (Object? args) => applyJsCryptoCall(args, ciphers: _ciphers),
+    );
     _runtime.onMessage('log', (Object? args) {
       if (args is! Map) {
         return null;
@@ -278,6 +276,7 @@ final class _Worker {
     _variables = <String, String?>{};
     _sourceVariables = <String, String?>{};
     _fonts.clear();
+    _ciphers.clear();
     _syncCache.clear();
     _pendingSync = null;
     _passes = 0;
@@ -638,6 +637,81 @@ globalThis.__crypto = function (operation, value) {
   return result;
 };
 
+// 字节族与密钥族（M25/S3a）：同一通道，但载荷是**对象**而不是 JSON 字符串，于是 `Uint8Array`
+// 原样过桥（宿主看到 Uint8List），回答也常常是 `Uint8Array`——`byte[]` 在沙箱里就是它。
+//
+// 失败用 `{__error: message}` 表达：字节/句柄族的失败原因（密钥长度、未知 transformation、
+// 句柄过期）必须能被规则和调试者读到，不能退化成 `undefined is not a function`。
+globalThis.__cryptoCall = function (payload) {
+  var answer = sendMessage('crypto', payload);
+  if (answer !== null && typeof answer === 'object' && answer.__error !== undefined) {
+    throw new Error(String(answer.__error));
+  }
+  return answer;
+};
+
+// `null` 是「这条输入没有字节」（上游 `base64DecodeToByteArray('')` 也答 null），不是错误；
+// 但反驳的是调用方要一个字节数组，所以这里照样抛。
+globalThis.__cryptoBytes = function (payload) {
+  var answer = __cryptoCall(payload);
+  if (answer === null || answer === undefined) {
+    throw new Error('java.' + payload.operation + ' cannot decode its input');
+  }
+  return answer;
+};
+
+globalThis.__b64Bytes = function (value) {
+  return __cryptoBytes({ operation: 'base64DecodeToByteArray', value: String(value) });
+};
+
+globalThis.__textBytes = function (value, charset) {
+  var payload = { operation: 'strToBytes', value: String(value) };
+  if (charset !== undefined && charset !== null) {
+    payload.charset = String(charset);
+  }
+  return __cryptoBytes(payload);
+};
+
+// `SymmetricCrypto` 句柄（M25/S3a）：与字体句柄同一套契约——密码器不进脚本，脚本只拿 id。
+// 方法名与上游 `SymmetricCryptoAndroid` 一一对应；`setIv` 与上游一样返回自身，可以链式写。
+globalThis.__symmetricApi = function (id) {
+  var call = function (method, value, charset) {
+    var payload = { operation: 'symmetricCall', id: id, method: method };
+    if (value !== undefined && value !== null) {
+      payload.value = value;
+    }
+    if (charset !== undefined && charset !== null) {
+      payload.charset = String(charset);
+    }
+    return __cryptoCall(payload);
+  };
+  var api = {};
+  api.setIv = function (iv) { call('setIv', iv); return api; };
+  api.encrypt = function (data) { return call('encrypt', data); };
+  api.encryptBase64 = function (data, charset) {
+    return call('encryptBase64', data, charset);
+  };
+  api.encryptHex = function (data) { return call('encryptHex', data); };
+  api.encryptStr = function (data) { return call('encryptStr', data); };
+  api.decrypt = function (data) { return call('decrypt', data); };
+  api.decryptStr = function (data) { return call('decryptStr', data); };
+  api.decryptHex = function (data) { return call('decryptHex', data); };
+  api.decryptBase64 = function (data) { return call('decryptBase64', data); };
+  return api;
+};
+
+globalThis.__symmetricCreate = function (transformation, key, iv) {
+  var payload = { operation: 'symmetricCreate', transformation: String(transformation) };
+  if (key !== undefined && key !== null) {
+    payload.key = key;
+  }
+  if (iv !== undefined && iv !== null) {
+    payload.iv = iv;
+  }
+  var handle = __cryptoCall(payload);
+  return __symmetricApi(handle.id);
+};
+
 globalThis.log = Object.freeze({
   debug: function (message) {
     sendMessage('log', JSON.stringify({ level: 'debug', message: String(message) }));
@@ -896,10 +970,9 @@ globalThis.__javaRejectedNames = [
   'ajaxAll', 'connect',
   'webViewGetElements',
   'downloadFile', 'cacheFile', 'importScript',
-  'base64DecodeToByteArray', 'hexDecodeToByteArray',
-  'createSymmetricCrypto', 'aesBase64DecodeToString', 'aesEncodeToString', 'aesDecodeToString',
-  'desBase64DecodeToString', 'HMacHex', 'HMacBase64',
-  'md5Encode16', 'htmlFormat', 'refreshBookUrl'
+  // 非对称与签名：上游有，但语料里没有；连模式都不在支持面内（book-source.md §11）。
+  'createAsymmetricCrypto', 'createSign',
+  'htmlFormat', 'refreshBookUrl'
 ];
 
 globalThis.__javaInteropNames = ['lang', 'security', 'util', 'net', 'io', 'nio', 'math', 'text'];
@@ -1031,6 +1104,142 @@ globalThis.java = (function () {
         call.charset = String(charset);
       }
       return __java(call);
+    },
+    // 字节族与密钥族（M25/S3a）：上游 `JsEncodeUtils` 的一半。`byte[]` 在沙箱里是
+    // `Uint8Array`（`length` / `[i]` / `Array.from` / `slice` 都能用），`createSymmetricCrypto`
+    // 答一个不透明句柄。
+    md5Encode16: function (value) {
+      return __cryptoCall({ operation: 'md5Encode16', value: String(value) });
+    },
+    base64DecodeToByteArray: function (value, flags) {
+      var payload = { operation: 'base64DecodeToByteArray', value: String(value) };
+      if (typeof flags === 'number') {
+        payload.flags = flags;
+      }
+      return __cryptoBytes(payload);
+    },
+    hexDecodeToByteArray: function (value) {
+      return __cryptoBytes({ operation: 'hexDecodeToByteArray', value: String(value) });
+    },
+    hexEncodeToString: function (value) {
+      return __cryptoCall({ operation: 'hexEncodeToString', value: String(value) });
+    },
+    hexDecodeToString: function (value) {
+      return __cryptoCall({ operation: 'hexDecodeToString', value: String(value) });
+    },
+    // 上游 `JsEncodeUtils.strToBytes/bytesToStr` 是公开方法，Rhino 下规则直接可见。
+    strToBytes: function (value, charset) {
+      return __textBytes(value, charset);
+    },
+    bytesToStr: function (value, charset) {
+      var payload = { operation: 'bytesToStr', value: value };
+      if (charset !== undefined && charset !== null) {
+        payload.charset = String(charset);
+      }
+      return __cryptoCall(payload);
+    },
+    digestHex: function (data, algorithm) {
+      return __cryptoCall({
+        operation: 'digestHex',
+        value: String(data),
+        algorithm: String(algorithm)
+      });
+    },
+    digestBase64Str: function (data, algorithm) {
+      return __cryptoCall({
+        operation: 'digestBase64Str',
+        value: String(data),
+        algorithm: String(algorithm)
+      });
+    },
+    HMacHex: function (data, algorithm, key) {
+      return __cryptoCall({
+        operation: 'HMacHex',
+        value: String(data),
+        algorithm: String(algorithm),
+        key: String(key)
+      });
+    },
+    HMacBase64: function (data, algorithm, key) {
+      return __cryptoCall({
+        operation: 'HMacBase64',
+        value: String(data),
+        algorithm: String(algorithm),
+        key: String(key)
+      });
+    },
+    createSymmetricCrypto: function (transformation, key, iv) {
+      return __symmetricCreate(transformation, key, iv);
+    },
+    // 上游已弃用（@Deprecated）的那一大族：真实语料仍在用，所以照样绑定。它们的语义都是
+    // 「组一个密码器再调一个方法」，因此实现在 JS 侧，只有 cipher 本体在宿主。
+    aesDecodeToByteArray: function (str, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).decrypt(String(str));
+    },
+    aesDecodeToString: function (str, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).decryptStr(String(str));
+    },
+    // 上游这个重载的 key/iv 是 base64（`JsEncodeUtils.kt:150-168`）。
+    aesDecodeArgsBase64Str: function (data, key, mode, padding, iv) {
+      return __symmetricCreate('AES/' + mode + '/' + padding, __b64Bytes(key), __b64Bytes(iv))
+        .decryptStr(String(data));
+    },
+    // 名字里带 Base64 的两个族与上面两个逐字相同：上游实现里 `aesBase64DecodeToByteArray`
+    // 也调 `decrypt(str)`，编码是靠 `decrypt(String)` 自己猜 hex/base64。
+    aesBase64DecodeToByteArray: function (str, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).decrypt(String(str));
+    },
+    aesBase64DecodeToString: function (str, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).decryptStr(String(str));
+    },
+    aesEncodeToByteArray: function (data, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).encrypt(String(data));
+    },
+    // 上游这里写成了 `decryptStr`（`JsEncodeUtils.kt:241-245` 的历史 bug）：本仓按名字的意图
+    // （加密后当字符串）实现，差异登记在 book-source.md §6。
+    aesEncodeToString: function (data, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).encryptStr(String(data));
+    },
+    aesEncodeToBase64ByteArray: function (data, key, transformation, iv) {
+      return __textBytes(__symmetricCreate(transformation, key, iv).encryptBase64(String(data)));
+    },
+    aesEncodeToBase64String: function (data, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).encryptBase64(String(data));
+    },
+    // 注意与上一条的不对称：上游 `aesEncodeArgsBase64Str` 把 key/iv 当**明文**传
+    // （`JsEncodeUtils.kt:303-315`），而 `aesDecodeArgsBase64Str` 当 base64。照抄这个不对称。
+    aesEncodeArgsBase64Str: function (data, key, mode, padding, iv) {
+      return __symmetricCreate('AES/' + mode + '/' + padding, key, iv)
+        .encryptBase64(String(data));
+    },
+    desDecodeToString: function (data, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).decryptStr(String(data));
+    },
+    desBase64DecodeToString: function (data, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).decryptStr(String(data));
+    },
+    desEncodeToString: function (data, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).encryptStr(String(data));
+    },
+    desEncodeToBase64String: function (data, key, transformation, iv) {
+      return __symmetricCreate(transformation, key, iv).encryptBase64(String(data));
+    },
+    tripleDESDecodeStr: function (data, key, mode, padding, iv) {
+      return __symmetricCreate('DESede/' + mode + '/' + padding, key, iv)
+        .decryptStr(String(data));
+    },
+    // 上游这一族：key 是 base64，iv 是明文（`JsEncodeUtils.kt:378-395`）。
+    tripleDESDecodeArgsBase64Str: function (data, key, mode, padding, iv) {
+      return __symmetricCreate('DESede/' + mode + '/' + padding, __b64Bytes(key), iv)
+        .decryptStr(String(data));
+    },
+    tripleDESEncodeBase64Str: function (data, key, mode, padding, iv) {
+      return __symmetricCreate('DESede/' + mode + '/' + padding, key, iv)
+        .encryptBase64(String(data));
+    },
+    tripleDESEncodeArgsBase64Str: function (data, key, mode, padding, iv) {
+      return __symmetricCreate('DESede/' + mode + '/' + padding, __b64Bytes(key), iv)
+        .encryptBase64(String(data));
     },
     log: function (message) {
       sendMessage('log', JSON.stringify({ level: 'info', message: String(message) }));

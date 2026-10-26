@@ -1171,6 +1171,135 @@ void main() {
     expect(_value(result), 'undefined');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_whenTheRuleDecryptsWithAes_answersWithTheHandle', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3a：`createSymmetricCrypto` 在沙箱里是**不透明句柄**，密码器本体留在宿主。这条探针验证
+    // 真引擎上「句柄 → 宿主加密 → 字符串回来」这一圈成立，并且同一条规则里还能再解密。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var aes = java.createSymmetricCrypto('AES/CBC/PKCS5Padding', "
+            "'D2o4XyQeIFobJ4tS', 'sciCuBC7orQtDhTO');"
+            "var cipher = aes.encryptBase64('hello');"
+            "cipher + '|' + aes.decryptStr(cipher) + '|' "
+            "+ aes.decryptStr('72D9l7h5ia1n6LhEDc4fEg==')",
+      ),
+    );
+
+    expect(_value(result), '72D9l7h5ia1n6LhEDc4fEg==|hello|hello');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheRuleHandlesBytes_seesAUint8Array', (
+    WidgetTester tester,
+  ) async {
+    // `byte[]` 在沙箱里是 `Uint8Array`：语料用它做 `length` / `Array.from(...)` / `slice(...)`，
+    // 所以这三件事都必须在真引擎上成立，且能原样交回字节族。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var bytes = java.hexDecodeToByteArray('e99885e8afbb');"
+            "bytes.length + '|' + Array.from(bytes).join(',') + '|' "
+            "+ java.hexEncodeToString('阅读') + '|' + java.bytesToStr(bytes)",
+      ),
+    );
+
+    expect(_value(result), '6|233,152,133,232,175,187|e99885e8afbb|阅读');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheSourceDecodesItsKeyLikeTheCorpus_roundTrips', (
+    WidgetTester tester,
+  ) async {
+    // 真实语料（独阅读网）的写法：密钥是摘要的 hex，IV 是 32 个 0；解密走 `decryptStr`。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var key = java.hexDecodeToByteArray(java.digestHex('secret', 'SHA-256'));"
+            "var iv = java.hexDecodeToByteArray('0'.repeat(32));"
+            "var cipher = java.createSymmetricCrypto('AES/CBC/PKCS5Padding', key, iv);"
+            'var encrypted = cipher.encryptBase64(JSON.stringify({a: 1}));'
+            'JSON.parse(cipher.decryptStr(encrypted)).a',
+      ),
+    );
+
+    expect(_value(result), 1);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheJsLibDecryptsWithBase64Keys_runsLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    // 真实语料（书耽）的写法：密钥与 IV 都是 base64，库里的 `function` 对规则可见（S1 + S3a 合流）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "decode('EbiJK0+BOpPGKLxuEACm8A==')",
+        jsLib:
+            'function decode(word) {'
+            '  return java.createSymmetricCrypto('
+            '    "AES/CBC/PKCS5Padding",'
+            '    java.base64DecodeToByteArray('
+            '      "L6alxSR4ttjXvcGpZozYtdcJtG4l0tSnQplRUONIRsw="),'
+            '    java.base64DecodeToByteArray('
+            '      "AAAAAAAAAAAAAAAAAAAAAA==")'
+            '  ).decryptStr(word);'
+            '}',
+      ),
+    );
+
+    expect(_value(result), 'hello');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheDeprecatedAesFamilyIsUsed_answersLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    // 上游 `aes*` / `des*` 一族都已 @Deprecated，但真实语料仍在用；它们全部是「组密码器 + 调方法」。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "java.aesEncodeToBase64String('hello', 'D2o4XyQeIFobJ4tS', "
+            "'AES/CBC/PKCS5Padding', 'sciCuBC7orQtDhTO') + '|' "
+            "+ java.aesDecodeToString('72D9l7h5ia1n6LhEDc4fEg==', 'D2o4XyQeIFobJ4tS', "
+            "'AES/CBC/PKCS5Padding', 'sciCuBC7orQtDhTO')",
+      ),
+    );
+
+    expect(_value(result), '72D9l7h5ia1n6LhEDc4fEg==|hello');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenADigestOrHmacIsMissing_answersTheReadableError', (
+    WidgetTester tester,
+  ) async {
+    // 失败必须是可读的：字典里没有的算法不能退化成 `undefined is not a function`。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var message = '';"
+            "try { java.digestHex('abc', 'ROT13'); } catch (error) { message = error.message; }"
+            "message.indexOf('unsupported digest algorithm') >= 0 ? 'reported' : message",
+      ),
+    );
+
+    expect(_value(result), 'reported');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheBytesFamilyIsUsed_answersLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "java.HMacBase64('The quick brown fox', 'HmacSHA256', 'key') + '|' "
+            "+ java.digestHex('abc', 'SHA-256') + '|' + java.md5Encode16('abc')",
+      ),
+    );
+
+    expect(
+      _value(result),
+      'ID0eXO3S0Y+MWjvv8L2cHry5cJffyyiMRrAMkif94sA=|'
+      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad|'
+      '3cd24fb0d6963f7d',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('jsBridge_whenFormattingTitles_runsOncePerChapterInOneScope', (
     WidgetTester tester,
   ) async {
