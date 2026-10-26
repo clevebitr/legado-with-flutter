@@ -403,13 +403,13 @@ String formatKeepImg(String html) {
   return text;
 }
 
-/// `<img …>` excluding `<!--` comments and self-closing `<img/>`.
+/// One `<img …>` tag as it appears in the body (comments are stripped before this runs).
 final RegExp _imageTag = RegExp('<img\\b[^>]*>', caseSensitive: false);
 
 /// Rebuilds one `<img>` as `<img src="…">`, keeping the `,{…}` option suffix upstream supports.
 ///
-/// Upstream also reads a mustache-ish `src="{…}"`; those are not absolutised here either (the JS call
-/// passes no redirect URL), so the plain `data-src` / `src` / `data-*` order is enough.
+/// The value comes from `src`, then `data-src`, then the first non-empty `data-*`. Nothing is
+/// absolutised: upstream's JS call passes no redirect URL either.
 String _normaliseImage(String tag) {
   final String? value =
       _attribute(tag, 'src') ??

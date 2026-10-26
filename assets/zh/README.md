@@ -55,4 +55,6 @@ for f in TSCharacters.txt TSPhrases.txt STCharacters.txt STPhrases.txt; do curl 
 
 1. 跳过空行与 `#` 开头的行；`key=value` 以**第一个** `=` 切分（键里不含 `=`）。
 2. 转换是**最长匹配**：在当前位置尝试尽可能长的键，命中即替换并前进，否则原样输出一个字符。
-3. 表在 worker 里懒加载（第一次遇到 `t2s` / `s2t` 时才读），失败即该条规则报 `unsupported`。
+3. 两张表都由桥在**主 isolate** 读好、随 worker 启动的 bootstrap 交过去（后台 isolate 读不到 Flutter
+   资产）；**解析**才是懒的：只有脚本里出现 `t2s` / `s2t` 时才建表，`s2t` 的 842 KB 表因此不会为
+   不调用它的源付出代价。表缺失时该条规则报可读的 `js:error`（`conversion table did not load`）。
