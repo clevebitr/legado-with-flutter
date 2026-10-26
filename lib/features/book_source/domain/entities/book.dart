@@ -83,10 +83,23 @@ abstract class Chapter with _$Chapter {
   /// [updateTime] is the chapter's update time as the source spelled it — `null` when the
   /// rule matched nothing. It is a **display** string: the engine does not parse it, and a
   /// source that wants a formatted date asks `java.timeFormat` for one (§6).
+  ///
+  /// [isPay] is the source's「已购买」mark and only means something together with [isVip]
+  /// (upstream `BookChapterList.kt:229-268`); [isVolume] marks a **volume heading** rather than a
+  /// readable chapter, which keeps it in the list without offering it as a page to read.
+  ///
+  /// [wordCount] is display text, like [updateTime]. [variable] is the chapter's own variable map
+  /// (`chapter.putVariable`, upstream): the audio pipeline stores the lyrics a `subContent` rule
+  /// produced under `lyric` (§4.1). [reviewImg] is the image a `contentRule.title` rule carried.
   const factory Chapter({
     required String name,
     required String url,
     @Default(false) bool isVip,
+    @Default(false) bool isPay,
+    @Default(false) bool isVolume,
     String? updateTime,
+    String? wordCount,
+    @Default(<String, String>{}) Map<String, String> variable,
+    String? reviewImg,
   }) = _Chapter;
 }

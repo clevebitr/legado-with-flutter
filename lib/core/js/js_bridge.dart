@@ -79,6 +79,50 @@ final class JsBookInfo {
   };
 }
 
+/// One chapter as a script sees it (upstream's `chapter` binding).
+///
+/// Data only: `tocRule.formatJs` reads `chapter.title` / `chapter.url` and the flags, and the script
+/// answers the new title through the job's result instead of mutating this object (S2).
+final class JsChapterInfo {
+  /// Creates the sandbox view of one chapter.
+  const JsChapterInfo({
+    required this.title,
+    required this.url,
+    this.isVip = false,
+    this.isPay = false,
+    this.isVolume = false,
+    this.updateTime,
+  });
+
+  /// The chapter name the `chapterName` rule produced.
+  final String title;
+
+  /// The chapter URL, already absolute.
+  final String url;
+
+  /// Whether the source marked the chapter as VIP-only.
+  final bool isVip;
+
+  /// Whether the source marked the chapter as already bought.
+  final bool isPay;
+
+  /// Whether this entry is a volume heading rather than a chapter.
+  final bool isVolume;
+
+  /// The display-only update time, when the source had one.
+  final String? updateTime;
+
+  /// The JSON object the sandbox receives as `chapter`.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'title': title,
+    'url': url,
+    'isVip': isVip,
+    'isPay': isPay,
+    'isVolume': isVolume,
+    'updateTime': updateTime,
+  };
+}
+
 /// One `parse.*` call from a running rule.
 ///
 /// The call travels to the host, which evaluates [rule] with the rule engine and
@@ -195,6 +239,7 @@ final class JsJob {
     this.variables = const <String, String>{},
     this.sourceVariables = const <String, String>{},
     this.jsLib,
+    this.titleFormatChapters,
     this.key,
     this.bookName,
     this.chapterTitle,
@@ -220,6 +265,15 @@ final class JsJob {
   /// app, so the bridge writes what the job reported back to storage
   /// (`SourceVariableStore.merge`).
   final Map<String, String> sourceVariables;
+
+  /// The chapters a `tocRule.formatJs` pass rewrites, or `null` for an ordinary job (S2).
+  ///
+  /// Non-null switches the job into **title-format mode**: [script] is the `formatJs` rule and it
+  /// runs **once per chapter in one scope**, with `index` (1-based), `chapter`, `title` and `gInt`
+  /// bound — `gInt` deliberately persists across the loop, exactly like upstream's shared
+  /// `ScriptBindings` (`BookChapterList.kt:141-163`). The answer is a list aligned with this list:
+  /// a string replaces the title, `null` keeps the previous one.
+  final List<JsChapterInfo>? titleFormatChapters;
 
   /// The source's **resolved** `jsLib`: the JavaScript the worker runs before the rule itself
   /// (ADR-0078 S1).
@@ -288,6 +342,12 @@ final class JsJob {
     'variables': variables,
     'sourceVariables': sourceVariables,
     'jsLib': jsLib,
+    'titleFormatChapters': <Map<String, Object?>>[
+      for (final JsChapterInfo chapter
+          in titleFormatChapters ?? const <JsChapterInfo>[])
+        chapter.toJson(),
+    ],
+    'titleFormat': titleFormatChapters != null,
     'key': key,
     'bookName': bookName,
     'chapterTitle': chapterTitle,

@@ -119,3 +119,32 @@ M25（对齐，`#35`）→ M26（性能，`#36`）→ M27（语料回归与台�
 LRU、失败重试）、`rule_engine_test`（job 携带解析后的库 + 解析失败即规则失败且不执行 job）、
 `js_bridge_lib` 相关 2 例（job 透传、`libError` → `js:lib`），以及真引擎探针 4 条（库函数可用、库抛错
 归因、库里同步取页触发整条重放、无库时上一条库不泄漏）在 **Windows 与 Android 模拟器**双端全绿。
+
+## 实现注记（2026-10-26，S2 第一半：目录字段族 + `bookUrlPattern`）
+
+决策 1/6 在 S2 上的落地形态（行为面归 `book-source.md` §4.1 / §4.1b / §6，台账状态归
+`engine-parity.md` 3.1–3.3）：
+
+1. **`formatJs` 是「一条脚本跑 N 章、一个作用域」，所以它是一个 job。** 逐章各开一个 job 会丢掉
+   `gInt` 的跨章累积（上游把 `gInt` 只初始化一次），也会把千章目录变成千次 worker 往返。worker 的
+   前奏因此多了一个运行器 `__formatTitles(lib, script, chapters)`：同一函数作用域里 `for` 循环 +
+   `eval`，`index` / `chapter` / `title` 每轮重绑、`gInt` 自然累积；某章抛错按 `null` 交回（保留原
+   标题），与上游 `runCatching(...).onFailure` 同义。库脚本（S1）在这个作用域里同样可见。
+2. **`preUpdateJs` 在 `walk` 之前跑，失败即失败**（上游 `runPreUpdateJs(...).getOrThrow()`）；本仓
+   连第一个请求都不发，`FetchToc` 的两个失败分支分别对应「脚本坏了」与「页面取不到」。
+3. **卷占位与无名条目**：`isVolume` 且无 URL → `title + index`（上游连分隔符都没有，照抄）；名字读不
+   出来的条目整条丢弃——这同时推翻了 ADR-0026 时代「名字降级为空、条目保留」的旧行为，因为上游的
+   `if (title.isNotEmpty)` 是条目**存在**的条件，而 ADR-0026 管的是**字段**可否降级。
+4. **`bookUrlPattern` 复用 `ruleBookInfo` 的读取器**（`FetchBookInfo.readFromPage`），而不是在搜索侧再
+   写一份字段解析：同一页、同一套规则、同一个 scope，两个阶段不可能读出不同的书。
+5. **行为变化（有意）**：「搜索页一条都没命中」从 `parseFailed` 变成回落详情页 → 仍无书则**空结果**。
+   上游本来如此（`BookList.kt:100-110`），但这条变化影响了书源校验的语义，所以校验侧补了
+   `emptyRulePath`：空结果仍判「搜索失效」，只是 `rulePath` 指回**列表规则**而不是 `searchUrl`。
+6. **不做的两件事会写在台账里**：`subContent` / `title` 的执行要 `FetchContent` 返回 `ChapterContent`
+   （正文 + 副文 + 改名 + reviewImg + 音频歌词），那是 S2 的第二半；`payAction` / `callBackJs` /
+   `eventListener` 需要付费解锁 UI 与读者事件面，登记为有意差异。
+
+验证：`fetch_toc_test`（新增 8 例：isPay/wordCount、卷占位、无名丢弃、去重、formatJs 单 job、formatJs
+失败、preUpdateJs 顺序、preUpdateJs 失败不发请求）、`search_books_test`（新增 4 例：pattern 命中、空
+列表回落、pattern 不匹配、坏正则 warning）、真引擎探针 3 条（`index`/`gInt` 跨章、某章抛错保留原名、
+formatJs 里可见 `jsLib`）在 **Windows 与 Android 模拟器**双端全绿。

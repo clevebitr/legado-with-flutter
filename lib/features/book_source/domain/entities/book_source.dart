@@ -56,6 +56,20 @@ abstract class BookSource with _$BookSource {
     @JsonKey(name: 'concurrentRate') String? concurrentRate,
     @JsonKey(name: 'variableComment') String? variableComment,
 
+    /// A regex that recognises a **detail page** where a list was expected
+    /// (`bookUrlPattern`, upstream `BookList.kt:62-84`).
+    ///
+    /// When the search URL itself matches, the page is parsed as one book (detail rules) instead of
+    /// as a result list; and when `bookList` matches nothing while this field is blank, the page is
+    /// parsed as a detail page too (`BookList.kt:100-110`).
+    String? bookUrlPattern,
+
+    /// Whether the source wants reader-event callbacks at all (`eventListener`).
+    ///
+    /// Modelled together with `ContentRule.callBackJs`; nothing consumes it yet (registered
+    /// difference, `engine-parity.md` A5/B4).
+    @Default(false) bool eventListener,
+
     /// The address (or a script defining `login()`) a source signs in at (`loginUrl`).
     ///
     /// It is a **URL rule**, so it may carry the `,{…}` suffix of `book-source.md` §4.3, and it is
@@ -242,6 +256,38 @@ abstract class TocRule with _$TocRule {
     String? chapterName,
     String? chapterUrl,
     String? isVip,
+
+    /// Marks a **paid** (already bought) chapter, upstream `TocRule.isPay`.
+    ///
+    /// Together with [isVip] it decides whether a chapter is locked upstream
+    /// (`BookChapterList.kt:229-268`). Modelled in M25/S2; the reader's lock UI is a separate
+    /// slice.
+    String? isPay,
+
+    /// Marks a **volume** heading rather than a chapter, upstream `TocRule.isVolume`.
+    ///
+    /// A volume whose `chapterUrl` matched nothing keeps its title and gets a synthetic URL
+    /// (`title + index`), so it survives the「chapter without URL」rule
+    /// (`BookChapterList.kt:240-259`).
+    String? isVolume,
+
+    /// Chapter word count, read as display text (`wordCount`).
+    String? wordCount,
+
+    /// Rewrites every chapter name before the list is used (`formatJs`).
+    ///
+    /// Upstream runs it once per chapter with `index` (1-based), `chapter` (the chapter object),
+    /// `title` and a `gInt` counter that **persists across the loop**
+    /// (`BookChapterList.kt:141-163`). A non-blank result replaces the title, an error leaves the
+    /// previous title alone.
+    String? formatJs,
+
+    /// Runs **before** the table of contents is fetched (`preUpdateJs`).
+    ///
+    /// Upstream aborts the whole TOC update when it throws (`WebBook.kt:305-313`); so does
+    /// `FetchToc` here.
+    String? preUpdateJs,
+
     String? updateTime,
     String? nextTocUrl,
     @JsonKey(includeFromJson: false, includeToJson: false)
@@ -271,6 +317,34 @@ abstract class ContentRule with _$ContentRule {
     String? content,
     String? nextContentUrl,
     String? replaceRegex,
+
+    /// Secondary text that belongs to the same chapter (`subContent`, upstream
+    /// `BookContent.kt:144-163`).
+    ///
+    /// For a text source it is appended to the body; for an **audio** source it becomes the
+    /// chapter's `lyric` variable. A rule that resolves to an absolute URL is fetched first
+    /// (upstream does the same), so a site may keep its lyrics on a second page.
+    String? subContent,
+
+    /// Chapter name read from the **content page** (`title`, upstream `BookContent.kt:165-190`).
+    ///
+    /// Evaluated after the body was read; a non-blank result renames the chapter, and a value that
+    /// carries an `<img src=…>` tag also becomes the chapter's `reviewImg`.
+    String? title,
+
+    /// The unlock action of a paid chapter (`payAction`).
+    ///
+    /// Upstream evaluates it when the user asks to unlock (`ReadBookViewModel.kt:2623`) — i.e. it
+    /// needs a paid-content UI this app does not have. Modelled so import/export round trips keep
+    /// it; **not executed** (registered difference, `engine-parity.md` B3).
+    String? payAction,
+
+    /// A script the source wants to run on reader events (`callBackJs`).
+    ///
+    /// Upstream gates it on `eventListener` and runs it for a dozen UI events
+    /// (`SourceCallBack.kt:54/94/117`). Modelled only: this app has no such event surface yet
+    /// (registered difference, `engine-parity.md` B4).
+    String? callBackJs,
 
     /// A regex that cuts the wanted payload out of the **raw** page before the rules run
     /// (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 7).

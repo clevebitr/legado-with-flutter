@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The TOC stage reads the fields upstream reads (ADR-0078 S2, M25)
+
+S2 of the parity slices. Two halves: the table-of-contents fields now behave like upstream, and the
+fields that need a wider return shape are modelled (not executed) so nothing silently disappears.
+
+- **`formatJs`** rewrites chapter names the way upstream does: **one** JS job for the whole list,
+  `index` rebound per chapter while `gInt` persists across the loop; a script that throws only
+  leaves that chapter's title alone. `preUpdateJs` runs **before** the first request and aborts the
+  TOC when it fails.
+- **`isVolume` / `isPay` / `wordCount`** are read (same `isTrue()` predicate as `isVip`). A volume
+  heading without a URL keeps its title with a `title + index` placeholder link; an entry whose name
+  cannot be read is dropped (upstream `if (title.isNotEmpty)`), which also settles an older
+  ADR-0026 case where a blank name used to stay in the list.
+- **Duplicates** are dropped by `(name, url)` keeping the first occurrence, and `Chapter` grew
+  `isPay` / `isVolume` / `wordCount` / `variable` / `reviewImg` so the fields have somewhere to live.
+- **`bookUrlPattern`** (`book-source.md` §4.1b): a search whose final URL matches the pattern is
+  parsed as **one** result through `ruleBookInfo`; with no pattern, an empty list also falls back to
+  a detail read. A search page with nothing on it is now an empty result rather than `parseFailed`
+  — the source check still reports it as「搜索失效」, and says which rule to look at.
+- **Modelled, not executed** (`engine-parity.md`): `ContentRule.subContent` / `title` need a
+  `ChapterContent` return shape (next S2 step), and `payAction` / `callBackJs` / `eventListener`
+  need UI surfaces this app does not have.
+
 ### Source-owned JavaScript libraries run before every rule (ADR-0078 S1, M25)
 
 - **`jsLib` is modelled and executed.** Upstream treats a source's own JS library as the prototype

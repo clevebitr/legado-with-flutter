@@ -1171,6 +1171,64 @@ void main() {
     expect(_value(result), 'undefined');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_whenFormattingTitles_runsOncePerChapterInOneScope', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0078 S2：`tocRule.formatJs` 是「一条脚本跑 N 章、一个作用域」——`index` 逐章重绑，
+    // `gInt` 跨章累积（上游 BookChapterList.kt:141-163）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _jobFormat(
+        script:
+            'gInt = gInt + 1; index + "|" + title + "|" + chapter.url + '
+            '"|" + gInt + "|" + chapter.isVolume',
+        chapters: const <JsChapterInfo>[
+          JsChapterInfo(title: '第一章', url: 'https://js.test/1'),
+          JsChapterInfo(title: '第二卷', url: '第二卷1', isVolume: true),
+        ],
+      ),
+    );
+
+    expect(_value(result), <Object?>[
+      '1|第一章|https://js.test/1|1|false',
+      '2|第二卷|第二卷1|2|true',
+    ]);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenFormattingTitlesThrows_keepsThatTitle', (
+    WidgetTester tester,
+  ) async {
+    // 上游 `runCatching(...).onFailure`：某一章格式化失败只保留原标题，不影响其它章。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _jobFormat(
+        script: 'if (index === 2) { throw new Error("boom"); } "新" + index',
+        chapters: const <JsChapterInfo>[
+          JsChapterInfo(title: '第一章', url: 'https://js.test/1'),
+          JsChapterInfo(title: '第二章', url: 'https://js.test/2'),
+          JsChapterInfo(title: '第三章', url: 'https://js.test/3'),
+        ],
+      ),
+    );
+
+    expect(_value(result), <Object?>['新1', null, '新3']);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenFormattingTitlesWithAJsLib_seesTheLibrary', (
+    WidgetTester tester,
+  ) async {
+    // 库脚本对 formatJs 同样可见（同一个函数作用域）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _jobFormat(
+        script: 'decorate(title)',
+        jsLib: 'function decorate(text) { return "【" + text + "】"; }',
+        chapters: const <JsChapterInfo>[
+          JsChapterInfo(title: '第一章', url: 'https://js.test/1'),
+        ],
+      ),
+    );
+
+    expect(_value(result), <Object?>['【第一章】']);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('jsBridge_whenARuleSetsContent_readsTheReplacedPage', (
     WidgetTester tester,
   ) async {
@@ -1239,6 +1297,21 @@ JsJob _job({
   bookName: bookName,
   chapterTitle: chapterTitle,
   book: book,
+);
+
+/// A `tocRule.formatJs` job: one script, one chapter list, one scope (ADR-0078 S2).
+JsJob _jobFormat({
+  required String script,
+  required List<JsChapterInfo> chapters,
+  String? jsLib,
+}) => JsJob(
+  script: script,
+  rulePath: 'tocRule.formatJs',
+  baseUrl: 'https://example-novel.test/book/1/',
+  page: 1,
+  source: const JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+  titleFormatChapters: chapters,
+  jsLib: jsLib,
 );
 
 /// The value of a successful evaluation, failing the test otherwise.

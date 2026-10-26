@@ -6,6 +6,7 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
@@ -988,6 +989,42 @@ final class PageFetchService {
         data == null || data.isEmpty ? _noMatch(rulePath) : ParseSuccess(data),
     };
   }
+
+  /// Runs a **pre-fetch script** of a stage (`ruleToc.preUpdateJs`, ADR-0078 S2).
+  ///
+  /// The script runs on the page context only — there is no page yet, which is the point: upstream
+  /// uses it to warm a cookie or a token before the request. A failure is the **caller's** failure
+  /// (upstream aborts the TOC update), so it comes back as a [ParseFailure] here.
+  Future<ParseResult<Object?>> script(
+    String script, {
+    required String rulePath,
+    required JsPageContext context,
+  }) => _engine.evaluateJs(script, rulePath: rulePath, context: context);
+
+  /// Runs a `ruleToc.formatJs` rule over [chapters] (ADR-0078 S2).
+  ///
+  /// One JS job for the whole list; see `RuleEngine.formatTitles` for why.
+  Future<ParseResult<List<String?>>> formatTitles({
+    required String script,
+    required List<Chapter> chapters,
+    required JsPageContext context,
+    required String rulePath,
+  }) => _engine.formatTitles(
+    script: script,
+    chapters: <JsChapterInfo>[
+      for (final Chapter chapter in chapters)
+        JsChapterInfo(
+          title: chapter.name,
+          url: chapter.url,
+          isVip: chapter.isVip,
+          isPay: chapter.isPay,
+          isVolume: chapter.isVolume,
+          updateTime: chapter.updateTime,
+        ),
+    ],
+    context: context,
+    rulePath: rulePath,
+  );
 
   /// Returns the **whole content** [rule] matches as one newline-joined string (upstream
   /// `getString`).

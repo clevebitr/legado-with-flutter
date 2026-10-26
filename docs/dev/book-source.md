@@ -74,9 +74,11 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > 列表字段由上游 `BookListRule` 接口固定，两者**必须同批**增减字段，不得只改一处。
 >
 > **上游存在而本仓尚未建模的字段（清单的唯一出处是 `docs/dev/engine-parity.md`）：**
-> `BookInfoRule.downloadUrls` / `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay`、
-> `ContentRule.subContent` / `title` / `payAction` / `callBackJs`、书源级 `bookUrlPattern` /
-> `coverDecodeJs` / `ruleReview` / `eventListener` / `customButton` / `homepageModules`。
+> `BookInfoRule.downloadUrls` / `relatedBooks`、书源级 `coverDecodeJs` / `ruleReview` /
+> `customButton` / `homepageModules`。
+> **自 M25 起已建模的**：`jsLib`（S1）；`bookUrlPattern`、`eventListener`、`TocRule.formatJs` /
+> `isVolume` / `isPay` / `wordCount` / `preUpdateJs`、`ContentRule.subContent` / `title` /
+> `payAction` / `callBackJs`（S2，其中 `subContent` / `title` 只建模、执行留待 S2 剩余）。
 > 它们的处理口径固定：**保留在 `extra`**（导入/导出不变形）+ **不假装支持**（不生效即是不生效）+
 > **去向登记**（`engine-parity.md` 的切片或「有意差异 + 触发条件」）。本表不重列、不另开清单。
 > `SearchRule.checkKeyWord` **不在此列**：它属「校验 / 调试的默认关键词」，已随 5.10 建模
@@ -434,6 +436,11 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 | `chapterList` | 结果列表；**首字符 `-` 使列表反序** | M0 |
 | `chapterName` / `chapterUrl` | 章节名与章节 URL（相对路径需转绝对） | M0 |
 | `isVip` | 结果为 `null` / `false` / `0` / `""` 时视为**非 VIP** | M0 |
+| `isPay` | 已购标记；与 `isVip` 同一套 `isTrue()` 判定 | **M25/S2** |
+| `isVolume` | 分卷标记；卷标题没有 URL 时用「标题 + 序号」占位 | **M25/S2** |
+| `wordCount` | 章节字数，展示用字符串 | **M25/S2** |
+| `formatJs` | 整份目录一次跑的标题重写脚本（`index` / `chapter` / `title` / `gInt`） | **M25/S2** |
+| `preUpdateJs` | 取目录**之前**跑的脚本；失败即整段目录失败 | **M25/S2** |
 | `updateTime` | 可调用 `java.timeFormat(timestamp)` 转为 `yyyy/MM/dd HH:mm` | M1 |
 | `nextTocUrl` | 支持**单个 URL** 或 **URL 数组**；JS 返回 `[]` / `null` / `""` 时停止加载下一页 | M0 |
 | `content` | 正文内容；可含多个 `##` 替换 | M0 |
@@ -482,6 +489,23 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 >   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
 >   （ADR-0026 §决策 2）。
 
+> **目录字段族（2026-10-26，M25/S2，ADR-0078）：** 六条语义，逐条对齐上游
+> `BookChapterList.kt`（行号见 `engine-parity.md` 3.2）：
+>
+> - **无名条目丢掉。** 名字读不出来（规则未命中 / 被拒）的条目不是章节（上游
+>   `if (title.isNotEmpty)`），整条跳过——这与 `isVip` / `wordCount` 这类**可选字段**的
+>   「降级为空」不同：名字是条目存在的条件。阶段本身不会因此失败，只是目录变短。
+> - **`isPay` / `isVolume` / `isVip` 共用 `isTrue()`**（见下一条的谓词）。`isPay` 目前只解析、
+>   不参与阅读器的锁定判定（锁定仍看 `isVip`）。
+> - **卷标题的占位地址。** `isVolume` 为真的条目若没有 URL，地址取「标题 + 序号」（上游
+>   `title + index`，无分隔符）；普通章节仍回落到目录页地址（ADR-0069 G8）。
+> - **去重按 `(名字, URL)`、保序**（上游 `LinkedHashSet`）：分页目录里同一章出现两次只留第一次。
+> - **`formatJs` 一条脚本跑完整份目录。** 每次迭代重绑 `index`（1-based）/ `chapter` /
+>   `title`，`gInt` **跨章保留**；返回非空字符串才替换标题，返回空/抛错都保留原标题（上游
+>   `runCatching(...).onFailure`）。整个目录是**一个 JS job**，所以它同样吃 §6 的超时与配额。
+> - **`preUpdateJs` 在第一个请求之前跑，失败即失败。** 上游 `runPreUpdateJs(...).getOrThrow()`
+>   会中断整次目录更新；本仓连请求都不发（`FetchToc` 在 `walk` 之前执行）。
+
 > **正文缓存（2026-10-14，`docs/dev/roadmap.md` 5.2）：** 一章的**成品正文**（分页已拼好、`replaceRegex` 已跑过）
 > 存进与 charset 缓存同一张 `cache_entries`，键复用 `CacheDao` 的稳定键（`ruleField` 固定为
 > `content`、`page` 固定为 1，键含**书源 ID**，所以两个书源发布同一章节 URL 也不会串味）；
@@ -524,6 +548,25 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 - 后缀是**宽松 JSON**：单引号、裸键、尾逗号、值里嵌 `{{…}}` 都是真实写法。
 - 读不懂的后缀是 `unsupported:url-options` 的显式失败——**绝不**把 `,{…}` 当 URL 发出去
   （那是真实语料里 50 条源 404 的来源）。
+
+### 4.1b 搜索页就是详情页（`bookUrlPattern`，M25/S2）
+
+上游的搜索阶段有两条「当成详情页读」的路径（`BookList.kt:62-84`、`:100-110`），本仓两条都实现：
+
+1. **`bookUrlPattern` 全匹配最终响应地址**：搜索请求被重定向进了详情页（单书站、或搜索直接跳书），
+   这时不再读列表规则，而是用 `ruleBookInfo` 把这一页读成**一条**搜索结果（书名、作者、封面、简介…），
+   地址就是响应地址本身。
+2. **没有 `bookUrlPattern` 且列表为空**：`bookList` 一条都没命中时先按详情页再读一次；详情页也读不出
+   书名，就返回**空结果**（不是 `parseFailed`）。
+
+因此三件事与从前不同，改动都是对齐上游：①「搜索页没有结果条目」不再是阶段失败（书源校验那边仍把它
+判成「搜索失效」，因为校验要的是「这条源还能不能搜」，见 `roadmap.md` 5.10）；②`bookUrlPattern` 是
+**全匹配**（Kotlin `String.matches`），写错的正则只记 warning 并按普通列表继续；③详情页读出来的那一条
+结果用的是 `ruleBookInfo`，所以 `ruleSearch` 里即使写了 `bookUrl` 也不参与这条路径。
+
+> 待办：`bookUrlPattern` 命中后「列表规则完全跳过」意味着列表字段（`lastChapter` 等）只来自
+> `ruleBookInfo`；这与上游一致，但如果某源的详情规则缺字段，搜索结果会比列表路径稀。真实语料出现时
+> 再评估是否补「先按列表读、再回落详情」。
 
 ### 4.2 发现页（`exploreUrl` 与 `ruleExplore`）
 

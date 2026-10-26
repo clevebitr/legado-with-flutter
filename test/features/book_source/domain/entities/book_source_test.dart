@@ -307,7 +307,6 @@ void main() {
         source.extra.keys,
         unorderedEquals(<String>[
           'bookSourceComment',
-          'bookUrlPattern',
           'customOrder',
           'enabledCookieJar',
           'enabledExplore',
@@ -318,6 +317,9 @@ void main() {
           'weight',
         ]),
       );
+      // `bookUrlPattern` / `eventListener` 自 M25/S2 起是建模字段（ADR-0078），不再落进 extra。
+      expect(source.bookUrlPattern, r'https://example-novel.test/\d.*');
+      expect(source.eventListener, isFalse);
       expect(source.extra['customOrder'], 60);
       expect(source.extra['lastUpdateTime'], 1676448109528);
       expect(source.extra['enabledReview'], isFalse);
@@ -339,16 +341,17 @@ void main() {
       'fromLegadoJson_givenUnrecognisedRuleKeys_keepsThemInTheRuleOwnExtra',
       () {
         final Map<String, Object?> json = _loadFixture();
-        // 该导出里 ruleToc / ruleContent 的键已全部建模（PLAN 3.5 补齐），所以先加一个
-        // 模型不认识的键，才能验证「规则对象自己也会保留未识别键」（book-source.md §2）。
-        (json['ruleToc']! as Map<String, Object?>)['formatJs'] =
+        // 该导出里 ruleToc / ruleContent 的键已全部建模（PLAN 3.5 补齐、M25/S2 又补了
+        // formatJs / isPay / isVolume / wordCount / preUpdateJs），所以先加一个模型仍不认识的
+        // 键，才能验证「规则对象自己也会保留未识别键」（book-source.md §2）。
+        (json['ruleToc']! as Map<String, Object?>)['futureTocKey'] =
             'chapter.title';
 
         final BookSource source = BookSource.fromLegadoJson(json);
 
         expect(
           source.tocRule.extra.keys,
-          unorderedEquals(<String>['formatJs']),
+          unorderedEquals(<String>['futureTocKey']),
         );
         expect(source.contentRule.extra, isEmpty);
         expect(source.searchRule.extra, isEmpty);

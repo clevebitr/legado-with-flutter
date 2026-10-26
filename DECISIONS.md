@@ -671,3 +671,30 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 2. **用 `grep -c "已对齐（M25/S1）"` 判断台账状态会假阴性**：markdown 里是 `**已对齐**（M25/S1）`，`**` 夹在词与全角括号之间。核对提交内容要看 `git show <sha>:<file>` 的实际行，而不是关键词计数。
 
 验证（HEAD 上六条门禁全过）：format 0 changed / analyze 0 issue / `flutter test` 2365 用例全过 / `check_coverage` exit 0（core 99.38、domain 98.95、data 95.65）/ `build_runner build` 后 `git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'` exit 0 / 真引擎探针 46 例在 Windows 上全绿（Android 侧在提交前同内容已跑过 46 例全绿）。
+
+## 2026-10-26 — M25/S2 第一半落地：目录字段族（formatJs/isVolume/isPay/wordCount/preUpdateJs）+ bookUrlPattern（ADR-0078）
+
+用户裁决（2026-10-26）：继续 S2。本轮交付 **S2 第一半**（目录字段族 + `bookUrlPattern` + 目录去重/元数据），并如实登记第二半。
+
+**落地**（行为面 → `book-source.md` §4.1 / §4.1b；为什么 → ADR-0078 §实现注记；台账 → `engine-parity.md` 3.1–3.3）：
+- `TocRule` += `formatJs` / `isVolume` / `isPay` / `wordCount` / `preUpdateJs`；`ContentRule` += `subContent` / `title` / `payAction` / `callBackJs`；`BookSource` += `bookUrlPattern` / `eventListener`；`Chapter` += `isPay` / `isVolume` / `wordCount` / `variable` / `reviewImg`（freezed + fingerprint 无需改）。
+- `formatJs` 是**一个 job 跑 N 章**：worker 前奏新增 `__formatTitles(lib, script, chapters)`，同一函数作用域里 `for` + `eval`，`index`/`chapter`/`title` 每轮重绑、`gInt` 跨章累积，某章抛错回 `null` 保留原标题。
+- `preUpdateJs` 在 `walk` **之前**跑，失败即失败且不发请求。
+- 卷条目无 URL 用 `title + index` 占位；**名字读不出来的条目整条丢弃**（上游 `if (title.isNotEmpty)`）。
+- 去重按 `(名字, URL)` 保序。
+- `bookUrlPattern` 全匹配最终响应地址 → 用 `ruleBookInfo` 读成一条结果（复用 `FetchBookInfo.readFromPage`）；无 pattern 且列表为空（或列表规则一条未命中）也回落详情页。
+
+**两条行为变化（都是对齐上游，但影响下游，特意记下）**：
+1. 「搜索页一条都没命中」不再是 `parseFailed`，而是回落详情页 → 仍无书则**空结果**。书源校验因此补了 `emptyRulePath`：空结果仍判「搜索失效」，但 `rulePath` 指回**列表规则**（`searchRule.bookList` / `exploreRule.bookList` / `tocRule.chapterList` / `contentRule.content`），不再指阶段入口。
+2. 名字为空的章节不再保留（旧行为来自 ADR-0026 的「字段降级保留」口径）。ADR-0026 管的是**字段**能否降级，上游的 `title.isNotEmpty` 管的是**条目**是否存在 —— 两者不冲突，已在 `book-source.md` §4.1 写清。
+
+**登记为「S2 剩余」/有意差异（不假装支持）**：
+- `subContent` / `title`：**已建模、未执行**。执行需要 `FetchContent` 返回 `ChapterContent`（正文 + 副文 + 改名 + reviewImg + 音频歌词），属第二半；音频歌词（`engine-parity` E 行）随之。
+- `payAction` / `callBackJs` / `eventListener`：已建模、不执行 —— 需要付费解锁 UI 与读者事件面，标「有意差异 + 触发条件」。
+
+**踩的坑**：
+1. `formatJs` 的 `gInt` 不能靠「每章一个 job」实现——上游只在循环前初始化一次。这条直接决定了「一条脚本一个 job」的设计。
+2. `tag.i.1@text` 这类写法在本仓不是「第 n 个 tag.i」，测试里要改用 `class.xxx@text`，否则读不到值却看不出原因。
+3. `bookUrlPattern` 的「全匹配」必须显式加 `^(?:...)$`：Kotlin `String.matches` 是全匹配，Dart `hasMatch` 是包含匹配，直接照抄会把不该命中的 URL 当详情页。
+
+验证：format 0 / analyze 0 issue / `flutter test` 2377 用例全过 / check_coverage exit 0 / `build_runner build` 后生成物无漂移；真引擎探针 **49 例** 在 Windows 与 Android 模拟器双端全绿（新增 3 条 formatJs 探针）。

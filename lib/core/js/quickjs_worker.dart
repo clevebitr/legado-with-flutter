@@ -461,6 +461,18 @@ String _evaluationSource(Map<String, Object?> fields) {
     buffer.writeln('globalThis.key = ${jsonEncode(key)};');
   }
   final String script = _asString(fields['script']);
+  if (fields['titleFormat'] == true) {
+    // 标题格式化是「一条脚本跑 N 章」，不是「跑一次脚本」：不套 __runRule，直接进循环运行器。
+    final Object? lib = fields['jsLib'];
+    buffer.write(
+      '__formatTitles('
+      '${lib is String && lib.isNotEmpty ? jsonEncode(lib) : 'null'}, '
+      '${jsonEncode(script)}, '
+      '${jsonEncode(fields['titleFormatChapters'] ?? const <Object?>[])})',
+    );
+
+    return buffer.toString();
+  }
   final Object? jsLib = fields['jsLib'];
   if (jsLib is String && jsLib.isNotEmpty) {
     buffer.write(
@@ -569,6 +581,50 @@ globalThis.__runRuleWithLib = function (libText, scriptText) {
     return __envelope({ ok: false, error: __errorMessage(error) });
   }
   return __settle(value);
+};
+
+// `tocRule.formatJs`（ADR-0078 S2）：一条脚本，**一个作用域里逐章跑**。
+//
+// 上游把 `index` / `chapter` / `title` 每轮重绑、`gInt` 只初始化一次（`BookChapterList.kt:141-163`），
+// 所以计数器的自增会跨章累积。这里用同一函数的 `var` 兑现同一条语义；答案与输入等长：
+// 非空字符串替换标题，`null` 表示「保持原标题」（脚本报错也按 null 处理，与上游 onFailure 一致）。
+globalThis.__formatTitles = function (libText, scriptText, chapters) {
+  if (libText) {
+    try {
+      // 库脚本与规则同一个函数作用域（同 __runRuleWithLib）；库坏了就是这一条规则的失败。
+      eval(libText);
+    } catch (error) {
+      return __envelope({
+        ok: false,
+        error: __errorMessage(error),
+        libError: true
+      });
+    }
+  }
+  var index = 0;
+  var chapter = null;
+  var title = '';
+  var gInt = 0;
+  var titles = [];
+  for (var i = 0; i < chapters.length; i++) {
+    chapter = chapters[i];
+    index = i + 1;
+    title = (chapter && chapter.title !== undefined && chapter.title !== null)
+      ? String(chapter.title) : '';
+    var value = null;
+    try {
+      value = eval(scriptText);
+    } catch (error) {
+      value = null;
+    }
+    if (value === null || value === undefined) {
+      titles.push(null);
+    } else {
+      var text = String(value);
+      titles.push(text === '' ? null : text);
+    }
+  }
+  return __envelope({ ok: true, value: titles });
 };
 
 globalThis.__crypto = function (operation, value) {

@@ -87,6 +87,28 @@ final class FetchBookInfo {
     return clean;
   }
 
+  /// Reads one book out of a page that was **already fetched** (`bookUrlPattern`, ADR-0078 S2).
+  ///
+  /// Upstream's search stage calls `getInfoItem` on the same response when the search URL is a
+  /// detail page, or when `bookList` matched nothing (`BookList.kt:62-84`, `:100-110`). Keeping the
+  /// reader here means both stages run the same field rules against the same scope, instead of the
+  /// search stage growing a second, subtly different copy.
+  Future<ParseResult<BookInfo>> readFromPage(
+    BookSource source,
+    FetchedPage page,
+  ) async => switch (await _initScope(source, page.scope)) {
+    ParseFailure<RuleScope>(
+      :final ParseFailureKind kind,
+      rulePath: final String failedAt,
+    ) =>
+      failureAt<BookInfo>(kind: kind, rulePath: failedAt),
+    ParseSuccess<RuleScope>(data: final RuleScope scope) => await _read(
+      source,
+      page.url,
+      scope,
+    ),
+  };
+
   /// Reads every `ruleBookInfo` field out of [scope].
   Future<ParseResult<BookInfo>> _read(
     BookSource source,

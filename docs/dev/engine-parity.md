@@ -40,7 +40,7 @@
 | ✅ `jsLib`（源内 JS 库，作为每个脚本的 prototype scope） | `BaseSource.kt:335-339`、`AnalyzeRule.kt:848`、`SharedJsScope.kt:23-60` | **已对齐**（M25/S1）：字段建模为 `BookSource.jsLib`；`JsLibStore` 解析（纯 JS 直通 / JSON 对象里的 http(s) 值逐条下载按序拼接，缓存 16 条、失败不缓存）→ worker 在同一函数作用域里先跑库再跑规则；库失败与规则失败分开（`js:lib`）。三条有意差异：库顶 `let`/`const` 规则不可见（Rhino ES5 同样不认）、缓存只在内存、`source.jsLib` 不在 `source` 绑定里 | 待 M27 | 已对齐（`book-source.md` §6） |
 | ⚠ `coverDecodeJs`（封面二次解密） | `ImageUtils.kt:66-69` | 未建模 | | S1 之后按需（M27 普查决定） |
 | ⚠ `ruleReview`（段评九字段） | `rule/ReviewRule.kt:9-20` | 未建模 | | M27 后另立里程碑（要 UI） |
-| ⚠ `bookUrlPattern`（搜索 URL 命中即按详情页解析；`bookList` 为空时回落详情页） | `BookList.kt:62-84`、`:100-110` | 未建模 → 单书站搜不到东西 | | **S2** |
+| ✅ `bookUrlPattern`（搜索 URL 命中即按详情页解析；`bookList` 为空时回落详情页） | `BookList.kt:62-84`、`:100-110` | **已对齐**（M25/S2）：最终 URL 与 pattern 全匹配即用 `ruleBookInfo` 读成一条结果；无 pattern 且列表为空（或列表规则一条未命中）时同样回落详情页；坏正则只记 warning | 待 M27 | 已对齐（`book-source.md` §4） |
 | ⚠ `eventListener` / `callBackJs` / `customButton` / `homepageModules` | `BookSource.kt:104-112`、`SourceCallBack.kt:54/94/117` | 未建模（`callBackJs` 见 B4） | | S2 / 后续 |
 | `enabledExplore` | `BookSource.kt:52` | `extra`，发现页仍会尝试 | | 有意差异（未提供单源发现开关 UI） |
 | `enabledCookieJar`（单源 CookieJar） | `BaseSource.kt:56-58` | 无按源语义（Cookie 按域共享） | | 有意差异（ADR-0072 §决策 2） |
@@ -52,10 +52,10 @@
 
 | 能力 | 上游证据 | 本仓现状 | 语料命中 | 去向 |
 |---|---|---|---|---|
-| ⚠ `subContent`（副文；音频源写成章节变量 `lyric`） | `BookContent.kt:144-163` | **未建模** | | **S2** |
-| ⚠ `title`（正文反取章节名 + `reviewImg`） | `BookContent.kt:165-190` | **未建模** | | **S2** |
-| ⚠ `payAction`（付费章节解锁动作） | `ReadBookViewModel.kt:2623`、`MangaReaderActionRepository.kt:237` | **未建模**（配 `isPay` 缺失，VIP 付费章节无法解锁） | | **S2** |
-| ⚠ `callBackJs`（事件回调） | `SourceCallBack.kt:54/94/117` | **未建模** | | S2（UI 侧另算） |
+| ⚠ `subContent`（副文；音频源写成章节变量 `lyric`） | `BookContent.kt:144-163` | **已建模、未执行**：字段进 `ContentRule` 与导出往返，`FetchContent` 还没有「正文附带副文」的返回形状（要 `ChapterContent` 值对象） | | **S2 剩余** |
+| ⚠ `title`（正文反取章节名 + `reviewImg`） | `BookContent.kt:165-190` | **已建模、未执行**：`Chapter.name` / `reviewImg` 已能承载，但正文阶段改名要回写章节，等同一个 `ChapterContent` 返回形状 | | **S2 剩余** |
+| ⚠ `payAction`（付费章节解锁动作） | `ReadBookViewModel.kt:2623`、`MangaReaderActionRepository.kt:237` | **已建模、不执行**：本仓没有付费内容 UI，执行它也没有落点 | | 有意差异（触发 = 加入付费章节解锁 UI） |
+| ⚠ `callBackJs`（事件回调） | `SourceCallBack.kt:54/94/117` | **已建模、不执行**：`ContentRule.callBackJs` + `BookSource.eventListener` 都进导出往返，事件面不存在 | | 有意差异（触发 = 阅读器事件回调需求） |
 | `imageDecode`（图片字节解密） | `ContentRule.kt:21` | 显式拒绝（`fetch_manga_pages.dart:30-41`） | | **S6** |
 | `imageStyle`（`full`/`single`/`left`/`right`/居中） | `ContentRule.kt:20` | 部分（只 `full`/`single`，ADR-0069 G5） | | **S6** |
 | 正文 HTML 化（`formatKeepImg`：相对 `<img>` 补全、`<usehtml>` 保真） | `BookContent.kt:207-216`、`HtmlFormatter.kt:151-195` | **无**：正文原样落库，阅读端也不渲染 HTML/内联图 | | **S6** |
@@ -66,11 +66,11 @@
 
 | 能力 | 上游证据 | 本仓现状 | 语料命中 | 去向 |
 |---|---|---|---|---|
-| ⚠ `formatJs`（统一重写章节名，绑 `index`/`chapter`/`title`/`gInt`） | `BookChapterList.kt:141-163` | **未建模** | | **S2** |
-| ⚠ `isVolume`（分卷标记；卷标题无 url 时用标题占位） | `BookChapterList.kt:240-259` | **未建模** → 卷标题被当普通章节 | | **S2** |
-| ⚠ `isPay`（已购标记，与 `isVip` 共同决定「锁定」） | `BookChapterList.kt:229-268`、`TocScreen.kt:894` | **未建模**（`Chapter` 只有 `isVip`） | | **S2** |
-| ⚠ `preUpdateJs`（更新检查前置脚本，可中止） | `WebBook.kt:305-313` | **未建模** | | **S2** |
-| 目录去重（`LinkedHashSet`）与元数据保留（`wordCount`/`variable`/`reviewImg`） | `BookChapterList.kt:120-140`、`:275-295` | 不去重、不保留 | | **S2** |
+| ✅ `formatJs`（统一重写章节名，绑 `index`/`chapter`/`title`/`gInt`） | `BookChapterList.kt:141-163` | **已对齐**（M25/S2）：一次 job 跑完整份目录，`index` 逐章重绑、`gInt` 跨章累积；脚本抛错只保留该章原标题 | 待 M27 | 已对齐（`book-source.md` §6） |
+| ✅ `isVolume`（分卷标记；卷标题无 url 时用标题占位） | `BookChapterList.kt:240-259` | **已对齐**（M25/S2）：`Chapter.isVolume`，无 URL 的卷用「标题+序号」占位；无名条目整条丢弃 | 待 M27 | 已对齐（`book-source.md` §4.1） |
+| ✅ `isPay`（已购标记，与 `isVip` 共同决定「锁定」） | `BookChapterList.kt:229-268`、`TocScreen.kt:894` | **已对齐（解析）**（M25/S2）：`Chapter.isPay` 按上游 `isTrue()` 判定；阅读器的锁定 UI 仍只看 `isVip` | 待 M27 | 解析已对齐；锁定 UI 归后续 |
+| ✅ `preUpdateJs`（更新检查前置脚本，可中止） | `WebBook.kt:305-313` | **已对齐**（M25/S2）：`FetchToc` 在第一个请求前执行，失败即整段目录失败（不发请求） | 待 M27 | 已对齐（`book-source.md` §6） |
+| ✅ 目录去重（`LinkedHashSet`）与元数据保留（`wordCount`/`variable`/`reviewImg`） | `BookChapterList.kt:120-140`、`:275-295` | **已对齐（去重 + 字段）**（M25/S2）：按 `(名字, URL)` 去重保序；`Chapter` 增加 `wordCount` / `variable` / `reviewImg` / `isPay` / `isVolume`。上游的「跨刷新保留旧元数据」依赖章节入库，本仓目录不落库 | 待 M27 | 去重已对齐；跨刷新保留归「目录不落库」登记 |
 | 目录翻页并发（多值 `nextTocUrl`） | `BookChapterList.kt:100-118` | 串行 | | **已知热点**（M26 R4） |
 
 ### 3.3 `ruleBookInfo` / 列表阶段
@@ -120,7 +120,7 @@
 | 类型 | 上游 | 本仓现状 | 去向 |
 |---|---|---|---|
 | 文本（0） | 完整四段 | 已对齐 | — |
-| 音频（1） | `content` 取地址，`subContent` 作歌词 | 有 `fetch_audio_tracks`，**无歌词** | **S2** |
+| 音频（1） | `content` 取地址，`subContent` 作歌词 | 有 `fetch_audio_tracks`，**无歌词**（`subContent` 已建模，见 3.1 的「S2 剩余」） | **S2 剩余** |
 | 图片（2） | `content` 取图片列表 + `imageDecode` + `imageStyle` 全分支 | 有 `fetch_manga_pages`，`imageDecode` 拒绝、`imageStyle` 部分 | **S6** |
 | 文件（3） | `ruleBookInfo.downloadUrls` + 批量下载 | 无 | **S6** |
 | 视频（4） | 有视频播放链路 | 无 | **S6** |
@@ -132,7 +132,7 @@
 | 片 | 内容 | 主要落点 | 依赖 |
 |---|---|---|---|
 | **S1** ✅ | `jsLib` | `core/js/js_lib.dart`（解析 + 缓存）、`BookSource.jsLib`、worker 前奏 `__runRuleWithLib`、`RuleEngine._jsLibOf` | — |
-| **S2** | 阶段字段族 + `bookUrlPattern` + 目录去重/元数据 | `BookSource`/`Chapter` 模型、`FetchContent`/`FetchToc`/`FetchBookInfo` | S1（同属字段建模，可并行） |
+| **S2** 🚧 | 阶段字段族 + `bookUrlPattern` + 目录去重/元数据 | 已落地：`TocRule`（`formatJs`/`isVolume`/`isPay`/`wordCount`/`preUpdateJs`）、`Chapter`（`isPay`/`isVolume`/`wordCount`/`variable`/`reviewImg`）、`FetchToc` 去重与卷占位、`bookUrlPattern` 详情页回落、`ContentRule`（`subContent`/`title`/`payAction`/`callBackJs`）建模。剩：`subContent` / `title` 的**执行**（要 `ChapterContent` 返回形状） | S1（已闭环） |
 | **S3** | 密钥类 crypto + 绑注入面 | `core/js/js_bindings.dart`、`quickjs_worker.dart` | 语料普查（优先级） |
 | **S4** | URL 方言五条 + 列表尾部 `@js:` | `url_rule.dart`、`rule_engine.dart` | — |
 | **S5** | 矩阵 #20/#21/#22/#30 | `rule_engine.dart`（+ 依赖） | M27 普查定序 |

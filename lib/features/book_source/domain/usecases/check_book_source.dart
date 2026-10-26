@@ -155,6 +155,7 @@ final class CheckBookSource {
       isFromSearch: true,
       rulePath: 'searchUrl',
       emptyGroup: searchInvalidGroup,
+      emptyRulePath: 'searchRule.bookList',
       operation: () => _searchBooks.execute(source, keyword),
     );
     if (books == null) {
@@ -180,6 +181,7 @@ final class CheckBookSource {
       isFromSearch: false,
       rulePath: 'exploreUrl',
       emptyGroup: exploreRuleMissingGroup,
+      emptyRulePath: 'exploreRule.bookList',
       // 读分类是发现阶段的**前景**而不是它自己的阶段：成功不记一条结果，失败才记，
       // 否则一个阶段会跑出两条 outcome（UI 上的「阶段」就会重复）。
       recordsSuccess: false,
@@ -242,6 +244,7 @@ final class CheckBookSource {
       isFromSearch: isFromSearch,
       rulePath: 'ruleToc',
       emptyGroup: isFromSearch ? searchTocInvalidGroup : exploreTocInvalidGroup,
+      emptyRulePath: 'tocRule.chapterList',
       operation: () => _toc.execute(source, info.tocUrl),
     );
     if (chapters == null || !run.settings.runs(SourceCheckStage.content)) {
@@ -256,6 +259,7 @@ final class CheckBookSource {
       emptyGroup: isFromSearch
           ? searchContentInvalidGroup
           : exploreContentInvalidGroup,
+      emptyRulePath: 'contentRule.content',
       // §6 / ADR-0049：校验也知道书名与章节名，顺手喂给 `java.get('bookName' / 'title')`。
       operation: () => _content.execute(
         source,
@@ -280,6 +284,7 @@ final class CheckBookSource {
     required String rulePath,
     required Future<ParseResult<T>> Function() operation,
     String? emptyGroup,
+    String? emptyRulePath,
     bool recordsSuccess = true,
   }) async {
     if (run.isCancelled) {
@@ -321,7 +326,8 @@ final class CheckBookSource {
           run.recordFailure(
             stage,
             failureKind: ParseFailureKind.parseFailed,
-            rulePath: rulePath,
+            // 空结果指向**列表规则**：`searchUrl` 本身没错，是它读出来的东西不是列表。
+            rulePath: emptyRulePath ?? rulePath,
             invalidGroup: emptyGroup,
           );
 

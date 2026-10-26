@@ -332,6 +332,65 @@ final class RuleEngine {
         rulePath: field,
       );
 
+  /// Rewrites chapter names with a `tocRule.formatJs` rule (ADR-0078 S2).
+  ///
+  /// One job for the whole list, because upstream evaluates the script once per chapter **inside
+  /// one scope**: `index` is rebound each round while `gInt` keeps its value across rounds
+  /// (`BookChapterList.kt:141-163`). A script that throws leaves that chapter's title alone
+  /// (upstream `runCatching(...).onFailure`), so the answer is always the same length as
+  /// [chapters]: a string replaces the title, `null` keeps it.
+  Future<ParseResult<List<String?>>> formatTitles({
+    required String script,
+    required List<JsChapterInfo> chapters,
+    required JsPageContext context,
+    required String rulePath,
+  }) async {
+    if (script.trim().isEmpty || chapters.isEmpty) {
+      return const ParseSuccess<List<String?>>(<String?>[]);
+    }
+
+    final ParseResult<String?> lib = await _jsLibOf(context, rulePath);
+    switch (lib) {
+      case ParseFailure<String?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        return failureAt<List<String?>>(kind: kind, rulePath: rulePath);
+      case ParseSuccess<String?>(:final String? data):
+        final ParseResult<Object?> formatted = await _jsBridge.evaluate(
+          JsJob(
+            script: script,
+            rulePath: rulePath,
+            baseUrl: context.baseUrl,
+            page: context.page,
+            source: context.source,
+            sourceHeaders: context.headers,
+            variables: _variables.snapshot(context.source.url),
+            sourceVariables: _sourceVariables.snapshot(context.source.url),
+            jsLib: data,
+            titleFormatChapters: chapters,
+            bookName: context.bookName,
+            chapterTitle: context.chapterTitle,
+            book: context.book,
+          ),
+        );
+
+        return switch (formatted) {
+          ParseFailure<Object?>(
+            :final ParseFailureKind kind,
+            rulePath: final String failedAt,
+          ) =>
+            failureAt<List<String?>>(kind: kind, rulePath: failedAt),
+          ParseSuccess<Object?>(:final Object? data) =>
+            ParseSuccess<List<String?>>(<String?>[
+              if (data is List)
+                for (final Object? title in data)
+                  if (title is String) title else null,
+            ]),
+        };
+    }
+  }
+
   /// Returns every element matched by the **list** rule [rule] inside [scope].
   ///
   /// Every `@`-separated segment is a selector here, because `bookList` and

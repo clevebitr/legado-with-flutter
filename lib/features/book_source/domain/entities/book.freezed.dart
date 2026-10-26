@@ -597,7 +597,7 @@ as bool,
 /// @nodoc
 mixin _$Chapter {
 
- String get name; String get url; bool get isVip; String? get updateTime;
+ String get name; String get url; bool get isVip; bool get isPay; bool get isVolume; String? get updateTime; String? get wordCount; Map<String, String> get variable; String? get reviewImg;
 /// Create a copy of Chapter
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -609,20 +609,20 @@ $ChapterCopyWith<Chapter> get copyWith => _$ChapterCopyWithImpl<Chapter>(this as
 @override
 bool operator ==(Object other) {
   final _this = this as Chapter;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Chapter&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.url, _this.url) || other.url == _this.url)&&(identical(other.isVip, _this.isVip) || other.isVip == _this.isVip)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Chapter&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.url, _this.url) || other.url == _this.url)&&(identical(other.isVip, _this.isVip) || other.isVip == _this.isVip)&&(identical(other.isPay, _this.isPay) || other.isPay == _this.isPay)&&(identical(other.isVolume, _this.isVolume) || other.isVolume == _this.isVolume)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime)&&(identical(other.wordCount, _this.wordCount) || other.wordCount == _this.wordCount)&&const DeepCollectionEquality().equals(other.variable, _this.variable)&&(identical(other.reviewImg, _this.reviewImg) || other.reviewImg == _this.reviewImg));
 }
 
 
 @override
 int get hashCode {
   final _this = this as Chapter;
-  return Object.hash(runtimeType,_this.name,_this.url,_this.isVip,_this.updateTime);
+  return Object.hash(runtimeType,_this.name,_this.url,_this.isVip,_this.isPay,_this.isVolume,_this.updateTime,_this.wordCount,const DeepCollectionEquality().hash(_this.variable),_this.reviewImg);
 }
 
 @override
 String toString() {
   final _this = this as Chapter;
-  return 'Chapter(name: ${_this.name}, url: ${_this.url}, isVip: ${_this.isVip}, updateTime: ${_this.updateTime})';
+  return 'Chapter(name: ${_this.name}, url: ${_this.url}, isVip: ${_this.isVip}, isPay: ${_this.isPay}, isVolume: ${_this.isVolume}, updateTime: ${_this.updateTime}, wordCount: ${_this.wordCount}, variable: ${_this.variable}, reviewImg: ${_this.reviewImg})';
 }
 
 
@@ -633,7 +633,7 @@ abstract mixin class $ChapterCopyWith<$Res>  {
   factory $ChapterCopyWith(Chapter value, $Res Function(Chapter) _then) = _$ChapterCopyWithImpl;
 @useResult
 $Res call({
- String name, String url, bool isVip, String? updateTime
+ String name, String url, bool isVip, bool isPay, bool isVolume, String? updateTime, String? wordCount, Map<String, String> variable, String? reviewImg
 });
 
 
@@ -650,12 +650,17 @@ class _$ChapterCopyWithImpl<$Res>
 
 /// Create a copy of Chapter
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? url = null,Object? isVip = null,Object? updateTime = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? url = null,Object? isVip = null,Object? isPay = null,Object? isVolume = null,Object? updateTime = freezed,Object? wordCount = freezed,Object? variable = null,Object? reviewImg = freezed,}) {
   return _then(Chapter(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
 as String,isVip: null == isVip ? _self.isVip : isVip // ignore: cast_nullable_to_non_nullable
+as bool,isPay: null == isPay ? _self.isPay : isPay // ignore: cast_nullable_to_non_nullable
+as bool,isVolume: null == isVolume ? _self.isVolume : isVolume // ignore: cast_nullable_to_non_nullable
 as bool,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
+as String?,wordCount: freezed == wordCount ? _self.wordCount : wordCount // ignore: cast_nullable_to_non_nullable
+as String?,variable: null == variable ? _self.variable : variable // ignore: cast_nullable_to_non_nullable
+as Map<String, String>,reviewImg: freezed == reviewImg ? _self.reviewImg : reviewImg // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -741,10 +746,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String url,  bool isVip,  String? updateTime)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  String url,  bool isVip,  bool isPay,  bool isVolume,  String? updateTime,  String? wordCount,  Map<String, String> variable,  String? reviewImg)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Chapter() when $default != null:
-return $default(_that.name,_that.url,_that.isVip,_that.updateTime);case _:
+return $default(_that.name,_that.url,_that.isVip,_that.isPay,_that.isVolume,_that.updateTime,_that.wordCount,_that.variable,_that.reviewImg);case _:
   return orElse();
 
 }
@@ -762,10 +767,10 @@ return $default(_that.name,_that.url,_that.isVip,_that.updateTime);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String url,  bool isVip,  String? updateTime)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  String url,  bool isVip,  bool isPay,  bool isVolume,  String? updateTime,  String? wordCount,  Map<String, String> variable,  String? reviewImg)  $default,) {final _that = this;
 switch (_that) {
 case _Chapter():
-return $default(_that.name,_that.url,_that.isVip,_that.updateTime);case _:
+return $default(_that.name,_that.url,_that.isVip,_that.isPay,_that.isVolume,_that.updateTime,_that.wordCount,_that.variable,_that.reviewImg);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -782,10 +787,10 @@ return $default(_that.name,_that.url,_that.isVip,_that.updateTime);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String url,  bool isVip,  String? updateTime)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  String url,  bool isVip,  bool isPay,  bool isVolume,  String? updateTime,  String? wordCount,  Map<String, String> variable,  String? reviewImg)?  $default,) {final _that = this;
 switch (_that) {
 case _Chapter() when $default != null:
-return $default(_that.name,_that.url,_that.isVip,_that.updateTime);case _:
+return $default(_that.name,_that.url,_that.isVip,_that.isPay,_that.isVolume,_that.updateTime,_that.wordCount,_that.variable,_that.reviewImg);case _:
   return null;
 
 }
@@ -797,13 +802,24 @@ return $default(_that.name,_that.url,_that.isVip,_that.updateTime);case _:
 
 
 class _Chapter implements Chapter {
-  const _Chapter({required this.name, required this.url, this.isVip = false, this.updateTime});
+  const _Chapter({required this.name, required this.url, this.isVip = false, this.isPay = false, this.isVolume = false, this.updateTime, this.wordCount,  Map<String, String> variable = const <String, String>{}, this.reviewImg}): _variable = variable;
   
 
 @override final  String name;
 @override final  String url;
 @override@JsonKey() final  bool isVip;
+@override@JsonKey() final  bool isPay;
+@override@JsonKey() final  bool isVolume;
 @override final  String? updateTime;
+@override final  String? wordCount;
+ final  Map<String, String> _variable;
+@override@JsonKey() Map<String, String> get variable {
+  if (_variable is EqualUnmodifiableMapView) return _variable;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableMapView(_variable);
+}
+
+@override final  String? reviewImg;
 
 /// Create a copy of Chapter
 /// with the given fields replaced by the non-null parameter values.
@@ -815,18 +831,18 @@ _$ChapterCopyWith<_Chapter> get copyWith => __$ChapterCopyWithImpl<_Chapter>(thi
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _Chapter&&(identical(other.name, name) || other.name == name)&&(identical(other.url, url) || other.url == url)&&(identical(other.isVip, isVip) || other.isVip == isVip)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _Chapter&&(identical(other.name, name) || other.name == name)&&(identical(other.url, url) || other.url == url)&&(identical(other.isVip, isVip) || other.isVip == isVip)&&(identical(other.isPay, isPay) || other.isPay == isPay)&&(identical(other.isVolume, isVolume) || other.isVolume == isVolume)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime)&&(identical(other.wordCount, wordCount) || other.wordCount == wordCount)&&const DeepCollectionEquality().equals(other.variable, _variable)&&(identical(other.reviewImg, reviewImg) || other.reviewImg == reviewImg));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,name,url,isVip,updateTime);
+    return Object.hash(runtimeType,name,url,isVip,isPay,isVolume,updateTime,wordCount,const DeepCollectionEquality().hash(_variable),reviewImg);
 }
 
 @override
 String toString() {
-    return 'Chapter(name: $name, url: $url, isVip: $isVip, updateTime: $updateTime)';
+    return 'Chapter(name: $name, url: $url, isVip: $isVip, isPay: $isPay, isVolume: $isVolume, updateTime: $updateTime, wordCount: $wordCount, variable: $variable, reviewImg: $reviewImg)';
 }
 
 
@@ -837,7 +853,7 @@ abstract mixin class _$ChapterCopyWith<$Res> implements $ChapterCopyWith<$Res> {
   factory _$ChapterCopyWith(_Chapter value, $Res Function(_Chapter) _then) = __$ChapterCopyWithImpl;
 @override @useResult
 $Res call({
- String name, String url, bool isVip, String? updateTime
+ String name, String url, bool isVip, bool isPay, bool isVolume, String? updateTime, String? wordCount, Map<String, String> variable, String? reviewImg
 });
 
 
@@ -854,12 +870,17 @@ class __$ChapterCopyWithImpl<$Res>
 
 /// Create a copy of Chapter
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? url = null,Object? isVip = null,Object? updateTime = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? url = null,Object? isVip = null,Object? isPay = null,Object? isVolume = null,Object? updateTime = freezed,Object? wordCount = freezed,Object? variable = null,Object? reviewImg = freezed,}) {
   return _then(_Chapter(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
 as String,isVip: null == isVip ? _self.isVip : isVip // ignore: cast_nullable_to_non_nullable
+as bool,isPay: null == isPay ? _self.isPay : isPay // ignore: cast_nullable_to_non_nullable
+as bool,isVolume: null == isVolume ? _self.isVolume : isVolume // ignore: cast_nullable_to_non_nullable
 as bool,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
+as String?,wordCount: freezed == wordCount ? _self.wordCount : wordCount // ignore: cast_nullable_to_non_nullable
+as String?,variable: null == variable ? _self._variable : variable // ignore: cast_nullable_to_non_nullable
+as Map<String, String>,reviewImg: freezed == reviewImg ? _self.reviewImg : reviewImg // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
