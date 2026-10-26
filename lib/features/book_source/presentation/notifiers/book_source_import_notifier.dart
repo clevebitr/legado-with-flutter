@@ -104,8 +104,10 @@ class BookSourceImportNotifier extends _$BookSourceImportNotifier {
           :final BookSourceImportReport data,
         ):
           state = BookSourceImportState.done(data);
-          // 导入可能新增行、也可能只刷新既有行；两种情况都让列表与「当前源」按新库重算。
+          // 导入可能新增行、也可能只刷新既有行；列表页读的是按排序/筛选投影后的
+          // `bookSourceListDataProvider`，只失效源列表会让它继续显示导入前的行。
           ref.invalidate(bookSourceListProvider);
+          ref.invalidate(bookSourceListDataProvider);
         case ParseFailure<BookSourceImportReport>(:final ParseFailureKind kind):
           state = BookSourceImportState.failed(kind);
       }
