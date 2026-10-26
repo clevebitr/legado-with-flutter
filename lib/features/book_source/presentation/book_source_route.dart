@@ -5,46 +5,48 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'book_source_route.freezed.dart';
 
-/// The typed routes of the book source feature (ADR-0011).
+/// The typed routes of the book source feature.
 ///
-/// A route carries its arguments as a `freezed` value object and owns the path the
-/// app's route table serves, so a page pushes a route instead of naming a next hop:
-/// `pushBookSourceRoute(context, BookSourceRoute.bookDetail(book: book))`.
+/// Each route carries its arguments as a value object and owns the path it is served under.
 @freezed
 sealed class BookSourceRoute with _$BookSourceRoute {
   const BookSourceRoute._();
 
-  /// The route that shows one book's detail page and chapter list.
+  /// Shows one book's detail page and chapter list.
   const factory BookSourceRoute.bookDetail({required Book book}) =
       BookDetailRoute;
 
-  /// The route that shows the source's discover page.
+  /// Shows the source's discover page.
   const factory BookSourceRoute.explore() = ExploreRoute;
 
-  /// The route that lists the imported sources (`docs/dev/roadmap.md` 5.1).
+  /// Lists the imported sources.
   const factory BookSourceRoute.importedSources() = BookSourceListRoute;
 
-  /// The route that imports sources from pasted text or a URL (`docs/dev/roadmap.md` 5.1).
+  /// Imports sources from pasted text or a URL.
   const factory BookSourceRoute.importSources() = BookSourceImportRoute;
 
-  /// The route that runs the batch check over the imported sources (`docs/dev/roadmap.md` 5.10).
+  /// Runs the batch check over the imported sources.
   ///
-  /// [sourceIds] / [group] let the source list hand over a target: its batch bar passes the ticked
-  /// rows, its toolbar passes the group filter that is active (ADR-0057). An empty route (both
-  /// `null`) is what the 「校验」 toolbar entry uses when nothing is filtered.
+  /// [sourceIds] and [group] narrow the target; both `null` means every source.
   const factory BookSourceRoute.checkSources({
     Set<int>? sourceIds,
     String? group,
   }) = BookSourceCheckRoute;
 
-  /// The route that opens the debug console, optionally pinned to [sourceId]
-  /// (`docs/dev/roadmap.md` 5.10).
+  /// Opens the debug console, optionally pinned to [sourceId].
   const factory BookSourceRoute.debugSource({int? sourceId}) =
       BookSourceDebugRoute;
 
-  /// The route that edits one stored source (`docs/dev/roadmap.md` §3.9-S4, ADR-0050).
+  /// Edits one stored source.
   const factory BookSourceRoute.editSource({required int sourceId}) =
       BookSourceEditRoute;
+
+  /// Shows the per-source cache usage (`docs/dev/roadmap.md` M22, ADR-0072 §决策 1).
+  const factory BookSourceRoute.cacheManage() = BookSourceCacheRoute;
+
+  /// Shows one source's native login form (`docs/dev/roadmap.md` M22, ADR-0072 §决策 3).
+  const factory BookSourceRoute.signIn({required int sourceId}) =
+      BookSourceLoginRoute;
 
   /// The path this route is served under.
   String get path => switch (this) {
@@ -55,30 +57,29 @@ sealed class BookSourceRoute with _$BookSourceRoute {
     BookSourceCheckRoute() => _sourceCheckPath,
     BookSourceDebugRoute() => _sourceDebugPath,
     BookSourceEditRoute() => _sourceEditPath,
+    BookSourceCacheRoute() => _sourceCachePath,
+    BookSourceLoginRoute() => _sourceLoginPath,
   };
 }
 
-/// Path of [ExploreRoute].
 const String _explorePath = '/explore';
 
-/// Path of [BookDetailRoute].
 const String _bookDetailPath = '/book';
 
-/// Path of [BookSourceListRoute].
 const String _sourceListPath = '/sources';
 
-/// Path of [BookSourceImportRoute].
 const String _sourceImportPath = '/sources/import';
 
-/// Path of [BookSourceCheckRoute].
 const String _sourceCheckPath = '/sources/check';
 
-/// Path of [BookSourceDebugRoute].
 const String _sourceDebugPath = '/sources/debug';
 
-/// Path of [BookSourceEditRoute].
+const String _sourceCachePath = '/sources/cache';
+
+const String _sourceLoginPath = '/sources/login';
+
 const String _sourceEditPath = '/sources/edit';
 
-/// Pushes [route] through the app's route table (ADR-0011 §4).
+/// Pushes [route] through the app's route table.
 void pushBookSourceRoute(BuildContext context, BookSourceRoute route) =>
     AppRouter.push(context, path: route.path, arguments: route);

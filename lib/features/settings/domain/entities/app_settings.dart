@@ -21,6 +21,9 @@ const int minConcurrentBudget = 1;
 /// still passes its own rate gate first (`book-source.md` §8).
 const int maxConcurrentBudget = 8;
 
+/// The folder user-picked images are stored in (`ADR-0075` §决策 1).
+const String backgroundImageFolder = 'backgrounds';
+
 /// The light switches the user chose (C-NET-9: these live in `shared_preferences`).
 ///
 /// Every value is **clamped in the factory**, not asserted: an assertion would be stripped in
@@ -33,6 +36,8 @@ final class AppSettings {
     required this.fontScale,
     required this.maxConcurrentPerSource,
     required this.allowPlainHttp,
+    required this.seedColor,
+    required this.backgroundImageName,
   });
 
   /// Creates settings, clamping every value into its documented range.
@@ -41,6 +46,8 @@ final class AppSettings {
     double fontScale = 1,
     int maxConcurrentPerSource = defaultMaxConcurrentRequestsPerSource,
     bool allowPlainHttp = false,
+    int? seedColor,
+    String? backgroundImageName,
   }) => AppSettings._(
     themeMode: themeMode,
     fontScale: fontScale.clamp(minFontScale, maxFontScale),
@@ -49,6 +56,8 @@ final class AppSettings {
       maxConcurrentBudget,
     ),
     allowPlainHttp: allowPlainHttp,
+    seedColor: seedColor,
+    backgroundImageName: backgroundImageName,
   );
 
   /// The settings used before anything was stored and while the store is still loading.
@@ -57,6 +66,8 @@ final class AppSettings {
     fontScale: 1,
     maxConcurrentPerSource: defaultMaxConcurrentRequestsPerSource,
     allowPlainHttp: false,
+    seedColor: null,
+    backgroundImageName: null,
   );
 
   /// Which scheme the app follows.
@@ -67,6 +78,19 @@ final class AppSettings {
 
   /// Requests one book source may have in flight at once (`book-source.md` §8).
   final int maxConcurrentPerSource;
+
+  /// The seed colour (ARGB) the theme is built from, or `null` for the project default
+  /// (`ADR-0075` §决策 1).
+  ///
+  /// Stored as an `int` because `domain/` may not import Flutter (C-ARCH-7); the theme builder turns
+  /// it into a `Color`. A platform that reports dynamic color still wins over this value.
+  final int? seedColor;
+
+  /// The file name of the theme background inside `backgrounds/`, or `null` for none.
+  ///
+  /// A **name**, never a path: the bytes were copied into the app's directory when the user picked
+  /// them, so the setting survives the original file moving or an expired Android URI grant.
+  final String? backgroundImageName;
 
   /// Whether the user allows plaintext `http://` media (C-SEC-2's explicit opt-in).
   ///
@@ -80,12 +104,20 @@ final class AppSettings {
     double? fontScale,
     int? maxConcurrentPerSource,
     bool? allowPlainHttp,
+    int? seedColor,
+    String? backgroundImageName,
+    bool clearSeedColor = false,
+    bool clearBackgroundImage = false,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     fontScale: fontScale ?? this.fontScale,
     maxConcurrentPerSource:
         maxConcurrentPerSource ?? this.maxConcurrentPerSource,
     allowPlainHttp: allowPlainHttp ?? this.allowPlainHttp,
+    seedColor: clearSeedColor ? null : (seedColor ?? this.seedColor),
+    backgroundImageName: clearBackgroundImage
+        ? null
+        : (backgroundImageName ?? this.backgroundImageName),
   );
 
   @override
@@ -94,9 +126,17 @@ final class AppSettings {
       other.themeMode == themeMode &&
       other.fontScale == fontScale &&
       other.maxConcurrentPerSource == maxConcurrentPerSource &&
-      other.allowPlainHttp == allowPlainHttp;
+      other.allowPlainHttp == allowPlainHttp &&
+      other.seedColor == seedColor &&
+      other.backgroundImageName == backgroundImageName;
 
   @override
-  int get hashCode =>
-      Object.hash(themeMode, fontScale, maxConcurrentPerSource, allowPlainHttp);
+  int get hashCode => Object.hash(
+    themeMode,
+    fontScale,
+    maxConcurrentPerSource,
+    allowPlainHttp,
+    seedColor,
+    backgroundImageName,
+  );
 }

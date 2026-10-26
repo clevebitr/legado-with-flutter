@@ -2189,6 +2189,1470 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.'**
   String get readerAudioPlainHttp;
+
+  /// Row menu: opens the source's login page in the visible WebView.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in / pass check'**
+  String get bookSourceRowSignIn;
+
+  /// Snackbar after the login / verification page finished.
+  ///
+  /// In en, this message translates to:
+  /// **'The site\'s cookies are saved; the source can be checked again.'**
+  String get bookSourceSignInDone;
+
+  /// Snackbar when the login page failed for a reason other than the user closing it.
+  ///
+  /// In en, this message translates to:
+  /// **'The sign-in / verification did not finish.'**
+  String get bookSourceSignInFailed;
+
+  /// Snackbar when the platform cannot show a verification page.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no WebView; finish the check in the system browser first.'**
+  String get bookSourceSignInUnsupported;
+
+  /// No description provided for @bookmarkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks'**
+  String get bookmarkTitle;
+
+  /// No description provided for @bookmarkEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No bookmarks yet. Tap the bookmark button in the reader toolbar to mark your place.'**
+  String get bookmarkEmpty;
+
+  /// No description provided for @bookmarkLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks could not be loaded.'**
+  String get bookmarkLoadFailed;
+
+  /// No description provided for @bookmarkAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add bookmark'**
+  String get bookmarkAdd;
+
+  /// No description provided for @bookmarkRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove bookmark'**
+  String get bookmarkRemove;
+
+  /// No description provided for @bookmarkAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark added'**
+  String get bookmarkAdded;
+
+  /// No description provided for @bookmarkRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark removed'**
+  String get bookmarkRemoved;
+
+  /// No description provided for @bookmarkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The bookmark could not be saved.'**
+  String get bookmarkFailed;
+
+  /// No description provided for @bookmarkDeleteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete bookmark'**
+  String get bookmarkDeleteAction;
+
+  /// No description provided for @bookSourceReadingRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records'**
+  String get bookSourceReadingRecords;
+
+  /// No description provided for @readingRecordsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records'**
+  String get readingRecordsTitle;
+
+  /// No description provided for @readingRecordsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No reading records yet. Sessions shorter than a minute are not recorded.'**
+  String get readingRecordsEmpty;
+
+  /// No description provided for @readingRecordsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records could not be loaded.'**
+  String get readingRecordsLoadFailed;
+
+  /// No description provided for @bookReadingRecordsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records · {book}'**
+  String bookReadingRecordsTitle(String book);
+
+  /// No description provided for @bookReadingRecordsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This book has no reading records yet.'**
+  String get bookReadingRecordsEmpty;
+
+  /// No description provided for @readingRecordMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String readingRecordMinutes(int minutes);
+
+  /// No description provided for @readingRecordHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String readingRecordHours(int hours);
+
+  /// No description provided for @readingRecordHoursMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h {minutes} min'**
+  String readingRecordHoursMinutes(int hours, int minutes);
+
+  /// No description provided for @myBookmarks.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks'**
+  String get myBookmarks;
+
+  /// No description provided for @myBookmarksBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Every position you marked'**
+  String get myBookmarksBody;
+
+  /// No description provided for @myReadingRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records'**
+  String get myReadingRecords;
+
+  /// No description provided for @myReadingRecordsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'What you read, by day'**
+  String get myReadingRecordsBody;
+
+  /// No description provided for @shelfManageGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage groups'**
+  String get shelfManageGroups;
+
+  /// No description provided for @shelfGroupAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get shelfGroupAll;
+
+  /// No description provided for @shelfGroupUngrouped.
+  ///
+  /// In en, this message translates to:
+  /// **'Ungrouped'**
+  String get shelfGroupUngrouped;
+
+  /// No description provided for @shelfGroupEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No books in this group yet.'**
+  String get shelfGroupEmpty;
+
+  /// No description provided for @shelfGroupsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get shelfGroupsTitle;
+
+  /// No description provided for @shelfGroupsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No groups yet. Create one with the button below.'**
+  String get shelfGroupsEmpty;
+
+  /// No description provided for @shelfGroupCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'New group'**
+  String get shelfGroupCreate;
+
+  /// No description provided for @shelfGroupCreateAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get shelfGroupCreateAction;
+
+  /// No description provided for @shelfGroupNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Group name'**
+  String get shelfGroupNameHint;
+
+  /// No description provided for @shelfGroupRename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get shelfGroupRename;
+
+  /// No description provided for @shelfGroupRenameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename group'**
+  String get shelfGroupRenameTitle;
+
+  /// No description provided for @shelfGroupDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete group'**
+  String get shelfGroupDelete;
+
+  /// No description provided for @shelfGroupDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete group'**
+  String get shelfGroupDeleteTitle;
+
+  /// No description provided for @shelfGroupDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The books go back to ungrouped and are not deleted.'**
+  String get shelfGroupDeleteBody;
+
+  /// No description provided for @shelfGroupNameTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'A group with this name already exists.'**
+  String get shelfGroupNameTaken;
+
+  /// No description provided for @shelfSelectionExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit selection'**
+  String get shelfSelectionExit;
+
+  /// No description provided for @shelfSelectionCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String shelfSelectionCount(int count);
+
+  /// No description provided for @shelfSelectionClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get shelfSelectionClear;
+
+  /// No description provided for @shelfSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get shelfSelectAll;
+
+  /// No description provided for @shelfBatchAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Batch actions'**
+  String get shelfBatchAction;
+
+  /// No description provided for @shelfBatchGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to group'**
+  String get shelfBatchGroup;
+
+  /// No description provided for @bookSourceShelfGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to group'**
+  String get bookSourceShelfGroup;
+
+  /// No description provided for @bookSourceShelfGroupHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the book to the shelf before grouping it.'**
+  String get bookSourceShelfGroupHint;
+
+  /// No description provided for @bookSourceChangeCover.
+  ///
+  /// In en, this message translates to:
+  /// **'Change cover'**
+  String get bookSourceChangeCover;
+
+  /// No description provided for @bookSourceResetCover.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset cover'**
+  String get bookSourceResetCover;
+
+  /// No description provided for @bookSourceBookCache.
+  ///
+  /// In en, this message translates to:
+  /// **'Book cache'**
+  String get bookSourceBookCache;
+
+  /// No description provided for @bookSourceBookCacheCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters cached'**
+  String bookSourceBookCacheCount(int count);
+
+  /// No description provided for @bookSourceBookCacheClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear this book\'s cache'**
+  String get bookSourceBookCacheClear;
+
+  /// No description provided for @bookSourceBookCacheCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared {count} cached items'**
+  String bookSourceBookCacheCleared(int count);
+
+  /// No description provided for @bookSourceBookCacheFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The cache action failed.'**
+  String get bookSourceBookCacheFailed;
+
+  /// No description provided for @sourceVerificationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{title} · {source}'**
+  String sourceVerificationTitle(String title, String source);
+
+  /// No description provided for @sourceVerificationDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get sourceVerificationDone;
+
+  /// No description provided for @sourceVerificationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification was not completed.'**
+  String get sourceVerificationFailed;
+
+  /// No description provided for @sourceCaptchaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Captcha · {source}'**
+  String sourceCaptchaTitle(String source);
+
+  /// No description provided for @sourceCaptchaImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Captcha image'**
+  String get sourceCaptchaImage;
+
+  /// No description provided for @sourceCaptchaHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type the characters in the image'**
+  String get sourceCaptchaHint;
+
+  /// No description provided for @sourceCaptchaConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get sourceCaptchaConfirm;
+
+  /// No description provided for @failureLoginRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This source needs a sign-in or a fresh human check; open the source and finish it first.'**
+  String get failureLoginRequired;
+
+  /// No description provided for @mySectionRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules'**
+  String get mySectionRules;
+
+  /// No description provided for @rulesReplaceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace & clean'**
+  String get rulesReplaceTitle;
+
+  /// No description provided for @rulesTocTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter rules'**
+  String get rulesTocTitle;
+
+  /// No description provided for @rulesDictTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Dictionaries'**
+  String get rulesDictTitle;
+
+  /// No description provided for @rulesHighlightTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Highlight tags'**
+  String get rulesHighlightTitle;
+
+  /// No description provided for @rulesAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add rule'**
+  String get rulesAdd;
+
+  /// No description provided for @rulesEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit rule'**
+  String get rulesEditTitle;
+
+  /// No description provided for @rulesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No rules yet'**
+  String get rulesEmpty;
+
+  /// No description provided for @rulesLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The rules could not be loaded.'**
+  String get rulesLoadFailed;
+
+  /// No description provided for @rulesGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This rule no longer exists.'**
+  String get rulesGone;
+
+  /// No description provided for @rulesBroken.
+  ///
+  /// In en, this message translates to:
+  /// **'Unreadable rule'**
+  String get rulesBroken;
+
+  /// No description provided for @rulesBuiltIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get rulesBuiltIn;
+
+  /// No description provided for @rulesBrokenNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This rule\'s stored content cannot be read. It is shown below; saving replaces it.'**
+  String get rulesBrokenNotice;
+
+  /// No description provided for @rulesReorderHandle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reorder'**
+  String get rulesReorderHandle;
+
+  /// No description provided for @rulesNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get rulesNameLabel;
+
+  /// No description provided for @rulesPatternLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Find (regular expression or text)'**
+  String get rulesPatternLabel;
+
+  /// No description provided for @rulesReplacementLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace with'**
+  String get rulesReplacementLabel;
+
+  /// No description provided for @rulesIsRegexLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a regular expression'**
+  String get rulesIsRegexLabel;
+
+  /// No description provided for @rulesRuleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter title rule'**
+  String get rulesRuleLabel;
+
+  /// No description provided for @rulesSerialNumberLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Serial number (optional)'**
+  String get rulesSerialNumberLabel;
+
+  /// No description provided for @rulesUrlRuleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Lookup address'**
+  String get rulesUrlRuleLabel;
+
+  /// No description provided for @rulesShowRuleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract rule'**
+  String get rulesShowRuleLabel;
+
+  /// No description provided for @rulesColorLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour, #AARRGGBB (optional)'**
+  String get rulesColorLabel;
+
+  /// No description provided for @rulesGroupLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Group (optional)'**
+  String get rulesGroupLabel;
+
+  /// No description provided for @rulesEnabledLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get rulesEnabledLabel;
+
+  /// No description provided for @rulesRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required.'**
+  String get rulesRequired;
+
+  /// No description provided for @rulesInvalidRegex.
+  ///
+  /// In en, this message translates to:
+  /// **'This is not a valid regular expression.'**
+  String get rulesInvalidRegex;
+
+  /// No description provided for @rulesInvalidColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Use #RRGGBB or #AARRGGBB.'**
+  String get rulesInvalidColor;
+
+  /// No description provided for @readerSearchAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Search in book'**
+  String get readerSearchAction;
+
+  /// No description provided for @readerSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search this book'**
+  String get readerSearchHint;
+
+  /// No description provided for @readerSearchStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get readerSearchStart;
+
+  /// No description provided for @readerSearchStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get readerSearchStop;
+
+  /// No description provided for @readerSearchProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Searched {scanned} of {total} chapters'**
+  String readerSearchProgress(int scanned, int total);
+
+  /// No description provided for @readerSearchStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped after {scanned} of {total} chapters.'**
+  String readerSearchStopped(int scanned, int total);
+
+  /// No description provided for @readerSearchBudgetSpent.
+  ///
+  /// In en, this message translates to:
+  /// **'Time is up: stopped after {scanned} of {total} chapters.'**
+  String readerSearchBudgetSpent(int scanned, int total);
+
+  /// No description provided for @readerSearchEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing found.'**
+  String get readerSearchEmpty;
+
+  /// No description provided for @readerSearchFailedChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters could not be read.'**
+  String readerSearchFailedChapters(int count);
+
+  /// No description provided for @readerSearchUntitledChapter.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled chapter'**
+  String get readerSearchUntitledChapter;
+
+  /// No description provided for @rulesImportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import rules'**
+  String get rulesImportTitle;
+
+  /// No description provided for @rulesImportTextLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules JSON'**
+  String get rulesImportTextLabel;
+
+  /// No description provided for @rulesImportTextHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste the contents of a 净化规则 JSON file'**
+  String get rulesImportTextHint;
+
+  /// No description provided for @rulesImportUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Or a URL'**
+  String get rulesImportUrlLabel;
+
+  /// No description provided for @rulesImportUrlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'https://…/replaceRules.json'**
+  String get rulesImportUrlHint;
+
+  /// No description provided for @rulesImportFileAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a JSON file'**
+  String get rulesImportFileAction;
+
+  /// No description provided for @rulesImportSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Import all of them'**
+  String get rulesImportSelectAll;
+
+  /// No description provided for @rulesImportSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected} of {usable} selected'**
+  String rulesImportSelected(int selected, int usable);
+
+  /// No description provided for @rulesImportCommit.
+  ///
+  /// In en, this message translates to:
+  /// **'Import selected ({count})'**
+  String rulesImportCommit(int count);
+
+  /// No description provided for @rulesImportSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {created} new rules and updated {updated}.'**
+  String rulesImportSucceeded(int created, int updated);
+
+  /// No description provided for @rulesImportSucceededWithSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {created} new rules and updated {updated}; {skipped} entries were skipped as unreadable.'**
+  String rulesImportSucceededWithSkipped(int created, int updated, int skipped);
+
+  /// No description provided for @rulesImportUntitled.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled rule'**
+  String get rulesImportUntitled;
+
+  /// No description provided for @rulesImportUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get rulesImportUpdate;
+
+  /// No description provided for @rulesImportProblemFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'not a rule object'**
+  String get rulesImportProblemFormat;
+
+  /// No description provided for @rulesImportProblemMissingPattern.
+  ///
+  /// In en, this message translates to:
+  /// **'missing pattern'**
+  String get rulesImportProblemMissingPattern;
+
+  /// No description provided for @rulesExportAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get rulesExportAction;
+
+  /// No description provided for @rulesExportEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no rules to export.'**
+  String get rulesExportEmpty;
+
+  /// No description provided for @rulesExportSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {count} rules.'**
+  String rulesExportSaved(int count);
+
+  /// No description provided for @rulesExportSavedWithSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {count} rules; {skipped} unreadable rules were left out.'**
+  String rulesExportSavedWithSkipped(int count, int skipped);
+
+  /// No description provided for @rulesExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not export the rules.'**
+  String get rulesExportFailed;
+
+  /// No description provided for @rulesScopeBoth.
+  ///
+  /// In en, this message translates to:
+  /// **'title + body'**
+  String get rulesScopeBoth;
+
+  /// No description provided for @rulesScopeContent.
+  ///
+  /// In en, this message translates to:
+  /// **'body only'**
+  String get rulesScopeContent;
+
+  /// No description provided for @rulesScopeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'title only'**
+  String get rulesScopeTitle;
+
+  /// No description provided for @rulesScopeNone.
+  ///
+  /// In en, this message translates to:
+  /// **'not applied'**
+  String get rulesScopeNone;
+
+  /// No description provided for @bookSourceExportAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Export all'**
+  String get bookSourceExportAll;
+
+  /// No description provided for @bookSourceExportSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Export selected ({count})'**
+  String bookSourceExportSelected(int count);
+
+  /// No description provided for @bookSourceExportAllSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {count} book sources.'**
+  String bookSourceExportAllSaved(int count);
+
+  /// No description provided for @bookSourceExportEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no book sources to export.'**
+  String get bookSourceExportEmpty;
+
+  /// No description provided for @rulesListMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get rulesListMenu;
+
+  /// No description provided for @mySectionData.
+  ///
+  /// In en, this message translates to:
+  /// **'Data'**
+  String get mySectionData;
+
+  /// No description provided for @cacheManageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached chapters'**
+  String get cacheManageTitle;
+
+  /// No description provided for @cacheManageMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get cacheManageMore;
+
+  /// No description provided for @cacheManageTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} cached chapters in total'**
+  String cacheManageTotal(int count);
+
+  /// No description provided for @cacheManageSourceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chapters'**
+  String cacheManageSourceCount(int count);
+
+  /// No description provided for @cacheManageClearSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear this source'**
+  String get cacheManageClearSource;
+
+  /// No description provided for @cacheManageClearExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear expired entries'**
+  String get cacheManageClearExpired;
+
+  /// No description provided for @cacheManageClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the whole cache'**
+  String get cacheManageClearAll;
+
+  /// No description provided for @cacheManageClearAllTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the whole cache?'**
+  String get cacheManageClearAllTitle;
+
+  /// No description provided for @cacheManageClearAllBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached chapters and probe results are downloaded again when needed.'**
+  String get cacheManageClearAllBody;
+
+  /// No description provided for @cacheManageEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is cached.'**
+  String get cacheManageEmpty;
+
+  /// No description provided for @cacheManageLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The cache could not be read.'**
+  String get cacheManageLoadFailed;
+
+  /// No description provided for @myCookies.
+  ///
+  /// In en, this message translates to:
+  /// **'Cookies'**
+  String get myCookies;
+
+  /// No description provided for @myCookiesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'What sites stored to keep you signed in'**
+  String get myCookiesBody;
+
+  /// No description provided for @cookieManageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cookies'**
+  String get cookieManageTitle;
+
+  /// No description provided for @cookieManageMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get cookieManageMore;
+
+  /// No description provided for @cookieManageSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Until the app closes'**
+  String get cookieManageSession;
+
+  /// No description provided for @cookieManageExpiresAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {moment}'**
+  String cookieManageExpiresAt(String moment);
+
+  /// No description provided for @cookieManageDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this cookie'**
+  String get cookieManageDelete;
+
+  /// No description provided for @cookieManageClearDomain.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear this domain'**
+  String get cookieManageClearDomain;
+
+  /// No description provided for @cookieManageClearExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear expired cookies'**
+  String get cookieManageClearExpired;
+
+  /// No description provided for @cookieManageClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all cookies'**
+  String get cookieManageClearAll;
+
+  /// No description provided for @cookieManageClearAllTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all cookies?'**
+  String get cookieManageClearAllTitle;
+
+  /// No description provided for @cookieManageClearAllBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Every site will ask you to sign in again.'**
+  String get cookieManageClearAllBody;
+
+  /// No description provided for @cookieManageEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No cookies are stored.'**
+  String get cookieManageEmpty;
+
+  /// No description provided for @cookieManageLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The cookies could not be read.'**
+  String get cookieManageLoadFailed;
+
+  /// No description provided for @bookSourceLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get bookSourceLoginTitle;
+
+  /// No description provided for @bookSourceLoginLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The login form could not be read.'**
+  String get bookSourceLoginLoadFailed;
+
+  /// No description provided for @bookSourceLoginNoForm.
+  ///
+  /// In en, this message translates to:
+  /// **'This source declares no login form.'**
+  String get bookSourceLoginNoForm;
+
+  /// No description provided for @bookSourceLoginWorking.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing in…'**
+  String get bookSourceLoginWorking;
+
+  /// No description provided for @bookSourceLoginDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in. The source\'s own script reported success.'**
+  String get bookSourceLoginDone;
+
+  /// No description provided for @myBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup and restore'**
+  String get myBackup;
+
+  /// No description provided for @myBackupBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Pack everything into one zip, or restore from one'**
+  String get myBackupBody;
+
+  /// No description provided for @backupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup and restore'**
+  String get backupTitle;
+
+  /// No description provided for @backupExportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export a backup'**
+  String get backupExportTitle;
+
+  /// No description provided for @backupExportBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Book sources, shelf, groups, bookmarks, reading records, rules and settings, packed into one zip.'**
+  String get backupExportBody;
+
+  /// No description provided for @backupRestoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from a backup'**
+  String get backupRestoreTitle;
+
+  /// No description provided for @backupRestoreBody.
+  ///
+  /// In en, this message translates to:
+  /// **'See what the archive holds first, then merge it into this device.'**
+  String get backupRestoreBody;
+
+  /// No description provided for @backupIncludeSecretsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The archive is a plain file and includes book-source login data. Keep it somewhere you trust.'**
+  String get backupIncludeSecretsHint;
+
+  /// No description provided for @backupWorkingExporting.
+  ///
+  /// In en, this message translates to:
+  /// **'Packing…'**
+  String get backupWorkingExporting;
+
+  /// No description provided for @backupWorkingReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the archive…'**
+  String get backupWorkingReading;
+
+  /// No description provided for @backupWorkingRestoring.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring…'**
+  String get backupWorkingRestoring;
+
+  /// No description provided for @backupPreviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What the archive holds'**
+  String get backupPreviewTitle;
+
+  /// No description provided for @backupPreviewEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This archive holds no rows.'**
+  String get backupPreviewEmpty;
+
+  /// No description provided for @backupConfirmRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Merge into this device'**
+  String get backupConfirmRestore;
+
+  /// No description provided for @backupMergeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring only merges: anything this device has that the archive lacks stays as it is.'**
+  String get backupMergeHint;
+
+  /// No description provided for @backupTableBookSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Book sources'**
+  String get backupTableBookSources;
+
+  /// No description provided for @backupTableBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'Shelf'**
+  String get backupTableBooks;
+
+  /// No description provided for @backupTableReadingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading progress'**
+  String get backupTableReadingProgress;
+
+  /// No description provided for @backupTableBookGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get backupTableBookGroups;
+
+  /// No description provided for @backupTableBookmarks.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks'**
+  String get backupTableBookmarks;
+
+  /// No description provided for @backupTableReadRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading records'**
+  String get backupTableReadRecords;
+
+  /// No description provided for @backupTableRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules'**
+  String get backupTableRules;
+
+  /// No description provided for @backupExported.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {fileName} ({count} rows).'**
+  String backupExported(String fileName, int count);
+
+  /// No description provided for @backupPreviewMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'Written {createdAt} by version {appVersion}.'**
+  String backupPreviewMeta(String createdAt, String appVersion);
+
+  /// No description provided for @backupPreviewPreferences.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} settings'**
+  String backupPreviewPreferences(int count);
+
+  /// No description provided for @backupRestored.
+  ///
+  /// In en, this message translates to:
+  /// **'Merged: {changed} rows written, {preferences} settings.'**
+  String backupRestored(int changed, int preferences);
+
+  /// No description provided for @backupAutoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic backup'**
+  String get backupAutoTitle;
+
+  /// No description provided for @backupAutoBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Backs up once a day at start-up when the last archive is older than a day.'**
+  String get backupAutoBody;
+
+  /// No description provided for @backupRetentionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backups to keep'**
+  String get backupRetentionTitle;
+
+  /// No description provided for @backupRetentionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Older archives beyond this count are deleted; only files this app wrote are removed.'**
+  String get backupRetentionBody;
+
+  /// No description provided for @backupRetentionValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files'**
+  String backupRetentionValue(int count);
+
+  /// No description provided for @backupLocationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup location'**
+  String get backupLocationTitle;
+
+  /// No description provided for @backupLocationPrivate.
+  ///
+  /// In en, this message translates to:
+  /// **'App private folder'**
+  String get backupLocationPrivate;
+
+  /// No description provided for @backupLocationChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a folder'**
+  String get backupLocationChoose;
+
+  /// No description provided for @backupLocationReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the private folder'**
+  String get backupLocationReset;
+
+  /// No description provided for @backupLocationFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'The chosen folder is unavailable; archives go to the app\'s private folder for now.'**
+  String get backupLocationFallback;
+
+  /// No description provided for @backupPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup password'**
+  String get backupPasswordTitle;
+
+  /// No description provided for @backupPasswordBody.
+  ///
+  /// In en, this message translates to:
+  /// **'When set, whole archives are encrypted (AES-256); the password lives in the system key store.'**
+  String get backupPasswordBody;
+
+  /// No description provided for @backupPasswordChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the password'**
+  String get backupPasswordChange;
+
+  /// No description provided for @backupPasswordSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a password'**
+  String get backupPasswordSet;
+
+  /// No description provided for @backupPasswordClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the password'**
+  String get backupPasswordClear;
+
+  /// No description provided for @backupPasswordStored.
+  ///
+  /// In en, this message translates to:
+  /// **'Set (archives are encrypted)'**
+  String get backupPasswordStored;
+
+  /// No description provided for @backupPasswordMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set (archives stay unencrypted)'**
+  String get backupPasswordMissing;
+
+  /// No description provided for @backupPasswordStoreFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The key store is unavailable, so the password was not stored: archives stay unencrypted.'**
+  String get backupPasswordStoreFailed;
+
+  /// No description provided for @backupSaveToLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to the backup location'**
+  String get backupSaveToLocation;
+
+  /// No description provided for @backupSaveAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as…'**
+  String get backupSaveAs;
+
+  /// No description provided for @backupRestoreFromFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from a file'**
+  String get backupRestoreFromFile;
+
+  /// No description provided for @backupSavedTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to {path}'**
+  String backupSavedTo(String path);
+
+  /// No description provided for @backupRemoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud backups'**
+  String get backupRemoteTitle;
+
+  /// No description provided for @backupRemoteEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No backup files on the server.'**
+  String get backupRemoteEmpty;
+
+  /// No description provided for @backupRemoteRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from the cloud'**
+  String get backupRemoteRestore;
+
+  /// No description provided for @backupRemoteDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the cloud backup'**
+  String get backupRemoteDelete;
+
+  /// No description provided for @backupCloudUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload the current backup'**
+  String get backupCloudUpload;
+
+  /// No description provided for @backupCloudRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh the cloud list'**
+  String get backupCloudRefresh;
+
+  /// No description provided for @backupWebDavTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WebDAV'**
+  String get backupWebDavTitle;
+
+  /// No description provided for @backupWebDavUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'URL (collection)'**
+  String get backupWebDavUrl;
+
+  /// No description provided for @backupWebDavUsername.
+  ///
+  /// In en, this message translates to:
+  /// **'User name'**
+  String get backupWebDavUsername;
+
+  /// No description provided for @backupWebDavPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get backupWebDavPassword;
+
+  /// No description provided for @backupWebDavSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save the WebDAV configuration'**
+  String get backupWebDavSave;
+
+  /// No description provided for @backupWebDavNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'WebDAV is not configured yet.'**
+  String get backupWebDavNotConfigured;
+
+  /// No description provided for @backupPasswordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This archive is encrypted and needs its password.'**
+  String get backupPasswordRequired;
+
+  /// No description provided for @backupPasswordPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the backup password'**
+  String get backupPasswordPrompt;
+
+  /// No description provided for @backupPasswordWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'That password is wrong; try again.'**
+  String get backupPasswordWrong;
+
+  /// No description provided for @backupMergeMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Merge'**
+  String get backupMergeMode;
+
+  /// No description provided for @backupOverwriteMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Overwrite'**
+  String get backupOverwriteMode;
+
+  /// No description provided for @backupOverwriteWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Overwriting clears this device\'s book sources, shelf, groups, bookmarks, reading records and rules first, then writes the archive; a safety copy is saved before it starts.'**
+  String get backupOverwriteWarning;
+
+  /// No description provided for @backupOverwriteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Overwrite this device'**
+  String get backupOverwriteConfirm;
+
+  /// No description provided for @backupSafetyCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety copy saved first: {name}'**
+  String backupSafetyCopy(String name);
+
+  /// No description provided for @backupWorkSavingAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get backupWorkSavingAs;
+
+  /// No description provided for @backupWorkUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get backupWorkUploading;
+
+  /// No description provided for @backupWorkListingRemote.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing the cloud collection…'**
+  String get backupWorkListingRemote;
+
+  /// No description provided for @backupWorkDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading…'**
+  String get backupWorkDownloading;
+
+  /// No description provided for @backupLocalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'On this device'**
+  String get backupLocalTitle;
+
+  /// No description provided for @settingsSeedColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get settingsSeedColor;
+
+  /// No description provided for @settingsSeedColorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Dynamic colour wins when the platform has it; this decides the colours on devices that do not.'**
+  String get settingsSeedColorHint;
+
+  /// No description provided for @settingsSeedColorDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get settingsSeedColorDefault;
+
+  /// No description provided for @settingsBackgroundImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get settingsBackgroundImage;
+
+  /// No description provided for @settingsBackgroundImageNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get settingsBackgroundImageNone;
+
+  /// No description provided for @settingsBackgroundImageChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an image'**
+  String get settingsBackgroundImageChoose;
+
+  /// No description provided for @settingsBackgroundImageRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get settingsBackgroundImageRemove;
+
+  /// No description provided for @settingsBackgroundImageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is copied into the app, so deleting the original is fine.'**
+  String get settingsBackgroundImageHint;
+
+  /// No description provided for @settingsBackgroundImageFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The background image could not be saved; try again.'**
+  String get settingsBackgroundImageFailed;
 }
 
 class _AppLocalizationsDelegate

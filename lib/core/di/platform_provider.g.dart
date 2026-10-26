@@ -8,24 +8,21 @@ part of 'platform_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the platform facts every other layer is allowed to branch on
-/// (C-PLT-1).
+/// Provides the platform facts other layers branch on.
 ///
 /// Tests override it with a fake to simulate Android or a desktop host.
 
 @ProviderFor(platformInfo)
 final platformInfoProvider = PlatformInfoProvider._();
 
-/// Provides the platform facts every other layer is allowed to branch on
-/// (C-PLT-1).
+/// Provides the platform facts other layers branch on.
 ///
 /// Tests override it with a fake to simulate Android or a desktop host.
 
 final class PlatformInfoProvider
     extends $FunctionalProvider<PlatformInfo, PlatformInfo, PlatformInfo>
     with $Provider<PlatformInfo> {
-  /// Provides the platform facts every other layer is allowed to branch on
-  /// (C-PLT-1).
+  /// Provides the platform facts other layers branch on.
   ///
   /// Tests override it with a fake to simulate Android or a desktop host.
   PlatformInfoProvider._()
@@ -63,32 +60,16 @@ final class PlatformInfoProvider
 
 String _$platformInfoHash() => r'cac1cdfd452c2761363bd21226093e0ef4f8783c';
 
-/// Provides the platform dynamic color source, or `null` when the platform has
-/// none (`docs/dev/platform.md` §3).
+/// Provides the platform dynamic color source, or `null` when it has none.
 ///
-/// Named `platformDynamicColor` on purpose: the generated provider class is
-/// `<function>Provider`, so a function named `dynamicColor` would declare
-/// `DynamicColorProvider` and collide with the platform interface of the same
-/// name.
-///
-/// Consumers must handle `null` by falling back to the seed color; tests pin the
-/// fallback with `platformDynamicColorProvider.overrideWithValue(null)`
-/// (`docs/dev/testing.md` §5).
+/// The name avoids a generated-class collision with [DynamicColorProvider].
 
 @ProviderFor(platformDynamicColor)
 final platformDynamicColorProvider = PlatformDynamicColorProvider._();
 
-/// Provides the platform dynamic color source, or `null` when the platform has
-/// none (`docs/dev/platform.md` §3).
+/// Provides the platform dynamic color source, or `null` when it has none.
 ///
-/// Named `platformDynamicColor` on purpose: the generated provider class is
-/// `<function>Provider`, so a function named `dynamicColor` would declare
-/// `DynamicColorProvider` and collide with the platform interface of the same
-/// name.
-///
-/// Consumers must handle `null` by falling back to the seed color; tests pin the
-/// fallback with `platformDynamicColorProvider.overrideWithValue(null)`
-/// (`docs/dev/testing.md` §5).
+/// The name avoids a generated-class collision with [DynamicColorProvider].
 
 final class PlatformDynamicColorProvider
     extends
@@ -98,17 +79,9 @@ final class PlatformDynamicColorProvider
           DynamicColorProvider?
         >
     with $Provider<DynamicColorProvider?> {
-  /// Provides the platform dynamic color source, or `null` when the platform has
-  /// none (`docs/dev/platform.md` §3).
+  /// Provides the platform dynamic color source, or `null` when it has none.
   ///
-  /// Named `platformDynamicColor` on purpose: the generated provider class is
-  /// `<function>Provider`, so a function named `dynamicColor` would declare
-  /// `DynamicColorProvider` and collide with the platform interface of the same
-  /// name.
-  ///
-  /// Consumers must handle `null` by falling back to the seed color; tests pin the
-  /// fallback with `platformDynamicColorProvider.overrideWithValue(null)`
-  /// (`docs/dev/testing.md` §5).
+  /// The name avoids a generated-class collision with [DynamicColorProvider].
   PlatformDynamicColorProvider._()
     : super(
         from: null,
@@ -146,163 +119,410 @@ final class PlatformDynamicColorProvider
 String _$platformDynamicColorHash() =>
     r'e65a7da4798de930ff708a4e625ff68248e4c2ac';
 
-/// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
+/// Provides the platform file picker for book-source imports.
 ///
-/// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
-/// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
-/// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
-/// plugin (`docs/dev/testing.md` §4).
+/// Unsupported platforms get a no-op picker instead of an exception.
 
-@ProviderFor(bookSourceFilePicker)
-final bookSourceFilePickerProvider = BookSourceFilePickerProvider._();
+@ProviderFor(jsonFilePicker)
+final jsonFilePickerProvider = JsonFilePickerProvider._();
 
-/// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
+/// Provides the platform file picker for book-source imports.
 ///
-/// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
-/// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
-/// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
-/// plugin (`docs/dev/testing.md` §4).
+/// Unsupported platforms get a no-op picker instead of an exception.
 
-final class BookSourceFilePickerProvider
-    extends
-        $FunctionalProvider<
-          BookSourceFilePicker,
-          BookSourceFilePicker,
-          BookSourceFilePicker
-        >
-    with $Provider<BookSourceFilePicker> {
-  /// Provides the platform file picker for book source imports (`docs/dev/roadmap.md` 5.8, C-PLT-1).
+final class JsonFilePickerProvider
+    extends $FunctionalProvider<JsonFilePicker, JsonFilePicker, JsonFilePicker>
+    with $Provider<JsonFilePicker> {
+  /// Provides the platform file picker for book-source imports.
   ///
-  /// Every target this app ships (Android, iOS, Windows) has a real dialog through `file_selector`;
-  /// anything else gets the fallback that answers “nothing picked”, so an unsupported platform
-  /// degrades instead of throwing (`docs/dev/platform.md` §2). Tests override the port, never the
-  /// plugin (`docs/dev/testing.md` §4).
-  BookSourceFilePickerProvider._()
+  /// Unsupported platforms get a no-op picker instead of an exception.
+  JsonFilePickerProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'bookSourceFilePickerProvider',
+        name: r'jsonFilePickerProvider',
         isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$bookSourceFilePickerHash();
+  String debugGetCreateSourceHash() => _$jsonFilePickerHash();
 
   @$internal
   @override
-  $ProviderElement<BookSourceFilePicker> $createElement(
-    $ProviderPointer pointer,
-  ) => $ProviderElement(pointer);
+  $ProviderElement<JsonFilePicker> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
 
   @override
-  BookSourceFilePicker create(Ref ref) {
-    return bookSourceFilePicker(ref);
+  JsonFilePicker create(Ref ref) {
+    return jsonFilePicker(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(BookSourceFilePicker value) {
+  Override overrideWithValue(JsonFilePicker value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<BookSourceFilePicker>(value),
+      providerOverride: $SyncValueProvider<JsonFilePicker>(value),
     );
   }
 }
 
-String _$bookSourceFilePickerHash() =>
-    r'f7d7e3123b6a021aa45663689c93ced0c7b1817a';
+String _$jsonFilePickerHash() => r'2c6acd27ff8a29e555afbdc24db48da8f0c725e9';
 
-/// Provides the platform save dialog used by a single-source export
-/// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+/// Provides the platform save dialog for single-source export.
 ///
-/// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
-/// else gets “not saved”, and a test overrides the port rather than the plugin.
+/// Unsupported platforms report `not saved` instead of throwing.
 
-@ProviderFor(bookSourceFileSaver)
-final bookSourceFileSaverProvider = BookSourceFileSaverProvider._();
+@ProviderFor(jsonFileSaver)
+final jsonFileSaverProvider = JsonFileSaverProvider._();
 
-/// Provides the platform save dialog used by a single-source export
-/// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+/// Provides the platform save dialog for single-source export.
 ///
-/// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
-/// else gets “not saved”, and a test overrides the port rather than the plugin.
+/// Unsupported platforms report `not saved` instead of throwing.
 
-final class BookSourceFileSaverProvider
-    extends
-        $FunctionalProvider<
-          BookSourceFileSaver,
-          BookSourceFileSaver,
-          BookSourceFileSaver
-        >
-    with $Provider<BookSourceFileSaver> {
-  /// Provides the platform save dialog used by a single-source export
-  /// (`docs/dev/roadmap.md` §3.9-S5, C-PLT-1).
+final class JsonFileSaverProvider
+    extends $FunctionalProvider<JsonFileSaver, JsonFileSaver, JsonFileSaver>
+    with $Provider<JsonFileSaver> {
+  /// Provides the platform save dialog for single-source export.
   ///
-  /// Same split as the picker above: the shipped targets get the `file_selector` dialog, anything
-  /// else gets “not saved”, and a test overrides the port rather than the plugin.
-  BookSourceFileSaverProvider._()
+  /// Unsupported platforms report `not saved` instead of throwing.
+  JsonFileSaverProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'bookSourceFileSaverProvider',
+        name: r'jsonFileSaverProvider',
         isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$bookSourceFileSaverHash();
+  String debugGetCreateSourceHash() => _$jsonFileSaverHash();
 
   @$internal
   @override
-  $ProviderElement<BookSourceFileSaver> $createElement(
-    $ProviderPointer pointer,
-  ) => $ProviderElement(pointer);
+  $ProviderElement<JsonFileSaver> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
 
   @override
-  BookSourceFileSaver create(Ref ref) {
-    return bookSourceFileSaver(ref);
+  JsonFileSaver create(Ref ref) {
+    return jsonFileSaver(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(BookSourceFileSaver value) {
+  Override overrideWithValue(JsonFileSaver value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<BookSourceFileSaver>(value),
+      providerOverride: $SyncValueProvider<JsonFileSaver>(value),
     );
   }
 }
 
-String _$bookSourceFileSaverHash() =>
-    r'324c249ec6b41181bbadd92c67a5496c0926efbf';
+String _$jsonFileSaverHash() => r'51d513898a1bf349e8152385c6c8a72590d2add9';
 
-/// Provides the long-task marker a batch check holds while it runs
-/// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///
-/// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
-/// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+/// Unsupported platforms report `not saved` instead of throwing.
+
+@ProviderFor(backupArchiveSaver)
+final backupArchiveSaverProvider = BackupArchiveSaverProvider._();
+
+/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms report `not saved` instead of throwing.
+
+final class BackupArchiveSaverProvider
+    extends
+        $FunctionalProvider<
+          BackupArchiveSaver,
+          BackupArchiveSaver,
+          BackupArchiveSaver
+        >
+    with $Provider<BackupArchiveSaver> {
+  /// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+  ///
+  /// Unsupported platforms report `not saved` instead of throwing.
+  BackupArchiveSaverProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'backupArchiveSaverProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$backupArchiveSaverHash();
+
+  @$internal
+  @override
+  $ProviderElement<BackupArchiveSaver> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BackupArchiveSaver create(Ref ref) {
+    return backupArchiveSaver(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BackupArchiveSaver value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BackupArchiveSaver>(value),
+    );
+  }
+}
+
+String _$backupArchiveSaverHash() =>
+    r'3d40b6a2082c5dc2ff9d2a3ff20b8a5605b28a90';
+
+/// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms answer “nothing picked” instead of throwing.
+
+@ProviderFor(backupArchivePicker)
+final backupArchivePickerProvider = BackupArchivePickerProvider._();
+
+/// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+///
+/// Unsupported platforms answer “nothing picked” instead of throwing.
+
+final class BackupArchivePickerProvider
+    extends
+        $FunctionalProvider<
+          BackupArchivePicker,
+          BackupArchivePicker,
+          BackupArchivePicker
+        >
+    with $Provider<BackupArchivePicker> {
+  /// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+  ///
+  /// Unsupported platforms answer “nothing picked” instead of throwing.
+  BackupArchivePickerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'backupArchivePickerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$backupArchivePickerHash();
+
+  @$internal
+  @override
+  $ProviderElement<BackupArchivePicker> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BackupArchivePicker create(Ref ref) {
+    return backupArchivePicker(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BackupArchivePicker value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BackupArchivePicker>(value),
+    );
+  }
+}
+
+String _$backupArchivePickerHash() =>
+    r'b418885595d7f2608a7a967a19cea0fea085e17b';
+
+/// Provides the platform key store for the backup and WebDAV passwords
+/// (`docs/dev/roadmap.md` M22, ADR-0074 §决策 5).
+///
+/// Only Android / iOS / Windows ship a key store here; the other platforms answer “not stored” and
+/// the backup page says the archive stays unencrypted rather than pretending otherwise.
+
+@ProviderFor(secretStore)
+final secretStoreProvider = SecretStoreProvider._();
+
+/// Provides the platform key store for the backup and WebDAV passwords
+/// (`docs/dev/roadmap.md` M22, ADR-0074 §决策 5).
+///
+/// Only Android / iOS / Windows ship a key store here; the other platforms answer “not stored” and
+/// the backup page says the archive stays unencrypted rather than pretending otherwise.
+
+final class SecretStoreProvider
+    extends $FunctionalProvider<SecretStore, SecretStore, SecretStore>
+    with $Provider<SecretStore> {
+  /// Provides the platform key store for the backup and WebDAV passwords
+  /// (`docs/dev/roadmap.md` M22, ADR-0074 §决策 5).
+  ///
+  /// Only Android / iOS / Windows ship a key store here; the other platforms answer “not stored” and
+  /// the backup page says the archive stays unencrypted rather than pretending otherwise.
+  SecretStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'secretStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$secretStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<SecretStore> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SecretStore create(Ref ref) {
+    return secretStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SecretStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SecretStore>(value),
+    );
+  }
+}
+
+String _$secretStoreHash() => r'665c45ceb4c7ded7b53c4b086b4b6b9b4b86940c';
+
+/// Provides the folder dialog the backup location is chosen with (ADR-0074 §决策 1).
+
+@ProviderFor(backupDirectoryPicker)
+final backupDirectoryPickerProvider = BackupDirectoryPickerProvider._();
+
+/// Provides the folder dialog the backup location is chosen with (ADR-0074 §决策 1).
+
+final class BackupDirectoryPickerProvider
+    extends
+        $FunctionalProvider<
+          BackupDirectoryPicker,
+          BackupDirectoryPicker,
+          BackupDirectoryPicker
+        >
+    with $Provider<BackupDirectoryPicker> {
+  /// Provides the folder dialog the backup location is chosen with (ADR-0074 §决策 1).
+  BackupDirectoryPickerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'backupDirectoryPickerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$backupDirectoryPickerHash();
+
+  @$internal
+  @override
+  $ProviderElement<BackupDirectoryPicker> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BackupDirectoryPicker create(Ref ref) {
+    return backupDirectoryPicker(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BackupDirectoryPicker value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BackupDirectoryPicker>(value),
+    );
+  }
+}
+
+String _$backupDirectoryPickerHash() =>
+    r'916608672e8264703ff018e74bef6d355a0bf1b6';
+
+/// Provides the image dialog the theme background is chosen with (`ADR-0075` §决策 1).
+
+@ProviderFor(backgroundImagePicker)
+final backgroundImagePickerProvider = BackgroundImagePickerProvider._();
+
+/// Provides the image dialog the theme background is chosen with (`ADR-0075` §决策 1).
+
+final class BackgroundImagePickerProvider
+    extends
+        $FunctionalProvider<
+          BackgroundImagePicker,
+          BackgroundImagePicker,
+          BackgroundImagePicker
+        >
+    with $Provider<BackgroundImagePicker> {
+  /// Provides the image dialog the theme background is chosen with (`ADR-0075` §决策 1).
+  BackgroundImagePickerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'backgroundImagePickerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$backgroundImagePickerHash();
+
+  @$internal
+  @override
+  $ProviderElement<BackgroundImagePicker> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  BackgroundImagePicker create(Ref ref) {
+    return backgroundImagePicker(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BackgroundImagePicker value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BackgroundImagePicker>(value),
+    );
+  }
+}
+
+String _$backgroundImagePickerHash() =>
+    r'66a3dc5328016972bafc548f424c00a9cefe7cf4';
+
+/// Provides the long-task marker a batch check holds while it runs.
+///
+/// Only Android has a real one; other platforms get a no-op.
 
 @ProviderFor(longRunningTask)
 final longRunningTaskProvider = LongRunningTaskProvider._();
 
-/// Provides the long-task marker a batch check holds while it runs
-/// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+/// Provides the long-task marker a batch check holds while it runs.
 ///
-/// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
-/// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+/// Only Android has a real one; other platforms get a no-op.
 
 final class LongRunningTaskProvider
     extends
         $FunctionalProvider<LongRunningTask, LongRunningTask, LongRunningTask>
     with $Provider<LongRunningTask> {
-  /// Provides the long-task marker a batch check holds while it runs
-  /// (`docs/dev/roadmap.md` §5.10, ADR-0043 §决策 3).
+  /// Provides the long-task marker a batch check holds while it runs.
   ///
-  /// Only Android has a real one (a `PARTIAL_WAKE_LOCK`); everything else gets the no-op port, so a
-  /// caller never needs to ask which platform it is (C-PLT-1, `platform.md` §7).
+  /// Only Android has a real one; other platforms get a no-op.
   LongRunningTaskProvider._()
     : super(
         from: null,
@@ -337,3 +557,126 @@ final class LongRunningTaskProvider
 }
 
 String _$longRunningTaskHash() => r'c4f24b2ab4e07af40943e68f73e182a163752df6';
+
+/// Provides visible-WebView verification, unbound by default.
+///
+/// An unbound port answers `isSupported == false`, which surfaces as
+/// `unsupportedRule`.
+
+@ProviderFor(sourceVerification)
+final sourceVerificationProvider = SourceVerificationProvider._();
+
+/// Provides visible-WebView verification, unbound by default.
+///
+/// An unbound port answers `isSupported == false`, which surfaces as
+/// `unsupportedRule`.
+
+final class SourceVerificationProvider
+    extends
+        $FunctionalProvider<
+          SourceVerification,
+          SourceVerification,
+          SourceVerification
+        >
+    with $Provider<SourceVerification> {
+  /// Provides visible-WebView verification, unbound by default.
+  ///
+  /// An unbound port answers `isSupported == false`, which surfaces as
+  /// `unsupportedRule`.
+  SourceVerificationProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sourceVerificationProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sourceVerificationHash();
+
+  @$internal
+  @override
+  $ProviderElement<SourceVerification> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SourceVerification create(Ref ref) {
+    return sourceVerification(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SourceVerification value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SourceVerification>(value),
+    );
+  }
+}
+
+String _$sourceVerificationHash() =>
+    r'f8f51b442facda34452fd3c221f42a3f012cdeb3';
+
+/// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
+///
+/// It lives in `core/di/` because two features use it (the source engine's page fetch and the JS
+/// sandbox) and `core/` may not import `features/` (C-ARCH-2). The real implementation is bound by
+/// the composition root; the default answers `unsupportedRule`, which makes a forgotten binding a
+/// readable failure instead of a rule that silently sees an unrendered page.
+
+@ProviderFor(webPageFetcher)
+final webPageFetcherProvider = WebPageFetcherProvider._();
+
+/// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
+///
+/// It lives in `core/di/` because two features use it (the source engine's page fetch and the JS
+/// sandbox) and `core/` may not import `features/` (C-ARCH-2). The real implementation is bound by
+/// the composition root; the default answers `unsupportedRule`, which makes a forgotten binding a
+/// readable failure instead of a rule that silently sees an unrendered page.
+
+final class WebPageFetcherProvider
+    extends $FunctionalProvider<WebPageFetcher, WebPageFetcher, WebPageFetcher>
+    with $Provider<WebPageFetcher> {
+  /// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
+  ///
+  /// It lives in `core/di/` because two features use it (the source engine's page fetch and the JS
+  /// sandbox) and `core/` may not import `features/` (C-ARCH-2). The real implementation is bound by
+  /// the composition root; the default answers `unsupportedRule`, which makes a forgotten binding a
+  /// readable failure instead of a rule that silently sees an unrendered page.
+  WebPageFetcherProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'webPageFetcherProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$webPageFetcherHash();
+
+  @$internal
+  @override
+  $ProviderElement<WebPageFetcher> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  WebPageFetcher create(Ref ref) {
+    return webPageFetcher(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(WebPageFetcher value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<WebPageFetcher>(value),
+    );
+  }
+}
+
+String _$webPageFetcherHash() => r'e258afa898dc2d848748bdf28feb5fe1fe8478d9';

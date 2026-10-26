@@ -3,7 +3,42 @@ import 'dart:convert';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_fonts.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/synthetic_ttf.dart';
+
+/// A base64 font whose private-use characters draw 剑 / 客 (glyph names carry the real code point).
+String _errorFontBase64() => base64Encode(
+  buildSyntheticFont(
+    cmapOverride: buildSyntheticCmap(codes: <int, int>{0xE001: 1, 0xE002: 2}),
+    includePost: true,
+    postOverride: buildSyntheticPost(
+      numGlyphs: 3,
+      names: <int, String>{1: 'uni5251', 2: 'uni5BA2'},
+    ),
+  ),
+);
+
+/// A base64 font that draws the real characters themselves.
+String _correctFontBase64() => base64Encode(
+  buildSyntheticFont(
+    cmapOverride: buildSyntheticCmap(codes: <int, int>{0x5251: 1, 0x5BA2: 2}),
+    includePost: true,
+    postOverride: buildSyntheticPost(
+      numGlyphs: 3,
+      names: <int, String>{1: 'uni5251', 2: 'uni5BA2'},
+    ),
+  ),
+);
+
+/// Reads the `value` of a successful envelope, or `null`.
+Object? _valueOf(String envelope) {
+  final Map<String, Object?> decoded =
+      jsonDecode(envelope) as Map<String, Object?>;
+
+  return decoded['ok'] == true ? decoded['value'] : null;
+}
 
 void main() {
   group('applyCryptoOperation', () {
@@ -172,6 +207,31 @@ void main() {
 
       expect(request?.headers, isEmpty);
       expect(request?.body, isNull);
+      // 默认只要正文；`response: true` 才是整个响应（book-source.md §6）。
+      expect(request?.wantsResponse, isFalse);
+    });
+
+    test('decodeJsHttpRequest_givenAResponseFlag_readsIt', () {
+      final JsHttpRequest? request = decodeJsHttpRequest(<String, Object?>{
+        'operation': 'post',
+        'url': 'https://a.test/x',
+        'options': <String, Object?>{'body': 'q=1', 'response': true},
+      });
+
+      expect(request?.wantsResponse, isTrue);
+      expect(request?.body, 'q=1');
+    });
+
+    test('decodeJsHttpRequest_givenANonBooleanResponseFlag_returnsNull', () {
+      // 听不懂的标志位要让这次调用显式失败，而不是静默退回「只要正文」。
+      expect(
+        decodeJsHttpRequest(<String, Object?>{
+          'operation': 'get',
+          'url': 'https://a.test/x',
+          'options': <String, Object?>{'response': 'yes'},
+        }),
+        isNull,
+      );
     });
 
     test('decodeJsHttpRequest_givenUnusableArguments_returnsNull', () {
@@ -635,6 +695,240 @@ void main() {
         mergeJsHttpHeaders(null, <String, String>{'X': '1'}),
         <String, String>{'X': '1'},
       );
+    });
+  });
+
+  group('java.encodeURI charset (ADR-0069 G1)', () {
+    test('javaEncodeUri_givenACharset_escapesItsBytes', () {
+      // 美女图片网的 searchUrl 用 `java.encodeURI(key,"GBK")`：老 PHP 站点只认 GBK 字节。
+      expect(javaEncodeUri('美女', charset: 'gbk'), '%C3%C0%C5%AE');
+      expect(javaEncodeUri('剑来', charset: 'GBK'), '%BD%A3%C0%B4');
+    });
+
+    test('javaEncodeUri_givenNoCharset_staysUtf8', () {
+      expect(javaEncodeUri('a b'), 'a+b');
+      expect(javaEncodeUri('剑来'), '%E5%89%91%E6%9D%A5');
+    });
+
+    test('applyJsJavaCall_givenTheTwoArgumentForm_passesTheCharset', () {
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'encodeUri',
+          'value': '美女',
+          'charset': 'gbk',
+        }),
+        '{"ok":true,"value":"%C3%C0%C5%AE"}',
+      );
+    });
+
+    test('decodeJsJavaRequest_givenANonStringCharset_returnsNull', () {
+      expect(
+        decodeJsJavaRequest(<String, Object?>{
+          'operation': 'encodeUri',
+          'value': 'a',
+          'charset': 1,
+        }),
+        isNull,
+      );
+    });
+  });
+
+  group('applyJsJavaCall fonts (M21a)', () {
+    late JsFontRegistry fonts;
+
+    setUp(() => fonts = JsFontRegistry());
+
+    /// Queries [base64] and answers the handle id.
+    int query(String base64) {
+      final Object? handle = _valueOf(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'queryTtf',
+          'value': base64,
+        }, fonts: fonts),
+      );
+
+      return (handle as Map<String, Object?>)['id'] as int;
+    }
+
+    test('queryTtf_givenAFontBase64_answersAHandle', () {
+      final Object? handle = _valueOf(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'queryTtf',
+          'value': _errorFontBase64(),
+        }, fonts: fonts),
+      );
+
+      // 字体不进脚本：脚本只拿到一个不透明句柄，正文替换时再交回来。
+      expect(handle, <String, Object?>{'__ttf': true, 'id': 1});
+    });
+
+    test('queryTtf_givenADataUrl_stripsThePrefix', () {
+      final Object? handle = _valueOf(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'queryTtf',
+          'value': 'data:font/ttf;base64,${_errorFontBase64()}',
+        }, fonts: fonts),
+      );
+
+      expect(handle, isNotNull);
+    });
+
+    test('queryTtf_givenLineWrappedBase64_readsIt', () {
+      final String wrapped = _errorFontBase64().replaceAllMapped(
+        RegExp(r'.{20}'),
+        (Match match) => '${match.group(0)}\n',
+      );
+
+      expect(
+        _valueOf(
+          applyJsJavaCall(<String, String?>{}, <String, Object?>{
+            'operation': 'queryTtf',
+            'value': wrapped,
+          }, fonts: fonts),
+        ),
+        isNotNull,
+      );
+    });
+
+    test('queryTtf_givenSomethingThatIsNotAFont_fails', () {
+      // 不是字体时只回答「拿不到」：脚本可以 catch 后保留原正文，不必整条 job 死。
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'queryTtf',
+          'value': base64Encode(utf8.encode('not a font')),
+        }, fonts: fonts),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'queryTtf',
+          'value': '!!!',
+        }, fonts: fonts),
+        '{"ok":false}',
+      );
+    });
+
+    test('queryTtf_givenNoRegistry_fails', () {
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'queryTtf',
+          'value': _errorFontBase64(),
+        }),
+        '{"ok":false}',
+      );
+    });
+
+    test('replaceFont_givenBothHandles_mapsTheText', () {
+      final int errorFont = query(_errorFontBase64());
+      final int correctFont = query(_correctFontBase64());
+
+      final Object? replaced = _valueOf(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'replaceFont',
+          'value': <String, Object?>{
+            'text': '',
+            'from': errorFont,
+            'to': correctFont,
+          },
+        }, fonts: fonts),
+      );
+
+      expect(replaced, '剑客');
+    });
+
+    test('replaceFont_givenACodePointRange_replacesOnlyInsideIt', () {
+      final int errorFont = query(_errorFontBase64());
+      final int correctFont = query(_correctFontBase64());
+
+      final Object? replaced = _valueOf(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'replaceFont',
+          'value': <String, Object?>{
+            'text': '',
+            'from': errorFont,
+            'to': correctFont,
+            'start': 0xE001,
+            'end': 0xE001,
+          },
+        }, fonts: fonts),
+      );
+
+      expect(replaced, '剑');
+    });
+
+    test('replaceFont_givenAnUnknownHandle_fails', () {
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'replaceFont',
+          'value': <String, Object?>{'text': 'x', 'from': 99, 'to': 98},
+        }, fonts: fonts),
+        '{"ok":false}',
+      );
+    });
+
+    test('replaceFont_givenOnlyOneHandle_fails', () {
+      final int errorFont = query(_errorFontBase64());
+
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'replaceFont',
+          'value': <String, Object?>{'text': 'x', 'from': errorFont},
+        }, fonts: fonts),
+        '{"ok":false}',
+      );
+    });
+
+    test('replaceFont_givenNoRegistry_fails', () {
+      expect(
+        applyJsJavaCall(<String, String?>{}, <String, Object?>{
+          'operation': 'replaceFont',
+          'value': <String, Object?>{'text': 'x', 'from': 1, 'to': 2},
+        }),
+        '{"ok":false}',
+      );
+    });
+
+    test('decodeJsJavaRequest_givenMalformedFontCalls_returnsNull', () {
+      expect(
+        decodeJsJavaRequest(<String, Object?>{'operation': 'queryTtf'}),
+        isNull,
+      );
+      expect(
+        decodeJsJavaRequest(<String, Object?>{
+          'operation': 'queryTtf',
+          'value': '   ',
+        }),
+        isNull,
+      );
+      expect(
+        decodeJsJavaRequest(<String, Object?>{'operation': 'replaceFont'}),
+        isNull,
+      );
+      expect(
+        decodeJsJavaRequest(<String, Object?>{
+          'operation': 'replaceFont',
+          'value': <String, Object?>{'text': 1},
+        }),
+        isNull,
+      );
+      expect(
+        decodeJsJavaRequest(<String, Object?>{
+          'operation': 'replaceFont',
+          'value': <String, Object?>{'text': 'x', 'from': 'one'},
+        }),
+        isNull,
+      );
+    });
+
+    test('decodeFontBase64_givenUnusableText_returnsNull', () {
+      expect(decodeFontBase64('   '), isNull);
+      expect(decodeFontBase64('!!!'), isNull);
+    });
+
+    test('decodeFontBase64_givenPlainOrNonBase64Data_readsWhatItCan', () {
+      expect(decodeFontBase64(base64Encode(<int>[0, 1, 2])), <int>[0, 1, 2]);
+      // 没有 `;base64` 的 data URL 是 URL 编码载荷，不是 base64：读不出来就是 null。
+      expect(decodeFontBase64('data:font/ttf,AAAA'), isNull);
     });
   });
 }

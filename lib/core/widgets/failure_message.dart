@@ -8,10 +8,10 @@ class FailureMessage extends StatelessWidget {
   /// Creates the message.
   const FailureMessage({required this.kind, this.onRetry, super.key});
 
-  /// The failure to explain. The kind carries no text of its own (C-ERR-7).
+  /// The failure to explain; the kind itself carries no text.
   final ParseFailureKind kind;
 
-  /// Re-runs the failed operation; the retry action is hidden when `null`.
+  /// Re-runs the failed operation; the action is hidden when `null`.
   final VoidCallback? onRetry;
 
   @override
@@ -43,9 +43,7 @@ class FailureMessage extends StatelessWidget {
 
 /// Turns [kind] into the text the user reads.
 ///
-/// `AppLocalizations` cannot look a message up by the key `resolveFailureArbKey`
-/// returns, so this switch is where the key becomes text
-/// (`docs/dev/architecture.md` §5, C-ERR-7).
+/// `cancelled` is silent and yields an empty string.
 String resolveFailureMessage(AppLocalizations l10n, ParseFailureKind kind) =>
     switch (kind) {
       ParseFailureKind.networkTimeout => l10n.failureNetworkTimeout,
@@ -56,6 +54,7 @@ String resolveFailureMessage(AppLocalizations l10n, ParseFailureKind kind) =>
       ParseFailureKind.parseFailed => l10n.failureParseFailed,
       ParseFailureKind.unsupportedRule => l10n.failureUnsupportedRule,
       ParseFailureKind.invalidBookSource => l10n.failureInvalidBookSource,
-      // 取消是静默的：`book-source.md` §7 没有对应文案键，因此没有可显示的文本。
+      ParseFailureKind.loginRequired => l10n.failureLoginRequired,
+      // 取消是静默的，没有对应文案。
       ParseFailureKind.cancelled => '',
     };

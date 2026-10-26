@@ -75,5 +75,78 @@ void main() {
 
       expect(store.readInt('int'), isNull);
     });
+
+    group('snapshot', () {
+      test('snapshot_givenStoredValues_answersEveryOneOfThem', () {
+        expect(store.snapshot(), <String, Object?>{
+          'int': 7,
+          'double': 1.5,
+          'string': 'stored',
+          'bool': true,
+        });
+      });
+
+      test('snapshot_givenAStringList_keepsIt', () async {
+        await store.writeAll(<String, Object?>{
+          'list': <Object?>['a', 'b'],
+        });
+
+        expect(store.snapshot()['list'], <String>['a', 'b']);
+      });
+
+      test('snapshot_givenAValueOutsideTheDomain_leavesItOut', () async {
+        // 写不回去的值（混合列表）不进备份：留在文件里只会显得像支持了。
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'mixed': <Object>['a', 1],
+        });
+        final PreferenceStore mixedStore = PreferenceStore(
+          await SharedPreferences.getInstance(),
+        );
+
+        expect(mixedStore.snapshot(), isEmpty);
+      });
+    });
+
+    group('writeAll', () {
+      test('writeAll_givenEverySupportedType_writesThemAll', () async {
+        await store.writeAll(<String, Object?>{
+          'int': 9,
+          'double': 2.5,
+          'string': 'next',
+          'bool': false,
+          'list': <Object?>['a', 'b'],
+        });
+
+        expect(store.readInt('int'), 9);
+        expect(store.readDouble('double'), 2.5);
+        expect(store.readString('string'), 'next');
+        expect(store.readBool('bool'), isFalse);
+        expect(
+          (await SharedPreferences.getInstance()).getStringList('list'),
+          <String>['a', 'b'],
+        );
+      });
+
+      test('writeAll_givenAKeyAbsentFromTheMap_keepsIt', () async {
+        // 合并语义（ADR-0073 §决策 3）：备份里没有的键不能被当成「删除」。
+        await store.writeAll(<String, Object?>{'int': 9});
+
+        expect(store.readString('string'), 'stored');
+      });
+
+      test('writeAll_givenUnsupportedValues_skipsOnlyThose', () async {
+        await store.writeAll(<String, Object?>{
+          'null': null,
+          'mixed': <Object?>['a', 1],
+          'map': <String, Object?>{'a': 1},
+          'string': 'next',
+        });
+
+        expect(store.readString('null'), isNull);
+        expect(store.readString('mixed'), isNull);
+        expect(store.readString('map'), isNull);
+        expect(store.readString('string'), 'next');
+      });
+    });
   });
 }

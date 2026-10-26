@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$SourceCheckEntry {
 
-/// The stored row's id, so the run can write its verdict back (`ADR-0043`).
+/// The stored row's id, so the run can write its verdict back.
  int get sourceId;/// The source's name, snapshotted because the row may be gone by the time the check ends.
  String get name;/// Where this source's check stands.
  SourceCheckStatus get status;/// Why it did not pass, when [status] is [SourceCheckStatus.failed].
@@ -230,7 +230,7 @@ class _SourceCheckEntry implements SourceCheckEntry {
   const _SourceCheckEntry({required this.sourceId, required this.name, required this.status, this.failure,  List<SourceCheckStageOutcome> stages = const <SourceCheckStageOutcome>[], this.elapsedMillis, this.failureKind, this.rulePath}): _stages = stages;
   
 
-/// The stored row's id, so the run can write its verdict back (`ADR-0043`).
+/// The stored row's id, so the run can write its verdict back.
 @override final  int sourceId;
 /// The source's name, snapshotted because the row may be gone by the time the check ends.
 @override final  String name;

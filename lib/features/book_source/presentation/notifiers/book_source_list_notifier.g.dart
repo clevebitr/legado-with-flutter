@@ -8,22 +8,16 @@ part of 'book_source_list_notifier.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Every stored book source, in the order the list and the default pick share
-/// (`BookSourceDao.findAll`: enabled first, then `customOrder`, then `id`).
+/// Every stored book source, in the order the list and the default pick share.
 ///
-/// `keepAlive` on purpose: the selection below watches it, so the list must not be re-read
-/// (and the selection must not be lost) when the user walks from the reader back to the list.
-/// Mutations invalidate it explicitly, so "fresh" is a decision rather than a side effect.
+/// Kept alive so the selection below survives page navigation.
 
 @ProviderFor(bookSourceList)
 final bookSourceListProvider = BookSourceListProvider._();
 
-/// Every stored book source, in the order the list and the default pick share
-/// (`BookSourceDao.findAll`: enabled first, then `customOrder`, then `id`).
+/// Every stored book source, in the order the list and the default pick share.
 ///
-/// `keepAlive` on purpose: the selection below watches it, so the list must not be re-read
-/// (and the selection must not be lost) when the user walks from the reader back to the list.
-/// Mutations invalidate it explicitly, so "fresh" is a decision rather than a side effect.
+/// Kept alive so the selection below survives page navigation.
 
 final class BookSourceListProvider
     extends
@@ -35,12 +29,9 @@ final class BookSourceListProvider
     with
         $FutureModifier<List<StoredBookSource>>,
         $FutureProvider<List<StoredBookSource>> {
-  /// Every stored book source, in the order the list and the default pick share
-  /// (`BookSourceDao.findAll`: enabled first, then `customOrder`, then `id`).
+  /// Every stored book source, in the order the list and the default pick share.
   ///
-  /// `keepAlive` on purpose: the selection below watches it, so the list must not be re-read
-  /// (and the selection must not be lost) when the user walks from the reader back to the list.
-  /// Mutations invalidate it explicitly, so "fresh" is a decision rather than a side effect.
+  /// Kept alive so the selection below survives page navigation.
   BookSourceListProvider._()
     : super(
         from: null,
@@ -69,30 +60,21 @@ final class BookSourceListProvider
 
 String _$bookSourceListHash() => r'463f718c9157a957ec27e02ee168172cd0d53ac6';
 
-/// Which stored source the pages work with, and the only place that changes it.
+/// The stored source the pages work with; the only place that changes it.
 ///
-/// The selection is a plain id in a private field, so a reload of the list (after an import, a
-/// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
-/// gone the notifier falls back to the default source, because a dangling selection would leave
-/// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
+/// When the selected row disappears, the selection falls back to the default source.
 
 @ProviderFor(SelectedBookSource)
 final selectedBookSourceProvider = SelectedBookSourceProvider._();
 
-/// Which stored source the pages work with, and the only place that changes it.
+/// The stored source the pages work with; the only place that changes it.
 ///
-/// The selection is a plain id in a private field, so a reload of the list (after an import, a
-/// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
-/// gone the notifier falls back to the default source, because a dangling selection would leave
-/// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
+/// When the selected row disappears, the selection falls back to the default source.
 final class SelectedBookSourceProvider
     extends $AsyncNotifierProvider<SelectedBookSource, StoredBookSource?> {
-  /// Which stored source the pages work with, and the only place that changes it.
+  /// The stored source the pages work with; the only place that changes it.
   ///
-  /// The selection is a plain id in a private field, so a reload of the list (after an import, a
-  /// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
-  /// gone the notifier falls back to the default source, because a dangling selection would leave
-  /// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
+  /// When the selected row disappears, the selection falls back to the default source.
   SelectedBookSourceProvider._()
     : super(
         from: null,
@@ -115,12 +97,9 @@ final class SelectedBookSourceProvider
 String _$selectedBookSourceHash() =>
     r'c4d9215f2882ee3f2175194120dbbf71e5a84067';
 
-/// Which stored source the pages work with, and the only place that changes it.
+/// The stored source the pages work with; the only place that changes it.
 ///
-/// The selection is a plain id in a private field, so a reload of the list (after an import, a
-/// toggle or a delete) keeps the user's choice **and** re-resolves it: when the selected row is
-/// gone the notifier falls back to the default source, because a dangling selection would leave
-/// every page pointing at a source that no longer exists (`docs/dev/roadmap.md` 5.1).
+/// When the selected row disappears, the selection falls back to the default source.
 
 abstract class _$SelectedBookSource extends $AsyncNotifier<StoredBookSource?> {
   FutureOr<StoredBookSource?> build();
@@ -141,32 +120,17 @@ abstract class _$SelectedBookSource extends $AsyncNotifier<StoredBookSource?> {
   }
 }
 
-/// The book source the parsing pages work with (`docs/dev/roadmap.md` 2.5's seam, now filled by 5.1).
-///
-/// It stays a **synchronous** projection of [SelectedBookSource] so the four parsing pages keep
-/// reading a `BookSource?`; only the pages that manage sources look at the load state.
-/// `null` means "no usable source", which is what makes every page show its empty state instead
-/// of requesting pages with an empty rule set.
+/// The book source the parsing pages work with; `null` when none is usable.
 
 @ProviderFor(currentBookSource)
 final currentBookSourceProvider = CurrentBookSourceProvider._();
 
-/// The book source the parsing pages work with (`docs/dev/roadmap.md` 2.5's seam, now filled by 5.1).
-///
-/// It stays a **synchronous** projection of [SelectedBookSource] so the four parsing pages keep
-/// reading a `BookSource?`; only the pages that manage sources look at the load state.
-/// `null` means "no usable source", which is what makes every page show its empty state instead
-/// of requesting pages with an empty rule set.
+/// The book source the parsing pages work with; `null` when none is usable.
 
 final class CurrentBookSourceProvider
     extends $FunctionalProvider<BookSource?, BookSource?, BookSource?>
     with $Provider<BookSource?> {
-  /// The book source the parsing pages work with (`docs/dev/roadmap.md` 2.5's seam, now filled by 5.1).
-  ///
-  /// It stays a **synchronous** projection of [SelectedBookSource] so the four parsing pages keep
-  /// reading a `BookSource?`; only the pages that manage sources look at the load state.
-  /// `null` means "no usable source", which is what makes every page show its empty state instead
-  /// of requesting pages with an empty rule set.
+  /// The book source the parsing pages work with; `null` when none is usable.
   CurrentBookSourceProvider._()
     : super(
         from: null,
@@ -202,27 +166,15 @@ final class CurrentBookSourceProvider
 
 String _$currentBookSourceHash() => r'4b345d64ed2c08b87fe3b3c03b8262e517edcc49';
 
-/// The list's own view state — sort key and group filter — and the only place that changes it
-/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
-///
-/// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
-/// back, and the store write happens once per change rather than once per visit.
+/// The list's sort key and group filter; the only place that changes them.
 
 @ProviderFor(BookSourceView)
 final bookSourceViewProvider = BookSourceViewProvider._();
 
-/// The list's own view state — sort key and group filter — and the only place that changes it
-/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
-///
-/// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
-/// back, and the store write happens once per change rather than once per visit.
+/// The list's sort key and group filter; the only place that changes them.
 final class BookSourceViewProvider
     extends $AsyncNotifierProvider<BookSourceView, BookSourceListView> {
-  /// The list's own view state — sort key and group filter — and the only place that changes it
-  /// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
-  ///
-  /// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
-  /// back, and the store write happens once per change rather than once per visit.
+  /// The list's sort key and group filter; the only place that changes them.
   BookSourceViewProvider._()
     : super(
         from: null,
@@ -244,11 +196,7 @@ final class BookSourceViewProvider
 
 String _$bookSourceViewHash() => r'1ff826e9dab2cddcfda4a3c521c9fd077de0eccf';
 
-/// The list's own view state — sort key and group filter — and the only place that changes it
-/// (`docs/dev/roadmap.md` 5.5, ADR-0045 §决策 4).
-///
-/// `keepAlive` like the list itself: the choice survives walking to a source's debug console and
-/// back, and the store write happens once per change rather than once per visit.
+/// The list's sort key and group filter; the only place that changes them.
 
 abstract class _$BookSourceView extends $AsyncNotifier<BookSourceListView> {
   FutureOr<BookSourceListView> build();
@@ -269,22 +217,16 @@ abstract class _$BookSourceView extends $AsyncNotifier<BookSourceListView> {
   }
 }
 
-/// What the list page renders: the rows after the filter, the groups they carry, and the view.
+/// What the list page renders: the rows after filtering, the groups and the view.
 ///
-/// The group fallback lives **here** rather than in the store: whether a group still exists depends
-/// on the rows, which the store cannot see. A stored filter that names a group nobody carries is
-/// therefore dropped while rendering instead of being written back from a `build`
-/// (ADR-0045 §决策 4).
+/// A stored group filter that no longer exists is dropped while rendering, not written back.
 
 @ProviderFor(bookSourceListData)
 final bookSourceListDataProvider = BookSourceListDataProvider._();
 
-/// What the list page renders: the rows after the filter, the groups they carry, and the view.
+/// What the list page renders: the rows after filtering, the groups and the view.
 ///
-/// The group fallback lives **here** rather than in the store: whether a group still exists depends
-/// on the rows, which the store cannot see. A stored filter that names a group nobody carries is
-/// therefore dropped while rendering instead of being written back from a `build`
-/// (ADR-0045 §决策 4).
+/// A stored group filter that no longer exists is dropped while rendering, not written back.
 
 final class BookSourceListDataProvider
     extends
@@ -296,12 +238,9 @@ final class BookSourceListDataProvider
     with
         $FutureModifier<BookSourceListData>,
         $FutureProvider<BookSourceListData> {
-  /// What the list page renders: the rows after the filter, the groups they carry, and the view.
+  /// What the list page renders: the rows after filtering, the groups and the view.
   ///
-  /// The group fallback lives **here** rather than in the store: whether a group still exists depends
-  /// on the rows, which the store cannot see. A stored filter that names a group nobody carries is
-  /// therefore dropped while rendering instead of being written back from a `build`
-  /// (ADR-0045 §决策 4).
+  /// A stored group filter that no longer exists is dropped while rendering, not written back.
   BookSourceListDataProvider._()
     : super(
         from: null,
@@ -331,32 +270,20 @@ final class BookSourceListDataProvider
 String _$bookSourceListDataHash() =>
     r'157a28db61cad6680c99df520971a7dad5378fea';
 
-/// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
-///
-/// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
-/// right now" (usually "show me what broke"), and a stored value would silently hide sources on
-/// the next launch.
+/// The check-status axis of the list filter; session state, not persisted.
 
 @ProviderFor(BookSourceCheckFilterSelection)
 final bookSourceCheckFilterSelectionProvider =
     BookSourceCheckFilterSelectionProvider._();
 
-/// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
-///
-/// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
-/// right now" (usually "show me what broke"), and a stored value would silently hide sources on
-/// the next launch.
+/// The check-status axis of the list filter; session state, not persisted.
 final class BookSourceCheckFilterSelectionProvider
     extends
         $NotifierProvider<
           BookSourceCheckFilterSelection,
           BookSourceCheckFilter
         > {
-  /// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
-  ///
-  /// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
-  /// right now" (usually "show me what broke"), and a stored value would silently hide sources on
-  /// the next launch.
+  /// The check-status axis of the list filter; session state, not persisted.
   BookSourceCheckFilterSelectionProvider._()
     : super(
         from: null,
@@ -387,11 +314,7 @@ final class BookSourceCheckFilterSelectionProvider
 String _$bookSourceCheckFilterSelectionHash() =>
     r'480163a0f83616a3e38d817f3d0c57ea18f765e2';
 
-/// The check-status axis of the list filter (session state, ADR-0050 §决策 1).
-///
-/// It is **not** persisted, unlike the sort key and the group: it describes "what I am looking at
-/// right now" (usually "show me what broke"), and a stored value would silently hide sources on
-/// the next launch.
+/// The check-status axis of the list filter; session state, not persisted.
 
 abstract class _$BookSourceCheckFilterSelection
     extends $Notifier<BookSourceCheckFilter> {

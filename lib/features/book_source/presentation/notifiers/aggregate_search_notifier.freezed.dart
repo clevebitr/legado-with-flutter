@@ -25,10 +25,7 @@ mixin _$AggregateSearchState {
  bool get isPaused;/// The page the next [AggregateSearch.loadMore] will ask for.
  int get page;/// Why the run failed, when [status] is [AggregateSearchStatus.failed].
  ParseFailureKind? get failureKind;/// Why no source could be searched, when the scope resolved to nothing.
- Map<String, SearchSourceSkip> get skipped;/// Whether the scope named something that no longer exists, so every enabled source ran.
-///
-/// 回退不是一个内部细节：用户选了一个已经不存在的分组，却看到全库的结果，不告诉他就会读成
-/// 「范围筛选失效」（ADR-0058）。
+ Map<String, SearchSourceSkip> get skipped;/// Whether the requested scope no longer exists, so every enabled source ran.
  bool get scopeFellBack;/// The match mode the next run uses.
  SearchMatchMode get matchMode;/// The source-type filter the next run uses.
  Set<BookSourceType> get types;
@@ -277,10 +274,7 @@ class _AggregateSearchState implements AggregateSearchState {
   return EqualUnmodifiableMapView(_skipped);
 }
 
-/// Whether the scope named something that no longer exists, so every enabled source ran.
-///
-/// 回退不是一个内部细节：用户选了一个已经不存在的分组，却看到全库的结果，不告诉他就会读成
-/// 「范围筛选失效」（ADR-0058）。
+/// Whether the requested scope no longer exists, so every enabled source ran.
 @override@JsonKey() final  bool scopeFellBack;
 /// The match mode the next run uses.
 @override@JsonKey() final  SearchMatchMode matchMode;

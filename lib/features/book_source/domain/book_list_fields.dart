@@ -6,13 +6,10 @@ import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scop
 import 'package:flutter_reader/features/book_source/domain/url_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 
-/// The fields one **result page** yields, whichever rule set produced it.
+/// The fields one result page yields, whichever rule set produced it.
 ///
-/// `SearchRule` and `ExploreRule` carry exactly these ten fields because upstream fixes the shape
-/// of a list rule in one interface (`BookListRule.kt:6-18`; the constraint is written down in
-/// `docs/dev/book-source.md` §2). The search and explore stages therefore read them through one
-/// reader ([readBooks]) instead of two copies that could drift apart — the drift `docs/dev/roadmap.md` §6
-/// warns about, and the reason the two rule types must grow together.
+/// `SearchRule` and `ExploreRule` share this shape, so both stages read them through one
+/// reader instead of two copies that could drift apart.
 final class BookListFields {
   /// Creates a field set.
   const BookListFields({
@@ -77,23 +74,15 @@ final class BookListFields {
   /// The rule that reads a hit's URL.
   final String? bookUrl;
 
-  /// The rule that reads a hit's update time — a display string, never parsed
-  /// (`book-source.md` §2).
+  /// The rule that reads a hit's update time — a display string, never parsed.
   final String? updateTime;
 }
 
 /// Reads one [Book] per item of a result page.
 ///
-/// [listRule] is the `bookList` rule that produced the items and [fieldPrefix] the rule set it
-/// belongs to (`searchRule` or `exploreRule`), so every failure and every warning points at the
-/// field that really produced the value (C-SRC-8): the explore stage falls back to the **whole**
-/// search rule (ADR-0035 §决策 2), and the bookkeeping has to say so.
-///
-/// A field whose rule matched nothing falls back to `null` (and the name to an empty string),
-/// because only the URL is required to open a hit; a **rejected** optional field degrades the same
-/// way with a warning (ADR-0026 §决策 2). An item without a usable URL is dropped with a warning
-/// instead of failing the page (`book-source.md` §9), and [noun] names what was dropped
-/// (`Search hit` / `Explore item`) so the log stays readable.
+/// [fieldPrefix] names the rule set the item came from, so every failure points at the field
+/// that produced it. An item without a URL is skipped with a warning, and [noun] names what
+/// was dropped so the log stays readable.
 Future<ParseResult<List<Book>>> readBooks(
   PageFetchService pages,
   String? listRule,
@@ -180,7 +169,7 @@ Future<ParseResult<List<Book>>> readBooks(
 
     final String? url = bookUrl.dataOrNull;
     if (url == null || url.isEmpty) {
-      // §9：单条失败不中断整页结果，只跳过它并记录。
+      // 单条缺 URL 不中断整页结果，只跳过并记录。
       pages.warn('$noun without URL skipped: source=$sourceId');
       continue;
     }
@@ -188,19 +177,42 @@ Future<ParseResult<List<Book>>> readBooks(
     books.add(
       Book(
         name: name.dataOrNull ?? '',
-        // 书籍地址同样可能带 `,{webView:…}`（真实语料常见）：保留选项原文。
+        // 书籍地址可能带 `,{webView:…}` 选项：保留原文。
         url: resolveUrlRule(url, baseUrl),
         author: author.dataOrNull,
         kind: kind.dataOrNull,
-        coverUrl: resolveAbsoluteUrlOrNull(coverUrl.dataOrNull, baseUrl),
+        coverUrl: resolveAbsoluteUrlOrNull(
+          _coverOf(coverUrl.dataOrNull, pages, baseUrl),
+          baseUrl,
+        ),
         intro: intro.dataOrNull,
         lastChapter: lastChapter.dataOrNull,
         wordCount: wordCount.dataOrNull,
-        // 展示用字符串：规则结果原文，不做日期解析（book-source.md §2）。
+        // 更新时间是展示用字符串，不做日期解析。
         updateTime: updateTime.dataOrNull,
       ),
     );
   }
 
   return ParseSuccess<List<Book>>(books);
+}
+
+/// [value] with a `,{…}` URL-option suffix removed, or `null` when it is absent.
+///
+/// A cover address is a **URL rule** in the corpus (`img@src##$##,{"headers":{"Referer":…}}`), but
+/// the cover loader sends no per-image headers yet, so the options are dropped with a warning
+/// instead of becoming part of the address (ADR-0069 G4).
+String? _coverOf(String? value, PageFetchService pages, String baseUrl) {
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  final String clean = stripUrlOptions(value);
+  if (clean != value) {
+    pages.warn(
+      'Cover URL options dropped (covers carry no request headers): '
+      'base=$baseUrl',
+    );
+  }
+
+  return clean;
 }

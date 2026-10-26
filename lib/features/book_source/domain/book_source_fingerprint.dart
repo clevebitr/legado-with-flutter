@@ -2,13 +2,10 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
-/// The fields that decide how a book source **behaves**, and therefore its identity
-/// (ADR-0040 §决策 2).
+/// The fields that decide how a book source behaves, and therefore its identity.
 ///
-/// User state (`enabled`, `customOrder`) and the display metadata (`bookSourceGroup`,
-/// `bookSourceType`, `weight`, `lastUpdateTime`, `respondTime`) are deliberately absent: two
-/// entries that differ only there are the *same* source, and an import must not create a second
-/// row because the user toggled something.
+/// User state and display metadata are absent: two entries that differ only there are the
+/// same source, so toggling one must not create a second row.
 const List<String> bookSourceFingerprintFields = <String>[
   'bookSourceName',
   'searchUrl',
@@ -20,12 +17,9 @@ const List<String> bookSourceFingerprintFields = <String>[
   'ruleExplore',
 ];
 
-/// The identity half of a stored source's `(url, fingerprint)` key (ADR-0040 §决策 1).
+/// The identity half of a stored source's `(url, fingerprint)` key.
 ///
-/// The result is the sha256 of the behaviour fields' canonical JSON, so two imports of the same
-/// source compare equal even when the file was re-exported with reordered keys; the tool census
-/// that produced ADR-0040's numbers uses this same function (`tool/spot_check`), which is why the
-/// rule lives here rather than in either caller.
+/// It is the sha256 of the behaviour fields' canonical JSON, so key order does not matter.
 String bookSourceFingerprint(Map<String, Object?> entry) => sha256
     .convert(
       utf8.encode(
@@ -39,9 +33,8 @@ String bookSourceFingerprint(Map<String, Object?> entry) => sha256
 
 /// Serialises [value] with map keys in a stable order.
 ///
-/// `jsonEncode` keeps insertion order, so a re-export that only reorders keys would otherwise
-/// look like a different source (the corpus census in `tool/spot_check/README.md` §3 would have
-/// reported 1012 identical duplicates as differences).
+/// `jsonEncode` keeps insertion order, so a re-export that only reorders keys would
+/// otherwise look like a different source.
 String canonicalJson(Object? value) => switch (value) {
   final Map<String, Object?> map =>
     '{${(map.keys.toList()..sort()).map((String key) => '${jsonEncode(key)}:${canonicalJson(map[key])}').join(',')}}',

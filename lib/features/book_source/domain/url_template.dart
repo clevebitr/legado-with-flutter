@@ -1,12 +1,7 @@
-import 'dart:convert';
-
-import 'package:charset/charset.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/text/charset_encoding.dart';
 
 /// Characters upstream's `URLEncoder` leaves alone.
-///
-/// `NetworkUtils.notNeedEncodingForm` allows exactly `[a-zA-Z0-9*._-]` plus valid
-/// `%XX` escapes, and that set is what decides whether a value is already encoded.
 final RegExp _formSafe = RegExp(r'[A-Za-z0-9*._-]');
 
 /// A two-digit hexadecimal escape body, e.g. the `20` of `%20`.
@@ -16,30 +11,13 @@ final RegExp _hexPair = RegExp(r'^[0-9A-Fa-f]{2}$');
 final RegExp _placeholder = RegExp(r'\{\{([^{}]*)\}\}');
 
 /// The placeholder whose value is the search keyword.
-///
-/// Its value is the only one that gets form-encoded; `page` and `baseUrl` are
-/// inserted as they are (`docs/dev/book-source.md` §4).
 const String _keywordVariable = 'key';
 
-/// Renders a Legado URL template, e.g. `/search?q={{key}}&page={{page}}`
-/// (C-SRC-5).
+/// Renders a Legado URL template such as `/search?q={{key}}&page={{page}}`.
 ///
-/// [params] carries the **raw** values: `key` is the raw search keyword and is
-/// form-encoded here, exactly once. A keyword that is already encoded (only
-/// `[A-Za-z0-9*._-]` and valid `%XX` escapes) is passed through untouched, so the
-/// caller must not encode it beforehand either — that is the "encode once, never
-/// twice" rule of `docs/dev/book-source.md` §4, which upstream implements as
-/// `AnalyzeUrl.appendEncoded` + `NetworkUtils.encodedForm`.
-///
-/// Well-known names: `key`, `page`, `baseUrl`. A placeholder that [params] does not
-/// define renders as an **empty string** and is reported through [logger] as a
-/// warning, so `{{...}}` never leaks into a request. Nested rules inside `{{}}`
-/// (matrix #18) are M1 and are therefore treated as undefined variables for now;
-/// `docs/dev/roadmap.md` records that boundary.
-///
-/// The warning deliberately names only the variables, never the template: the
-/// template may already carry the keyword, and a search keyword must not reach the
-/// logs (C-ERR-8, C-SEC-4).
+/// [params] carries raw values: `key` is form-encoded exactly once, and a value that is
+/// already encoded is kept as is. An undefined placeholder renders empty and is reported
+/// through [logger] by name only, never with the template.
 String renderUrlTemplate(
   String template,
   Map<String, String> params, {
@@ -72,12 +50,9 @@ String renderUrlTemplate(
   return rendered;
 }
 
-/// Resolves [url] against the page it was found on (`docs/dev/book-source.md` §4).
+/// Resolves [url] against the page it was found on.
 ///
-/// A relative target (`/book/1`, `2.html`) becomes absolute, so the next stage can
-/// request it; an already absolute URL is returned unchanged. A value that cannot be
-/// parsed is returned as it is instead of throwing, because a malformed rule output
-/// is a data problem the caller reports, not a crash (C-ERR-1).
+/// An unparsable value is returned unchanged instead of throwing.
 String resolveAbsoluteUrl(String url, String baseUrl) {
   final Uri? reference = Uri.tryParse(url);
   final Uri? base = Uri.tryParse(baseUrl);
@@ -94,17 +69,8 @@ String? resolveAbsoluteUrlOrNull(String? url, String baseUrl) =>
 
 /// Form-encodes [value] the way upstream does (`URLEncoder.encode`).
 ///
-/// Only `[A-Za-z0-9*._-]` stay raw, a space becomes `+`, and every other character
-/// is percent-encoded from its UTF-8 bytes with upper-case hex. A `+` is encoded
-/// again (`%2B`), which upstream does as well, because its already-encoded check
-/// does not accept `+`; callers therefore pass the raw keyword.
-///
-/// [charset] is the request's declared encoding (`url,{“charset”:“gbk”}`,
-/// `book-source.md` §4.3). It changes **which bytes** are escaped, not which characters:
-/// `剑` becomes `%BD%A3` under GBK rather than `%E5%89%91` under UTF-8, which is what a
-/// GBK-era site actually decodes back to the keyword. An unknown label falls back to
-/// UTF-8 instead of failing the request, because the label is arbitrary text from an
-/// imported file.
+/// Only `[A-Za-z0-9*._-]` stay raw, a space becomes `+`, and everything else is escaped
+/// from its [charset] bytes — an unknown label falls back to UTF-8.
 String _encodeFormValue(String value, [String? charset]) {
   if (_isFormEncoded(value)) {
     return value;
@@ -122,7 +88,7 @@ String _encodeFormValue(String value, [String? charset]) {
       continue;
     }
     // 逐字符编码：一个字符在声明编码里可能是 1–4 字节。
-    for (final int byte in _encodeWith(character, charset)) {
+    for (final int byte in charsetBytes(character, charset: charset)) {
       buffer.write('%${byte.toRadixString(16).toUpperCase().padLeft(2, '0')}');
     }
   }
@@ -130,19 +96,9 @@ String _encodeFormValue(String value, [String? charset]) {
   return buffer.toString();
 }
 
-/// The bytes of [text] in [charset], or UTF-8 when the label is absent or unknown.
-List<int> _encodeWith(String text, String? charset) {
-  final Encoding? encoding = charset == null || charset.isEmpty
-      ? null
-      : Charset.getByName(charset);
-
-  return (encoding ?? utf8).encode(text);
-}
-
-/// Whether [value] is already form-encoded, mirroring upstream `encodedForm`.
+/// Whether [value] is already form-encoded.
 ///
-/// True when every character is either `[A-Za-z0-9*._-]` or part of a valid `%XX`
-/// escape; anything else means the value still has to be encoded.
+/// True when every character is a safe character or part of a valid `%XX` escape.
 bool _isFormEncoded(String value) {
   var index = 0;
   while (index < value.length) {

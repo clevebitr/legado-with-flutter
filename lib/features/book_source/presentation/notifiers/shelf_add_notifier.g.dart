@@ -8,30 +8,21 @@ part of 'shelf_add_notifier.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// The 「加入书架」 action of the detail page (`docs/dev/roadmap.md` 5.4)。
+/// Adds a book to the shelf from the detail page.
 ///
-/// It exists as a Notifier rather than a call inside the page because C-STATE-4 keeps business
-/// calls out of widgets; the loading state is what disables the button while a write is in
-/// flight. The **port** does the cross-feature part: nothing here knows what a shelf is
-/// (ADR-0041 §决策 2).
+/// The write goes through the shelf port, so this feature knows no shelf type.
 
 @ProviderFor(ShelfAdd)
 final shelfAddProvider = ShelfAddProvider._();
 
-/// The 「加入书架」 action of the detail page (`docs/dev/roadmap.md` 5.4)。
+/// Adds a book to the shelf from the detail page.
 ///
-/// It exists as a Notifier rather than a call inside the page because C-STATE-4 keeps business
-/// calls out of widgets; the loading state is what disables the button while a write is in
-/// flight. The **port** does the cross-feature part: nothing here knows what a shelf is
-/// (ADR-0041 §决策 2).
+/// The write goes through the shelf port, so this feature knows no shelf type.
 final class ShelfAddProvider
     extends $NotifierProvider<ShelfAdd, AsyncValue<void>> {
-  /// The 「加入书架」 action of the detail page (`docs/dev/roadmap.md` 5.4)。
+  /// Adds a book to the shelf from the detail page.
   ///
-  /// It exists as a Notifier rather than a call inside the page because C-STATE-4 keeps business
-  /// calls out of widgets; the loading state is what disables the button while a write is in
-  /// flight. The **port** does the cross-feature part: nothing here knows what a shelf is
-  /// (ADR-0041 §决策 2).
+  /// The write goes through the shelf port, so this feature knows no shelf type.
   ShelfAddProvider._()
     : super(
         from: null,
@@ -61,12 +52,9 @@ final class ShelfAddProvider
 
 String _$shelfAddHash() => r'6a68328b9b2988a5fc6f2f9c82e8fa5955b06b48';
 
-/// The 「加入书架」 action of the detail page (`docs/dev/roadmap.md` 5.4)。
+/// Adds a book to the shelf from the detail page.
 ///
-/// It exists as a Notifier rather than a call inside the page because C-STATE-4 keeps business
-/// calls out of widgets; the loading state is what disables the button while a write is in
-/// flight. The **port** does the cross-feature part: nothing here knows what a shelf is
-/// (ADR-0041 §决策 2).
+/// The write goes through the shelf port, so this feature knows no shelf type.
 
 abstract class _$ShelfAdd extends $Notifier<AsyncValue<void>> {
   AsyncValue<void> build();

@@ -10,18 +10,14 @@ part of 'book_queries.dart';
 // ignore_for_file: type=lint, type=warning
 /// Reads the detail page of [book] from [source].
 ///
-/// Fetch-on-build on purpose: the page watches the provider, so leaving the page
-/// disposes the request instead of a detached continuation writing into a dead
-/// notifier.
+/// Fetch-on-build: leaving the page disposes the request.
 
 @ProviderFor(bookInfo)
 final bookInfoProvider = BookInfoFamily._();
 
 /// Reads the detail page of [book] from [source].
 ///
-/// Fetch-on-build on purpose: the page watches the provider, so leaving the page
-/// disposes the request instead of a detached continuation writing into a dead
-/// notifier.
+/// Fetch-on-build: leaving the page disposes the request.
 
 final class BookInfoProvider
     extends
@@ -35,9 +31,7 @@ final class BookInfoProvider
         $FutureProvider<ParseResult<BookInfo>> {
   /// Reads the detail page of [book] from [source].
   ///
-  /// Fetch-on-build on purpose: the page watches the provider, so leaving the page
-  /// disposes the request instead of a detached continuation writing into a dead
-  /// notifier.
+  /// Fetch-on-build: leaving the page disposes the request.
   BookInfoProvider._({
     required BookInfoFamily super.from,
     required (BookSource, Book) super.argument,
@@ -86,9 +80,7 @@ String _$bookInfoHash() => r'f51b80128fca711c4a0a45137a455adde902f2b5';
 
 /// Reads the detail page of [book] from [source].
 ///
-/// Fetch-on-build on purpose: the page watches the provider, so leaving the page
-/// disposes the request instead of a detached continuation writing into a dead
-/// notifier.
+/// Fetch-on-build: leaving the page disposes the request.
 
 final class BookInfoFamily extends $Family
     with
@@ -107,9 +99,7 @@ final class BookInfoFamily extends $Family
 
   /// Reads the detail page of [book] from [source].
   ///
-  /// Fetch-on-build on purpose: the page watches the provider, so leaving the page
-  /// disposes the request instead of a detached continuation writing into a dead
-  /// notifier.
+  /// Fetch-on-build: leaving the page disposes the request.
 
   BookInfoProvider call(BookSource source, Book book) =>
       BookInfoProvider._(argument: (source, book), from: this);
@@ -119,17 +109,11 @@ final class BookInfoFamily extends $Family
 }
 
 /// Reads the chapter list that lives at [url] of [source].
-///
-/// [url] is the catalogue address the detail stage resolved (`BookInfo.tocUrl`),
-/// which is the book page itself when the source declares no `tocUrl` rule.
 
 @ProviderFor(toc)
 final tocProvider = TocFamily._();
 
 /// Reads the chapter list that lives at [url] of [source].
-///
-/// [url] is the catalogue address the detail stage resolved (`BookInfo.tocUrl`),
-/// which is the book page itself when the source declares no `tocUrl` rule.
 
 final class TocProvider
     extends
@@ -142,9 +126,6 @@ final class TocProvider
         $FutureModifier<ParseResult<List<Chapter>>>,
         $FutureProvider<ParseResult<List<Chapter>>> {
   /// Reads the chapter list that lives at [url] of [source].
-  ///
-  /// [url] is the catalogue address the detail stage resolved (`BookInfo.tocUrl`),
-  /// which is the book page itself when the source declares no `tocUrl` rule.
   TocProvider._({
     required TocFamily super.from,
     required (BookSource, String) super.argument,
@@ -192,9 +173,6 @@ final class TocProvider
 String _$tocHash() => r'36e065fe6993f1b35d053f5556d429500d2f6e22';
 
 /// Reads the chapter list that lives at [url] of [source].
-///
-/// [url] is the catalogue address the detail stage resolved (`BookInfo.tocUrl`),
-/// which is the book page itself when the source declares no `tocUrl` rule.
 
 final class TocFamily extends $Family
     with
@@ -212,9 +190,6 @@ final class TocFamily extends $Family
       );
 
   /// Reads the chapter list that lives at [url] of [source].
-  ///
-  /// [url] is the catalogue address the detail stage resolved (`BookInfo.tocUrl`),
-  /// which is the book page itself when the source declares no `tocUrl` rule.
 
   TocProvider call(BookSource source, String url) =>
       TocProvider._(argument: (source, url), from: this);

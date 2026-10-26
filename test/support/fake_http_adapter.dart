@@ -42,6 +42,16 @@ final class FakeHttpAdapter implements HttpClientAdapter {
     _queue.add(_QueuedFailure(type, statusCode));
   }
 
+  /// Queues a redirect the **adapter follows itself**, the way a real one does.
+  ///
+  /// dio never follows a redirect: `IOHttpClientAdapter` does, and reports the chain back on
+  /// `ResponseBody.redirects`. The double mirrors that so a test can pin what the client reads
+  /// out of the chain — the final address of a `302` hand-off is the only way a rule learns where
+  /// an ASP search moved to (`http_response.dart`).
+  void enqueueRedirect({required String location, int statusCode = 302}) {
+    _queue.add(_QueuedRedirect(location, statusCode));
+  }
+
   /// Queues a 200 whose **body stream** fails with [type] after one chunk.
   ///
   /// The request itself succeeds and the failure arrives while the body is being read —
@@ -97,6 +107,29 @@ final class FakeHttpAdapter implements HttpClientAdapter {
       );
     }
 
+    if (next is _QueuedRedirect) {
+      // 跟随重定向是适配器的职责（dio 只读它报的链）：这里把下一条队列当成结果，
+      // 并把这一次跳转放进 `redirects`。
+      final Object following = _queue.isEmpty
+          ? ResponseBody.fromBytes(const <int>[], 200)
+          : _queue.removeAt(0);
+      final ResponseBody body = following as ResponseBody;
+
+      return ResponseBody(
+        body.stream,
+        body.statusCode,
+        headers: body.headers,
+        isRedirect: true,
+        redirects: <RedirectRecord>[
+          RedirectRecord(
+            next.statusCode,
+            options.method,
+            Uri.parse(next.location),
+          ),
+        ],
+      );
+    }
+
     return next as ResponseBody;
   }
 
@@ -117,4 +150,12 @@ final class _QueuedFailure {
 
   final DioExceptionType type;
   final int? statusCode;
+}
+
+/// A queued redirect the adapter follows on its own (`ResponseBody.redirects`).
+final class _QueuedRedirect {
+  const _QueuedRedirect(this.location, this.statusCode);
+
+  final String location;
+  final int statusCode;
 }

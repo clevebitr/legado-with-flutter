@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
@@ -8,6 +10,8 @@ import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/platform/source_verification.dart';
+import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 
@@ -22,6 +26,8 @@ typedef _Fixture = ({
   List<FakeJsWorkerHandle> workers,
   FakeHttpClient http,
   JsVariableStore variables,
+  _FakeVerification verification,
+  _FakeWebPages webPages,
 });
 
 /// Builds a bridge whose launcher hands out [FakeJsWorkerHandle]s.
@@ -36,11 +42,16 @@ _Fixture _buildBridge({
   int maxBindingCalls = defaultJsMaxBindingCalls,
   JsVariableStore? variables,
   void Function(FakeJsWorkerHandle worker)? configure,
+  _FakeVerification? verification,
+  _FakeWebPages? webPages,
 }) {
   final FakeLogPrinter printer = FakeLogPrinter();
   final List<FakeJsWorkerHandle> workers = <FakeJsWorkerHandle>[];
   final FakeHttpClient http = FakeHttpClient();
   final JsVariableStore store = variables ?? JsVariableStore();
+  final _FakeVerification fakeVerification =
+      verification ?? _FakeVerification();
+  final _FakeWebPages fakePages = webPages ?? _FakeWebPages();
 
   return (
     bridge: QuickJsWorkerBridge(
@@ -58,11 +69,15 @@ _Fixture _buildBridge({
       timeout: timeout,
       killGrace: killGrace,
       maxBindingCalls: maxBindingCalls,
+      verification: fakeVerification,
+      webPages: fakePages,
     ),
     printer: printer,
     workers: workers,
     http: http,
     variables: store,
+    verification: fakeVerification,
+    webPages: fakePages,
   );
 }
 
@@ -121,7 +136,136 @@ ParseFailure<Never> _failure(ParseResult<Object?> result) => switch (result) {
   ParseSuccess<Object?>() => fail('Expected a failure.'),
 };
 
+/// Records what a rule asked a human for (`docs/dev/testing.md` §4).
+final class _FakeVerification implements SourceVerification {
+  /// The outcome `verify` answers with.
+  ParseResult<SourceVerificationOutcome> outcome =
+      const ParseSuccess<SourceVerificationOutcome>(
+        SourceVerificationOutcome(
+          url: 'https://example-novel.test/after',
+          body: '<p>solved</p>',
+        ),
+      );
+
+  /// The answer `imageCode` gives.
+  ParseResult<String> code = const ParseSuccess<String>('A7bC');
+
+  /// Every request the bridge passed on, in order.
+  final List<SourceVerificationRequest> requests =
+      <SourceVerificationRequest>[];
+
+  /// Every image captcha asked for, in order.
+  final List<String> captchas = <String>[];
+
+  /// Whether the platform can show a page (a test can turn it off).
+  bool supported = true;
+
+  /// When set, `verify` / `imageCode` wait for it before answering (job-end races).
+  Future<void>? gate;
+
+  @override
+  bool get isSupported => supported;
+
+  @override
+  Future<ParseResult<SourceVerificationOutcome>> verify(
+    SourceVerificationRequest request,
+  ) async {
+    requests.add(request);
+    final Future<void>? waiting = gate;
+    if (waiting != null) {
+      await waiting;
+    }
+
+    return outcome;
+  }
+
+  @override
+  Future<ParseResult<String>> imageCode({
+    required String sourceUrl,
+    required String sourceName,
+    required String imageUrl,
+    required String title,
+  }) async {
+    captchas.add(imageUrl);
+    final Future<void>? waiting = gate;
+    if (waiting != null) {
+      await waiting;
+    }
+
+    return code;
+  }
+}
+
+/// Serves rendered pages for `java.webView` (the real one is a WebView).
+final class _FakeWebPages implements WebPageFetcher {
+  /// The body every render answers with.
+  String body = '<div>rendered</div>';
+
+  /// The script the caller asked for, in order.
+  final List<String?> javaScripts = <String?>[];
+
+  /// When true the render fails instead of answering a page.
+  bool fail = false;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<ParseResult<FetchedWebPage>> fetch({
+    required String url,
+    Map<String, String>? headers,
+    required String rulePath,
+    WebPageRequestMethod method = WebPageRequestMethod.get,
+    String? body,
+    String? javaScript,
+    Duration? delayTime,
+    String? overrideUrlRegex,
+  }) async {
+    javaScripts.add(javaScript);
+    if (fail) {
+      return const ParseFailure<FetchedWebPage>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'webView',
+      );
+    }
+
+    return ParseSuccess<FetchedWebPage>(
+      FetchedWebPage(url: url, body: this.body),
+    );
+  }
+}
+
 void main() {
+  test('JsResponseView_toJson_marksTheSandboxResponse', () {
+    const JsResponseView view = JsResponseView(
+      url: 'https://example-novel.test/book/1',
+      body: '<div>正文</div>',
+      code: 203,
+      headers: <String, String>{'content-type': 'text/html'},
+    );
+
+    expect(view.toJson(), <String, Object?>{
+      jsResponseMarker: true,
+      'body': '<div>正文</div>',
+      '__url': 'https://example-novel.test/book/1',
+      '__code': 203,
+      '__headers': <String, String>{'content-type': 'text/html'},
+    });
+    // 注意：`url` / `code` / `headers` 是沙箱的方法名（上游 StrResponse），数据因此走 `__` 前缀。
+    expect(const JsResponseView(url: 'u', body: 'b').toJson()['__code'], 200);
+    expect(
+      const JsJob(
+        script: 'result',
+        rulePath: 'loginCheckJs',
+        baseUrl: 'https://example-novel.test/',
+        page: 1,
+        source: JsSourceInfo(name: 's', url: 'https://example-novel.test'),
+        response: view,
+      ).toJson()['response'],
+      view.toJson(),
+    );
+  });
+
   test('JsBookInfo_toJson_keepsEveryField', () {
     const JsBookInfo book = JsBookInfo(
       name: '剑来',
@@ -542,6 +686,109 @@ void main() {
       expect(await call, isA<ParseSuccess<Object?>>());
     });
 
+    test('evaluate_givenAnHttpGetBytes_answersBase64', () async {
+      // `java.queryTTF(url)` 的字节门：字体过文本解码就坏了，所以这条通道回 base64
+      // （ADR-0068 增补决策 9）。
+      final _Fixture fixture = _buildBridge();
+      fixture.http.serveBytes('https://mirror.test/font.ttf', _fontBytes());
+
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsHttpBinding, <String, Object?>{
+          'operation': 'getBytes',
+          'url': 'https://mirror.test/font.ttf',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(fixture.http.requestedUrls, <String>[
+        'https://mirror.test/font.ttf',
+      ]);
+      expect(_replies(worker).single['value'], base64Encode(_fontBytes()));
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+    });
+
+    test('evaluate_givenAnHttpRequestThatAsksForTheResponse_answersUrlCodeAndHeaders', () async {
+      // `options.response` 要的是整个响应：重定向之后的地址只有响应里才有，
+      // 而规则重发请求时需要的正是它（book-source.md §6）。
+      final _Fixture fixture = _buildBridge();
+      fixture.http.serve(
+        'https://mirror.test/sscc/',
+        'moved body',
+        headers: const <String, List<String>>{
+          'location': <String>['?9bdb14'],
+        },
+        finalUrl: 'https://mirror.test/sscc/?9bdb14',
+      );
+
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(7, jsHttpBinding, <String, Object?>{
+          'operation': 'post',
+          'url': 'https://mirror.test/sscc/',
+          'options': <String, Object?>{'body': 'q=1', 'response': true},
+        }),
+      );
+      await pumpEventQueue();
+
+      final Map<String, Object?> value =
+          _replies(worker).single['value']! as Map<String, Object?>;
+      expect(value['__strResponse'], isTrue);
+      expect(value['body'], 'moved body');
+      expect(value['__url'], 'https://mirror.test/sscc/?9bdb14');
+      expect(value['__code'], 200);
+      expect(value['__headers'], containsPair('location', '?9bdb14'));
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+    });
+
+    test('evaluate_givenAnHttpGetBytesThatFails_rejectsThePromise', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.http
+        ..serveBytes('https://mirror.test/font.ttf', _fontBytes())
+        ..failWith('https://mirror.test/font.ttf', ParseFailureKind.notFound);
+
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsHttpBinding, <String, Object?>{
+          'operation': 'getBytes',
+          'url': 'https://mirror.test/font.ttf',
+        }),
+      );
+      await pumpEventQueue();
+
+      // 传输失败只拒绝这条 Promise（规则可以换镜像），不判整个 job 死。
+      expect(_replies(worker).single['ok'], isFalse);
+      expect(_replies(worker).single['fatal'], isFalse);
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+    });
+
     test('evaluate_givenAnHttpPost_sendsTheBodyAndMethod', () async {
       final _Fixture fixture = _buildBridge();
       fixture.http.serve('https://mirror.test/api', 'posted');
@@ -659,6 +906,40 @@ void main() {
       expect(fixture.http.requestedUrls, hasLength(1));
 
       // 请求还在飞，job 已经结束（结果先到）：答复无处可去，也不得算到下一个 job 头上。
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'done',
+      });
+      expect(await call, isA<ParseSuccess<Object?>>());
+
+      gate.complete();
+      await pumpEventQueue();
+
+      expect(_replies(worker), isEmpty);
+    });
+
+    test('evaluate_givenAByteCallAfterTheJobEnded_answersNothing', () async {
+      // 与 GET 同一条规矩：请求还在飞时 job 已经结束，答复无处可去。
+      final _Fixture fixture = _buildBridge();
+      final Completer<void> gate = Completer<void>();
+      fixture.http.onRequest = () => gate.future;
+      fixture.http.serveBytes('https://mirror.test/font.ttf', _fontBytes());
+
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsHttpBinding, <String, Object?>{
+          'operation': 'getBytes',
+          'url': 'https://mirror.test/font.ttf',
+        }),
+      );
+      await pumpEventQueue();
+      expect(fixture.http.requestedUrls, hasLength(1));
+
       worker.emit(<String, Object?>{
         'type': 'result',
         'ok': true,
@@ -867,6 +1148,50 @@ void main() {
       );
       expect(fixture.http.requestedUrls, isEmpty);
     });
+
+    test(
+      'evaluate_givenAByteCallLandingAfterAFatalFailure_rejectsIt',
+      () async {
+        final _Fixture fixture = _buildBridge(maxBindingCalls: 3);
+        final Completer<void> gate = Completer<void>();
+        fixture.http.onRequest = () => gate.future;
+        fixture.http.serveBytes('https://mirror.test/font.ttf', _fontBytes());
+
+        final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+          _job(script: 'hold'),
+        );
+        await pumpEventQueue();
+        final FakeJsWorkerHandle worker = fixture.workers.single;
+        worker.emit(
+          _hostCall(1, jsHttpBinding, <String, Object?>{
+            'operation': 'getBytes',
+            'url': 'https://mirror.test/font.ttf',
+          }),
+        );
+        await pumpEventQueue();
+        for (final String message in <String>['a', 'b', 'c']) {
+          worker.emit(<String, Object?>{
+            'type': 'log',
+            'level': 'info',
+            'message': message,
+          });
+        }
+        await pumpEventQueue();
+        expect(_replies(worker), isEmpty);
+
+        // 字节回来时 job 已经定了：同样不得回答一个已经失败的 job。
+        gate.complete();
+        await pumpEventQueue();
+        expect(_replies(worker).single['message'], 'the job already failed');
+
+        worker.emit(<String, Object?>{
+          'type': 'result',
+          'ok': false,
+          'error': 'js:quota',
+        });
+        await call;
+      },
+    );
 
     test(
       'evaluate_givenAnHttpCallLandingAfterAFatalFailure_rejectsIt',
@@ -1157,4 +1482,351 @@ void main() {
       expect(fixture.variables.snapshot('https://example-novel.test'), isEmpty);
     });
   });
+  group('verification channel', () {
+    test(
+      'startBrowserAwait_whenTheUserSolves_answersTheRefetchedPage',
+      () async {
+        final _Fixture fixture = _buildBridge();
+        unawaited(fixture.bridge.evaluate(_job(script: 'hold')));
+        await pumpEventQueue();
+        final FakeJsWorkerHandle worker = fixture.workers.single;
+        worker.emit(
+          _hostCall(1, jsVerifyBinding, <String, Object?>{
+            'operation': 'startBrowserAwait',
+            'url': 'https://example-novel.test/challenge',
+            'title': '验证',
+          }),
+        );
+        await pumpEventQueue();
+
+        // 请求带到端口的是书源身份与原标题；答案回到脚本的是一个 {url, body} 对象。
+        expect(
+          fixture.verification.requests.single.url,
+          'https://example-novel.test/challenge',
+        );
+        expect(fixture.verification.requests.single.title, '验证');
+        expect(
+          fixture.verification.requests.single.sourceUrl,
+          'https://example-novel.test',
+        );
+        final Map<String, Object?> reply = _replies(worker).single;
+        expect(reply['ok'], isTrue);
+        expect(reply['value'], <String, Object?>{
+          'url': 'https://example-novel.test/after',
+          'body': '<p>solved</p>',
+        });
+      },
+    );
+
+    test('startBrowser_whenCalled_answersImmediatelyAndOpensThePage', () async {
+      final _Fixture fixture = _buildBridge();
+      unawaited(fixture.bridge.evaluate(_job(script: 'hold')));
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsVerifyBinding, <String, Object?>{
+          'operation': 'startBrowser',
+          'url': 'https://example-novel.test/challenge',
+        }),
+      );
+      await pumpEventQueue();
+
+      // 上游的这个名字返回 void：规则不被页面挡住，页面照样打开。
+      expect(_replies(worker).single, containsPair('ok', true));
+      expect(fixture.verification.requests, hasLength(1));
+    });
+
+    test('imageCode_whenTheUserTypes_answersTheText', () async {
+      final _Fixture fixture = _buildBridge();
+      unawaited(fixture.bridge.evaluate(_job(script: 'hold')));
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsVerifyBinding, <String, Object?>{
+          'operation': 'imageCode',
+          'url': 'https://example-novel.test/code.jpg',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(
+        fixture.verification.captchas.single,
+        'https://example-novel.test/code.jpg',
+      );
+      expect(_replies(worker).single, containsPair('value', 'A7bC'));
+    });
+
+    test('webView_whenARuleAsks_answersTheRenderedBody', () async {
+      final _Fixture fixture = _buildBridge();
+      unawaited(fixture.bridge.evaluate(_job(script: 'hold')));
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsVerifyBinding, <String, Object?>{
+          'operation': 'webView',
+          'url': 'https://example-novel.test/page',
+          'script': 'document.title',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(fixture.webPages.javaScripts.single, 'document.title');
+      expect(
+        _replies(worker).single,
+        containsPair('value', '<div>rendered</div>'),
+      );
+    });
+
+    test('verify_whenTheUserCancels_failsTheJobAsCancelled', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.verification.outcome =
+          const ParseFailure<SourceVerificationOutcome>(
+            kind: ParseFailureKind.cancelled,
+            rulePath: 'java.startBrowser',
+          );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsVerifyBinding, <String, Object?>{
+          'operation': 'startBrowserAwait',
+          'url': 'https://example-novel.test/challenge',
+        }),
+      );
+      await pumpEventQueue();
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': false,
+        'error': 'rejected',
+        'elapsedMs': 0,
+      });
+
+      // 取消是整次 job 的答案（ADR-0068 §决策 10），不是脚本自己的错。
+      final ParseResult<Object?> result = await call;
+      expect(
+        (result as ParseFailure<Object?>).kind,
+        ParseFailureKind.cancelled,
+      );
+    });
+
+    test('startBrowserAwait_whenTheSourceHasHeaders_passesThemOn', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(
+          script: 'hold',
+          sourceHeaders: const <String, String>{'Referer': 'https://a.test/'},
+        ),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsVerifyBinding, <String, Object?>{
+          'operation': 'startBrowserAwait',
+          'url': 'https://example-novel.test/challenge',
+        }),
+      );
+      await pumpEventQueue();
+
+      // 书源自己的 header 必须带给验证页（站点按 Referer/UA 决定放不放行）。
+      expect(fixture.verification.requests.single.headers, <String, String>{
+        'Referer': 'https://a.test/',
+      });
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'ok',
+      });
+      await call;
+    });
+
+    test('verify_givenNoJobInFlight_rejectsTheCall', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      // 先让 job 结束，再让一条迟到的验证调用进来。
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'ok',
+      });
+      await call;
+      worker.emit(
+        _hostCall(2, jsVerifyBinding, <String, Object?>{
+          'operation': 'imageCode',
+          'url': 'https://example-novel.test/code.jpg',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(_replies(worker).single, containsPair('ok', false));
+      expect(fixture.verification.captchas, isEmpty);
+    });
+
+    test('imageCode_whenTheUserCancels_failsTheJobAsCancelled', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.verification.code = const ParseFailure<String>(
+        kind: ParseFailureKind.cancelled,
+        rulePath: 'java.getVerificationCode',
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsVerifyBinding, <String, Object?>{
+          'operation': 'imageCode',
+          'url': 'https://example-novel.test/code.jpg',
+        }),
+      );
+      await pumpEventQueue();
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': false,
+        'error': 'rejected',
+        'elapsedMs': 0,
+      });
+
+      expect(
+        ((await call) as ParseFailure<Object?>).kind,
+        ParseFailureKind.cancelled,
+      );
+    });
+
+    test('verify_whenTheJobEndsWhileTheUserIsAway_isRejected', () async {
+      // 用户按「完成」之前 job 已经结束（脚本自己抛错）：答复无处可去，只能显式拒绝。
+      final _Fixture fixture = _buildBridge();
+      final Completer<void> gate = Completer<void>();
+      fixture.verification.gate = gate.future;
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsVerifyBinding, <String, Object?>{
+          'operation': 'imageCode',
+          'url': 'https://example-novel.test/code.jpg',
+        }),
+      );
+      await pumpEventQueue();
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'ok',
+      });
+      await call;
+      gate.complete();
+      await pumpEventQueue();
+
+      expect(_replies(worker).last, containsPair('ok', false));
+    });
+
+    test('verify_givenMalformedArguments_rejectsTheCall', () async {
+      final _Fixture fixture = _buildBridge();
+      unawaited(fixture.bridge.evaluate(_job(script: 'hold')));
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+
+      worker.emit(_hostCall(1, jsVerifyBinding, 'not an object'));
+      await pumpEventQueue();
+
+      expect(_replies(worker).single, containsPair('ok', false));
+      expect(fixture.verification.requests, isEmpty);
+    });
+
+    test('webView_whenTheRendererFails_failsTheJob', () async {
+      final _Fixture fixture = _buildBridge(
+        webPages: _FakeWebPages()..fail = true,
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsVerifyBinding, <String, Object?>{
+          'operation': 'webView',
+          'url': 'https://example-novel.test/page',
+        }),
+      );
+      await pumpEventQueue();
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': false,
+        'error': 'rejected',
+        'elapsedMs': 0,
+      });
+
+      expect(
+        ((await call) as ParseFailure<Object?>).kind,
+        ParseFailureKind.unsupportedRule,
+      );
+    });
+
+    test('verify_givenAnUnsupportedPlatform_failsAsUnsupportedRule', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.verification.supported = false;
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsVerifyBinding, <String, Object?>{
+          'operation': 'startBrowserAwait',
+          'url': 'https://example-novel.test/challenge',
+        }),
+      );
+      await pumpEventQueue();
+      worker.emit(<String, Object?>{
+        'type': 'result',
+        'ok': false,
+        'error': 'rejected',
+        'elapsedMs': 0,
+      });
+
+      expect(
+        ((await call) as ParseFailure<Object?>).kind,
+        ParseFailureKind.unsupportedRule,
+      );
+    });
+  });
 }
+
+/// A synthetic font's bytes, for the byte-door tests.
+Uint8List _fontBytes() => Uint8List.fromList(<int>[
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x63,
+  0x6D,
+  0x61,
+  0x70,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x1C,
+  0x00,
+  0x00,
+  0x00,
+  0x04,
+]);

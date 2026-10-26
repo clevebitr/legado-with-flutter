@@ -3,12 +3,9 @@ import 'package:flutter_reader/features/book_source/domain/entities/source_check
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 
-/// The four states the list's status light can show (`docs/dev/roadmap.md` §3.10 V1).
+/// The four states the list's status light can show.
 ///
-/// [unchecked] is not an error: a source nobody checked has no verdict, which is exactly what the
-/// grey light says. The enum lives in `domain/` because two consumers share it (the row's light and
-/// the list's healthy/failing filter), and colours do **not**: those are the UI's tokens
-/// (ADR-0052 §决策 2).
+/// [unchecked] is not an error: a source nobody checked has no verdict.
 enum SourceCheckLight {
   /// No verdict yet: never checked, or only cancelled runs.
   unchecked,
@@ -23,12 +20,10 @@ enum SourceCheckLight {
   degraded,
 }
 
-/// The light of [source], from its newest non-cancelled record (ADR-0052 §决策 1).
+/// The light of [source], from its newest non-cancelled record.
 ///
-/// A v5 database has no history, so a source whose columns still carry a check note falls back to
-/// [SourceCheckLight.failed]; the fallback is deliberately **not** "green", because that would
-/// present an old, unknown verdict as a fresh pass. Any source with neither history nor a note is
-/// [SourceCheckLight.unchecked].
+/// Without history, a source whose columns still carry a check note counts as failed —
+/// never as a fresh pass.
 SourceCheckLight sourceCheckLightOf(StoredBookSource source) {
   final SourceCheckRecord? record = source.lastCheck;
   if (record == null) {
@@ -39,7 +34,7 @@ SourceCheckLight sourceCheckLightOf(StoredBookSource source) {
 
   return switch (record.status) {
     SourceCheckStatus.succeeded => SourceCheckLight.passed,
-    // 取消不构成结论（ADR-0052 §决策 1）：DAO 取最近一条非取消记录，这里再兜一层。
+    // 取消与进行中都不构成结论。
     SourceCheckStatus.cancelled => SourceCheckLight.unchecked,
     SourceCheckStatus.pending ||
     SourceCheckStatus.running => SourceCheckLight.unchecked,
@@ -51,10 +46,6 @@ SourceCheckLight sourceCheckLightOf(StoredBookSource source) {
 }
 
 /// Whether [source]'s last check found something wrong.
-///
-/// It reads the record first and the **columns** second (ADR-0043 §决策 1, ADR-0045 §决策 1):
-/// the note or a group token the check owns. The group tokens come from `source_check_group.dart`,
-/// which stays their only source of truth.
 bool hasCheckFailure(StoredBookSource source) {
   final SourceCheckLight light = sourceCheckLightOf(source);
 
@@ -72,10 +63,7 @@ bool _degradedOnly(List<String> groups) {
   );
 }
 
-/// Whether the **columns** of [source] still carry a check note or an owned failure group.
-///
-/// This is the v5 fallback only: it must not call [sourceCheckLightOf], which calls it when there
-/// is no history (that recursion is what the first version of this file did).
+// v5 旧库没有历史记录，只能看列上残留的结论。
 bool _legacyColumnsFailed(StoredBookSource source) =>
     (source.comment ?? '').isNotEmpty ||
     splitGroups(source.groupName)

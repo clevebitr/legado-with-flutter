@@ -29,7 +29,7 @@ lib/
 ├── features/
 │   └── <feature>/                # book_source（书源 / 搜索 / 发现 / 详情 / 校验 / 调试）；Phase 5 新增
 │                                 #   reader（阅读会话 / 阅读设置 / 进度端口）/ bookshelf / settings
-│                                 #   （边界见 ADR-0041、ADR-0044）
+│                                 #   （边界见 ADR-0041、ADR-0044）/ rules（四类规则的 CRUD，ADR-0070）
 │       ├── data/                 # DTO(freezed) + DataSource + RepositoryImpl
 │       ├── domain/               # Entity + Repository 接口 + UseCase
 │       ├── presentation/         # pages / widgets / notifiers（Notifier 与该 feature 的派生 provider 同放 notifiers/）
@@ -143,6 +143,9 @@ enum ParseFailureKind {
   unsupportedRule,
   invalidBookSource,
   cancelled,
+
+  /// 站点说会话没了：需要登录或重新过人机验证（M21a，ADR-0068 §决策 3）。
+  loginRequired,
 }
 
 /// Result of an operation that can fail without throwing.
@@ -173,6 +176,9 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 | 路径必填 | `rulePath` 使用「书源字段 + 规则片段」描述，如 `searchRule.list`、`contentRule.content`（C-SRC-8） |
 | 穷尽匹配 | 消费方必须 `switch` 穷尽两个分支，禁止 `is` 判断后回退到 `null` |
 
+> **M21a 的那次新增：** `loginRequired` 由 ADR-0068 §决策 3 引入，理由见该节；其余阶段失败仍按下面的
+> 归类规则留在报告内部。
+
 > **不新增 kind 的既有裁决：** 书源校验的阶段失败（搜索失败 / 目录为空 / 正文为空 / 超时 / JS 失效）
 > 属于**归类**而不是新的失败类型，因此仍在 `ParseResult<SourceCheckReport>` 的报告内部表达，
 > `ParseFailureKind` 保持这 9 个值（ADR-0043 §决策 4）。需要新 kind 时先改本节并写 ADR。
@@ -196,17 +202,25 @@ sealed class ParseResult<T> with _$ParseResult<T> {
 - 路由参数必须为**类型化对象**（`freezed`），禁止传递裸 `Map<String, Object?>`。
 - 页面间传参不得传递 Entity 之外的未序列化状态；需要跨页共享的数据放入 Notifier。
 - 预测性返回接线见 `docs/dev/platform.md`（C-UI-4、C-PLT-2）。
+- **一次例外（M21a，ADR-0068 §决策 3）：** `MaterialApp.navigatorKey`（`appNavigatorKey`）让**没有
+  `BuildContext`** 的调用方也能推页面 —— 书源规则触发的「过人机验证」页就是这种调用（JS → 桥 →
+  适配器）。页面本身仍走 `AppRouter`/`Navigator`，这个 key 只给验证页用。
 
 | 路由类型（`features/<f>/presentation/<f>_route.dart`） | 页面 | feature | 分期 |
 |---|---|---|---|
 | `BookDetailRoute`、`ExploreRoute` | `BookDetailPage`、`ExplorePage` | `book_source` | 已落地 |
 | `BookSourceListRoute`、`BookSourceImportRoute` | 书源列表页、导入页 | `book_source` | 5.1 |
 | `ReaderRoute` | `ReaderPage` | `reader` | ✅ 5.3（2026-10-21，从 `book_source` **迁入**） |
-| `BookshelfRoute` | `BookshelfPage` | `bookshelf` | ✅ 5.4（2026-10-21） |
+| `BookshelfRoute.shelf` | `BookshelfPage` | `bookshelf` | ✅ 5.4（2026-10-21）；M19 加分组 chip 与多选批量 |
+| `BookshelfRoute.groups` | `ShelfGroupsPage`（分组管理） | `bookshelf` | ✅ M19（ADR-0066 §决策 2） |
 | `SettingsRoute` | `SettingsPage` | `settings` | ✅ 5.6（2026-10-21） |
 | `BookSourceCheckRoute` | `BookSourceCheckPage` | `book_source` | ✅ 5.10（2026-10-21） |
 | `BookSourceDebugRoute` | `BookSourceDebugPage` | `book_source` | ✅ 5.10（2026-10-21） |
+| `ReaderRoute.read` | `ReaderPage`（可带 `chapterUrl` / `charOffset`） | `reader` | ✅ M19（ADR-0066 §决策 7：书签跳转需要偏移） |
+| `ReaderRoute.bookmarks` / `ReaderRoute.records` / `ReaderRoute.bookRecords` | `BookmarkListPage` / `ReadingRecordsPage` / `BookReadingRecordsPage` | `reader` | ✅ M19（书签 / 阅读记录） |
 | `ShellRoute.about` / `ShellRoute.legalNotices` | `AboutPage` / `LegalNoticesPage` | `shell` | ✅ M18（2026-10-22） |
+| `RulesRoute.list` / `RulesRoute.edit` | `RulesListPage`（按 kind）/ `RuleEditPage` | `rules` | ✅ M20-c（ADR-0070 §决策 1；入口在「我的」） |
+| `BackupRoute.page` | `BackupPage`（导出 / 恢复） | `backup` | ✅ M22-b（ADR-0073；入口在「我的 → 备份与恢复」） |
 
 > 落地页是组合根里的 `AppShell`（ADR-0055）：它组合四个 feature 的页面，因此不进本表；
 > 表内只登记 feature 自己 push 的类型化路由。

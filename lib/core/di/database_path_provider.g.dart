@@ -8,32 +8,23 @@ part of 'database_path_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Provides the on-disk database path: `<application support>/reader.db`
-/// (`docs/dev/platform.md` §5).
+/// Provides the on-disk database path: `<application support>/reader.db`.
 ///
-/// The platform lookup is isolated here so tests can assert the resolved path
-/// without opening a file database: they fake the `path_provider` channel
-/// instead of touching the real application directory.
+/// Isolated so tests can fake the platform lookup without opening a database.
 
 @ProviderFor(databaseFilePath)
 final databaseFilePathProvider = DatabaseFilePathProvider._();
 
-/// Provides the on-disk database path: `<application support>/reader.db`
-/// (`docs/dev/platform.md` §5).
+/// Provides the on-disk database path: `<application support>/reader.db`.
 ///
-/// The platform lookup is isolated here so tests can assert the resolved path
-/// without opening a file database: they fake the `path_provider` channel
-/// instead of touching the real application directory.
+/// Isolated so tests can fake the platform lookup without opening a database.
 
 final class DatabaseFilePathProvider
     extends $FunctionalProvider<AsyncValue<String>, String, FutureOr<String>>
     with $FutureModifier<String>, $FutureProvider<String> {
-  /// Provides the on-disk database path: `<application support>/reader.db`
-  /// (`docs/dev/platform.md` §5).
+  /// Provides the on-disk database path: `<application support>/reader.db`.
   ///
-  /// The platform lookup is isolated here so tests can assert the resolved path
-  /// without opening a file database: they fake the `path_provider` channel
-  /// instead of touching the real application directory.
+  /// Isolated so tests can fake the platform lookup without opening a database.
   DatabaseFilePathProvider._()
     : super(
         from: null,

@@ -14,22 +14,12 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_conten
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
 
-/// How many result URLs one debug run reports, so a long list does not flood the console.
+// 单次调试最多报告的结果地址数，避免长列表刷屏。
 const int _maxReportedUrls = 3;
 
-/// Runs **one** target of the debug console against one source (`docs/dev/roadmap.md` §5.10).
+/// Runs one debug target against one source, reporting events as it goes.
 ///
-/// The run reports through the event sink as it goes — that is what makes the console live — and
-/// answers with the terminal [SourceDebugStatus]. The three event kinds are the console's whole
-/// contract:
-///
-/// * **message** — what the run is doing (`search: books=12`, `content: chars=1532`);
-/// * **source** — the URL it just touched, so a user can open it in a browser;
-/// * **error** — a `ParseResult` failure, with its kind and rule path kept verbatim.
-///
-/// Every payload is **data**, never interface copy and never a page body (C-SEC-4, C-ERR-8): ARB
-/// owns the labels the page puts next to a line. A stop requested through [TaskCancellation] ends
-/// the run as [SourceDebugStatus.cancelled] between two steps.
+/// A stop requested through [TaskCancellation] ends the run as cancelled between steps.
 final class RunSourceDebug {
   /// Creates the use case.
   const RunSourceDebug({
@@ -51,9 +41,6 @@ final class RunSourceDebug {
   final Clock _clock;
 
   /// Runs [target] on [source] with [query], reporting every step to [onEvent].
-  ///
-  /// The failure branch is the caller's mistake — a blank query means there is nothing to run —
-  /// rather than a verdict about the source, which travels through the event stream instead.
   Future<ParseResult<SourceDebugStatus>> execute(
     BookSource source, {
     required SourceDebugTarget target,
@@ -103,7 +90,7 @@ final class RunSourceDebug {
     return ParseSuccess<SourceDebugStatus>(status);
   }
 
-  /// Runs the search target: the keyword goes through `searchUrl` like a real search.
+  // 搜索目标：关键词走 searchUrl，和真实搜索同一条路径。
   Future<SourceDebugStatus> _search(
     BookSource source,
     String keyword,
@@ -123,7 +110,7 @@ final class RunSourceDebug {
     }
 
     run.message('search: keyword=$keyword');
-    // 「来源」事件要报的是真正发出去的地址：渲染失败时不报，搜索本身会把失败讲清楚。
+    // 「来源」事件只报渲染成功的地址；渲染失败由搜索本身报告。
     final ParseResult<String> rendered = await _pages.renderUrl(
       searchUrl,
       <String, String>{'key': keyword, 'page': '1', 'baseUrl': source.url},
@@ -159,7 +146,6 @@ final class RunSourceDebug {
     };
   }
 
-  /// Runs the explore target: [categoryUrl] is opened as a discover-page category.
   Future<SourceDebugStatus> _explore(
     BookSource source,
     String categoryUrl,
@@ -192,7 +178,6 @@ final class RunSourceDebug {
     };
   }
 
-  /// Runs the detail target on the book URL in [bookUrl].
   Future<SourceDebugStatus> _info(
     BookSource source,
     String bookUrl,
@@ -225,7 +210,6 @@ final class RunSourceDebug {
     };
   }
 
-  /// Runs the table-of-contents target on the table-of-contents URL.
   Future<SourceDebugStatus> _tocRun(
     BookSource source,
     String tocUrl,
@@ -258,10 +242,7 @@ final class RunSourceDebug {
     };
   }
 
-  /// Runs the body target on the chapter URL.
-  ///
-  /// The reported payload is the **length** of the body; the text itself never reaches the console
-  /// (C-SEC-4).
+  // 上报的只是正文长度，正文本身永不进入控制台。
   Future<SourceDebugStatus> _contentRun(
     BookSource source,
     String chapterUrl,
@@ -273,8 +254,7 @@ final class RunSourceDebug {
     }
 
     run.source(chapterUrl);
-    // 控制台只拿到一个 URL：书名 / 章节名留空，`java.get('bookName' / 'title')` 会回落到
-    // 书源变量（§6、ADR-0049）。
+    // 控制台只给一个 URL：书名 / 章节名留空，规则会回落到书源变量。
     final ParseResult<String> result = await _content.execute(
       source,
       ChapterRequest(url: chapterUrl),
@@ -295,7 +275,6 @@ final class RunSourceDebug {
     };
   }
 
-  /// Whether a stop was requested before this step started.
   bool _stopped(_DebugRun run, TaskCancellation? cancellation) {
     if (cancellation?.isCancelled ?? false) {
       run.message('cancelled');
@@ -306,13 +285,12 @@ final class RunSourceDebug {
     return false;
   }
 
-  /// At most [_maxReportedUrls] URLs of [books], so a 300-hit search stays readable.
   List<String> _urlsOf(List<Book> books) => <String>[
     for (final Book book in books.take(_maxReportedUrls)) book.url,
   ];
 }
 
-/// One debug run: the event sink plus the clock the elapsed times are measured on.
+// 一次调试运行的共享状态：事件出口与计时时钟。
 final class _DebugRun {
   _DebugRun({
     required this.target,
@@ -326,14 +304,12 @@ final class _DebugRun {
   final Clock clock;
   final void Function(SourceDebugEvent event) onEvent;
 
-  /// Reports a message line.
   void message(String text) => _emit(SourceDebugEventKind.message, text: text);
 
-  /// Reports a URL the run touched.
   void source(String url) =>
       _emit(SourceDebugEventKind.source, text: url, url: url);
 
-  /// Reports one URL line per entry of [urls], then the terminal message.
+  // 逐条上报 URL，最后再发终态消息。
   SourceDebugStatus finish(
     String text, {
     List<String> urls = const <String>[],
@@ -346,7 +322,6 @@ final class _DebugRun {
     return SourceDebugStatus.succeeded;
   }
 
-  /// Reports a failure line and answers with the terminal state.
   SourceDebugStatus fail(ParseFailureKind kind, {required String rulePath}) {
     _emit(
       SourceDebugEventKind.error,
@@ -358,7 +333,6 @@ final class _DebugRun {
     return SourceDebugStatus.failed;
   }
 
-  /// Emits one line with the elapsed time measured from the start of the run.
   void _emit(
     SourceDebugEventKind kind, {
     required String text,

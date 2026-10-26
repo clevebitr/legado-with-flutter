@@ -11,6 +11,7 @@ import 'package:flutter_reader/features/book_source/domain/page_fetch_service.da
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/fake_js_bridge.dart';
@@ -84,6 +85,42 @@ void main() {
       expect(info.coverUrl, 'https://example-novel.test/img/1.jpg');
       // 书源没有 `tocUrl` 规则 → 目录就在书籍页本身。
       expect(info.tocUrl, _bookUrl);
+    });
+
+    test('execute_givenACoverWithUrlOptions_stripsThemWithAWarning', () async {
+      // 封面地址在语料里是 URL 规则（`img@src##$##,{"headers":…}`）。封面加载器还带不了
+      // 这些 header，但地址里不能留 JSON（会把图床地址整个弄坏，ADR-0069 G4）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _bookUrl,
+          '<html><body><div class="info"><img src="/img/1.jpg"></div>'
+          '<h1 class="title">书名一</h1></body></html>',
+        );
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final BookSource source = _source();
+      final BookInfoRule rules = source.bookInfoRule!.copyWith(
+        coverUrl: r'img@src##$##,{"headers":{"Referer":"{{baseUrl}}"}}',
+      );
+
+      final BookInfo info = _data(
+        await FetchBookInfo(
+          pages: PageFetchService(
+            engine: RuleEngine(
+              logger: AppLogger(level: LogLevel.debug, printer: printer),
+              jsBridge: FakeJsBridge(),
+              variables: JsVariableStore(),
+            ),
+            http: http,
+            logger: AppLogger(level: LogLevel.debug, printer: printer),
+          ),
+        ).execute(source.copyWith(bookInfoRule: rules), _bookUrl),
+      );
+
+      expect(info.coverUrl, 'https://example-novel.test/img/1.jpg');
+      expect(
+        printer.events.map((LogEvent event) => event.message),
+        contains(contains('Cover URL options dropped')),
+      );
     });
 
     test('execute_givenTocUrlRule_resolvesItAgainstTheBookUrl', () async {

@@ -16,6 +16,7 @@ import 'package:flutter_reader/features/book_source/domain/usecases/fetch_conten
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 
 import '../../../../support/fake_content_cache.dart';
 import '../../../../support/fake_http_client.dart';
@@ -229,6 +230,29 @@ void main() {
       expect(books.first.coverUrl, 'https://example-novel.test/img/1.jpg');
       expect(books.first.lastChapter, '第3章 结尾');
       expect(books.last.name, '书名二');
+    });
+
+    test('execute_givenACoverWithUrlOptions_stripsThemWithAWarning', () async {
+      // `img@src##$##,{"headers":…}`：地址里不能留 JSON（ADR-0069 G4）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_searchUrl, _page('search_result.html'));
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(http);
+      final BookSource source = _source();
+      final SearchRule rules = source.searchRule.copyWith(
+        coverUrl: r'img@src##$##,{"headers":{"Referer":"{{baseUrl}}"}}',
+      );
+
+      final List<Book> books = _data(
+        await SearchBooks(pages: service.pages)
+            .execute(source.copyWith(searchRule: rules), '剑来'),
+      );
+
+      expect(books.first.coverUrl, 'https://example-novel.test/img/1.jpg');
+      expect(
+        service.printer.events.map((LogEvent event) => event.message),
+        contains(contains('Cover URL options dropped')),
+      );
     });
 
     test('execute_givenHttpFailure_returnsTheSameFailure', () async {

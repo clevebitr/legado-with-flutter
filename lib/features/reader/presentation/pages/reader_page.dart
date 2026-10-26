@@ -1,24 +1,33 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/reader/di.dart';
+import 'package:flutter_reader/features/reader/domain/bookmark_excerpt.dart';
+import 'package:flutter_reader/features/reader/domain/entities/book_search.dart';
+import 'package:flutter_reader/features/reader/domain/entities/bookmark.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_settings.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_source_kind.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
+import 'package:flutter_reader/features/reader/domain/entities/reading_session.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/book_source_switcher.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/reading_record_repository.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/manga_queries.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_bookmarks_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/manga_reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_search_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_source_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
@@ -41,8 +50,13 @@ import 'package:m3e_design/m3e_design.dart';
 /// * **the two page modes share everything but the body widget**: the same chapter, the same
 ///   restore offset, the same save path — so switching modes mid-chapter does not lose the place.
 class ReaderPage extends ConsumerStatefulWidget {
-  /// Creates the page for [book], optionally starting at [chapterUrl].
-  const ReaderPage({required this.book, this.chapterUrl, super.key});
+  /// Creates the page for [book], optionally starting at [chapterUrl] and [charOffset].
+  const ReaderPage({
+    required this.book,
+    this.chapterUrl,
+    this.charOffset = 0,
+    super.key,
+  });
 
   /// The book being read.
   final ReaderBook book;
@@ -52,6 +66,10 @@ class ReaderPage extends ConsumerStatefulWidget {
   /// A concrete URL wins over the stored position: tapping a chapter row in the detail page must
   /// open **that** chapter, not the last one read (ADR-0044 §决策 2).
   final String? chapterUrl;
+
+  /// Where to land inside [chapterUrl], which is what a bookmark jump needs
+  /// (`docs/dev/roadmap.md` M19, ADR-0066 §决策 7).
+  final int charOffset;
 
   @override
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
@@ -69,8 +87,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// The progress port, captured in `initState` so `dispose` may still write.
   ReadingProgressStore? _store;
 
+  /// The reading-record port, the clock and the session's start instant, captured for the same
+  /// reason as [_store]: `dispose` may not read a provider.
+  ReadingRecordRepository? _records;
+  Clock? _clock;
+  DateTime? _sessionStartedAt;
+
   /// The chapter whose restore offset was already applied (the page restores once per chapter).
   String? _restoredChapterUrl;
+
+  /// Bumped when a jump must restore again inside the **same** chapter.
+  ///
+  /// The paged body restores once per widget instance, so a bookmark jump that stays in the same
+  /// chapter would otherwise be ignored; a new key gives it a fresh body that restores at the
+  /// requested offset (ADR-0066 §决策 7).
+  int _restoreNonce = 0;
 
   /// Whether the chapter the route asked for was already opened.
   bool _appliedStartChapter = false;
@@ -104,6 +135,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// The body of the chapter the last build showed, for the percent estimate.
   String? _lastBody;
 
+  /// The chapter the last build showed, kept for the session record written in `dispose`.
+  String? _lastChapterUrl;
+  String? _lastChapterName;
+
   /// Whether the user is dragging the progress slider right now.
   ///
   /// While dragging, the label follows the finger but the chapter does **not** change: changing it
@@ -114,6 +149,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void initState() {
     super.initState();
     _store = ref.read(readerProgressStoreProvider);
+    _records = ref.read(readingRecordRepositoryProvider);
+    _clock = ref.read(clockProvider);
+    _sessionStartedAt = _clock?.now();
   }
 
   @override
@@ -136,10 +174,38 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ),
       );
     }
+    _recordSession();
     _tts?.onReaderClosed();
     _chromeTimer?.cancel();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Appends this session to the reading history (ADR-0066 §决策 4).
+  ///
+  /// The store drops sessions below `minimumRecordedSeconds`, so this always hands the frame over
+  /// and never has to decide: a glance at the chapter title is not a reading record. Both ports
+  /// were captured in `initState` because reading a provider inside `dispose` is unsafe.
+  void _recordSession() {
+    final ReadingRecordRepository? records = _records;
+    final Clock? clock = _clock;
+    final DateTime? startedAt = _sessionStartedAt;
+    if (records == null || clock == null || startedAt == null) {
+      return;
+    }
+    final ReadingSession session = ReadingSession(
+      sourceUrl: _book.sourceUrl,
+      bookUrl: _book.bookUrl,
+      bookName: _book.name,
+      chapterUrl: _lastChapterUrl,
+      chapterName: _lastChapterName,
+      startedAt: startedAt,
+      endedAt: clock.now(),
+    );
+    if (!session.shouldRecord) {
+      return;
+    }
+    unawaited(records.record(session));
   }
 
   /// Shows the chrome and restarts its auto-hide countdown (ADR-0051 §决策 1).
@@ -213,6 +279,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final AsyncValue<ParseResult<List<ReadingChapter>>> chapters = ref.watch(
       readerChaptersProvider(_book),
     );
+    // 书签也在工具条出现**之前**就读：工具条只在唤出时才构建，第一帧还停在 loading 的话，
+    // 按钮会先画成「未标记」再跳成「已标记」（ADR-0066 §决策 3 的 toggle 语义要求状态稳定）。
+    final AsyncValue<List<Bookmark>> marks = ref.watch(
+      readerBookmarksProvider(_book),
+    );
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -223,6 +294,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               foregroundColor: palette.foreground,
               title: Text(_title(chapters, l10n)),
               actions: <Widget>[
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: l10n.readerSearchAction,
+                  onPressed: () => _keepAlive(
+                    () => _openSearch(switch (chapters.value) {
+                      ParseSuccess<List<ReadingChapter>>(
+                        :final List<ReadingChapter> data,
+                      ) =>
+                        data,
+                      _ => const <ReadingChapter>[],
+                    }),
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.text_fields),
                   tooltip: l10n.readerSettingsAction,
@@ -273,7 +357,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ],
       ),
       bottomNavigationBar: _chromeVisible
-          ? _toolBar(context, l10n, chapters, palette)
+          ? _toolBar(context, l10n, chapters, palette, marks)
           : null,
     );
   }
@@ -284,11 +368,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     AppLocalizations l10n,
     AsyncValue<ParseResult<List<ReadingChapter>>> chapters,
     ({Color background, Color foreground}) palette,
+    AsyncValue<List<Bookmark>> marks,
   ) {
     final M3ETheme tokens = context.m3e;
     final List<ReadingChapter> known = _chaptersOf(chapters);
     final int index = _currentIndex;
     final int total = known.length;
+    final bool marked = _isBookmarkedAtCurrentPosition(known, index, marks);
     final double? scrubbing = _scrubbing;
 
     return SafeArea(
@@ -349,6 +435,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   tooltip: l10n.readerTocAction,
                   onPressed: () => _keepAlive(() => _openToc(known)),
                 ),
+                // 书签按钮是一个 toggle：同一位置再按一次就取消（ADR-0066 §决策 3）。
+                IconButton(
+                  icon: Icon(marked ? Icons.bookmark : Icons.bookmark_border),
+                  tooltip: marked ? l10n.bookmarkRemove : l10n.bookmarkAdd,
+                  onPressed: known.isEmpty
+                      ? null
+                      : () => _keepAlive(
+                          () => _toggleBookmark(known, index, l10n),
+                        ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.swap_horiz),
                   tooltip: l10n.readerChangeSource,
@@ -400,14 +496,75 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return (state.charOffset / body.length * 100).clamp(0, 100).round();
   }
 
+  /// Whether the current position of chapter [index] already carries a bookmark.
+  ///
+  /// The list is the same provider the toggle reloads, so the icon and the next write always agree
+  /// on what 「marked here」 means (ADR-0066 §决策 3).
+  bool _isBookmarkedAtCurrentPosition(
+    List<ReadingChapter> chapters,
+    int index,
+    AsyncValue<List<Bookmark>> marks,
+  ) {
+    if (chapters.isEmpty || index >= chapters.length) {
+      return false;
+    }
+
+    return isBookmarkedAt(
+      marks.value ?? const <Bookmark>[],
+      chapterUrl: chapters[index].url,
+      charOffset: _lastOffset,
+    );
+  }
+
+  /// Adds or removes the bookmark at the current position and reports which way it went.
+  Future<void> _toggleBookmark(
+    List<ReadingChapter> chapters,
+    int index,
+    AppLocalizations l10n,
+  ) async {
+    if (index >= chapters.length) {
+      return;
+    }
+    final ReadingChapter chapter = chapters[index];
+    final String body = _lastBody ?? '';
+    final bool? marked = await ref
+        .read(readerBookmarksProvider(_book).notifier)
+        .toggle(
+          BookmarkDraft(
+            sourceUrl: _book.sourceUrl,
+            bookUrl: _book.bookUrl,
+            bookName: _book.name,
+            tocUrl: _book.tocUrl,
+            chapterUrl: chapter.url,
+            chapterName: chapter.title.isEmpty ? null : chapter.title,
+            chapterIndex: index,
+            charOffset: _lastOffset,
+            // 摘录来自已经渲染过的正文：加书签不发第二请求（ADR-0066 §决策 3）。
+            excerpt: body.isEmpty ? null : bookmarkExcerpt(body, _lastOffset),
+          ),
+        );
+    if (!mounted) {
+      return;
+    }
+    final String message = switch (marked) {
+      true => l10n.bookmarkAdded,
+      false => l10n.bookmarkRemoved,
+      null => l10n.bookmarkFailed,
+    };
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
   /// Jumps to chapter [index] and keeps the chrome alive.
-  void _jumpToChapter(int index) {
+  void _jumpToChapter(int index, {int charOffset = 0}) {
     if (_chapters.isEmpty) {
       return;
     }
     final int target = index.clamp(0, _chapters.length - 1);
     unawaited(
-      ref.read(readerSessionProvider(_book).notifier).selectChapter(target),
+      ref
+          .read(readerSessionProvider(_book).notifier)
+          .selectChapter(target, charOffset: charOffset),
     );
     _keepAlive(() {});
   }
@@ -532,6 +689,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   /// Opens the chapter the route named, once, when it differs from the restored one.
+  ///
+  /// The route may also name an offset inside that chapter (a bookmark jump); the session then
+  /// starts there instead of at the top, and the body restores against it once
+  /// (ADR-0066 §决策 7).
   void _applyStartChapter(
     List<ReadingChapter> chapters,
     ReaderSessionState? session,
@@ -550,17 +711,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _appliedStartChapter = true;
-    if (index == session.chapterIndex) {
+    final int offset = widget.charOffset < 0 ? 0 : widget.charOffset;
+    final bool samePosition =
+        index == session.chapterIndex && offset == session.charOffset;
+    if (samePosition) {
       return;
     }
-    // 换章会改 provider 状态，而这里还在 build 里：放到帧后执行（否则 Riverpod 会报
+    // 换章 / 换位置会改 provider 状态，而这里还在 build 里：放到帧后执行（否则 Riverpod 会报
     // 「Tried to modify a provider while the widget tree was building」）。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
+      // 同一章内的跳转必须让正文重新恢复一次：滚动正文按章缓存恢复目标，分页正文每个实例只恢复
+      // 一次，所以这里清掉章标记并换一个实例（见 [_restoreNonce]）。
+      _restoredChapterUrl = null;
+      _restoreNonce++;
       unawaited(
-        ref.read(readerSessionProvider(_book).notifier).selectChapter(index),
+        ref
+            .read(readerSessionProvider(_book).notifier)
+            .selectChapter(index, charOffset: offset),
       );
     });
   }
@@ -581,6 +751,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _lastIndex = session.chapterIndex;
     _lastOffset = session.charOffset;
     _lastSession = session;
+    _lastChapterUrl = chapter.url;
+    _lastChapterName = chapter.title.isEmpty ? null : chapter.title;
     final M3ETheme tokens = context.m3e;
     final TextStyle style = readerTextStyle(
       tokens: tokens,
@@ -755,7 +927,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       padding: EdgeInsets.all(padding),
       child: _PagedBody(
         key: ValueKey<String>(
-          '${chapter.url}|${style.fontSize}|${style.height}',
+          '${chapter.url}|${style.fontSize}|${style.height}|$_restoreNonce',
         ),
         text: body,
         style: style,
@@ -821,6 +993,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         context: context,
         isScrollControlled: true,
         builder: (BuildContext context) => ReaderTtsSheet(book: widget.book),
+      ),
+    );
+  }
+
+  /// Opens the in-book search and jumps to the hit the user picks
+  /// (`docs/dev/roadmap.md` M20, ADR-0070 §决策 2).
+  ///
+  /// The hit's `offsetInText` is the reader's own text offset, so it travels as the session's
+  /// `charOffset` — exactly how a bookmark lands on its sentence (ADR-0066 §决策 7).
+  void _openSearch(List<ReadingChapter> chapters) {
+    if (chapters.isEmpty) {
+      return;
+    }
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (BuildContext context) => SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.85,
+          child: ReaderSearchSheet(
+            book: widget.book,
+            chapters: chapters,
+            fromIndex: _currentIndex,
+            onSelected: (BookSearchHit hit) {
+              Navigator.of(context).pop();
+              _jumpToChapter(hit.chapterIndex, charOffset: hit.offsetInText);
+            },
+          ),
+        ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:typed_data' show Uint8List;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/app_shell.dart';
 import 'package:flutter_reader/core/di/app_navigation_provider.dart';
@@ -5,11 +7,20 @@ import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/network/cookie_manager.dart';
+import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/network/persistent_cookie_manager.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/in_app_web_view_page_fetcher.dart';
+import 'package:flutter_reader/core/platform/platform_info.dart';
+import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/router/app_navigation.dart';
 import 'package:flutter_reader/core/router/app_router.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
+import 'package:flutter_reader/features/backup/di.dart';
+import 'package:flutter_reader/features/backup/domain/repositories/restore_completion_hook.dart';
+import 'package:flutter_reader/features/backup/presentation/backup_route.dart';
+import 'package:flutter_reader/features/backup/presentation/pages/backup_page.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/audio_track.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
@@ -17,7 +28,9 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/manga_pages.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/switch_book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
@@ -27,14 +40,19 @@ import 'package:flutter_reader/features/book_source/presentation/pages/book_sour
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_edit_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_import_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/book_source_list_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/book_source_login_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/cache_manage_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/source_captcha_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/pages/source_verification_page.dart';
+import 'package:flutter_reader/features/bookshelf/data/shelf_cover_picker_impl.dart';
 import 'package:flutter_reader/features/bookshelf/di.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_candidate.dart';
+import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_group.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
 import 'package:flutter_reader/features/bookshelf/domain/repositories/bookshelf_repository.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/bookshelf_route.dart';
 import 'package:flutter_reader/features/bookshelf/presentation/notifiers/bookshelf_notifier.dart';
-import 'package:flutter_reader/features/bookshelf/presentation/pages/bookshelf_page.dart';
 import 'package:flutter_reader/features/reader/di.dart';
 import 'package:flutter_reader/features/reader/domain/entities/audio_track.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_book.dart';
@@ -48,11 +66,22 @@ import 'package:flutter_reader/features/reader/domain/repositories/manga_page_so
 import 'package:flutter_reader/features/reader/domain/repositories/reader_source_kind_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
-import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
+import 'package:flutter_reader/features/reader/presentation/notifiers/reader_session_notifier.dart';
 import 'package:flutter_reader/features/reader/presentation/reader_route.dart';
+import 'package:flutter_reader/features/rules/di.dart';
+import 'package:flutter_reader/features/rules/domain/entities/rule.dart';
+import 'package:flutter_reader/features/rules/domain/entities/rule_kind.dart';
+import 'package:flutter_reader/features/rules/domain/entities/rule_payload.dart';
+import 'package:flutter_reader/features/rules/domain/repositories/chapter_body_invalidator.dart';
+import 'package:flutter_reader/features/rules/domain/repositories/rule_repository.dart';
+import 'package:flutter_reader/features/rules/presentation/pages/rule_edit_page.dart';
+import 'package:flutter_reader/features/rules/presentation/pages/rules_import_page.dart';
+import 'package:flutter_reader/features/rules/presentation/pages/rules_list_page.dart';
+import 'package:flutter_reader/features/rules/presentation/rules_route.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_theme_mode.dart';
 import 'package:flutter_reader/features/settings/presentation/notifiers/settings_notifier.dart';
+import 'package:flutter_reader/features/settings/presentation/pages/cookie_manage_page.dart';
 import 'package:flutter_reader/features/settings/presentation/pages/settings_page.dart';
 import 'package:flutter_reader/features/settings/presentation/settings_route.dart';
 import 'package:flutter_reader/features/shell/presentation/pages/about_page.dart';
@@ -105,7 +134,95 @@ List<Override> appProviderOverrides() => <Override>[
   webPageFetcherProvider.overrideWith(
     (Ref ref) => InAppWebViewPageFetcher(logger: ref.watch(appLoggerProvider)),
   ),
+  // 人机验证需要推一个页面并等结果（ADR-0068 §决策 3）：绑定只能在这里，`core/` 不认识
+  // `features/`，`domain/` 也不能碰 `BuildContext`。
+  sourceVerificationProvider.overrideWith(_SourceVerification.new),
+  // 替换净化（M20，ADR-0070 增补 §6）：`book_source` 声明「取启用的净化规则」端口，这里把它绑到
+  // `rules` 的仓储；实体在装配根就地映射成消费方的 `PurgeRule`（ADR-0041 §决策 2）。
+  purgeRuleSourceProvider.overrideWith(_PurgeRuleSource.new),
+  // 反过来的一条：规则写入后要作废已缓存的成品正文，端口由 `rules` 声明、这里绑到 `book_source`
+  // 的正文缓存（ADR-0070 增补 §7）。
+  chapterBodyInvalidatorProvider.overrideWith(_ChapterBodyInvalidator.new),
+  // 恢复写过设置之后要让界面重读（ADR-0073 §决策 3）：端口由 `backup` 声明，这里绑到
+  // settings 与 reader 的 keepAlive provider —— 它们不失效就会一直显示恢复前的主题与字号。
+  restoreCompletionHookProvider.overrideWith(_RestoreHook.new),
 ];
+
+/// `PurgeRuleSource` bound to the rules feature, which owns the table (ADR-0070 §决策 3).
+///
+/// Only **enabled** `replace` rules travel: the pipeline has no use for a disabled rule or for the
+/// other three kinds, and a payload this build cannot read is simply not a regex to run.
+final class _PurgeRuleSource implements PurgeRuleSource {
+  const _PurgeRuleSource(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<List<PurgeRule>> purgeRules() async {
+    final RuleRepository repository = await _ref.read(
+      ruleRepositoryProvider.future,
+    );
+    final List<Rule> rules = await repository.ofKind(RuleKind.replace);
+
+    return <PurgeRule>[
+      for (final Rule rule in rules)
+        if (rule.isEnabled)
+          if (rule.payload case final ReplacePayload payload)
+            PurgeRule(
+              pattern: payload.pattern,
+              replacement: payload.replacement,
+              isRegex: payload.isRegex,
+              appliesToContent: payload.scopeContent,
+              appliesToTitle: payload.scopeTitle,
+              timeoutMs: payload.timeoutMs,
+            ),
+    ];
+  }
+}
+
+/// `ChapterBodyInvalidator` bound to the chapter body cache in `book_source` (ADR-0070 增补 §7).
+final class _ChapterBodyInvalidator implements ChapterBodyInvalidator {
+  const _ChapterBodyInvalidator(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<void> invalidateChapterBodies() =>
+      _ref.read(contentCacheProvider).clearAll();
+}
+
+/// The theme seed the user picked, as a [Color], or `null` for the project default.
+Color? _seedOf(AppSettings settings) => switch (settings.seedColor) {
+  final int argb => Color(argb),
+  null => null,
+};
+
+/// `RestoreCompletionHook` bound to the two providers that cache `shared_preferences`
+/// (ADR-0073 §决策 3).
+///
+/// Both are `keepAlive`, so a restore would otherwise leave the app on the theme and text scale it
+/// had before until the next launch. Nothing else is invalidated: the rows the restore wrote are read
+/// by pages that are rebuilt when they are opened, and the shelf was already rebuilt by the
+/// navigation that got the user here.
+final class _RestoreHook implements RestoreCompletionHook {
+  const _RestoreHook(this._ref);
+
+  final Ref _ref;
+
+  @override
+  void onRestored() {
+    _ref.invalidate(settingsProvider);
+    _ref.invalidate(readerSettingsProvider);
+  }
+}
+
+/// The root navigator key (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 3).
+///
+/// The verification page is pushed from code that has no `BuildContext`: a JS rule
+/// (`java.startBrowser`) reaches the host through the bridge, and the adapter that answers it is a
+/// plain object in this file. A `navigatorKey` is the smallest way to give it the root navigator;
+/// everything the UI itself starts keeps going through `Navigator` / `AppRouter`.
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 /// Root widget: wires theming, localization and the route table.
 ///
@@ -154,15 +271,24 @@ class ReaderApp extends ConsumerWidget {
     final BookSourceEditRoute route => BookSourceEditPage(
       sourceId: route.sourceId,
     ),
-    ShelfRoute() => const BookshelfPage(),
+    final BookshelfRoute route => bookshelfPageFor(route),
     SettingsPageRoute() => const SettingsPage(),
     final BookDetailRoute route => BookDetailPage(book: route.book),
-    final ReaderRoute route => ReaderPage(
-      book: route.book,
-      chapterUrl: route.chapterUrl,
-    ),
+    final ReaderRoute route => readerPageFor(route),
     AboutRoute() => const AboutPage(),
     LegalNoticesRoute() => const LegalNoticesPage(),
+    final RulesListRoute route => RulesListPage(kind: route.kind),
+    final RulesEditRoute route => RuleEditPage(
+      kind: route.kind,
+      ruleId: route.ruleId,
+    ),
+    RulesImportRoute() => const RulesImportPage(),
+    BookSourceCacheRoute() => const CacheManagePage(),
+    final BookSourceLoginRoute route => BookSourceLoginPage(
+      sourceId: route.sourceId,
+    ),
+    SettingsCookiesRoute() => const CookieManagePage(),
+    BackupPageRoute() => const BackupPage(),
     // 落地页就是外壳（ADR-0055 §决策 5）：未知参数回落到它，而不是搜索页。
     _ => const AppShell(),
   };
@@ -180,12 +306,18 @@ class ReaderApp extends ConsumerWidget {
     ColorScheme? darkDynamic,
     AppSettings settings,
   ) => MaterialApp(
+    navigatorKey: appNavigatorKey,
     onGenerateTitle: (BuildContext context) =>
         AppLocalizations.of(context).appTitle,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    theme: buildReaderTheme(lightDynamic ?? fallbackLightColorScheme()),
-    darkTheme: buildReaderTheme(darkDynamic ?? fallbackDarkColorScheme()),
+    // 用户选的种子色只在「平台没有动态取色」时生效（ADR-0075 §决策 1）。
+    theme: buildReaderTheme(
+      lightDynamic ?? fallbackLightColorScheme(seedColor: _seedOf(settings)),
+    ),
+    darkTheme: buildReaderTheme(
+      darkDynamic ?? fallbackDarkColorScheme(seedColor: _seedOf(settings)),
+    ),
     themeMode: switch (settings.themeMode) {
       AppThemeMode.system => ThemeMode.system,
       AppThemeMode.light => ThemeMode.light,
@@ -240,7 +372,7 @@ final class _RootNavigation implements AppNavigation {
     String? chapterUrl,
   }) => pushReaderRoute(
     context,
-    ReaderRoute(
+    ReaderRoute.read(
       book: ReaderBook(
         sourceUrl: sourceUrl,
         bookUrl: bookUrl,
@@ -248,6 +380,57 @@ final class _RootNavigation implements AppNavigation {
         tocUrl: tocUrl,
       ),
       chapterUrl: chapterUrl,
+    ),
+  );
+
+  @override
+  void openBookmarks(BuildContext context) =>
+      pushReaderRoute(context, const ReaderRoute.bookmarks());
+
+  @override
+  void openCacheManage(BuildContext context) =>
+      pushBookSourceRoute(context, const BookSourceRoute.cacheManage());
+
+  @override
+  void openCookies(BuildContext context) =>
+      pushSettingsRoute(context, const SettingsRoute.cookies());
+
+  @override
+  void openBackup(BuildContext context) =>
+      pushBackupRoute(context, const BackupRoute.page());
+
+  @override
+  void openReplaceRules(BuildContext context) =>
+      pushRulesRoute(context, const RulesRoute.list(kind: RuleKind.replace));
+
+  @override
+  void openTocRules(BuildContext context) =>
+      pushRulesRoute(context, const RulesRoute.list(kind: RuleKind.toc));
+
+  @override
+  void openDictRules(BuildContext context) =>
+      pushRulesRoute(context, const RulesRoute.list(kind: RuleKind.dict));
+
+  @override
+  void openHighlightRules(BuildContext context) =>
+      pushRulesRoute(context, const RulesRoute.list(kind: RuleKind.highlight));
+
+  @override
+  void openReadingRecords(BuildContext context) =>
+      pushReaderRoute(context, const ReaderRoute.records());
+
+  @override
+  void openBookReadingRecords(
+    BuildContext context, {
+    required String sourceUrl,
+    required String bookUrl,
+    required String bookName,
+  }) => pushReaderRoute(
+    context,
+    ReaderRoute.bookRecords(
+      sourceUrl: sourceUrl,
+      bookUrl: bookUrl,
+      bookName: bookName,
     ),
   );
 }
@@ -450,6 +633,241 @@ final class _ShelfWriter implements BookshelfWriter {
           lastChapter: draft.lastChapter,
         ),
       );
+
+  @override
+  Future<ShelfMembership> membership({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async {
+    final BookshelfRepository repository = _ref.read(
+      bookshelfRepositoryProvider,
+    );
+    final ShelvedBook? book = await repository.findByUrl(
+      sourceUrl: sourceUrl,
+      bookUrl: bookUrl,
+    );
+    final List<ShelfGroup> groups = await repository.getGroups();
+    final List<ShelfGroupOption> options = groups
+        .map(
+          (ShelfGroup group) =>
+              ShelfGroupOption(id: group.id, name: group.name),
+        )
+        .toList();
+    if (book == null) {
+      // 不在书架上的书没有分组与封面可言：页面据此把那几个动作置灰。
+      return ShelfMembership.absent;
+    }
+
+    return ShelfMembership(
+      onShelf: true,
+      groupId: book.groupId,
+      customCoverPath: book.customCoverPath,
+      groups: options,
+    );
+  }
+
+  @override
+  Future<ParseResult<void>> assignGroup({
+    required String sourceUrl,
+    required String bookUrl,
+    required int? groupId,
+  }) async {
+    final BookshelfRepository repository = _ref.read(
+      bookshelfRepositoryProvider,
+    );
+    final ShelvedBook? book = await repository.findByUrl(
+      sourceUrl: sourceUrl,
+      bookUrl: bookUrl,
+    );
+    if (book == null) {
+      return const ParseFailure<void>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'shelf.writer.group',
+      );
+    }
+    await repository.setGroupFor(ids: <int>[book.id], groupId: groupId);
+    // 书架是 keepAlive 的：不主动失效的话，切回 tab 还显示旧分组。
+    _ref.invalidate(bookshelfProvider);
+
+    return const ParseResult<void>.success(null);
+  }
+
+  @override
+  Future<ParseResult<String?>> chooseCustomCover({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async {
+    final BookshelfRepository repository = _ref.read(
+      bookshelfRepositoryProvider,
+    );
+    final ShelvedBook? book = await repository.findByUrl(
+      sourceUrl: sourceUrl,
+      bookUrl: bookUrl,
+    );
+    if (book == null) {
+      return const ParseFailure<String?>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'shelf.writer.cover',
+      );
+    }
+    final String? path = await _ref
+        .read(shelfCoverPickerProvider)
+        .pickAndStore();
+    if (path == null) {
+      // 取消不是失败（platform.md §2）：页面什么都不做。
+      return const ParseSuccess<String?>(null);
+    }
+    await repository.saveCustomCover(id: book.id, path: path);
+    _ref.invalidate(bookshelfProvider);
+
+    return ParseSuccess<String?>(path);
+  }
+
+  @override
+  Future<ParseResult<void>> resetCustomCover({
+    required String sourceUrl,
+    required String bookUrl,
+  }) async {
+    final BookshelfRepository repository = _ref.read(
+      bookshelfRepositoryProvider,
+    );
+    final ShelvedBook? book = await repository.findByUrl(
+      sourceUrl: sourceUrl,
+      bookUrl: bookUrl,
+    );
+    final String? path = book?.customCoverPath;
+    if (book == null || path == null) {
+      return const ParseResult<void>.success(null);
+    }
+    await repository.saveCustomCover(id: book.id, path: null);
+    await _ref.read(shelfCoverPickerProvider).delete(path);
+    _ref.invalidate(bookshelfProvider);
+
+    return const ParseResult<void>.success(null);
+  }
+}
+
+/// `SourceVerification` bound to the visible WebView pages (`docs/dev/roadmap.md` M21a).
+///
+/// It is the one place that knows both sides: a rule asks for a human, and this adapter pushes the
+/// page on the root navigator, waits for the outcome, and — when the rule asked for it — re-fetches
+/// the address over HTTP so the answer already carries the cookies the user just earned
+/// (ADR-0068 §决策 3/5).
+final class _SourceVerification implements SourceVerification {
+  /// Creates the binding.
+  const _SourceVerification(this._ref);
+
+  final Ref _ref;
+
+  @override
+  bool get isSupported {
+    final PlatformInfo platform = _ref.read(platformInfoProvider);
+
+    return platform.isMobile || platform.isDesktop;
+  }
+
+  @override
+  Future<ParseResult<SourceVerificationOutcome>> verify(
+    SourceVerificationRequest request,
+  ) async {
+    final NavigatorState? navigator = appNavigatorKey.currentState;
+    if (navigator == null) {
+      // 没有 navigator 就没有人去点验证：报「已取消」，让上层当成一次未完成的验证。
+      return const ParseFailure<SourceVerificationOutcome>(
+        kind: ParseFailureKind.cancelled,
+        rulePath: 'java.startBrowser',
+      );
+    }
+    final PersistentCookieManager jar = _ref.read(cookieManagerProvider);
+    final List<StoredCookie> cookies = jar.cookiesFor(Uri.parse(request.url));
+    final SourceVerificationOutcome? outcome = await navigator
+        .push<SourceVerificationOutcome>(
+          MaterialPageRoute<SourceVerificationOutcome>(
+            builder: (BuildContext context) => SourceVerificationPage(
+              request: request,
+              cookies: cookies,
+              cookieJar: jar,
+            ),
+          ),
+        );
+    if (outcome == null) {
+      // 用户明确关掉页面：`cancelled` 是既有 kind，页面会显示「已取消验证」。
+      return const ParseFailure<SourceVerificationOutcome>(
+        kind: ParseFailureKind.cancelled,
+        rulePath: 'java.startBrowser',
+      );
+    }
+    if (!request.refetchAfterSuccess) {
+      return ParseSuccess<SourceVerificationOutcome>(outcome);
+    }
+
+    // 重取走统一的请求层（C-NET-1）：此刻 cookie jar 已经收下用户过盾得到的 cookie。
+    final ParseResult<HttpResponse> refetched = await _ref
+        .read(httpClientProvider)
+        .get(
+          request.url,
+          rulePath: 'java.startBrowser',
+          headers: request.headers,
+          sourceId: request.sourceUrl,
+        );
+
+    return switch (refetched) {
+      ParseSuccess<HttpResponse>(:final HttpResponse data) =>
+        ParseSuccess<SourceVerificationOutcome>(
+          SourceVerificationOutcome(url: request.url, body: data.body),
+        ),
+      ParseFailure<HttpResponse>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        ParseFailure<SourceVerificationOutcome>(kind: kind, rulePath: rulePath),
+    };
+  }
+
+  @override
+  Future<ParseResult<String>> imageCode({
+    required String sourceUrl,
+    required String sourceName,
+    required String imageUrl,
+    required String title,
+  }) async {
+    final NavigatorState? navigator = appNavigatorKey.currentState;
+    if (navigator == null) {
+      return const ParseFailure<String>(
+        kind: ParseFailureKind.cancelled,
+        rulePath: 'java.getVerificationCode',
+      );
+    }
+    // 验证码图必须拿**原始字节**（C-NET-1 的字节门）：按文本解码会把图片弄坏。
+    final ParseResult<Uint8List> image = await _ref
+        .read(httpClientProvider)
+        .getBytes(
+          imageUrl,
+          rulePath: 'java.getVerificationCode',
+          sourceId: sourceUrl,
+        );
+    switch (image) {
+      case ParseFailure<Uint8List>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        return ParseFailure<String>(kind: kind, rulePath: rulePath);
+      case ParseSuccess<Uint8List>(:final Uint8List data):
+        final String? code = await navigator.push<String>(
+          MaterialPageRoute<String>(
+            builder: (BuildContext context) =>
+                SourceCaptchaPage(image: data, sourceName: sourceName),
+          ),
+        );
+
+        return code == null
+            ? const ParseFailure<String>(
+                kind: ParseFailureKind.cancelled,
+                rulePath: 'java.getVerificationCode',
+              )
+            : ParseSuccess<String>(code);
+    }
+  }
 }
 
 /// Resolves a stored book source by its URL, or `null` when it is gone.
@@ -495,16 +913,42 @@ final class _ChapterListSource implements ChapterListProvider {
 
     return switch (result) {
       ParseSuccess<List<Chapter>>(:final List<Chapter> data) =>
-        ParseSuccess<List<ReadingChapter>>(<ReadingChapter>[
-          for (final Chapter chapter in data)
-            ReadingChapter(title: chapter.name, url: chapter.url),
-        ]),
+        ParseSuccess<List<ReadingChapter>>(
+          await _purifiedChapters(data, source: source, tocUrl: tocUrl),
+        ),
       ParseFailure<List<Chapter>>(
         :final ParseFailureKind kind,
         :final String rulePath,
       ) =>
         failureAt<List<ReadingChapter>>(kind: kind, rulePath: rulePath),
     };
+  }
+}
+
+/// The chapters with the user's **title** purge rules applied.
+///
+/// This is the one place the reader's titles come from, so purifying here makes the 目录 sheet, the
+/// chapter header, the stored progress name and a search hit agree on one title (ADR-0071 §决策 4).
+/// The detail page's TOC preview and the shelf's 「最新章节」 read `book_source`'s own cache instead
+/// and stay unpurified — registered in `roadmap.md` §3.7.
+extension on _ChapterListSource {
+  Future<List<ReadingChapter>> _purifiedChapters(
+    List<Chapter> chapters, {
+    required BookSource source,
+    required String tocUrl,
+  }) async {
+    final List<String> titles = await _ref
+        .read(contentPurifierProvider)
+        .purgeTitles(
+          <String>[for (final Chapter chapter in chapters) chapter.name],
+          // 标题规则读到的是**目录页**：`baseUrl` 就是 tocUrl，`@js:` 标题脚本靠它取上下文。
+          context: JsPageContext(baseUrl: tocUrl, source: source.jsSourceInfo),
+        );
+
+    return <ReadingChapter>[
+      for (var index = 0; index < chapters.length; index++)
+        ReadingChapter(title: titles[index], url: chapters[index].url),
+    ];
   }
 }
 
@@ -593,6 +1037,7 @@ final class _MangaPageSource implements MangaPageProvider {
             ReadingPage(
               url: url,
               headers: data.headers ?? const <String, String>{},
+              style: _mangaStyleOf(data.imageStyle),
             ),
         ]),
       ParseFailure<MangaPages>(
@@ -603,6 +1048,20 @@ final class _MangaPageSource implements MangaPageProvider {
     };
   }
 }
+
+/// The reader's layout enum for a source's `ruleContent.imageStyle` (ADR-0069 G5).
+///
+/// Upstream compares the value case-insensitively and lets an unknown one fall through to the
+/// centered default, which is what this does. `left` / `right` / `centered` still render like
+/// `full` — the alignment branch is registered in `docs/dev/roadmap.md` §3.7.
+MangaImageStyle _mangaStyleOf(String? imageStyle) =>
+    switch (imageStyle?.trim().toLowerCase()) {
+      'full' => MangaImageStyle.full,
+      'single' => MangaImageStyle.single,
+      'left' => MangaImageStyle.left,
+      'right' => MangaImageStyle.right,
+      _ => MangaImageStyle.centered,
+    };
 
 /// `AudioTrackProvider` bound to `book_source`'s `FetchAudioTracks` (ADR-0054 §决策 2).
 final class _AudioTrackSource implements AudioTrackProvider {

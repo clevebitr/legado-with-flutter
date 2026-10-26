@@ -34,6 +34,12 @@ abstract class ShelvedBook with _$ShelvedBook {
     String? lastChapter,
     @Default(ShelfStatus.tracking) ShelfStatus status,
     @Default(false) bool isPinned,
+
+    /// The shelf group this entry belongs to, or `null` for 「未分组」 (ADR-0066 §决策 2).
+    int? groupId,
+
+    /// Absolute path of the cover the user picked, or `null` to use [coverUrl].
+    String? customCoverPath,
     required DateTime addedAt,
     ReadingProgressPosition? progress,
   }) = _ShelvedBook;

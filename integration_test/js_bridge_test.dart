@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
@@ -10,12 +11,16 @@ import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
+import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:html/parser.dart' as parser;
 import 'package:integration_test/integration_test.dart';
 import 'package:logger/logger.dart';
+
+import '../test/support/synthetic_ttf.dart';
 
 /// 设备级验证：真实 QuickJS 引擎 + 真实 worker isolate 上跑通 `JsBridge` 的 3.3 契约。
 ///
@@ -67,6 +72,169 @@ void main() {
     );
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_givenALoginCheckJob_exposesTheResponseObject', (
+    WidgetTester tester,
+  ) async {
+    // `loginCheckJs` 的 `result` 是响应对象，不是页面正文（ADR-0068 增补）：属性 `body` 是上游
+    // `StrResponse` 的写法，`url()` / `code()` / `header()` 是方法。这条探针在真引擎上验证
+    // 前奏里的 `__sandboxStrResponse` 真的这么长。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "result.body + '|' + result.url() + '|' + result.code() + '|' "
+            "+ result.header('Content-Type') + '|' + result.isSuccessful()",
+        response: const JsResponseView(
+          url: 'https://example-novel.test/book/1',
+          body: 'need-login',
+          code: 200,
+          headers: <String, String>{'content-type': 'text/html'},
+        ),
+      ),
+    );
+
+    expect(
+      _value(result),
+      'need-login|https://example-novel.test/book/1|200|text/html|true',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_givenALoginCheckJob_roundTripsTheResponseItReturns', (
+    WidgetTester tester,
+  ) async {
+    // 脚本原样/改写返回响应对象时，宿主拿到的是可读的 `{body, __url}`，`readLoginCheckResult`
+    // 才认得出它是替换后的响应。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "result.body = 'after-login'; result",
+        response: const JsResponseView(
+          url: 'https://example-novel.test/book/1',
+          body: 'need-login',
+        ),
+      ),
+    );
+
+    expect(_value(result), <String, Object?>{
+      '__strResponse': true,
+      'body': 'after-login',
+      '__url': 'https://example-novel.test/book/1',
+      '__code': 200,
+      '__headers': <String, Object?>{},
+    });
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_givenAJavaStyleList_readsSizeLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    // 上游的列表是 Java `List`，真实语料写 `list.size`（美女图片网的正文 JS）。没有这条垫片，
+    // 那个循环一次都不跑，正文会静默变成空串（ADR-0069 G7）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var list = ['a', 'b', 'c'];"
+            "var out = '';"
+            'for (let i = 0; i < list.size; i++) { out = out + list[i]; }'
+            // 同一份导出里还有 `list.size()` 的写法：`size` 取回的是可调用对象，
+            // 调用与算术两种用法都要成立（ADR-0069 G14）。
+            'out + "|" + list.size() + "|" + (list.size + 1)',
+      ),
+    );
+
+    expect(_value(result), 'abc|3|4');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_givenABase64Font_replacesTheObfuscatedText', (
+    WidgetTester tester,
+  ) async {
+    // 字体反解（ADR-0068 增补决策 9）：两套字体都带 `uniXXXX` 字形名，脚本只把句柄交回来。
+    // 这条探针在真引擎上跑 `java.queryBase64TTF` / `java.replaceFont`，也钉住「字体不进脚本」。
+    final String errorFont = base64Encode(
+      buildSyntheticFont(
+        cmapOverride: buildSyntheticCmap(
+          codes: <int, int>{0xE001: 1, 0xE002: 2},
+        ),
+        includePost: true,
+        postOverride: buildSyntheticPost(
+          numGlyphs: 3,
+          names: <int, String>{1: 'uni5251', 2: 'uni5BA2'},
+        ),
+      ),
+    );
+    final String correctFont = base64Encode(
+      buildSyntheticFont(
+        cmapOverride: buildSyntheticCmap(
+          codes: <int, int>{0x5251: 1, 0x5BA2: 2},
+        ),
+        includePost: true,
+        postOverride: buildSyntheticPost(
+          numGlyphs: 3,
+          names: <int, String>{1: 'uni5251', 2: 'uni5BA2'},
+        ),
+      ),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var errorFont = java.queryBase64TTF('$errorFont');"
+            "var correctFont = java.queryBase64TTF('$correctFont');"
+            r"java.replaceFont('前面后面', errorFont, correctFont)",
+      ),
+    );
+
+    expect(_value(result), '前面剑客后面');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_givenAFontUrl_fetchesTheBytesAndReplaces', (
+    WidgetTester tester,
+  ) async {
+    // `java.queryTTF(url)` 走字节门再解析；本仓网络一律异步，所以规则要 `await`（登记差异）。
+    final Uint8List correctFont = buildSyntheticFont(
+      cmapOverride: buildSyntheticCmap(codes: <int, int>{0x5251: 1}),
+      includePost: true,
+      postOverride: buildSyntheticPost(
+        numGlyphs: 2,
+        names: <int, String>{1: 'uni5251'},
+      ),
+    );
+    http.bytes = correctFont;
+    final String errorFont = base64Encode(
+      buildSyntheticFont(
+        cmapOverride: buildSyntheticCmap(codes: <int, int>{0xE001: 1}),
+        includePost: true,
+        postOverride: buildSyntheticPost(
+          numGlyphs: 2,
+          names: <int, String>{1: 'uni5251'},
+        ),
+      ),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            '(async function () {'
+            " var errorFont = java.queryBase64TTF('$errorFont');"
+            " var correctFont = await java.queryTTF('https://mirror.test/f.ttf');"
+            r" return java.replaceFont('', errorFont, correctFont); })()",
+      ),
+    );
+
+    expect(_value(result), '剑');
+    expect(http.requestedUrls, contains('https://mirror.test/f.ttf'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_givenBytesThatAreNotAFont_failsTheScriptReadably', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "java.queryBase64TTF('bm90IGEgZm9udA==')"),
+    );
+
+    expect(switch (result) {
+      ParseFailure<Object?>(:final String rulePath) => rulePath,
+      ParseSuccess<Object?>() => fail('Expected a failure.'),
+    }, contains('js:error'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('jsBridge_whenTheRuleReturnsAnArray_reportsAList', (
     WidgetTester tester,
   ) async {
@@ -88,6 +256,39 @@ void main() {
     );
 
     expect(_value(result), '900150983cd24fb0d6963f7d28e17f72|YQ==');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('contentPurifier_givenAJSReplacement_rewritesEveryMatch', (
+    WidgetTester tester,
+  ) async {
+    // 净化规则的 `@js:` 替换在**真沙箱**上验证（ADR-0071 §决策 5）：一条规则一批一个 job，
+    // 脚本的**完成值**就是替换文本（上游的脚本常写成 `if (…) { … } else { "" }`）。
+    final ContentPurifier purifier = ContentPurifier(
+      rules: const _FixedPurgeRules(<PurgeRule>[
+        PurgeRule(pattern: r'\d', replacement: '@js:result * 2', isRegex: true),
+        PurgeRule(
+          pattern: r'.+',
+          replacement: '@js:if (result.length > 4) { "长标题" } else { "" }',
+          isRegex: true,
+          appliesToContent: false,
+          appliesToTitle: true,
+        ),
+      ]),
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      js: bridge,
+    );
+    const JsPageContext context = JsPageContext(
+      baseUrl: 'https://example-novel.test/book/1/1.html',
+    );
+
+    expect(await purifier.purgeContent('1 和 2', context: context), '2 和 4');
+    expect(
+      await purifier.purgeTitles(<String>[
+        '第1章 很长的标题',
+        '第1章',
+      ], context: context),
+      <String>['长标题', ''],
+    );
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('jsBridge_whenTheRuleLogs_forwardsItWithTheField', (
@@ -740,7 +941,9 @@ void main() {
 
     final ParseResult<String?> result = await engine.extractFirst(
       "@js:java.getString('class.odd.0@tag.a.0@text') + '|' + "
-      "java.getStringList('class.odd@tag.a').toArray().length",
+      // `getStringList` 要**带提取段**的规则（上游语义：最后一段是提取）：`@text` 才是值，
+      // 光写选择器末段会被当成属性名而得到空列表（ADR-0069 G14）。
+      "java.getStringList('class.odd@tag.a@text').toArray().length",
       scope,
       rulePath: 'contentRule.content',
     );
@@ -766,6 +969,7 @@ JsJob _job({
   String? bookName,
   String? chapterTitle,
   JsBookInfo? book,
+  JsResponseView? response,
 }) => JsJob(
   script: script,
   rulePath: 'searchRule.name',
@@ -773,6 +977,7 @@ JsJob _job({
   page: 2,
   source: source,
   result: 'raw',
+  response: response,
   sourceHeaders: sourceHeaders,
   variables: variables,
   bookName: bookName,
@@ -820,6 +1025,9 @@ final class _ProbeHttpClient implements HttpClient {
   /// The body served for every request.
   String body = '';
 
+  /// The bytes served to `getBytes` (the font byte door); falls back to [body] when unset.
+  Uint8List? bytes;
+
   /// The headers of the last request.
   Map<String, String>? lastHeaders;
 
@@ -849,6 +1057,8 @@ final class _ProbeHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) async {
     requestedUrls.add(url);
     requestedMethods.add('GET');
@@ -856,6 +1066,26 @@ final class _ProbeHttpClient implements HttpClient {
     lastSourceId = sourceId;
 
     return _answer();
+  }
+
+  @override
+  Future<ParseResult<Uint8List>> getBytes(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxBytes,
+  }) async {
+    // 字节门：字体过文本解码就坏了，所以这条通道回 base64（真字节由 http_client_test 覆盖）。
+    requestedUrls.add(url);
+    requestedMethods.add('GET');
+    lastHeaders = headers;
+    lastSourceId = sourceId;
+
+    return ParseSuccess<Uint8List>(
+      bytes ?? Uint8List.fromList(utf8.encode(body)),
+    );
   }
 
   @override
@@ -867,6 +1097,8 @@ final class _ProbeHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) async {
     requestedUrls.add(url);
     requestedMethods.add('POST');
@@ -883,6 +1115,17 @@ final class _ProbeHttpClient implements HttpClient {
       statusCode: 200,
       headers: const <String, List<String>>{},
       body: body,
+      url: 'https://js.test/',
     ),
   );
+}
+
+/// A [PurgeRuleSource] answering a fixed list (the device test's rules are written inline).
+final class _FixedPurgeRules implements PurgeRuleSource {
+  const _FixedPurgeRules(this._rules);
+
+  final List<PurgeRule> _rules;
+
+  @override
+  Future<List<PurgeRule>> purgeRules() async => _rules;
 }

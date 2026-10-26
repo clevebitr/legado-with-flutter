@@ -1,5 +1,6 @@
 // coverage:ignore-file
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_candidate.dart';
+import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_group.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_status.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelved_book.dart';
 
@@ -52,6 +53,51 @@ abstract interface class BookshelfRepository {
 
   /// Deletes entry [id] together with its reading progress.
   Future<void> remove(int id);
+
+  /// Deletes every entry in [ids] together with their progress (M19's batch delete).
+  Future<void> removeMany(List<int> ids);
+
+  /// Every shelf group in display order (ADR-0066 §决策 2).
+  Future<List<ShelfGroup>> getGroups();
+
+  /// Creates a group named [name] at the end of the list.
+  ///
+  /// Answers `null` when the trimmed name is empty or already taken: a chip cannot tell two groups
+  /// with one name apart, so a duplicate is refused instead of silently merged.
+  Future<ShelfGroup?> createGroup(String name);
+
+  /// Renames group [id]; answers `false` when [name] is empty or belongs to another group.
+  Future<bool> renameGroup({required int id, required String name});
+
+  /// Deletes group [id]; its books move back to 「未分组」 and are **not** deleted.
+  Future<void> deleteGroup(int id);
+
+  /// Writes [ids]'s normalized order (`0..n-1`).
+  Future<void> reorderGroups(List<int> ids);
+
+  /// Moves entries [ids] into [groupId] (`null` = 未分组).
+  Future<void> setGroupFor({required List<int> ids, required int? groupId});
+
+  /// Pins or unpins entries [ids].
+  Future<void> setPinnedFor({required List<int> ids, required bool isPinned});
+
+  /// Sets the status of entries [ids].
+  Future<void> setStatusFor({
+    required List<int> ids,
+    required ShelfStatus status,
+  });
+
+  /// Remembers [path] as entry [id]'s own cover, or clears it with `null`.
+  Future<void> saveCustomCover({required int id, required String? path});
+
+  /// The entry of `(sourceUrl, bookUrl)`, or `null` when the book is not on the shelf.
+  ///
+  /// The detail page's group/cover sheet needs the stored row, and looking it up by identity keeps
+  /// the port free of the shelf's primary key (ADR-0066 §决策 5).
+  Future<ShelvedBook?> findByUrl({
+    required String sourceUrl,
+    required String bookUrl,
+  });
 
   /// The stored position of `(sourceUrl, bookUrl)`, or `null` when the book was never opened.
   ///

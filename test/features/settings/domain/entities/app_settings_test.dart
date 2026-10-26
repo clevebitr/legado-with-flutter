@@ -29,6 +29,53 @@ void main() {
       );
     });
 
+    test('new_givenNoThemeExtras_keepsTheProjectDefaults', () {
+      final AppSettings settings = AppSettings();
+
+      expect(settings.seedColor, isNull);
+      expect(settings.backgroundImageName, isNull);
+    });
+
+    test('copyWith_givenASeedColor_replacesIt', () {
+      final AppSettings settings = AppSettings().copyWith(
+        seedColor: 0xFF112233,
+      );
+
+      expect(settings.seedColor, 0xFF112233);
+    });
+
+    test('copyWith_givenClearSeedColor_dropsIt', () {
+      // `int?` 参数没法用 null 表达「清空」，所以清空走显式开关（ADR-0075 §决策 1）。
+      final AppSettings settings = AppSettings(seedColor: 0xFF112233)
+          .copyWith(clearSeedColor: true);
+
+      expect(settings.seedColor, isNull);
+    });
+
+    test('copyWith_givenABackgroundName_replacesItAndClearsIt', () {
+      final AppSettings named = AppSettings().copyWith(
+        backgroundImageName: 'background.png',
+      );
+      expect(named.backgroundImageName, 'background.png');
+      expect(
+        named.copyWith(clearBackgroundImage: true).backgroundImageName,
+        isNull,
+      );
+    });
+
+    test('equality_givenDifferentThemeExtras_differs', () {
+      final AppSettings plain = AppSettings();
+      final AppSettings seeded = plain.copyWith(seedColor: 0xFF112233);
+      final AppSettings imaged = plain.copyWith(
+        backgroundImageName: 'background.png',
+      );
+
+      expect(plain, isNot(seeded));
+      expect(plain, isNot(imaged));
+      expect(plain.hashCode, isNot(seeded.hashCode));
+      expect(seeded, AppSettings(seedColor: 0xFF112233));
+    });
+
     test('new_givenAZeroBudget_clampsToOne', () {
       // roadmap §3.7：`assert` 在 release 下会被剥掉，`0` 会让该源的请求永久排队，所以钳制发生
       // 在构造处（而且 release 里也生效）。

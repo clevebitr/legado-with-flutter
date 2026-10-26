@@ -219,3 +219,285 @@ M14 交付（阅读体验 R1–R4，ADR-0051）：
 修复：升级步骤前先查 sqlite_master / PRAGMA table_info（_hasSchemaObject / _addColumnIfMissing），版本门只做注释说明；回归测试 schemaAt(6) + PRAGMA user_version=5；ADR-0056 + C-NET-9 回链 + tech-stack §8 规则。实测：真实 reader.db 副本 503 行、版本升到 6。
 
 教训：日志脱敏把 sqlite 错误正文换成了哈希，先要拿到原始异常才能在库副本上用 drift 复现（flutter test + NativeDatabase 即可）。
+
+## 2026-10-23 — M19 落地：v7 迁移 + 分组/批量/书签/阅读记录/换封面/本书缓存（ADR-0066），六个坑
+
+M19 按用户裁决分两批，但结构改动一次升到 schemaVersion 7（ADR-0066）：批 A = 书签 + 阅读记录 + 详情入口 + `ReaderRoute` 三兄弟；批 B = 书架分组 chip/管理页/多选批量 + 详情改分组/换封面/本书缓存。
+
+1. **ADR 号撞车**：`CHANGELOG.md` 与 `.github/workflows/ci.yml` 早就引用「ADR-0065 = 分层 CI」，而我开工时 `ls docs/dev/adr` 只列到 0064（0065 的 CI ADR 文件当时还没落盘/被我漏看）。M19 的规格 ADR 因此从 0065 改名为 **0066**，并把 `lib/`、`test/`、`tool/coverage_allowlist.txt`、`architecture.md` 里的引用一并改掉。教训：新 ADR 号先 `grep -rn "ADR-00" CHANGELOG.md .github/ docs/` 再定，别只看目录。
+2. **drift 表文件没有 `part`**：`books.dart` / 新表文件都不带 `part`，`XxxRow` 生成在 `database.g.dart` 里。DAO 的 `where` 闭包参数必须是**表类**（`(Bookmarks table) => table.x.equals(...)`），写成 `(BookmarkRow row)` 会得到 `String/Int` 上的 `.equals` 未定义；repo/测试要用 row 类时 import `database.dart`，不能只 import 表文件。
+3. **两种 orderBy**：`select(t)..orderBy(...)` 的 cascade 要 `List<OrderClauseGenerator<$T>>`（参数是表结构类型），`JoinedSelectStatement` 才用 `OrderingTerm`；`cast` 错会同时报「元素类型不匹配」与「`.equals` 未定义」两串错。
+4. **书签 toggle 的首帧**：工具条只在唤出时才构建，`ref.watch(readerBookmarksProvider)` 放在工具条里会让第一帧仍是「未添加」（测试里 tooltip 找不到 `bookmarkRemove`）。改成在 `_textReader` 的 build 里先 watch，再把 `AsyncValue` 传进工具条。
+5. **autoDispose Notifier 的 UnmountedRefException**：`ref.read(xProvider.notifier).write()` 之后 Notifier 可能已被回收，紧跟的 `ref.invalidate(...)` / `ref.read(logger)` 会抛。端口与 logger 必须在 await 前取好，`ref.invalidate` 用 `if (ref.mounted)` 守卫（`ShelfBookActions` / `BookCacheActions`）。
+6. **对话框里的 TextEditingController**：`showDialog` 返回后立即 `dispose()` 会在退场动画那一帧再 build 一次 TextField，抛 “used after being disposed”。改成 StatefulWidget 对话框（`_GroupNameDialog`）自己持有并释放控制器。
+
+其它：`CoverImage` 新增 `localPath`（本地封面优先于网络 URL）；自定义封面存**绝对路径**（相对路径会让每行书架做一次异步基准目录查询）；`ContentCache.write` 加可选 `bookUrl` 写 `scope_key`，读仍是同一个 `cache_key`，旧条目只是不计入按书统计。验证：1659 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、`build_runner` 幂等；新增豁免项 5 条（封面 file_selector 适配器、ShelfCoverPicker 端口、ShelfGroup 与两个书签/记录 freezed 实体、三张 drift 表）。
+
+## 2026-10-23 — M21a 第一批落地：可见 WebView 验证 + Cookie v8 + 引擎 A/B/D 簇（ADR-0068），四个坑
+
+M21a 按用户裁决拆成「验证 + 引擎」与「原 U8–U15」两条线（M22）。第一批交付：可见 WebView 验证页 + 图片验证码页、`SourceVerification`/`WebViewCookieBridge` 端口与装配根绑定、`appNavigatorKey`、cookie 表 v8 与 `PersistentCookieManager`（`main()` 前 hydrate + 写穿 + WebView 双向同步）、`HttpClient.getBytes`、JS 验证族（`startBrowser*` / `getVerificationCode` / `webView*`，用户门控）、`webViewDelayTime`/`webJs`/`overrideUrlRegex`、`ContentRule.webJs`、`retry`/`readTimeout`、`ParseFailureKind.loginRequired`。
+
+坑与结论：
+1. **验证族在沙箱里只能是 Promise。** 上游 Rhino 能同步阻塞线程，本仓 QuickJS 不能停下来等宿主，所以 `startBrowserAwait`/`getVerificationCode` 返回 Promise（规则要 `await`），`startBrowser`（上游返回 void）没有差异。**不要**为了「兼容」去假装同步，否则规则拿到的是 `[object Promise]`。已写进 `book-source.md` §6。
+2. **等用户的时间必须从 JS 预算里扣除。** 桥的硬预算 `timeout + killGrace` 与 `_onResult` 的「跑满预算 = 超时」判定都按墙钟算；不扣除 `_humanWaitMs` 时，一次两分钟的人机验证会被判成 `js:timeout`。验证调用同时免掉每规则调用额度（额度数的是 CPU 往返）。
+3. **`webView` 从「被忽略的选项」变成字段后，旧的 `canWebView && ignored == 'webView'` 分支就成了死代码**；覆盖率门禁直接把它标出来（domain 100% 不允许不可达行），顺手删掉。同理 `UrlRuleOptions` 的 `retry`/`readTimeout` 要在**解析侧**钳制（3 / 120 s），否则 C-NET-2 的「显式上限」形同虚设。
+4. **验证码图片不能走文本门。** `HttpClient.get` 会把正文按检测到的编码解码成 String，图片过一遍就坏了；新增 `getBytes`（共享同一套 URL 校验 / 预算 / 重试 / cookie），这也是将来字体反爬（TTF 字节）必需的门。
+
+未做（ADR-0068 落地注记里逐项写了原因与触发条件）：`loginUrl`/`loginUi`/`loginCheckJs` 三个源字段、`ContentRule.sourceRegex`、字体反爬 C 簇、`proxy`/`dnsIp`/`callTimeout`/`HEAD`/`encodedForm`。验证：1719 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 双用例（真实 `main()` 启动 + 文件库 v8 cookie）通过；Android 待跑。
+
+## 2026-10-24 — M21a 第二刀：loginCheckJs 是响应拦截器，不是布尔检查；sourceRegex/bodyJs 落地；字体与 D 簇定案
+
+取证后改写了 ADR-0068 决策 3 的口径，并交付第二刀：
+
+1. **`loginCheckJs` = 响应拦截器（上游语义）**，不是「返回 true/false」。上游 `AnalyzeUrl.evalJS(jsStr, result)` 把 `StrResponse` 绑成 `result`，调用方 `res = analyzeUrl.evalJS(checkJs, res) as StrResponse` 用返回值替换响应；真实语料就是 `var src = result.body; if (…) java.startBrowserAwait(result.url(), '登录')`。本仓在 `PageFetchService` 每次取页成功后跑它：`result` 是 `JsResponseView`（`body` 属性 + `url()`/`code()`/`headers()`/`header()`/`cookie()`/`contentType()`/`isSuccessful()`），`null` 沿用、`{body[,url]}` 替换、裸字符串只换正文、其余在「源声明了 loginUrl/loginUi」时给 `loginRequired`。陷阱：**上游 `body` 是属性**（`getStrResponse().body`），Readori 文档与少量语料写 `result.body()` —— 不能两头讨好，选上游属性形态并把方法形态显式报错登记。
+2. **沙箱表示**：响应对象走 `JsResponseView.toJson()` 的 `__strResponse` 标记 + `__url`/`__code`/`__headers`，因为 `url`/`code`/`headers` 是上游的**方法名**，不能同时当数据键；方法用不可枚举 defineProperty，`return result` 时 JSON 只带回数据。prelude 用 `__sandboxValue` 分流，普通 `@js:` 的 `result` 语义不变。
+3. **三个登录字段建模 + 书源管理「登录 / 过验证」入口**（走同一个 `SourceVerification` 端口打开可见 WebView；`loginUrl` 是 URL 规则，后缀丢掉；脚本形态则打开源地址）。原生 `loginUi` 表单留在 M21b/U15。
+4. **`sourceRegex`**：每次取页后、建 scope 前截取（有捕获组取 group(1)，否则整个匹配），片段就是页面（DOM 与 `$.` 都从它读，拦截器也看它）；不命中/正则非法 → `parseFailed(contentRule.sourceRegex)`；`nextContentUrl` 每页各自截取。**`bodyJs`**（URL 选项）先跑、`sourceRegex` 后跑；`bodyJs` 非字符串 → `parseFailed(bodyJs)`。
+5. **字体反爬只做评估**：候选包 `glyph_path` / `ttf` / `dart-ttf-parser` / `flutter_ttf_parser` 均不合格（许可 Other 或 Dart 3 不兼容、且都不给「字形↔字符」反查面）；结论是自研 `cmap` format 4/12（150–200 行）+ 合成字体单测，**不引依赖**；开工前只需定一件事：返回表示用 `code → glyphId`（上游用 `post` 字形名对齐），排在 M21a 第三刀，命中仍 `unsupportedRule`。
+6. **D 簇五项裁决「不做」并写死重开条件**（proxy / dnsIp / callTimeout / HEAD / encodedForm），不再以「收益未取证」长期挂着。
+
+覆盖率的两个小坑：`const` 构造的 `SourceLoginGuard.none()` 会被编译期折叠、统计不到（改成运行时构造 + ignore lint）；`_interceptLogin` 里「按 scope 取上下文」的分支永远走不到（`_pageOf` 只造 DomScope），改成由调用方把 `JsPageContext` 与当前 body 传进去，顺带删掉不可达分支。
+
+验证：1761 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等。
+
+## 2026-10-24 — M19/M21a 设备级实跑补齐：双端全绿，并补上 WebView↔cookie 双向探针（抓到键名不一致的真 bug）
+
+双端设备级实跑补上了（这也是 M19 的唯一挂账项），并新增一条 cookie 互操作探针：
+
+1. **Windows 5 文件全过**：`app_boot` 1、`audio_playback` 5、`js_bridge` 30、`on_disk_database` 5、`web_view` 3。
+2. **Android（`Medium_Phone`，API 37 模拟器）4 文件全过**：`app_boot`、`on_disk_database`（含 v8 cookie jar 跨连接读回）、`js_bridge` 30、`web_view` 3。M19 因此可以标完成。
+3. **新增 `webViewCookieBridge_sharesCookiesWithTheWebView`**（`integration_test/web_view_test.dart`）：本地 HttpServer 上验证**双向**互操作——桥 `setCookie` 写进去的 cookie 页面 `document.cookie` 读得到，页面自己种的 cookie 桥 `getCookies` 读得回。这是 ADR-0068 §决策 4 之前只有单测、没有设备证据的一环。
+4. **两个新 `js_bridge` 探针**（`loginCheckJs` 的 `result` 响应对象：属性 + 方法 + 返回值往返）当场抓到一个真 bug：`JsResponseView.toJson()` 发的是 `code` / `headers`，而 prelude 读的是 `__code` / `__headers`，于是设备上 `result.code()` 恒为 0、`headers()` 恒空——单测（用 JSON 直比对）看不出来，只有真引擎跑一遍才暴露。教训：**沙箱前奏与宿主序列化的键名必须由同一条设备级用例钉住**，别只测宿主一侧。
+
+最终门禁：format 0、analyze 干净、1761 用例全过、core 100% / domain 100% / data 97.94%、codegen 幂等。
+
+## 2026-10-24 — M21a 第三刀：字体反爬零依赖落地（cmap + post，字形名优先、id 兜底），并砍掉不存在的 getFontGlyph
+
+M21a 第三刀按 ADR-0068 决策 9 的评估执行：零新依赖、自研解析。落地过程中有两处必须改口径：
+
+1. **字形名优先，字形 id 兜底（原评估写的是「只用 id」）。** 站点发的多半是**子集字体**：子集化会重排字形 id，但 `post` 表里的 `uniXXXX` 名字还在。只按 id 对会在真实语料上静默换错字，而且错得看不出来（换出来的是另一个真字）。所以 `TtfFont` 同时读 `cmap`（format 0/4/6/12，Unicode 平台优先、format 12 优于 4，首选子表映射为空时回退到下一张）与 `post` 2.0 自定义名（索引 <258 的标准 Macintosh 名不内置，这些字形退回按 id）。
+2. **`getFontGlyph` 不实现。** ADR 早期登记里有这个名字，但上游 master 的 `JsExtensions.kt` 只有 `queryTTF` / `queryBase64TTF` / `replaceFont`。凭空造一个只会让语料里的假拼写看起来合法。
+
+实现形状：
+- `lib/core/font/ttf_font.dart`：纯 Dart 解析 + `replaceFontText`。**不做逐字段边界检查**——字体是不可信输入，`parse` 用一个 `try` 把 `RangeError` 翻成 `FormatException`（一处可达分支换掉二十处守卫；`avoid_catching_errors` 已按理由 ignore）。
+- `lib/core/js/js_fonts.dart`：`JsFontRegistry`，字体以不透明句柄 `{__ttf, id}` 进脚本，真实字体留在 worker 里，随 job 清空、id 不复用（跨 job 存句柄会「找不到」而不是读到别人的字体）。一次正文替换只花一个小信封，而不是几万个字形的 JSON。
+- **字节门**：`java.queryTTF(url)` 需要字体字节，走 `http` 通道新加的 `getBytes` 动词（base64 过界）。文本门会把二进制体解码坏——与验证码图片同一个理由。网络在本仓一律异步，所以这个形态返回 Promise（`await java.queryTTF(url)`），`queryBase64TTF` / `replaceFont` 同步。
+- 失败面：不是字体 / base64 坏了 / 句柄失效都只让**这次调用**抛错，不判整条 job 死——没换成功的正文仍然可读。
+
+测试：`test/support/synthetic_ttf.dart` 现拼 sfnt 字节（表目录 + cmap + post），所以「截断文件 / 表撒谎 / 空子表 / 坏分组 / 3.0 post」都能逐字节复现，不必提交二进制字体基线。真引擎上补了三条 `integration_test/js_bridge_test.dart` 探针（base64 往返、url 字节门、非字体报错）。
+
+验证：1810 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 5 文件全过（js_bridge 33/33）、Android js_bridge 33/33。
+
+## 2026-10-24 — ADR-0069：用真实导出定位 9 个引擎差距，修 G1/G3/G4/G5/G7/G8，登记 G2/G6/G9
+
+用户给了一份「上游可用、本仓不可用」的 5 条图片源导出，并要求对照本机上游仓库（`legado-upstream`）定位差距。取证方法：逐条导入 + 把每个规则字段送进 `extractFirst`/`extractAll`/`selectAll`/`renderUrl`，只区分「语法被拒」与「没命中」，再把每条结论对到上游源码实现点。结论写进 **ADR-0069**（G1–G9 表 + 登记差异 + 触发条件）。
+
+用户裁决：G1–G5 + G7 + G8 全做，G6 登记。已修六项：
+1. **G1 `java.encodeURI(str, charset)`**：两参形态（GBK 关键词）以前按名拒绝。新增 `lib/core/text/charset_encoding.dart` 的 `charsetBytes` 作为「文本→声明编码字节」的唯一实现，`url_template` 的关键词编码与 JS 绑定共用；未知标签退 UTF-8（上游抛错返回 `""`，退 UTF-8 更有用）。
+2. **G3 任意段末尾 `.N` 索引**：`#image_div img.0@src` 被 cascadia 当「类名 0」。degraded 段现在剥「纯数字（可带负号）」的尾巴当索引；`div.item` / `.result-item` 不受影响。落地时确认了 `.-1` / `!0` / `tag.img.0` 本来就支持，只有「裸 CSS 段」缺这一刀。
+3. **G4 图片/封面的 `,{…}` 选项**：以前整段 JSON 进了地址。漫画页把选项里的 `headers` 并进该章图片请求头（章节内通常同一套），地址只留 URL；封面地址裁掉选项 + warning（封面加载器还带不了 header，登记）。`stripUnreadableUrlOptions` 顺势更名 `stripUrlOptions`（同一个「切掉 `,{…}`」现在有两个正当用途）。
+4. **G5 `imageStyle` / `imageDecode`**：两字段建模（不再落 `extra`）。`imageDecode` 非空 → 显式 `unsupportedRule(contentRule.imageDecode)`——静默降级会把加密字节当图片摆给用户，比失败更坏；`imageStyle` 打通 `MangaPages → ReadingPage.style → 阅读器`，`single` = 一图一屏（`BoxFit.contain` + 视口高），`left`/`right`/居中的对齐分支登记未做。
+5. **G7 `Array.prototype.size`**：真实正文 JS 用 `list.size` 遍历 `java.getStringList(...)`；没这条垫片循环一次都不跑，正文**静默变空**。与既有 `toArray()` 垫片同族，只加 getter（属性与方法不能同名）。
+6. **G8 目录项空 `chapterUrl`**：以前直接跳过该章 → 美图网这种单章图片书整本没目录。现在回落到目录页地址（上游 `BookChapterList.kt:246-258` 同口径）+ warning。
+
+登记不做（ADR-0069）：**G6** 同步 `java.post/get/ajax` 响应对象（沙箱是独立 isolate，阻塞不了宿主；规则须写 `await http.post`）、**G2** URL 规则里的非 JS `{{…}}`（本批 5 条源走的是值规则，已支持；URL 规则要先把 scope 传进 `renderUrl`，影响面未取证）、**G9** 列表 JSONPath + `@js:` 的 `result` 形状（要该站真实响应体才能定论）、封面 per-URL header、`imageStyle` 对齐分支。
+
+坑一条：`build_runner build --build-filter=…` 会把不匹配的生成物**删掉**（一跑 `flutter analyze` 报 4000+ 错），恢复办法是全量 `dart run build_runner build --delete-conflicting-outputs`；以后改实体别用 filter。
+
+连带修：G8 让「目录里有条目但没有 URL」不再是「成功且为空」，`switch_book_source` 里那条 `data.isEmpty` 分支变成不可达（删掉并注明），`check_book_source` 的 `emptyGroup` 分支改由「搜索列表命中但每条都没 bookUrl」这条真实路径覆盖。
+
+验证：1830 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；设备级 `js_bridge` 新增 `list.size` 探针（真引擎）。
+
+## 2026-10-24 — ADR-0069/0070：兼容性六项修复落地；M20 规格定案（rules 单表 v9 + 顺序预取搜索）
+
+先说兼容性取证，再做 M20-a。
+
+**兼容性（ADR-0069）**：用户给的 5 条「上游可用、本仓不可用」源全是 `bookSourceType: 2`。我逐条导入并把每个字段送进 `extractFirst`/`extractAll`/`selectAll`/`renderUrl`，只区分「语法被拒」与「没命中」，再把每条对到本机 `legado-upstream` 的实现点，得到 G1–G9。用户裁决「G1–G5+G7+G8 全做，G6 登记」，已全部落地（详见 DECISIONS #21 / ADR-0069）。
+
+**M20-a（ADR-0070）**：用户裁决「Drift 单表 + kind 列」「顺序预取 + 可停止」。落地内容：
+
+1. **ADR-0070** 定两件事：四类规则共用一张 `rules` 表（`kind` + JSON `payload`，payload 形状由 ADR 拥有，未知键保留、坏 payload 标坏不丢），以及书内搜索的语义（从当前章起顺序预取、并发 2、受速率门与 `SourceBudget`、`cancel()` 停新请求但保留已取正文、命中带 `(chapterIndex, title, url, offset, excerpt)`）。还写死了接线范围：**只有净化规则**承诺影响阅读（接在 `replaceRegex` 之后），字典/高亮/目录规则 M20 只做列表+编辑+启停，因为分别缺选词入口、富文本渲染、本地 txt 导入。
+2. **schema v8 → v9**：`rules` 表 + `(kind, sort_order)` 索引；迁移只做结构（内置规则由仓储首次使用时播种，`hasAny` 区分「从没初始化」与「用户清空了」）；`drift_schema_v9.json` + `generated_migrations/schema_v9.dart` 一并提交，迁移测试补 v8→v9、v1→v9 与「版本落后于结构」三条。
+3. **`RuleDao`**：`ofKind` / `enabledOfKind` / `insert`（缺省追加到该 kind 末尾）/ `updateRow` / `deleteById` / `deleteKind` / `hasAny` / `_nextSortOrder`，11 条单测。
+
+坑：`build_runner --build-filter` 会删掉不匹配的生成物（4000+ analyze 错），改实体一律全量 build。另外迁移测试里几条 `fromV?ToV8` 的名字在目标版本升到 9 后一并改名，避免「名字说 8、断言跑 9」。
+
+验证：1842 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等、schema dump 与生成迁移同步；Windows 5 文件全过（含 on-disk v9）。
+
+## 2026-10-24 — 真机日志四连：content 单值语义（G9）、explore 分组标题（G11）、默认 UA（G10）、HTTP 失败日志（G12）
+
+用户贴了一段真机日志，四类 warning 各对应一个不同的 bug，全部修掉（ADR-0069 增补）：
+
+1. **`JS rule failed: field=contentRule.content error=<String: 14 chars>`** —— 14 字符就是 `not a function`。那份导出的正文规则是 `$.data[*].image` + `@js:result.split("\n")`：上游 `BookContent.kt:234` 对所有书型都用 `getString`，而 `AnalyzeRule.getString` 把多匹配 `joinToString("\n")`，脚本拿到的是**字符串**；本仓漫画链路用 `extractAll`，`result` 是 **List**，`split` 不存在。修法：新增 `RuleEngine.extractJoined`（= `getString` 语义），漫画链路改用它并按行切分；同时把**单值字段交给脚本的 `result`** 从「首个匹配」改成「换行拼接的字符串」（`extractFirst` 的返回值口径不变，仍是首个匹配）。
+2. **`Explore category rejected … missing url (title=══ 推荐 ══)`** —— 真实 `exploreUrl` 用「只有标题、没有地址」的条目做**分组标题**；上游 `BookSourceExtensions.exploreKinds()` 直接映射、不校验 url 非空，本仓却按坏条目丢了。修法：`ExploreCategory.url` 可空（`null` = 分组标题），解析两条路径都保留，发现页画成不可点标签，`openCategory` 遇 null 直接返回，`ExploreBooks` 防御性返回空列表。
+3. **`Request failed for rule=ruleToc/ruleBookInfo/exploreUrl … <DioException: sha256>`** —— 两层：① 默认 UA 是 `flutter_reader`，一批站点在规则跑之前就 403（上游 `FeatureSettingsRepositories.kt:157-162` 默认是桌面 Chrome）；② 日志把 dio 异常整体脱敏，403 与超时长得一样。修法：默认 UA 换桌面 Chrome（源的 `header` 仍覆盖，C-NET-4）；失败日志带 `type=`/`status=`，URL 仍走 `redactUrl`。
+4. 顺带：漫画链路换掉 `extractAll` 之后 `PageFetchService.extractAll` 成了死代码（C-BAN-1），删掉。
+
+转义又踩了两次坑（python 里写 `\n` 进 Dart 源码变成真换行）：以后这种多行/带反斜杠的测试片段改用 write 工具写进临时文件再 splice，别在 heredoc 里拼。
+
+验证：1851 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 5 文件全过（js_bridge 34/34）。
+
+## 2026-10-24 — G13/G14：`class.a b c` 全类命中、`java.getStringList` 求值、`size`/`size()` 双形态
+
+用户又给了同一批源（美图网 / 美女图片网 / 小姐姐写真）要"继续修"。这次把每条源的每条规则过了一遍引擎，只剩两个纯引擎缺口（第三十条源是 G6）：
+
+1. **G13：`class.a b c` 是「这几个类都要有」。** 上游 `AnalyzeByJSoup.ElementsSingle` 对 `class` 用 `temp.getElementsByClass(rules[1])`，jsoup 的语义是「元素必须同时带这些类」；本仓把整串当一个类名（`.${escapeCssIdent('a b c')}`），于是 `📷🔞美图网` 的**每一条**规则都返回空：`bookList`、`ruleBookInfo`（`class.container pt-3@tag.a.3@text`）、正文（`class.mb-4 container-inner-fix-m@html`）、目录。修法：`_classSelector` 按空白切分拼成 `.a.b.c`，单类行为不变。
+2. **G14：`java.getStringList` 求值，`parse.getElements` 求元素。** 美女图片网正文 `java.getStringList("@css:.ArticleImageBox img@src")` 上次在设备上拿到空数组：上游 `AnalyzeRule.getStringList` 会跑**提取段**并回 `List<String>`，而我们把 `getStringList` 与 `getElements` 混成一条通道（都答元素文档），末尾 `@src` 被当选择器。ADR-0037 §决策 3 当初就把两者写成一件。现在 `JsParseRequest.wantsValues` 分流：`getStringList` → 抽取值并串化（与上游 `List<String>` 一致），`getElements` → 元素文档（类型保真）；字面量内联与宿主求值器两条路径同口径。
+3. **G14 附带：`list.size` 与 `list.size()` 都要成立。** 同一份导出两条脚本各用一种。上一轮加的是属性 getter，`size()` 直接 `not a function`。改成「取回来的是可调用对象」：调用 → 长度，参与算术/比较 → `valueOf()` → 长度。只有严格相等（`list.size === 3`）不成立，语料没有这种写法。
+
+连带：`java.getString` 的多匹配在半内联路径上也要换行拼接（上一轮改了沙箱的 `result`，内联路径漏了）。
+
+**G6 仍是`📷🔞小姐姐写真`的唯一死结**：正文只有 `java.post(...).body()` 一条路，沙箱阻塞不了宿主。两条出路：登记（现状），或做**确定性重放**（同步网络调用抛哨兵 → 宿主执行 → 记忆表重跑脚本，直到无待办）。后者能覆盖 `java.post/get/head/ajax/connect` 整族，但脚本会被跑多次（`java.put`/`log` 重复）、`js:quota` 计数要重新定义，属于一轮独立设计，已在 ADR-0069 增补里写明，等用户裁决。
+
+验证：1859 用例全过；core 100% / domain 100% / data 97.94%；format 0、analyze 干净、codegen 幂等；Windows 5 文件全过（js_bridge 34/34）、Android js_bridge 34/34（含新的 `size()` 探针）。
+
+## 2026-10-25 — M20-b 开工前的四项裁决：播种范围、rules feature 边界、净化与缓存、G6 维持登记
+
+开工前四项空白已由用户裁决，全部写进 ADR-0070 的「增补（2026-10-24，M20-b 开工前的四项裁决）」：
+
+1. **播种（§5）**：只播目录规则（上游 `txtTocRule.json`）与字典规则（`dictRules.json`），净化/高亮不播。原文「内置净化规则」与上游事实不符，已撤销——上游 assets/defaultData 里根本没有默认净化规则，凭空的净化会改用户正文且无从解释。
+2. **feature 边界（§6）**：新建 `lib/features/rules/`（data/domain/presentation/di.dart）。判据：dict/highlight/toc 与书源无关，数据源是 Drift 而非 shared_preferences，所以既不属于 book_source 也不属于 settings。book_source 要读净化规则、规则变更要清缓存，两件事只走 ADR-0041 端口 + 装配根绑定，rules 不被任何 feature import。
+3. **净化与缓存（§7）**：保持「replaceRegex 之后、写缓存前」，但 `replace` 规则任一写入（增/改/删/启停/排序）后作废正文缓存——只删 `ruleField = content` 的条目（`CacheDao.deleteByRuleField` + `ContentCache.clearAll()`），书源信息/目录/封面缓存保留。不做「只删受影响章节」：规则是全局表达式，命中面无法先验确定。副作用：进度/书签偏移可能与新正文不逐字对应，与 5.3「进度是比例估算」同量级，不另开机制。
+4. **G6（§8）**：维持登记不做（ADR-0069 的口径不变），不做确定性重放。理由：本轮只一条源命中，重放会改 job 执行语义（脚本多次运行、java.put/log 重复、js:quota 计数重定义），属独立一轮设计与验收。
+
+文档改动：ADR-0070 §决策 4 修正 + 增补 §5–§8 与「影响（增补）」；`architecture.md` §1 的 feature 列表加 `rules`（引用 ADR-0070）。
+
+## 2026-10-25 — M20-c 规则管理 UI：四类共用一页、表单保留未知键、入口在「我的」
+
+M20-c 落地，形态写进 ADR-0070 增补 §9：
+
+- **一条 kind 一页**：`RulesRoute.list(kind)` → `RulesListPage`，四类共用启停 / 拖动排序 / 删除 / 点击进表单；kind 只影响标题与行摘要。
+- **字段之外的东西一律保留**：`RuleEditPage` 只呈现当前 kind 的字段，保存时把 `timeoutMs`（净化）与 payload 的 `extra`（上游的 volumeRule / example / excludeScope 等）原样写回——这是 ADR-0070 §决策 1「未知键必须保留」在 UI 上的落点。
+- **入口在「我的」**：`AppNavigation` 加四个方法（openReplaceRules / openTocRules / openDictRules / openHighlightRules）。四个方法而不是一个带 kind 参数的：端口只收发原语（ADR-0042），字符串 kind 会把 switch 搬进每个实现。
+- **排序也作废缓存**：`RuleRepository.reorder` 把整类重编号 0..n-1，`replace` 触发一次正文缓存作废（顺序变了净化结果就会变）。
+- **表单前置校验**（执行期仍按 ContentPurifier 的规则跳过）：正则必须能编译、颜色必须 #RRGGBB/#AARRGGBB、名字与各 kind 必填表达式非空。
+- **坏 payload 可修**：表单显示「存的内容读不懂」+ 原文，填好合法内容保存即替换。
+
+踩坑：MyPage 多了 4 行之后「设置 / 关于」落到首屏之外，`ListView(children:)` 是懒挂载的，老测试 `find.text` 直接找不到 → 测试改成先 `scrollUntilVisible`。表单页的保存按钮同理：`RuleEditPage` 的坏 payload 分支多出一段提示，Save 被挤出视口，tap 静默不打中，抽取 `_save()` 帮手统一 `ensureVisible`。
+
+验证：1969 用例全过；core 100% / domain 100% / data 98.42%；format 0、analyze 干净。
+
+## 2026-10-25 — M20-d 书内全文搜索：reader 侧窗口预取 + 自量预算 + sheet 落点
+
+M20-d 落地，落点写进 ADR-0070 增补 §10（§决策 2 的语义不变：当前章起顺序预取、并发 2、可停、命中带章节与偏移）。
+
+- **用例在 reader**：`SearchInBook` 只依赖阅读器已有的 `ChapterContentProvider`，所以「发请求」仍全在 book_source，速率门与 `HttpPolicy` 原样生效。
+- **预算自己量**：`SourceBudget` 属 book_source/domain，跨 feature 不能 import（C-ARCH-2），改用注入 `Clock` + `budget`（默认 2 分钟，与聚合搜索 60 s / 校验 180 s 同量级），用完以 `budgetSpent` 停，已找到的命中仍算数。
+- **窗口式顺序预取**：每窗 ≤2 章、`Future.wait` 后按章序产出；不是滑动窗口（慢章会拖同伴），换来顺序与「最多 2 个在飞」一眼可验。
+- **取消语义**：cancel 后不再发新请求、在途结果丢弃（正文留在缓存里不算副作用）；run 放在**下一个微任务**启动，所以 `execute` 后立刻 cancel 一个请求都不发。
+- **命中粒度按上游逐条**，但每章上限 20 条；`excerpt` 两侧各 40 字符、换行压空格；`offsetInText` 用 `RegExp(caseSensitive: false)` 在原串求位置——不用 `toLowerCase` 双串比较，因为 `İ` 这类字符会改长度、把偏移整体挪位。
+- **失败章节不吞**：计入 `failedChapters` 并在 UI 明说「有 N 章读取失败」。
+- **UI 是 sheet**：入口在阅读器 AppBar 搜索按钮；点命中把 `hit.offsetInText` 当 `charOffset` 交给 session（与书签同一套，ADR-0066 §决策 7），落在那一句；关 sheet 即 dispose → 取消。
+
+踩坑两条：① 单订阅 `StreamController.close()` 的 future 在有监听者之前不完成，所以 `run()` 末尾改成 `unawaited(controller.close())`，否则只等 `done` 的调用方会永远挂着；② autoDispose notifier 在测试里用裸 `container.read` 轮询会在两次读之间被销毁而自动取消搜索，测试必须先 `container.listen` 保活。
+
+已登记（roadmap §3.7）：搜索历史/结果落库、正则开关/繁简转换/跨书聚合，均带触发条件。
+
+验证：1999 用例全过；core 100% / domain 100% / data 98.42%；format 0、analyze 干净、codegen 幂等、Windows app_boot 通过。
+
+## 2026-10-25 — M23 规则与书源导入导出、净化 scope 与 @js: 替换
+
+按用户四项裁决（连 scope 与 `@js:` 一起做、书源导出全部+选中、预览+逐条勾选、URL+粘贴+文件）落地，规格在 ADR-0071。
+
+**导出的格式就是上游的**：净化规则导出为 `ReplaceRule` 数组（`id` 不导出、`order`/`isEnabled` 取列值、`timeoutMillisecond` ↔ `timeoutMs`、未知键经 payload 的 `extra` 往返）；书源导出直接写存储里的 payload（ADR-0040 §决策 4 的原样保真），只覆盖 `enabled`/`customOrder` 两个用户态键——因此单条导出也改走同一方法，ADR-0050 §决策 4 的「字节就是 payload」被这一条修订。
+
+**导入**：`ImportReplaceRules` 接三种来源（粘贴/URL/文件，32 MB 上限，明文 http 跟 `allowPlainHttp`），先预览（逐条可勾、坏条目带原因且不可勾），提交时按 `name`+`pattern` 去重——同键改写、不同键新增、**从不删除**；提交前重新读库，避免「更新一条预览后被删掉的行」变成静默无操作。
+
+**执行面两块新东西**（这是用户明确要求的「不只是搬运」）：
+- *scope*：`PurgeRule` 带 `appliesToContent`/`appliesToTitle`，`purgeContent` 与 `purgeTitles` 各扫各的；标题净化在装配根把目录映射成阅读器 `ReadingChapter` 时做，因此目录 sheet / 正文头 / 进度名 / 搜索命中是同一份净化后的标题。
+- *`@js:` 替换*：一条规则**一批一个 job**——所有匹配合成 `__matches`，用 `eval` 的完成值取每条替换（上游的脚本常写成 `if (…) { … } else { "" }`，语句形态只有 eval 能回答）；`timeoutMs` 终于有了用处（该 job 的上限），脚本报错/超时/答案长度不符都只跳过该规则。设备级用例在真 QuickJS 上跑通了这套脚本形状。
+
+**语料口径校正**：`净化规则.json` 20 条里 `@js:` 只有 4 条（#01–#04）、标题专用 1 条、全部 isRegex/带 group/无 timeoutMillisecond——ADR 背景里先写成「大量」是错的，已按逐条统计改正。
+
+登记（roadmap §3.7）：规则分组只存不展示不筛选、正则规则仍无超时、标题净化不覆盖详情页目录预览与书架「最新章节」。
+
+验证：2062 用例全过；core 100% / domain 100% / data 98.25%；format 0、analyze 干净、codegen 幂等；Windows app_boot 通过、js_bridge 35/35（含新的真沙箱净化替换用例）。
+
+## 2026-10-25 — M22-a 第一批：按源缓存（v10）与 Cookie 管理页
+
+M22 拆批并落了第一批（ADR-0072），先按用户裁决对齐上游行为：
+
+上游实况（逐条查过）：缓存清理只有「全部 / 按书」（`BookHelp.clearCache`），**没有按源**；Cookie 只有书源编辑页里的「清掉该源的 Cookie」（`BookSourceEditViewModel.clearCookie`）+ `enabledCookieJar` 开关，**没有列表页**；`loginUi` 是 `RowUi` 数组（text/password/toggle/select/button + `viewName` 可求值 + 本身可以是 `@js:`/`<js>`），登录信息由 `BaseSource.putLoginInfo` 加密存、确认时跑 `loginUrl` 里的 `login()`。所以「按源缓存」与「Cookie 列表」是本仓在**上游没有的粒度上做的增强**，ADR 里写明了这一点。
+
+第一批交付：
+- **schema v10**：`cache_entries.source_key` + 索引；迁移**顺带清空旧缓存**——摘要无法反推，留着会让按源统计在 TTL 内少算，缓存又是可再生数据，清空比显示错数诚实。schema dump v10 + 迁移测试（fromV9→v10、全量链路、版本断言）齐了。
+- **按源缓存页**（book_source，「我的 → 缓存管理」）：每源章数、清理该源、清理过期、清空全部（带二次确认）。
+- **Cookie 管理页**（settings，「我的 → Cookie 管理」）：按域分组，显示名称与过期（**不显示值**——会话凭据印在屏上没有用处）；删单条/整域/过期/全部。`CookieStore` 补 `deleteByDomain`/`deleteAll`。
+- `ContentCache` 补 `countForSource`/`clearForSource`/`countAll`/`clearExpired`。
+
+登记：每书源 Cookie 隔离仍不做（当前是全局按域）；登录信息将按 ADR 明文存库（与 Cookie 同级）；`putLoginHeader`/`upLoginData` 不做。
+
+验证：2089 用例全过；core 100% / domain 100% / data 98.30%；format 0、analyze 干净、codegen 幂等；Windows app_boot 与 on-disk 数据库用例通过。
+
+## 2026-10-25 — M22-a 第二批：loginUi 原生登录表单与 login() 执行
+
+M22-a 第二批落地（ADR-0072 §决策 3 + 实现注记）：loginUi 表单 + 登录信息 + `login()`。
+
+上游行为照搬的地方：`loginUi` 是 `RowUi` 数组（text/password/toggle/select/button，`chars` 是选项、`default` 初值、`viewName` 引号字面量或脚本）；`loginUi` 本身可以是 `@js:`/`<js>`（前置 `loginUrl` 的脚本求值）；确认时**先存值再跑** `<loginUrl 脚本>\nif (typeof login=='function'){ login.apply(this) } else { throw ... }`，值绑在 `result`；脚本失败也保留已存值。
+
+本仓的落点：
+- **schema v11** `book_sources.login_info`（JSON 文本，属用户态，重导入不覆盖）。原计划并进 v10，但 v10 已提交，改历史版本会让已升到 v10 的库永远补不上列——ADR-0056 的同一教训。
+- `ResolveLoginForm`（domain）：字面量/脚本两种 `loginUi`、`viewName` 求值（失败退回 `name`）、未知 type 退 text、无 `name` 的行跳过；坏文档给 `loginUi` 的 rulePath。
+- `SignIn`（domain）：确认与按钮 `action` 两条入口共用同一个 `_run`；`loginUrl` 是裸地址时明确 `unsupportedRule`（那是浏览器那条路）。`loginScriptOf` 统一判定三种脚本形态。
+- 沙箱：`JsJob.loginInfo` 快照 + 前奏 `source.getLoginInfo()`/`getLoginInfoMap()`（沿用 ADR-0034 的「随 job 进、随结果回」机制）。
+- 入口：列表行「登录」——有 `loginUi` 走表单页，只有 `loginUrl` 仍走可见 WebView；表单为空就明说。
+
+登记（roadmap §3.7 + book-source.md §11 已改）：登录信息只喂给登录自己的 job，页面请求 job（`loginCheckJs`/字段规则）还读不到；`java.upLoginData`、`source.putLoginHeader` 未做。
+
+验证：2118 用例全过；core 100% / domain 100% / data 98.35%；format 0、analyze 干净、codegen 幂等；Windows app_boot / on-disk / js_bridge(35) 逐个跑通。
+
+## 2026-10-25 — M22-b 备份与恢复：zip + 每表 JSON、合并式恢复、archive 依赖
+
+按用户四项裁决（范围 = 数据 + 设置、恢复 = 按自然键合并、格式 = 本仓格式带 manifest、归属 = 新 feature `backup`）落地，规格在 ADR-0073。上游格式只当对照组：每表一个 JSON + config.xml，没有 manifest、按 id 插入、个别表 replaceAll。
+
+落地要点：
+- 产物 backup<yyyy-MM-dd>.zip：manifest.json（formatVersion/createdAt/appVersion/tables/preferences）+ 七个表文件 + preferences.json。行对象用列名（camelCase）作键，DateTime 一律 ISO-8601 UTC，id 不导出；books 的分组写组名（groupName）而不是 groupId。
+- 恢复：先整包解析校验，再在一个 drift 事务里按自然键合并；从不删除；本地进度更新时不回拨；已存在的规则/书签/会话不动；书源已存在时刷新 payload 与用户态但不搬 customOrder；单行坏掉记 skipped，文件级坏掉整次失败。
+- 设置：PreferenceStore.snapshot()/writeAll()（只写给的键、返回写入数），备份 feature 不需要知道任何 settings.* / reader.* 键名；恢复后由装配根的 RestoreCompletionHook invalidate 两个 keepAlive 设置 provider，否则界面一直显示恢复前的主题与字号。
+- 依赖：archive ^4.5.2（MIT、纯 Dart、此前已是 dev 传递依赖，包总数不变）；新增端口 BackupArchiveSaver / BackupArchivePicker，读取前按 XFile.length() 判上限，解码前按中央目录声明值判条目大小。appVersion 是 core/app_version.dart 的常量镜像，app_version_test 读 pubspec.yaml 防漂移。
+
+踩坑：
+- archive 4.x 两种失败类型：结构坏（截断/中央目录越界/zip64 locator 坏）抛 ArchiveException，解压流坏抛 FormatException（Windows 实测）。统一进私有 _guarded 后两个 catch 都有可测触发路径。构造触发输入的手法：① EOCD 前 20 字节写 zip64 locator 签名；② 把中央目录「解压后大小」写小；③ 打坏 deflate 数据。
+- 纯垃圾字节不会让 decodeBytes 抛：它安静解出空档案，失败落在「没有 manifest」。别为「不是 zip」写走不到的分支。
+- pumpAndSettle 等不到 Isolate.run 的结果，且 working 态的 LinearProgressIndicator 一直在动会直接超时；widget 测试要 tester.runAsync + pump（见 backup_page_test 的 _tapAndWait）。
+- const 构造折叠再次踩到：OversizedBackupArchive / BackupContents 的非 const 用例要 // ignore: prefer_const_constructors 并写理由，否则 core/domain 的 100% 门禁缺执行点。
+- DAO 时间戳可注入：insertNew / upsertProgress / restoreUserState 加可选 createdAt/updatedAt/tocUrl，默认仍取 Clock；恢复要写回备份里的时间，否则「最近阅读」被重排。
+
+验证：2196 用例全过；core 100% / domain 100% / data 96.41%；format 0、analyze 干净、codegen 幂等（第二次写 0 输出）；scan_licenses 193 包 Risky items: none。Windows 设备级用例未跑（本批无平台通道改动，file_selector 对话框在宿主 VM 里不可自动化）。
+
+## 2026-10-25 — M22-c 备份增强：位置/自动备份与保留份数/覆盖恢复/整包加密/WebDAV
+
+按用户裁决落地 ADR-0074：四项一次做完（含 WebDAV）、范围维持不含 Cookie/缓存/校验历史、凭据进系统密钥库、安全副本写「用户选的备份位置，未设置则应用私有目录」。
+
+交付：
+- 备份位置：BackupLocation = appPrivate（path_provider 的应用支持目录 /backups）或用户选的文件夹；自动备份、恢复前安全副本、页面「保存到备份位置」共用；文件夹不可用回落私有目录并在页面显示真实落点；「另存为…」仍走系统保存框。
+- 自动备份：AppShell 首帧后触发，1 天节流（backup.lastAutoBackupAt），成功后保留份数 N=1..30（默认 5，N=1 等价上游 onlyLatestBackup）；只删匹配 ^backup.*\.zip(\.enc)?$ 的文件；时间戳只在写成功后前进。
+- 覆盖式恢复：RestoreMode.overwrite 在同一 drift 事务里先清空七张表再写入；覆盖前先写 backup-before-restore-<yyyyMMdd-HHmmss>.zip[.enc] 安全副本，写失败即中止；preferences 两种模式都只合并不删除。DAO 补 deleteAll（分组/书签/阅读记录/规则）。
+- 加密：整包 WinZip AES-256（archive 自带 password 支持，不引新密码学依赖）；口令存 flutter_secure_storage；解码前先读中央目录 flag bit 0 判「加密包」，无口令报 backup.read.passwordRequired、口令错报 backup.read.badPassword（外层兜底：加密包+有口令仍读不出=口令错）。
+- WebDAV：core/network 的 WebDavClient（PROPFIND Depth:1 / PUT / GET / DELETE，Basic 认证，http 受 allowPlainHttp 约束）+ features/backup/data 的 WebDavRemoteBackupStore（凭据每次现读、只认本应用命名、远端保留份数）；页面有配置对话框、上传、刷新、云端恢复、删除。
+- 新依赖 flutter_secure_storage ^11.2.0（BSD-3），包数 193→201，Risky items: none。
+
+踩坑：
+- dart:io 的 HttpDate 才是 PROPFIND 的 getlastmodified 格式（RFC 1123）解析器，DateTime.tryParse 对它一律返回 null——一度让所有条目落到 epoch、列表退化成按名字排序。HttpDate.parse 对非 RFC1123 抛 HttpException（不是 FormatException），所以只接 HttpException。
+- 同一时间戳的排序要用名字兜底，否则会随服务器返回顺序抖动。
+- 集合条目（href 以 / 结尾）必须跳过，真实 NAS 有的不给 resourcetype。
+- widget 测试里 ListView 是懒挂载：先 drag 到目标再 tap，否则静默打空；Isolate.run 需要 tester.runAsync 给真实事件循环。
+- secret store 的默认闭包（插件调用）在宿主 VM 里跑不到：用一个 FlutterSecureStorage 的假子类注入 storage 参数，才能覆盖那三行（core 100% 门禁）。
+- const 构造折叠又一次：OversizedBackupArchive / BackupContents 的测试用例改非 const 并 // ignore: prefer_const_constructors。
+
+验证：2298 用例全过；core 100% / domain 100% / data 95.79%；format 0、analyze 干净、codegen 幂等（第二次 0 输出）；scan_licenses 201 包无风险项。未做（已登记 §3.7）：后台调度的自动备份、密钥库不可用时的降级策略、口令强度校验、云端进度同步、读上游 zip。主题与阅读设置扩展（U9/U10）本轮未开始，下一步。
+
+## 2026-10-25 — M24 同步 java.* 重放层的切片与验收
+
+目标：让上游「同步 java.*」书源不改写即可跑（触发源：来看文学，`java.ajax` 在 searchUrl 第一行就拒绝）。
+
+切片顺序（每片都能独立过门禁）：
+1. 与重放无关的三个缺口先补：`cookie.getCookie/setCookie/removeCookie`（读自 job 快照、写穿 CookieManager）、`source.getVariable/setVariable/putVariable`（每源持久变量，落点待定：Drift 新表 or 复用书源字段）、`java.toast/longToast`（转发到 UI，去重）。
+2. 重放骨架：worker 内 `java.ajax` 命中未缓存 → 抛哨兵 `{op,url}`；桥取页后缓存 → **从脚本开头重跑**；`_variables` 按 pass 重置、成功 pass 才提交；pass 上限 16；等人的时间不计预算（沿用 ADR-0068 §决策 5）。
+3. 同步族补齐：`java.ajax/post/head`（`post` 返回可 `.header()` 的响应对象，复用 `http.* {response:true}` 的信封）、`java.getCookie`、`java.setContent`（页级 scope 的内容覆盖）。
+4. 验证族答案记忆：`getVerificationCode` / `startBrowserAwait` 按 `op+url` 记忆，重跑时同步返回上次答案（保证只弹一次窗）。
+5. 文档：`book-source.md` §11 把 `ajax/post/getCookie/setContent/cookie.*` 从「明确不支持」移出，写清重放语义与 pass 上限；roadmap §3.7 对应行。
+
+已落地的前置（2026-10-25）：`HttpResponse.url`（跟随重定向后的地址，页面 baseUrl / loginCheckJs 的 url() 都改用它）+ `http.* {response:true}` 返回响应对象（与 loginCheckJs 的 result 同形）。
+
+未做且不在本里程碑：`java.importScript` / `cacheFile` / `downloadFile` / `refreshBookUrl` / Rhino Java 互操作。

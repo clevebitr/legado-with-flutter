@@ -2,14 +2,10 @@ import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/search_book.dart';
 import 'package:flutter_reader/features/book_source/domain/search_match_mode.dart';
 
-/// How many merged books one search keeps (`docs/dev/roadmap.md` 3.8, ADR-0046 §决策 7).
-///
-/// Upstream's `MAX_RETAINED_SEARCH_RESULTS`: past this the merger evicts the least valuable rows
-/// instead of growing the list without bound, and `hasMore` turns off.
+/// How many merged books one search keeps before evicting the least valuable rows.
 const int maxRetainedSearchBooks = 1000;
 
-/// The bucket a hit falls into; the order of the values **is** the display order
-/// (ADR-0046 §决策 3).
+/// The bucket a hit falls into; the order of the values is the display order.
 enum SearchHitBucket {
   /// Name or author **equals** the keyword (kept in both modes).
   equal,
@@ -26,9 +22,7 @@ enum SearchHitBucket {
 
 /// Which bucket [book] belongs in under [mode], or `null` when [mode] drops it.
 ///
-/// The rules are upstream's `classifyBucket`, including the part that surprises: under
-/// [SearchMatchMode.exact] the `tags` / `contains` / `other` buckets are **dropped**, so "exact"
-/// means "name or author equals the keyword" and nothing else.
+/// Under [SearchMatchMode.exact] only an equal name or author survives.
 SearchHitBucket? searchBucketOf(
   Book book,
   String keyword,
@@ -36,8 +30,7 @@ SearchHitBucket? searchBucketOf(
 ) {
   final String key = mergeKeyOf(keyword);
   if (key.isEmpty) {
-    // 空关键词没有匹配语义：`''.contains('')` 会让一切落进某个桶，所以直接不算命中。
-    // 聚合用例本来就会先拒绝空关键词，这里只是让分类函数自己也是安全的。
+    // 空关键词没有匹配语义，直接不算命中。
     return null;
   }
   final String name = mergeKeyOf(book.name);
@@ -58,12 +51,10 @@ SearchHitBucket? searchBucketOf(
   return SearchHitBucket.other;
 }
 
-/// Merges the hits of many sources into one ordered, de-duplicated list
-/// (`docs/dev/roadmap.md` 3.8, ADR-0046 §决策 3/4/7).
+/// Merges the hits of many sources into one ordered, de-duplicated list.
 ///
-/// It is stateful on purpose: an aggregate search runs source by source and each result page adds
-/// to the same list, so "what the user sees" is [books] after every [add]. The class owns no I/O and
-/// no clock, which is what lets the bucket rules and the eviction order be tested directly.
+/// It is stateful on purpose: each result page adds to the same list, and [books] is what
+/// the user sees. The class owns no I/O and no clock.
 final class SearchResultMerger {
   /// Creates a merger for [keyword] under [mode].
   SearchResultMerger({required this.keyword, required this.mode});
@@ -80,12 +71,12 @@ final class SearchResultMerger {
       <SearchBookKey, SearchBook>{};
   final Map<SearchBookKey, SearchBook> _other = <SearchBookKey, SearchBook>{};
 
-  /// The merged rows as they should be shown, best bucket first, multi-source first inside a bucket.
+  /// The merged rows as they should be shown, best bucket first.
   List<SearchBook> get books => <SearchBook>[
     ..._sorted(_equal),
     ..._sorted(_tags),
     ..._sorted(_contains),
-    // 上游的 `other` 桶不按来源数排序，保持插入序；照抄而不是「顺手改好」（ADR-0046 §决策 3）。
+    // 上游的 `other` 桶不按来源数排序，保持插入序。
     ..._other.values,
   ];
 
@@ -93,15 +84,14 @@ final class SearchResultMerger {
   int get count =>
       _equal.length + _tags.length + _contains.length + _other.length;
 
-  /// Whether the eviction bound has thrown rows away; `hasMore` uses it (ADR-0046 §决策 7).
+  /// Whether the eviction bound has thrown rows away.
   bool get resultLimitReached => _limitReached;
   bool _limitReached = false;
 
-  /// Adds [hits] from [sourceUrl] and returns whether anything visible changed.
+  /// Adds [hits] from [sourceUrl] and answers whether anything visible changed.
   ///
-  /// A hit that is already known — same `(name, author)`, or the same `bookUrl` seen from another
-  /// source — only gains [sourceUrl] in its `origins`, which is what the "N sources" marker on the
-  /// row counts.
+  /// A hit already known — same `(name, author)` or same `bookUrl` — only gains [sourceUrl]
+  /// in its `origins`, which is what the "N sources" marker counts.
   bool add(List<Book> hits, {required String sourceUrl}) {
     var changed = false;
     for (final Book hit in hits) {
@@ -139,7 +129,6 @@ final class SearchResultMerger {
   SearchHitBucket bucketOf(SearchBook book) =>
       _bucketOfKey(searchBookKeyOf(book));
 
-  /// The bucket a key is filed under.
   SearchHitBucket _bucketOfKey(SearchBookKey key) {
     if (_equal.containsKey(key)) {
       return SearchHitBucket.equal;
@@ -162,7 +151,7 @@ final class SearchResultMerger {
       SearchHitBucket.contains => _contains,
       SearchHitBucket.other => _other,
     };
-    // 同一个 (name, author) 换了桶（例如先被归到 contains，后来发现 kind 命中）：先从旧桶摘掉。
+    // 同一个 (name, author) 可能换桶：先从旧桶摘掉。
     for (final Map<SearchBookKey, SearchBook> bucketMap
         in <Map<SearchBookKey, SearchBook>>[_equal, _tags, _contains, _other]) {
       bucketMap.remove(key);
@@ -170,14 +159,13 @@ final class SearchResultMerger {
     target[key] = book;
   }
 
-  /// The row filed under [key] in any bucket, or `null`.
   SearchBook? _find(SearchBookKey key) =>
       _equal[key] ?? _tags[key] ?? _contains[key] ?? _other[key];
 
-  /// [bucket]'s rows ordered by origin count descending, keeping insertion order for ties.
+  /// [bucket]'s rows ordered by origin count descending, insertion order for ties.
   List<SearchBook> _sorted(Map<SearchBookKey, SearchBook> bucket) {
     final List<SearchBook> rows = bucket.values.toList();
-    // `List.sort` 在 Dart 里不保证稳定，所以用插入序做第二关键字。
+    // `List.sort` 不保证稳定，所以用插入序做第二关键字。
     final Map<SearchBook, int> order = <SearchBook, int>{
       for (var index = 0; index < rows.length; index++) rows[index]: index,
     };
@@ -190,11 +178,7 @@ final class SearchResultMerger {
     return rows;
   }
 
-  /// Drops the least valuable row once [maxRetainedSearchBooks] is exceeded.
-  ///
-  /// The order is upstream's `trimSearchBooks`: `other` → `tags` → the `contains` with the fewest
-  /// origins → the `equal` with the fewest origins. Evicting an exact match is the last resort
-  /// because it is the row the user asked for.
+  // 淘汰顺序：other → tags → origins 最少的 contains → origins 最少的 equal。
   void _evict() {
     while (count > maxRetainedSearchBooks) {
       _limitReached = true;
@@ -209,7 +193,6 @@ final class SearchResultMerger {
     }
   }
 
-  /// Removes the last (lowest priority) row of [bucket].
   bool _removeLast(Map<SearchBookKey, SearchBook> bucket) {
     if (bucket.isEmpty) {
       return false;
@@ -219,7 +202,6 @@ final class SearchResultMerger {
     return true;
   }
 
-  /// Removes the row of [bucket] with the fewest origins.
   bool _removeFewestOrigins(Map<SearchBookKey, SearchBook> bucket) {
     if (bucket.isEmpty) {
       return false;

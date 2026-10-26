@@ -56,11 +56,12 @@ extension BookshelfRoutePatterns on BookshelfRoute {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ShelfRoute value)?  shelf,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ShelfRoute value)?  shelf,TResult Function( ShelfGroupsRoute value)?  groups,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case ShelfRoute() when shelf != null:
-return shelf(_that);case _:
+return shelf(_that);case ShelfGroupsRoute() when groups != null:
+return groups(_that);case _:
   return orElse();
 
 }
@@ -78,11 +79,12 @@ return shelf(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ShelfRoute value)  shelf,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ShelfRoute value)  shelf,required TResult Function( ShelfGroupsRoute value)  groups,}){
 final _that = this;
 switch (_that) {
 case ShelfRoute():
-return shelf(_that);}
+return shelf(_that);case ShelfGroupsRoute():
+return groups(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -96,11 +98,12 @@ return shelf(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ShelfRoute value)?  shelf,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ShelfRoute value)?  shelf,TResult? Function( ShelfGroupsRoute value)?  groups,}){
 final _that = this;
 switch (_that) {
 case ShelfRoute() when shelf != null:
-return shelf(_that);case _:
+return shelf(_that);case ShelfGroupsRoute() when groups != null:
+return groups(_that);case _:
   return null;
 
 }
@@ -117,10 +120,11 @@ return shelf(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  shelf,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  shelf,TResult Function()?  groups,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case ShelfRoute() when shelf != null:
-return shelf();case _:
+return shelf();case ShelfGroupsRoute() when groups != null:
+return groups();case _:
   return orElse();
 
 }
@@ -138,10 +142,11 @@ return shelf();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  shelf,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  shelf,required TResult Function()  groups,}) {final _that = this;
 switch (_that) {
 case ShelfRoute():
-return shelf();}
+return shelf();case ShelfGroupsRoute():
+return groups();}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -155,10 +160,11 @@ return shelf();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  shelf,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  shelf,TResult? Function()?  groups,}) {final _that = this;
 switch (_that) {
 case ShelfRoute() when shelf != null:
-return shelf();case _:
+return shelf();case ShelfGroupsRoute() when groups != null:
+return groups();case _:
   return null;
 
 }
@@ -190,6 +196,38 @@ int get hashCode => runtimeType.hashCode;
 @override
 String toString() {
     return 'BookshelfRoute.shelf()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class ShelfGroupsRoute extends BookshelfRoute {
+  const ShelfGroupsRoute(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ShelfGroupsRoute);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'BookshelfRoute.groups()';
 }
 
 

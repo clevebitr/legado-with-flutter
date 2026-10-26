@@ -9,9 +9,9 @@ import 'package:m3e_design/m3e_design.dart';
 /// (`docs/dev/roadmap.md` §3.11 M18, ADR-0055 §决策 3).
 ///
 /// Every row calls a method on the [AppNavigation] port (ADR-0042), so this page does not import
-/// `book_source` or `settings`: the composition root binds the real push functions. The cache
-/// entry deliberately lives in settings only — two "clear cache" buttons would be two answers to
-/// the same question.
+/// `book_source`, `settings`, `reader` or `rules`: the composition root binds the real push
+/// functions. The cache entry deliberately lives in settings only — two "clear cache" buttons would
+/// be two answers to the same question.
 class MyPage extends ConsumerWidget {
   /// Creates the page.
   const MyPage({super.key});
@@ -36,6 +36,62 @@ class MyPage extends ConsumerWidget {
             title: Text(l10n.myBookSources),
             subtitle: Text(l10n.myBookSourcesBody),
             onTap: () => navigation.openBookSources(context),
+          ),
+          // 书签与阅读记录是阅读产物，页面归 `reader`；这里只发一个导航请求（ADR-0066 §决策 7）。
+          ListTile(
+            leading: const Icon(Icons.bookmark_border),
+            title: Text(l10n.myBookmarks),
+            subtitle: Text(l10n.myBookmarksBody),
+            onTap: () => navigation.openBookmarks(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: Text(l10n.myReadingRecords),
+            subtitle: Text(l10n.myReadingRecordsBody),
+            onTap: () => navigation.openReadingRecords(context),
+          ),
+          // 四类规则各自一页（M20，ADR-0070 §决策 1）：它们同构，但一处入口进一类，
+          // 免得「在净化列表里看到字典规则」。
+          _heading(context, l10n.mySectionRules),
+          ListTile(
+            leading: const Icon(Icons.auto_fix_high),
+            title: Text(l10n.rulesReplaceTitle),
+            onTap: () => navigation.openReplaceRules(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.format_list_bulleted),
+            title: Text(l10n.rulesTocTitle),
+            onTap: () => navigation.openTocRules(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.translate),
+            title: Text(l10n.rulesDictTitle),
+            onTap: () => navigation.openDictRules(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.brush_outlined),
+            title: Text(l10n.rulesHighlightTitle),
+            onTap: () => navigation.openHighlightRules(context),
+          ),
+          // 数据面：缓存（按源）与 Cookie 罐（ADR-0072）。两者都是「看得到才敢动」的东西。
+          _heading(context, l10n.mySectionData),
+          ListTile(
+            leading: const Icon(Icons.sd_storage_outlined),
+            title: Text(l10n.cacheManageTitle),
+            onTap: () => navigation.openCacheManage(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cookie_outlined),
+            title: Text(l10n.myCookies),
+            subtitle: Text(l10n.myCookiesBody),
+            onTap: () => navigation.openCookies(context),
+          ),
+          // 备份与恢复也是数据面：导出的 zip 带走用户数据，恢复把它拿回来（M22，ADR-0073）。
+          ListTile(
+            leading: const Icon(Icons.settings_backup_restore),
+            title: Text(l10n.myBackup),
+            subtitle: Text(l10n.myBackupBody),
+            onTap: () => navigation.openBackup(context),
           ),
           _heading(context, l10n.mySectionApp),
           ListTile(

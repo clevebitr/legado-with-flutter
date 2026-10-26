@@ -300,5 +300,164 @@ void main() {
         'https://example-novel.test/img/3.jpg',
       ]);
     });
+
+    test(
+      'execute_givenImageUrlsWithOptions_keepsTheUrlAndMergesHeaders',
+      () async {
+        // 美女图片网的图床要 Referer：地址带 `,{"headers":{…}}`（ADR-0069 G4）。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            _chapterUrl,
+            '<div class="page"><img src="/img/1.jpg,{&quot;headers&quot;:{&quot;Referer&quot;:&quot;https://a.test/&quot;}}">'
+            '</div>',
+          );
+        final ({FetchMangaPages useCase, FakeLogPrinter printer}) fixture =
+            _useCase(http);
+
+        final MangaPages pages = _data(
+          await fixture.useCase.execute(
+            _source(),
+            const ChapterRequest(url: _chapterUrl),
+          ),
+        );
+
+        // 地址里没有 JSON；选项里的 header 与书源自己的 header 合在一张表里。
+        expect(pages.urls, <String>['https://example-novel.test/img/1.jpg']);
+        expect(pages.headers?['Referer'], 'https://a.test/');
+      },
+    );
+
+    test('execute_givenAnUnreadableOptionSuffix_dropsItWithAWarning', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _chapterUrl,
+          '<div class="page"><img src="/img/1.jpg,{oops}"></div>',
+        );
+      final ({FetchMangaPages useCase, FakeLogPrinter printer}) fixture =
+          _useCase(http);
+
+      final MangaPages pages = _data(
+        await fixture.useCase.execute(
+          _source(),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(pages.urls, <String>['https://example-novel.test/img/1.jpg']);
+      expect(
+        fixture.printer.events.map((LogEvent event) => event.message),
+        contains(contains('Unreadable image URL options dropped')),
+      );
+    });
+
+    test(
+      'execute_givenAListJsonPathAndJsTail_handsTheScriptTheJoinedString',
+      () async {
+        // 那份导出的正文规则：`$.data[*].image` + `@js:result.split("\n")`。上游把多匹配拼成
+        // **一个字符串**交给脚本，所以 `split` 成立；脚本产出 `<img>` HTML（ADR-0069 G9）。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            _chapterUrl,
+            '{"data":[{"image":"https://img.test/1.jpg"},'
+            '{"image":"https://img.test/2.jpg"}]}',
+          );
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..result =
+              '<img src="https://img.test/1.jpg">'
+              '<img src="https://img.test/2.jpg">';
+        final ({FetchMangaPages useCase, FakeLogPrinter printer}) fixture =
+            _useCase(http, bridge);
+
+        final MangaPages pages = _data(
+          await fixture.useCase.execute(
+            _source(
+              contentRule:
+                  '\$.data[*].image\n'
+                  '@js:result.split("\n").map(x=>\'<img src="\'+x+\'">\').join("\n")',
+            ),
+            const ChapterRequest(url: _chapterUrl),
+          ),
+        );
+
+        expect(
+          bridge.jobs.single.result,
+          'https://img.test/1.jpg\nhttps://img.test/2.jpg',
+        );
+        expect(pages.urls, <String>[
+          'https://img.test/1.jpg',
+          'https://img.test/2.jpg',
+        ]);
+      },
+    );
+
+    test('execute_givenContentThatIsAPlainUrlList_splitsItIntoPages', () async {
+      // 没有 `<img>` 的形态：内容是多行地址（`getString` 拼接的结果）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _chapterUrl,
+          '<div class="page"><img src="/img/1.jpg"></div>'
+          '<div class="page"><img src="/img/2.jpg"></div>',
+        );
+      final ({FetchMangaPages useCase, FakeLogPrinter printer}) fixture =
+          _useCase(http);
+
+      final MangaPages pages = _data(
+        await fixture.useCase.execute(
+          _source(),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(pages.urls, <String>[
+        'https://example-novel.test/img/1.jpg',
+        'https://example-novel.test/img/2.jpg',
+      ]);
+    });
+
+    test('execute_givenAnImageDecodeScript_failsLoudly', () async {
+      // `imageDecode` 要在沙箱里解图片字节，本仓做不到：显式 unsupported，而不是把加密图
+      // 直接摆给用户（ADR-0069 G5）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, '<div class="page"><img src="/img/1.jpg"></div>');
+      final BookSource source = _source();
+      final ({FetchMangaPages useCase, FakeLogPrinter printer}) fixture =
+          _useCase(http);
+
+      final ParseResult<MangaPages> result = await fixture.useCase.execute(
+        source.copyWith(
+          contentRule: source.contentRule.copyWith(imageDecode: '@js:result'),
+        ),
+        const ChapterRequest(url: _chapterUrl),
+      );
+
+      expect(result.dataOrNull, isNull);
+      expect(switch (result) {
+        ParseFailure<MangaPages>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ) =>
+          '${kind.name} @ $rulePath',
+        ParseSuccess<MangaPages>() => 'ok',
+      }, 'unsupportedRule @ contentRule.imageDecode');
+    });
+
+    test('execute_givenAnImageStyle_carriesItOnThePages', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, '<div class="page"><img src="/img/1.jpg"></div>');
+      final BookSource source = _source();
+      final ({FetchMangaPages useCase, FakeLogPrinter printer}) fixture =
+          _useCase(http);
+
+      final MangaPages pages = _data(
+        await fixture.useCase.execute(
+          source.copyWith(
+            contentRule: source.contentRule.copyWith(imageStyle: 'single'),
+          ),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(pages.imageStyle, 'single');
+    });
   });
 }

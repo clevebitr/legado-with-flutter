@@ -13,36 +13,16 @@ import 'package:flutter_reader/core/network/http_policy.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
 import 'package:flutter_reader/core/network/request_limiter.dart';
 
-/// Fetches pages over HTTP for the rest of the app (C-NET-1).
+/// Fetches pages over HTTP for the rest of the app.
 ///
-/// Implementations never throw for expected failures: timeouts, connection
-/// errors, non-2xx statuses and undecodable bodies come back as a
-/// [ParseFailure] so callers can `switch` exhaustively (C-ERR-1). Feature code
-/// must depend on this interface and never import `dio` itself.
+/// Expected failures come back as a [ParseFailure]; implementations never throw for them.
 abstract interface class HttpClient {
-  /// Sends a GET request to [url].
+  /// Sends a GET for [url]; expected failures come back as a [ParseFailure].
   ///
-  /// [rulePath] names the book source field this request belongs to; it is
-  /// carried into [ParseFailure.rulePath] so a failure stays locatable
-  /// (C-SRC-8). [headers] override the policy defaults for this request only,
-  /// while cookies come from the [CookieManager] and must never be set by hand
-  /// (C-NET-5).
-  ///
-  /// Pass [keyword] when [url] was rendered from a search template: it is used
-  /// only to keep the keyword out of failure logs (ADR-0006 §5).
-  ///
-  /// Pass [sourceId] (the book source URL) so a warning that belongs to a book
-  /// source can name it without the client having to know the source model
-  /// (C-ERR-8): the tolerant-decode warning of ADR-0031 §决策 2 needs it.
-  ///
-  /// Pass [maxBytes] to bound the response **while it is read** (`docs/dev/roadmap.md` 5.1,
-  /// ADR-0040 §决策 5): the import path must abandon an oversized download instead of
-  /// buffering it (C-PERF-5). A body over the cap is a [ParseFailure] of kind
-  /// [ParseFailureKind.invalidBookSource] whose `cause` is a [BodyTooLargeException] — the
-  /// request layer owns no "too large" kind, and it does not know what the caller wanted the
-  /// bytes for, so the caller rewrites the failure into its own `rulePath`
-  /// (`ImportBookSources` maps it to `import.sizeLimit`). `null` means “no caller cap”, which
-  /// is what every rule-driven request wants.
+  /// [rulePath] locates the failure, [headers] override the policy, and [maxBytes] bounds the body (over it: a [BodyTooLargeException] cause).
+  /// [maxRetries] overrides the policy's bound for this request: a URL rule's `retry` option
+  /// (`docs/dev/roadmap.md` M21a) is capped by the caller at 3, so C-NET-2's 「显式次数上限」 still
+  /// holds. [receiveTimeout] is the rule's `readTimeout`, again capped by the caller.
   Future<ParseResult<HttpResponse>> get(
     String url, {
     required String rulePath,
@@ -51,21 +31,25 @@ abstract interface class HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   });
 
-  /// Sends a POST request to [url], carrying [body] as the request payload.
+  /// Sends a GET and answers the raw bytes of a 2xx response.
   ///
-  /// The contract is [get]'s: the same [rulePath] / [headers] / [keyword] / [sourceId]
-  /// meanings, the same retry, timeout and decoding policy, and the same promise to
-  /// answer with a [ParseResult] instead of throwing (C-ERR-1).
+  /// Used for non-text bodies (images, fonts); every other rule of [get] still applies.
+  Future<ParseResult<Uint8List>> getBytes(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxBytes,
+  });
+
+  /// Sends a POST to [url], carrying [body] as-is.
   ///
-  /// [body] is sent as it is, so the `Content-Type` a site expects has to come from
-  /// [headers] — the client does not guess one. It exists because the JS whitelist of
-  /// `docs/dev/book-source.md` §6 binds `http.post`, and the request layer must stay the
-  /// single door to the network (C-NET-1).
-  ///
-  /// There is no `maxBytes` here: the cap exists for a caller that downloads a **file**
-  /// (the import path), and a rule-driven POST is read whole by definition.
+  /// [headers] must supply `Content-Type`; the other parameters and failures match [get].
   Future<ParseResult<HttpResponse>> post(
     String url, {
     required String rulePath,
@@ -74,31 +58,19 @@ abstract interface class HttpClient {
     String? keyword,
     String? sourceId,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   });
 
-  /// Applies the `concurrentRate` [sourceId] declares to that source's budget
-  /// (`docs/dev/book-source.md` §8).
+  /// Applies the `concurrentRate` [sourceId] declares to that source's budget.
   ///
-  /// Call it when an operation starts using a source. The rate gate is keyed by [sourceId],
-  /// exactly like the concurrency budget, so every later request of that source — including
-  /// the `http.*` calls a `@js:` rule makes (`book-source.md` §6), which never see the
-  /// declaration itself — passes it as well (ADR-0036 §决策 5).
-  ///
-  /// [concurrentRate] is the **raw** declaration text: the request layer owns the syntax and
-  /// its warning, because that is where the budget is spent. `null`, a blank string and `"0"`
-  /// mean “no rate gate”; an illegal declaration is ignored with a warning and the source keeps
-  /// the default concurrency budget (ADR-0036 §决策 2). Registering the same declaration twice
-  /// is harmless and never resets the window.
+  /// [concurrentRate] is raw text; `null`, blank and `"0"` mean no gate, and illegal text warns.
   void applySourceRate(String sourceId, String? concurrentRate);
 }
 
-/// Raised inside the request layer when a response body passes the caller's `maxBytes` cap.
+/// Marks a response body that passed the caller's `maxBytes` cap.
 ///
-/// It never escapes as an exception: [DioHttpClient] catches it, cancels the download and answers
-/// with a [ParseFailure] whose `cause` is this object, so the caller can recognise *why* the
-/// request was refused (`ImportBookSources` rewrites it into `import.sizeLimit`).
-///
-/// It carries the limit, never the bytes that were read (C-SEC-4).
+/// It never escapes: the client turns it into a [ParseFailure] whose `cause` is this object.
 final class BodyTooLargeException implements Exception {
   /// Creates the marker for a body that passed [limitBytes].
   const BodyTooLargeException(this.limitBytes);
@@ -110,21 +82,50 @@ final class BodyTooLargeException implements Exception {
   String toString() => 'Response body exceeded $limitBytes bytes';
 }
 
-/// [HttpClient] backed by `dio` (C-NET-1).
+// 未解码的 2xx 响应，文本与字节两条路径共用。
+final class _RawResponse {
+  const _RawResponse({
+    required this.status,
+    required this.headers,
+    required this.bytes,
+    required this.url,
+  });
+
+  final int status;
+  final Headers headers;
+  final List<int> bytes;
+
+  /// 读过重定向之后的地址（没有重定向时就是请求的地址）。
+  final Uri url;
+}
+
+/// The address a response finally came from: [requested] with every redirect applied.
 ///
-/// Every wire request also spends one slot of the book source's concurrency budget
-/// (`book-source.md` §8): the budget is the request layer's policy (ADR-0030 §决策 2),
-/// so enforcing it here is what lets a batch of chapter downloads stay bounded without
-/// any caller having to know about it.
+/// dio exposes the chain (`Response.redirects`) rather than the final address, so a relative
+/// `Location` (`?9bdb14…`, which is how an ASP session hands a search off) has to be resolved
+/// against the address it was served from, in order, to land where a browser would.
+Uri _finalUri(Uri requested, List<RedirectRecord> redirects) {
+  var current = requested;
+  for (final RedirectRecord record in redirects) {
+    // dio 5.11 起 `RedirectRecord.location` 是 `Uri`（更早是 `String?`）；转回字符串再 resolve，
+    // 相对引用（`?token`）的语义才与浏览器一致。
+    final String location = record.location.toString();
+    if (location.isEmpty) {
+      continue;
+    }
+    current = current.resolve(location);
+  }
+
+  return current;
+}
+
+/// [HttpClient] backed by `dio`.
+///
+/// Every wire request also spends one slot of its source's concurrency budget.
 final class DioHttpClient implements HttpClient {
-  /// Creates a client that shares the cookie store and applies the policy.
+  /// Creates a client that shares the cookie jar and applies the given policy.
   ///
-  /// `dio` is injectable so tests can attach a fake adapter instead of touching
-  /// the network (`docs/dev/testing.md` §4). [policy] also carries the per-source
-  /// concurrency budget, so the limiter is built from it and needs no separate
-  /// injection point. `charsetCache` is optional: `null` means “sniff every response”,
-  /// which is what a caller that has no cache to offer (and every test that does not
-  /// care) gets; the app wires the `CacheDao`-backed one in `http_client_provider.dart`.
+  /// [dio] is injectable for tests; without a charset cache every response is sniffed.
   DioHttpClient({
     required this._cookies,
     required this._logger,
@@ -141,8 +142,7 @@ final class DioHttpClient implements HttpClient {
       receiveTimeout: _policy.timeout,
       sendTimeout: _policy.timeout,
       headers: <String, String>{HttpHeaders.userAgentHeader: _policy.userAgent},
-      // 4xx/5xx 不交给 dio 抛异常：状态码要自己映射成 ParseFailureKind
-      // （book-source.md §7），否则 403/404 会混进同一个 badResponse 桶。
+      // 4xx/5xx 自己映射成 ParseFailureKind，不让 dio 抛异常。
       validateStatus: (int? _) => true,
       responseType: ResponseType.bytes,
     );
@@ -156,17 +156,9 @@ final class DioHttpClient implements HttpClient {
   final Dio _dio;
   final CharsetCache? _charsetCache;
 
-  /// Reads [sourceId]'s own rate declaration into its budget (`book-source.md` §8).
+  /// Applies [sourceId]'s rate declaration; an illegal one is ignored and warned about.
   ///
-  /// The rate gate lives in the same [RequestLimiter] as the concurrency budget and is keyed
-  /// by the source URL, so a `@js:` rule's `http.*` call (which only knows the source URL,
-  /// `book-source.md` §6) passes the same gate without carrying the declaration
-  /// (ADR-0036 §决策 5).
-  ///
-  /// An illegal declaration is **ignored and reported** (ADR-0036 §决策 2): the source keeps
-  /// the default concurrency budget and is not rate limited, instead of being silently limited
-  /// by a number nobody can see. The warning names the source, the field and a bounded excerpt
-  /// of the text, never a page body (C-ERR-8, C-SEC-4).
+  /// The gate is keyed by the source URL, so its `@js:` requests pass it too.
   @override
   void applySourceRate(String sourceId, String? concurrentRate) {
     final ConcurrentRateDeclaration declaration = parseConcurrentRate(
@@ -192,6 +184,8 @@ final class DioHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) => _request(
     method: 'GET',
     url: url,
@@ -201,7 +195,54 @@ final class DioHttpClient implements HttpClient {
     sourceId: sourceId,
     maxBytes: maxBytes,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
   );
+
+  @override
+  Future<ParseResult<Uint8List>> getBytes(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxBytes,
+  }) async {
+    final ParseResult<_RawResponse> raw = await _perform<_RawResponse>(
+      method: 'GET',
+      url: url,
+      rulePath: rulePath,
+      headers: headers,
+      keyword: keyword,
+      sourceId: sourceId,
+      maxBytes: maxBytes,
+      send: (Uri uri) => _sendRaw(
+        url,
+        method: 'GET',
+        rulePath: rulePath,
+        headers: headers,
+        keyword: keyword,
+        sourceId: sourceId,
+        maxBytes: maxBytes,
+      ),
+      failure: (ParseFailureKind kind, Object? cause) =>
+          ParseFailure<_RawResponse>(
+            kind: kind,
+            rulePath: rulePath,
+            cause: cause,
+          ),
+    );
+
+    return switch (raw) {
+      ParseSuccess<_RawResponse>(:final _RawResponse data) =>
+        ParseSuccess<Uint8List>(Uint8List.fromList(data.bytes)),
+      ParseFailure<_RawResponse>(
+        :final ParseFailureKind kind,
+        :final Object? cause,
+      ) =>
+        ParseFailure<Uint8List>(kind: kind, rulePath: rulePath, cause: cause),
+    };
+  }
 
   @override
   Future<ParseResult<HttpResponse>> post(
@@ -212,6 +253,8 @@ final class DioHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) => _request(
     method: 'POST',
     url: url,
@@ -221,12 +264,11 @@ final class DioHttpClient implements HttpClient {
     keyword: keyword,
     sourceId: sourceId,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
   );
 
-  /// Sends one request of [method] with the shared policy, budget and retry loop.
-  ///
-  /// Both verbs go through here so a later policy change (a new retryable kind, a
-  /// stricter URL check) cannot land on one of them only.
+  // 发送一次 method 请求并把正文解码成文本。
   Future<ParseResult<HttpResponse>> _request({
     required String method,
     required String url,
@@ -237,77 +279,123 @@ final class DioHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
+  }) async {
+    final ParseResult<_RawResponse> raw = await _perform<_RawResponse>(
+      method: method,
+      url: url,
+      rulePath: rulePath,
+      headers: headers,
+      keyword: keyword,
+      sourceId: sourceId,
+      maxBytes: maxBytes,
+      maxRetries: maxRetries,
+      send: (Uri uri) => _sendRaw(
+        url,
+        method: method,
+        body: body,
+        rulePath: rulePath,
+        headers: headers,
+        keyword: keyword,
+        sourceId: sourceId,
+        maxBytes: maxBytes,
+        receiveTimeout: receiveTimeout,
+      ),
+      failure: (ParseFailureKind kind, Object? cause) =>
+          ParseFailure<_RawResponse>(
+            kind: kind,
+            rulePath: rulePath,
+            cause: cause,
+          ),
+    );
+
+    return switch (raw) {
+      ParseSuccess<_RawResponse>(:final _RawResponse data) => _decode(
+        status: data.status,
+        headers: data.headers,
+        bytes: data.bytes,
+        rulePath: rulePath,
+        keyword: keyword,
+        url: url,
+        responseUrl: data.url,
+        sourceId: sourceId,
+        declaredCharset: declaredCharset,
+      ),
+      ParseFailure<_RawResponse>(
+        :final ParseFailureKind kind,
+        :final Object? cause,
+      ) =>
+        ParseFailure<HttpResponse>(
+          kind: kind,
+          rulePath: rulePath,
+          cause: cause,
+        ),
+    };
+  }
+
+  // URL 校验、并发预算与重试都在这里统一处理。
+  Future<ParseResult<T>> _perform<T>({
+    required String method,
+    required String url,
+    required String rulePath,
+    required Future<ParseResult<T>> Function(Uri uri) send,
+    required ParseFailure<T> Function(ParseFailureKind kind, Object? cause)
+    failure,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxBytes,
+    int? maxRetries,
   }) async {
     final Uri? uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
-      // 畸形 URL 与不支持的 scheme 在这里就拒绝：dio 内部还会再 Uri.parse 一次，
-      // 它抛出的 FormatException 若落到解码分支就会被误报成 encodingFailed（桶错了）。
+      // 畸形 URL 与不支持的 scheme 在这里拒绝，免得 dio 的异常落到解码分支。
       _logger.warning(
         'Unsupported request URL rejected: rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
       );
 
-      return ParseFailure<HttpResponse>(
-        kind: ParseFailureKind.networkFailed,
-        rulePath: rulePath,
-      );
+      return failure(ParseFailureKind.networkFailed, null);
     }
     if (uri.scheme == 'http' && !_policy.allowPlainHttp) {
-      // C-SEC-2：明文 HTTP 必须由用户显式开启。9 个 ParseFailureKind 里没有
-      // 「策略拒绝」桶，故用 networkFailed 承载，原因写进日志。
+      // 明文 HTTP 需用户显式开启；失败分类里没有策略桶，用 networkFailed 承载。
       _logger.warning(
         'Plaintext HTTP rejected by policy: rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
       );
 
-      return ParseFailure<HttpResponse>(
-        kind: ParseFailureKind.networkFailed,
-        rulePath: rulePath,
-      );
+      return failure(ParseFailureKind.networkFailed, null);
     }
 
+    // 规则自己的 `retry` 覆盖策略默认值；两者都不允许无限重试（C-NET-2）。
+    final int retryBound = maxRetries ?? _policy.maxRetries;
     var attempt = 0;
-    // 同一书源的请求共用一份并发预算（book-source.md §8）。没有书源时按主机分桶，
-    // 这样「章节正文批量下载」这类无书源上下文的调用也不会对单一域名无限并发。
+    // 同一书源的请求共用一份并发预算；没有书源时按主机分桶。
     final String limitKey = sourceId ?? uri.host;
     while (true) {
-      final ParseResult<HttpResponse> result = await _limiter.run(
+      final ParseResult<T> result = await _limiter.run(
         limitKey,
-        () => _send(
-          url,
-          method: method,
-          body: body,
-          rulePath: rulePath,
-          headers: headers,
-          keyword: keyword,
-          sourceId: sourceId,
-          maxBytes: maxBytes,
-          declaredCharset: declaredCharset,
-        ),
+        () => send(uri),
       );
 
       switch (result) {
-        case ParseSuccess<HttpResponse>():
+        case ParseSuccess<T>():
           return result;
-        case ParseFailure<HttpResponse>(:final ParseFailureKind kind):
-          // 只有可重试的 kind 才继续；上限来自策略，禁止无限重试（C-NET-2）。
-          if (!kind.isRetryable || attempt >= _policy.maxRetries) {
+        case ParseFailure<T>(:final ParseFailureKind kind):
+          // 只有可重试的 kind 才继续，上限来自策略。
+          if (!kind.isRetryable || attempt >= retryBound) {
             return result;
           }
       }
 
       attempt++;
       _logger.warning(
-        'Retrying request: rule=$rulePath attempt=${attempt + 1}/${_policy.maxRetries + 1}',
+        'Retrying request: rule=$rulePath attempt=${attempt + 1}/${retryBound + 1}',
       );
     }
   }
 
-  /// Performs one request and maps every outcome onto a [ParseResult].
-  ///
-  /// The body always arrives as a stream and is read by [_readBytes], so the `maxBytes` cap
-  /// applies to the *download* rather than to the decoded text: an oversized body is abandoned
-  /// mid-flight (C-PERF-5). Without a cap the accumulated bytes are exactly what the previous
-  /// `bytes` response type produced.
-  Future<ParseResult<HttpResponse>> _send(
+  // 返回未解码的字节，maxBytes 在下载途中生效。
+  Future<ParseResult<_RawResponse>> _sendRaw(
     String url, {
     required String method,
     required String rulePath,
@@ -316,7 +404,7 @@ final class DioHttpClient implements HttpClient {
     required String? sourceId,
     String? body,
     int? maxBytes,
-    String? declaredCharset,
+    Duration? receiveTimeout,
   }) async {
     final Response<ResponseBody> response;
     try {
@@ -327,25 +415,30 @@ final class DioHttpClient implements HttpClient {
           method: method,
           headers: headers,
           responseType: ResponseType.stream,
+          // 规则声明的 `readTimeout` 只影响这一条请求（上限由解析侧钳到 120 s）。
+          receiveTimeout: receiveTimeout,
+          sendTimeout: receiveTimeout,
         ),
       );
     } on DioException catch (error, stackTrace) {
-      // 只有 dio 自己的异常到这里：URL 已在 [_request] 里校验，解码在 _decode 里单独处理。
+      // 只有 dio 自己的异常到这里；URL 已在 _perform 校验。
+      // 日志里要能看出**为什么**失败：dio 的异常对象会被脱敏成 `sha256`，403 与超时长得一样。
       _logger.warning(
-        'Request failed for rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
+        'Request failed for rule=$rulePath '
+        'type=${error.type.name} status=${error.response?.statusCode} '
+        'url=${redactUrl(url, keyword: keyword)}',
         describeError(error),
         stackTrace,
       );
 
-      return ParseFailure<HttpResponse>(
+      return ParseFailure<_RawResponse>(
         kind: _failureKindForDioError(error),
         rulePath: rulePath,
       );
     }
 
     final int status = response.statusCode ?? 0;
-    // dio 把「没有正文可给」表达成 null；对调用方那就是空正文，所以这里补一个空流，
-    // 后面的读取与丢弃两条路径都不必再判空。
+    // dio 用 null 表示没有正文，这里补一个空流以便后续统一处理。
     final ResponseBody responseBody =
         response.data ?? ResponseBody.fromBytes(const <int>[], status);
     final ParseFailureKind? statusKind = _failureKindForStatus(status);
@@ -356,7 +449,7 @@ final class DioHttpClient implements HttpClient {
       );
       await _discard(responseBody);
 
-      return ParseFailure<HttpResponse>(kind: statusKind, rulePath: rulePath);
+      return ParseFailure<_RawResponse>(kind: statusKind, rulePath: rulePath);
     }
 
     final List<int> bytes;
@@ -370,16 +463,13 @@ final class DioHttpClient implements HttpClient {
         stackTrace,
       );
 
-      return ParseFailure<HttpResponse>(
+      return ParseFailure<_RawResponse>(
         kind: ParseFailureKind.invalidBookSource,
         rulePath: rulePath,
         cause: error,
       );
     } on Exception catch (error, stackTrace) {
-      // 正文是**流式**读的（C-PERF-5），所以读的过程中也会超时 / 断连，而 dio 的
-      // `receiveTimeout` 在那里表现为一个 `DioException`。它在 `_dio.request` 的
-      // try 之外抛出，不接住就会穿过 `HttpClient` 契约（C-ERR-1），把一个「读超时」
-      // 变成上一层的整批失败（真实案例：一个源把整次聚合搜索打成了失败）。
+      // 正文是流式读取的，读超时以 DioException 抛出，必须接住以免穿透 HttpClient 契约。
       final ParseFailureKind kind = error is DioException
           ? _failureKindForDioError(error)
           : ParseFailureKind.networkFailed;
@@ -390,25 +480,19 @@ final class DioHttpClient implements HttpClient {
         stackTrace,
       );
 
-      return ParseFailure<HttpResponse>(kind: kind, rulePath: rulePath);
+      return ParseFailure<_RawResponse>(kind: kind, rulePath: rulePath);
     }
 
-    return _decode(
-      status: status,
-      headers: response.headers,
-      bytes: bytes,
-      rulePath: rulePath,
-      keyword: keyword,
-      url: url,
-      sourceId: sourceId,
-      declaredCharset: declaredCharset,
+    return ParseSuccess<_RawResponse>(
+      _RawResponse(
+        status: status,
+        headers: response.headers,
+        bytes: bytes,
+        url: _finalUri(response.requestOptions.uri, response.redirects),
+      ),
     );
   }
 
-  /// Reads the whole [body], or abandons it the moment it passes `maxBytes`.
-  ///
-  /// Throwing inside the `await for` cancels the subscription, which is what stops the download
-  /// instead of letting it finish in the background (C-PERF-5).
   Future<List<int>> _readBytes(
     ResponseBody body, {
     required int? maxBytes,
@@ -424,21 +508,12 @@ final class DioHttpClient implements HttpClient {
     return builder.takeBytes();
   }
 
-  /// Releases a response body this client deliberately does not read.
-  ///
-  /// A 4xx/5xx body stays held by dio until its subscription is consumed or cancelled; cancelling
-  /// returns the connection to the pool instead of leaving it dangling.
+  // 取消订阅才会把连接还给连接池。
   Future<void> _discard(ResponseBody body) async {
     await body.stream.listen(null).cancel();
   }
 
-  /// Decodes a 2xx body; the only place a [FormatException] is expected.
-  ///
-  /// The sniffing step of `book-source.md` §5 runs once per `(书源, URL)`: the label it
-  /// chose is read from [CharsetCache] on the next request and passed to [decodeBody], so
-  /// the detector never runs twice for the same page. Only a **detected** label is stored
-  /// (a declared one is read from the response itself every time and always wins); a cache
-  /// that cannot answer is a miss, because the port is total (C-ERR-2).
+  // 解码异常在这里转成 encodingFailed。
   Future<ParseResult<HttpResponse>> _decode({
     required int status,
     required Headers headers,
@@ -446,6 +521,7 @@ final class DioHttpClient implements HttpClient {
     required String rulePath,
     required String? keyword,
     required String url,
+    required Uri responseUrl,
     required String? sourceId,
     String? declaredCharset,
   }) async {
@@ -459,12 +535,11 @@ final class DioHttpClient implements HttpClient {
         declaredCharset: declaredCharset,
       );
       if (decoded.isDetected && sniffedCharset == null) {
-        // 命中的标签不需要重写（DAO 已把它当成未过期才会返回）；只有**这次刚嗅探出来**的才写。
+        // 只有本次刚嗅探出的标签才写缓存。
         await _writeCachedCharset(sourceId, url, decoded.charset);
       }
       if (decoded.toleratedMalformedBytes) {
-        // ADR-0031 §决策 1/2：声明车道允许宽容解码，但必须留痕——携带**声明的编码**、
-        // 替换数量与书源 ID；正文、Cookie、Token 一律不入日志（C-ERR-8 / C-SEC-4）。
+        // 宽容解码必须留痕：记录编码与替换数量，正文、Cookie、Token 不入日志。
         _logger.warning(
           'Declared charset ${decoded.charset} carried illegal bytes; '
           '${decoded.malformedByteCount} malformed byte replacement(s) inserted: '
@@ -478,11 +553,11 @@ final class DioHttpClient implements HttpClient {
           statusCode: status,
           headers: headers.map,
           body: decoded.text,
+          url: responseUrl.toString(),
         ),
       );
     } on FormatException catch (error, stackTrace) {
-      // 嗅探 / 回退车道的解码失败必须显式失败，禁止用 allowMalformed 静默吞掉，
-      // 否则「猜错的编码」会变成乱码正文（C-NET-3、ADR-0031 §决策 3）。
+      // 嗅探车道解码失败必须显式报错，不能静默替换成乱码。
       _logger.warning(
         'Body decoding failed for rule=$rulePath source=${sourceId ?? 'unknown'} '
         'url=${redactUrl(url, keyword: keyword)}',
@@ -497,12 +572,6 @@ final class DioHttpClient implements HttpClient {
     }
   }
 
-  /// The charset a previous response for ([sourceId], [url]) was decoded with, if any.
-  ///
-  /// A page without a book source has no cache key (C-NET-6 starts one with the source id),
-  /// so it sniffs every time. Nothing here catches: [CharsetCache] is total — a cache
-  /// failure comes back as `null`, which is why the request path needs no exception
-  /// boundary of its own (C-ERR-2).
   Future<String?> _readCachedCharset(String? sourceId, String url) async {
     final CharsetCache? cache = _charsetCache;
     if (cache == null || sourceId == null) {
@@ -517,7 +586,6 @@ final class DioHttpClient implements HttpClient {
     );
   }
 
-  /// Stores the detected charset for ([sourceId], [url]); a failed write is not the page's.
   Future<void> _writeCachedCharset(
     String? sourceId,
     String url,
@@ -538,9 +606,7 @@ final class DioHttpClient implements HttpClient {
   }
 }
 
-/// Adds stored cookies to requests and records the cookies of responses.
-///
-/// The only place a `Cookie` header is produced (C-NET-5).
+// 唯一生成 Cookie 头、记录响应 Cookie 的地方。
 final class _CookieInterceptor extends Interceptor {
   _CookieInterceptor(this._cookies);
 
@@ -568,22 +634,13 @@ final class _CookieInterceptor extends Interceptor {
   }
 }
 
-/// The `ruleField` the charset cache uses in the TTL cache's key (`book-source.md` §5).
-///
-/// It is a constant on purpose: §5 caches by 「书源 ID + URL」, and one book page is often
-/// read by two stages (the G2b source reads it for `ruleBookInfo` and again for `ruleToc`),
-/// so a key that carried the stage would miss on the second read and sniff again. The
-/// `page` part of the shared key is fixed for the same reason — a charset does not depend
-/// on it.
+// 缓存键的 ruleField 固定：同一页面会被不同阶段重复读取，带上阶段就会反复嗅探。
 const String _charsetCacheField = 'charset';
 
-/// The `page` the charset cache uses in the TTL cache's key; see [_charsetCacheField].
+// `page` 同样固定：字符集与页码无关。
 const int _charsetCachePage = 1;
 
-/// Maps a non-2xx [status] onto the kinds `book-source.md` §7 names.
-///
-/// 403, 404 and 5xx are spelled out there; any other status falls back to
-/// [ParseFailureKind.networkFailed] because the taxonomy has no closer bucket.
+// 只区分 403、404 与其余非 2xx。
 ParseFailureKind? _failureKindForStatus(int status) {
   if (status >= 200 && status < 300) {
     return null;
@@ -598,12 +655,6 @@ ParseFailureKind? _failureKindForStatus(int status) {
   return ParseFailureKind.networkFailed;
 }
 
-/// Maps a dio failure onto the failure taxonomy.
-///
-/// Returns a bounded excerpt of a declaration for a warning (C-ERR-8, C-SEC-4).
-///
-/// An invalid `concurrentRate` is arbitrary text from an imported file, so the log line keeps
-/// only its first characters: enough to recognise what the source wrote, never unbounded.
 String _excerpt(String? declaration) {
   final String text = declaration ?? '';
   if (text.length <= _maxExcerptLength) {
@@ -613,11 +664,10 @@ String _excerpt(String? declaration) {
   return '${text.substring(0, _maxExcerptLength)}…';
 }
 
-/// Longest declaration excerpt a warning carries.
+// 日志里保留的声明文本长度上限。
 const int _maxExcerptLength = 32;
 
-/// Every `DioExceptionType` is listed so a dio upgrade that adds a value becomes
-/// a compile error instead of a silent fallback.
+// 穷举所有 DioExceptionType，dio 新增枚举值时能直接编译报错。
 ParseFailureKind _failureKindForDioError(DioException error) {
   switch (error.type) {
     case DioExceptionType.connectionTimeout:

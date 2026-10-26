@@ -11,7 +11,8 @@ void main() {
         expect(policy.timeout, const Duration(seconds: 15));
         expect(policy.maxRetries, 1);
         expect(policy.maxConcurrentRequestsPerSource, 3);
-        expect(policy.userAgent, 'flutter_reader');
+        expect(policy.userAgent, defaultUserAgent);
+        expect(policy.userAgent, contains('Mozilla/5.0'));
         expect(policy.allowPlainHttp, isFalse);
       },
     );

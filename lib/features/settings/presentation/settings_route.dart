@@ -12,14 +12,21 @@ sealed class SettingsRoute with _$SettingsRoute {
   /// The route that shows the settings page.
   const factory SettingsRoute.settings() = SettingsPageRoute;
 
+  /// The cookie jar view (`docs/dev/roadmap.md` M22, ADR-0072 §决策 2).
+  const factory SettingsRoute.cookies() = SettingsCookiesRoute;
+
   /// The path this route is served under.
   String get path => switch (this) {
     SettingsPageRoute() => _settingsPath,
+    SettingsCookiesRoute() => _cookiesPath,
   };
 }
 
 /// Path of [SettingsPageRoute].
 const String _settingsPath = '/settings';
+
+/// Path of [SettingsCookiesRoute].
+const String _cookiesPath = '/settings/cookies';
 
 /// Pushes [route] through the app's route table (ADR-0011 §4).
 void pushSettingsRoute(BuildContext context, SettingsRoute route) =>

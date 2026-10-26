@@ -190,6 +190,28 @@ void main() {
       expect(row.isPinned, isTrue);
     });
 
+    test(
+      'restoreUserState_givenATocUrl_fillsItWhenTheLocalRowHasNone',
+      () async {
+        // 恢复只在本地没有目录地址时补（ADR-0073 §决策 3）：有值说明本机已解析过，不该被改回去。
+        final int id = await insert(tocUrl: null);
+
+        await dao.restoreUserState(
+          id: id,
+          status: 1,
+          isPinned: true,
+          groupId: null,
+          customCoverPath: '/covers/x.jpg',
+          tocUrl: 'https://source.test/book/1/toc',
+        );
+
+        final BookRow row = (await dao.findAll()).single.book;
+        expect(row.tocUrl, 'https://source.test/book/1/toc');
+        expect(row.customCoverPath, '/covers/x.jpg');
+        expect(row.isPinned, isTrue);
+      },
+    );
+
     test('findAll_whenTwoRows_ordersPinnedFirst', () async {
       final int first = await insert(bookUrl: 'https://source.test/book/1');
       final int second = await insert(
@@ -297,6 +319,50 @@ void main() {
 
     test('deleteById_givenAnUnknownId_reportsNothingDeleted', () async {
       expect(await dao.deleteById(42), 0);
+    });
+
+    test('deleteByIds_whenNoIdIsChosen_deletesNothing', () async {
+      await insert();
+
+      expect(await dao.deleteByIds(const <int>[]), 0);
+      expect(await dao.findAll(), hasLength(1));
+    });
+
+    test(
+      'deleteByIds_whenTwoRowsAreChosen_removesThemAndTheirProgress',
+      () async {
+        final int first = await insert();
+        final int second = await insert(bookUrl: 'https://source.test/book/2');
+        await insert(bookUrl: 'https://source.test/book/3');
+        await dao.upsertProgress(
+          sourceUrl: 'https://source.test',
+          bookUrl: 'https://source.test/book/1',
+          chapterUrl: 'https://source.test/1.html',
+          chapterName: '第1章',
+          charOffset: 0,
+        );
+
+        expect(await dao.deleteByIds(<int>[first, second]), 2);
+        expect(await dao.findAll(), hasLength(1));
+        expect(
+          await dao.findProgress(
+            sourceUrl: 'https://source.test',
+            bookUrl: 'https://source.test/book/1',
+          ),
+          isNull,
+        );
+      },
+    );
+
+    test('setCustomCover_whenCalled_writesThePath', () async {
+      final int id = await insert();
+
+      await dao.setCustomCover(id: id, path: '/covers/a.jpg');
+
+      expect(
+        (await dao.findAll()).single.book.customCoverPath,
+        '/covers/a.jpg',
+      );
     });
   });
 }

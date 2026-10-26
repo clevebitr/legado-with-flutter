@@ -48,7 +48,7 @@
 | `ruleContent` | `contentRule` | `ContentRule` | M0 | 必填 |
 | `concurrentRate` | `concurrentRate` | `String?` | **M1** | 并发限速；语法、毫秒单位与「速率门 → 并发门」的合成归 §8（ADR-0036） |
 | `variableComment` | `variableComment` | `String?` | **M1** | 书源变量说明；**纯展示**，引擎不读（上游 `BookSource.kt:245-252` 只与校验注释拼接显示） |
-| `loginUrl` / `loginUi` / `loginCheckJs` | — | — | **M2** | 登录相关，暂不实现 |
+| `loginUrl` / `loginUi` / `loginCheckJs` | 同名 | `String?` ×3 | **M21a** | 三个字段都建模（导入/导出保真）。`loginCheckJs` 是**每次取页后运行的响应拦截器**（不是 true/false 检查），绑定与返回值见 §6；`loginUrl` 是登录入口打开的地址（URL 规则，后缀丢掉），`loginUi` 只保留原文（原生表单归 M21b/U15）。口径与三条登记差异见 ADR-0068（2026-10-24 增补） |
 | `lastUpdateTime` / `respondTime` / `weight` / `customOrder` | 同名 | `int?` | M0 | 仅用于展示与排序 |
 
 **子规则字段**（原版字段名 → Dart，全部 camelCase）：
@@ -60,7 +60,10 @@
 | `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName`、`updateTime` | M0（`canReName`、`updateTime` 为 M1） |
 | `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
-| `ContentRule` | `webJs`、`sourceRegex`、`imageStyle` | **M2** |
+| `ContentRule` | `webJs`（✅ M21a：渲染后执行脚本，见 §4.3）、`sourceRegex`（✅ M21a：先截取再建 scope，见 §4.3）、`imageStyle`（✅ M21a：`single`/`full` 生效，`left`/`right` 的对齐分支未实现）、`imageDecode`（建模保留，**非空即显式 `unsupportedRule`**——沙箱执行不了图片字节解密，ADR-0069 G5） | M21a |
+
+**默认请求头：** 源没写 `header` 时，请求带一个**桌面 Chrome** 的 `User-Agent`（与上游默认一致，
+ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前就 403；源自己的 `header` 仍然覆盖它（C-NET-4）。
 
 模型必须使用 `freezed` + `json_serializable`（C-SRC-7）。未知字段必须**保留而非丢弃**：
 在 `extra` 中承载，以便导出时不丢信息。
@@ -147,12 +150,12 @@
 | 20 | `:正则规则`（不可省略标志；**仅书籍列表与目录列表**） | 待按原版实现确认 | 仅书籍列表、目录列表 | **M2** | 待验证 |
 | 21 | `@xpath:` XPath（以 `//` 开头时可省略标志） | `@xpath://div[@id='a']/text()` | 所有字段 | **M2** | 不支持 |
 | 22 | `@webJs` 网页 JS | — | 正文规则 | **M2** | 不支持 |
-| 23 | `sourceRegex` 源码正则 | — | 正文规则 | **M2** | 不支持 |
-| 24 | 字体反爬字形映射 | — | 正文替换规则 | **M2** | 不支持 |
+| 23 | `sourceRegex` 源码正则 | `sourceRegex`（`ruleContent`） | 正文规则 | **M21a** | 已确认（先截取再建 scope，不命中即 `parseFailed`；见 §4.3 与 ADR-0068） |
+| 24 | 字体反爬字形映射 | `queryTTF` / `queryBase64TTF` / `replaceFont` | 正文替换规则 | **M21a** | 已确认（自研 `cmap` + `post` 解析；字形名优先、id 兜底，见 §6） |
 | 25 | `##match##replace###`：只取**第一个匹配**并在其内部替换（矩阵 #9 的补充语义） | `##match##replace###`（上游注释原文） | 所有字段 | **M0**（Phase 2.2 已实现） | 已确认 |
 | 26 | `[]` 索引列表：`[-1, 3:-2:-10, 2]`、`[-1:0]` 可在任意位置反向（与 #5 / #6 同组） | `tag.div[-1, 3:-2:-10, 2]` | 所有字段 | **M0** → Phase 3.1 | 已确认 |
 | 27 | `%%` 并行交叉合并（与 `\|\|`、`&&` 同级的选择器连接符） | — | 所有字段 | **M0** → Phase 3.2（与 #10 / #11 同族，复用同一套连接符切分） | 已确认 |
-| 28 | 索引作为 `@` 分段后每段的首规则：`.1` / `[1]` / `!0` / `children[1]`，等价于 `children` + 该索引（可与 #5 / #6 / #26 的位置写法组合） | `head@.1@text`、`head@[1]@text`、`head@children[1]@text`（等价） | 所有字段 | **M0** → Phase 3.1（已实现） | 已确认 |
+| 28 | 索引作为 `@` 分段后每段的首规则：`.1` / `[1]` / `!0` / `children[1]`，等价于 `children` + 该索引（可与 #5 / #6 / #26 的位置写法组合）；**任意段末尾**的 `.N` / `.-N`（纯数字）同样是索引（`#id img.0`，ADR-0069 G3） | `head@.1@text`、`head@[1]@text`、`head@children[1]@text`、`#image_div img.0@src`（等价） | 所有字段 | **M0** → Phase 3.1（已实现） | 已确认 |
 | 29 | `@css:` 内的 jsoup 索引伪类 `:eq(n)` / `:gt(n)` / `:lt(n)`（**兄弟索引**，0-based，**不是**结果集索引） | `@css:div#info > p:eq(3) @text` | 所有字段 | **M0** → Phase 3.2 | 已确认 |
 | 30 | 提取段里的**嵌套规则**（末段本身是一条规则，如 `class.a@css:.b`） | `class.a@css:.b` | 所有字段 | **M2 / 暂不实现**（复审触发条件：真实语料统计显示使用率 > 0 且影响可用率时改判 M1） | 不支持 |
 | 31 | `<js>…</js>` JS 包装（**任意位置**，可作其他规则的分隔符；与 #14 同能力、不同包装） | `tag.li<js>…</js>//a`（原版文档示例） | 所有字段 | **M12**（值规则与列表规则都支持） | 已确认（**分段链**：上一段产出是下一段 `result`，`{{result}}` 由此拼进后续文本；ADR-0047 §决策 2） |
@@ -488,8 +491,14 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 | `body` | POST 载荷，可含 `{{…}}` | ✅ 是**规则**：URL / 表单里 `{{key}}` 按 `charset` 百分号编码，**JSON / XML 载荷里原样** |
 | `charset` | 该请求的编码 | ✅ 双向：请求侧编码 `{{key}}`，响应侧作为 §5 的**最高优先级声明** |
 | `headers` | 该请求额外 header（对象，或**字符串形式的对象**） | ✅ 合并到书源 `header` **之上** |
-| `webView` | 用真实 WebView 渲染页面；**GET 与 POST + body 都支持**（POST 的表单由 WebView 自己提交，见下方约定），平台无 WebView2 / 取页失败回落普通 HTTP（ADR-0061 §决策 4、ADR-0062 §决策 1） | ✅ 走 `WebPageFetcher` 端口 |
-| `webJs` / `retry` / `origin` / `type` / `js` | 重试 / 源类型等 | ❌ 记 `unsupported` 并按名 warning（ADR-0032 的降级口径） |
+| `webView` | 用真实 WebView 渲染页面（`webView: true`）；**GET 与 POST + body 都支持**（POST 的表单由 WebView 自己提交，见下方约定），平台无 WebView2 / 取页失败回落普通 HTTP（ADR-0061 §决策 4、ADR-0062 §决策 1） | ✅ 走 `WebPageFetcher` 端口 |
+| `webViewDelayTime` | `onLoadStop` 之后再等这么多毫秒才取 HTML（上限 30 s），给站点自己的脚本时间（ADR-0068 §决策 6） | ✅ M21a |
+| `webJs` | 在渲染后的页面里执行脚本，返回字符串即 body | ✅ M21a（同时是 `ContentRule.webJs` 的实现） |
+| `bodyJs` | 对**普通 HTTP** 响应体执行脚本，返回字符串即 body（渲染路径用 `webJs`）；先于 `sourceRegex` | ✅ M21a |
+| `overrideUrlRegex` | 命中则把该 URL 当结果页，停止加载 | ✅ M21a |
+| `retry` | 这一条请求的重试次数（规则侧上限 3） | ✅ M21a |
+| `readTimeout` | 这一条请求的响应超时（上限 120 s） | ✅ M21a |
+| `origin` / `type` / `js` / `dnsIp` / `proxy` / `callTimeout` / `HEAD` / `encodedForm` | 本仓没有对应实现，按名记 `unsupported` 并 warning | ❌ **裁决不做**（ADR-0068 2026-10-24 增补：理由与重开触发条件逐项写死） |
 
 约定：
 
@@ -507,7 +516,7 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 
 | 形态 | 写法 | 语义 |
 |---|---|---|
-| 分类串 | `玄幻::https://a.test/list/{{page}}.html&&都市::https://b.test/...` | `&&` 或换行分隔（上游正则 `(&&\|\n)+`）；条目 `标题::URL`。**空标题**或**缺少 URL** 的条目报 `unsupportedRule` 并记录，**其余条目照常** |
+| 分类串 | `玄幻::https://a.test/list/{{page}}.html&&都市::https://b.test/...` | `&&` 或换行分隔（上游正则 `(&&\|\n)+`）；条目 `标题::URL`。**空标题**的条目报 `unsupportedRule` 并记录（**URL 为空是分组标题**，保留成不可点标签，ADR-0069 G11），其余条目照常 |
 | 整字段 JS | `@js:…` 或 `<js>…</js>`（大小写不敏感） | `<js>` 形态**必须**以 `</js>` 收尾，否则该字段 `parseFailed`；返回值认 **JSON 数组**（元素含 `title`，可选 `url`）**或**上面的分隔串 |
 
 - **整字段 JS 的绑定：** `baseUrl` = **书源 URL**、`source`、`java.*`（与 `@put:` / `@get:` 同一份变量表，ADR-0034，`sourceId` = 书源 URL）；**不绑 `key`**（字段里写 `key` 即 `js:error`），`page` 固定为 `1`，**无 `infoMap`**（命中即 `js:error`，不静默给 undefined）。
@@ -628,19 +637,67 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | 绑定 | 形态 | 说明 | 分期 |
 |---|---|---|---|
 | `baseUrl` | `String` | 当前页 URL（原版同名变量） | M0 |
-| `result` | `String?` \| `List` | 当前页 responseBody（原版同名变量） | M0 |
+| `result` | `String?` \| `List` \| 响应对象 | 当前页 responseBody（原版同名变量） | M0 |
+| `result`（**仅 `loginCheckJs`**） | 响应对象 | `body` 属性 + `url()` / `code()` / `headers()` / `header(name)` / `cookie()` / `contentType()` / `isSuccessful()` / `String(result)`——上游 `StrResponse` 的形状。拦截器的返回值决定页面（见下方「`loginCheckJs` 的返回值」） | M21a |
 | `page` | `int` | 当前页码 | M0 |
 | `source` | 只读对象 | 仅 `name`、`url`、`group`，其余不可见 | M0 |
 | `book` | 对象（字段 + 方法） | 字段 `name` / `author` / `bookUrl` / `tocUrl` / `intro` / `kind`；阶段不知道时为 `null`。方法：`putVariable(k,v)` / `getVariable(k)`（= `java.put` / `java.get` 的规则变量表）、`setType` / `getType` / `setReverseToc` / `getReverseToc`（job 内可读回，**不影响宿主**）、`type` 字段。ADR-0061 §决策 5、ADR-0062 §决策 2 | M17 / M24 |
-| `http.get(url, options)` | `String` | 经 `core/network/HttpClient` 代理，受超时与重试策略约束 | M0 |
-| `http.post(url, options)` | `String` | 同上 | M0 |
+| `http.get(url, options)` | `String` | 经 `core/network/HttpClient` 代理，受超时与重试策略约束；`{response:true}` 改为返回整个响应对象 | M0 / M21a |
+| `http.post(url, options)` | `String` | 同上 | M0 / M21a |
 | `parse.getString(rule, doc)` | `String` | 复用规则引擎，可递归 | M0 |
 | `parse.getElements(rule, doc)` | `List` | 同上 | M0 |
 | `java.put(key, value)` / `java.get(key)` | `void` / `String` | 规则变量，与 `@put:` / `@get:` 是同一份（ADR-0034）；**仅 JS 内可用** | M1 |
+| `java.startBrowser(url, title[, html])` | `void` | 打开**可见 WebView**让用户过人机验证；不等结果（ADR-0068 §决策 5） | M21a |
+| `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])` | `Promise<{url, body}>` | 同上但等用户按「完成」，成功后按需用新 cookie 重取；**本仓返回 Promise，规则里要 `await`**（上游是同步，差异见注记） | M21a |
+| `java.getVerificationCode(imageUrl)` | `Promise<String>` | 图片验证码对话框，返回用户输入的字符串；**需 `await`** | M21a |
+| `java.webView(url[, js])` / `webViewGetString(url[, js])` | `Promise<String>` | 隐藏 WebView 渲染（可执行 `js`），结果是 body | M21a |
+| `java.queryTTF(data)` | 句柄对象 | 字体反解（见下方注记）：`data` 认 **base64**（含 `data:…;base64,` 前缀与换行）与 **url**；url 走字节门并返回 Promise，规则要 `await` | M21a |
+| `java.queryBase64TTF(data)` | 句柄对象 | 同上的 base64 专用形态（上游已弃用，真实语料仍在用） | M21a |
+| `java.replaceFont(text, errorFont, correctFont[, start, end])` | `String` | 把混淆字换回真字；`start`/`end` 限定码位区间，第 4 参是布尔时按「缓存开关」忽略 | M21a |
 | `java.timeFormat(timestamp)` | `String` | `yyyy/MM/dd HH:mm` | M1 |
 | `key` | `String` | 搜索关键词，**只在 URL 规则的 JS 里**存在（ADR-0034 §决策 3） | M1 |
 | `log.debug/info/warn/error(msg)` | `void` | 转发到 `core/logging`，自动附加 `rulePath` | M0 |
 | `crypto.md5/sha1/base64Encode/base64Decode` | `String` | 纯计算 | M0 |
+
+**`loginCheckJs`（响应拦截器，M21a）：** 源声明了非空的 `loginCheckJs` 时，**每一次取页成功后**
+都会在页面 scope 上运行它，`rulePath = loginCheckJs`，`result` 就是上表的响应对象。返回值语义
+（上游 `res = analyzeUrl.evalJS(checkJs, res) as StrResponse`，ADR-0068 2026-10-24 增补）：
+
+| 返回值 | 本仓行为 |
+|---|---|
+| `null` / `undefined`（含只做判断不返回的写法） | 沿用本次响应 |
+| 带 `body` 字符串的对象（沙箱响应对象本身，或 `java.startBrowserAwait(...)` 的 `{url, body}`） | 用它的 `body`（和 `url`）重建页面，后续规则读新页面 |
+| 裸字符串 | 只替换正文（宽容方言；上游会报「did not return StrResponse」） |
+| 其余（布尔 / 数字 / 数组 …） | 源声明了 `loginUrl` / `loginUi` → `loginRequired`（UI 显示「去登录」）；否则 `parseFailed` |
+| 脚本抛错 / 超时 / 用户取消验证 | 原样上抛（`js:error` / `js:timeout` / `cancelled` / `unsupportedRule`） |
+
+三条登记差异：① 只对 **2xx** 响应运行（非 2xx 在请求层已是失败）；② `result.body()`（方法形态）
+不支持——上游是 `body` 属性，命中会显式报 `result.body is not a function`；③
+`java.getStrResponse()` / `java.initUrl()` / `java.getHeaderMap()`（只在登录检查 JS 里有效的
+`AnalyzeUrl` 方法）仍具名拒绝。
+
+**字体反解（M21a，ADR-0068 §决策 9）：** 站点把正文写成私有区码位（如 ``），再用一套
+`cmap` 被重映射的字体把它们画成真字。三个 `java.*` 成员按上表使用，典型写法：
+
+```js
+var errorFont = java.queryBase64TTF(String(result).match(/ttf;base64,([^)]+)/)[1]);
+var correctFont = await java.queryTTF('https://a.test/font.woff2.ttf');   // url 要 await
+java.replaceFont(result, errorFont, correctFont);
+```
+
+四条必须知道的事：
+
+1. **字体对象是不透明句柄**（`{__ttf: true, id}`）：字体不进脚本，所以不要索引它；查询来的东西
+   原样交回 `replaceFont` 即可。句柄随 job 失效（脚本存在 `globalThis` 里跨 job 用会拿到
+   `java.replaceFont failed`，而不是别人的字体）。
+2. **先按字形名对，再按字形 id 兜底。** 子集化会把字形 id 重排，但 `post` 表里的 `uniXXXX`
+   名字还在——上游也是这么做的。`post` 索引 < 258 的标准 Macintosh 名本仓不内置（CJK 混淆字体
+   用的都是自定义名），这些字形退回按 id 对。
+3. **`queryTTF(url)` 返回 Promise**：网络一律异步（§6 的总规矩）。`queryBase64TTF` 与
+   `replaceFont` 同步返回。
+4. **`java.getFontGlyph` 不存在**：ADR-0068 早期登记里提到过它，但上游 master 的
+   `JsExtensions.kt` 没有这个成员（只有 `queryTTF` / `queryBase64TTF` / `replaceFont`），
+   所以本仓也不提供。
 
 **`java.*` 兼容面（ADR-0037；本节是它的唯一出处）：**
 
@@ -651,8 +708,9 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `md5Encode(str)` | = 本表的 `crypto.md5`（UTF-8 字节的十六进制 MD5；上游 `MD5Utils.kt:13-15`） | ✅ 已落地（M1-b1b） |
 | `base64Encode(str)` / `base64Decode(str)` | = `crypto.base64Encode` / `crypto.base64Decode`；前者对齐上游 flags = 2（`Base64.NO_WRAP`），非法输入抛错 | ✅ 已落地（M1-b1b） |
 | `encodeURI(str)` | **Java `URLEncoder.encode(str, "UTF-8")`**：空格 → `+`，保留 `A-Za-z0-9` 与 `-_.*`，其余 UTF-8 字节 `%XX` 大写——**不是** JS 的 `encodeURI`（上游 `JsExtensions.kt:683-689`） | ✅ 已落地（M1-b1b） |
+| `encodeURI(str, charset)` | 同上，但按**声明的字符集**取字节（真实语料：`java.encodeURI(key, "GBK")`，ADR-0069 G1）；未知标签退 UTF-8（上游抛错返回 `""`） | ✅ M21a（ADR-0069） |
 | `log(msg)` | = `log.info(msg)`（自动附 `rulePath`；上游 `JsExtensions.kt:1128-1132`） | ✅ 已落地（M1-b1b） |
-| `getString(rule)` / `getStringList(rule)` / `getElement(rule)` / `getElements(rule)` | **对当前 scope 求值**，两种形态：① 首参是字符串字面量、且内层规则不带 `@js:` / `{{` / `@put:` / `@get:` / `<js>` 时，由**引擎在脚本执行前内联**（同步语义，覆盖语料 377/379 个字面量嵌套调用）；② 其余走宿主调用，形态是 **Promise**（等价 `parse.getString(rule, 当前 scope)` 等）——在表达式内当字符串用会显式 `js:error`，不会静默给错值 | ✅ 已落地（M1-b1b） |
+| `getString(rule)` / `getStringList(rule)` / `getElement(rule)` / `getElements(rule)` | **对当前 scope 求值**，两种形态：① 首参是字符串字面量、且内层规则不带 `@js:` / `{{` / `@put:` / `@get:` / `<js>` 时，由**引擎在脚本执行前内联**（同步语义，覆盖语料 377/379 个字面量嵌套调用）；② 其余走宿主调用，形态是 **Promise**（等价 `parse.getString(rule, 当前 scope)` 等）——在表达式内当字符串用会显式 `js:error`，不会静默给错值。**`getStringList` 求的是值**（含提取段，`@css:.box img@src` 回 URL 列表、元素串化），`getElements` 才给元素文档（`outerHtml` / JSON 值），见 ADR-0069 G14 | ✅ 已落地（M1-b1b；语义细化 M21a） |
 | `getString(rule, false)` | 接受（`false` = 不 unescape，正是本仓行为）；`(rule, true)` 与三参形态**具名拒绝** | ✅ 已落地（M1-b1b） |
 | 列表返回值 | JS `Array`；沙箱另装 `Array.prototype.toArray()`（返回 `this`），配上游 Java `List.toArray()` 习惯用法（语料 38 处） | ✅ 已落地（M1-b1b） |
 | 多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)` / `encodeURI` 两参 …） | 具名拒绝：本仓没有 flags / charset 语义，猜一个只会静默给不同结果 | 拒绝 |
@@ -704,6 +762,11 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 > - **独立 `@js:` 的 `result`：** 整页 scope 给 responseBody；**元素 scope**（逐项字段，如
 >   `searchRule.name`）给它自己的 `outerHtml`——沙箱里没有 DOM 句柄可交（ADR-0029 §决策 5），
 >   但规则总得看见它所属的那一项；JSON 条目 scope 给该条目的 JSON 文本。
+> - **单值字段的 `result` 是「全部匹配用换行拼接后的字符串」**（上游 `AnalyzeRule.getString`
+>   → `joinToString("
+")`，ADR-0069 G9）：所以 `result.split("
+")` / `result.replace(...)`
+>   这类写法成立。列表规则的 `result` 仍是列表（§4.1 的 URL 数组靠它）。
 >
 > **JS 绑定的操作面（2026-10-12，3.4 落地；上表是白名单，本段是每一项的行为）：**
 >
@@ -711,9 +774,14 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 >   唯一实现是 `core/network/HttpClient`（C-NET-1），因此超时 / 重试 / 编码 / 明文策略与页面
 >   抓取完全同一套。请求带上书源自带的 `header`（C-NET-4，规则自己的同名键优先），并以**书源
 >   URL** 作为并发预算键，所以它花的仍是 §8 那份预算。
-> - **`options` 只认 `headers` 与（POST 的）`body`**，其余键（如 `charset` / `timeout` / `retry` /
+> - **`options` 只认 `headers`、`response` 与（POST 的）`body`**，其余键（如 `charset` / `timeout` / `retry` /
 >   `webView`）让**该次调用抛错**：策略由 `HttpPolicy` 拥有，而 `webView` 本仓没有，悄悄忽略
 >   它会把「未渲染的页面」当成答案（§1 的不兼容清单）。
+> - **`options.response: true` 返回响应对象**（`body` 属性 + `url()` / `code()` / `headers()` /
+>   `header(name)` / `cookie()` / `contentType()` / `isSuccessful()`），与 `loginCheckJs` 看到的
+>   `result` **同一个形状**（ADR-0068 增补）。`url()` 是**跟随重定向之后**的地址，与页面
+>   `baseUrl` 同源（`core/network/http_response.dart`）：站点用 `302` + 相对 `Location` 交接会话时
+>   （ASP 搜索的 `?token`），规则只能从这里拿到真正该重发的地址，正文里没有它。
 > - **传输失败只拒绝这次的 Promise**（message 是 `ParseFailureKind` 名，如 `networkTimeout`）：
 >   规则可以自己 `catch` 后改走镜像；规则没 catch 时该 job 按 §7 报 `js:error`。
 >   **已登记的取舍：** 可重试性（`isRetryable`）不随它上抛——脚本可能吞掉它，把「传输失败」
@@ -969,8 +1037,13 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 
 - `@xpath:` XPath 规则（需要引入 XPath 依赖，须先开 ADR）
 - `:` 正则规则（仅书籍列表与目录列表）
-- `webJs`、`sourceRegex`、字体反爬字形映射
-- 原版的登录脚本、登录 UI、登录检查 JS
+- 原生登录表单的**后续交互**：`java.upLoginData`（脚本动态改表单）、`source.putLoginHeader`（脚本改登录头）
+  仍未实现；`loginUi` 的 text / password / button / select / toggle + `action` JS 与
+  `source.getLoginInfo()` / `getLoginInfoMap()` **已实现**（M22-a，ADR-0072 §决策 3），但登录信息目前只喂给
+  登录自己的脚本 job，页面请求的 job 里还读不到（登记在 `roadmap.md` §3.7）
+- 图片字节解密 `ruleContent.imageDecode`（非空即显式 `unsupportedRule`，ADR-0069 G5）
+- **同步**返回响应对象的 `java.post` / `java.get` / `java.ajax*` / `java.head` / `java.connect`：
+  沙箱阻塞不了宿主，规则要写 `await http.post(...)`（ADR-0069 G6 登记差异）
 - RSS / 订阅源、朗读规则
 - 需要浏览器 DOM/BOM 的网页 JS、依赖 Android WebView 行为的规则
 - 提取段里的嵌套规则（矩阵 #30：末段本身是一条规则，如 `class.a@css:.b`；命中报 `unsupported:nested-rule`）
@@ -987,8 +1060,9 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 - **`java.*` 的具名拒绝族（ADR-0037 §决策 5；形态与实现档位见 §6 的兼容面表）：**
   **其中 `get` / `put` 不在拒绝族里：** §6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**读写（ADR-0034），名字被占用；上游那套同步返回 body 的 `get(url)` / `post(url)` 因此没有可用拼写，只能靠 `ajax` 族具名拒绝（`java.post` 也已登记具名拒绝）。另：`base64Encode` / `base64Decode` 的多参重载**具名拒绝**（本仓没有 `flags` / `charset` 语义）。
   `ajax` / `get` / `post` / `head` / `ajaxAll` / `connect`（上游**同步**返回 body，与本仓 `http.*` 的
-  Promise 形态冲突）、`webView*` / `startBrowser*` / `downloadFile` / `cacheFile` / `importScript` /
-  `getVerificationCode` / `getCookie`（沙箱禁忌或需要平台能力）、`setContent`（脚本中途改 scope，
+  Promise 形态冲突）、`webViewGetElements`（本仓没有元素列表形态的渲染接口）、
+  `downloadFile` / `cacheFile` / `importScript` / `getCookie`（沙箱禁忌或需要平台能力）、
+  `setContent`（脚本中途改 scope，
   需要一个规则 / 作用域 API）、`toast` / `longToast`（UI）、`base64DecodeToByteArray` /
   `hexDecodeToByteArray`（Rhino 字节数组；语料里 326/328 处直接喂给 `IvParameterSpec` /
   `SecretKeySpec`，即密钥类 crypto）、`createSymmetricCrypto` / `aes*` / `des*` / `HMac*`（密钥类 crypto）、

@@ -6,21 +6,11 @@ import 'dart:isolate';
 import 'package:flutter_qjs_next/flutter_qjs.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_fonts.dart';
 
-/// Starts the real worker: one dedicated isolate owning one **reused** QuickJS runtime
-/// (`docs/dev/book-source.md` §6, ADR-0030 §决策 1).
+/// Starts the real worker: one isolate owning one reused QuickJS runtime.
 ///
-/// This file is exempt from the coverage gate under ADR-0019's second category: it is
-/// the only place that reaches the `flutter_qjs_next` native library, which cannot be
-/// loaded from `flutter test`'s host VM (only a real device build provides it), so its
-/// queueing and budget policy deliberately lives in
-/// `quickjs_worker_bridge.dart` instead. **Its only automated verification is
-/// `integration_test/js_bridge_test.dart`**, which runs it on Windows / Android with
-/// the plugin built; how to run that is in `docs/dev/test-environment.md` §4.
-///
-/// The two budgets come from the bridge, never from here: the runtime interrupt
-/// ([timeout]) and the heap limit ([memoryLimit]) are `book-source.md` §6's numbers,
-/// defined once in `quickjs_worker_bridge.dart`.
+/// The budgets come from the bridge, which also owns queueing and timeouts.
 Future<JsWorkerHandle> launchQuickJsWorker({
   required Duration timeout,
   required int memoryLimit,
@@ -65,7 +55,6 @@ Future<JsWorkerHandle> launchQuickJsWorker({
   );
 }
 
-/// One worker isolate as a [JsWorkerHandle].
 final class _IsolateWorkerHandle implements JsWorkerHandle {
   _IsolateWorkerHandle({
     required this._isolate,
@@ -98,13 +87,8 @@ final class _IsolateWorkerHandle implements JsWorkerHandle {
   }
 }
 
-/// The worker's main loop: build the runtime once, then serve messages until closed.
-///
-/// Deliberately free of `try`/`catch`: a native failure is an `Error`, which ADR-0022
-/// forbids catching. An isolate that dies leaves the bridge's hard budget to notice,
-/// kill (a no-op by then) and rebuild — which is exactly the fallback ADR-0030
-/// §决策 3 describes. The same budget covers the failure a `Future` cannot report up
-/// from the worker (a native `Error` inside `evaluate` leaves the job unanswered).
+// 主循环：建一次运行时，然后分发消息直到关闭。
+// 不写 try/catch：原生错误交给桥的硬预算发现并重建 worker。
 Future<void> _quickJsWorkerMain(List<Object?> bootstrap) async {
   final Object? port = bootstrap.isNotEmpty ? bootstrap[0] : null;
   final Object? timeoutMs = bootstrap.length > 1 ? bootstrap[1] : null;
@@ -119,9 +103,7 @@ Future<void> _quickJsWorkerMain(List<Object?> bootstrap) async {
   final JavascriptRuntime runtime = getJavascriptRuntime(
     timeout: timeoutMs,
     memoryLimit: memoryLimit,
-    // §6 禁止定时器、`console` 与原生态；`JsWebApis.none()` 就是「什么都不装」
-    // （库自己的描述：no console, no timers, plain ECMAScript），比装完再 delete 干净。
-    // 剩下的重绑防护由 `_evaluationSource` 在每个 job 前重跑沙箱完成。
+    // 不装 console / 定时器等 Web API，只留纯 ECMAScript；重绑防护靠每个 job 重跑前奏。
     webApis: const JsWebApis.none(),
   );
   final _Worker worker = _Worker(runtime, port);
@@ -134,9 +116,7 @@ Future<void> _quickJsWorkerMain(List<Object?> bootstrap) async {
     final Map<String, Object?> envelope = Map<String, Object?>.from(raw);
     switch (envelope['type']) {
       case 'evaluate':
-        // 这里**不能** await：一个 `@js:` 脚本可以停在 `await http.get(...)` /
-        // `await parse.*` 上（§6 的 Promise 绑定），而它的答复正是由这条循环继续分发的。
-        // 桥按 FIFO 一次只派一个 job，所以同一时刻至多一个求值在跑。
+        // 不能 await：脚本可能停在 `await http.get(...)` 上，答复要靠这条循环继续分发。
         unawaited(worker.evaluate(envelope['job']));
       case 'hostResult':
         worker.answerHostCall(envelope);
@@ -150,10 +130,7 @@ Future<void> _quickJsWorkerMain(List<Object?> bootstrap) async {
   }
 }
 
-/// The worker's own state: one reused runtime plus the binding calls in flight (§6).
-///
-/// One job runs at a time (the bridge's FIFO queue), so the calls a script is waiting on
-/// live in one map keyed by the call number the reply has to name.
+// 一个 worker 的状态：复用的运行时，加上在途的绑定调用。
 final class _Worker {
   _Worker(this._runtime, this._toBridge);
 
@@ -163,25 +140,17 @@ final class _Worker {
   final Map<int, Completer<Object?>> _pending = <int, Completer<Object?>>{};
   int _nextCallId = 0;
 
-  /// The variables of the job being evaluated (`book-source.md` §6, ADR-0034 §决策 1).
-  ///
-  /// Seeded from the job's snapshot and reported back with the result, so `java.get` /
-  /// `java.put` are answered without leaving this isolate — which is what keeps them
-  /// synchronous — while the host stays the single writer of the store. A **null** value
-  /// means the script cleared the variable (`java.put(key, null)`), which the bridge turns
-  /// back into a removal instead of the text "null".
+  // 当前 job 的变量表：从快照播种，随结果回传；null 表示脚本删除了该变量。
   Map<String, String?> _variables = <String, String?>{};
 
-  /// The book / chapter a `java.get('bookName')` / `java.get('title')` reads answer with
-  /// (`book-source.md` §6, ADR-0049); empty when the stage does not know them.
+  // bookName / title 的内置值；阶段不知道时为空。
   Map<String, String> _named = const <String, String>{};
 
-  /// Registers §6's binding channels.
-  ///
-  /// The sync bindings (`crypto.*`, `log.*`) complete inside this isolate, so JavaScript
-  /// gets a value. The two host bindings (`http.*`, `parse.*`) cannot: their handler
-  /// returns a [Future], which the engine turns into the Promise §6 requires the rule to
-  /// `await`.
+  // 本 job 查询过的字体（`java.queryTTF` 的句柄表，ADR-0068 增补决策 9）。
+  // 字体不进脚本、也不跨 job：一个 job 结束时清空，句柄 id 不复用。
+  final JsFontRegistry _fonts = JsFontRegistry();
+
+  // sync 绑定在本隔离体内直接答复；http / parse 返回 Future，由引擎转成 Promise。
   void installBindings() {
     _runtime.onMessage('crypto', (Object? args) {
       if (args is! Map) {
@@ -216,23 +185,23 @@ final class _Worker {
       jsParseBinding,
       (Object? args) => _callHost(jsParseBinding, args),
     );
-    // 矩阵 #17：`java.*` 在本 isolate 内完成，所以 JS 同步拿到值（§6 的形态列）。
+    // 验证族（ADR-0068 §决策 5）：等的是人，桥会暂停硬预算并免掉调用额度。
+    _runtime.onMessage(
+      jsVerifyBinding,
+      (Object? args) => _callHost(jsVerifyBinding, args),
+    );
+    // java.* 在本 isolate 内完成，所以 JS 同步拿到值。
     _runtime.onMessage(jsJavaBinding, _applyJava);
   }
 
-  /// Answers one `java.*` call from the running script (§6, matrix #17).
-  ///
-  /// The value is a JSON envelope ([applyJsJavaCall]) rather than a bare value: a write has
-  /// no value to return, so `null` cannot serve as “failed” here. The variable map is this
-  /// job's snapshot, which the result envelope carries back to the host (ADR-0034 §决策 1).
   Object? _applyJava(Object? args) =>
-      applyJsJavaCall(_variables, args, named: _named);
+      applyJsJavaCall(_variables, args, named: _named, fonts: _fonts);
 
-  /// Runs one job and reports its result envelope.
   Future<void> evaluate(Object? job) async {
-    // 上一个 job 的未答复调用（脚本没 await 就结束了）不再有意义，桥也已经不再认它。
+    // 上一个 job 未答复的调用不再有意义，桥也已经不再认它。
     _pending.clear();
     _variables = <String, String?>{};
+    _fonts.clear();
     if (job is! Map) {
       _toBridge.send(<String, Object?>{
         'type': 'result',
@@ -250,9 +219,8 @@ final class _Worker {
     final Stopwatch stopwatch = Stopwatch()..start();
     JsEvalResult result = _runtime.evaluate(_evaluationSource(fields));
     if (result.rawResult is Future) {
-      // 脚本停在 Promise 上（`await http.get(...)` / `await parse.*`）：这套引擎把 JS
-      // Promise 换成 Dart Future，`handlePromise` 边等边抽干作业队列（库的 async-bridge
-      // recipe 同形）。答复由主循环的 [answerHostCall] 分发，所以这里能安全地等。
+      // 脚本停在 Promise 上：引擎把 JS Promise 换成 Dart Future，等待期间主循环继续
+      // 分发 hostResult，所以这里可以安全地等。
       result = await _runtime.handlePromise(result);
     }
     stopwatch.stop();
@@ -263,7 +231,7 @@ final class _Worker {
         'ok': false,
         'error': result.stringResult,
         'elapsedMs': stopwatch.elapsedMilliseconds,
-        // 脚本可能在报错前已经 `java.put` 过：上游的写入是立即生效的，所以失败也回传。
+        // 脚本报错前可能已经 java.put：上游的写入立即生效，失败也要回传。
         'variables': _variables,
       });
 
@@ -293,17 +261,14 @@ final class _Worker {
     });
   }
 
-  /// Answers one binding call with the bridge's reply (§6).
-  ///
-  /// A failure rejects the script's Promise, which is what a rule can `catch`; whether it
-  /// also fails the job is the bridge's decision ([JsHostReply.fatal]).
+  // 答复失败会拒绝脚本的 Promise；是否连 job 一起判失败由桥决定。
   void answerHostCall(Map<String, Object?> message) {
     final JsHostReply? reply = JsHostReply.fromJson(message);
     final Completer<Object?>? pending = reply == null
         ? null
         : _pending.remove(reply.callId);
     if (reply == null || pending == null) {
-      // 畸形或无人等待的答复不得静默丢弃（C-SRC-4 的同口径）：送回宿主记一条。
+      // 畸形或无人等待的答复不得静默丢弃：送回宿主记一条。
       _toBridge.send(<String, Object?>{
         'type': 'log',
         'level': 'warn',
@@ -321,10 +286,7 @@ final class _Worker {
     pending.completeError(Exception(reply.message));
   }
 
-  /// Runs one binding call that has to leave this isolate and waits for its answer.
-  ///
-  /// The envelope is built by [JsHostCall], which the bridge decodes with the same type, so
-  /// the two sides cannot drift; the reply is matched by [JsHostCall.callId].
+  // 需要离开隔离体的调用：发信封后按 callId 等答复。
   Future<Object?> _callHost(String binding, Object? args) {
     final int callId = _nextCallId++;
     final Completer<Object?> completer = Completer<Object?>();
@@ -337,35 +299,26 @@ final class _Worker {
   }
 }
 
-/// Builds the script one job runs: the sandbox (re-applied every job), the §6
-/// variables, then the rule through the helper.
-///
-/// **The whole sandbox is re-applied per job on purpose.** The runtime is reused and
-/// `globalThis` is shared, so a rule could otherwise leave `globalThis.crypto` or
-/// `globalThis.log` pointing somewhere else (freezing the object does not protect the
-/// property name) and the *next* job — possibly another book source — would inherit it.
-/// Re-running the prelude costs a re-parse of about 1.5 KB next to a 5 s budget and
-/// repairs every whitelisted name; the belt-and-braces `delete` list inside it also
-/// clears the names §6 forbids, in case a rule defined them again.
-///
-/// `eval` inside the helper is what gives the rule its **completion value** semantics:
-/// `result.replace(...)` and `var x = 1; x + 1` both produce a value, so a source can
-/// keep using either spelling. The script text is passed as a JSON string literal, so
-/// nothing in the rule can break out of it.
+// 拼出一个 job 的脚本：沙箱、绑定，最后是规则本身。
+// 沙箱每个 job 都重跑：运行时复用且 globalThis 共享，规则的重绑定会漏给下一个 job。
 String _evaluationSource(Map<String, Object?> fields) {
   final Object? key = fields['key'];
+  // 响应对象优先于普通 `result`：登录拦截器的 `result` 是响应，不是页面正文（ADR-0068 增补）。
+  final Object? result = fields['response'] ?? fields['result'];
   final StringBuffer buffer = StringBuffer()
     ..writeln(_prelude)
     ..writeln('var baseUrl = ${jsonEncode(fields['baseUrl'])};')
-    ..writeln('var result = ${jsonEncode(fields['result'])};')
+    ..writeln('var result = __sandboxValue(${jsonEncode(result)});')
     ..writeln('var page = ${jsonEncode(fields['page'])};')
-    ..writeln('var source = Object.freeze(${jsonEncode(fields['source'])});');
+    ..writeln(
+      'var source = __sandboxSource(${jsonEncode(fields['source'])}, '
+      '${jsonEncode(fields['loginInfo'] ?? const <String, String>{})});',
+    );
   final Object? book = fields['book'];
   buffer.writeln(
     'var book = __sandboxBook(${book == null ? 'null' : jsonEncode(book)});',
   );
-  // `key` 只有 URL 规则才有（上游 `AnalyzeUrl.evalJS`，AnalyzeUrl.kt:377）。缺席时用
-  // `globalThis` 删掉而不是 `var` 声明，因为 `var` 建的属性删不掉，上一个 job 的词就会漏进来。
+  // key 只有 URL 规则才有；缺席时删掉 globalThis 属性（var 建的属性删不掉，会漏到下一个 job）。
   if (key != null) {
     buffer.writeln('globalThis.key = ${jsonEncode(key)};');
   }
@@ -374,13 +327,9 @@ String _evaluationSource(Map<String, Object?> fields) {
   return buffer.toString();
 }
 
-/// Reads one envelope field as a [String], or an empty string.
 String _asString(Object? value) => value is String ? value : '';
 
-/// Decodes the JSON envelope the sandbox helper returns, or `null` when it is not one.
-///
-/// A JS syntax error makes the helper itself unparsable, so this is the second place a
-/// broken script surfaces; the caller reports both as `js:error`.
+// 语法错误会让前奏本身不可解析，这里返回 null，由调用方报 js:error。
 Map<String, Object?>? _decodeEnvelope(String raw) {
   try {
     final Object? decoded = jsonDecode(raw);
@@ -391,23 +340,9 @@ Map<String, Object?>? _decodeEnvelope(String raw) {
   }
 }
 
-/// The sandbox surface: the §6 variables helper, the sync `log.*` / `crypto.*` and the two
-/// host bindings `http.*` / `parse.*`.
-///
-/// Every `sendMessage` payload is a `JSON.stringify` object: the bridge decodes it with
-/// `jsonDecode` before the handler sees it (`tool/spike/README.md` §4), so a bare
-/// string would not survive.
-///
-/// It is re-evaluated before every job (see `_evaluationSource`), so every statement
-/// here must be idempotent. The first block closes the holes F1 of the 3.3 review
-/// found: the names §6 forbids are deleted even though `JsWebApis.none()` should never
-/// have installed them, because a rule can define them itself and the next job must not
-/// inherit that.
-///
-/// `__runRule` returns a **Promise** for an `await`-ing rule and a plain string
-/// otherwise, because §6's `http.*` / `parse.*` are Promises (ADR-0029 §决策 3): the
-/// whole promise is settled inside JavaScript, so the engine always receives the same
-/// JSON envelope and a rejected promise can never escape as an unhandled rejection.
+// 沙箱面：变量助手、同步的 log.* / crypto.*，以及 http.* / parse.* 两个宿主绑定。
+// 每个 job 前都会重跑，所以这里每条语句都必须幂等；sendMessage 的载荷统一是 JSON 字符串。
+// __runRule 对 await 的规则返回 Promise，其余返回字符串，最终都收敛成同一个 JSON 信封。
 const String _prelude = r'''
 (function () {
   var forbidden = [
@@ -503,6 +438,20 @@ globalThis.__java = function (call) {
     ? '' : String(envelope.value);
 };
 
+// 与 __java 同一通道，但**不**把回答串成字符串：字体句柄之类的对象要原样交给脚本。
+globalThis.__javaObject = function (call) {
+  var envelope = null;
+  try {
+    envelope = JSON.parse(String(sendMessage('java', JSON.stringify(call))));
+  } catch (error) {
+    envelope = null;
+  }
+  if (!envelope || envelope.ok !== true) {
+    throw new Error('java.' + call.operation + ' failed');
+  }
+  return (envelope.value === undefined) ? null : envelope.value;
+};
+
 // 具名拒绝族（ADR-0037 §决策 5）：命中即给可读错误，不落到 `undefined is not a function`。
 globalThis.__javaRejected = function (name) {
   return function () {
@@ -518,6 +467,77 @@ globalThis.__javaRejected = function (name) {
 // * `setType` / `setReverseToc` 在本仓没有对应的书籍状态：它们在本 job 内可读回，但**不影响**
 //   宿主（章节顺序 / 书籍类型不变），差异登记在 ADR-0062 §决策 2。
 // 每次 job 重建，所以这里不再 `Object.freeze`：规则自己的写入不会漏到下一份规则。
+// 登录拦截器的响应对象（ADR-0068 增补）：`loginCheckJs` 的 `result` 不是页面正文，而是上游
+// `StrResponse` 那一层——`body` 是属性（上游自己的 JS 助手就写 `getStrResponse().body`），
+// `url()` / `code()` / `headers()` 是方法。Readori 风格的 `result.body()` 本仓不支持，命中会显式
+// 报 `result.body is not a function`（差异登记在 book-source.md §6）。
+//
+// 方法不可枚举：脚本原样 `return result` 时，JSON 只带回 body / 状态码 / 头，宿主就能把它当作
+// 替换后的响应。
+globalThis.__sandboxStrResponse = function (data) {
+  var url = (data.__url === undefined || data.__url === null) ? '' : String(data.__url);
+  var body = (data.body === undefined || data.body === null) ? '' : String(data.body);
+  var code = Number(data.__code) || 0;
+  var headers = (data.__headers && typeof data.__headers === 'object') ? data.__headers : {};
+  var response = {
+    __strResponse: true,
+    body: body,
+    __url: url,
+    __code: code,
+    __headers: headers
+  };
+  var define = function (name, fn) {
+    Object.defineProperty(response, name, { value: fn, enumerable: false });
+  };
+  define('url', function () { return url; });
+  define('code', function () { return code; });
+  define('headers', function () { return headers; });
+  define('header', function (name) {
+    var wanted = String(name).toLowerCase();
+    for (var key in headers) {
+      if (Object.prototype.hasOwnProperty.call(headers, key) &&
+          key.toLowerCase() === wanted) {
+        return headers[key];
+      }
+    }
+    return null;
+  });
+  define('cookie', function () { return headers.cookie || ''; });
+  define('contentType', function () { return headers['content-type'] || ''; });
+  define('isSuccessful', function () { return code >= 200 && code < 300; });
+  define('toString', function () { return body; });
+  return response;
+};
+
+// 只有带标记的对象才是响应；其余（字符串 / 数组 / JSON 值）原样交给规则，`@js:` 的 result 语义不变。
+globalThis.__sandboxValue = function (value) {
+  if (value !== null && typeof value === 'object' && value.__strResponse === true) {
+    return __sandboxStrResponse(value);
+  }
+  return value;
+};
+
+// `source` 对象：字段照旧冻结，另挂两个**登录信息**读取器（ADR-0072 §决策 3）。
+// 它们是同步的纯读取：值随 job 进来（ADR-0034 的快照做法），不回写宿主。
+globalThis.__sandboxSource = function (data, loginInfo) {
+  var source = {};
+  for (var field in data) {
+    source[field] = data[field];
+  }
+  var info = loginInfo || {};
+  source.getLoginInfoMap = function () {
+    var copy = {};
+    for (var key in info) {
+      copy[key] = info[key];
+    }
+    return copy;
+  };
+  source.getLoginInfo = function () {
+    return JSON.stringify(source.getLoginInfoMap());
+  };
+  return Object.freeze(source);
+};
+
 globalThis.__sandboxBook = function (data) {
   if (data === null || data === undefined) {
     return null;
@@ -561,8 +581,8 @@ globalThis.__sandboxBook = function (data) {
 // 因此没有可用的拼写，只能靠 `ajax` 这一族具名拒绝（ADR-0037 §决策 5）。
 globalThis.__javaRejectedNames = [
   'ajax', 'post', 'head', 'ajaxAll', 'connect',
-  'webView', 'webViewGetString', 'webViewGetElements', 'startBrowser', 'startBrowserAwait',
-  'downloadFile', 'cacheFile', 'importScript', 'getVerificationCode', 'getCookie',
+  'webViewGetElements',
+  'downloadFile', 'cacheFile', 'importScript', 'getCookie',
   'setContent', 'toast', 'longToast',
   'base64DecodeToByteArray', 'hexDecodeToByteArray',
   'createSymmetricCrypto', 'aesBase64DecodeToString', 'aesEncodeToString', 'aesDecodeToString',
@@ -579,6 +599,32 @@ globalThis.Packages = new Proxy({}, {
     throw new Error('Packages.* interop is not supported (M2): see book-source.md §11');
   }
 });
+
+// 验证族（ADR-0068 §决策 5）：这些调用等的是**人**，所以走独立的 host 频道，返回 Promise。
+// 上游是「同步阻塞」，本仓的沙箱不可能阻塞 QuickJS 去等宿主，因此规则里要 `await`（差异登记在
+// book-source.md §6）。`startBrowser` 上游返回 void，这里同样不等结果（浮空 Promise 的错误吞掉，
+// 页面本身已经打开）。
+globalThis.__verify = function (operation, url, title, refetchAfterSuccess, html, script) {
+  var payload = { operation: operation, url: String(url) };
+  if (title !== undefined && title !== null) {
+    payload.title = String(title);
+  }
+  if (refetchAfterSuccess !== undefined && refetchAfterSuccess !== null) {
+    payload.refetchAfterSuccess = refetchAfterSuccess !== false;
+  }
+  if (html !== undefined && html !== null) {
+    payload.html = String(html);
+  }
+  if (script !== undefined && script !== null) {
+    payload.script = String(script);
+  }
+  return sendMessage('verify', JSON.stringify(payload));
+};
+
+// 查询一个字体并拿回句柄；不是字体/认不出 cmap 时抛错（规则可以 catch 后保留原文）。
+globalThis.__queryTtf = function (data) {
+  return __javaObject({ operation: 'queryTtf', value: String(data) });
+};
 
 globalThis.java = (function () {
   var surface = {
@@ -617,11 +663,17 @@ globalThis.java = (function () {
       }
       return __crypto('base64Decode', value);
     },
-    encodeURI: function (value) {
-      if (arguments.length > 1) {
-        throw new Error('java.encodeURI(str) takes one argument');
+    // 上游两个重载：`encodeURI(str)` 与 `encodeURI(str, enc)`。真实语料用后者给老 PHP 站点
+    // 编 GBK 关键词（美女图片网的 searchUrl），所以第二个参数是**字符集**，不是 flags。
+    encodeURI: function (value, charset) {
+      if (arguments.length > 2) {
+        throw new Error('java.encodeURI(str[, charset]) takes at most two arguments');
       }
-      return __java({ operation: 'encodeUri', value: String(value) });
+      var call = { operation: 'encodeUri', value: String(value) };
+      if (charset !== undefined && charset !== null) {
+        call.charset = String(charset);
+      }
+      return __java(call);
     },
     log: function (message) {
       sendMessage('log', JSON.stringify({ level: 'info', message: String(message) }));
@@ -635,8 +687,10 @@ globalThis.java = (function () {
       }
       return __parse('getString', rule, null);
     },
+    // 上游 `java.getStringList` 求的是**值**（含提取段），不是元素：`@css:.box img@src`
+    // 要回 URL 列表。元素形态是 `parse.getElements` 的事（ADR-0037 §决策 3）。
     getStringList: function (rule) {
-      return __parse('getElements', rule, null);
+      return __parse('getStringList', rule, null);
     },
     getElement: function (rule) {
       // 单值形态：异步路径也只答第一个（与快路径内联的第一个匹配同形）——否则同一个调用在
@@ -647,6 +701,59 @@ globalThis.java = (function () {
     },
     getElements: function (rule) {
       return __parse('getElements', rule, null);
+    },
+    // 验证族（ADR-0068 §决策 5）。`startBrowser` 与上游一样不返回页面；带 Await 的那个返回
+    // `{url, body}`（上游 `StrResponse` 的两个字段）。
+    startBrowser: function (url, title, html) {
+      __verify('startBrowser', url, title, null, html, null).catch(function () {});
+    },
+    startBrowserAwait: function (url, title, refetchAfterSuccess, html) {
+      return __verify('startBrowserAwait', url, title, refetchAfterSuccess, html, null)
+        .then(function (payload) {
+          if (payload === null || payload === undefined) {
+            return { url: String(url), body: '' };
+          }
+          return { url: String(payload.url), body: String(payload.body) };
+        });
+    },
+    getVerificationCode: function (imageUrl) {
+      return __verify('imageCode', imageUrl, null, null, null, null).then(function (code) {
+        return code === null || code === undefined ? '' : String(code);
+      });
+    },
+    webView: function (url, js) {
+      return __verify('webView', url, null, null, null, js);
+    },
+    webViewGetString: function (url, js) {
+      return __verify('webView', url, null, null, null, js);
+    },
+    // 字体反解族（ADR-0068 增补决策 9）：`QueryTTF` 在本仓是不透明句柄 `{__ttf:true,id}`，
+    // 规则只要把它的返回值交回 `replaceFont`。字体不跨进脚本，所以一次正文替换只花一个
+    // 小信封，而不是几万个字形的 JSON。
+    queryBase64TTF: function (data) {
+      return __queryTtf(data);
+    },
+    queryTTF: function (data) {
+      var text = String(data);
+      // 上游自动判断 url / 本地文件 / base64；本仓只多认 url（网络必须异步，与 http.* 同规矩）。
+      if (/^https?:\/\//i.test(text)) {
+        return __hostCall('http', { operation: 'getBytes', url: text })
+          .then(function (base64) { return __queryTtf(base64); });
+      }
+      return __queryTtf(text);
+    },
+    replaceFont: function (text, errorFont, correctFont, start, end) {
+      var payload = { text: String(text) };
+      if (errorFont && errorFont.__ttf === true) {
+        payload.from = errorFont.id;
+      }
+      if (correctFont && correctFont.__ttf === true) {
+        payload.to = correctFont.id;
+      }
+      // 旧语料的 (text, f1, f2, start, end) 形态：只替换给定码位区间。
+      if (typeof start === 'number') { payload.start = start; }
+      if (typeof end === 'number') { payload.end = end; }
+      return __java({ operation: 'replaceFont', value: payload });
     }
   };
   for (var rejectedIndex = 0; rejectedIndex < __javaRejectedNames.length; rejectedIndex++) {
@@ -674,6 +781,30 @@ if (Array.prototype.toArray === undefined) {
   });
 }
 
+// 上游返回的是 Java `List`，真实语料两种写法都有：`list.size`（属性，美女图片网）与
+// `list.size()`（方法，同一份导出里的另一条正文脚本）。JS 里一个值不能既是数字又是函数，
+// 所以 `size` 取回来的是一个**可调用对象**：
+//   * `list.size()` → 调用它，闭包记住的数组长度；
+//   * `list.size` 参与算术/比较 → `valueOf()` 给出长度（`i < list.size` 成立）。
+// 只有严格相等（`list.size === 3`）会失败，语料里没有这种写法（ADR-0069 G14）。
+if (Object.getOwnPropertyDescriptor(Array.prototype, 'size') === undefined) {
+  Object.defineProperty(Array.prototype, 'size', {
+    get: function () {
+      var array = this;
+      var accessor = function () { return array.length; };
+      Object.defineProperty(accessor, 'valueOf', {
+        value: function () { return array.length; }
+      });
+      Object.defineProperty(accessor, 'toString', {
+        value: function () { return String(array.length); }
+      });
+      return accessor;
+    },
+    enumerable: false,
+    configurable: true
+  });
+}
+
 globalThis.__hostCall = function (binding, args) {
   return sendMessage(binding, JSON.stringify(args));
 };
@@ -685,7 +816,7 @@ globalThis.__httpOptions = function (operation, options) {
   if (typeof options !== 'object') {
     throw new Error('http.' + operation + ': options must be an object');
   }
-  var allowed = ['headers', 'body'];
+  var allowed = ['headers', 'body', 'response'];
   for (var key in options) {
     if (allowed.indexOf(key) < 0) {
       // 听不懂的键会让这次调用答非所问（`webView` 会拿回未渲染的页面），所以显式拒绝，
@@ -697,16 +828,23 @@ globalThis.__httpOptions = function (operation, options) {
     headers: (options.headers === undefined || options.headers === null)
       ? null : options.headers,
     body: (options.body === undefined || options.body === null)
-      ? null : String(options.body)
+      ? null : String(options.body),
+    // `response: true` 要的是整个响应（body / url / code / headers），不是只有正文。
+    response: options.response === true
   };
 };
 
 globalThis.__http = function (operation, url, options) {
-  return __hostCall('http', {
-    operation: operation,
-    url: String(url),
-    options: __httpOptions(operation, options)
-  });
+  var opts = __httpOptions(operation, options);
+  var call = { operation: operation, url: String(url), options: opts };
+  if (opts !== null && opts.response === true) {
+    // 宿主回的是响应信封；__sandboxValue 把 url() / code() / headers() 方法挂回去，
+    // 形状与 loginCheckJs 看到的 `result` 相同（book-source.md §6）。
+    return __hostCall('http', call).then(function (reply) {
+      return __sandboxValue(reply);
+    });
+  }
+  return __hostCall('http', call);
 };
 
 globalThis.http = Object.freeze({

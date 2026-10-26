@@ -286,7 +286,8 @@ class _BookSourceDebugPageState extends ConsumerState<BookSourceDebugPage> {
 
         return <String>[
           for (final ExploreCategory category in parsed.categories)
-            category.url,
+            // 分组标题没有地址，调试列表里不放空行。
+            if (category.url != null) category.url!,
         ];
       case SourceDebugTarget.info:
       case SourceDebugTarget.toc:

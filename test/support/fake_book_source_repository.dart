@@ -241,6 +241,33 @@ final class FakeBookSourceRepository implements BookSourceRepository {
     return row == null ? null : jsonEncode(row.source.toJson());
   }
 
+  /// The `loginUi` values per row id (M22-a, ADR-0072 §决策 3).
+  final Map<int, Map<String, String>> loginInfos = <int, Map<String, String>>{};
+
+  @override
+  Future<Map<String, String>> loginInfoOf(int id) async =>
+      loginInfos[id] ?? <String, String>{};
+
+  @override
+  Future<void> saveLoginInfo(int id, Map<String, String> info) async {
+    if (info.isEmpty) {
+      loginInfos.remove(id);
+    } else {
+      loginInfos[id] = Map<String, String>.of(info);
+    }
+  }
+
+  @override
+  Future<List<String>> exportPayloads({Set<int>? ids}) async => <String>[
+    for (final MapEntry<int, StoredBookSource> entry in _rows.entries)
+      if (ids == null || ids.isEmpty || ids.contains(entry.key))
+        jsonEncode(<String, Object?>{
+          ...entry.value.source.toJson(),
+          'enabled': entry.value.isEnabled,
+          'customOrder': entry.value.customOrder,
+        }),
+  ];
+
   @override
   Future<void> setEnabledFor(List<int> ids, {required bool isEnabled}) async {
     for (final int id in ids) {

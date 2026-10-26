@@ -135,8 +135,10 @@ void main() {
   });
 
   group('ParseFailureKind', () {
-    test('values_whenEnumerated_containsNineKinds', () {
-      expect(ParseFailureKind.values, hasLength(9));
+    test('values_whenEnumerated_containsTenKinds', () {
+      // 第 10 个是 M21a 的 loginRequired（ADR-0068 §决策 3）。
+      expect(ParseFailureKind.values, hasLength(10));
+      expect(ParseFailureKind.values, contains(ParseFailureKind.loginRequired));
     });
 
     test('isRetryable_whenKindIsTransient_isTrue', () {
@@ -191,8 +193,9 @@ void main() {
           .whereType<String>()
           .toList();
 
-      expect(keys, hasLength(8));
-      expect(keys.toSet(), hasLength(8));
+      // 10 个 kind 里只有 cancelled 没有文案键（M21a 加了 loginRequired）。
+      expect(keys, hasLength(9));
+      expect(keys.toSet(), hasLength(9));
     });
 
     test(

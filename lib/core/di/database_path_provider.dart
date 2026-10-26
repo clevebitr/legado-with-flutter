@@ -4,12 +4,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'database_path_provider.g.dart';
 
-/// Provides the on-disk database path: `<application support>/reader.db`
-/// (`docs/dev/platform.md` §5).
+/// Provides the on-disk database path: `<application support>/reader.db`.
 ///
-/// The platform lookup is isolated here so tests can assert the resolved path
-/// without opening a file database: they fake the `path_provider` channel
-/// instead of touching the real application directory.
+/// Isolated so tests can fake the platform lookup without opening a database.
 @Riverpod(keepAlive: true)
 Future<String> databaseFilePath(Ref ref) async =>
     databasePathIn(await getApplicationSupportDirectory());

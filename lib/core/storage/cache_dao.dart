@@ -6,22 +6,19 @@ import 'package:flutter_reader/core/utils/clock.dart';
 
 part 'cache_dao.g.dart';
 
-/// Time-to-live cache for network payloads (C-NET-6).
+/// Time-to-live cache for network payloads.
 ///
-/// Every entry carries an expiry, reads treat an expired entry as a miss and
-/// [deleteExpired] removes them, so the cache can never grow without bound.
+/// Expired entries read as misses; [deleteExpired] purges them.
 @DriftAccessor(tables: <Type>[CacheEntries])
 class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
-  /// Creates the DAO; `clock` decides when an entry has expired
-  /// (`docs/dev/testing.md` §4).
+  /// Creates the DAO with an injected clock.
   CacheDao(super.attachedDatabase, {required this._clock});
 
   final Clock _clock;
 
   /// Stores [payload] for the request described by the other arguments.
   ///
-  /// An existing entry for the same request is replaced, so [ttl] always counts
-  /// from the moment of the write.
+  /// An existing entry for the same request is replaced, so [ttl] counts from this write.
   Future<void> put({
     required String sourceId,
     required String ruleField,
@@ -29,6 +26,8 @@ class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
     required int page,
     required String payload,
     required Duration ttl,
+    String? scopeKey,
+    String? sourceKey,
   }) async {
     await into(cacheEntries).insertOnConflictUpdate(
       CacheEntriesCompanion.insert(
@@ -40,6 +39,8 @@ class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
         ),
         payload: payload,
         expiresAt: _clock.now().add(ttl),
+        scopeKey: Value<String?>(scopeKey),
+        sourceKey: Value<String?>(sourceKey),
       ),
     );
   }
@@ -79,9 +80,51 @@ class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
           ))
           .go();
 
-  /// Deletes **every** entry and returns how many rows were removed.
+  /// Counts the entries written for one book.
   ///
-  /// Everything in this table is derived data, so a full purge needs no migration and no
-  /// per-source column (`docs/dev/roadmap.md` 5.7 ①); the settings page is the only caller.
+  /// [scopeKey] comes from [cacheScopeKeyFor], so the count needs no URL.
+  Future<int> countByScope(String scopeKey) async {
+    final QueryRow row = await customSelect(
+      'SELECT COUNT(*) AS c FROM ${cacheEntries.actualTableName} '
+      'WHERE scope_key = ?',
+      variables: <Variable<Object>>[Variable<String>(scopeKey)],
+    ).getSingle();
+
+    return row.data['c'] as int? ?? 0;
+  }
+
+  /// Deletes one book's entries and returns how many rows were removed.
+  Future<int> deleteByScope(String scopeKey) => (delete(
+    cacheEntries,
+  )..where((CacheEntries table) => table.scopeKey.equals(scopeKey))).go();
+
+  /// Counts the entries written for one book source (`ADR-0072 §决策 1`).
+  Future<int> countBySourceKey(String sourceKey) async {
+    final QueryRow row = await customSelect(
+      'SELECT COUNT(*) AS c FROM ${cacheEntries.actualTableName} '
+      'WHERE source_key = ?',
+      variables: <Variable<Object>>[Variable<String>(sourceKey)],
+    ).getSingle();
+
+    return row.data['c'] as int? ?? 0;
+  }
+
+  /// Deletes one book source's entries and returns how many rows were removed.
+  Future<int> deleteBySourceKey(String sourceKey) =>
+      (delete(cacheEntries)..where(
+            ($CacheEntriesTable table) => table.sourceKey.equals(sourceKey),
+          ))
+          .go();
+
+  /// Counts every stored entry.
+  Future<int> countAll() async {
+    final QueryRow row = await customSelect(
+      'SELECT COUNT(*) AS c FROM ${cacheEntries.actualTableName}',
+    ).getSingle();
+
+    return row.data['c'] as int? ?? 0;
+  }
+
+  /// Deletes **every** entry and returns how many rows were removed.
   Future<int> deleteAll() => delete(cacheEntries).go();
 }

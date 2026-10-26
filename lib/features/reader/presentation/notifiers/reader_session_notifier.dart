@@ -154,14 +154,21 @@ class ReaderSession extends _$ReaderSession {
     return -1;
   }
 
-  /// Opens chapter [index] from the beginning and remembers it.
-  Future<void> selectChapter(int index) async {
+  /// Opens chapter [index] at [charOffset] and remembers it.
+  ///
+  /// [charOffset] is what a bookmark jump needs: the position is already known, so the session
+  /// starts there instead of at the top of the chapter (ADR-0066 §决策 7). A chapter switch
+  /// passes `0`.
+  Future<void> selectChapter(int index, {int charOffset = 0}) async {
     final List<ReadingChapter> chapters = _chapters;
     if (index < 0 || index >= chapters.length) {
       return;
     }
     state = AsyncData<ReaderSessionState>(
-      ReaderSessionState(chapterIndex: index),
+      ReaderSessionState(
+        chapterIndex: index,
+        charOffset: charOffset < 0 ? 0 : charOffset,
+      ),
     );
     await saveProgress();
   }

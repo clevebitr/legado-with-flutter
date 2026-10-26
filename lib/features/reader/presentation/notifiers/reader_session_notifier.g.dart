@@ -412,7 +412,7 @@ final class ReaderSessionProvider
   }
 }
 
-String _$readerSessionHash() => r'7acd89ac5ec936f9b41891605cf4ebcca1bd1add';
+String _$readerSessionHash() => r'f72625ca69ca2e4d92228232c04917bdbe8977e3';
 
 /// The reading session: which chapter is open and where the user is inside it
 /// (`docs/dev/roadmap.md` 5.3).

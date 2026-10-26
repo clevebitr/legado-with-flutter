@@ -19,6 +19,12 @@ const String _concurrencyKey = 'settings.maxConcurrentPerSource';
 /// `shared_preferences` key of the plaintext-HTTP opt-in.
 const String _plainHttpKey = 'settings.allowPlainHttp';
 
+/// `shared_preferences` key of the theme seed colour (ARGB int, `ADR-0075` §决策 1).
+const String _seedColorKey = 'settings.seedColor';
+
+/// `shared_preferences` key of the theme background file name (`ADR-0075` §决策 1).
+const String _backgroundImageKey = 'settings.backgroundImage';
+
 /// [SettingsRepository] on top of [PreferenceStore] (`docs/dev/roadmap.md` 5.6, C-NET-9).
 ///
 /// Every read is defensive: a value written by an older build, a hand-edited store or a wrong
@@ -36,6 +42,10 @@ final class SettingsRepositoryImpl implements SettingsRepository {
     final double? storedFontScale = _store.readDouble(_fontScaleKey);
     final int? storedConcurrency = _store.readInt(_concurrencyKey);
     final bool? storedPlainHttp = _store.readBool(_plainHttpKey);
+    final int? storedSeedColor = _store.readInt(_seedColorKey);
+    final String? storedBackgroundImage = _store.readString(
+      _backgroundImageKey,
+    );
 
     return AppSettings(
       themeMode: storedTheme == null
@@ -45,6 +55,8 @@ final class SettingsRepositoryImpl implements SettingsRepository {
       maxConcurrentPerSource:
           storedConcurrency ?? defaultMaxConcurrentRequestsPerSource,
       allowPlainHttp: storedPlainHttp ?? false,
+      seedColor: storedSeedColor,
+      backgroundImageName: storedBackgroundImage,
     );
   }
 
@@ -55,5 +67,15 @@ final class SettingsRepositoryImpl implements SettingsRepository {
     await _store.writeDouble(_fontScaleKey, settings.fontScale);
     await _store.writeInt(_concurrencyKey, settings.maxConcurrentPerSource);
     await _store.writeBool(_plainHttpKey, settings.allowPlainHttp);
+    if (settings.seedColor case final int seed) {
+      await _store.writeInt(_seedColorKey, seed);
+    } else {
+      await _store.remove(_seedColorKey);
+    }
+    if (settings.backgroundImageName case final String name) {
+      await _store.writeString(_backgroundImageKey, name);
+    } else {
+      await _store.remove(_backgroundImageKey);
+    }
   }
 }

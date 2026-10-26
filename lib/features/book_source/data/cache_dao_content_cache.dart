@@ -1,6 +1,7 @@
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
 import 'package:flutter_reader/core/storage/cache_failure_absorber.dart';
+import 'package:flutter_reader/core/storage/cache_key.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 
 /// [ContentCache] backed by the app's TTL cache ([CacheDao]) — no new column, no new table.
@@ -41,6 +42,7 @@ final class CacheDaoContentCache implements ContentCache {
     required String sourceId,
     required String url,
     required String body,
+    String? bookUrl,
   }) async {
     await absorbCacheFailure(
       () async {
@@ -51,6 +53,11 @@ final class CacheDaoContentCache implements ContentCache {
           page: _page,
           payload: body,
           ttl: chapterCacheTtl,
+          // 归属书与来源只用于「按书 / 按源统计与清理」，不参与键计算。
+          scopeKey: bookUrl == null
+              ? null
+              : cacheScopeKeyFor(sourceId: sourceId, bookUrl: bookUrl),
+          sourceKey: cacheSourceKeyFor(sourceId),
         );
 
         return true;
@@ -58,6 +65,100 @@ final class CacheDaoContentCache implements ContentCache {
       logger: _logger,
       scope: 'Chapter cache',
       url: url,
+    );
+  }
+
+  @override
+  Future<int> countForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async {
+    // 吸收失败的读返回 null：统计不上就显示 0 项，不把失败抛到页面（ADR-0033 的 total 契约）。
+    final int? count = await absorbCacheFailure<int>(
+      () => _dao.countByScope(
+        cacheScopeKeyFor(sourceId: sourceId, bookUrl: bookUrl),
+      ),
+      logger: _logger,
+      scope: 'Chapter cache count',
+      url: bookUrl,
+    );
+
+    return count ?? 0;
+  }
+
+  @override
+  Future<int> clearForBook({
+    required String sourceId,
+    required String bookUrl,
+  }) async {
+    final int? removed = await absorbCacheFailure<int>(
+      () => _dao.deleteByScope(
+        cacheScopeKeyFor(sourceId: sourceId, bookUrl: bookUrl),
+      ),
+      logger: _logger,
+      scope: 'Chapter cache clear',
+      url: bookUrl,
+    );
+
+    return removed ?? 0;
+  }
+
+  @override
+  Future<int> countForSource(String sourceId) async {
+    final int? count = await absorbCacheFailure<int>(
+      () => _dao.countBySourceKey(cacheSourceKeyFor(sourceId)),
+      logger: _logger,
+      scope: 'Source cache count',
+      url: sourceId,
+    );
+
+    return count ?? 0;
+  }
+
+  @override
+  Future<int> clearForSource(String sourceId) async {
+    final int? removed = await absorbCacheFailure<int>(
+      () => _dao.deleteBySourceKey(cacheSourceKeyFor(sourceId)),
+      logger: _logger,
+      scope: 'Source cache clear',
+      url: sourceId,
+    );
+
+    return removed ?? 0;
+  }
+
+  @override
+  Future<int> countAll() async {
+    final int? count = await absorbCacheFailure<int>(
+      _dao.countAll,
+      logger: _logger,
+      scope: 'Cache count',
+      url: 'cache',
+    );
+
+    return count ?? 0;
+  }
+
+  @override
+  Future<int> clearExpired() async {
+    final int? removed = await absorbCacheFailure<int>(
+      _dao.deleteExpired,
+      logger: _logger,
+      scope: 'Expired cache clear',
+      url: 'cache',
+    );
+
+    return removed ?? 0;
+  }
+
+  @override
+  Future<void> clearAll() async {
+    // 吸收失败：一次没删干净的代价是旧正文多活一阵，不是读不了章节（ADR-0033 的 total 契约）。
+    await absorbCacheFailure<int>(
+      _dao.deleteAll,
+      logger: _logger,
+      scope: 'Chapter cache purge',
+      url: 'chapter-cache',
     );
   }
 }

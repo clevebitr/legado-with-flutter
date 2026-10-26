@@ -13,12 +13,9 @@ part 'source_debug_notifier.freezed.dart';
 part 'source_debug_notifier.g.dart';
 
 /// How many lines the console keeps; older ones fall off the top.
-///
-/// A runaway rule can report hundreds of URLs, and a `ListView` of unbounded length is a leak the
-/// user never asked for — upstream caps its log the same way (`MAX_LOG_ENTRIES`).
 const int maxSourceDebugEvents = 200;
 
-/// The state of the debug console (`docs/dev/roadmap.md` §5.10).
+/// The state of the debug console.
 @freezed
 abstract class SourceDebugState with _$SourceDebugState {
   /// Creates the console state.
@@ -37,15 +34,9 @@ abstract class SourceDebugState with _$SourceDebugState {
   }) = _SourceDebugState;
 }
 
-/// Drives one debug console: the target / query the user picked and the event stream of the run.
+/// Drives one debug console: the target / query the user picked and the run's events.
 ///
-/// The notifier is a thin adapter on purpose — the chain itself is `RunSourceDebug` in `domain/`,
-/// and every line it reports is already a typed [SourceDebugEvent]. What lives here is the state
-/// machine the UI needs: which target is selected, whether a run is in flight, and the two ways a
-/// run ends (its own status, or a stop the user asked for).
-///
-/// A stop is cooperative like the batch check's (ADR-0043 §后果): the token is set and the run
-/// ends between two steps, so the console reports `cancelled` instead of a failure.
+/// A stop is cooperative, so a cancelled run ends between two steps without reporting a failure.
 @Riverpod(keepAlive: true)
 class SourceDebug extends _$SourceDebug {
   TaskCancellation? _cancellation;
@@ -72,8 +63,7 @@ class SourceDebug extends _$SourceDebug {
 
   /// Runs [target] with [query] against [source] and streams its events into the state.
   ///
-  /// A blank query does nothing: the page disables its run button in that case, and a run that
-  /// answered "invalid" would be a failure the user did not ask for.
+  /// A blank query is ignored.
   Future<void> start({
     required BookSource source,
     required SourceDebugTarget target,
@@ -103,7 +93,7 @@ class SourceDebug extends _$SourceDebug {
             cancellation: cancellation,
           );
     } on Exception catch (error, stackTrace) {
-      // 唯一允许的兜底位置（C-ERR-2）：把异常变成失败状态并记录，而不是让页面卡在「运行中」。
+      // 唯一允许的兜底位置：把异常变成失败状态，而不是让页面卡在「运行中」。
       ref
           .read(appLoggerProvider)
           .error(
@@ -127,7 +117,6 @@ class SourceDebug extends _$SourceDebug {
     );
   }
 
-  /// Appends one event, dropping the oldest line once the cap is reached.
   void _append(SourceDebugEvent event) {
     final List<SourceDebugEvent> events = <SourceDebugEvent>[
       ...state.events,

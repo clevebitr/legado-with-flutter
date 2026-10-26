@@ -38,6 +38,9 @@ _BookSource _$BookSourceFromJson(Map<String, dynamic> json) => $checkedCreate(
       ),
       concurrentRate: $checkedConvert('concurrentRate', (v) => v as String?),
       variableComment: $checkedConvert('variableComment', (v) => v as String?),
+      loginUrl: $checkedConvert('loginUrl', (v) => v as String?),
+      loginUi: $checkedConvert('loginUi', (v) => v as String?),
+      loginCheckJs: $checkedConvert('loginCheckJs', (v) => v as String?),
       bookInfoRule: $checkedConvert(
         'ruleBookInfo',
         (v) =>
@@ -83,6 +86,9 @@ Map<String, dynamic> _$BookSourceToJson(_BookSource instance) =>
       'ruleExplore': instance.exploreRule,
       'concurrentRate': instance.concurrentRate,
       'variableComment': instance.variableComment,
+      'loginUrl': instance.loginUrl,
+      'loginUi': instance.loginUi,
+      'loginCheckJs': instance.loginCheckJs,
       'ruleBookInfo': instance.bookInfoRule,
       'ruleToc': instance.tocRule,
       'ruleContent': instance.contentRule,
@@ -221,6 +227,10 @@ _ContentRule _$ContentRuleFromJson(Map<String, dynamic> json) =>
         content: $checkedConvert('content', (v) => v as String?),
         nextContentUrl: $checkedConvert('nextContentUrl', (v) => v as String?),
         replaceRegex: $checkedConvert('replaceRegex', (v) => v as String?),
+        sourceRegex: $checkedConvert('sourceRegex', (v) => v as String?),
+        webJs: $checkedConvert('webJs', (v) => v as String?),
+        imageStyle: $checkedConvert('imageStyle', (v) => v as String?),
+        imageDecode: $checkedConvert('imageDecode', (v) => v as String?),
       );
       return val;
     });
@@ -230,4 +240,8 @@ Map<String, dynamic> _$ContentRuleToJson(_ContentRule instance) =>
       'content': instance.content,
       'nextContentUrl': instance.nextContentUrl,
       'replaceRegex': instance.replaceRegex,
+      'sourceRegex': instance.sourceRegex,
+      'webJs': instance.webJs,
+      'imageStyle': instance.imageStyle,
+      'imageDecode': instance.imageDecode,
     };

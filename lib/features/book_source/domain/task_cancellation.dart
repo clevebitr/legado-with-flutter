@@ -1,12 +1,6 @@
 /// A cooperative stop signal shared by a long run and whoever wants to stop it.
 ///
-/// Dart has no cancellation primitive, so a batch that spans many requests stops **between**
-/// stages: the runner hands one instance to every `execute` call, and the domain checks
-/// [isCancelled] before it starts the next stage. Nothing is interrupted mid-request, which is why
-/// a stop is reported as cancelled rather than as a failure (ADR-0043 §后果).
-///
-/// It lives in `domain/` rather than in `presentation/` because both the batch check and the debug
-/// console talk to domain use cases, and neither may own a signal the other cannot understand.
+/// It is checked between stages, so a stop is reported as cancelled, not as a failure.
 final class TaskCancellation {
   bool _isCancelled = false;
 

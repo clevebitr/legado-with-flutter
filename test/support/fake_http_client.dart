@@ -1,3 +1,6 @@
+import 'dart:convert' show utf8;
+import 'dart:typed_data' show Uint8List;
+
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
@@ -43,6 +46,12 @@ final class FakeHttpClient implements HttpClient {
   /// The request body of every request, in order (`null` for a GET).
   final List<String?> requestedBodies = <String?>[];
 
+  /// The `maxRetries` a URL rule asked for, in order (`null` = policy default).
+  final List<int?> requestedMaxRetries = <int?>[];
+
+  /// The `receiveTimeout` a URL rule asked for, in order.
+  final List<Duration?> requestedReceiveTimeouts = <Duration?>[];
+
   /// The `charset` a URL rule declared for every request, in order
   /// (`book-source.md` §4.3): `url,{“charset”:“gbk”}` has to reach the decoder.
   final List<String?> requestedCharsets = <String?>[];
@@ -67,17 +76,39 @@ final class FakeHttpClient implements HttpClient {
   }
 
   final Map<String, String> _bodies = <String, String>{};
+  final Map<String, Uint8List> _byteBodies = <String, Uint8List>{};
+  final Map<String, Map<String, List<String>>> _responseHeaders =
+      <String, Map<String, List<String>>>{};
   final Map<String, ParseFailureKind> _failures = <String, ParseFailureKind>{};
   final Map<String, Object?> _causes = <String, Object?>{};
   final Map<String, Exception> _throws = <String, Exception>{};
+  final Map<String, String> _finalUrls = <String, String>{};
 
-  /// Serves [body] for [url].
-  void serve(String url, String body) => _bodies[url] = body;
+  /// Serves [body] for [url], optionally answering from another address.
+  ///
+  /// [finalUrl] is the address a redirect landed on (`HttpResponse.url`): a page read from it
+  /// must resolve its relative links against **that** address, and `loginCheckJs` must see it
+  /// in `url()` — which is what upstream's `StrResponse` does (`http_response.dart`).
+  void serve(
+    String url,
+    String body, {
+    Map<String, List<String>> headers = const <String, List<String>>{},
+    String? finalUrl,
+  }) {
+    _bodies[url] = body;
+    _responseHeaders[url] = headers;
+    if (finalUrl != null) {
+      _finalUrls[url] = finalUrl;
+    }
+  }
+
+  /// Serves [bytes] to `getBytes` (the font byte door) instead of the text body.
+  void serveBytes(String url, Uint8List bytes) {
+    _bodies[url] = '';
+    _byteBodies[url] = bytes;
+  }
 
   /// Makes [url] fail with [kind] instead of being served.
-  ///
-  /// [cause] lets a test reproduce a **typed** refusal — the request layer marks an oversized
-  /// body with a `BodyTooLargeException` cause, and the import path has to recognise it.
   void failWith(String url, ParseFailureKind kind, {Object? cause}) {
     _failures[url] = kind;
     if (cause != null) {
@@ -101,6 +132,8 @@ final class FakeHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) => _serve(
     method: 'GET',
     url: url,
@@ -109,7 +142,45 @@ final class FakeHttpClient implements HttpClient {
     sourceId: sourceId,
     maxBytes: maxBytes,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
   );
+
+  /// Answers the **bytes** of the served body.
+  ///
+  /// The double re-encodes the text it was given: what it has to prove is that the caller went
+  /// through the request layer's byte door at all (C-NET-1), not how a real binary body survives
+  /// transport — that is `http_client_test`'s job with a Dio adapter.
+  @override
+  Future<ParseResult<Uint8List>> getBytes(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxBytes,
+  }) async {
+    final ParseResult<HttpResponse> result = await get(
+      url,
+      rulePath: rulePath,
+      headers: headers,
+      keyword: keyword,
+      sourceId: sourceId,
+      maxBytes: maxBytes,
+    );
+
+    return switch (result) {
+      ParseSuccess<HttpResponse>(:final HttpResponse data) =>
+        ParseSuccess<Uint8List>(
+          _byteBodies[url] ?? Uint8List.fromList(utf8.encode(data.body)),
+        ),
+      ParseFailure<HttpResponse>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        ParseFailure<Uint8List>(kind: kind, rulePath: rulePath),
+    };
+  }
 
   @override
   Future<ParseResult<HttpResponse>> post(
@@ -120,6 +191,8 @@ final class FakeHttpClient implements HttpClient {
     String? keyword,
     String? sourceId,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) => _serve(
     method: 'POST',
     url: url,
@@ -128,6 +201,8 @@ final class FakeHttpClient implements HttpClient {
     headers: headers,
     sourceId: sourceId,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
   );
 
   /// Records one request and answers from the registered bodies / failures.
@@ -140,7 +215,11 @@ final class FakeHttpClient implements HttpClient {
     String? sourceId,
     int? maxBytes,
     String? declaredCharset,
+    int? maxRetries,
+    Duration? receiveTimeout,
   }) async {
+    requestedMaxRetries.add(maxRetries);
+    requestedReceiveTimeouts.add(receiveTimeout);
     requestedUrls.add(url);
     requestedRulePaths.add(rulePath);
     requestedHeaders.add(headers);
@@ -181,8 +260,9 @@ final class FakeHttpClient implements HttpClient {
     return ParseSuccess<HttpResponse>(
       HttpResponse(
         statusCode: 200,
-        headers: const <String, List<String>>{},
+        headers: _responseHeaders[url] ?? const <String, List<String>>{},
         body: served,
+        url: _finalUrls[url] ?? url,
       ),
     );
   }

@@ -19,7 +19,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'aggregate_search_notifier.freezed.dart';
 part 'aggregate_search_notifier.g.dart';
 
-/// Where an aggregate search stands (`docs/dev/roadmap.md` 3.8, ADR-0046).
+/// Where an aggregate search stands.
 enum AggregateSearchStatus {
   /// Nothing was searched yet in this session.
   idle,
@@ -34,7 +34,7 @@ enum AggregateSearchStatus {
   failed,
 }
 
-/// What the search page shows (`docs/dev/roadmap.md` 3.8, ADR-0046).
+/// What the search page shows.
 @freezed
 abstract class AggregateSearchState with _$AggregateSearchState {
   /// Creates a search state.
@@ -70,10 +70,7 @@ abstract class AggregateSearchState with _$AggregateSearchState {
     @Default(<String, SearchSourceSkip>{})
     Map<String, SearchSourceSkip> skipped,
 
-    /// Whether the scope named something that no longer exists, so every enabled source ran.
-    ///
-    /// 回退不是一个内部细节：用户选了一个已经不存在的分组，却看到全库的结果，不告诉他就会读成
-    /// 「范围筛选失效」（ADR-0058）。
+    /// Whether the requested scope no longer exists, so every enabled source ran.
     @Default(false) bool scopeFellBack,
 
     /// The match mode the next run uses.
@@ -84,7 +81,7 @@ abstract class AggregateSearchState with _$AggregateSearchState {
   }) = _AggregateSearchState;
 }
 
-/// The stored scope and the only place that changes it (`docs/dev/roadmap.md` 3.8, ADR-0046 §决策 1).
+/// The stored search scope; the only place that changes it.
 @Riverpod(keepAlive: true)
 class SearchScopeSelection extends _$SearchScopeSelection {
   @override
@@ -98,19 +95,9 @@ class SearchScopeSelection extends _$SearchScopeSelection {
   }
 }
 
-/// Runs the aggregate search and publishes its progress (`docs/dev/roadmap.md` 3.8).
+/// Runs the aggregate search and publishes its progress.
 ///
-/// It owns three things the domain does not:
-///
-/// * **the scope → sources step**: `resolveSearchSources` over the loaded rows, so the page only
-///   hands in "what the list knows" and the answer is the same one the check page will use;
-/// * **the pause latch and the cancellation token**: both are rebuilt per run, and pausing only
-///   takes effect between sources (ADR-0046 §决策 6);
-/// * **paging**: [loadMore] runs the same use case one page further and keeps the merged list, so
-///   the page never merges two different result shapes itself.
-///
-/// It is `keepAlive`: a search of a hundred sources is minutes of work and must survive walking to a
-/// book and back.
+/// Kept alive so a long run survives leaving the page and coming back.
 @Riverpod(keepAlive: true)
 class AggregateSearch extends _$AggregateSearch {
   SearchPause? _pause;
@@ -120,10 +107,7 @@ class AggregateSearch extends _$AggregateSearch {
   @override
   AggregateSearchState build() => const AggregateSearchState();
 
-  /// Starts a new search for [keyword] over [rows] (the loaded sources).
-  ///
-  /// A blank keyword does nothing: the page already disables its button for that case, and a search
-  /// that answered "invalid" would be a failure the user did not ask for.
+  /// Starts a new search for [keyword] over [rows]; a blank keyword is ignored.
   Future<void> search({
     required String keyword,
     required List<StoredBookSource> rows,
@@ -224,10 +208,10 @@ class AggregateSearch extends _$AggregateSearch {
     state = state.copyWith(isPaused: false);
   }
 
-  /// Stops the running search; what was found stays on screen (ADR-0046 §决策 6).
+  /// Stops the running search; already found results stay on screen.
   void cancel() => _cancellation?.cancel();
 
-  /// Replaces the match mode of the **next** run.
+  /// Replaces the match mode of the next run.
   void setMatchMode(SearchMatchMode mode) =>
       state = state.copyWith(matchMode: mode);
 
@@ -235,7 +219,6 @@ class AggregateSearch extends _$AggregateSearch {
   void setTypes(Set<BookSourceType> types) =>
       state = state.copyWith(types: types);
 
-  /// Runs one page and folds the outcome into the state.
   Future<void> _run({
     required String keyword,
     required List<BookSource> sources,
@@ -284,7 +267,7 @@ class AggregateSearch extends _$AggregateSearch {
 
     switch (result) {
       case ParseFailure<AggregateSearchResult>(:final ParseFailureKind kind):
-        // 取消不是失败：已找到的结果保留，状态回到 done（ADR-0046 §决策 6）。
+        // 取消不是失败：保留已找到的结果并回到 done。
         state = _settled(
           kind: kind,
           isCancelled: _cancellation?.isCancelled ?? false,
@@ -305,12 +288,7 @@ class AggregateSearch extends _$AggregateSearch {
     }
   }
 
-  /// Folds a failed run into the state **without discarding hits already published**.
-  ///
-  /// A failure that *replaces* the list is the bug the user sees as “one broken source wiped every
-  /// good result”: progress already delivered rows, and the failure path used to overwrite the whole
-  /// screen with an error. So the rule is: keep the rows, and keep `done` when there is something to
-  /// show; only an empty run reports `failed` (ADR-0046 §决策 5).
+  // 失败时保留已发布的结果；只有空结果才报告 failed。
   AggregateSearchState _settled({
     required ParseFailureKind kind,
     required bool isCancelled,
@@ -332,8 +310,4 @@ class AggregateSearch extends _$AggregateSearch {
 extension AggregateSearchStateX on AggregateSearchState {
   /// Whether a run is in flight (possibly paused).
   bool get isRunning => status == AggregateSearchStatus.running;
-
-  /// Whether there are no hits to show although the run finished.
-  bool get isEmptyResult =>
-      status == AggregateSearchStatus.done && books.isEmpty;
 }

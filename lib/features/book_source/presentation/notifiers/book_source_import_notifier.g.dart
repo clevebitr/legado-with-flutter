@@ -45,7 +45,7 @@ final class BookSourceImportNotifierProvider
 }
 
 String _$bookSourceImportNotifierHash() =>
-    r'f1ec82a8702bba324f4bf3be89079402fc4048cf';
+    r'23eb70a3b6780a420726a04e0c194603f029cd42';
 
 /// Runs one book source import from the form.
 

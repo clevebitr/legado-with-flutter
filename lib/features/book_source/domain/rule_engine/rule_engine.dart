@@ -46,6 +46,16 @@ final RegExp _putFlag = RegExp(r'@put:\{([^{}]*)\}', caseSensitive: false);
 /// The `@get:{key}` flag of matrix #16, lower-cased for a case-insensitive scan.
 const String _getFlag = '@get:{';
 
+/// How several matches of one **value** rule are joined (upstream `getString`).
+///
+/// `book-source.md` §6: a single-value field joins its matches with a newline, which is what makes
+/// `result.split("\n")` work on an image source's `$.data[*].image` rule
+/// (ADR-0069 G9).
+const String _valueSeparator = '\n';
+
+/// The trailing `.N` / `.-N` index a degraded segment may carry (matrix #28's dot form).
+final RegExp _dotIndex = RegExp(r'^-?\d+$');
+
 /// The `@put:` flag, lower-cased for a case-insensitive scan.
 const String _putScanFlag = '@put:';
 
@@ -248,10 +258,19 @@ final class RuleEngine {
   /// The variables of `@put:` / `@get:` / `java.*` are the source's, exactly as everywhere else
   /// (ADR-0034). A script error, a timeout or a quota overrun come back as
   /// [ParseFailureKind.parseFailed] with the bridge's marker, never as a thrown exception.
+  ///
+  /// [response] replaces the `result` binding with a response object. It is how a `loginCheckJs`
+  /// interceptor sees the page it may replace (`book-source.md` §6, ADR-0068 addendum): upstream
+  /// hands that script a `StrResponse`, not the page text.
+  ///
+  /// [result] is the ordinary `result` binding of a script that follows some text — the response
+  /// body for a `bodyJs` URL option (ADR-0068 §决策 7). [response] wins when both are passed.
   Future<ParseResult<Object?>> evaluateJs(
     String script, {
     required String rulePath,
     required JsPageContext context,
+    Object? result,
+    JsResponseView? response,
   }) async {
     if (script.trim().isEmpty) {
       return const ParseSuccess<Object?>(null);
@@ -269,6 +288,8 @@ final class RuleEngine {
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
         book: context.book,
+        result: result,
+        response: response,
       ),
     );
   }
@@ -701,6 +722,37 @@ final class RuleEngine {
     };
   }
 
+  /// Returns **every** value of [rule] joined with `\n`, i.e. upstream `getString`.
+  ///
+  /// It exists for fields upstream reads as one string even when the rule matches several
+  /// elements: `ruleContent.content` is read with `getString` for **every** book type, so an image
+  /// source whose rule is `$.data[*].image` plus a `@js:` tail gets one newline-joined string as
+  /// `result` — not a list (ADR-0069 G9). Taking the first match instead would drop pages.
+  ///
+  /// A rejected rule stays a failure; an empty match answers an empty string.
+  Future<ParseResult<String>> extractJoined(
+    String rule,
+    RuleScope scope, {
+    required String rulePath,
+  }) async {
+    final ParseResult<List<String>> values = await _evaluate(
+      rule,
+      scope,
+      rulePath: rulePath,
+      single: true,
+    );
+
+    return switch (values) {
+      ParseFailure<List<String>>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ) =>
+        failureAt<String>(kind: kind, rulePath: failedAt),
+      ParseSuccess<List<String>>(:final List<String> data) =>
+        ParseSuccess<String>(data.join(_valueSeparator)),
+    };
+  }
+
   /// Runs the shared pipeline of a **value** rule: candidates, branches, the optional
   /// terminal `@js:`, then the `-` reverse and the `##` replacements.
   ///
@@ -809,9 +861,15 @@ final class RuleEngine {
       script,
       // 独立 `@js:` 的 `result` 是这一层的内容（§6）；有选择器时才是上游 `getString` /
       // `getStringList` 的形态：单值字段给字符串，多值字段给列表（§4.1 的 URL 数组靠它）。
+      // 上游 `getString` 把多个匹配用 `\n` 拼成一个字符串再交给脚本
+      // （`AnalyzeRule.getString` → `joinToString("\n")`），所以 `result.split("\n")`
+      // 这类写法在单值字段上是成立的；只给第一个匹配会让这类正文规则直接
+      // `not a function`（ADR-0069 G9）。
       parsed.isBareJs
           ? _resultOf(scope)
-          : (single ? (merged.isEmpty ? null : merged.first) : merged),
+          : (single
+                ? (merged.isEmpty ? null : merged.join(_valueSeparator))
+                : merged),
       scope,
       field: rulePath,
       allowJs: allowJs,
@@ -983,7 +1041,9 @@ final class RuleEngine {
 
     for (final _RuleSegment segment in _jsSegmentsOf(rule)) {
       final Object? previous = hasResult
-          ? (single ? (values.isEmpty ? null : values.first) : values)
+          ? (single
+                ? (values.isEmpty ? null : values.join(_valueSeparator))
+                : values)
           : _resultOf(scope);
       final ParseResult<List<String>> evaluated;
       if (segment.isScript) {
@@ -1090,10 +1150,29 @@ final class RuleEngine {
       }
 
       final String verb = match.group(1) ?? '';
-      final bool wantsList = verb == 'getStringList' || verb == 'getElements';
+      // `java.getStringList` 求的是**值**（含提取段，`@css:.box img@src` 要 URL 列表）；
+      // `getElements` / `getElement` 要元素文档（ADR-0037 §决策 3）。两者不能混。
+      final bool wantsValues = verb == 'getStringList';
+      final bool wantsElements = verb == 'getElements';
       // `getElement` 是**单值**形态（上游拿一个元素），异步路径同样只答第一个（ADR-0037 §决策 3）。
       final bool wantsDoc = verb == 'getElement';
-      final ParseResult<List<Object?>> values = wantsList || wantsDoc
+      final ParseResult<List<Object?>> values = wantsValues
+          ? switch (await _evaluate(
+              rule,
+              scope,
+              rulePath: field,
+              single: false,
+              depth: 1,
+            )) {
+              ParseFailure<List<String>>(
+                :final ParseFailureKind kind,
+                :final String rulePath,
+              ) =>
+                failureAt<List<Object?>>(kind: kind, rulePath: rulePath),
+              ParseSuccess<List<String>>(:final List<String> data) =>
+                ParseSuccess<List<Object?>>(<Object?>[...data]),
+            }
+          : wantsElements || wantsDoc
           ? await _selectAllValues(rule, scope, field: field)
           : await _evaluate(
               rule,
@@ -1110,14 +1189,15 @@ final class RuleEngine {
           return failureAt<String>(kind: kind, rulePath: rulePath);
         case ParseSuccess<List<Object?>>(:final List<Object?> data):
           inlined = inlined.replaceRange(match.start, match.end, switch ((
-            wantsList,
+            wantsValues || wantsElements,
             wantsDoc,
           )) {
             (true, _) => jsonEncode(data),
             // 单文档形态无匹配时与异步路径一致地给 `null`。
             (_, true) => jsonEncode(data.isEmpty ? null : data.first),
-            // `getString` 无匹配给空串——异步路径（`parse.getString`）就是这个形状。
-            _ => jsonEncode(data.isEmpty ? '' : data.first),
+            // `getString`：多匹配用换行拼接（上游 `AnalyzeRule.getString`），无匹配给空串
+            // ——异步路径（`parse.getString`）就是这个形状（ADR-0069 G9）。
+            _ => jsonEncode(data.join(_valueSeparator)),
           });
       }
     }
@@ -1937,6 +2017,25 @@ final class RuleEngine {
       );
     }
 
+    if (request.wantsList && request.wantsValues) {
+      // `java.getStringList`：抽取值（上游 `AnalyzeRule.getStringList` 会跑提取段）。
+      return switch (await _evaluate(
+        request.rule,
+        scope,
+        rulePath: field,
+        single: false,
+        allowJs: false,
+      )) {
+        ParseFailure<List<String>>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ) =>
+          failureAt<Object?>(kind: kind, rulePath: rulePath),
+        ParseSuccess<List<String>>(:final List<String> data) =>
+          ParseSuccess<Object?>(data),
+      };
+    }
+
     if (request.wantsList) {
       return switch (await selectAll(request.rule, scope, rulePath: field)) {
         ParseFailure<List<RuleScope>>(
@@ -1963,8 +2062,9 @@ final class RuleEngine {
         :final String rulePath,
       ) =>
         failureAt<Object?>(kind: kind, rulePath: rulePath),
+      // 上游 `getString`：多匹配用换行拼接（ADR-0069 G9），不是只给第一个。
       ParseSuccess<List<String>>(:final List<String> data) =>
-        ParseSuccess<Object?>(data.isEmpty ? '' : data.first),
+        ParseSuccess<Object?>(data.join(_valueSeparator)),
     };
   };
 
@@ -2358,10 +2458,30 @@ final class RuleEngine {
   String _selectorFor(_SelectorStep step) => switch (step.type) {
     // 矩阵 #12：`@css:` 的选择器原样交给 cascadia，不做任何改写。
     'css' => step.name,
-    'class' => '.${cascadia.escapeCssIdent(step.name)}',
+    // 上游 `getElementsByClass(rules[1])`（jsoup）把带空格的类名按**全部命中**处理：
+    // `class.col-lg-3 col-md-4 col-6 mb-2` 表示「这四个类都要有」。只取第一个（或把空格
+    // 当后代选择器）会让这类源的每一条列表规则都返回空（ADR-0069 G13）。
+    'class' => _classSelector(step.name),
     'id' => '#${cascadia.escapeCssIdent(step.name)}',
     _ => cascadia.escapeCssIdent(step.name),
   };
+
+  /// The CSS selector for a `class.` segment: every whitespace-separated class is required.
+  ///
+  /// An empty name keeps the old single-token behaviour (`.`) so the failure stays the same
+  /// `parseFailed` the caller already handles.
+  String _classSelector(String name) {
+    final Iterable<String> classes = name
+        .split(_whitespace)
+        .where((String token) => token.isNotEmpty);
+    if (classes.isEmpty) {
+      return '.';
+    }
+
+    return classes
+        .map((String token) => '.${cascadia.escapeCssIdent(token)}')
+        .join();
+  }
 
   /// Splits [rule] into its `##` parts, its leading `-` and its `@`-separated
   /// segments.
@@ -2784,6 +2904,18 @@ final class RuleEngine {
     String segment, {
     required String field,
   }) {
+    // 上游把**任何**段末尾的 `.N` 当索引（`ElementsSingle`）：`#image_div img.0` 读的是
+    // 「`#image_div img` 的第 0 个」，不是「类名 0」。只有纯数字（可带负号）才算索引，
+    // 所以 `div.item` / `.result-item` 仍是 CSS（ADR-0069 G3）。
+    final int dot = segment.lastIndexOf('.');
+    if (dot > 0 && _dotIndex.hasMatch(segment.substring(dot + 1))) {
+      return _indexSuffix(
+        segment.substring(0, dot),
+        segment.substring(dot + 1),
+        field: field,
+      );
+    }
+
     final int bracket = segment.indexOf('[');
     if (bracket >= 0) {
       return _indexSuffix(

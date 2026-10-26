@@ -5,7 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_reader/core/di/database_executor_provider.dart';
 import 'package:flutter_reader/core/di/database_path_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
+import 'package:flutter_reader/core/storage/bookmark_dao.dart';
 import 'package:flutter_reader/core/storage/cache_dao.dart';
+import 'package:flutter_reader/core/storage/local_image_store.dart';
+import 'package:flutter_reader/core/storage/read_record_dao.dart';
+import 'package:flutter_reader/core/storage/rule_dao.dart';
+import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -72,6 +77,54 @@ void main() {
     });
   });
 
+  group('shelfGroupDao', () {
+    test('shelfGroupDao_whenRead_returnsADaoOnTheSharedDatabase', () {
+      final ProviderContainer container = _memoryContainer();
+
+      expect(container.read(shelfGroupDaoProvider), isA<ShelfGroupDao>());
+      expect(
+        container.read(shelfGroupDaoProvider).attachedDatabase,
+        same(container.read(readerDatabaseProvider)),
+      );
+    });
+  });
+
+  group('bookmarkDao', () {
+    test('bookmarkDao_whenRead_returnsADaoOnTheSharedDatabase', () {
+      final ProviderContainer container = _memoryContainer();
+
+      expect(container.read(bookmarkDaoProvider), isA<BookmarkDao>());
+      expect(
+        container.read(bookmarkDaoProvider).attachedDatabase,
+        same(container.read(readerDatabaseProvider)),
+      );
+    });
+  });
+
+  group('readRecordDao', () {
+    test('readRecordDao_whenRead_returnsADaoOnTheSharedDatabase', () {
+      final ProviderContainer container = _memoryContainer();
+
+      expect(container.read(readRecordDaoProvider), isA<ReadRecordDao>());
+      expect(
+        container.read(readRecordDaoProvider).attachedDatabase,
+        same(container.read(readerDatabaseProvider)),
+      );
+    });
+  });
+
+  group('ruleDao', () {
+    test('ruleDao_whenRead_returnsADaoOnTheSharedDatabase', () {
+      final ProviderContainer container = _memoryContainer();
+
+      expect(container.read(ruleDaoProvider), isA<RuleDao>());
+      expect(
+        container.read(ruleDaoProvider).attachedDatabase,
+        same(container.read(readerDatabaseProvider)),
+      );
+    });
+  });
+
   group('cacheDao', () {
     test('cacheDao_whenRead_returnsADaoOnTheSharedDatabase', () {
       final ProviderContainer container = _memoryContainer();
@@ -82,5 +135,11 @@ void main() {
         same(container.read(readerDatabaseProvider)),
       );
     });
+  });
+
+  test('localImageStore_whenRead_answersTheStore', () {
+    final ProviderContainer container = ProviderContainer.test();
+
+    expect(container.read(localImageStoreProvider), isA<LocalImageStore>());
   });
 }

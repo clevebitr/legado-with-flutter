@@ -253,33 +253,31 @@ void main() {
       expect(result.chapterIndex, 1);
     });
 
-    test(
-      'switchTo_givenATargetWithoutUsableChapters_answersAFailure',
-      () async {
-        // 目录命中但每条都没有可用地址（§9 跳过）→ FetchToc 答**成功且为空**：换源必须显式
-        // 失败，而不是切过去然后没有章节可读。
-        final FakeHttpClient http = FakeHttpClient()
-          ..serve(
-            'https://b.test/book/0',
-            '<h1 class="title">剑来</h1>'
-                '<li class="chapter"><span>没有链接的一章</span></li>',
-          );
-
-        expect(
-          await _useCase(http).switchTo(
-            target: _source('b'),
-            candidate: const SourceCandidate(
-              sourceUrl: 'https://b.test',
-              sourceName: 'b',
-              bookUrl: 'https://b.test/book/0',
-            ),
-            currentChapterName: '第二章',
-            currentChapterIndex: 0,
-          ),
-          isA<ParseFailure<SourceSwitchResult>>(),
+    test('switchTo_givenATargetWhoseTocListIsEmpty_answersAFailure', () async {
+      // 目录**列表规则一条都没命中** → FetchToc 答成功且为空：换源必须显式失败，而不是
+      // 切过去然后没有章节可读。（「命中了但没有链接」不再算空：那一章回落到目录页地址，
+      // ADR-0069 G8。）
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://b.test/book/0',
+          '<h1 class="title">剑来</h1>'
+              '<li><span>没有链接的一章</span></li>',
         );
-      },
-    );
+
+      expect(
+        await _useCase(http).switchTo(
+          target: _source('b'),
+          candidate: const SourceCandidate(
+            sourceUrl: 'https://b.test',
+            sourceName: 'b',
+            bookUrl: 'https://b.test/book/0',
+          ),
+          currentChapterName: '第二章',
+          currentChapterIndex: 0,
+        ),
+        isA<ParseFailure<SourceSwitchResult>>(),
+      );
+    });
 
     test('switchTo_givenAnUnreadableToc_answersTheFailure', () async {
       // 详情页读得出来、目录页读不出来：失败必须停在这一步，不切过去。

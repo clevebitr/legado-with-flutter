@@ -17,7 +17,8 @@ mixin _$ReadingPage {
 
 /// The absolute image URL.
  String get url;/// Headers the image request must carry.
- Map<String, String> get headers;
+ Map<String, String> get headers;/// How the source wants its pages laid out.
+ MangaImageStyle get style;
 /// Create a copy of ReadingPage
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -29,20 +30,20 @@ $ReadingPageCopyWith<ReadingPage> get copyWith => _$ReadingPageCopyWithImpl<Read
 @override
 bool operator ==(Object other) {
   final _this = this as ReadingPage;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ReadingPage&&(identical(other.url, _this.url) || other.url == _this.url)&&const DeepCollectionEquality().equals(other.headers, _this.headers));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ReadingPage&&(identical(other.url, _this.url) || other.url == _this.url)&&const DeepCollectionEquality().equals(other.headers, _this.headers)&&(identical(other.style, _this.style) || other.style == _this.style));
 }
 
 
 @override
 int get hashCode {
   final _this = this as ReadingPage;
-  return Object.hash(runtimeType,_this.url,const DeepCollectionEquality().hash(_this.headers));
+  return Object.hash(runtimeType,_this.url,const DeepCollectionEquality().hash(_this.headers),_this.style);
 }
 
 @override
 String toString() {
   final _this = this as ReadingPage;
-  return 'ReadingPage(url: ${_this.url}, headers: ${_this.headers})';
+  return 'ReadingPage(url: ${_this.url}, headers: ${_this.headers}, style: ${_this.style})';
 }
 
 
@@ -53,7 +54,7 @@ abstract mixin class $ReadingPageCopyWith<$Res>  {
   factory $ReadingPageCopyWith(ReadingPage value, $Res Function(ReadingPage) _then) = _$ReadingPageCopyWithImpl;
 @useResult
 $Res call({
- String url, Map<String, String> headers
+ String url, Map<String, String> headers, MangaImageStyle style
 });
 
 
@@ -70,11 +71,12 @@ class _$ReadingPageCopyWithImpl<$Res>
 
 /// Create a copy of ReadingPage
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? url = null,Object? headers = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? url = null,Object? headers = null,Object? style = null,}) {
   return _then(ReadingPage(
 url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
 as String,headers: null == headers ? _self.headers : headers // ignore: cast_nullable_to_non_nullable
-as Map<String, String>,
+as Map<String, String>,style: null == style ? _self.style : style // ignore: cast_nullable_to_non_nullable
+as MangaImageStyle,
   ));
 }
 
@@ -159,10 +161,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String url,  Map<String, String> headers)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String url,  Map<String, String> headers,  MangaImageStyle style)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ReadingPage() when $default != null:
-return $default(_that.url,_that.headers);case _:
+return $default(_that.url,_that.headers,_that.style);case _:
   return orElse();
 
 }
@@ -180,10 +182,10 @@ return $default(_that.url,_that.headers);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String url,  Map<String, String> headers)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String url,  Map<String, String> headers,  MangaImageStyle style)  $default,) {final _that = this;
 switch (_that) {
 case _ReadingPage():
-return $default(_that.url,_that.headers);case _:
+return $default(_that.url,_that.headers,_that.style);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -200,10 +202,10 @@ return $default(_that.url,_that.headers);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String url,  Map<String, String> headers)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String url,  Map<String, String> headers,  MangaImageStyle style)?  $default,) {final _that = this;
 switch (_that) {
 case _ReadingPage() when $default != null:
-return $default(_that.url,_that.headers);case _:
+return $default(_that.url,_that.headers,_that.style);case _:
   return null;
 
 }
@@ -215,7 +217,7 @@ return $default(_that.url,_that.headers);case _:
 
 
 class _ReadingPage implements ReadingPage {
-  const _ReadingPage({required this.url,  Map<String, String> headers = const <String, String>{}}): _headers = headers;
+  const _ReadingPage({required this.url,  Map<String, String> headers = const <String, String>{}, this.style = MangaImageStyle.centered}): _headers = headers;
   
 
 /// The absolute image URL.
@@ -229,6 +231,8 @@ class _ReadingPage implements ReadingPage {
   return EqualUnmodifiableMapView(_headers);
 }
 
+/// How the source wants its pages laid out.
+@override@JsonKey() final  MangaImageStyle style;
 
 /// Create a copy of ReadingPage
 /// with the given fields replaced by the non-null parameter values.
@@ -240,18 +244,18 @@ _$ReadingPageCopyWith<_ReadingPage> get copyWith => __$ReadingPageCopyWithImpl<_
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ReadingPage&&(identical(other.url, url) || other.url == url)&&const DeepCollectionEquality().equals(other.headers, _headers));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ReadingPage&&(identical(other.url, url) || other.url == url)&&const DeepCollectionEquality().equals(other.headers, _headers)&&(identical(other.style, style) || other.style == style));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,url,const DeepCollectionEquality().hash(_headers));
+    return Object.hash(runtimeType,url,const DeepCollectionEquality().hash(_headers),style);
 }
 
 @override
 String toString() {
-    return 'ReadingPage(url: $url, headers: $headers)';
+    return 'ReadingPage(url: $url, headers: $headers, style: $style)';
 }
 
 
@@ -262,7 +266,7 @@ abstract mixin class _$ReadingPageCopyWith<$Res> implements $ReadingPageCopyWith
   factory _$ReadingPageCopyWith(_ReadingPage value, $Res Function(_ReadingPage) _then) = __$ReadingPageCopyWithImpl;
 @override @useResult
 $Res call({
- String url, Map<String, String> headers
+ String url, Map<String, String> headers, MangaImageStyle style
 });
 
 
@@ -279,11 +283,12 @@ class __$ReadingPageCopyWithImpl<$Res>
 
 /// Create a copy of ReadingPage
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? url = null,Object? headers = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? url = null,Object? headers = null,Object? style = null,}) {
   return _then(_ReadingPage(
 url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
 as String,headers: null == headers ? _self._headers : headers // ignore: cast_nullable_to_non_nullable
-as Map<String, String>,
+as Map<String, String>,style: null == style ? _self.style : style // ignore: cast_nullable_to_non_nullable
+as MangaImageStyle,
   ));
 }
 
