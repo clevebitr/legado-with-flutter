@@ -391,6 +391,37 @@ void main() {
       );
     });
 
+    testWidgets(
+      'pagedMode_whenTheNextChapterIsPrefetched_turnsAcrossTheBoundary',
+      (WidgetTester tester) async {
+        final _Fixture fixture = _fixture(
+          settings: ReaderSettings(pageMode: ReaderPageMode.paged),
+        );
+        // 第一章缩到一页：越过章界只差一次翻页。
+        fixture.content.bodies['https://source.test/1.html'] = '第一章正文';
+
+        await _pump(tester, fixture);
+        // 预取是真实端口请求：还没翻页，第二章已经在手里（`pumpAndSettle` 等它落地）。
+        expect(
+          fixture.content.requests,
+          contains('https://source.test/2.html'),
+        );
+
+        await tester.drag(find.byType(PageView), const Offset(-600, 0));
+        await tester.pumpAndSettle();
+
+        // 跨章翻页：会话进入下一章，页面上不再是「本章读完」而是第二章正文。
+        expect(
+          fixture.container
+              .read(readerSessionProvider(_book))
+              .value
+              ?.chapterIndex,
+          1,
+        );
+        expect(find.textContaining('第二章正文'), findsOneWidget);
+      },
+    );
+
     testWidgets('dispose_whenLeaving_writesThePosition', (
       WidgetTester tester,
     ) async {
