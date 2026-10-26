@@ -364,7 +364,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   /// The switch keeps the shelf identity (the row's URL is rewritten, its progress follows the row)
   /// and moves the global selected source, so every other parsing page follows the new one.
   Widget _changeSourceButton(
-    BuildContext context,
     WidgetRef ref,
     BookSource source,
     BookInfo info,
@@ -372,14 +371,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     AppLocalizations l10n,
   ) => OutlinedButton.icon(
     onPressed: () =>
-        unawaited(_changeSource(context, ref, source, info, membership, l10n)),
+        unawaited(_changeSource(ref, source, info, membership, l10n)),
     icon: const Icon(Icons.swap_horiz),
     label: Text(l10n.readerChangeSource),
   );
 
   /// Runs the change-source flow: candidates → switch → selected source → shelf → page.
   Future<void> _changeSource(
-    BuildContext context,
     WidgetRef ref,
     BookSource source,
     BookInfo info,
@@ -424,9 +422,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (BuildContext context) => PopScope(
+        builder: (BuildContext context) => const PopScope(
           canPop: false,
-          child: const Center(child: CircularProgressIndicator()),
+          child: Center(child: CircularProgressIndicator()),
         ),
       ),
     );
