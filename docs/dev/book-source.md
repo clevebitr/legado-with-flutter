@@ -798,6 +798,15 @@ java.replaceFont(result, errorFont, correctFont);
 | `HMacHex(data, algorithm, key)` / `HMacBase64(data, algorithm, key)` | HMAC，算法名照抄 Java 拼写（`HmacSHA256` / `HMAC-SHA1` / `HmacMD5`），`key` 取 UTF-8 字节 | ✅ M25/S3a |
 | `createSymmetricCrypto(transformation[, key[, iv]])` | 不透明句柄（`{__symmetric: true, id}`），九个方法：`encrypt` / `encryptBase64` / `encryptHex` / `encryptStr` / `decrypt` / `decryptStr` / `decryptHex` / `decryptBase64` / `setIv` | ✅ M25/S3a |
 | `aes*` / `des*` / `tripleDES*`（上游 `@Deprecated` 一族） | 按「组一个密码器 + 调一个方法」实现，参数顺序逐个照抄上游（含 `*ArgsBase64Str` 那组的 key/iv 不对称） | ✅ M25/S3a |
+| `randomUUID()` | 标准 v4 UUID（8-4-4-4-12），`Random.secure()` | ✅ M25/S3b |
+| `timeFormatUTC(time, format, sh)` | 固定 `sh` 小时偏移的 `SimpleDateFormat`：`y`/`M`/`d`/`H`/`h`/`m`/`s`/`S` + `'…'` 字面量；未知字母原样输出 | ✅ M25/S3b |
+| `toNumChapter(str)` | 把 `第…章` 里的中文数字换成阿拉伯数字（`第一百二十三章` → `第123章`），认不出就原样返回 | ✅ M25/S3b |
+| `toURL(url[, baseUrl])` | `{host, origin, pathname, searchParams}`；`searchParams` 按 `URLDecoder` 语义解码（`+` → 空格） | ✅ M25/S3b |
+| `htmlFormat(str)` | 上游 `HtmlFormatter.formatKeepImg`：标签 → 段落、只留 `<img src>`（含 `,{…}` 选项）、统一段首缩进 | ✅ M25/S3b |
+| `t2s(str)` / `s2t(str)` | 繁简互转，最长匹配；码表见下方注记 | ✅ M25/S3b |
+| `getWebViewUA()` | 随 job 下发的 UA 常量（与请求默认 UA 同一出处） | ✅ M25/S3b |
+| `androidId()` | 随 job 下发的安装 id；宿主没有时答空串（**与上游 Android ID 语义不同**，见注记） | ⏳ M25/S3b（端口待接） |
+| `cache.put/get/getInt/getLong/getDouble/putMemory/getFromMemory/delete/deleteMemory` | **内存 LRU**（容量 + 单值长度上限，随 worker 存亡）；上游是「内存 + 持久表」两层 | ✅ M25/S3b（差异见注记） |
 | `base64Encode(str)` / `base64Decode(str)` | = `crypto.base64Encode` / `crypto.base64Decode`；前者对齐上游 flags = 2（`Base64.NO_WRAP`），非法输入抛错 | ✅ 已落地（M1-b1b） |
 | `encodeURI(str)` | **Java `URLEncoder.encode(str, "UTF-8")`**：空格 → `+`，保留 `A-Za-z0-9` 与 `-_.*`，其余 UTF-8 字节 `%XX` 大写——**不是** JS 的 `encodeURI`（上游 `JsExtensions.kt:683-689`） | ✅ 已落地（M1-b1b） |
 | `encodeURI(str, charset)` | 同上，但按**声明的字符集**取字节（真实语料：`java.encodeURI(key, "GBK")`，ADR-0069 G1）；未知标签退 UTF-8（上游抛错返回 `""`） | ✅ M21a（ADR-0069） |
@@ -886,6 +895,25 @@ java.replaceFont(result, errorFont, correctFont);
 
 > 这些调用**纯计算**，在 worker 的同一 isolate 内完成：不联网、不进 `http.*` / `parse.*` 的调用额度，
 > 也不受单源并发/限速影响。
+
+**纯计算与工具族（M25/S3b，ADR-0078 §切片 S3b）：** 这一族的共同点是**在 worker 内同步完成**，
+不联网、不进 `http.*` / `parse.*` 的调用额度。四条必须知道的差异：
+
+1. **`t2s` / `s2t` 的码表不是上游那一份。** 上游走 `quick-chinese-transfer`，它的 pom 没有
+   `<licenses>`、仓库也没有 LICENSE 文件，按 C-DEP-7 不能搬；本仓用 **OpenCC（Apache-2.0）** 的
+   `TSCharacters/TSPhrases`（繁→简）与 `STCharacters/STPhrases`（简→繁）生成 `assets/zh/*.txt`
+   （来源、生成规则与哈希见 `assets/zh/README.md`）。所以上游 `fixT2sDict()` 里那份「不该转换」的
+   港台词表（`雪梨` / `鳳梨` / `魔戒` …）本仓没有，这类词按 OpenCC 的默认结果走。码表随 worker 的
+   bootstrap 进来、**首次用到才解析**（简→繁表 842 KB）。
+2. **`cache.*` 只在内存里**（容量 256 条、单值 64 K 字符、`saveTime` 以秒计的 TTL 照上游语义）。
+   上游的 `Cache` 是持久表，重启后还能读到 token；本仓重启即丢。这是有意差异（M25/S3b 裁决），
+   触发条件是「有源依赖跨会话缓存且能复现」。
+3. **`toURL().origin` 按意图实现**：上游那一行把整个 URL 又插进了 `host:` 与端口之间
+   （`"${protocol}://$host:${mUrl}:${mUrl.port}"`，`JsURL.kt:22-25`），带端口的源会拿到
+   `https://a.test:https://a.test/p:8443` 这种值。本仓答 `scheme://host[:port]`。
+4. **`androidId()` 不是 Android ID**：上游取 `Settings.Secure.ANDROID_ID`，本仓没有这个标识，装配根
+   下发一个**每次安装稳定**的 id（同样 16 位十六进制）；宿主没提供时答空串而不是 `undefined`。
+   `java.openUrl` / `java.connect` / `java.ajaxAll` 与 `source.*` 的注入面仍在 S3b 的剩余部分。
 
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
 `eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。

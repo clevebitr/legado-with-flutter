@@ -213,3 +213,32 @@ reviewImg、只有图时保留目录名、`replaceRegex` 看得到副文、二�
 `build_runner build` 后生成物无漂移。真引擎探针新增 7 条（AES 句柄往返、`Uint8Array` 的
 `length`/`Array.from`/`bytesToStr`、语料式的 hex 密钥解密、`jsLib` + base64 密钥解密、`@Deprecated`
 的 `aes*` 族、算法名错误可读、HMAC/digest/md5Encode16）：**56 例在 Windows 与 Android 模拟器双端全绿**。
+
+## 实现注记（2026-10-26，S3b 第一组：纯计算族 + cache.*）
+
+用户裁决（2026-10-26）：S3b **一次做完**（不复用 S3a 的「切一半」做法），`t2s`/`s2t` 两张表都做，
+`cache.*` 只做内存层。本注记记录第一组（纯计算 + cache），绑注入面与平台族见后续注记。
+
+1. **码表是数据资产，不是依赖。** 上游走 `quick-chinese-transfer`，其 pom 无 `<licenses>`、仓库无
+   LICENSE → 按 C-DEP-7 不能搬。改用 **OpenCC（Apache-2.0）** 的四个字典生成 `assets/zh/t2s.txt`
+   （3 573 项 / 33 KB）与 `s2t.txt`（42 430 项 / 842 KB），生成规则、输入与输出 sha256 全在
+   `assets/zh/README.md`，登记在 `NOTICE.md` §5。转换器是 40 行的最长匹配（`zh_converter.dart`），
+   与上游的 trie 实现等价但更小；差异是**没有**上游 `fixT2sDict()` 的港台排除词表。
+2. **资产怎么进 worker。** 后台 isolate 读不到 Flutter 资产（`rootBundle` 需要主 isolate，或根 isolate
+   的 token + `BackgroundIsolateBinaryMessenger`），所以码表在 `launchQuickJsWorker` 里于主 isolate 读好、
+   随 bootstrap 一次性交过去；**解析**才懒（`ZhTables.t2s(needed:)`），842 KB 的表只对真正调用
+   `java.s2t` 的源付出建表成本。这一取舍避免了两件事：给每个 job 塞 1 MB、以及为读资产把 worker
+   绑到 isolate token 的可用性上。
+3. **`cache.*` 只做内存。** 语义照上游 `CacheManager`（容量、单值长度上限、`saveTime` 秒级 TTL、
+   `putMemory/getFromMemory/deleteMemory` 与持久层的同名方法在内存层汇合），但**不落盘**：本仓没有
+   `Cache` 表，也不为它升 schema。差异与触发条件写在 `book-source.md` §6。
+4. **HTML 格式化是逐条语义移植**，不是「删标签」：块级标签换段落、`<img>` 换成占位符保住、其余标签
+   删掉、实体归一、段首两个全角空格。两个实现细节值得记：① 拿不到 `src` 的 `<img>` **整条丢弃**
+   （上游没有占位符，占位符会让它多留一个段落分隔）；② 属性值用**手写扫描器**读，因为语料的
+   `src` 里就带着 `,{"headers":{…}}`，正则会在内层引号处截断。
+5. **失败必须可读**：`{__error}` → `throw new Error(message)`（与 S3a 同一契约），所以
+   「码表没加载」「时间戳不是数字」都能在 `js:error` 的 message 里看到，而不是 `undefined`。
+
+验证：`test/core/js/js_helpers_test.dart` 22 例、`js_cache_test.dart` 10 例、`zh_converter_test.dart`
+7 例（含 OpenCC 表的短语优先、CRLF、未知字符直通），真引擎探针新增 5 条（纯计算族一次跑完、
+`java.t2s` / `java.s2t` 走真实资产、`cache` 跨 job、`getWebViewUA`）；全量门禁见下一轮提交说明。
