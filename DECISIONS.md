@@ -649,3 +649,25 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 **「提交问题」的真实成因（顺手修掉一半）**：工作树里除了上一轮未提交的 ADR-0077（测试精简）与 ADR-0078（台账）之外，还有 **4 个文件丢了 why-注释**（MainActivity.kt、in_app_web_view_page_fetcher.dart、in_app_webview_cookie_bridge.dart、long_running_task.dart）——MainActivity 的文档注释还被弄成语病（`still has no foreground service of its own / the only foreground service in the app is` 断句）。功能无变化，判定为更早某次自动化清理的误伤，已 `git checkout --` 还原。提交整理见下一步（按主题拆 Conventional Commits，提交后再跑 `build_runner` + `git diff --exit-code`）。
 
 验证：format 0 / analyze 0 issue / 全量 `flutter test` 2346+ 全过（新增 store 11 例、实体 3 例、指纹 1 例、引擎 2 例、桥 2 例）；真引擎探针 46 例在 **Windows 与 Android 模拟器**双端全绿（新增 4 条 jsLib 探针，含「库里 java.ajax 触发整条重放」与「上一个 job 的库不泄漏」）。
+
+## 2026-10-26 — 提交整理：误删注释、生成物 hash 漂移与四片混合工作树的拆分
+
+用户裁决（2026-10-26）：按切片拆 4 个提交（含台账 hunk 拆分），留在当前分支 `feat/ui-m15-m18`。
+
+**「提交的问题」查清了三件事，都已修**：
+1. **4 个文件被误删注释**（`MainActivity.kt`、`in_app_web_view_page_fetcher.dart`、`in_app_webview_cookie_bridge.dart`、`long_running_task.dart`）：只删了 why-注释、功能未变，MainActivity 的文档注释还被弄成语病（`still has no foreground service of its own / the only foreground service in the app is` 断句）。判定为更早某次自动化清理的误伤 → `git checkout --` 还原。
+2. **`settings_notifier.g.dart` 的 hash 漂移让最后一道门禁永远红**：`build_runner build` 每次都会改写 `_$settingsHash`，而源文件没动 —— 于是 `git diff --exit-code -- '**/*.g.dart'` 在干净树上也必定非空，只能每次手 revert。根因是生成器版本变了、committed 输出没跟上；提交锁定版本的输出后，`build_runner build` 变成 no-op（实测 `wrote 0 outputs`），门禁在 HEAD 上真的绿了。
+3. **工作树里混了四块工作**（ADR-0077 测试精简 / ADR-0078 台账 / M24 重放 / M25-S1 jsLib）→ 拆成 4 + 1 个提交。
+
+**最终提交序列**（都在 `feat/ui-m15-m18`，工作树已干净）：
+- `test: trim the suite to behaviour and lower the coverage gate (ADR-0077)`
+- `docs(adr): register the engine-parity ledger and the M25-M27 goals (ADR-0078)`
+- `feat: replay upstream's sync java.* dialect and persist per-source variables (M24, ADR-0076)`
+- `feat: run a source's own jsLib before every rule (M25 S1, ADR-0078)`
+- `chore: adopt the generator output for the settings provider hash`
+
+**拆提交时踩的两个坑（下次别再踩）**：
+1. **`git commit` 不带 `-a` 只提交 index**：我用 `git checkout <snapshot> -- .` 把最终态灌进 index 后，又在**工作树**里做切片剥离，结果第一个 M24 提交把 S1 的代码与文档一起带了进去，而两个新文件（`js_lib.dart` / `js_lib_test.dart`）被 reset 掉 → 那个中间提交**编译不过**。发现后 `git reset --mixed` 回退、把剥离脚本写成文件重跑、并**改用 `git add -A` 后再 reset 掉属于下一片的两个新文件**，这次核对过 `git show :<path>` 的 index 内容才提交。
+2. **用 `grep -c "已对齐（M25/S1）"` 判断台账状态会假阴性**：markdown 里是 `**已对齐**（M25/S1）`，`**` 夹在词与全角括号之间。核对提交内容要看 `git show <sha>:<file>` 的实际行，而不是关键词计数。
+
+验证（HEAD 上六条门禁全过）：format 0 changed / analyze 0 issue / `flutter test` 2365 用例全过 / `check_coverage` exit 0（core 99.38、domain 98.95、data 95.65）/ `build_runner build` 后 `git diff --exit-code -- '**/*.g.dart' '**/*.freezed.dart'` exit 0 / 真引擎探针 46 例在 Windows 上全绿（Android 侧在提交前同内容已跑过 46 例全绿）。
