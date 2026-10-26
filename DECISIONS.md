@@ -743,3 +743,24 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 **语料数字（2026-10-26 手工静态普查，M27 用 `batch_probe.dart` 重算）**：本地 `corpus_a`(504 条) 29 源 / 85 处，`corpus_b`(128 条) 4 源 / 6 处；`createSymmetricCrypto` 32 处、`hexDecodeToString` 16 处、`aesBase64DecodeToString` 9 处、`base64DecodeToByteArray` 9 处、`hexDecodeToByteArray` 8 处、`HMacBase64` / `digestHex` 各 3 处。
 
 验证：format 0 / analyze 0 issue / `flutter test` 2434 例全过 / check_coverage exit 0（core 99.19、domain 98.67、data 95.65；`js_crypto.dart` 与 `charset_encoding.dart` 行覆盖 100%）/ `build_runner` 后生成物无漂移 / `dart run tool/scan_licenses.dart` 202 包 Risky none（新增 1 个 MIT 包）/ 真引擎探针 56 例（新增 7 条）在 **Windows 与 Android 模拟器**双端全绿。
+
+## 2026-10-26 — 工作树收敛到唯一的 dev checkout，并新增集成分支 dev（ADR-0079）
+
+用户指令（2026-10-26）：整理工作树、重订开发标准 —— 任何开发代码都提交到 `dev` 工作树；删除本地多余 worktree，统一在 dev worktree 开发。裁决三点：① 新建 `dev` 分支指向当时 HEAD（不重命名 `feat/ui-m15-m18`，避免断开已有 PR）；② `legado-p5` 的 137 处未提交改动先备份再删；③ 本会话目录无法自删，用 `git worktree move`/改名把它变成 `legado-p5-dev`。
+
+**为什么必须做**（ADR-0079 §背景，三条实证）：① 提交位置歧义——同一功能在 3 个 checkout 各有版本，`legado-p5` 积了 106 改动 + 31 未跟踪文件，与集成分支版本不同、既没提交也没人清理；② 分支语义错位——远端没有集成分支，`ci.yml` 的 push 门禁只听 `main`，于是实际在 `feat/ui-m15-m18` 上跑的集成提交**从来没被 L1 门禁验证过**；③ 每个 worktree 各有 `.dart_tool`/`build`/Gradle 缓存，`pub get` 与 `build_runner` 争用同一 pub cache。
+
+**落地**：
+- 规则唯一出处 = `CONTRIBUTING.md` §4.1：单一 dev 工作树（`<父目录>/legado-p5-dev`，check out `dev`）+ 三条硬规则（唯一长命 checkout、所有提交落 `dev`、并行用短命分支或临时 clone）；`main` 只收 `dev` 的 PR。
+- `AGENTS.md` §3 新增第 0 步「定位」，只回链 §4.1 不抄正文（仍是 98 行 ≤120）。
+- `.github/workflows/ci.yml` 的 `push.branches` 加 `dev`（L1 门禁跟着集成分支跑）；发布通道 `release.yml`（tag）/`beta.yml`（手动）/`debug.yml`（main push）不动。
+- `CHANGELOG.md` Unreleased 记一条（为什么改、改了什么）。
+- 手工手术：主克隆 `legado-with-flutter`（`main`）改名为 `legado-p5-dev` 并切 `dev`；删 `legado-p5-audio`（干净）、`legado-p5`（先归档为仓库外 patch + 未跟踪文件 zip）；本会话所在的 `legado-p5-mgmt` 先搬成临时 worktree 再删除，最后 `git worktree list` 只剩一条。
+
+**踩的坑（值得记）**：
+1. **主 worktree 不能 `git worktree remove`**：`F:/Projetcs/legado-with-flutter` 是 `.git` 所在的主克隆，`worktree remove` 直接拒绝。要「只剩一个 checkout」只能让**主克隆本身**变成 dev 工作树——先删掉全部 linked worktree 再重命名目录（`.git/config` 里没有绝对路径，重命名安全），否则 linked worktree 的 `.git` 文件会指向旧路径。
+2. **dev 分支同一时刻只能被一个 worktree 占用**：主克隆要切 `dev`，得先让临时 worktree `switch --detach` 释放它，顺序错了会报 "already checked out"。
+3. **远端没有 worktree**：用户说的「整理远端 worktree」实际只能落到「统一分支」上；远端只保留 `main`/`dev` 两条长命线，`feat/*` 转只读。
+4. **CI 触发分支漏改就是假绿**：集成分支换了名字/新增了 `dev` 而 `ci.yml` 只监听 `main`，push 门禁等于不存在——这次一并加上。
+
+验证：`git worktree list` 只剩 `F:/Projetcs/legado-p5-dev [dev]`；四个分支里 `dev` 已推到远端；`legado-p5` 的未提交快照落在 `F:/Projetcs/_archive/`（patch + zip）。

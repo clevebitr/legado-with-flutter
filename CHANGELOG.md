@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### One dev worktree, one integration branch (ADR-0079)
+
+The repository had four checkouts of the same history (the main clone plus three `git worktree`s on
+old feature branches) and no integration branch at all: work landed on `feat/ui-m15-m18` while
+`ci.yml` only gated pushes to `main`, so the commits that actually shipped were never verified by the
+L1 gate. One of those checkouts had also accumulated 137 uncommitted files that existed nowhere else.
+
+- **`dev` is now the integration branch**: every development commit lands there, and `main` only
+  takes merges from a `dev` pull request.
+- **One checkout per machine**, at `<parent>/legado-p5-dev`, checked out on `dev`. No more
+  `git worktree add`: a short-lived branch is switched inside the dev worktree (announcing it first,
+  as the multi-writer rule already required) and full isolation uses a throwaway clone.
+- `ci.yml` gates pushes to **`dev`** as well as `main`; the release channels (`release.yml` on tags,
+  `beta.yml` manual, `debug.yml` on `main`) are unchanged.
+- The stale checkouts were removed after archiving the dirty one to `F:/Projetcs/_archive/`
+  (patch + untracked files), and the old `feat/*` branches stay as read-only branches.
+
+Rules live in `CONTRIBUTING.md` §4.1, the reasoning in ADR-0079, and `AGENTS.md` §3 step 0 points at
+both.
+
 ### The content stage answers the whole chapter (ADR-0078 S2 part 2, M25)
 
 `FetchContent` used to answer a `String`. It now answers a `ChapterContent` — body, content-page

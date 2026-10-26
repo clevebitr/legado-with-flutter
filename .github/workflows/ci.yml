@@ -7,7 +7,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `dev` 是集成分支（ADR-0079）：日常提交落在那里，所以 L1 门禁必须跟着它跑。
+    branches: [main, dev]
     tags: ['v*']
   pull_request:
   # 手动跑一次门禁：发布通道的 `wait-for-verify` 需要一个 push/tag 的 CI 运行可等。
