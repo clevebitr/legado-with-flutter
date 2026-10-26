@@ -135,6 +135,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// override before that write lands.
   bool _brightnessSaving = false;
 
+  /// Chapter bodies fetched ahead through the real content port, keyed by chapter URL.
+  ///
+  /// The map is pruned to the current and the next chapter on every build, so reading a thousand
+  /// chapters does not keep a thousand bodies alive.
+  final Map<String, String> _prefetchedBodies = <String, String>{};
+
+  /// Chapter URLs whose prefetch is in flight (a rebuild must not start it twice).
+  final Set<String> _prefetching = <String>{};
+
+  /// Chapters whose prefetch failed; not retried while they remain in the window.
+  final Set<String> _prefetchFailed = <String>{};
+
+  /// Bumped on a source switch so an in-flight prefetch of the old source is dropped.
+  int _prefetchGeneration = 0;
+
   /// The session the last build saw, so the tool bar can show the chapter position.
   ReaderSessionState? _lastSession;
 
@@ -640,6 +655,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           _book = data.book;
           _restoredChapterUrl = null;
           _lastBody = null;
+          // 旧源的正文不能带到新源：换源后重新预取当前 + 下一章。
+          _prefetchedBodies.clear();
+          _prefetching.clear();
+          _prefetchFailed.clear();
+          _prefetchGeneration++;
         });
         // 退出守护要按换源后的身份判断「在不在书架」，否则会拿旧 URL 再问一次。
         ReaderBookScope.maybeOf(context)?.value = data.book;
@@ -818,17 +838,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _lastChapterUrl = chapter.url;
     _lastChapterName = chapter.title.isEmpty ? null : chapter.title;
 
-    // L1 预取：进入本章时把下一章正文读进正文缓存，翻章时直接命中而不等网络。
-    // 监听（而不是 `read`）让 autoDispose 的 provider 活到内容到达；回调本身不重建页面。
-    if (session.chapterIndex + 1 < chapters.length) {
-      final ReadingChapter nextChapter = chapters[session.chapterIndex + 1];
-      ref.listen(
-        readerContentProvider((_book, nextChapter.url)),
-        (
-          AsyncValue<ParseResult<String>>? previous,
-          AsyncValue<ParseResult<String>> next,
-        ) {},
-      );
+    final ReadingChapter? nextChapter =
+        session.chapterIndex + 1 < chapters.length
+        ? chapters[session.chapterIndex + 1]
+        : null;
+    // 只保留当前章与下一章的预取正文：读一本书不该把整本的正文都留在内存里。
+    _prunePrefetch(chapter.url, nextChapter?.url);
+    final String? currentPrefetched = _prefetchedBodies[chapter.url];
+    final String? nextPrefetched = nextChapter == null
+        ? null
+        : _prefetchedBodies[nextChapter.url];
+    if (nextChapter != null) {
+      _schedulePrefetch(nextChapter);
     }
 
     final M3ETheme tokens = context.m3e;
@@ -840,9 +861,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       family: settings.fontFamily,
     );
 
-    final AsyncValue<ParseResult<String>> content = ref.watch(
-      readerContentProvider((_book, chapter.url)),
-    );
     // ADR-0062 §决策 5：读出声时把那句话画出来。这个 provider 只在读声时才有值，
     // 所以没开 TTS 的读者只多一次空读，不会因此拉起语音引擎。
     final ReaderTtsHighlight? spoken = ref.watch(readerTtsHighlighterProvider);
@@ -851,34 +869,53 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ? (start: spoken.start, end: spoken.end)
         : null;
 
+    // 段距与首行缩进是**排版**（ADR-0051 §决策 4）：在渲染前套一次，正文数据不动。
+    Widget bodyFor(String data) {
+      _remembered(data);
+      final String laidOut = readerBodyText(data, settings);
+
+      return settings.pageMode == ReaderPageMode.scroll
+          ? _scrollBody(
+              chapter,
+              laidOut,
+              style,
+              session.charOffset,
+              palette,
+              _paddingOf(settings),
+              spokenRange,
+            )
+          : _pagedBody(
+              chapter,
+              laidOut,
+              style,
+              session.charOffset,
+              chapters.length,
+              session.chapterIndex,
+              palette,
+              _paddingOf(settings),
+              spokenRange,
+              // 下一章正文已预取时，把它的页接在当前章后面：越过章界是连续翻页，不是加载。
+              nextText: nextPrefetched == null
+                  ? null
+                  : readerBodyText(nextPrefetched, settings),
+            );
+    }
+
+    // 预取的正文就是这一章的：直接渲染，不再看 provider，翻章没有加载圈。
+    if (currentPrefetched != null) {
+      return _tapZones(child: bodyFor(currentPrefetched));
+    }
+
+    final AsyncValue<ParseResult<String>> content = ref.watch(
+      readerContentProvider((_book, chapter.url)),
+    );
+
     // 三区点击（ADR-0051 §决策 1）：中间 ⅓ 唤出菜单，左右各 ⅓ 唤出菜单前先收起它。
     return _tapZones(
       child: switch (content) {
         AsyncData<ParseResult<String>>(:final ParseResult<String> value) =>
           switch (value) {
-            // 段距与首行缩进是**排版**（ADR-0051 §决策 4）：在渲染前套一次，正文数据不动。
-            ParseSuccess<String>(:final String data) =>
-              _remembered(data) && settings.pageMode == ReaderPageMode.scroll
-                  ? _scrollBody(
-                      chapter,
-                      readerBodyText(data, settings),
-                      style,
-                      session.charOffset,
-                      palette,
-                      _paddingOf(settings),
-                      spokenRange,
-                    )
-                  : _pagedBody(
-                      chapter,
-                      readerBodyText(data, settings),
-                      style,
-                      session.charOffset,
-                      chapters.length,
-                      session.chapterIndex,
-                      palette,
-                      _paddingOf(settings),
-                      spokenRange,
-                    ),
+            ParseSuccess<String>(:final String data) => bodyFor(data),
             ParseFailure<String>(:final ParseFailureKind kind) =>
               FailureMessage(
                 kind: kind,
@@ -894,6 +931,77 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _ => const Center(child: CircularProgressIndicator()),
       },
     );
+  }
+
+  /// Keeps the prefetched bodies down to the current and the next chapter.
+  void _prunePrefetch(String currentUrl, String? nextUrl) {
+    _prefetchedBodies.removeWhere(
+      (String url, String _) => url != currentUrl && url != nextUrl,
+    );
+    _prefetchFailed.removeWhere(
+      (String url) => url != currentUrl && url != nextUrl,
+    );
+  }
+
+  /// Starts one real prefetch for [chapter], once per chapter URL.
+  void _schedulePrefetch(ReadingChapter chapter) {
+    final String url = chapter.url;
+    if (_prefetchedBodies.containsKey(url) ||
+        _prefetchFailed.contains(url) ||
+        !_prefetching.add(url)) {
+      return;
+    }
+    final int generation = _prefetchGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        _prefetching.remove(url);
+
+        return;
+      }
+      if (generation != _prefetchGeneration) {
+        // 换源已经把旧 generation 的预取全部作废；新 generation 的标记不能在这里删。
+        return;
+      }
+      unawaited(_prefetch(chapter, generation));
+    });
+  }
+
+  /// Fetches [chapter] through the production content port and keeps the body for the next turn.
+  ///
+  /// It deliberately does **not** listen to `readerContentProvider`: that would only keep a
+  /// provider alive, not guarantee the body is in hand before the turn. The port writes the same
+  /// content cache the normal read uses, and the map below is what the next chapter renders from.
+  Future<void> _prefetch(ReadingChapter chapter, int generation) async {
+    try {
+      final ParseResult<String> result = await ref
+          .read(readerChapterContentProvider)
+          .fetch(
+            sourceUrl: _book.sourceUrl,
+            chapterUrl: chapter.url,
+            bookName: _book.name,
+            chapterTitle: chapter.title,
+            bookUrl: _book.bookUrl,
+            tocUrl: _book.tocUrl,
+          );
+      if (!mounted || generation != _prefetchGeneration) {
+        return;
+      }
+      if (result case ParseSuccess<String>(:final String data)
+          when data.isNotEmpty) {
+        setState(() => _prefetchedBodies[chapter.url] = data);
+      } else {
+        // 失败或空正文：记下来避免每个 build 重试；打开这一章时由它自己的 provider 重试/报错。
+        _prefetchFailed.add(chapter.url);
+      }
+    } on Exception {
+      if (mounted && generation == _prefetchGeneration) {
+        _prefetchFailed.add(chapter.url);
+      }
+    } finally {
+      if (generation == _prefetchGeneration) {
+        _prefetching.remove(chapter.url);
+      }
+    }
   }
 
   /// Wraps [child] in the three tap zones of §决策 1.
@@ -999,8 +1107,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     int chapterIndex,
     ({Color background, Color foreground}) palette,
     double padding,
-    ({int start, int end})? spokenRange,
-  ) {
+    ({int start, int end})? spokenRange, {
+    String? nextText,
+  }) {
     return Padding(
       padding: EdgeInsets.all(padding),
       child: _PagedBody(
@@ -1008,6 +1117,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           '${chapter.url}|${style.fontSize}|${style.height}|$_restoreNonce',
         ),
         text: body,
+        nextText: nextText,
         style: style,
         initialOffset: initialOffset,
         foreground: palette.foreground,
@@ -1017,6 +1127,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onNextChapter: () => unawaited(
           ref.read(readerSessionProvider(_book).notifier).nextChapter(),
         ),
+        onNextChapterStarted: (int charOffset) =>
+            _jumpToChapter(chapterIndex + 1, charOffset: charOffset),
       ),
     );
   }
@@ -1161,6 +1273,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 class _PagedBody extends StatefulWidget {
   const _PagedBody({
     required this.text,
+    this.nextText,
     required this.style,
     required this.initialOffset,
     required this.foreground,
@@ -1168,10 +1281,15 @@ class _PagedBody extends StatefulWidget {
     required this.spokenRange,
     required this.onOffsetChanged,
     required this.onNextChapter,
+    this.onNextChapterStarted,
     super.key,
   });
 
   final String text;
+
+  /// The next chapter's body when it was prefetched; its pages continue after [text].
+  final String? nextText;
+
   final TextStyle style;
   final int initialOffset;
   final Color foreground;
@@ -1183,6 +1301,9 @@ class _PagedBody extends StatefulWidget {
   final ValueChanged<int> onOffsetChanged;
   final VoidCallback onNextChapter;
 
+  /// Called with the character offset when the turn enters [nextText].
+  final ValueChanged<int>? onNextChapterStarted;
+
   @override
   State<_PagedBody> createState() => _PagedBodyState();
 }
@@ -1191,6 +1312,7 @@ class _PagedBody extends StatefulWidget {
 class _PagedBodyState extends State<_PagedBody> {
   PageController? _controller;
   List<int> _starts = const <int>[0];
+  List<int> _nextStarts = const <int>[];
   bool _restored = false;
 
   @override
@@ -1206,43 +1328,83 @@ class _PagedBodyState extends State<_PagedBody> {
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
+        final String? nextText = widget.nextText;
         _starts = readerPageStarts(
           text: widget.text,
           style: widget.style,
           size: constraints.biggest,
           textScaler: MediaQuery.textScalerOf(context),
         );
-        final PageController controller = _controller ??= PageController();
+        _nextStarts = nextText == null || nextText.isEmpty
+            ? const <int>[]
+            : readerPageStarts(
+                text: nextText,
+                style: widget.style,
+                size: constraints.biggest,
+                textScaler: MediaQuery.textScalerOf(context),
+              );
+        final int currentPages = _starts.length;
+        final int nextPages = _nextStarts.length;
+        final bool hasNext = nextPages > 0;
+        final PageController controller = _controller ??= PageController(
+          // 从预取页跨章时，新实例直接落在被滑到的那一页，而不是先画首页再跳。
+          initialPage: readerPageOf(_starts, widget.initialOffset),
+        );
         _restoreOnce(controller);
 
         return PageView.builder(
           controller: controller,
-          itemCount: _starts.length + 1,
+          itemCount: currentPages + (hasNext ? nextPages : 1),
           onPageChanged: (int page) {
-            if (page < _starts.length) {
+            if (page < currentPages) {
               widget.onOffsetChanged(_starts[page]);
+            } else if (hasNext) {
+              // 越过章界：把会话切到下一章，并落在这一页的字符偏移上。
+              widget.onNextChapterStarted?.call(
+                _nextStarts[page - currentPages],
+              );
             }
           },
           itemBuilder: (BuildContext context, int page) {
-            if (page >= _starts.length) {
-              return _chapterEnd(l10n, tokens);
-            }
-            final int start = _starts[page];
-            final int end = page + 1 < _starts.length
-                ? _starts[page + 1]
-                : widget.text.length;
+            if (page < currentPages) {
+              final int start = _starts[page];
+              final int end = page + 1 < currentPages
+                  ? _starts[page + 1]
+                  : widget.text.length;
 
-            return SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              child: readingText(
-                body: widget.text,
-                start: start,
-                end: end,
-                style: widget.style,
-                highlightStyle: spokenSentenceStyle(context, widget.style),
-                highlight: widget.spokenRange,
-              ),
-            );
+              return SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: readingText(
+                  body: widget.text,
+                  start: start,
+                  end: end,
+                  style: widget.style,
+                  highlightStyle: spokenSentenceStyle(context, widget.style),
+                  highlight: widget.spokenRange,
+                ),
+              );
+            }
+            if (hasNext && nextText != null) {
+              final int nextPage = page - currentPages;
+              final int start = _nextStarts[nextPage];
+              final int end = nextPage + 1 < nextPages
+                  ? _nextStarts[nextPage + 1]
+                  : nextText.length;
+
+              return SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: readingText(
+                  body: nextText,
+                  start: start,
+                  end: end,
+                  style: widget.style,
+                  highlightStyle: spokenSentenceStyle(context, widget.style),
+                  highlight: null,
+                ),
+              );
+            }
+
+            return _chapterEnd(l10n, tokens);
           },
         );
       },
