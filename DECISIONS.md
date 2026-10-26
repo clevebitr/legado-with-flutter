@@ -516,3 +516,96 @@ M22-a 第二批落地（ADR-0072 §决策 3 + 实现注记）：loginUi 表单 +
 踩坑：① 合并同一个页面/Notifier 的两个测试文件时，两个文件各自有私有 helper（`_source`/`_l10n`/`_pump`/`_fixture`），必须先确认签名差异再拼，否则会出现「顶层 group」与重复声明；② 表驱动里第二次 `pump` 同一棵树不会重置 Navigator —— 上一轮 push 过占位路由时要先 `pumpWidget(SizedBox.shrink())`；③ 删掉「只为读 provider 断言类型」的用例后要复查「未测量源文件」判定（clock/web_dav 的 provider 测试因此保留）；④ `dart run build_runner build` 在本地会改写 `storage_provider.g.dart` / `settings_notifier.g.dart` 的 hash（与本轮改动无关，属既存漂移），已 revert，需要单独确认 CI 是否也红。
 
 下一步待定：唯一还能大幅减量的手段是把 rule_engine_test(4854 行/269 例) 与 js 测试(2766 行/113 例) 的 Legado 矩阵改成表驱动（估 -2.5k 行，行为断言不变，但风险与工作量都高）。
+
+## 2026-10-26 — M25 引擎对齐上游：缺口清单、切片与验收（目标从「规则面可用」升级为「行为几乎一致」）
+
+用户裁决（2026-10-26）：引擎目标从「真实语料可用」升级为「与上游 legado 行为几乎一致」，同时要高性能实现，允许重构。缺口清单与状态表落 docs/dev/engine-parity.md（唯一清单），理由与边界见 ADR-0078。
+
+对齐清单（按「不补就静默不生效」排序，证据在 engine-parity.md 表内）：
+
+A 书源级字段
+A1 ⚠ jsLib：源内 JS 库，上游作为每个脚本的 prototype scope（BaseSource.kt:335-339、AnalyzeRule.kt:848）；本仓未建模、未执行 —— 依赖库函数的源每条规则 js:error。
+A2 ⚠ coverDecodeJs 封面解密（ImageUtils.kt:66-69）。
+A3 ⚠ ruleReview 段评（ReviewRule.kt 九个字段）。
+A4 ⚠ bookUrlPattern：搜索 URL 命中即按详情页解析 + bookList 为空时回落详情页（BookList.kt:62-84, 100-110）。
+A5 ⚠ eventListener / callBackJs / customButton / homepageModules。
+
+B 阶段字段
+B1 ⚠ ruleContent.subContent（正文副文 / 音频歌词，BookContent.kt:144-163）。
+B2 ⚠ ruleContent.title（正文反取章节名 + reviewImg，:165-190）。
+B3 ⚠ ruleContent.payAction（付费解锁，ReadBookViewModel.kt:2623）。
+B4 ⚠ ruleContent.callBackJs（事件回调，SourceCallBack.kt:54/94/117）。
+B5 ruleToc.formatJs / isVolume / isPay / preUpdateJs（BookChapterList.kt:141-163, 229-268；WebBook.kt:305-313）。
+B6 ruleBookInfo.downloadUrls（BookInfo.kt:171-180）/ relatedBooks。
+B7 ⚠ 目录去重与章节元数据保留（wordCount/variable/reviewImg，:120-140, :275-295）。
+
+C 规则语法（矩阵剩余 4 条 + 3 处方言）
+C1 #20 `:正则`（AnalyzeByRegex + allInOne）。
+C2 #21 @xpath: 与裸 `//`（AnalyzeByXPath）。
+C3 #22 @webJs 规则级（AppPattern.WebJS_PATTERN、AnalyzeRule.getWebJsResult）。
+C4 #30 提取段嵌套规则。
+C5 ⚠ 列表规则尾部 @js:：上游任一段是 JS 段即可（AnalyzeRule.kt:439），本仓只认「整条 JS」或 `<js>`（rule_engine.dart:2658、测试 rule_engine_test.dart:3256）→ 与 §3 #14 的「已支持」表述冲突，按行为修正文档。
+C6 ⚠ URL 方言：页码列表 `<1,2,3>`（AnalyzeUrl.kt:777）、段链 `@result`（:157-176）、GET query 全量按 charset 编码（:295-300）、`+` 正序前缀（BookList.kt:73-75）。
+
+D JS 绑定面（对 JsExtensions.kt 1220 行 + bindings 表）
+D1 ⚠ 密钥类 crypto：createSymmetricCrypto / aes* / des* / HMac*、base64DecodeToByteArray、hexDecodeToByteArray、md5Encode16、hexEncodeToString —— 语料里 326/328 处字节类调用属这一类，是仅次于 jsLib 的硬缺口。
+D2 全局绑定：chapter / src / nextChapterUrl / fromBookInfo / infoMap / speakText / gInt+index（formatJs）。
+D3 cache.*；source.getKey/getTag/getLoginHeader/putLoginHeader/upLoginData；timeFormatUTC / htmlFormat / t2s / s2t / toNumChapter / refreshBookUrl。
+D4 明确不做（沙箱禁忌，维持具名拒绝）：文件/压缩包族、Rhino Java 互操作、importScript/cacheFile/downloadFile。
+
+E 非文本书源
+E1 文件型（type=3，downloadUrls）与视频型（type=4）无链路；图片源 imageDecode 仍拒绝、imageStyle 只 single/full。
+E2 正文 HTML 化：HtmlFormatter.formatKeepImg（相对 img 补全 + <usehtml> 保真，BookContent.kt:207-216）与阅读端 HTML 渲染缺失。
+
+切片（每片独立过全部门禁，行为测试先行；顺序即依赖顺序）：
+S1 jsLib（A1）。S2 阶段字段族 B1-B4 + B5 + B6 + B7。S3 密钥类 crypto 与 D2/D3 绑定。S4 URL 方言 C6。S5 语法 C1/C2/C3/C4（按语料占比定序）。S6 非文本链路与正文 HTML（E1/E2）。S7 文档与拒绝清单收敛（§11 与 engine-parity 同步）。
+
+验收（硬性）：
+1. engine-parity.md 每行状态改为「已对齐」，并附真实书源证据（源名 + 四段计数/哈希），格式照 book-source.md §10。
+2. 语料普查（tool/spot_check/batch_probe.dart）统计每个缺口字段/语法的出现次数，写进 engine-parity.md；出现次数 >0 且未实现的项必须显式 unsupported 或进「有意的差异」并留触发条件。
+3. 文档与代码一致：§3 矩阵状态列、§11 拒绝清单、§2 未建模字段清单三处不得再出现「已支持但不支持」这类矛盾。
+4. 差异台账：与上游不同的每一处，要么在 book-source.md §11/§3 注记登记，要么在 engine-parity.md 标「有意的差异 + 触发条件」。
+
+不在本里程碑：RSS/订阅源、朗读规则、上游备份 zip 读取、Rhino 互操作、字典/高亮规则。
+
+## 2026-10-26 — M26 引擎高性能重构：可测指标、允许的重构面与不可动红线
+
+用户裁决（2026-10-26）：性能与行为对齐同属目标，允许重构引擎内核。本里程碑只改「同一行为更快」，不改语义；每个优化必须在 M25 的行为测试全绿下进行，行为变化一律回到 M25。
+
+可测指标（写进 docs/dev/testing.md §2 的同一口径，数值先按下列初值，实测后只准收紧）：
+P1 单章正文（≤200KB HTML，规则 3 段）：解析 → 提取 → replaceRegex 全程 ≤ 40 ms（Windows release，不含网络）。
+P2 千章目录（1000 条正则/CSS 混合规则）：≤ 300 ms，且与章数近似线性（无 O(n²)）。
+P3 规则解析缓存：同一条规则文本在一本书的一次会话内只编译一次（CSS/JSONPath/正则），命中率 ≥ 95%。
+P4 HTML DOM 复用：一页只 parse 一次，同一 scope 的多个字段共享 DOM（现在是每次 evaluate 重建）。
+P5 JS worker 往返：每个 job 的固定开销 ≤ 3 ms（空脚本基准），`java.getString` 字面量内联路径覆盖 ≥ 90% 的嵌套调用。
+P6 内存：解析单章峰值增量 ≤ 8 MB，1000 章目录 ≤ 32 MB（不得一次性把整页/整书读进内存，C-NET-7 不变）。
+
+重构允许面（都是当前实现的可识别热点）：
+R1 规则编译期/运行期分离：`_parse` / `_check` 的结果按 (rule text, hasExtraction) 缓存，规则求值只走已编译的步骤表；缓存 key 与生命周期归 PageFetchService 作用域，随书源 reload 失效。
+R2 去掉重复 scope 重建：`_pages.field()` 现在每个字段都重新解析页面 body，改为一个 FetchedPage 持有一份 RuleScope（DOM + body + JSON 惰性解析）。
+R3 提取管线批量化：同一 rule 在列表条目上逐项求值时，共享选择器编译结果与已解析的条目 DOM。
+R4 页内并发：nextTocUrl / nextContentUrl 多值并发抓取（上限沿用 book-source.md §8 的 3，且不得嵌套占用同一源的槽位）。
+R5 JS 通道：把「一条规则一个 job」的开销降到固定成本（脚本编译结果按 sourceId+script hash 缓存），保留 5s / 32MB / 20 调用配额不变。
+R6 目录/正文缓存的命中路径不得触碰引擎（现状已满足，重构不得回退）。
+
+不可动（红线照旧）：C-SRC-*（含 C-SRC-4 禁止静默忽略、C-SRC-8 rulePath 可定位）、ParseResult 契约、无 dynamic/print/!、presentation 不 import data、JS 白名单与配额数值、书源并发上限与限速合成顺序、生成物不手改。
+
+验收：P1-P6 的基准脚本落在 tool/bench/（不进 CI，与 tool/spot_check 同模式，README 写复现方法）；重构 PR 必须附前后数字；内存指标用 integration_test 的设备级用例抽一次真机数据。行为对齐测试与性能基准不得互相让步 —— 做不到就登记为「已知热点」而不是放宽行为。
+
+## 2026-10-26 — M27 语料全量回归与差异台账：口径、出口判据与两条新增门禁
+
+目的：把「行为几乎一致」变成可复核的数字，而不是逐条目测。M25 交付能力、M26 交付速度，本里程碑交付**证据**。
+
+语料与口径：
+1. 语料分层两档，都写清来源与抓取日期（不进仓库大文件）：L1 = 128 条公开合集（`4dc410d1.json` 一档，历史普查用过的同一份）；L2 = 全量合集（3907 条一档）。只对 L1 要求逐源跑通，对 L2 只要求普查与显式拒绝，避免把「站点挂了」算成引擎缺陷。
+2. 普查（静态、不联网）：`tool/spot_check/batch_probe.dart --list=` 统计每个缺口字段/语法/`java.*` 成员的出现次数与涉及源数，产出 docs/dev/engine-parity.md 的「语料命中」列。这张表决定 S5（#20/#21/#22/#30）的排序，取代拍脑袋。
+3. 链路（联网、可复现）：L1 里能跑的源按 book-source.md §10 的格式记录「语法/字段 + 书源 + 四段结果 + 哈希」；失败必须落到归因（网络 / 站点改版 / 未实现能力），不允许只写「失败」。
+4. 差异台账：与上游行为不同的每一处，三选一 —— ① 修掉；② 登记为「有意的差异 + 触发条件」（book-source.md §3/§4/§6/§11 的注记）；③ 登记为「已知热点」（性能，归 M26）。未登记差异视为缺陷。
+5. 出口判据（M27 完成）：engine-parity.md 无「未对齐」行；L1 逐源归因表完整；book-source.md §3 矩阵状态列、§11 拒绝清单、§2 未建模字段清单与代码逐条一致（用一次 grep 复核：文档声称支持的名字必须能在 lib/ 找到实现，反之亦然）。
+
+新增门禁（只加不删）：
+G1 一条单测/工具用例：把 book-source.md §11 的拒绝名单与 `quickjs_worker.dart` 的 `__javaRejectedNames` 对照，两边不一致即失败（防文档漂移，ADR-0012）。
+G2 一条单测：矩阵「已确认」行的语法各有 ≥1 条用例（现存已满足，改为按表驱动查漏）。
+G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine-parity.md，PR 里可对照。
+
+不在本里程碑：为对齐而引入上游 Android 专属行为（WebView 特有 JS、Rhino 类型系统）；这些以「有意的差异」登记。

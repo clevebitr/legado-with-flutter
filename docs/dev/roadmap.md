@@ -55,6 +55,7 @@ Phase 6    发布前                          清单见 §5
 | M16 — 漫画引擎 | 🚧 落地中：M-1–M-3 ✅；设备级实跑与真源抽查未闭环（见 §3.10） |
 | M18–M21 — UI 对齐（外壳/书架/规则/数据） | 🚧 M18 已落地（U1–U3）；M19–M21 未开工（见 `docs/dev/ui-gap.md` 与 §3.11） |
 | M17 — 听书与音频 | ⏳ 未开工（已交给另一个代理；判断归 ADR-0054） |
+| M25–M27 — 引擎对齐上游 + 高性能 | 🚧 M25 刚立项（ADR-0078，`DECISIONS.md` #35–#37）；缺口清单唯一出处 `docs/dev/engine-parity.md`，切片 S1–S7 的步骤级进度只看 `todo` |
 | Phase 6 — 发布前 | ⏳ 未开始（清单见 §5） |
 
 > 步骤级「下一步」不写在此处，由 `todo` 工具决定。
@@ -428,7 +429,26 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 > 恢复完成后经 `RestoreCompletionHook` 让 `Settings` 与阅读设置重新读盘。
 > **未做（登记在 §3.7）：** WebDAV、自动备份与保留份数、覆盖式恢复、备份加密、读上游 zip。
 
+> **M25–M27 立项（2026-10-26，ADR-0078，`DECISIONS.md` #35–#37）：** 引擎目标从「真实语料可用」升级为
+> 「与上游几乎一致 + 高性能」，允许重构内核。**本仓不在这里维护缺口清单**：逐项证据、本仓现状、语料命中与去向
+> 全部在 `docs/dev/engine-parity.md`（唯一）；本节只留里程碑口径：
+>
+> - **M25 对齐（`#35`）**：切片 S1 `jsLib` → S2 阶段字段族（`subContent`/`title`/`payAction`/`callBackJs`/
+>   `formatJs`/`isVolume`/`isPay`/`preUpdateJs`/`downloadUrls`/`bookUrlPattern`/目录去重）→ S3 密钥类 crypto 与绑定面
+>   → S4 URL 方言五条 + 列表尾部 `@js:` → S5 矩阵 #20/#21/#22/#30 → S6 非文本链路与正文 HTML → S7 文档收敛。
+> - **M26 性能（`#36`）**：P1–P6 指标 + `tool/bench` 基准；重构面 R1–R5（规则编译缓存、共享 `RuleScope`、
+>   批量提取、翻页并发、JS 编译缓存）；红线与 JS 配额不动。
+> - **M27 收口（`#37`）**：L1/L2 语料普查填「语料命中」列、L1 逐源四段归因、差异三选一登记、
+>   新增门禁 G1（§11 拒绝名单 ↔ `__javaRejectedNames`）与 G2（矩阵「已确认」行表驱动查漏）。
+>
+> 出口判据（不许放宽）：`engine-parity.md` 无未标注去向的行 + 文档三处（`book-source.md` §2 未建模字段、
+> §3 矩阵状态列、§11 拒绝清单）与代码逐条一致。
+
 ### 3.7 未闭环交接登记（不得静默丢弃）
+
+> **范围分界（ADR-0078 §决策 2）：** 「引擎与上游 Legado 的行为差距」这一族（规则语法、书源/阶段字段、
+> JS 绑定、URL 方言、非文本书源）的唯一清单是 `docs/dev/engine-parity.md`；本节保留其余跨 feature 的
+> 未闭环节点，并对已迁走的引擎项只留一行回链（如 `downloadUrls` / `isVolume` 那一条）。
 
 > 已闭环 / 已否决的登记项（并发上限 3、M1 #15–#19、规则变量不落盘、`ruleBookInfo.init` 未应用、b1b 首版
 > 返工与真源回归、`{{…}}` 内 `##`、JSONPath `]name`、charset 结果缓存、`bookSourceType=4`、`java.*` 兼容面…）
@@ -446,7 +466,7 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 聚合搜索的结果**不落库**（上游把 `SearchBook` 写进数据库以复用搜索历史） | **未做（3.8 登记，ADR-0046 §后果）**：M11 只做内存合并。触发 = 用户要求「搜索历史 / 收藏搜索结果」，届时加表 + 迁移 |
 | 音频 / 图片 / 视频 / 文件源**只能被搜索的类型过滤排除**，本仓没有它们的链路（阅读器只读文本） | **未做（ADR-0046 §决策 2 的有意差异）**：类型筛选默认只选文本，界面上可以把它们打开但打开后没有可读页面。触发 = 真的要支持非文本书源 |
 | `java.get('bookName' / 'title')` 的上游特例（`AnalyzeRule.kt:812-821`） | ✅ **已闭环（M12，2026-10-21）**：`ChapterRequest` 替代裸 URL，`JsJob` 携带两个内置键且**先于**变量表（ADR-0049 §决策 1/2）；阅读器 / 校验 / 目录都接线并有测试 |
-| `downloadUrls` / `relatedBooks`；`isVolume` / `formatJs` / `preUpdateJs` | **均未做**：`isVolume` 一族已裁决本阶段不做（ADR-0041 §决策 6）；`downloadUrls` 属批量下载面、`relatedBooks` 无语料证据。触发 = 5.10 校验或入库工具普查出真实需求；未建模期间**不得**声称支持（清单归 `book-source.md` §2 注记） |
+| `downloadUrls` / `relatedBooks`；`isVolume` / `formatJs` / `preUpdateJs` | **已并入 M25 切片 S2/S6（ADR-0078，`DECISIONS.md` #35）**：清单与现状归 `docs/dev/engine-parity.md` §2/§3；本节不再重复。触发 = 用户裁决引擎对齐（已触发） |
 | `checkKeyWord`（书源校验 / 调试的默认关键词） | ✅ **已闭环（5.10，2026-10-21）**：`SearchRule.checkKeyWord` 已建模，「像规则」判据 = `resolveCheckKeyword` / `looksLikeRule`（ADR-0043 §决策 2） |
 | 并发上限接入用户设置时必须**显式校验 / 钳制 `> 0`**（今天只有 `assert`，release 会剥掉；`0` = 永久排队） | ✅ **已闭环（5.6，2026-10-21）**：`budgetOrDefault` 在 release 也生效（`<= 0` 回落默认 + warning），设置页的下限也是 1 |
 | `httpClientProvider` 是 autoDispose，预算挂在实例上 ⇒ 跨操作会重建 | ✅ **已闭环（5.6）**：改 `keepAlive`，预算跨操作保持一份（批量下载因此不必另起机制） |
@@ -481,7 +501,6 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 过人机验证（可见 WebView、图片验证码、`loginCheckJs`） | ✅ **已闭环（M21a 第二刀，2026-10-24）**：可见 WebView 页 + 图片验证码 + `java.startBrowser*` / `getVerificationCode` / `webView*` + Cookie v8 持久化与双向同步 + 三个登录源字段 + `loginCheckJs` **响应拦截器** + 书源管理的「登录 / 过验证」入口 + `sourceRegex` / `bodyJs`（ADR-0068 及其增补）。**未做**：原生 `loginUi` 表单（归 M21b/U15）、字体反爬（见下一行） |
 | 字体反爬 `queryTTF` / `queryBase64TTF` / `replaceFont` | ✅ **已闭环（M21a 第三刀，2026-10-24）**：零新依赖，自研 `cmap`（format 0/4/6/12）+ `post` 2.0 解析，字形名优先、字形 id 兜底，字体以不透明句柄随 job 存活；`queryTTF(url)` 走新加的字节门并返回 Promise。`getFontGlyph` 上游并不存在，未实现（ADR-0068 增补决策 9） |
 | 图片源兼容面（ADR-0069）：URL 规则里的 `{{非 JS 规则}}`（G2）、封面 / 图片的 per-URL header、`imageStyle` 的 `left`/`right`/居中分支 | **大部分闭环（ADR-0069 及其 2026-10-24 增补）**：G1/G3/G4/G5/G7/G8 已修，设备日志取证后又修了 **G9**（`contentRule.content` 是单值读取：多匹配用换行拼成 `result`，`extractJoined`）、**G10**（默认 UA 对齐上游桌面 Chrome）、**G11**（`exploreUrl` 的空 URL 条目是分组标题，保留成不可点标签）、**G12**（HTTP 失败日志带 `type`/`status`，不再只有脱敏的 `DioException`）。剩 G2（URL 规则里的非 JS `{{…}}`）与 per-URL header、`imageStyle` 对齐分支，触发条件见 ADR-0069「登记差异」 |
-| 同步 `java.post/get/ajax` 响应对象（G6） | **登记不做（ADR-0069）**：沙箱是独立 isolate，阻塞不了宿主；规则要改成 `await http.post(...)`。触发 = 出现只能靠同步响应对象、改写不了的真实源 |
 | 替换净化规则的已知差异：`@js:` 替换表达式、正则超时、上游的逐行 trim | **大部分闭环（M23，ADR-0071 §决策 5）**：`@js:` 替换已实现（一条规则一章**一个** job，`timeoutMs` 作为该 job 的上限）；剩**正则**规则没有超时（Dart `RegExp` 无此 API，只做上游那两条静态拦截）与上游的逐行 trim（已裁定属阅读器排版） |
 | 净化规则的**分组**（上游 `group`）只保存不展示，也没有按组筛选 | **未做（M23）**：payload 已建模 `group` 并随导入导出往返；列表仍是单一顺序。触发 = 规则超过几十条后用户要求分组 |
 | **标题**净化只覆盖阅读器一侧 | **有意差异（M23，ADR-0071 §决策 4）**：目录 sheet / 正文头 / 进度名 / 搜索命中同一份净化后的标题；书源详情页的目录预览与书架「最新章节」读的是 `book_source` 的目录缓存，保持原样。触发 = 用户反馈两处标题不一致 |

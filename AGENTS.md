@@ -29,6 +29,7 @@
 | `docs/dev/tech-stack.md` | 新增依赖、改 lint、改国际化配置时 |
 | `docs/dev/architecture.md` | 新增文件、feature、Provider、路由时 |
 | `docs/dev/book-source.md` | 任何书源解析、规则引擎、JS 桥接改动 |
+| `docs/dev/engine-parity.md` | 改引擎前：这一项与上游差在哪、去哪个切片、是否已有意登记（ADR-0078） |
 | `docs/dev/testing.md` | 写测试、改 CI、修门禁失败时 |
 | `docs/dev/test-environment.md` | 在本机跑设备级测试、搭建 Windows/Android 测试环境、排查模拟器与设备问题时 |
 | `docs/dev/platform.md` | 涉及 Android / iOS / Windows 差异的代码 |
