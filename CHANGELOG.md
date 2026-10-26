@@ -22,7 +22,8 @@ L1 gate. One of those checkouts had also accumulated 137 uncommitted files that 
 - `ci.yml` gates pushes to **`dev`** as well as `main`; the release channels (`release.yml` on tags,
   `beta.yml` manual, `debug.yml` on `main`) are unchanged.
 - The stale checkouts were removed after archiving the dirty one to `F:/Projetcs/_archive/`
-  (patch + untracked files), and the old `feat/*` branches stay as read-only branches.
+  (patch + untracked files). The remote is down to `main` + `dev`: the four `feat/*` branches were
+  deleted after checking that each held **no** commit `dev` lacks, so nothing became unreachable.
 
 Rules live in `CONTRIBUTING.md` §4.1, the reasoning in ADR-0079, and `AGENTS.md` §3 step 0 points at
 both.

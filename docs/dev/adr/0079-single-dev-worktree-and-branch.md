@@ -39,8 +39,9 @@
 
 ## 后果
 
-- 旧的 `feat/ui-m15-m18` 远分支保留为**只读归档**（内容与 `dev` 起点相同），不再接受提交；
-  `feat/p5-1-book-source-entry` 与 `feat/m17-audio` 的本地 checkout 删掉，分支保留。
+- **远端只剩 `main` 与 `dev`**：`feat/ui-m15-m18`、`feat/p5-1-book-source-entry` 已删除，本地同名分支
+  与 `feat/m17-audio`、`feat/source-mgmt-manga-audio` 一并删除。删之前逐个核对过「相对 `dev` 的独有
+  提交数 = 0」，所以没有任何一次提交因此不可达；`feat/*` 从此是短命分支，合并回 `dev` 后立即删。
 - `legado-p5` 的未提交快照在被删前导出到仓库外 `F:/Projetcs/_archive/`（patch + 未跟踪文件归档），
   既保住可追溯性，又不让它们继续污染工作树。
 - 「统一工作树」在远端等价于「统一分支」：远端没有 worktree 概念，别人 clone 后同样只留一个
@@ -52,11 +53,13 @@
 
 | 项 | 状态 |
 |---|---|
-| 分支 | `dev` 已建立（起点 `feat/ui-m15-m18` 的 `96fa2f5`）、已推送并跟踪 `origin/dev`；`main` 未动 |
+| 分支 | `dev` 已建立（起点 `feat/ui-m15-m18` 的 `96fa2f5`）、已推送并跟踪 `origin/dev`；`main` 的历史没动，本地 `main` 已快进到 `origin/main` |
 | 唯一 checkout | 主克隆 `F:/Projetcs/legado-with-flutter`，已切到 `dev`；`legado-p5-audio` / `legado-p5` 已移除，`legado-p5-mgmt` 待移除 |
 | 脏快照 | `legado-p5` 的 137 处改动已归档到 `F:/Projetcs/_archive/2026-10-26-legado-p5/`（`dirty-tracked-and-untracked.patch` 747 KB + `status.txt`） |
 | 目录改名 | **未完成**：`legado-with-flutter` 被 VS Code 等进程占用，`mv`/`move` 报「拒绝访问」；关闭占用它的程序后执行 `move F:\Projetcs\legado-with-flutter F:\Projetcs\legado-p5-dev` |
 | 待移除的 worktree | 本文档写作时 `legado-p5-mgmt`（本会话的工作目录）仍被持有，需在会话结束后执行 `git -C <主克隆> worktree remove --force F:\Projetcs\legado-p5-mgmt`，再 `git worktree prune` |
+| 分支清理 | 远端已只剩 `main` + `dev`；本地只剩 `dev`（当前 checkout）+ `main`（跟 `origin/main`）。四个 `feat/*` 分支全部删除，删前逐个确认「相对 `dev` 独有提交 = 0」 |
+| `main` 与 `dev` 的关系 | 两条线共享 `55964cf`；`main` 上有两次 squash 合并（`#45` 三条发布通道、`#47` M19–M23 重建），`dev` 上有 95 次细化提交。**下次发布必须走 `dev` → `main` 的 PR**，不能强推 |
 
 > 这两条是**一次性收尾**，不是常规流程：平时开发只需要「在主克隆里、在 `dev` 上」这两件事。
 
