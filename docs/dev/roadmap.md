@@ -434,7 +434,7 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 > 全部在 `docs/dev/engine-parity.md`（唯一）；本节只留里程碑口径：
 >
 > - **M25 对齐（`#35`）**：切片 S1 `jsLib` → S2 阶段字段族（`subContent`/`title`/`payAction`/`callBackJs`/
->   `formatJs`/`isVolume`/`isPay`/`preUpdateJs`/`downloadUrls`/`bookUrlPattern`/目录去重）→ S3 密钥类 crypto 与绑定面
+>   `formatJs`/`isVolume`/`isPay`/`preUpdateJs`/`downloadUrls`/`bookUrlPattern`/目录去重）→ S3a 密钥类 crypto 与字节族（已落地）/ S3b 绑注入面
 >   → S4 URL 方言五条 + 列表尾部 `@js:` → S5 矩阵 #20/#21/#22/#30 → S6 非文本链路与正文 HTML → S7 文档收敛。
 > - **M26 性能（`#36`）**：P1–P6 指标 + `tool/bench` 基准；重构面 R1–R5（规则编译缓存、共享 `RuleScope`、
 >   批量提取、翻页并发、JS 编译缓存）；红线与 JS 配额不动。

@@ -790,6 +790,14 @@ java.replaceFont(result, errorFont, correctFont);
 | `put(key, value)` / `get(key)` | 规则变量，与 `@put:` / `@get:` 同一份（ADR-0034） | ✅ 已落地 |
 | `timeFormat(ms)` | `yyyy/MM/dd HH:mm`、本地时区、worker 内同步（不限额） | ✅ 已落地（M1-b1） |
 | `md5Encode(str)` | = 本表的 `crypto.md5`（UTF-8 字节的十六进制 MD5；上游 `MD5Utils.kt:13-15`） | ✅ 已落地（M1-b1b） |
+| `md5Encode16(str)` | 32 位 MD5 的第 9..24 位字符（上游 `MD5Utils.md5Encode16`） | ✅ M25/S3a |
+| `base64DecodeToByteArray(str[, flags])` / `hexDecodeToByteArray(hex)` | 答 `byte[]`（沙箱里是 `Uint8Array`）；base64 按上游 hutool 的宽容规则解（空白、`-_`、缺填充都收），空白输入答 `null`；hex 必须偶数位且只含 `0-9a-fA-F` | ✅ M25/S3a |
+| `hexEncodeToString(str)` / `hexDecodeToString(hex)` | UTF-8 字节与十六进制互转（小写出口） | ✅ M25/S3a |
+| `strToBytes(str[, charset])` / `bytesToStr(bytes[, charset])` | 字符串与字节数组按声明字符集互转：未知标签与坏字节都退 UTF-8（坏序列换 U+FFFD），不抛错 | ✅ M25/S3a |
+| `digestHex(data, algorithm)` / `digestBase64Str(data, algorithm)` | 摘要，算法认 `MD5` / `SHA-1` / `SHA-224` / `SHA-256` / `SHA-384` / `SHA-512`（`-` 可省、大小写不敏感），出口 hex 或 `NO_WRAP` base64 | ✅ M25/S3a |
+| `HMacHex(data, algorithm, key)` / `HMacBase64(data, algorithm, key)` | HMAC，算法名照抄 Java 拼写（`HmacSHA256` / `HMAC-SHA1` / `HmacMD5`），`key` 取 UTF-8 字节 | ✅ M25/S3a |
+| `createSymmetricCrypto(transformation[, key[, iv]])` | 不透明句柄（`{__symmetric: true, id}`），九个方法：`encrypt` / `encryptBase64` / `encryptHex` / `encryptStr` / `decrypt` / `decryptStr` / `decryptHex` / `decryptBase64` / `setIv` | ✅ M25/S3a |
+| `aes*` / `des*` / `tripleDES*`（上游 `@Deprecated` 一族） | 按「组一个密码器 + 调一个方法」实现，参数顺序逐个照抄上游（含 `*ArgsBase64Str` 那组的 key/iv 不对称） | ✅ M25/S3a |
 | `base64Encode(str)` / `base64Decode(str)` | = `crypto.base64Encode` / `crypto.base64Decode`；前者对齐上游 flags = 2（`Base64.NO_WRAP`），非法输入抛错 | ✅ 已落地（M1-b1b） |
 | `encodeURI(str)` | **Java `URLEncoder.encode(str, "UTF-8")`**：空格 → `+`，保留 `A-Za-z0-9` 与 `-_.*`，其余 UTF-8 字节 `%XX` 大写——**不是** JS 的 `encodeURI`（上游 `JsExtensions.kt:683-689`） | ✅ 已落地（M1-b1b） |
 | `encodeURI(str, charset)` | 同上，但按**声明的字符集**取字节（真实语料：`java.encodeURI(key, "GBK")`，ADR-0069 G1）；未知标签退 UTF-8（上游抛错返回 `""`） | ✅ M21a（ADR-0069） |
@@ -844,6 +852,40 @@ java.replaceFont(result, errorFont, correctFont);
 `var` / `function` 才有跨 eval 的可见性；上游 Rhino 是 ES5，本来也不认 `let`）；② 缓存只在内存里，
 重启后重新解析（上游把它落到磁盘 `ACache`）；③ `source.jsLib` **不在** `source` 绑定里（那个对象仍只有
 `name` / `url` / `group`，防信息外泄），需要库内容的规则请直接依赖库函数。
+
+**字节与密钥族（M25/S3a，ADR-0078 §切片 S3a）：** 上游这一族靠 Rhino 直接拿到 Java `byte[]` 与活的
+`SymmetricCryptoAndroid` 对象，本仓用两个形状兑现：
+
+1. **`byte[]` = JS `Uint8Array`。** 语料对它的用法是 `length` / `Array.from(bytes)` / `slice(8, -16)`
+   （阅文系的解密链），三种都成立；它过隔离体边界时是一整块 typed array，不是「JSON 数字数组」。
+   差异：把字节数组**直接当返回值**时，`JSON.stringify` 看到的是对象而不是数组，所以规则要落库/拼字符串
+   时先转（`hexEncodeToString` / `bytesToStr` / `encryptBase64`）。
+2. **`SymmetricCrypto` = 不透明句柄**（`{__symmetric: true, id}`）：密码器本体留在宿主，每次方法调用只走
+   一个小信封。句柄**随 job 失效**（与字体句柄同一套契约，`_fonts` / `_ciphers` 都在 job 开始时清空），
+   脚本把句柄存进 `globalThis` 跨 job 用会拿到 `unknown symmetric crypto handle`，而不是别人的密码器。
+
+**transformation 与密钥的规范化照抄上游 `SymmetricCryptoAndroid`：**
+
+- 不带 `/` 的写法按 `/<算法>/ECB/PKCS5Padding` 补全（所以 `AES` = `AES/ECB/PKCS5Padding`）。
+- 密钥可以是字符串（取 UTF-8 字节）或字节数组；DES 超过 8 字节截前 8，DESede 超过 24 字节截前 24；
+  `key` 缺省时用随机密钥（`KeyGenerator` 语义：规则只能在同一段脚本里加密再解密）。
+- **支持面：AES / DES / DESede × ECB / CBC × PKCS5Padding / PKCS7Padding / NoPadding。**
+  CFB / OFB / CTR / GCM、非对称（`createAsymmetricCrypto`）与签名（`createSign`）**不在支持面**内，
+  命中即抛可读错误（触发条件：真实语料出现且能给出复现源，见 §11）。
+- 单 DES 由 `DESede(K1=K2=K3)` 兑现（pointycastle 只带三倍引擎），与 Java 单 DES **逐字节相同**；
+  `NoPadding` 要求字节数正好是块大小的非零整数倍（Java 抛 `IllegalBlockSizeException`，本仓同样失败，
+  不悄悄补零）。
+- `decrypt(String)` 自己猜编码：全 hex 且偶数位按 hex，否则按 base64（上游 `SymmetricCryptoAndroid.kt:80-90`）；
+  `decryptHex` / `decryptBase64` 则强制那一种。
+
+三条**有意差异**：① `aesEncodeToString` 上游实现是 `decryptStr`（历史 bug），本仓按名字的意图**加密**——
+依赖这个 bug 的源本来也解不出正文；② `base64DecodeToByteArray(str, flags)` 接受 `flags` 但**不按位分支**
+（上游两个重载最终都走 hutool 的宽容解码器，行为一致）；③ 上游的 `strToBytes/bytesToStr` 没有
+`@JavascriptInterface` 注解、只靠 Rhino 的公开方法可见性拿到，本仓照样绑定，但只做「未知标签退 UTF-8」
+这一档容错。
+
+> 这些调用**纯计算**，在 worker 的同一 isolate 内完成：不联网、不进 `http.*` / `parse.*` 的调用额度，
+> 也不受单源并发/限速影响。
 
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
 `eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。
@@ -1185,13 +1227,18 @@ java.replaceFont(result, errorFont, correctFont);
   读写（ADR-0034），名字被占用，上游那套同步返回 body 的 `get(url)` 因此仍无可用拼写。
   **重放层落地后仍拒绝的：** `ajaxAll` / `connect`（上游同步返回响应对象，只要整表的规则才需要）、
   `webViewGetElements`（本仓没有元素列表形态的渲染接口）、`downloadFile` / `cacheFile` / `importScript`
-  （沙箱禁忌或需要平台能力）、`base64DecodeToByteArray` / `hexDecodeToByteArray`（Rhino 字节数组；
-  语料里 326/328 处直接喂给 `IvParameterSpec` / `SecretKeySpec`，即密钥类 crypto）、
-  `createSymmetricCrypto` / `aes*` / `des*` / `HMac*`（密钥类 crypto）、
-  `md5Encode16` / `htmlFormat` / `refreshBookUrl`（零散）——命中即抛**可读错误**，不得落到
-  `undefined is not a function`。多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)`）
+  （沙箱禁忌或需要平台能力）、`htmlFormat` / `refreshBookUrl`（零散）——命中即抛**可读错误**，
+  不得落到 `undefined is not a function`。多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)`）
   同样具名拒绝：本仓没有 flags / charset 语义。
   **已随 M24 落地、不再拒绝：** `java.ajax` / `java.post` / `java.head` / `java.getCookie` / `java.setContent` /
   `java.toast` / `java.longToast` / `cookie.*` / `source.getVariable`（语义见 §6）。
+  **已随 M25/S3a 落地、不再拒绝：** `java.md5Encode16` / `base64DecodeToByteArray` / `hexDecodeToByteArray` /
+  `hexEncodeToString` / `hexDecodeToString` / `strToBytes` / `bytesToStr` / `digestHex` / `digestBase64Str` /
+  `HMacHex` / `HMacBase64` / `createSymmetricCrypto` / `aes*` / `des*` / `tripleDES*`（语义见 §6
+  「字节与密钥族」）。
+  **密钥族的边界（S3a 登记）：** 只支持 AES / DES / DESede × ECB / CBC × PKCS5/PKCS7/NoPadding；
+  CFB / OFB / CTR / GCM 这类模式与非对称（`createAsymmetricCrypto`）、签名（`createSign`）**仍是具名拒绝**
+  （前两者在上面的拒绝族里，模式不匹配则报 `unsupported mode`）。重新评审的触发条件：真实语料出现
+  该 transformation 且有能复现的源。
 - Rhino Java 互操作（`java.lang` / `java.security` / `java.util` / `java.net`，以及 `Packages.*`）：
   `new java.util.ArrayList()` 这类写法命中**抛错 Proxy**，报可读原因。

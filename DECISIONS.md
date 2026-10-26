@@ -721,3 +721,25 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 3. 副文页失败不能判章失败（正文仍可读），但副文为**空串**时要给 `null` 而不是 `''`，否则调用方会以为「有歌词但是空的」。
 
 验证：format 0 / analyze 0 issue / `flutter test` **2385 用例全过**（新增 `fetch_content_test` 9 例）、check_coverage 与生成物门禁随后一起验。
+
+## 2026-10-26 — M25/S3a 落地：密钥类 crypto 与字节族（pointycastle + 句柄）
+
+用户裁决（2026-10-26）：S3 拆两半，本轮做 **S3a（D1 密钥类 crypto + 字节族）**，并同意新增 `pointycastle`。S3b（D2/D3 绑注入面）留下一轮。
+
+**落地**（行为面 → `book-source.md` §6「字节与密钥族」/ §11；为什么 → ADR-0078 §实现注记 S3a；台账 → `engine-parity.md` §5 D1 / §7）：
+- `byte[]` = JS `Uint8Array`（不是句柄）：语料是 `Array.from(bytes).slice(8,-16)` 与 `bytes.length`，句柄会让这两种写法失效；`flutter_qjs_next` 原生支持 `Uint8List ↔ Uint8Array`，过桥是一次 memcpy。
+- `createSymmetricCrypto` = 不透明句柄 `{__symmetric: true, id}`，沿用 `JsFontRegistry` 的契约（每 job 清表、id 不复用），九个方法（`encrypt*` / `decrypt*` / `setIv`）与 `SymmetricCryptoAndroid` 一一对应。
+- `core/js/js_crypto.dart`：hex/base64 宽容编解码、`md5Encode16` / `digestHex` / `digestBase64Str` / `HMacHex` / `HMacBase64`、AES / DES / DESede × ECB / CBC × PKCS5-PKCS7 / NoPadding、transformation 与密钥规范化照抄上游（无 `/` 补 ECB/PKCS5、DES >8 截 8、DESede >24 截 24、key 缺省随机）。**单 DES 用 `DESede(K1=K2=K3)`** 兑现（pointycastle 4 只带三倍引擎），与 `openssl enc -des-cbc` 逐字节相同。
+- worker：`crypto` 通道一个解码器（老的四个 `crypto.*` 动词与新族共用），字节族载荷是**对象**而非 JSON 字符串；`__javaRejectedNames` 去掉 10 个已实现名字，加上 `createAsymmetricCrypto` / `createSign`（仍拒绝，保持 §11 与代码一致）。
+- `charset_text.dart` 新增 `charsetText`（未知标签/坏字节退 UTF-8 容错），供 `java.bytesToStr` 用。
+
+**有意差异（已登记，不假装对齐）**：`aesEncodeToString` 上游实现是 `decryptStr`（历史 bug）→ 本仓按名字的意图加密；`base64DecodeToByteArray(str, flags)` 收 `flags` 但不按位分支；CFB/OFB/CTR/GCM、非对称、签名仍具名拒绝（触发条件：真实语料出现且有可复现源）。
+
+**踩的坑（三条）**：
+1. `PaddedBlockCipherImpl.init` 在 pointycastle 4 要 `PaddedBlockCipherParameters(underlying, padding)`，不是裸 `CipherParameters`；ECB 要 `KeyParameter`、CBC 要 `ParametersWithIV`，两者不能混。
+2. `HMacHex(data, algorithm, key)` 的 `algorithm` 是 **Java 的 Mac 名**（`HmacSHA256` / `HMAC-SHA1`），前缀不去掉就会答「unsupported digest algorithm」——真实语料（西瓜小说）正是这么写的。
+3. `createSymmetricCrypto(transformation, key, iv)` 的 `key`/`iv` 允许字符串（UTF-8 字节）**和**字节数组：第一版只认字节，语料里的 `"D2o4XyQeIFobJ4tS"` 直接被判成 `expected bytes`。
+
+**语料数字（2026-10-26 手工静态普查，M27 用 `batch_probe.dart` 重算）**：本地 `corpus_a`(504 条) 29 源 / 85 处，`corpus_b`(128 条) 4 源 / 6 处；`createSymmetricCrypto` 32 处、`hexDecodeToString` 16 处、`aesBase64DecodeToString` 9 处、`base64DecodeToByteArray` 9 处、`hexDecodeToByteArray` 8 处、`HMacBase64` / `digestHex` 各 3 处。
+
+验证：format 0 / analyze 0 issue / `flutter test` 2434 例全过 / check_coverage exit 0（core 99.19、domain 98.67、data 95.65；`js_crypto.dart` 与 `charset_encoding.dart` 行覆盖 100%）/ `build_runner` 后生成物无漂移 / `dart run tool/scan_licenses.dart` 202 包 Risky none（新增 1 个 MIT 包）/ 真引擎探针 56 例（新增 7 条）在 **Windows 与 Android 模拟器**双端全绿。

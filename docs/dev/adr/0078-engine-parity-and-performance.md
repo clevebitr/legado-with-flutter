@@ -172,3 +172,44 @@ formatJs 里可见 `jsLib`）在 **Windows 与 Android 模拟器**双端全绿�
 验证：`fetch_content_test` 新增 9 例（文本副文追加、音频歌词、副文取页、副文页失败仍给正文、标题改名 +
 reviewImg、只有图时保留目录名、`replaceRegex` 看得到副文、二次读命中仍给标题/歌词）与全量
 `flutter test` 2385 例全过。
+
+## 实现注记（2026-10-26，S3a：密钥类 crypto 与字节族）
+
+决策 1/6 在 S3a 上的落地形态（行为面归 `book-source.md` §6「字节与密钥族」与 §11，台账状态归
+`engine-parity.md` §5 D1）：
+
+1. **`byte[]` 用 JS `Uint8Array` 表达，而不是句柄。** 语料对字节数组的实际用法是
+   `Array.from(bytes).slice(8, -16)`（阅文系解密链）与 `bytes.length`，句柄会让这两种写法全部失效；
+   `flutter_qjs_next` 的桥原生支持 `Uint8List ↔ Uint8Array`（`_typedDataToJs` / `jsGetArrayBuffer`），
+   所以字节数组过桥是**一次 memcpy**，不是「JSON 数字数组」。代价：脚本把字节数组直接当返回值时，
+   `JSON.stringify` 看到的是对象——这一条写进 `book-source.md` §6。
+2. **`SymmetricCrypto` 用句柄。** 密码器是宿主侧状态（transformation + key + iv），塞进脚本既不可能
+   （QuickJS 没有 Java 互操作）也没必要；沿用 `JsFontRegistry` 的契约：`{__symmetric: true, id}`、
+   每个 job 清表、id 不复用。九个方法与上游 `SymmetricCryptoAndroid` 一一对应，`setIv` 返回自身。
+3. **transformation / 密钥的规范化照抄 `SymmetricCryptoAndroid.normalizedKey`**：无 `/` 补
+   `/ECB/PKCS5Padding`；DES > 8 截 8、DESede > 24 截 24；`key == null` 用随机密钥。**单 DES 用
+   `DESede(K1=K2=K3)` 兑现**——pointycastle 4 只带三倍引擎，而三联同键在数学上就是单 DES（已用
+   `openssl enc -des-cbc` 与 `-des-ede3-cbc` 两种密码器互验同一向量）。`NoPadding` 要求整块，否则按
+   Java 的 `IllegalBlockSizeException` 失败，不补零。
+4. **失败必须可读。** 字节/句柄族的失败原因（密钥长度、未知 transformation、NoPadding 长度、过期句柄）
+   都通过 `{__error: message}` 回到 JS 并 `throw new Error(message)`；不能退化成
+   `undefined is not a function`，否则调试一条加密源无从下手（ADR-0037 §决策 5 的同一立场）。
+5. **通道与配额。** 新族与老的四个 `crypto.*` 动词共用 `crypto` 绑定（一个解码器、一套测试），载荷是
+   **对象**而不是 JSON 字符串（字节要原样过桥）；全部在 worker 的 isolate 内完成，不联网、不计入
+   `http.*` / `parse.*` 的单规则 20 次额度，也不受单源并发/限速影响。
+6. **新增依赖 `pointycastle ^4.0.0`（MIT，纯 Dart）。** 这与 2026-10-25「备份不引入密码学依赖」的结论
+   并不冲突：备份只需 `archive` 自带的 WinZip AES，而这里要 AES/DES/DESede × ECB/CBC × PKCS5，
+   手写的正确性风险远大于一个 MIT 依赖（`NOTICE.md` §5 已记两条结论并存）。许可证复扫
+   `dart run tool/scan_licenses.dart`：202 包，Risky items: none。
+7. **有意差异（登记，不假装对齐）**：`aesEncodeToString` 上游实现是 `decryptStr`（历史 bug），本仓按
+   名字的意图加密；`base64DecodeToByteArray(str, flags)` 收 `flags` 但不按位分支（上游两个重载最终同路）；
+   CFB/OFB/CTR/GCM、非对称 `createAsymmetricCrypto`、签名 `createSign` 仍具名拒绝，重新评审的触发条件
+   写在 `book-source.md` §11。
+
+验证：`test/core/js/js_crypto_test.dart` 49 例（AES-CBC/ECB、单 DES、DESede、NoPadding、密钥截断与
+随机密钥、无 IV、错误密钥长度、未知模式/填充、hex/base64 宽容解码与边界、digest/HMAC 已知向量、句柄
+过期与 LRU 淘汰、setIv、字节数组与普通数组两种操作数），两个新/改文件的行覆盖率均为 100%；全量
+`flutter test` **2434 例全过**，`check_coverage` exit 0（core 99.19 / domain 98.67 / data 95.65），
+`build_runner build` 后生成物无漂移。真引擎探针新增 7 条（AES 句柄往返、`Uint8Array` 的
+`length`/`Array.from`/`bytesToStr`、语料式的 hex 密钥解密、`jsLib` + base64 密钥解密、`@Deprecated`
+的 `aes*` 族、算法名错误可读、HMAC/digest/md5Encode16）：**56 例在 Windows 与 Android 模拟器双端全绿**。

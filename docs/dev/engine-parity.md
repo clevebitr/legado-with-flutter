@@ -107,11 +107,11 @@
 
 | 能力 | 上游证据 | 本仓现状 | 语料命中 | 去向 |
 |---|---|---|---|---|
-| ⚠ 密钥类 crypto：`createSymmetricCrypto` / `aes*` / `des*` / `HMac*`、`base64DecodeToByteArray` / `hexDecodeToByteArray` / `hexEncodeToString` / `md5Encode16` | `JsExtensions.kt:586-666`、`:1216+`（`SymmetricCrypto`） | 全部具名拒绝（`quickjs_worker.dart` 的 `__javaRejectedNames`） | | **S3**（字节族需「受控句柄」设计） |
-| ⚠ 全局绑定 `chapter` / `src` / `nextChapterUrl` / `fromBookInfo` / `infoMap` / `speakText` / `gInt`+`index`（`formatJs`） | `AnalyzeRule.kt:834-847`、`AnalyzeUrl.kt:365-376`、`BookChapterList.kt:145-149` | 只有 `baseUrl`/`result`/`page`/`source`/`book`/`key` | | **S3** |
-| ⚠ `cache.*`（`CacheManager`） | `AnalyzeRule.kt:836` | 无 | | **S3** |
-| ⚠ `source.getKey` / `getTag` / `getLoginHeader` / `putLoginHeader` / `login()` | `BaseSource.kt:80-140` | 部分（有 `name/url/group`、`getVariable`、`getLoginInfo*`） | | **S3** |
-| `java.timeFormatUTC` / `htmlFormat` / `t2s` / `s2t` / `toNumChapter` / `refreshBookUrl` / `randomUUID` / `androidId` / `openUrl` / `getWebViewUA` / `toURL` / `webViewGetElements` / `ajaxAll` / `connect` | `JsExtensions.kt` 各节 | 具名拒绝 | | 按普查逐个决定（`timeFormatUTC`/`htmlFormat`/`t2s`/`s2t` 纯计算，优先） |
+| ✅ 密钥类 crypto：`createSymmetricCrypto` / `aes*` / `des*` / `tripleDES*` / `HMac*` / `digest*`、`base64DecodeToByteArray` / `hexDecodeToByteArray` / `hexEncodeToString` / `hexDecodeToString` / `strToBytes` / `bytesToStr` / `md5Encode16` | `JsEncodeUtils.kt:20-528`、`SymmetricCryptoAndroid.kt` | **已对齐**（M25/S3a）：`byte[]` = JS `Uint8Array`（`length` / `[i]` / `Array.from` / `slice` 都可用），`createSymmetricCrypto` = 不透明句柄（密码器本体在宿主，九个方法逐一对齐）+ 上游 `@Deprecated` 的 `aes*` / `des*` / `tripleDES*` 全族；`pointycastle` 提供 AES / DES / DESede × ECB / CBC × PKCS5/NoPadding。三条有意差异：`aesEncodeToString` 按名字的意图加密（上游实现是 `decryptStr` 的历史 bug）、`base64DecodeToByteArray` 收 `flags` 但不按位分支、模式/非对称/签名仍拒绝 | 33 源 / 91 处（本地语料 `corpus_a` 504 条 + `corpus_b` 128 条，2026-10-26 静态普查；M27 用 `batch_probe.dart` 重算） | 已对齐 |
+| ⚠ 全局绑定 `chapter` / `src` / `nextChapterUrl` / `fromBookInfo` / `infoMap` / `speakText` / `gInt`+`index`（`formatJs`） | `AnalyzeRule.kt:834-847`、`AnalyzeUrl.kt:365-376`、`BookChapterList.kt:145-149` | 只有 `baseUrl`/`result`/`page`/`source`/`book`/`key`（`formatJs` 的 `index`/`chapter`/`title`/`gInt` 另在 S2 落地） | | **S3b** |
+| ⚠ `cache.*`（`CacheManager`） | `AnalyzeRule.kt:836` | 无 | | **S3b** |
+| ⚠ `source.getKey` / `getTag` / `getLoginHeader` / `putLoginHeader` / `login()` | `BaseSource.kt:80-140` | 部分（有 `name/url/group`、`getVariable`、`getLoginInfo*`） | | **S3b** |
+| `java.timeFormatUTC` / `htmlFormat` / `t2s` / `s2t` / `toNumChapter` / `refreshBookUrl` / `randomUUID` / `androidId` / `openUrl` / `getWebViewUA` / `toURL` / `webViewGetElements` / `ajaxAll` / `connect` | `JsExtensions.kt` 各节 | 具名拒绝 | | 按普查逐个决定（`timeFormatUTC`/`htmlFormat`/`t2s`/`s2t` 纯计算，优先；归 **S3b**） |
 | 文件/压缩包族（`readFile` / `unzipFile` / `getZipStringContent` …）、Rhino Java 互操作（`Packages.*`） | `JsExtensions.kt:727-976` | 具名拒绝 | | 有意差异（沙箱禁忌，C-SRC-3） |
 | 已对齐（对照用） | `java.ajax/post/head/getCookie/setContent/toast`、`cookie.*`、`source.getVariable`、`queryTTF`/`queryBase64TTF`/`replaceFont`、`startBrowser*`/`getVerificationCode`/`webView*`、`getString*`/`getElements`；以及**执行前注入的 `jsLib` 库作用域**（S1） | 已落地（ADR-0068 / 0076 / 0078 S1） | | 已对齐 |
 
@@ -133,7 +133,8 @@
 |---|---|---|---|
 | **S1** ✅ | `jsLib` | `core/js/js_lib.dart`（解析 + 缓存）、`BookSource.jsLib`、worker 前奏 `__runRuleWithLib`、`RuleEngine._jsLibOf` | — |
 | **S2** ✅ | 阶段字段族 + `bookUrlPattern` + 目录去重/元数据 | 已落地（两半）：`TocRule`（`formatJs`/`isVolume`/`isPay`/`wordCount`/`preUpdateJs`）、`Chapter` 元数据、`FetchToc` 去重与卷占位、`bookUrlPattern` 详情页回落、`FetchContent` 返回 `ChapterContent`（正文 + 副文/歌词 + 正文页标题 + reviewImg）。有意差异：`payAction`/`callBackJs` 需要 UI；阅读端尚未采用 `title`/`lyric` | S1（已闭环） |
-| **S3** | 密钥类 crypto + 绑注入面 | `core/js/js_bindings.dart`、`quickjs_worker.dart` | 语料普查（优先级） |
+| **S3a** ✅ | 密钥类 crypto + 字节族 | 已落地：`core/js/js_crypto.dart`（hex/base64/字节编解码、`digest*` / `HMac*` / `md5Encode16`、AES / DES / DESede × ECB / CBC × PKCS5/NoPadding 与句柄表）、`quickjs_worker.dart` 前奏（`Uint8Array` 字节面 + `aes*` / `des*` / `tripleDES*` 别名）、`pointycastle ^4.0.0`。有意差异：`aesEncodeToString` 按意图加密、`base64DecodeToByteArray` 收 `flags` 不按位分支、CFB/OFB/CTR/GCM 与非对称/签名仍拒（`book-source.md` §11） | `pointycastle`（新依赖） |
+| **S3b** | 绑注入面（D2/D3） | `js_bridge.dart` job 载荷 + `quickjs_worker.dart` 前奏：`chapter` / `src` / `nextChapterUrl` / `fromBookInfo` / `infoMap` / `speakText`、`cache.*`、`source.getKey/getTag/getLoginHeader/putLoginHeader/login()`、`timeFormatUTC` / `htmlFormat` / `t2s` / `s2t` / `toNumChapter` / `refreshBookUrl` | S3a（已闭环） |
 | **S4** | URL 方言五条 + 列表尾部 `@js:` | `url_rule.dart`、`rule_engine.dart` | — |
 | **S5** | 矩阵 #20/#21/#22/#30 | `rule_engine.dart`（+ 依赖） | M27 普查定序 |
 | **S6** | 非文本链路 + 正文 HTML 化 | `fetch_manga_pages`/新 usecase、`content_purifier`、阅读端 | S2 |
@@ -152,7 +153,7 @@
 | 能力 | L1 源数 / 次数 | L2 源数 / 次数 | 备注 |
 |---|---|---|---|
 | `jsLib` | 待 M27 | 待 M27 | 本仓已支持（S1），统计待 `batch_probe.dart` 补 |
-| 密钥类 crypto | | | |
+| 密钥类 crypto / 字节族 | 4 源 / 6 处（`corpus_b` 128 条） | 29 源 / 85 处（`corpus_a` 504 条） | 本仓已支持（S3a）；数字为 2026-10-26 手工静态普查，待 `batch_probe.dart` 重算 |
 | `subContent` / `title` | | | |
 | `isVolume` / `isPay` / `formatJs` / `preUpdateJs` | | | |
 | `bookUrlPattern` | | | |
