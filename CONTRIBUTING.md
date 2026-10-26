@@ -125,8 +125,8 @@ flutter gen-l10n
 
 三条硬规则：
 
-1. **每台机器只有一个 checkout**：目录名固定为 `<父目录>/legado-p5-dev`，check out `dev`。
-   它是主克隆（`.git` 在那里），**不再用 `git worktree add` 开第二份**。
+1. **每台机器只有一个 checkout**：主克隆（`.git` 在那里）就是它，check out `dev`；
+   **不再用 `git worktree add` 开第二份**。本机的具体路径记在 `docs/dev/adr/0079-*.md` §本机现状。
 2. **所有代码提交落在 `dev`**：`main` 只接受从 `dev` 开的 PR；短命分支不需要、也不允许
    单独开一个工作树（在 dev 工作树内切分支即可，切前必须先声明）。
 3. **并行开发**用短命分支（在 dev 工作树内切换并声明）或**临时 clone**（用完即删）；

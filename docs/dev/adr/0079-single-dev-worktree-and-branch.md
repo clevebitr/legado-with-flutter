@@ -26,9 +26,9 @@
 
 1. **集成分支 `dev`。** 由当时的 `feat/ui-m15-m18` 最新提交建立；日常开发一律提交到 `dev`。
    `main` 只接受**从 `dev` 开的 PR** 合并，不直接推送（发布线仍以 tag 为源头，ADR-0065/0067 不变）。
-2. **每台机器只有一个 checkout**：目录名 `<父目录>/legado-p5-dev`，check out `dev`。它是主克隆
-   （`.git` 就在里面）。本机执行时把主克隆 `legado-with-flutter` 直接改名为 `legado-p5-dev` 并切到
-   `dev`，三个 linked worktree 全部 `git worktree remove`（脏的那份先归档）。
+2. **每台机器只有一个 checkout**：主克隆（`.git` 就在里面）就是它，check out `dev`；不再保留
+   `feat/*` 的长期 checkout。本机执行时把主克隆切到 `dev`、三个 linked worktree 全部移除
+   （脏的那份先归档），并把目录名改为 `legado-p5-dev`（见下方 §本机现状）。
 3. **不再 `git worktree add`。** 需要评审的改动用短命分支（`feat/*` 等）在 dev 工作树内切，切前声明；
    需要完全隔离时用**临时 clone**，用完即删。两者都不改变「唯一长命 checkout 是 dev 工作树」。
 4. **CI 的 L1 门禁在 `dev` 与 `main` 的 push 上都要跑**（`ci.yml` 的 `push.branches`），PR 门禁本来
@@ -47,6 +47,18 @@
   checkout、check out `dev`。
 - 代价：不能再用两个 checkout 并行跑不同分支的 `flutter test`。需要时按决策 3 开临时 clone，或在
   dev 工作树内串行。
+
+## 本机现状（2026-10-26，执行记录）
+
+| 项 | 状态 |
+|---|---|
+| 分支 | `dev` 已建立（起点 `feat/ui-m15-m18` 的 `96fa2f5`）、已推送并跟踪 `origin/dev`；`main` 未动 |
+| 唯一 checkout | 主克隆 `F:/Projetcs/legado-with-flutter`，已切到 `dev`；`legado-p5-audio` / `legado-p5` 已移除，`legado-p5-mgmt` 待移除 |
+| 脏快照 | `legado-p5` 的 137 处改动已归档到 `F:/Projetcs/_archive/2026-10-26-legado-p5/`（`dirty-tracked-and-untracked.patch` 747 KB + `status.txt`） |
+| 目录改名 | **未完成**：`legado-with-flutter` 被 VS Code 等进程占用，`mv`/`move` 报「拒绝访问」；关闭占用它的程序后执行 `move F:\Projetcs\legado-with-flutter F:\Projetcs\legado-p5-dev` |
+| 待移除的 worktree | 本文档写作时 `legado-p5-mgmt`（本会话的工作目录）仍被持有，需在会话结束后执行 `git -C <主克隆> worktree remove --force F:\Projetcs\legado-p5-mgmt`，再 `git worktree prune` |
+
+> 这两条是**一次性收尾**，不是常规流程：平时开发只需要「在主克隆里、在 `dev` 上」这两件事。
 
 ## 被否的备选
 

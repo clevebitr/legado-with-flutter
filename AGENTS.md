@@ -42,7 +42,7 @@
 
 ## 3. 工作流（先定位，再走五步）
 
-0. **定位** — 只在唯一的 `dev` 工作树（本机 `<父目录>/legado-p5-dev`）上开发，提交落在 `dev`
+0. **定位** — 只在唯一的 `dev` 工作树（本机路径见 ADR-0079 §本机现状）上开发，提交落在 `dev`
    分支；不新开 `git worktree`。规则只有一处：`CONTRIBUTING.md` §4.1（ADR-0079）。
 1. **读** — 按上表读取相关文档；不确定归属时先通读 `docs/dev/constraints.md`。
 2. **判** — 确定改动落在哪一层（`presentation` / `domain` / `data` / `core`），
