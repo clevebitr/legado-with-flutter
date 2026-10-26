@@ -148,3 +148,27 @@ LRU、失败重试）、`rule_engine_test`（job 携带解析后的库 + 解析�
 失败、preUpdateJs 顺序、preUpdateJs 失败不发请求）、`search_books_test`（新增 4 例：pattern 命中、空
 列表回落、pattern 不匹配、坏正则 warning）、真引擎探针 3 条（`index`/`gInt` 跨章、某章抛错保留原名、
 formatJs 里可见 `jsLib`）在 **Windows 与 Android 模拟器**双端全绿。
+
+## 实现注记（2026-10-26，S2 第二半：`subContent` / `title` 与 `ChapterContent`）
+
+1. **正文阶段换返回形状，而不是再串一个端口。** `FetchContent.execute` 现在答 `ChapterContent`
+   （`body` / `title` / `reviewImg` / `lyric`）：副文、正文页标题、歌词都是**同一次读取**的产物，
+   分成多个返回值会让上层再读一遍页面。阅读器端口保持 `String`，装配根取 `.body` —— 阅读端要不要
+   显示改名与歌词是另一件事（已登记），不该为此把两边的类型绑在一起。
+2. **顺序照抄上游**：`content` → `subContent` → `title` → `replaceRegex`。`replaceRegex` 的文档语义
+   是「对**拼接后**的整章正文应用」，所以副文必须先并进去；`title` 必须读**第一页**的 scope，而不是
+   替换后的文本。
+3. **副文是地址时取那一页的正文原文**（上游 `AnalyzeUrl(...).body`）。为此 `PageFetchService` 多了
+   `plainBody`：走同一个 `fetchRule`（预算 / header / 登录拦截都在），但只回文本、不建 scope。
+   取不到只记 warning —— 副文缺了正文仍然可读，这与「正文缺页整章失败」不是一回事。
+4. **`reviewImg` 用「最后一个 media URL」切分**，并把标题里残留的标签剔掉。上游的
+   `(.*)((?:data|https?):[\s\S]+)$` 在 `@html` 取值下会把 `<div id=…>` 甚至半个 `<img src="` 当成
+   标题，那不是章节名；这处差异记进 `book-source.md` §4.1。
+5. **缓存按整个结果存，但只带额外信息时才换形状**：纯正文仍写纯文本（旧形状、零迁移、调试页读到的
+   还是正文），有标题/歌词时写一行带版本号的 JSON；读不懂就按正文处理（丢一个缓存条目的代价是重读）。
+6. **不做的事登记在台账**：`payAction` 要付费解锁 UI、`callBackJs`/`eventListener` 要读者事件面；
+   阅读端采用 `title` / `lyric` 需要阅读器与音频面板的改动，也单独登记。
+
+验证：`fetch_content_test` 新增 9 例（文本副文追加、音频歌词、副文取页、副文页失败仍给正文、标题改名 +
+reviewImg、只有图时保留目录名、`replaceRegex` 看得到副文、二次读命中仍给标题/歌词）与全量
+`flutter test` 2385 例全过。

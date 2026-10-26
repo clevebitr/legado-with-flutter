@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The content stage answers the whole chapter (ADR-0078 S2 part 2, M25)
+
+`FetchContent` used to answer a `String`. It now answers a `ChapterContent` — body, content-page
+title, review image and lyrics — because three more fields belong to the same read:
+
+- **`subContent`**: appended to the body for a text source, kept as `lyric` for an **audio** source
+  (upstream stores it as the chapter's `lyric` variable). A rule that answers an `http(s)` address is
+  fetched first; a page that cannot be read only logs a warning, it never fails the chapter.
+- **`title`**: read from the **content page** after the body, renaming the chapter and carrying a
+  review image (the last media URL in the value). A title that is only an image keeps the TOC name.
+  One small deviation: leftover markup is stripped from the title, where upstream would keep
+  `<div id=…>` (or half an `<img src="`).
+- **Order is upstream's**: `content` → `subContent` → `title` → `replaceRegex`, so the replacement
+  rule sees the sub-content too.
+- The body cache stores the **whole** result: a chapter with only text still caches as plain text
+  (same shape as before, no migration), and one with a title or lyrics caches as a small versioned
+  JSON line. Reader-facing behaviour is unchanged — the reader port still takes `.body`, so the
+  content-page rename and the lyrics are not shown yet (registered in `engine-parity.md`).
+
+Modelled but still not executed: `payAction` (needs a paid-content UI) and `callBackJs` /
+`eventListener` (needs a reader event surface).
+
 ### The TOC stage reads the fields upstream reads (ADR-0078 S2, M25)
 
 S2 of the parity slices. Two halves: the table-of-contents fields now behave like upstream, and the

@@ -698,3 +698,26 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 3. `bookUrlPattern` 的「全匹配」必须显式加 `^(?:...)$`：Kotlin `String.matches` 是全匹配，Dart `hasMatch` 是包含匹配，直接照抄会把不该命中的 URL 当详情页。
 
 验证：format 0 / analyze 0 issue / `flutter test` 2377 用例全过 / check_coverage exit 0 / `build_runner build` 后生成物无漂移；真引擎探针 **49 例** 在 Windows 与 Android 模拟器双端全绿（新增 3 条 formatJs 探针）。
+
+## 2026-10-26 — M25/S2 第二半（S2 闭环）：subContent / title 执行 + ChapterContent 返回形状（ADR-0078）
+
+用户裁决（2026-10-26）：开始 S2 第二半。已交付：`subContent` / `title` 执行 + `ChapterContent` 返回形状。**S2 至此闭环**（两半合计），剩余是有意差异与「阅读端采用」。
+
+**落地**（行为面 → `book-source.md` §4.1「副文与正文页标题」；为什么 → ADR-0078 §实现注记；台账 → `engine-parity.md` 3.1 / §6 / §7）：
+- `FetchContent.execute` 现在答 `ChapterContent{body, title, reviewImg, lyric}`；阅读器端口仍是 `String`，装配根取 `.body`。
+- 顺序照抄上游 `content → subContent → title → replaceRegex`：副文先进正文，替换规则才看得到它；`title` 读**第一页** scope。
+- `subContent`：文本源追加（`\n` 分隔），音频源只作 `lyric`；值是 `http(s)` 时先取那一页**正文原文**（新增 `PageFetchService.plainBody`，走同一 fetchRule：预算/header/登录拦截都在），取不到只记 warning、正文照常。
+- `title`：非空即改名；值里**最后一个** media URL 作 `reviewImg`；只剩一张图时标题回落目录名。
+- 缓存按整个结果存，但**只带额外信息时才换形状**：纯正文仍写纯文本（零迁移），否则写一行带 `v:2` 的 JSON；读不懂按正文处理。
+
+**登记的差距（不假装支持）**：
+- 阅读器**尚未采用**正文页改名与歌词（端口只取正文）→ 台账标「解析已对齐；阅读端采用归后续」。
+- `payAction` / `callBackJs` / `eventListener`：需要付费解锁 UI 与读者事件面 → 有意差异 + 触发条件。
+- 一处**有意的小差异**：标题里残留的 HTML 标签被剔掉（上游会把 `<div id=…>` 或半截 `<img src="` 当标题）。
+
+**踩的坑（三条，都是「照抄上游会得到错值」）**：
+1. 上游 `imgRegex` 在 `@html` 取值下会把外层标签当标题：真正的实现要按「最后一个 media URL」切分**再剔标签**，还要处理切分点落在标签中间（`… 开端<img src="`）。
+2. Dart 里写这条正则要小心引号：`'[^\s"'<>]'` 会被单引号截断，`r"…"` 也会被双引号截断 —— 只能用转义 `'(?:data|https?):[^\\s"\'<>]+'`。
+3. 副文页失败不能判章失败（正文仍可读），但副文为**空串**时要给 `null` 而不是 `''`，否则调用方会以为「有歌词但是空的」。
+
+验证：format 0 / analyze 0 issue / `flutter test` **2385 用例全过**（新增 `fetch_content_test` 9 例）、check_coverage 与生成物门禁随后一起验。

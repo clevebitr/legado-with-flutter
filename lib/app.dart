@@ -27,6 +27,7 @@ import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/audio_track.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_content.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/manga_pages.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
@@ -1011,7 +1012,9 @@ final class _ChapterContentSource implements ChapterContentProvider {
       );
     }
 
-    return _ref
+    // 阅读器端口只要正文：正文页标题（`contentRule.title`）与歌词属于领域结果，阅读端还没消费
+    // （登记在 `engine-parity.md` 3.1），所以在这里按 `body` 收口，不把两边的类型串在一起。
+    final ParseResult<ChapterContent> content = await _ref
         .read(fetchContentProvider)
         .execute(
           source,
@@ -1023,6 +1026,16 @@ final class _ChapterContentSource implements ChapterContentProvider {
             tocUrl: tocUrl,
           ),
         );
+
+    return switch (content) {
+      ParseFailure<ChapterContent>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ) =>
+        failureAt<String>(kind: kind, rulePath: rulePath),
+      ParseSuccess<ChapterContent>(:final ChapterContent data) =>
+        ParseSuccess<String>(data.body),
+    };
   }
 }
 

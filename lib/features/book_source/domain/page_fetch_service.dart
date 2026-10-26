@@ -990,6 +990,47 @@ final class PageFetchService {
     };
   }
 
+  /// Fetches [url] and answers its **text**, without building any rule scope.
+  ///
+  /// Exists for the one place a rule answers an address instead of a value: an audio source's
+  /// `subContent` may be「歌词在另一页」and upstream reads that page's body as-is
+  /// (`BookContent.kt:146-156`). Everything the request layer owes a rule still applies — the
+  /// per-source budget, the source's own headers and the login interceptor.
+  Future<ParseResult<String>> plainBody(
+    String url, {
+    required String rulePath,
+    required JsPageContext context,
+    Map<String, String>? headers,
+    String? sourceId,
+  }) async {
+    final ParseResult<FetchedPage> page = await fetchRule(
+      url,
+      rulePath: rulePath,
+      params: const <String, String>{},
+      context: context,
+      headers: headers,
+      sourceId: sourceId,
+    );
+
+    return switch (page) {
+      ParseFailure<FetchedPage>(
+        :final ParseFailureKind kind,
+        rulePath: final String failedAt,
+      ) =>
+        failureAt<String>(kind: kind, rulePath: failedAt),
+      ParseSuccess<FetchedPage>(:final FetchedPage data) =>
+        switch (data.scope) {
+          DomScope(:final String? body) when body != null =>
+            ParseSuccess<String>(body),
+          // 没有正文的 scope（JSON 页面 / 元素 scope）说明这一页不是「一整页正文」。
+          _ => failureAt<String>(
+            kind: ParseFailureKind.parseFailed,
+            rulePath: rulePath,
+          ),
+        },
+    };
+  }
+
   /// Runs a **pre-fetch script** of a stage (`ruleToc.preUpdateJs`, ADR-0078 S2).
   ///
   /// The script runs on the page context only — there is no page yet, which is the point: upstream

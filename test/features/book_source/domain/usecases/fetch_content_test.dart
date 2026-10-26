@@ -8,12 +8,14 @@ import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_content.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_content.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 
 import '../../../../support/fake_content_cache.dart';
 import '../../../../support/fake_http_client.dart';
@@ -150,6 +152,12 @@ T _data<T>(ParseResult<T> result) => switch (result) {
   ),
 };
 
+/// The finished body of a successful read (ADR-0078 S2: the stage answers a [ChapterContent]).
+String _body(ParseResult<ChapterContent> result) => _data(result).body;
+
+/// The whole result of a successful read.
+ChapterContent _content(ParseResult<ChapterContent> result) => _data(result);
+
 void main() {
   group('FetchContent', () {
     test('execute_givenAChapterUrlWithOptions_requestsTheCleanUrl', () async {
@@ -159,7 +167,7 @@ void main() {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_chapterUrl, _page('chapter_page.html'));
 
-      final String content = _data(
+      final String content = _body(
         await FetchContent(
           pages: _service(http),
           cache: FakeContentCache(),
@@ -174,7 +182,7 @@ void main() {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_chapterUrl, _page('chapter_page.html'));
 
-      final String content = _data(
+      final String content = _body(
         await FetchContent(
           pages: _service(http),
           cache: FakeContentCache(),
@@ -194,7 +202,7 @@ void main() {
       final BookSource source = _source();
       cache.entries['${source.url}|$_chapterUrl'] = '已缓存的正文';
 
-      final String content = _data(
+      final String content = _body(
         await FetchContent(
           pages: _service(http),
           cache: cache,
@@ -211,7 +219,7 @@ void main() {
       final FakeContentCache cache = FakeContentCache();
       final BookSource source = _source();
 
-      final String content = _data(
+      final String content = _body(
         await FetchContent(
           pages: _service(http),
           cache: cache,
@@ -232,10 +240,10 @@ void main() {
         cache: cache,
       );
 
-      final String first = _data(
+      final String first = _body(
         await useCase.execute(source, const ChapterRequest(url: _chapterUrl)),
       );
-      final String second = _data(
+      final String second = _body(
         await useCase.execute(source, const ChapterRequest(url: _chapterUrl)),
       );
 
@@ -343,7 +351,7 @@ void main() {
         )
         ..serve(secondPage, '<div id="content">第二页。</div>');
 
-      final String content = _data(
+      final String content = _body(
         await FetchContent(
           pages: _service(http),
           cache: FakeContentCache(),
@@ -413,7 +421,7 @@ void main() {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_chapterUrl, '<div id="content">正文。本章未完，点击下一页继续阅读。后续。</div>');
 
-      final String content = _data(
+      final String content = _body(
         await FetchContent(
           pages: _service(http),
           cache: FakeContentCache(),
@@ -432,7 +440,7 @@ void main() {
       final ({PageFetchService pages, FakeLogPrinter printer}) service =
           _serviceAndPrinter(http);
 
-      final String content = _data(
+      final String content = _body(
         await FetchContent(
           pages: service.pages,
           cache: FakeContentCache(),
@@ -456,7 +464,7 @@ void main() {
         ..serve(_chapterUrl, _page('chapter_page.html'));
       final FakeContentCache cache = FakeContentCache();
 
-      final String content = _data(
+      final String content = _body(
         await FetchContent(
           pages: _service(http),
           cache: cache,
@@ -483,7 +491,7 @@ void main() {
       final ({PageFetchService pages, FakeLogPrinter printer}) service =
           _serviceAndPrinter(http);
 
-      final String content = _data(
+      final String content = _body(
         await FetchContent(
           pages: service.pages,
           cache: FakeContentCache(),
@@ -513,7 +521,7 @@ void main() {
           )
           ..serve(secondPage, '<div id="content">第二页。</div>');
 
-        final String content = _data(
+        final String content = _body(
           await FetchContent(
             pages: _service(http),
             cache: FakeContentCache(),
@@ -545,12 +553,13 @@ void main() {
       );
       final FakeContentCache cache = FakeContentCache();
 
-      final ParseResult<String> result = await FetchContent(
+      final ParseResult<ChapterContent> result = await FetchContent(
         pages: pages,
         cache: cache,
       ).execute(source, const ChapterRequest(url: _chapterUrl));
 
-      expect(_data(result), '渲染后的正文');
+      expect(_content(result).body, '渲染后的正文');
+      expect(_content(result).title, isNull);
       expect(web.scripts.single, 'document.body.innerText');
       // 渲染路径不发明请求：普通 HTTP 一次都没发。
       expect(http.requestedUrls, isEmpty);
@@ -565,7 +574,7 @@ void main() {
         contentRule: _source().contentRule.copyWith(webJs: 'document.title'),
       );
 
-      final ParseResult<String> result = await FetchContent(
+      final ParseResult<ChapterContent> result = await FetchContent(
         pages: pages,
         cache: FakeContentCache(),
       ).execute(source, const ChapterRequest(url: _chapterUrl));
@@ -584,7 +593,7 @@ void main() {
           contentRule: _source().contentRule.copyWith(webJs: 'document.title'),
         );
 
-        final ParseResult<String> result = await FetchContent(
+        final ParseResult<ChapterContent> result = await FetchContent(
           pages: pages,
           cache: FakeContentCache(),
         ).execute(source, const ChapterRequest(url: _chapterUrl));
@@ -603,13 +612,234 @@ void main() {
         contentRule: _source().contentRule.copyWith(webJs: 'document.title'),
       );
 
-      final ParseResult<String> result = await FetchContent(
+      final ParseResult<ChapterContent> result = await FetchContent(
         pages: pages,
         cache: FakeContentCache(),
       ).execute(source, const ChapterRequest(url: _chapterUrl));
 
       expect(_failure(result).kind, ParseFailureKind.unsupportedRule);
       expect(_failure(result).rulePath, 'contentRule.webJs');
+    });
+  });
+
+  // ── M25/S2：副文与正文页标题（ADR-0078） ────────────────────────────────────
+  group('FetchContent S2 fields', () {
+    /// A chapter page that also carries a sub-content block, a title block and a lyric page link.
+    const String richPage =
+        '<html><body data-lyric="https://example-novel.test/lyric/1.html">'
+        '<div id="content">正文第一段。<br>正文第二段。</div>'
+        '<div id="sub">副文：作者的话。</div>'
+        '<div id="lyric">[00:01] 歌词一行</div>'
+        '<div id="title">第1章 开端'
+        '<img src="https://example-novel.test/review.jpg"/></div>'
+        '</body></html>';
+
+    BookSource contentSource({
+      String? subContent,
+      String? title,
+      String? replaceRegex,
+      BookSourceType type = BookSourceType.text,
+    }) {
+      final BookSource source = _source();
+
+      return source.copyWith(
+        sourceType: type,
+        contentRule: source.contentRule.copyWith(
+          subContent: subContent,
+          title: title,
+          replaceRegex: replaceRegex,
+        ),
+      );
+    }
+
+    test('execute_givenASubContentRule_appendsItToTheBody', () async {
+      // B1（文本源）：上游 `appendContent(subContent)`，与分页拼接同一形状。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, richPage);
+
+      final ChapterContent content = _content(
+        await FetchContent(
+          pages: _service(http),
+          cache: FakeContentCache(),
+        ).execute(
+          contentSource(subContent: 'id.sub@text'),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(content.body, '正文第一段。\n正文第二段。\n副文：作者的话。');
+      expect(content.lyric, isNull);
+    });
+
+    test('execute_givenAnAudioSource_keepsTheSubContentAsLyrics', () async {
+      // E1（音频源）：`subContent` 是歌词，**不**并进正文（上游写成章节变量 `lyric`）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, richPage);
+
+      final ChapterContent content = _content(
+        await FetchContent(
+          pages: _service(http),
+          cache: FakeContentCache(),
+        ).execute(
+          contentSource(
+            subContent: 'id.lyric@text',
+            type: BookSourceType.audio,
+          ),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(content.body, '正文第一段。\n正文第二段。');
+      expect(content.lyric, '[00:01] 歌词一行');
+    });
+
+    test('execute_givenASubContentThatIsAnUrl_readsThatPageInstead', () async {
+      // 上游把 http(s) 开头的值交给 `AnalyzeUrl(...).body`（BookContent.kt:146-156）。
+      const String lyricUrl = 'https://example-novel.test/lyric/1.html';
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, richPage)
+        ..serve(lyricUrl, '<html><body><p>另一页的歌词</p></body></html>');
+
+      final ChapterContent content = _content(
+        await FetchContent(
+          pages: _service(http),
+          cache: FakeContentCache(),
+        ).execute(
+          contentSource(
+            subContent: '@css:body@data-lyric',
+            type: BookSourceType.audio,
+          ),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(http.requestedUrls, contains(lyricUrl));
+      expect(content.body, '正文第一段。\n正文第二段。');
+      // 与上游一致：取到的是那一页的**正文原文**（`res.body`），不是抽出来的文本。
+      expect(content.lyric, '<html><body><p>另一页的歌词</p></body></html>');
+    });
+
+    test('execute_givenASubContentUrlThatCannotBeRead_keepsTheBody', () async {
+      // 副文页取不到只是「没有歌词」，正文仍然可用（不把整章判失败）。
+      const String lyricUrl = 'https://example-novel.test/lyric/1.html';
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, richPage)
+        ..failWith(lyricUrl, ParseFailureKind.networkTimeout);
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _serviceAndPrinter(http);
+
+      final ChapterContent content = _content(
+        await FetchContent(
+          pages: service.pages,
+          cache: FakeContentCache(),
+        ).execute(
+          contentSource(
+            subContent: '@css:body@data-lyric',
+            type: BookSourceType.audio,
+          ),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(content.body, isNotEmpty);
+      expect(content.lyric, isNull);
+      expect(
+        service.printer.events.map(
+          (LogEvent event) => event.message.toString(),
+        ),
+        anyElement(contains('Sub-content page could not be read')),
+      );
+    });
+
+    test('execute_givenATitleRule_renamesTheChapterAndKeepsTheImage', () async {
+      // B2：正文页的标题（`title`）可能带一张 reviewImg（上游 `AppPattern.imgRegex`）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, richPage);
+
+      final ChapterContent content = _content(
+        await FetchContent(
+          pages: _service(http),
+          cache: FakeContentCache(),
+        ).execute(
+          // `@html` 取元素本身（含 `<img>`）：上游靠 `AppPattern.imgRegex` 从**值里**捞 reviewImg。
+          contentSource(title: 'id.title@html'),
+          const ChapterRequest(url: _chapterUrl, title: '第1章'),
+        ),
+      );
+
+      expect(content.title, '第1章 开端');
+      expect(content.reviewImg, 'https://example-novel.test/review.jpg');
+    });
+
+    test('execute_givenATitleThatIsOnlyAnImage_keepsTheTocName', () async {
+      // 只剩一张图时标题回落成目录里的名字（上游 `if (group1 != "") ... else bookChapter.title`）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _chapterUrl,
+          '<html><body><div id="content">正文</div>'
+          '<div id="title"><img src="https://example-novel.test/x.jpg"/></div>'
+          '</body></html>',
+        );
+
+      final ChapterContent content = _content(
+        await FetchContent(
+          pages: _service(http),
+          cache: FakeContentCache(),
+        ).execute(
+          contentSource(title: 'id.title@html'),
+          const ChapterRequest(url: _chapterUrl, title: '目录里的名字'),
+        ),
+      );
+
+      expect(content.title, '目录里的名字');
+      expect(content.reviewImg, 'https://example-novel.test/x.jpg');
+    });
+
+    test('execute_givenReplaceRegex_itSeesTheSubContentToo', () async {
+      // 顺序照抄上游：`content` → `subContent` → `title` → `replaceRegex`
+      // （BookContent.kt:144-196），所以替换规则必须看得到副文。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, richPage);
+
+      final ChapterContent content = _content(
+        await FetchContent(
+          pages: _service(http),
+          cache: FakeContentCache(),
+        ).execute(
+          contentSource(subContent: 'id.sub@text', replaceRegex: '##副文：##旁白：'),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(content.body, contains('旁白：作者的话。'));
+    });
+
+    test('execute_givenASecondRead_answersTheSameTitleAndLyrics', () async {
+      // 缓存存的是整个结果：命中的那一章也要有正文页标题与歌词，否则第二次进同一章会「变回」目录名。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, richPage);
+      final FakeContentCache cache = FakeContentCache();
+      final BookSource source = contentSource(
+        subContent: 'id.lyric@text',
+        title: 'id.title@text',
+        type: BookSourceType.audio,
+      );
+      final FetchContent useCase = FetchContent(
+        pages: _service(http),
+        cache: cache,
+      );
+
+      final ChapterContent first = _content(
+        await useCase.execute(source, const ChapterRequest(url: _chapterUrl)),
+      );
+      final ChapterContent second = _content(
+        await useCase.execute(source, const ChapterRequest(url: _chapterUrl)),
+      );
+
+      expect(http.requestedUrls, <String>[_chapterUrl]);
+      expect(second.title, first.title);
+      expect(second.lyric, first.lyric);
+      expect(second.body, first.body);
     });
   });
 }

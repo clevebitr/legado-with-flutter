@@ -489,6 +489,22 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 >   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
 >   （ADR-0026 §决策 2）。
 
+> **副文与正文页标题（2026-10-26，M25/S2，ADR-0078）：** `ruleContent` 的另外两条字段也该生效了，
+> 顺序照抄上游 `BookContent.kt:144-196`（`content` → `subContent` → `title` → `replaceRegex`）：
+>
+> - **`subContent`（副文）。** 文本源把副文**追加**到正文（换行分隔，与分页拼接同形）；**音频源**不并进
+>   正文，而是作为 `ChapterContent.lyric`（上游写成章节变量 `lyric`）交回调用方。规则值是 `http(s)` 开头
+>   的地址时，先取那一页的**正文原文**（上游 `AnalyzeUrl(...).body`）；那一页取不到只记 warning、
+>   副文为空，**不**判整章失败——正文仍然可用。
+> - **`title`（正文页章节名）。** 正文读完后在**第一页**的 scope 上求值；非空即改名，并把值里**最后一个**
+>   media URL 当作 `reviewImg`（上游 `AppPattern.imgRegex`）。只剩一张图时标题回落到目录里的名字。
+>   与上游的一处小差异：标题里残留的 HTML 标签会被剔掉（`@html` 取出来的 `<div id=…>` 或半截
+>   `<img src="` 显然不是章节名）。
+> - **落地形状。** 正文阶段返回 `ChapterContent`（正文 + 标题 + reviewImg + 歌词），缓存也按整个结果存：
+>   只有正文的章节仍以**纯文本**缓存（旧形状、无迁移），带标题/歌词时才写成一行带版本号的 JSON。
+>   阅读器端口目前只取 `.body`，所以**正文页改名与歌词还没有显示在界面上**（登记在
+>   `engine-parity.md`）。
+
 > **目录字段族（2026-10-26，M25/S2，ADR-0078）：** 六条语义，逐条对齐上游
 > `BookChapterList.kt`（行号见 `engine-parity.md` 3.2）：
 >

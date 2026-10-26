@@ -52,6 +52,7 @@ import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/audio_track.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_content.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
@@ -412,12 +413,15 @@ Future<_Report> _runChain(
     pages: pages,
     cache: _noContentCache,
   ).execute(source, ChapterRequest(url: chapters.first.url))) {
-    case ParseSuccess<String>(:final String data):
+    case ParseSuccess<ChapterContent>(:final ChapterContent data):
       report.record(
         'content',
-        _stage(data.length, <String>['${_sample(data)} sha256=${_hash(data)}']),
+        _stage(data.body.length, <String>[
+          '${_sample(data.body)} sha256=${_hash(data.body)}'
+              '${data.title == null ? '' : ' title=${data.title}'}',
+        ]),
       );
-    case ParseFailure<String>(
+    case ParseFailure<ChapterContent>(
       :final ParseFailureKind kind,
       :final String rulePath,
     ):

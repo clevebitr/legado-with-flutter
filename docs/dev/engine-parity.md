@@ -52,8 +52,8 @@
 
 | 能力 | 上游证据 | 本仓现状 | 语料命中 | 去向 |
 |---|---|---|---|---|
-| ⚠ `subContent`（副文；音频源写成章节变量 `lyric`） | `BookContent.kt:144-163` | **已建模、未执行**：字段进 `ContentRule` 与导出往返，`FetchContent` 还没有「正文附带副文」的返回形状（要 `ChapterContent` 值对象） | | **S2 剩余** |
-| ⚠ `title`（正文反取章节名 + `reviewImg`） | `BookContent.kt:165-190` | **已建模、未执行**：`Chapter.name` / `reviewImg` 已能承载，但正文阶段改名要回写章节，等同一个 `ChapterContent` 返回形状 | | **S2 剩余** |
+| ✅ `subContent`（副文；音频源写成章节变量 `lyric`） | `BookContent.kt:144-163` | **已对齐**（M25/S2）：文本源追加到正文、音频源作为 `ChapterContent.lyric` 交回调用方；值是 http(s) 地址时先取那一页正文（取不到只记 warning、不判章失败） | 待 M27 | 已对齐（`book-source.md` §4.1） |
+| ✅ `title`（正文反取章节名 + `reviewImg`） | `BookContent.kt:165-190` | **已对齐（解析）**（M25/S2）：正文页标题与 `reviewImg` 进 `ChapterContent`；值里的标签会剔掉（上游会把 `<div id=…>` 当下标，属小差异）。**阅读端尚未采用**这个改名（端口仍只要正文） | 待 M27 | 解析已对齐；阅读端采用归后续 |
 | ⚠ `payAction`（付费章节解锁动作） | `ReadBookViewModel.kt:2623`、`MangaReaderActionRepository.kt:237` | **已建模、不执行**：本仓没有付费内容 UI，执行它也没有落点 | | 有意差异（触发 = 加入付费章节解锁 UI） |
 | ⚠ `callBackJs`（事件回调） | `SourceCallBack.kt:54/94/117` | **已建模、不执行**：`ContentRule.callBackJs` + `BookSource.eventListener` 都进导出往返，事件面不存在 | | 有意差异（触发 = 阅读器事件回调需求） |
 | `imageDecode`（图片字节解密） | `ContentRule.kt:21` | 显式拒绝（`fetch_manga_pages.dart:30-41`） | | **S6** |
@@ -120,7 +120,7 @@
 | 类型 | 上游 | 本仓现状 | 去向 |
 |---|---|---|---|
 | 文本（0） | 完整四段 | 已对齐 | — |
-| 音频（1） | `content` 取地址，`subContent` 作歌词 | 有 `fetch_audio_tracks`，**无歌词**（`subContent` 已建模，见 3.1 的「S2 剩余」） | **S2 剩余** |
+| 音频（1） | `content` 取地址，`subContent` 作歌词 | `content` 取地址；`subContent` 已解析成 `ChapterContent.lyric`，**播放器 UI 暂不展示** | 歌词展示归后续（有意差异） |
 | 图片（2） | `content` 取图片列表 + `imageDecode` + `imageStyle` 全分支 | 有 `fetch_manga_pages`，`imageDecode` 拒绝、`imageStyle` 部分 | **S6** |
 | 文件（3） | `ruleBookInfo.downloadUrls` + 批量下载 | 无 | **S6** |
 | 视频（4） | 有视频播放链路 | 无 | **S6** |
@@ -132,7 +132,7 @@
 | 片 | 内容 | 主要落点 | 依赖 |
 |---|---|---|---|
 | **S1** ✅ | `jsLib` | `core/js/js_lib.dart`（解析 + 缓存）、`BookSource.jsLib`、worker 前奏 `__runRuleWithLib`、`RuleEngine._jsLibOf` | — |
-| **S2** 🚧 | 阶段字段族 + `bookUrlPattern` + 目录去重/元数据 | 已落地：`TocRule`（`formatJs`/`isVolume`/`isPay`/`wordCount`/`preUpdateJs`）、`Chapter`（`isPay`/`isVolume`/`wordCount`/`variable`/`reviewImg`）、`FetchToc` 去重与卷占位、`bookUrlPattern` 详情页回落、`ContentRule`（`subContent`/`title`/`payAction`/`callBackJs`）建模。剩：`subContent` / `title` 的**执行**（要 `ChapterContent` 返回形状） | S1（已闭环） |
+| **S2** ✅ | 阶段字段族 + `bookUrlPattern` + 目录去重/元数据 | 已落地（两半）：`TocRule`（`formatJs`/`isVolume`/`isPay`/`wordCount`/`preUpdateJs`）、`Chapter` 元数据、`FetchToc` 去重与卷占位、`bookUrlPattern` 详情页回落、`FetchContent` 返回 `ChapterContent`（正文 + 副文/歌词 + 正文页标题 + reviewImg）。有意差异：`payAction`/`callBackJs` 需要 UI；阅读端尚未采用 `title`/`lyric` | S1（已闭环） |
 | **S3** | 密钥类 crypto + 绑注入面 | `core/js/js_bindings.dart`、`quickjs_worker.dart` | 语料普查（优先级） |
 | **S4** | URL 方言五条 + 列表尾部 `@js:` | `url_rule.dart`、`rule_engine.dart` | — |
 | **S5** | 矩阵 #20/#21/#22/#30 | `rule_engine.dart`（+ 依赖） | M27 普查定序 |

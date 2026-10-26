@@ -42,4 +42,4 @@ auto-breakpoint: false
 ## Current: M25 — M25 — 引擎对齐上游行为：字段/语法/方言（详见 #35）
 
 goal: 引擎行为对齐上游 + 高性能（详见 #35-#37）
-breakpoint: S1 jsLib 已闭环（#39）；下一步 S2 阶段字段族（B1-B7）
+breakpoint: S2 第一半已交付；下一步 S2 第二半（#41）

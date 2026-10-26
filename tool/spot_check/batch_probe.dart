@@ -36,6 +36,7 @@ import 'package:flutter_reader/core/network/http_policy.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_content.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
@@ -397,21 +398,21 @@ Future<void> _runChain({
   }
 
   final Stopwatch contentWatch = Stopwatch()..start();
-  final ParseResult<String> content = await FetchContent(
+  final ParseResult<ChapterContent> content = await FetchContent(
     pages: pages,
     cache: _noContentCache,
   ).execute(source, ChapterRequest(url: chapters.first.url));
   contentWatch.stop();
   report.stages.add(switch (content) {
-    ParseSuccess<String>(:final String data) => _StageOutcome(
+    ParseSuccess<ChapterContent>(:final ChapterContent data) => _StageOutcome(
       stage: 'content',
       ok: true,
-      count: data.length,
-      sample: _sample(data),
-      hash: _hash(data),
+      count: data.body.length,
+      sample: _sample(data.body),
+      hash: _hash(data.body),
       elapsedMs: contentWatch.elapsedMilliseconds,
     ),
-    ParseFailure<String>(
+    ParseFailure<ChapterContent>(
       :final ParseFailureKind kind,
       :final String rulePath,
     ) =>

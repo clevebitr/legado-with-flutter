@@ -400,7 +400,7 @@ void main() {
           pages: service.pages,
           cache: FakeContentCache(),
         ).execute(source, ChapterRequest(url: chapters.first.url)),
-      );
+      ).body;
       expect(content, '正文第一段。\n正文第二段。\n正文第三段。');
 
       // 四段请求的地址与规则路径，证明 URL 模板、编码与相对地址解析都走了生产代码。
@@ -467,7 +467,7 @@ void main() {
           pages: service.pages,
           cache: FakeContentCache(),
         ).execute(source, ChapterRequest(url: chapters.first.url)),
-      );
+      ).body;
       // JSON 里的 `\n` 是转义序列，解出来是一个真正的换行。
       expect(content, '正文第一段。\n正文第二段。');
 
