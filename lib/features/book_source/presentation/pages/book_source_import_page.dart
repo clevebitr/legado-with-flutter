@@ -6,6 +6,7 @@ import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source_import_preview.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/import_book_sources.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_import_notifier.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -66,6 +67,15 @@ class _BookSourceImportPageState extends ConsumerState<BookSourceImportPage> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final M3ETheme tokens = context.m3e;
     final BookSourceImportState state = ref.watch(bookSourceImportProvider);
+    // 导入完成后刷新列表页读的投影：notifier 只失效源列表，而投影读的是仓储、不 watch 它。
+    ref.listen<BookSourceImportState>(bookSourceImportProvider, (
+      BookSourceImportState? previous,
+      BookSourceImportState next,
+    ) {
+      if (next is BookSourceImportDone) {
+        ref.invalidate(bookSourceListDataProvider);
+      }
+    });
 
     return Scaffold(
       backgroundColor: tokens.colors.surface,
