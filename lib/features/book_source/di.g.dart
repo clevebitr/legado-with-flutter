@@ -403,7 +403,7 @@ final class PageFetchServiceProvider
   }
 }
 
-String _$pageFetchServiceHash() => r'468d712869d464c9328f014cebea12126c981668';
+String _$pageFetchServiceHash() => r'684f410a0e1ef014a56de8bf97dca4347ab5ffc1';
 
 /// Provides the search use case.
 

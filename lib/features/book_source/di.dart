@@ -97,6 +97,9 @@ PageFetchService pageFetchService(Ref ref) => PageFetchService(
   http: ref.watch(httpClientProvider),
   logger: ref.watch(appLoggerProvider),
   webPages: ref.watch(webPageFetcherProvider),
+  // 登录头（`source.putLoginHeader`，M25/S3b）：与桥看到的是同一个 store，所以登录脚本写下的
+  // 头会在下一阶段的每个请求上生效。
+  loginHeaders: ref.watch(sourceLoginHeaderStoreProvider),
 );
 
 /// Provides the search use case.

@@ -7,6 +7,7 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -46,6 +47,8 @@ void main() {
   // 同步族（ADR-0076 §决策 1）要的三件东西：Cookie 宗、每源变量、提示通道。
   late InMemoryCookieManager cookies;
   late SourceVariableStore sourceVariables;
+  // 登录头（`source.putLoginHeader`，M25/S3b）：也走「快照下发 + 写回写穿」这条路。
+  late SourceLoginHeaderStore loginHeaders;
   late _CollectingMessages messages;
 
   setUp(() {
@@ -54,6 +57,7 @@ void main() {
     cookies = InMemoryCookieManager();
     // 真实存储的读写在 `source_variable_dao_test` 里；探针只需要「值能存、能取回」。
     sourceVariables = SourceVariableStore();
+    loginHeaders = SourceLoginHeaderStore();
     messages = _CollectingMessages();
     bridge = QuickJsWorkerBridge(
       logger: AppLogger(level: LogLevel.debug, printer: printer),
@@ -62,6 +66,7 @@ void main() {
       variables: variables,
       cookies: cookies,
       sourceVariables: sourceVariables,
+      loginHeaders: loginHeaders,
       userMessages: messages,
     );
   });
@@ -1367,6 +1372,77 @@ void main() {
     );
 
     expect(_value(result), contains('Mozilla/5.0'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheSourceIdentityIsRead_answersKeyAndTag', (
+    WidgetTester tester,
+  ) async {
+    // 上游 `BaseSource.getKey()` / `getTag()` 分别答 `bookSourceUrl` / `bookSourceName`。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "source.getKey() + '|' + source.getTag()"),
+    );
+
+    expect(_value(result), 'https://example-novel.test|示例书源');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenNoLoginHeaderIsStored_answersNull', (
+    WidgetTester tester,
+  ) async {
+    // 上游 `getLoginHeader()` 没有值是 null（`getVariable` 才是空串）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'source.getLoginHeader() === null'),
+    );
+
+    expect(_value(result), isTrue);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenALoginHeaderIsWritten_persistsItAndItsCookie', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3b：登录脚本写下的头要写穿（下一个 job 还读得到），其中的 Cookie 还要并进 Cookie 宗，
+    // 否则下一次请求会被宗里的旧 Cookie 盖掉（上游 `BaseSource.putLoginHeader`）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            'source.putLoginHeader(JSON.stringify({Token: "t", Cookie: "sid=1"})); '
+            'JSON.parse(source.getLoginHeader()).Token',
+      ),
+    );
+
+    expect(_value(result), 't');
+    expect(
+      loginHeaders.snapshot('https://example-novel.test'),
+      contains('"Token":"t"'),
+    );
+    expect(
+      cookies.cookieHeaderFor(Uri.parse('https://example-novel.test/')),
+      'sid=1',
+    );
+
+    // 下一个 job 从存储里拿到同一份值（快照下发）。
+    final ParseResult<Object?> next = await bridge.evaluate(
+      _job(script: 'JSON.parse(source.getLoginHeader()).Token'),
+    );
+    expect(_value(next), 't');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleCallsSourceLogin_failsReadably', (
+    WidgetTester tester,
+  ) async {
+    // 规则内登录具名拒绝（book-source.md §11）：报错要落到 js:error，而不是一个
+    // `undefined is not a function`。日志里的 message 是脱敏的，所以这里断言形状。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'source.login()'),
+    );
+
+    expect(switch (result) {
+      ParseFailure<Object?>(:final String rulePath) => rulePath,
+      ParseSuccess<Object?>() => 'unexpected success',
+    }, 'searchRule.name:js:error');
+    expect(
+      printer.lines,
+      contains(contains('JS rule failed: field=searchRule.name')),
+    );
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('jsBridge_whenFormattingTitles_runsOncePerChapterInOneScope', (

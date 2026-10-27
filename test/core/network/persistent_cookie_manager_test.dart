@@ -236,6 +236,24 @@ void main() {
       expect(forExample.map((StoredCookie c) => c.name), <String>['session']);
     });
 
+    test('mergeCookieHeader_writesEveryCookieThrough', () async {
+      // 登录头里的 Cookie 必须落库：否则重启后要重新登录一次。
+      manager.mergeCookieHeader(
+        Uri.parse('https://example.com/'),
+        'sid=1; token=ab',
+      );
+      await pumpEventQueue();
+
+      expect(store.saved.map((StoredCookie cookie) => cookie.name), <String>[
+        'sid',
+        'token',
+      ]);
+      expect(
+        manager.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'sid=1; token=ab',
+      );
+    });
+
     test('cookiesFor_whenNothingMatches_answersNothing', () async {
       expect(manager.cookiesFor(Uri.parse('https://example.com/')), isEmpty);
     });

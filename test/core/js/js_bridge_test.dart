@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -30,6 +31,7 @@ typedef _Fixture = ({
   FakeHttpClient http,
   JsVariableStore variables,
   SourceVariableStore sourceVariables,
+  SourceLoginHeaderStore loginHeaders,
   InMemoryCookieManager cookies,
   _FakeUserMessages messages,
   _FakeVerification verification,
@@ -48,6 +50,7 @@ _Fixture _buildBridge({
   int maxBindingCalls = defaultJsMaxBindingCalls,
   JsVariableStore? variables,
   SourceVariableStore? sourceVariables,
+  SourceLoginHeaderStore? loginHeaders,
   InMemoryCookieManager? cookies,
   bool bindCookies = true,
   void Function(FakeJsWorkerHandle worker)? configure,
@@ -60,6 +63,8 @@ _Fixture _buildBridge({
   final JsVariableStore store = variables ?? JsVariableStore();
   final SourceVariableStore sourceStore =
       sourceVariables ?? SourceVariableStore();
+  final SourceLoginHeaderStore loginHeaderStore =
+      loginHeaders ?? SourceLoginHeaderStore();
   final InMemoryCookieManager cookieJar = cookies ?? InMemoryCookieManager();
   final _FakeUserMessages messages = _FakeUserMessages();
   final _FakeVerification fakeVerification =
@@ -86,6 +91,7 @@ _Fixture _buildBridge({
       webPages: fakePages,
       cookies: bindCookies ? cookieJar : null,
       sourceVariables: sourceStore,
+      loginHeaders: loginHeaderStore,
       userMessages: messages,
     ),
     printer: printer,
@@ -93,6 +99,7 @@ _Fixture _buildBridge({
     http: http,
     variables: store,
     sourceVariables: sourceStore,
+    loginHeaders: loginHeaderStore,
     cookies: cookieJar,
     messages: messages,
     verification: fakeVerification,
@@ -2283,6 +2290,115 @@ void main() {
       expect(
         fixture.sourceVariables.snapshot('https://example-novel.test'),
         isEmpty,
+      );
+    });
+  });
+
+  group('login header', () {
+    test('evaluate_sendsTheStoredHeaderWithTheJob', () async {
+      // 登录头随 job 下传（worker 读不到库），所以桥发出的信封里必须带着它。
+      final SourceLoginHeaderStore loginHeaders = SourceLoginHeaderStore(
+        repository: InMemorySourceLoginHeaderRepository(),
+      );
+      await loginHeaders.ensureLoaded('https://example-novel.test');
+      loginHeaders.put('https://example-novel.test', '{"Token":"t"}');
+      final _Fixture fixture = _buildBridge(loginHeaders: loginHeaders);
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+
+      expect(fixture.workers.single.sent.last['loginHeader'], '{"Token":"t"}');
+      await _finish(fixture.workers.single, call);
+    });
+
+    test('evaluate_givenAReportedLoginHeader_writesItToTheStore', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'loginHeader': '{"Token":"t"}',
+      });
+      await call;
+
+      expect(
+        fixture.loginHeaders.snapshot('https://example-novel.test'),
+        '{"Token":"t"}',
+      );
+    });
+
+    test('evaluate_givenAReportedLoginHeader_mergesItsCookie', () async {
+      // 上游 `putLoginHeader` 会把其中的 Cookie 并进宗；宗才是真正发 Cookie 的地方。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'loginHeader': '{"Cookie":"sid=1"}',
+      });
+      await call;
+
+      expect(
+        fixture.cookies.cookieHeaderFor(
+          Uri.parse('https://example-novel.test/'),
+        ),
+        'sid=1',
+      );
+    });
+
+    test('evaluate_withoutAReportedLoginHeader_writesNothing', () async {
+      final SourceLoginHeaderRepository repository =
+          InMemorySourceLoginHeaderRepository();
+      final SourceLoginHeaderStore loginHeaders = SourceLoginHeaderStore(
+        repository: repository,
+      );
+      final _Fixture fixture = _buildBridge(loginHeaders: loginHeaders);
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+      });
+      await call;
+
+      expect(await repository.read('https://example-novel.test'), isNull);
+    });
+
+    test('evaluate_givenAMalformedLoginHeader_logsAndKeepsGoing', () async {
+      // 信封里的值只可能是字符串；万一不是，丢一个头总比丢整个 job 好，但要留痕。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'loginHeader': 7,
+      });
+      final ParseResult<Object?> result = await call;
+
+      expect(result, isA<ParseSuccess<Object?>>());
+      expect(
+        fixture.printer.events.map((LogEvent event) => event.message),
+        contains(contains('malformed login header')),
       );
     });
   });

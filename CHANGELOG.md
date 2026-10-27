@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A source can save and use its login header (ADR-0078 S3b, M25)
+
+`source.getLoginHeader()` / `source.putLoginHeader(header)` and `source.getKey()` / `source.getTag()`
+now exist in the sandbox, which is how a source keeps the token it got from signing in:
+
+- **The login header is stored per source URL** (`book_sources.login_header`, schema v13), because that
+  is upstream's cache key (`loginHeader_<bookSourceUrl>`) and all a running rule knows. Two imports of
+  the same URL therefore share one value; a re-import leaves it alone (user state, like `loginInfo`).
+- **It is merged into every stage's request headers**, on top of the source's own `header` — upstream's
+  `getHeaderMap(userAgent, hasLoginHeader = true)` order — and `@js:` rules' `http.*` calls see the
+  same map. The `Cookie` inside it is merged into the app's cookie jar too
+  (`CookieManager.mergeCookieHeader`), because the jar is what actually sends `Cookie`.
+- **Writes take effect at once**: the worker reports the header back with the job result and the bridge
+  writes it through, so a login script that saves a token and then fetches a page gets the new header.
+  Reads never write.
+- `source.login()` **inside a rule** is a named rejection: it would have to run another script in the
+  worker that is already executing the current job. Signing in still works — the login page runs the
+  same `loginUrl` script through `SignIn`. `source.removeLoginHeader()` stays unbound.
+- Schema v13 adds one nullable column (`login_header`); the migration adds it only when the target
+  version is 13 or later, and the migration tests now validate against the latest schema.
+
 ### One dev worktree, one integration branch (ADR-0079)
 
 The repository had four checkouts of the same history (the main clone plus three `git worktree`s on

@@ -66,6 +66,9 @@
 
 **默认请求头：** 源没写 `header` 时，请求带一个**桌面 Chrome** 的 `User-Agent`（与上游默认一致，
 ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前就 403；源自己的 `header` 仍然覆盖它（C-NET-4）。
+**登录头（`source.putLoginHeader`，M25/S3b）压在 `header` 之上**：顺序是「源的 `header`（规则形态先求值）
+→ 登录头」，与上游 `getHeaderMap(userAgent, hasLoginHeader = true)` 一致；它是**按阶段**合并的
+（每个阶段取一次 header 表），不是每个请求都重读，所以同一个阶段里中途写下的登录头从下一个阶段起生效。
 
 模型必须使用 `freezed` + `json_serializable`（C-SRC-7）。未知字段必须**保留而非丢弃**：
 在 `extra` 中承载，以便导出时不丢信息。
@@ -731,6 +734,9 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `java.setContent(html)` | `void` | 把本 job 的页级 scope 换成这份 HTML：随后的 `java.getString*` / `parse.*` 读新页面（`result` 绑定不变） | M24 |
 | `java.toast(msg)` / `java.longToast(msg)` | `void` | 转发到装配根绑定的 `UserMessages`（snack bar），同一 job 内同句只贴一次，同时记 info 日志 | M24 |
 | `source.getVariable(key)` / `setVariable(key, value)` / `putVariable(k, v)` | `String` / `void` | **每源持久变量**（Drift 表 `source_variables`），与 `java.get` / `put` 的规则变量**不是**同一张表；`setVariable` 写 `null` 删键 | M24 |
+| `source.getKey()` / `source.getTag()` | `String` | 源身份：`getKey()` = `bookSourceUrl`（= `source.url`），`getTag()` = `bookSourceName`（= `source.name`）；纯读取，不过通道 | M25/S3b |
+| `source.getLoginHeader()` | `String?` | 登录头 JSON（上游存在 `CacheManager` 的 `loginHeader_<url>`）；本仓存 `book_sources.login_header` 列，随 job 下传。**没有值时是 `null`**（`getVariable` 才是空串） | M25/S3b |
+| `source.putLoginHeader(header)` | `void` | 写入登录头并**立即写穿**：同一 job 内读回新值，job 结束后下一个阶段的请求自动带上它（§2 的请求头合并），其中的 `Cookie` 同时并进 Cookie 宗 | M25/S3b |
 | `java.startBrowser(url, title[, html])` | `void` | 打开**可见 WebView**让用户过人机验证；不等结果（ADR-0068 §决策 5） | M21a |
 | `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])` | `Promise<{url, body}>` | 同上但等用户按「完成」，成功后按需用新 cookie 重取；**本仓返回 Promise，规则里要 `await`**（上游是同步，差异见注记）。同一个 `op+url` 在一个 job 里只问一次：重放的那一趟直接拿到上次的答案（ADR-0076 §决策 4） | M21a / M24 |
 | `java.getVerificationCode(imageUrl)` | `Promise<String>` | 图片验证码对话框，返回用户输入的字符串；**需 `await`**。答案同样按 `op+url` 记忆，重放不重复弹窗 | M21a / M24 |
@@ -913,7 +919,23 @@ java.replaceFont(result, errorFont, correctFont);
    `https://a.test:https://a.test/p:8443` 这种值。本仓答 `scheme://host[:port]`。
 4. **`androidId()` 不是 Android ID**：上游取 `Settings.Secure.ANDROID_ID`，本仓没有这个标识，装配根
    下发一个**每次安装稳定**的 id（同样 16 位十六进制）；宿主没提供时答空串而不是 `undefined`。
-   `java.openUrl` / `java.connect` / `java.ajaxAll` 与 `source.*` 的注入面仍在 S3b 的剩余部分。
+   `java.openUrl` / `java.connect` / `java.ajaxAll` 仍在 S3b 的剩余部分（全局 `chapter` / `src` /
+   `nextChapterUrl` / `fromBookInfo` / `infoMap` / `speakText` 绑定同理）。
+
+**登录头（M25/S3b，上游 `BaseSource.getLoginHeader` / `putLoginHeader`）：** 登录脚本换来的 token 写在
+这里，之后**每个阶段的请求都自动带上**：`headersOf` 把它合并**在源自己的 `header` 之上**（上游
+`getHeaderMap(userAgent, hasLoginHeader = true)` 的同一顺序），`@js:` 规则的 `http.*` 也走同一份
+map。四条要知道的：
+
+1. **键是源 URL**，不是行：上游的缓存键是 `loginHeader_<bookSourceUrl>`，本仓也按 URL 读写，因此两条
+   同 URL 的导入共享同一个登录头。
+2. **`Cookie` 会被并进 Cookie 宗**（上游 `CookieStore.replaceCookie`）：真正发 `Cookie` 的是宗，
+   只存头不并宗的话下一次请求会被宗里的旧 Cookie 盖掉。
+3. **值的形状是「JSON 对象文本」**，本仓照上游不校验：解析不出来时只记 warning 并跳过合并
+   （坏值不该让请求失败），但 `putLoginHeader` 只收字符串。
+4. **两条与上游不同的地方**：`source.removeLoginHeader()` **未绑定**（上游没标 `@JavascriptInterface`，
+   登出是 UI 的事，本仓不出登出入口）；规则内调用 `source.login()` **具名拒绝**——登录脚本由登录页跑
+   （`SignIn`，同一段 `loginUrl` 脚本），规则里重入 worker 会死锁。
 
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
 `eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。
@@ -921,7 +943,8 @@ java.replaceFont(result, errorFont, correctFont);
 > **JS 侧形态（本表是唯一出处；ADR-0029 §决策 3，2026-10-11 生效）：** 本表「形态」列描述的是**值类型**；
 > 调用能否同步取值另有一层，判定标准是「该绑定是否需要在别处执行」：
 >
-> - **立即返回值（同步）**：`java.put` / `java.get` / `source.getVariable` / `source.setVariable`、`log.*`、
+> - **立即返回值（同步）**：`java.put` / `java.get` / `source.getVariable` / `source.setVariable`、
+>   `source.getKey` / `getTag` / `getLoginHeader` / `putLoginHeader`、`log.*`、
 >   `crypto.*`、`java.timeFormat`，以及**重放层**里的 `java.ajax` / `java.post` / `java.head` / `java.getCookie` /
 >   `cookie.*`（ADR-0076 §决策 1：它们值上同步，背后是「未命中则抛哨兵 → 取页 → 从头重跑」）。
 >   前提是它们要么只在运行时所在 isolate 内完成（变量存 Dart 侧、按 `sourceId` 键控，见 ADR-0030 §决策 4），
@@ -1245,10 +1268,12 @@ java.replaceFont(result, errorFont, correctFont);
 
 - `@xpath:` XPath 规则（需要引入 XPath 依赖，须先开 ADR）
 - `:` 正则规则（仅书籍列表与目录列表）
-- 原生登录表单的**后续交互**：`java.upLoginData`（脚本动态改表单）、`source.putLoginHeader`（脚本改登录头）
-  仍未实现；`loginUi` 的 text / password / button / select / toggle + `action` JS 与
-  `source.getLoginInfo()` / `getLoginInfoMap()` **已实现**（M22-a，ADR-0072 §决策 3），但登录信息目前只喂给
-  登录自己的脚本 job，页面请求的 job 里还读不到（登记在 `roadmap.md` §3.7）
+- 原生登录表单的**后续交互**：`java.upLoginData`（脚本动态改表单）仍未实现；`loginUi` 的
+text / password / button / select / toggle + `action` JS、`source.getLoginInfo()` / `getLoginInfoMap()`
+（M22-a，ADR-0072 §决策 3）与 `source.putLoginHeader` / `getLoginHeader`（M25/S3b，含请求头合并与
+Cookie 合并）**已实现**。两条仍与上游不同：① 登录**信息**（`loginInfo`）只喂给登录自己的脚本 job，
+页面请求的 job 里还读不到（登记在 `roadmap.md` §3.7）；② 规则内 `source.login()` 与
+`source.removeLoginHeader()` **具名拒绝 / 未绑定**（登录走登录页，登出没有入口）
 - 图片字节解密 `ruleContent.imageDecode`（非空即显式 `unsupportedRule`，ADR-0069 G5）
 - **`java.*` 的具名拒绝族（ADR-0037 §决策 5；形态与实现档位见 §6 的兼容面表）：**
   其中 `get` / `put` 不在拒绝族里——§6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**

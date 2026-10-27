@@ -74,6 +74,7 @@ final class BackupRepositoryImpl implements BackupRepository {
               'lastUpdateTime': source.lastUpdateTime,
               'respondTime': source.respondTime,
               'loginInfo': source.loginInfo,
+              'loginHeader': source.loginHeader,
               'importedAt': dateToJson(source.importedAt),
               'updatedAt': dateToJson(source.updatedAt),
             },
@@ -533,6 +534,7 @@ final class BackupRepositoryImpl implements BackupRepository {
             ),
             comment: optionalStringOf(row, 'comment'),
             loginInfo: optionalStringOf(row, 'loginInfo'),
+            loginHeader: optionalStringOf(row, 'loginHeader'),
             importedAt: optionalDateOf(row, 'importedAt'),
             updatedAt: optionalDateOf(row, 'updatedAt'),
           );
@@ -552,6 +554,11 @@ final class BackupRepositoryImpl implements BackupRepository {
         await _sources.writeLoginInfo(
           id: existing.id,
           loginInfo: optionalStringOf(row, 'loginInfo') ?? existing.loginInfo,
+        );
+        await _sources.writeLoginHeader(
+          id: existing.id,
+          loginHeader:
+              optionalStringOf(row, 'loginHeader') ?? existing.loginHeader,
         );
         await _sources.setEnabled(
           id: existing.id,

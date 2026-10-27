@@ -33,7 +33,7 @@ class ReaderDatabase extends _$ReaderDatabase {
   ReaderDatabase(super.e);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -125,6 +125,12 @@ class ReaderDatabase extends _$ReaderDatabase {
         if (!await _hasSchemaObject(sourceVariablesSource.entityName)) {
           await m.create(sourceVariablesSource);
         }
+      }
+      // v13 给书源加「登录头」列（M25/S3b）：`source.putLoginHeader` 写下的请求头，按源存一份。
+      // 迁移测试会以「目标版本」为参数跑到中间版本，所以这里必须两头都判：只判 `from` 会把
+      // 新列加进 v12 及更早的库，与对应 schema 比对时多出一列。
+      if (from < 13 && to >= 13) {
+        await _addColumnIfMissing(m, bookSources, bookSources.loginHeader);
       }
     },
   );

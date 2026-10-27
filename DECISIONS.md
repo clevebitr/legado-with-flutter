@@ -764,3 +764,23 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 4. **CI 触发分支漏改就是假绿**：集成分支换了名字/新增了 `dev` 而 `ci.yml` 只监听 `main`，push 门禁等于不存在——这次一并加上。
 
 验证：`git worktree list` 只剩 `F:/Projetcs/legado-p5-dev [dev]`；四个分支里 `dev` 已推到远端；`legado-p5` 的未提交快照落在 `F:/Projetcs/_archive/`（patch + zip）。
+
+## 2026-10-27 — M25/S3b 第二组落地：source.* 簇与登录头（v13 列 + 请求头合并 + Cookie 合并）
+
+用户裁决（2026-10-26）：本轮只做 S3b 的 source.* 簇；登录头存 book_sources 新列 loginHeader（v13，与 v11 的 loginInfo 同构）；规则内 source.login() 具名拒绝并登记差异。全局绑定与平台族（chapter/src/nextChapterUrl/fromBookInfo/infoMap/speakText、androidId/openUrl/connect/ajaxAll）留下一段。
+
+落地形态（行为面归 book-source.md §2/§6/§11，为什么归 ADR-0078 §实现注记 S3b 第二组，台账归 engine-parity.md §5 D）：
+- source.getKey()/getTag() = bookSourceUrl/bookSourceName；两者本就在 source 字段里，纯读取不过通道。
+- 登录头按 **URL** 读写（上游 CacheManager 键是 loginHeader_<url>）：测 「最新一条有值的行」、写「该 URL 的所有行」，两条同 URL 的导入因此共享同一个登录头。
+- 桥在发 job 前把快照塞进信封（{'type':'evaluate','job':…,'loginHeader':…}），所以每个 job 都看得到它、构造点一个都不用改；结果信封里带 loginHeader 键才算「写过」→ 当即写穿 store。
+- PageFetchService.headersOf 把登录头合并 **在源 header 之上**（上游 getHeaderMap(hasLoginHeader=true) 同序），@js: 规则的 http.* 走同一份 map；合并粒度是「每个阶段取 header 表时」。
+- putLoginHeader 里的 Cookie 并进 Cookie 宗（新 CookieManager.mergeCookieHeader）：_CookieInterceptor 会用宗里的值盖掉请求头的 Cookie，只存头不并宗会在「宗里还有别的 cookie」时丢掉登录 cookie。
+- source.removeLoginHeader() 不绑定（上游没标 @JavascriptInterface，本仓无登出入口）；规则内 source.login() 具名拒绝（重入同一 worker 会死锁，登录页的 SignIn 跑同一段 loginUrl 脚本）。
+
+踩坑（值得记的四条）：
+1. 迁移步骤必须两头判：drift 的 migrateAndValidate 以「目标版本」为参数把库跑到中间版本，`if (from < 13)` 会把新列加进 v11/v12 的库，比对 schema 时「多出一列」直接失败。改成 `from < 13 && to >= 13`，并把迁移测试的目标版本统一到最新（createTable 用的是当前表定义，from-scratch 路径必然带最新列）。
+2. 新增 store 被 pageFetchServiceProvider/jsBridgeProvider watch，于是任何读真实 provider 的 widget 测试都会拉出数据库（drift_flutter → path_provider 需要 binding）：test/support/offline_corpus.dart 的五个 pump helper 与 search_results_notifier_test 各加一条 sourceLoginHeaderStoreProvider.overrideWithValue(SourceLoginHeaderStore())。
+3. 后台 isolate 读不到库也读不到资产，登录头只能靠「快照下发 + 结果回传」，与每源变量同一条契约；但它**不能**等 job 结束才落库（登录脚本写完立刻取页），所以写回挂在结果信封上而不是 job 生命周期上。
+4. 设备级探针里日志的 error message 是脱敏的（error=<String: N chars, sha256=…>），断言「错误可读」只能看形状（rulePath = field:js:error）+ 日志前缀，不能 contains 脚本抛出的那句话。
+
+验证：format 0；analyze 0 issue；flutter test 2530 例全过；check_coverage exit 0（core 98.89 / domain 98.66 / data 95.68）；build_runner 后生成物无漂移（190 个 g.dart 无变化，仅新增 provider/表列相关）；真引擎探针 65 例在 Windows 与 Android 模拟器双端全绿（新增 4 条：getKey/getTag、无值答 null、写入跨 job 并合并 Cookie、source.login() 落 js:error）；integration_test/on_disk_database_test.dart 6 例在 Windows 全绿。

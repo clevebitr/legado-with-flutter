@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
@@ -78,12 +79,14 @@ final class PageFetchService {
     required this._http,
     required this._logger,
     this._webPages,
+    this._loginHeaders,
   });
 
   final RuleEngine _engine;
   final HttpClient _http;
   final AppLogger _logger;
   final WebPageFetcher? _webPages;
+  final SourceLoginHeaderStore? _loginHeaders;
 
   /// Fetches one **URL rule** and parses the body into a page scope
   /// (`book-source.md` §4.3).
@@ -734,7 +737,50 @@ final class PageFetchService {
   /// static headers (usually none). The alternative — failing the stage — would turn "this
   /// source's signature script broke" into "this source has no books", and the request will
   /// fail loudly on its own if the header really was required (ADR-0026 §决策 2).
+  ///
+  /// The **login header** the source stored through `source.putLoginHeader` is merged **last**, over
+  /// both of the above: upstream's `getHeaderMap(userAgent, hasLoginHeader = true)` puts it on top of
+  /// the declared header, which is what makes a token obtained by signing in reach every later
+  /// request (M25/S3b). It is merged here rather than per request because this is the one place a
+  /// stage's headers are built; a source that also hands it to a `@js:` rule's `http.*` calls gets it
+  /// through the same map (`JsPageContext.headers`).
   Future<Map<String, String>?> headersOf(BookSource source) async {
+    final Map<String, String>? declared = await _declaredHeadersOf(source);
+    final Map<String, String>? login = await _loginHeadersOf(source);
+    if (login == null || login.isEmpty) {
+      return declared;
+    }
+
+    return <String, String>{...?declared, ...login};
+  }
+
+  /// The login header [source] stored, as a header map, or `null` when it stored none.
+  ///
+  /// A value that does not decode to a JSON object is logged and skipped — the same stance as a
+  /// broken `header` rule: a rule may store anything, and one bad value must not cost the request.
+  Future<Map<String, String>?> _loginHeadersOf(BookSource source) async {
+    final SourceLoginHeaderStore? store = _loginHeaders;
+    if (store == null) {
+      return null;
+    }
+    await store.ensureLoaded(source.url);
+    final String? stored = store.snapshot(source.url);
+    if (stored == null || stored.trim().isEmpty) {
+      return null;
+    }
+    final Map<String, String>? headers = _headersOfScriptResult(stored);
+    if (headers == null) {
+      _logger.warning(
+        'Login header is not a JSON object, sending the declared headers: '
+        'source=${source.url}',
+      );
+    }
+
+    return headers;
+  }
+
+  /// The headers [source] declares: its `header` field, with a rule form evaluated first.
+  Future<Map<String, String>?> _declaredHeadersOf(BookSource source) async {
     final String? rule = source.headerRule;
     if (rule == null) {
       return source.headers;

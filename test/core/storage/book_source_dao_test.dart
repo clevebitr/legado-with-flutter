@@ -511,5 +511,78 @@ void main() {
       await dao.writeLoginInfo(id: id, loginInfo: null);
       expect((await dao.findById(id))?.loginInfo, isNull);
     });
+
+    test('writeLoginHeaderByUrl_writesEveryRowOfThatUrl', () async {
+      // M25/S3b：上游按 URL 存登录头（`loginHeader_<bookSourceUrl>`），本仓两行同 URL 的导入
+      // 必须看到同一个值，否则「同一个源」会一半登录一半没登录。
+      final int first = await insert(name: '甲');
+      final int second = await insert(name: '乙');
+
+      await dao.writeLoginHeaderByUrl(
+        sourceUrl: 'https://example.test',
+        loginHeader: '{"Token":"t"}',
+      );
+
+      expect((await dao.findById(first))?.loginHeader, '{"Token":"t"}');
+      expect((await dao.findById(second))?.loginHeader, '{"Token":"t"}');
+      expect(
+        await dao.findLoginHeaderByUrl('https://example.test'),
+        '{"Token":"t"}',
+      );
+    });
+
+    test('findLoginHeaderByUrl_whenNoRowHasOne_answersNull', () async {
+      await insert();
+
+      expect(await dao.findLoginHeaderByUrl('https://example.test'), isNull);
+      expect(await dao.findLoginHeaderByUrl('https://other.test'), isNull);
+    });
+
+    test(
+      'findLoginHeaderByUrl_givenSeveralRows_answersTheNewestValue',
+      () async {
+        final int first = await insert(name: '甲');
+        await dao.writeLoginHeader(id: first, loginHeader: '{"Token":"old"}');
+        clock.advance(const Duration(days: 1));
+        final int second = await insert(name: '乙');
+        await dao.writeLoginHeader(id: second, loginHeader: '{"Token":"new"}');
+
+        expect(
+          await dao.findLoginHeaderByUrl('https://example.test'),
+          '{"Token":"new"}',
+        );
+      },
+    );
+
+    test('insertNew_givenALoginHeader_keepsIt', () async {
+      // 备份恢复要能把登录头原样写回去（ADR-0073 §决策 3 的同一份口径）。
+      final int id = await dao.insertNew(
+        url: 'https://example.test',
+        fingerprint: 'fp',
+        payload: '{}',
+        name: '示例书源',
+        groupName: null,
+        sourceType: 0,
+        isEnabled: true,
+        customOrder: 0,
+        weight: 0,
+        lastUpdateTime: null,
+        respondTime: null,
+        isExploreEnabled: true,
+        loginHeader: '{"Token":"t"}',
+      );
+
+      expect((await dao.findById(id))?.loginHeader, '{"Token":"t"}');
+    });
+
+    test('refreshPayload_keepsTheLoginHeader', () async {
+      // 重导入只刷新 payload：登录态是用户态，不能被导入抹掉。
+      final int id = await insert();
+      await dao.writeLoginHeader(id: id, loginHeader: '{"Token":"t"}');
+
+      await dao.refreshPayload(id: id, payload: '{"bookSourceName":"新"}');
+
+      expect((await dao.findById(id))?.loginHeader, '{"Token":"t"}');
+    });
   });
 }

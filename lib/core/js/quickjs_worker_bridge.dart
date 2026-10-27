@@ -14,6 +14,7 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_lib.dart';
 import 'package:flutter_reader/core/js/js_sync_call.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/redaction.dart';
@@ -79,6 +80,7 @@ final class QuickJsWorkerBridge implements JsBridge {
     WebPageFetcher? webPages,
     CookieManager? cookies,
     SourceVariableStore? sourceVariables,
+    SourceLoginHeaderStore? loginHeaders,
     UserMessages userMessages = const UnboundUserMessages(),
     this._timeout = defaultJsTimeout,
     this._killGrace = defaultJsKillGrace,
@@ -88,6 +90,7 @@ final class QuickJsWorkerBridge implements JsBridge {
        _webPages = webPages,
        _cookies = cookies,
        _sourceVariables = sourceVariables,
+       _loginHeaders = loginHeaders,
        _userMessages = userMessages;
 
   final AppLogger _logger;
@@ -102,6 +105,7 @@ final class QuickJsWorkerBridge implements JsBridge {
   final WebPageFetcher? _webPages;
   final CookieManager? _cookies;
   final SourceVariableStore? _sourceVariables;
+  final SourceLoginHeaderStore? _loginHeaders;
   final UserMessages _userMessages;
 
   final Queue<_PendingJob> _pending = Queue<_PendingJob>();
@@ -160,6 +164,8 @@ final class QuickJsWorkerBridge implements JsBridge {
 
   Future<ParseResult<Object?>> _run(JsJob job) async {
     try {
+      // 登录头是持久表：首个 job 前读一次，之后走内存（与每源变量同一份契约）。
+      await _loginHeaders?.ensureLoaded(job.source.url);
       final _WorkerSession session = await _currentSession();
 
       return await session.run(job);
@@ -204,6 +210,7 @@ final class QuickJsWorkerBridge implements JsBridge {
       webPages: _webPages,
       cookies: _cookies,
       sourceVariables: _sourceVariables,
+      loginHeaders: _loginHeaders,
       userMessages: _userMessages,
     );
     _session = created;
@@ -238,9 +245,11 @@ final class _WorkerSession {
     required this._webPages,
     required CookieManager? cookies,
     required SourceVariableStore? sourceVariables,
+    required SourceLoginHeaderStore? loginHeaders,
     required UserMessages userMessages,
   }) : _cookies = cookies,
        _sourceVariables = sourceVariables,
+       _loginHeaders = loginHeaders,
        _userMessages = userMessages {
     _subscription = _handle.messages.listen(
       _onMessage,
@@ -260,6 +269,7 @@ final class _WorkerSession {
   final WebPageFetcher? _webPages;
   final CookieManager? _cookies;
   final SourceVariableStore? _sourceVariables;
+  final SourceLoginHeaderStore? _loginHeaders;
   final UserMessages _userMessages;
 
   /// Milliseconds the job's wall clock spent on something other than its own CPU.
@@ -300,7 +310,12 @@ final class _WorkerSession {
     _budgetPausedMs = 0;
     _verifyAnswers.clear();
     _toasts.clear();
-    _handle.send(<String, Object?>{'type': 'evaluate', 'job': job.toJson()});
+    _handle.send(<String, Object?>{
+      'type': 'evaluate',
+      'job': job.toJson(),
+      // 登录头随 job 下传（快照），写回时再随结果上来：worker 读不到库，也不该为它多跑一趟。
+      'loginHeader': _loginHeaders?.snapshot(job.source.url),
+    });
     _budget = Timer(_timeout + _killGrace, _onBudgetExpired);
 
     return completer.future;
@@ -365,6 +380,10 @@ final class _WorkerSession {
         job.source.url,
         decodeJsVariables(message['sourceVariables']),
       );
+      // 登录头只在规则写过时才上来（M25/S3b）：读一次不该触发一次落库。
+      if (message.containsKey('loginHeader')) {
+        _applyLoginHeader(job.source.url, message['loginHeader']);
+      }
     }
 
     // 边界失败已经定了答案，脚本自己写出的值不再算数。
@@ -439,6 +458,36 @@ final class _WorkerSession {
   }
 
   // 日志按字段打标，超长文本截断并标记，而不是静默丢掉尾巴。
+  // 登录头的写入：先写穿存储，再把其中的 Cookie 合并进 Cookie 宗（上游 `BaseSource.putLoginHeader`）。
+  //
+  // 宗才是真正发 Cookie 的地方：`_CookieInterceptor` 会用宗里的值盖掉请求头里的 `Cookie`，所以只把
+  // 登录头存下来而不合并，下一次请求就会把登录 Cookie 丢掉。
+  void _applyLoginHeader(String sourceUrl, Object? raw) {
+    if (raw is! String) {
+      _logger.warning(
+        'Ignoring a malformed login header: source=${redactUrl(sourceUrl)}',
+      );
+
+      return;
+    }
+    _loginHeaders?.put(sourceUrl, raw);
+    final String? cookie = loginHeaderCookieOf(raw);
+    final CookieManager? cookies = _cookies;
+    if (cookie == null || cookies == null) {
+      return;
+    }
+    final Uri? url = Uri.tryParse(sourceUrl);
+    if (url == null || url.host.isEmpty) {
+      _logger.debug(
+        'Skipping the login header cookie, the source URL has no host: '
+        'source=${redactUrl(sourceUrl)}',
+      );
+
+      return;
+    }
+    cookies.mergeCookieHeader(url, cookie);
+  }
+
   void _onLog(Map<String, Object?> message) {
     if (_fatalFailure != null) {
       // 这个 job 已定案，后续日志不再影响结果。

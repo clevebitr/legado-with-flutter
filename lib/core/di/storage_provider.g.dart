@@ -493,6 +493,71 @@ final class SourceVariableStoreProvider
 String _$sourceVariableStoreHash() =>
     r'6a781f1a467108c9c9da87d80111e7f84197b07b';
 
+/// Provides the login header store (`source.putLoginHeader`, M25/S3b).
+///
+/// The bridge writes it through and the page fetcher merges it into every request's headers, so both
+/// must see the same instance. `keepAlive` matters for the same reason as the variables above: the
+/// value is hydrated once per source and reused across stages.
+
+@ProviderFor(sourceLoginHeaderStore)
+final sourceLoginHeaderStoreProvider = SourceLoginHeaderStoreProvider._();
+
+/// Provides the login header store (`source.putLoginHeader`, M25/S3b).
+///
+/// The bridge writes it through and the page fetcher merges it into every request's headers, so both
+/// must see the same instance. `keepAlive` matters for the same reason as the variables above: the
+/// value is hydrated once per source and reused across stages.
+
+final class SourceLoginHeaderStoreProvider
+    extends
+        $FunctionalProvider<
+          SourceLoginHeaderStore,
+          SourceLoginHeaderStore,
+          SourceLoginHeaderStore
+        >
+    with $Provider<SourceLoginHeaderStore> {
+  /// Provides the login header store (`source.putLoginHeader`, M25/S3b).
+  ///
+  /// The bridge writes it through and the page fetcher merges it into every request's headers, so both
+  /// must see the same instance. `keepAlive` matters for the same reason as the variables above: the
+  /// value is hydrated once per source and reused across stages.
+  SourceLoginHeaderStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sourceLoginHeaderStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sourceLoginHeaderStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<SourceLoginHeaderStore> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SourceLoginHeaderStore create(Ref ref) {
+    return sourceLoginHeaderStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SourceLoginHeaderStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SourceLoginHeaderStore>(value),
+    );
+  }
+}
+
+String _$sourceLoginHeaderStoreHash() =>
+    r'd22d169d99931f36b461ed5658caeca0c95f4203';
+
 /// Provides the DAO of the reading records.
 
 @ProviderFor(readRecordDao)

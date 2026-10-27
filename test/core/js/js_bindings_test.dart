@@ -402,6 +402,84 @@ void main() {
       expect(variables['token'], isNull);
     });
 
+    test('applyJsSourceCall_givenAGetLoginHeader_answersTheSeededValue', () {
+      // M25/S3b：登录头随 job 下传，读它是纯粹的本地读取。
+      final JsLoginHeaderSlot slot = JsLoginHeaderSlot('{"Token":"t"}');
+
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'getLoginHeader',
+          }, loginHeader: slot),
+        ),
+        <String, Object?>{'ok': true, 'value': '{"Token":"t"}'},
+      );
+    });
+
+    test('applyJsSourceCall_givenNoSeededLoginHeader_answersNull', () {
+      // 上游 `getLoginHeader()` 没有值时返回 null，而 `getVariable` 返回空串。
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'getLoginHeader',
+          }, loginHeader: JsLoginHeaderSlot(null)),
+        ),
+        <String, Object?>{'ok': true, 'value': null},
+      );
+    });
+
+    test('applyJsSourceCall_givenAPutLoginHeader_writesAndMarksItTouched', () {
+      final JsLoginHeaderSlot slot = JsLoginHeaderSlot(null);
+
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'putLoginHeader',
+          'value': '{"Token":"t"}',
+        }, loginHeader: slot),
+        '{"ok":true}',
+      );
+      expect(slot.value, '{"Token":"t"}');
+      expect(slot.touched, isTrue);
+    });
+
+    test('applyJsSourceCall_givenAReadOnlySlot_leavesItUntouched', () {
+      final JsLoginHeaderSlot slot = JsLoginHeaderSlot('{"Token":"t"}');
+
+      applyJsSourceCall(<String, String?>{}, <String, Object?>{
+        'operation': 'getLoginHeader',
+      }, loginHeader: slot);
+
+      expect(slot.touched, isFalse);
+    });
+
+    test('applyJsSourceCall_givenANonStringLoginHeader_fails', () {
+      // 上游签名是 `putLoginHeader(header: String)`：给别的类型就是规则写错了，必须响亮。
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'putLoginHeader',
+          'value': 1,
+        }, loginHeader: JsLoginHeaderSlot(null)),
+        '{"ok":false}',
+      );
+    });
+
+    test('applyJsSourceCall_withoutASlot_failsTheLoginHeaderOperations', () {
+      // 没播种就当作「这条规则跑过的 job 不该用登录头」，读和写都响亮失败（C-SRC-4 的同一立场）。
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'getLoginHeader',
+        }),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'putLoginHeader',
+          'value': '{"Token":"t"}',
+        }),
+        '{"ok":false}',
+      );
+    });
+
     test('applyJsSourceCall_givenUnusableArguments_answersAFailure', () {
       expect(
         applyJsSourceCall(<String, String?>{}, 'nonsense'),

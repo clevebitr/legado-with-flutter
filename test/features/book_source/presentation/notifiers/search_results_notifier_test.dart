@@ -2,6 +2,7 @@ import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -34,6 +35,9 @@ void main() {
             // 不是存储，所以换成不落盘的 store 与内存 Cookie 宗。
             sourceVariableStoreProvider.overrideWithValue(
               SourceVariableStore(),
+            ),
+            sourceLoginHeaderStoreProvider.overrideWithValue(
+              SourceLoginHeaderStore(),
             ),
             cookieStoreProvider.overrideWithValue(FakeCookieStore()),
           ],
@@ -81,6 +85,9 @@ void main() {
             // 不是存储，所以换成不落盘的 store 与内存 Cookie 宗。
             sourceVariableStoreProvider.overrideWithValue(
               SourceVariableStore(),
+            ),
+            sourceLoginHeaderStoreProvider.overrideWithValue(
+              SourceLoginHeaderStore(),
             ),
             cookieStoreProvider.overrideWithValue(FakeCookieStore()),
           ],

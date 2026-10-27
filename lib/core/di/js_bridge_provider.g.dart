@@ -61,7 +61,7 @@ final class JsBridgeProvider
   }
 }
 
-String _$jsBridgeHash() => r'ae4459e18f5e02ff7c549a8f84650da0df6ed77a';
+String _$jsBridgeHash() => r'cc30601962ec9a0551616d5f0f4d9e1a44c56813';
 
 /// Provides the rule variables shared by `@put:` / `@get:` and `java.put` /
 /// `java.get`.

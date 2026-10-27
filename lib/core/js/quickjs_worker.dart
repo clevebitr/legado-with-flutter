@@ -147,7 +147,7 @@ Future<void> _quickJsWorkerMain(List<Object?> bootstrap) async {
     switch (envelope['type']) {
       case 'evaluate':
         // 不能 await：脚本可能停在 `await http.get(...)` 上，答复要靠这条循环继续分发。
-        unawaited(worker.evaluate(envelope['job']));
+        unawaited(worker.evaluate(envelope));
       case 'hostResult':
         worker.answerHostCall(envelope);
       case 'close':
@@ -175,6 +175,10 @@ final class _Worker {
 
   // 当前 job 的**每源**变量表（`source.getVariable`），同样从快照播种、随结果回传。
   Map<String, String?> _sourceVariables = <String, String?>{};
+
+  // 当前 job 的登录头（`source.getLoginHeader` / `putLoginHeader`，M25/S3b）：随 job 进来，
+  // 写过后随结果回传（桥据此写穿并合并 Cookie）。
+  JsLoginHeaderSlot _loginHeader = JsLoginHeaderSlot(null);
 
   // 一趟重放已经拿到的同步答案；下一趟从这里同步返回（ADR-0076 §决策 1）。
   final JsSyncCache _syncCache = JsSyncCache();
@@ -259,7 +263,8 @@ final class _Worker {
     // 每源变量也只在 isolate 内转一图：快照进来、写入随结果出去。
     _runtime.onMessage(
       jsSourceBinding,
-      (Object? args) => applyJsSourceCall(_sourceVariables, args),
+      (Object? args) =>
+          applyJsSourceCall(_sourceVariables, args, loginHeader: _loginHeader),
     );
     // 同步族先问缓存；命中就当场答复，未命中就抛哨兵，由 evaluate 取页后重跑。
     _runtime.onMessage(jsSyncBinding, _applySync);
@@ -314,16 +319,18 @@ final class _Worker {
     return extended;
   }
 
-  Future<void> evaluate(Object? job) async {
+  Future<void> evaluate(Object? envelope) async {
     // 上一个 job 未答复的调用不再有意义，桥也已经不再认它。
     _pending.clear();
     _variables = <String, String?>{};
     _sourceVariables = <String, String?>{};
+    _loginHeader = JsLoginHeaderSlot(null);
     _fonts.clear();
     _ciphers.clear();
     _syncCache.clear();
     _pendingSync = null;
     _passes = 0;
+    final Object? job = envelope is Map ? envelope['job'] : null;
     if (job is! Map) {
       _toBridge.send(<String, Object?>{
         'type': 'result',
@@ -343,6 +350,10 @@ final class _Worker {
     final Map<String, String?> seedSourceVariables = decodeJsVariables(
       fields['sourceVariables'],
     );
+    // 登录头同样从快照播种：每趟重跑都回到 job 开始时的那份值（写入只算最后一趟）。
+    final Object? seedLoginHeader = envelope is Map
+        ? envelope['loginHeader']
+        : null;
     _named = decodeJsNamedContext(fields);
     // 简繁码表按需解析（`java.t2s` / `java.s2t`），并挂进本 job 的 helper 上下文。
     final String? scriptText = fields['script'] is String
@@ -364,6 +375,9 @@ final class _Worker {
     while (true) {
       _variables = Map<String, String?>.of(seedVariables);
       _sourceVariables = Map<String, String?>.of(seedSourceVariables);
+      _loginHeader = JsLoginHeaderSlot(
+        seedLoginHeader is String ? seedLoginHeader : null,
+      );
       _contentOverride = null;
       _pendingSync = null;
       result = _runtime.evaluate(_evaluationSource(fields));
@@ -387,6 +401,7 @@ final class _Worker {
           'elapsedMs': stopwatch.elapsedMilliseconds,
           'variables': _variables,
           'sourceVariables': _sourceVariables,
+          ..._touchedLoginHeader(),
         });
 
         return;
@@ -405,6 +420,7 @@ final class _Worker {
         // 脚本报错前可能已经 java.put：上游的写入立即生效，失败也要回传。
         'variables': _variables,
         'sourceVariables': _sourceVariables,
+        ..._touchedLoginHeader(),
       });
 
       return;
@@ -419,6 +435,7 @@ final class _Worker {
         'elapsedMs': stopwatch.elapsedMilliseconds,
         'variables': _variables,
         'sourceVariables': _sourceVariables,
+        ..._touchedLoginHeader(),
       });
 
       return;
@@ -434,8 +451,14 @@ final class _Worker {
       'elapsedMs': stopwatch.elapsedMilliseconds,
       'variables': _variables,
       'sourceVariables': _sourceVariables,
+      ..._touchedLoginHeader(),
     });
   }
+
+  // 登录头只在规则**写过**时随结果回传：`source.getLoginHeader()` 一次不该触发一次落库。
+  Map<String, Object?> _touchedLoginHeader() => _loginHeader.touched
+      ? <String, Object?>{'loginHeader': _loginHeader.value}
+      : const <String, Object?>{};
 
   // 单向转发：答复到了也只是清掉 callId，规则不会等它。
   Future<void> _notify(String binding, Object? args) async {
@@ -941,6 +964,22 @@ globalThis.__sourceCall = function (call) {
     ? '' : String(envelope.value);
 };
 
+// 登录头（`source.getLoginHeader` / `putLoginHeader`，M25/S3b）走同一个通道，但答案**原样**返回：
+// 上游 `getLoginHeader()` 没有值时是 null，而 `getVariable` 是空串——两者用 `if (!x)` 都成立，
+// 可是 `JSON.parse(null)` 与 `JSON.parse('')` 的报错长得不一样，调试时前者好认。
+globalThis.__sourceRawCall = function (call) {
+  var envelope = null;
+  try {
+    envelope = JSON.parse(String(sendMessage('source', JSON.stringify(call))));
+  } catch (error) {
+    envelope = null;
+  }
+  if (!envelope || envelope.ok !== true) {
+    throw new Error('source.' + call.operation + ' failed');
+  }
+  return (envelope.value === undefined) ? null : envelope.value;
+};
+
 // 沙箱的 `book` 对象（ADR-0061 §决策 5 的数据面 + ADR-0062 §决策 2 的方法面）。
 //
 // 数据字段从 `JsBookInfo` 的 JSON 拷来，方法分两类：
@@ -1030,6 +1069,31 @@ globalThis.__sandboxSource = function (data, loginInfo) {
     __sourceCall(call);
   };
   source.putVariable = source.setVariable;
+  // 源身份（`BaseSource.getKey` / `getTag`）：上游分别答 `bookSourceUrl` / `bookSourceName`，
+  // 两者本就在字段里，所以不需要过通道。
+  source.getKey = function () {
+    return source.url;
+  };
+  source.getTag = function () {
+    return source.name;
+  };
+  // 登录头（M25/S3b）：值随 job 进来，写回的结果由桥写穿存储并把其中的 Cookie 合并进 Cookie 宗。
+  source.getLoginHeader = function () {
+    return __sourceRawCall({ operation: 'getLoginHeader' });
+  };
+  source.putLoginHeader = function (header) {
+    if (typeof header !== 'string') {
+      throw new Error('source.putLoginHeader: header must be a string');
+    }
+    __sourceRawCall({ operation: 'putLoginHeader', value: header });
+  };
+  // 规则内触发的登录：本仓把**同一段** `loginUrl` 脚本交给登录页（`SignIn`，ADR-0072 §决策 3），
+  // 规则内部没有地方跑它（重入同一个 worker 会死锁），因此具名拒绝（book-source.md §11）。
+  source.login = function () {
+    throw new Error(
+      'source.login() is not supported inside a rule (M25): ' +
+      'use the sign-in page; see book-source.md §11');
+  };
   return Object.freeze(source);
 };
 

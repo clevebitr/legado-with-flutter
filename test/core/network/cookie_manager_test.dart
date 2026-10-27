@@ -228,6 +228,61 @@ void main() {
       );
     });
 
+    test('mergeCookieHeader_givenABareCookie_storesEveryPair', () {
+      // `source.putLoginHeader` 里的 Cookie 走这里：上游把它并进宗，宗才是真正发它的地方。
+      final InMemoryCookieManager cookies = InMemoryCookieManager();
+
+      cookies.mergeCookieHeader(
+        Uri.parse('https://example.com/'),
+        'sid=1; token=ab; padding==',
+      );
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/x')),
+        allOf(contains('sid=1'), contains('token=ab'), contains('padding==')),
+      );
+    });
+
+    test('mergeCookieHeader_replacesACookieWithTheSameName', () {
+      final InMemoryCookieManager cookies = InMemoryCookieManager();
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'sid=old',
+      ]);
+
+      cookies.mergeCookieHeader(Uri.parse('https://example.com/'), 'sid=new');
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'sid=new',
+      );
+    });
+
+    test('mergeCookieHeader_skipsPairsWithoutANameOrValue', () {
+      final InMemoryCookieManager cookies = InMemoryCookieManager();
+
+      cookies.mergeCookieHeader(
+        Uri.parse('https://example.com/'),
+        'sid=1; ; =broken; empty= ',
+      );
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'sid=1',
+      );
+    });
+
+    test('parseCookieHeader_storesThemForTheURLHostOnly', () {
+      final List<StoredCookie> parsed = parseCookieHeader(
+        Uri.parse('https://example.com/a'),
+        'sid=1',
+      );
+
+      expect(parsed.single.domain, 'example.com');
+      expect(parsed.single.path, '/');
+      expect(parsed.single.isSecure, isFalse);
+      expect(parsed.single.expiresAt, isNull);
+    });
+
     test(
       'storeFromResponse_whenExpiresIsUnparsable_keepsItAsASessionCookie',
       () {

@@ -791,18 +791,64 @@ Map<String, String?> decodeJsVariables(Object? value) {
   return variables;
 }
 
-/// Applies one `source.getVariable` / `setVariable` / `putVariable` call and returns a JSON
-/// envelope.
+/// The job-local **login header** of `source.getLoginHeader` / `putLoginHeader` (M25/S3b).
+///
+/// Seeded from the job envelope with the value the store holds, written by the rule, and reported
+/// back with the result **only when the rule wrote it**: a read must not cause a database write,
+/// and upstream's `putLoginHeader` takes effect at once (`BaseSource.kt:150-157`).
+final class JsLoginHeaderSlot {
+  /// Creates a slot seeded with [value].
+  JsLoginHeaderSlot(this.value);
+
+  /// The header JSON the rule sees, or `null` when the source never signed in.
+  String? value;
+
+  /// Whether the rule wrote the slot during this job.
+  bool touched = false;
+}
+
+/// Applies one `source.*` call and returns a JSON envelope.
 ///
 /// The map is the job's own copy of the source's variables: seeded from the store when the job is
 /// built and returned with the result, exactly like the rule variables (ADR-0034 §决策 1). A write
 /// is therefore visible to later reads in the same job, and persists because the bridge merges the
 /// returned map back into the store.
-String applyJsSourceCall(Map<String, String?> variables, Object? args) {
+///
+/// [loginHeader] is the same contract for `source.getLoginHeader` / `putLoginHeader`; passing
+/// `null` means the job seeded none, and the two operations then fail **loudly** (`{'ok':false}`)
+/// instead of pretending the source has no login header.
+String applyJsSourceCall(
+  Map<String, String?> variables,
+  Object? args, {
+  JsLoginHeaderSlot? loginHeader,
+}) {
   final Map<String, Object?>? call = _jsonObjectOf(args);
   if (call == null) {
     return '{"ok":false}';
   }
+
+  switch (call['operation']) {
+    case 'getLoginHeader':
+      if (loginHeader == null) {
+        return '{"ok":false}';
+      }
+
+      return jsonEncode(<String, Object?>{
+        'ok': true,
+        // 上游 `getLoginHeader()` 没有值时返回 null；`getVariable` 才返回空串。
+        'value': loginHeader.value,
+      });
+    case 'putLoginHeader':
+      final Object? header = call['value'];
+      if (loginHeader == null || header is! String) {
+        return '{"ok":false}';
+      }
+      loginHeader.value = header;
+      loginHeader.touched = true;
+
+      return '{"ok":true}';
+  }
+
   final Object? key = call['key'];
   final Object? value = call['value'];
   if (key is! String) {

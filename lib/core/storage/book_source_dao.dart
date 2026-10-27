@@ -106,6 +106,60 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
     bookSources,
   )..where(($BookSourcesTable table) => table.id.equals(id))).getSingleOrNull();
 
+  /// The login header stored for [sourceUrl], or `null` when there is none (M25/S3b).
+  ///
+  /// Keyed by URL because that is all a running rule knows and what upstream keys its cache on
+  /// (`loginHeader_<bookSourceUrl>`); several rows may share one URL, and [`writeLoginHeaderByUrl`]
+  /// keeps their values identical.
+  Future<String?> findLoginHeaderByUrl(String sourceUrl) async {
+    final BookSourceRow? row =
+        await (select(bookSources)
+              ..where(
+                ($BookSourcesTable table) =>
+                    table.url.equals(sourceUrl) & table.loginHeader.isNotNull(),
+              )
+              ..orderBy(<OrderClauseGenerator<$BookSourcesTable>>[
+                ($BookSourcesTable table) => OrderingTerm(
+                  expression: table.updatedAt,
+                  mode: OrderingMode.desc,
+                ),
+                ($BookSourcesTable table) =>
+                    OrderingTerm(expression: table.id, mode: OrderingMode.desc),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+
+    return row?.loginHeader;
+  }
+
+  /// Writes the login header of row [id] (`BookSourceDao.writeLoginInfo`'s counterpart).
+  ///
+  /// Used by a backup restore, which knows the row it is writing; the engine writes by URL because
+  /// that is all a running rule has.
+  Future<void> writeLoginHeader({
+    required int id,
+    required String? loginHeader,
+  }) =>
+      (update(
+        bookSources,
+      )..where(($BookSourcesTable table) => table.id.equals(id))).write(
+        BookSourcesCompanion(loginHeader: Value<String?>(loginHeader)),
+      );
+
+  /// Writes the login header of every row whose URL is [sourceUrl].
+  ///
+  /// Upstream stores one source per URL, so a URL is the unit; writing all matching rows keeps the
+  /// read above unambiguous instead of letting two imports of the same URL disagree.
+  Future<int> writeLoginHeaderByUrl({
+    required String sourceUrl,
+    required String? loginHeader,
+  }) =>
+      (update(
+        bookSources,
+      )..where(($BookSourcesTable table) => table.url.equals(sourceUrl))).write(
+        BookSourcesCompanion(loginHeader: Value<String?>(loginHeader)),
+      );
+
   /// The row identifying the same source as `(url, fingerprint)`, or `null`.
   Future<BookSourceRow?> findIdentity({
     required String url,
@@ -119,8 +173,9 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
 
   /// Inserts a new row and returns its generated id.
   ///
-  /// `comment` / `loginInfo` / the two timestamps are optional so a restore can write back what the
-  /// backup carried (`ADR-0073` §决策 3); an ordinary import leaves them at their defaults.
+  /// `comment` / `loginInfo` / `loginHeader` / the two timestamps are optional so a restore can
+  /// write back what the backup carried (`ADR-0073` §决策 3); an ordinary import leaves them at
+  /// their defaults.
   Future<int> insertNew({
     required String url,
     required String fingerprint,
@@ -136,6 +191,7 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
     required bool isExploreEnabled,
     String? comment,
     String? loginInfo,
+    String? loginHeader,
     DateTime? importedAt,
     DateTime? updatedAt,
   }) {
@@ -157,6 +213,7 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
         lastUpdateTime: Value<int?>(lastUpdateTime),
         respondTime: Value<int?>(respondTime),
         loginInfo: Value<String?>(loginInfo),
+        loginHeader: Value<String?>(loginHeader),
         importedAt: importedAt ?? now,
         updatedAt: updatedAt ?? now,
       ),

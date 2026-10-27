@@ -56,6 +56,15 @@ class BookSources extends Table {
   /// the same level as the cookie jar (registered in `roadmap.md` §3.7).
   TextColumn get loginInfo => text().nullable()();
 
+  /// The header map `source.putLoginHeader` stored, as JSON, or `null` when the source never
+  /// signed in (M25/S3b).
+  ///
+  /// Upstream keeps it in `CacheManager` under `loginHeader_<url>`, i.e. keyed by source URL, which
+  /// is what the engine has when a rule writes it; several rows may share one URL and then share
+  /// this value. User state like [loginInfo]: an import never overwrites it, and the engine merges
+  /// it over the source's own `header` on every request (`BaseSource.getHeaderMap`).
+  TextColumn get loginHeader => text().nullable()();
+
   /// When the row was created.
   DateTimeColumn get importedAt => dateTime()();
 

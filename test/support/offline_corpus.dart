@@ -9,6 +9,7 @@ import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/background_image_picker.dart';
@@ -104,6 +105,10 @@ Future<void> pumpReaderApp(
           () => _FixedSelectedBookSource(source),
         ),
         httpClientProvider.overrideWithValue(http),
+        // 登录头（`source.putLoginHeader`，M25/S3b）默认写穿数据库：页面测试换成内存 store。
+        sourceLoginHeaderStoreProvider.overrideWithValue(
+          SourceLoginHeaderStore(),
+        ),
         // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
         // （端口是 total，替身与适配器对页面是同一件事）。
         contentCacheProvider.overrideWithValue(FakeContentCache()),
@@ -156,6 +161,10 @@ Future<ProviderContainer?> pumpBookSourcePage(
       ] else
         bookSourceRepositoryProvider.overrideWithValue(repository),
       httpClientProvider.overrideWithValue(http),
+      // 登录头（`source.putLoginHeader`，M25/S3b）默认写穿数据库：页面测试换成内存 store。
+      sourceLoginHeaderStoreProvider.overrideWithValue(
+        SourceLoginHeaderStore(),
+      ),
       // 跨 feature 的入口是端口（ADR-0042）：测试可以塞一个记录器，断言页面**请求了**
       // 什么（哪一章 / 哪本书），而不是去追一个路由。
       if (navigation != null)
@@ -213,6 +222,10 @@ Future<void> pumpSourceManagementPage(
       overrides: [
         bookSourceRepositoryProvider.overrideWithValue(repository),
         httpClientProvider.overrideWithValue(http ?? FakeHttpClient()),
+        // 登录头（`source.putLoginHeader`，M25/S3b）默认写穿数据库：页面测试换成内存 store。
+        sourceLoginHeaderStoreProvider.overrideWithValue(
+          SourceLoginHeaderStore(),
+        ),
         appLoggerProvider.overrideWithValue(_logger()),
         // 文件选择器的默认实现要走平台通道；测试永远覆盖端口（testing.md §4）。
         jsonFilePickerProvider.overrideWithValue(
@@ -274,6 +287,10 @@ Future<ProviderContainer> pumpSourceConsolePage(
     overrides: <Override>[
       bookSourceRepositoryProvider.overrideWithValue(repository),
       httpClientProvider.overrideWithValue(http),
+      // 登录头（`source.putLoginHeader`，M25/S3b）默认写穿数据库：页面测试换成内存 store。
+      sourceLoginHeaderStoreProvider.overrideWithValue(
+        SourceLoginHeaderStore(),
+      ),
       contentCacheProvider.overrideWithValue(FakeContentCache()),
       appLoggerProvider.overrideWithValue(_logger()),
     ],
@@ -313,6 +330,10 @@ Future<ProviderContainer> pumpSearchPage(
     overrides: <Override>[
       bookSourceRepositoryProvider.overrideWithValue(repository),
       httpClientProvider.overrideWithValue(http),
+      // 登录头（`source.putLoginHeader`，M25/S3b）默认写穿数据库：页面测试换成内存 store。
+      sourceLoginHeaderStoreProvider.overrideWithValue(
+        SourceLoginHeaderStore(),
+      ),
       contentCacheProvider.overrideWithValue(FakeContentCache()),
       searchScopeStoreProvider.overrideWith(
         (Ref ref) async => scopeStore ?? FakeSearchScopeStore(),

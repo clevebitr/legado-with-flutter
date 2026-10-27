@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/database_executor_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/network/cookie_store.dart';
 import 'package:flutter_reader/core/storage/book_source_dao.dart';
@@ -16,6 +17,7 @@ import 'package:flutter_reader/core/storage/local_image_store.dart';
 import 'package:flutter_reader/core/storage/read_record_dao.dart';
 import 'package:flutter_reader/core/storage/rule_dao.dart';
 import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
+import 'package:flutter_reader/core/storage/source_login_header_dao_repository.dart';
 import 'package:flutter_reader/core/storage/source_variable_dao.dart';
 import 'package:flutter_reader/core/storage/source_variable_dao_repository.dart';
 import 'package:path_provider/path_provider.dart';
@@ -103,6 +105,21 @@ SourceVariableStore sourceVariableStore(Ref ref) => SourceVariableStore(
   ),
   logger: ref.watch(appLoggerProvider),
 );
+
+/// Provides the login header store (`source.putLoginHeader`, M25/S3b).
+///
+/// The bridge writes it through and the page fetcher merges it into every request's headers, so both
+/// must see the same instance. `keepAlive` matters for the same reason as the variables above: the
+/// value is hydrated once per source and reused across stages.
+@Riverpod(keepAlive: true)
+SourceLoginHeaderStore sourceLoginHeaderStore(Ref ref) =>
+    SourceLoginHeaderStore(
+      repository: SourceLoginHeaderDaoRepository(
+        ref.watch(bookSourceDaoProvider),
+        logger: ref.watch(appLoggerProvider),
+      ),
+      logger: ref.watch(appLoggerProvider),
+    );
 
 /// Provides the DAO of the reading records.
 @Riverpod(keepAlive: true)

@@ -22,7 +22,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(6);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -31,7 +31,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(7);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -41,7 +41,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(8);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -50,7 +50,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(10);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -60,7 +60,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(9);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -75,7 +75,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(1);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -85,7 +85,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(2);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -94,7 +94,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(3);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -104,7 +104,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(4);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -114,7 +114,7 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(5);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 11);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
@@ -134,11 +134,11 @@ void main() {
         schema.rawDatabase.execute('PRAGMA user_version = 8');
         final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-        await verifier.migrateAndValidate(database, 12);
+        await verifier.migrateAndValidate(database, 13);
         final QueryRow version = await database
             .customSelect('PRAGMA user_version')
             .getSingle();
-        expect(version.data.values.single, 12);
+        expect(version.data.values.single, 13);
         await database.close();
       },
     );
@@ -149,12 +149,22 @@ void main() {
       final InitializedSchema schema = await verifier.schemaAt(11);
       final ReaderDatabase database = ReaderDatabase(schema.newConnection());
 
-      await verifier.migrateAndValidate(database, 12);
+      await verifier.migrateAndValidate(database, 13);
       await database.close();
     });
 
-    test('schemaVersion_whenRead_isTwelve', () {
-      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 12);
+    test('migration_fromV12ToV13_addsTheLoginHeaderColumn', () async {
+      // M25/S3b：`source.putLoginHeader` 写下的登录头按源存一列 JSON（上游存在 CacheManager 里）。
+      // 只加列；既有行不动，重导入也不覆盖它。
+      final InitializedSchema schema = await verifier.schemaAt(12);
+      final ReaderDatabase database = ReaderDatabase(schema.newConnection());
+
+      await verifier.migrateAndValidate(database, 13);
+      await database.close();
+    });
+
+    test('schemaVersion_whenRead_isThirteen', () {
+      expect(ReaderDatabase(NativeDatabase.memory()).schemaVersion, 13);
     });
   });
 }

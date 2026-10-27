@@ -58,6 +58,13 @@ final class PersistentCookieManager implements CookieManager {
     }
   }
 
+  @override
+  void mergeCookieHeader(Uri url, String cookieHeader) {
+    for (final StoredCookie cookie in parseCookieHeader(url, cookieHeader)) {
+      _storeOne(cookie);
+    }
+  }
+
   /// Takes over the cookies a visible WebView collected.
   ///
   /// The WebView is authoritative for its domain: an expired or empty cookie here is a deletion.

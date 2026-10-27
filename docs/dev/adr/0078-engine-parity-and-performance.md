@@ -242,3 +242,49 @@ reviewImg、只有图时保留目录名、`replaceRegex` 看得到副文、二�
 验证：`test/core/js/js_helpers_test.dart` 22 例、`js_cache_test.dart` 10 例、`zh_converter_test.dart`
 7 例（含 OpenCC 表的短语优先、CRLF、未知字符直通），真引擎探针新增 5 条（纯计算族一次跑完、
 `java.t2s` / `java.s2t` 走真实资产、`cache` 跨 job、`getWebViewUA`）；全量门禁见下一轮提交说明。
+
+## 实现注记（2026-10-26，S3b 第二组：`source.*` 簇与登录头）
+
+用户裁决（2026-10-26）：本轮只做 S3b 的 `source.*` 簇；登录头落 **`book_sources.login_header` 新列**
+（v13，与 v11 的 `loginInfo` 同构）；规则内 `source.login()` **具名拒绝**并登记差异。全局绑定与平台族
+（`chapter`/`src`/`nextChapterUrl`/`fromBookInfo`/`infoMap`/`speakText`、`androidId`/`openUrl`/`connect`/
+`ajaxAll`）留下一段。
+
+1. **登录头由桥统一注入，而不是各调用点传参。** 上游的 `source` 绑定就是源对象本身，登录头在
+   `BaseSource` 里、与哪个阶段无关；本仓若把它做成 `JsJob` 的字段，就得在 RuleEngine、`SignIn`、
+   `ResolveLoginForm` 三处都记得传。改成 **桥在发 job 前把快照塞进信封**（`{'type':'evaluate', 'job':…,
+   'loginHeader':…}`）后，「每个 job 都看得到」是结构保证，构造点一个都不用改——`sourceVariables` 走的是
+   另一条路（引擎塞进 job），这是刻意的不对称：变量属于规则，登录头属于源。
+2. **写回的时机是「规则写过」，不是「job 结束」。** `putLoginHeader` 之后登录脚本往往立刻取下一页，
+   而上游写入立即生效；所以桥在结果信封里看到 `loginHeader` 键就当即写穿 store，并把其中的 `Cookie`
+   并进 Cookie 宗。读不触发写：信封里没有这个键，就不会有数据库写入。
+3. **`Cookie` 必须并进宗，不能只存头。** 我们的 `_CookieInterceptor` 用宗里的值盖掉请求头里的
+   `Cookie`，所以只存登录头会在「宗里还有别的 cookie」时把登录 cookie 丢掉（上游 `putLoginHeader` 里
+   那句 `CookieStore.replaceCookie(getKey(), cookie)` 正是为此）。`CookieManager` 因此多了一个
+   `mergeCookieHeader(url, header)`：`StoredCookie` 的 `domain` 取源 URL 的 host、`path = /`、
+   **不标 secure**（上游的宗没有这个属性，且源可能 https 登录、http 取章节）、空值跳过而不是当删除
+   （那是 `Set-Cookie` 的语义）。
+4. **按键是 URL，不是行。** `book_sources` 的身份是 `(url, fingerprint)`，而运行中的规则只有 URL；上游
+   的缓存键就是 `loginHeader_<bookSourceUrl>`。所以读走「最新一条有值的行」、写走「这个 URL 的所有行」，
+   同 URL 的两条导入因此不会一半登录一半没登录。备份恢复多一条按 id 写的方法（`writeLoginHeader`），
+   与 `writeLoginInfo` 同形。
+5. **合并顺序与粒度。** `headersOf` 里「源的 `header`（规则形态先求值）→ 登录头」，与上游
+   `getHeaderMap(..., hasLoginHeader = true)` 同序；合并发生在**每个阶段取 header 表**时，不是
+   每个请求 —— 同一阶段内有多个请求、且脚本中途写了登录头时，从下一个阶段起生效（登记在
+   `book-source.md` §2）。
+6. **规则内 `source.login()` 具名拒绝**：它要在同一个 worker 里再跑一段脚本，而 worker 正在执行当前
+   job（重入会死锁）；登录页的 `SignIn` 跑的是**同一段** `loginUrl` 脚本，所以能力没有丢。
+   `source.removeLoginHeader()` 不绑定（上游没标 `@JavascriptInterface`，本仓也没有登出入口）。
+7. **迁移步骤两头都判。** `if (from < 13 && to >= 13)`：drift 的迁移测试以「目标版本」为参数跑到中间
+   版本，只判 `from` 会把新列加进 v12 及更早的库，比对 schema 时多出一列。同批把迁移测试的目标版本
+   统一到最新（`createTable` 用的是**当前**表定义，from-scratch 路径必然带最新列）。
+
+验证：`test/core/js/source_login_header_test.dart` 15 例（store 的播种/写穿/失败降级、Cookie 提取）、
+`js_bindings_test` 新增 6 例（登录头读写与错误）、`js_bridge_test` 新增 5 例（信封注入、写回、Cookie 合并、
+畸形值只记 warning）、`page_fetch_service_test` 新增 3 例（合并顺序、无值、坏 JSON）、
+`book_source_dao_test`/`source_login_header_dao_repository_test` 6 例（按 URL 读写、备份字段、刷新 payload
+不覆盖）、`cookie_manager_test`/`persistent_cookie_manager_test` 6 例、迁移测试补 v12→v13；全量
+`flutter test` **2530 例全过**，`check_coverage` exit 0（core 98.89 / domain 98.66 / data 95.68），
+`build_runner build` 后生成物无漂移。真引擎探针新增 4 条（`getKey`/`getTag`、无值答 `null`、写入跨 job
+并合并 Cookie、`source.login()` 落到 `js:error`）：**65 例在 Windows 与 Android 模拟器双端全绿**；
+`integration_test/on_disk_database_test.dart` 6 例在 Windows 全绿（v13 建库路径）。

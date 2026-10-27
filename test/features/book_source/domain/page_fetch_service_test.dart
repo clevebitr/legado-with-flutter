@@ -1,6 +1,7 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
@@ -116,8 +117,9 @@ ParseFailure<Never> _failure<T>(ParseResult<T> result) => switch (result) {
 
 /// Builds the service under test around [jsBridge].
 ({PageFetchService pages, FakeLogPrinter printer}) _service(
-  FakeJsBridge jsBridge,
-) {
+  FakeJsBridge jsBridge, {
+  SourceLoginHeaderStore? loginHeaders,
+}) {
   final FakeLogPrinter printer = FakeLogPrinter();
 
   return (
@@ -129,6 +131,7 @@ ParseFailure<Never> _failure<T>(ParseResult<T> result) => switch (result) {
       ),
       http: FakeHttpClient(),
       logger: AppLogger(level: LogLevel.debug, printer: printer),
+      loginHeaders: loginHeaders,
     ),
     printer: printer,
   );
@@ -745,6 +748,75 @@ void main() {
       expect(
         await service.pages.headersOf(_source(headerRule: '@js:42')),
         isNull,
+      );
+    });
+
+    test('headersOf_givenAStoredLoginHeader_mergesItOverTheDeclared', () async {
+      // M25/S3b：上游 `getHeaderMap(userAgent, hasLoginHeader = true)` 把登录头压在源自己的
+      // header 之上——登录换来的 token 要能盖掉源里写死的那个。
+      final SourceLoginHeaderStore loginHeaders = SourceLoginHeaderStore(
+        repository: InMemorySourceLoginHeaderRepository(),
+      );
+      await loginHeaders.ensureLoaded('https://example-novel.test');
+      loginHeaders.put(
+        'https://example-novel.test',
+        '{"Token":"t","Referer":"https://login.test/"}',
+      );
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge(), loginHeaders: loginHeaders);
+      final BookSource source = _source(
+        headers: const <String, String>{
+          'Referer': 'https://declared.test/',
+          'Accept': 'x',
+        },
+      );
+
+      expect(await service.pages.headersOf(source), <String, String>{
+        'Accept': 'x',
+        'Referer': 'https://login.test/',
+        'Token': 't',
+      });
+    });
+
+    test('headersOf_givenNoLoginHeader_answersTheDeclaredMap', () async {
+      final SourceLoginHeaderStore loginHeaders = SourceLoginHeaderStore(
+        repository: InMemorySourceLoginHeaderRepository(),
+      );
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge(), loginHeaders: loginHeaders);
+      final BookSource source = _source(
+        headers: const <String, String>{'Accept': 'x'},
+      );
+
+      expect(await service.pages.headersOf(source), <String, String>{
+        'Accept': 'x',
+      });
+    });
+
+    test('headersOf_givenALoginHeaderThatIsNotJson_warnsAndSkips', () async {
+      // 规则可以往登录头里写任何东西：坏值只该丢这次的合并，不该让请求失败。
+      final SourceLoginHeaderStore loginHeaders = SourceLoginHeaderStore(
+        repository: InMemorySourceLoginHeaderRepository(),
+      );
+      await loginHeaders.ensureLoaded('https://example-novel.test');
+      loginHeaders.put('https://example-novel.test', 'not json');
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge(), loginHeaders: loginHeaders);
+
+      expect(
+        await service.pages.headersOf(
+          _source(headers: const <String, String>{'Accept': 'x'}),
+        ),
+        <String, String>{'Accept': 'x'},
+      );
+      expect(
+        service.printer.events
+            .map((LogEvent event) => event.message)
+            .any(
+              (Object? message) =>
+                  '$message'.contains('Login header is not a JSON object'),
+            ),
+        isTrue,
       );
     });
 

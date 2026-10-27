@@ -33,6 +33,8 @@ JsBridge jsBridge(Ref ref) {
     // toast 交给装配根绑定的提示通道（ADR-0076 §决策 1）。
     cookies: ref.watch(cookieManagerProvider),
     sourceVariables: ref.watch(sourceVariableStoreProvider),
+    // 登录头（`source.putLoginHeader`，M25/S3b）：随 job 下传、写过就写穿并合并其中的 Cookie。
+    loginHeaders: ref.watch(sourceLoginHeaderStoreProvider),
     userMessages: ref.watch(userMessagesProvider),
   );
   ref.onDispose(() => unawaited(bridge.dispose()));
