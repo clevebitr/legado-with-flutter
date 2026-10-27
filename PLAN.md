@@ -3,7 +3,7 @@
 > 由 `plan` 工具维护，请勿直接编辑。步骤级进度以 `todo` 工具为准；决策与踩坑写入 DECISIONS.md。
 
 <!-- plan-bridge:state -->
-current: M25
+current: M26
 auto-breakpoint: false
 <!-- /plan-bridge:state -->
 
@@ -35,11 +35,11 @@ auto-breakpoint: false
 - [x] M22b — M22b — 备份恢复：
 - [x] M22c — M22c — 备份增强：自动/加密/覆盖/WebDAV（#32）
 - [x] M24 — M24 — 同步 java.* 重放层（ADR-0076，详见 #33）
-- [ ] M25 — M25 — 引擎对齐：S5a→S5b→S5c→S5d 待做（详见 #49）
+- [x] M25 — M25 — 引擎对齐：只剩 S5e（:正则，2 源，#49）
 - [ ] M26 — M26 — 引擎高性能重构：指标 P1-P6（详见 #36）
 - [ ] M27 — M27 — 语料回归与差异台账清零（详见 #37）
 
-## Current: M25 — M25 — 引擎对齐：S5a→S5b→S5c→S5d 待做（详见 #49）
+## Current: M26 — M26 — 引擎高性能重构：指标 P1-P6（详见 #36）
 
-goal: 引擎行为对齐上游 + 高性能（详见 #35-#37、#49）
-breakpoint: S5a：source 对象补全（约 30 源，#49）
+goal: 同一行为更快：P1-P6 达标且行为测试全绿（#36）
+breakpoint: M26-R1：bench 基线（P1/P2/P3）先跑出「改前」数字（#36）

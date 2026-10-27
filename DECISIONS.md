@@ -858,3 +858,149 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 新顺序：**S5a（source 对象/别名）→ S5b（XPath 43 源）→ S5c（#30 22 源）→ S5d（Rhino shim，先 ADR）→ S5e（`:正则` 2 源）→ S6b（文件源）→ S6c（图片字节）**。S5/S6 的旧排序已被 §9.4 取代。
 
 复跑命令（新对话可直接用）：`dart run tool/spot_check/corpus_census.dart --source="C:/Users/xiaol/Downloads/Mobile Devices/bookSource (1).json" --source="C:/Users/xiaol/Downloads/Mobile Devices/bookSource.json"`。
+
+## 2026-10-27 — M25/S5a 落地：source 对象补全 + 变量形状改正 + 登录族收口
+
+用户裁决（三问全选「推荐」）：① getVariable/setVariable/putVariable 改成上游无参整份形状；② putLoginInfo/removeLoginInfo 按 URL 写穿；③ removeLoginHeader 连 Cookie 一起清。
+
+落地：
+- `JsSourceInfo` 白名单 +6 字段（key / bookSourceUrl / bookSourceName / bookSourceComment / header / loginUrl），comment 从 `extra` 读原文，header 规则形态原文、JSON 形态重新序列化。
+- 前奏新增 `__javaMap`（普通对象 + 不可枚举 get/put/remove/containsKey/size/isEmpty），`getLoginHeaderMap`/`getLoginInfoMap` 都走它（语料 9 源写 `.get("账号")`）。
+- `source.put(k,v)` 答回值、`source.get(k)` 未写过答空串；整份变量落 `source_variables` 的**空名条目**（无迁移、无第二个 store）。
+- `source.removeLoginHeader()` = 删头 + `CookieManager.removeCookiesFor(url)`（内存/持久双实现）。
+- `source.putLoginInfo(json)`/`removeLoginInfo()`：worker 槽位（job 内立即可见）+ 结果回传 + `SourceLoginInfoWriter`（core 端口）→ `book_sources.login_info`（新 DAO `writeLoginInfoByUrl`，按 URL）。只收字符串，解析不出答 false。
+- 语料证据：无参 getVariable 54 处 / setVariable 41 处（本仓键值形状命中 0）；put/get 4/3 源；getLoginHeaderMap 2 源；removeLoginHeader 2 源；putLoginInfo 3 处。
+
+门禁：format 0 / analyze 0 / 2621 例全过 / coverage exit 0（core 98.93、domain 98.54、data 95.68）/ build_runner 无漂移。docs/book-source.md §6+§11、engine-parity.md §5/§7/§9.3/§9.4 已同步（并把重复的 §9 语料曝光改成 §10）。
+
+遗留：`integration_test/js_bridge_test.dart` 新增 6 条真引擎探针**未在设备上跑**（用户要求最后手动统一跑），前奏（__javaMap、新 source 方法）尚未经过真实 QuickJS 验证。
+
+## 2026-10-27 — M25/S5b 落地：XPath 自研子集（无依赖，ADR-0080）
+
+用户裁决：自研 XPath 子集（不自带 fork xpath_selector）。
+
+选型事实（推翻了计划里的「新依赖」）：
+- pub 上没有 Dart 3 可用的 XPath 包：`xpath_selector` 3.0.2 + `xpath_selector_html_parser` 3.0.1 + `expressions` 0.2.5 的 SDK 全是 `>=2.12.0 <3.0.0`（最后一次发布 2023-01）；更致命的是 html 适配器 `HtmlNodeTree.children` 只暴露元素子节点，`text()`（语料 131 处里 61 处）必须改 fork 才成立。
+- 语料真实数字复核：**21 源 / 131 处 / 94 条表达式**（普查里的 43/155 把 `@js:` 里的 `//` 注释、`jsLib` 注释与 searchUrl 之类的相对 URL 也算进去了）。
+
+落地：
+- 新文件 `lib/features/book_source/domain/rule_engine/xpath_rule.dart`（自研解析器 + 求值器）：路径（`/` `//` `.` `..` `@attr`）、节点测试（标签 / `*` / `text()`）、八个轴（child/descendant/descendant-or-self/self/parent/following-sibling/preceding-sibling/attribute）、谓词（`[N]`、`[@a='v']`、`contains()`、`not()`、`starts-with()`、`position()`、`last()` 及算术、存在性路径、and/or）、`|` 并集（节点集合、文档顺序去重）。
+- 语义三条：`//` 编成 `descendant-or-self::node()`+`child::test`（位置=同父第 N 个）；结果按**文档顺序**；元素值=折叠空白文本，`text()` 只答直接文本子节点。
+- 触发面：只认 `//` 与 `@xpath:`（上游连单个 `/` 都算 XPath，本仓不跟——否则 `coverUrl: /static/x.jpg` 这类根相对地址会被静默当成表达式）。
+- 具名拒绝（`unsupported:xpath:<语法>`）：ancestor/ancestor-or-self/following/preceding/namespace 轴、node()/comment()、`@*`、count()/normalize-space()/concat() 等函数。列表规则选中文本 → parseFailed；对着 JsonScope 跑 → parseFailed。
+- engine：`_deferredFlags` 去掉 '//' 与 '@xpath:'；`_readBranch` 先认 XPath（整条分支=表达式，不切 `@`）；新增 `_XPathBranch` + `_xpathElements` / `_xpathMatches`；`_mergesTwoScopes` 把 XPath 当 DOM 分支。
+
+测试：新增 `xpath_rule_test.dart` 25 例（语料 94 条表达式的代表形状逐条断言 + 拒绝面）；`rule_engine_test.dart` 新增 `matrix #21` 组 10 例。原本拿 `@xpath://div` 当「未实现标志」样本的 ~20 处用例改成 `@webJs` / `@webJs:`（含 usecases 与两个页面测试）。全量 2656 例全过；format 0 / analyze 0 / coverage exit 0（core 98.93、domain 97.26、data 95.68）。
+
+文档：新 ADR-0080 + adr/README 索引；book-source.md §3 矩阵 #21 改「已确认」+ 新增 XPath 注记（支持面/三条语义/拒绝面）、§11 改成「XPath 未实现子集」具名列表、§10 拒绝测试行、两处旧「不支持 @xpath:」表述；engine-parity.md §4 #21 行、§9.2（43/155 → 21/131 并说明口径）、§9.4 S5b ✅。
+
+遗留：设备级探针未跑（用户要求最后统一手动跑）；S5b 不涉及前奏，真引擎风险低。
+
+## 2026-10-27 — M25/S5c 取消：matrix #30 语料命中归零，普查探测器已修（并更正 #51 的数字口径）
+
+用户裁决：修普查工具 + 把 matrix #30 登记为「有意差异 + 触发」，直接进 S5d。
+
+发现（S5c 复核）：
+- `corpus_census.dart` 的 #30 探测器是 `text.split('@').skip(1)`：不管括号/引号/模板/脚本体，于是把三类**已支持**的写法算成「嵌套提取段」：① 整条规则以 `@css:`/`@json:` 开头又含后续 `@`（117 条）、② `{{@css:…@text}}` 模板里的内联规则、③ `+@css:` / `-@css:` 正倒序前缀。
+- 修法：位置敏感的四个探测器（裸 `//`、#30、`:正则`、`+` 前缀）改跑 `_ruleHeadOf(text)`（剔掉 `@js:` 脚本与 `{{…}}` 模板），段切分改成括号/引号感知的顶层 `@`，且首段只剩 `+`/`-`/`@@` 时不算「有第二段」。工具耗时从超时降到 1.6 s（旧的按字符 substring 是 O(n²)）。
+- 复跑（334 源）：**嵌套提取段 = 0 源 / 0 处** → matrix #30 维持拒绝，登记为有意差异（触发 = 出现依赖它的真实源），S5c 不进切片。
+
+同时更正 DECISIONS #51 里的一个说法：
+- 我当时把「裸 `//` 43 源 / 155 处」当成误报、改写成 21/131，这是错的。按字段拆开：**四段规则字段 100 处 / 21 源 + URL 字段 31 处（coverUrl 15、bookUrl 5、nextTocUrl/nextContentUrl/tocUrl 各 3、chapterUrl 2）+ bookSourceComment 里的脚本注释 24 处**。三者都是本仓会求值的文本，43/155 是对的。engine-parity §4/§9.2 与 ADR-0080 背景段已按字段拆开更正。
+- 真正是误报的是 #30 的 22/125。
+
+文档：book-source.md §3 矩阵 #30 改「有意差异（触发）」+ 新增 #30 复核注记、§3.1 M2 范围表；engine-parity.md §4 #30 行、§7 S5 行、§9.2/§9.4（S5c 取消、S5e 不再与 #30 同批）；tool/spot_check/README.md §8 增「位置敏感探测器先剔掉非规则文本」的口径说明；tool 的 `_knownSource` 补齐 S5a 的 17 个成员（之前会把 `source.key` 等继续报成缺口）。
+
+门禁：dart format 0 / flutter analyze 0 / test/docs 3 例全过（文档门禁 G1/G2 未受影响）。
+
+## 2026-10-27 — M25/S5d 落地：Rhino 互操作最小垫片（白名单 12 类成员，ADR-0081）
+
+用户裁决：实现 shim（不维持全量拒绝）。
+
+语料复核（334 源）：**19 源**用 `Packages.*`；其中 **6 源只需白名单**（七猫四合一、阅文、长佩、海棠、书旗、Hi歌曲），**13 源另需** `javax.crypto`（Cipher/SecretKeySpec/IvParameterSpec/Mac，多在 `new JavaImporter()` + `with()` 里）、`java.io` 流、`java.net.URL`、`okhttp3`、`org.jsoup`、`BitmapFactory`。
+
+落地（`quickjs_worker.dart` 前奏，约 200 行 JS）：
+- 白名单：`java.lang.String`（`new String(bytes,charset)` 解码 / `String(x).getBytes(charset)` 编码）、`java.lang.System.currentTimeMillis`、`java.lang.Thread.sleep`（**空操作**）、`java.util.UUID.randomUUID`、`java.util.Arrays.copyOfRange/copyOf/toString`、`java.util.HashMap`/`LinkedHashMap`（复用 `__javaMap`）、`java.util.ArrayList`（数组 + 不可枚举 `add`/`size`）、`android.util.Base64`、`android.text.TextUtils.isEmpty`、`cn.hutool.crypto.digest.DigestUtil.md5/md5Hex`、`cn.hutool.core.codec.Base64`、`io.legado.app.help.http.StrResponse`。
+- 脚本侧小工具：`__bytesOfHex` / `__bytesToBase64` / `__base64ToBytes`（不给一次编码加一趟宿主往返）。
+- 每个包节点都是 Proxy：白名单外的名字抛 `Packages.<到第一个未知段的路径> is not supported`；`JavaImporter` 抛具名错误（原来那 13 源报的是 `JavaImporter is not defined`）。
+- `java.*` 的 8 个包名（lang/util/io/security/net/nio/math/text）**不变**，仍全部抛错：本仓 `java` 是扩展面、不是包（上游同样取不到 `java.lang.*`），§11 门禁 G1 的名单与含义不动。
+
+验证：
+- **Node `vm` 一次性校验**（桩 sendMessage 出 strToBytes/bytesToStr/md5/randomUUID）：白名单成员 + 两条具名拒绝逐条通过；抓出两个真 bug（`new` 只认对象返回值 → 解码须返回装箱 String；根节点路径拼出 `Packages..javax`）。
+- 设备探针新增 6 条（`integration_test/js_bridge_test.dart` 的 `Rhino interop shim (M25/S5d)` 组）：编解码往返、Base64 往返、hutool+TextUtils、UUID/ArrayList/Arrays/HashMap/System、StrResponse 形状、未知成员与 JavaImporter 落 `js:error`。**尚未在设备上跑**（用户统一手动跑）。
+
+文档：新 ADR-0081 + adr/README 索引；`book-source.md` §6 新增「`Packages.*` 最小垫片」三条边界（只做数据/编码/集合、`javax.crypto` 等不做、`java` 不是包）、§11 的 8 包名块后补「S5d 之后的口径」；`engine-parity.md` §5 拆出 Rhino 互操作行（部分对齐 + 19/6/13）、§9.3 行、§9.4 表。
+
+门禁：dart format 0 / analyze 0 / 全量 2656 例过 / docs 门禁 3 例过（本轮 prelude 属 allowlist，覆盖率不受影响）。
+
+## 2026-10-27 — M25/S5e 落地：`:正则` 列表规则（正则链 + $N 条目模板），M25 引擎切片收口
+
+语料：2 源 / 2 处，都在目录列表（若夏 `:(?s)(\d+)" class="(isvip)?[^"]*name[^>]*>([^<]*)`；快眼小说 `:正文卷[\s\S]*?/dl&&href ="([^"]+)">([^<]+)`）。
+
+上游语义（`AnalyzeByRegex.kt` + `AnalyzeRule.kt:393/430`）：
+- 只有 `getElements` / `getElement` 有 `Mode.Regex`；`getString`/`getStringList` 没有（落到 `else -> rule`，等于答规则原文）→ 本仓在**值规则位置**具名拒绝 `unsupported::`。
+- `&&` 在正则规则里是**正则链**（`rule.splitNotBlank("&&")`），除最后一条外把文本缩到自己的匹配段再交给下一条——所以必须在切候选/分支之前识别 `:`。
+- 一次匹配 = 一个条目，条目内容是**全部组** `[整段, 组1, …]`；条目字段用 `$1`/`$2`/`$0` 模板取组值（上游 `SourceRule.splitRegex` 拆 `\$\d{1,2}`、`makeUpRule` 填回），可带 `##正则##替换`。
+
+落地：
+- `rule_scope.dart`：新增 `RegexScope(groups, jsContext)`（三处 switch 补全）。
+- `rule_engine.dart`：`_deferredFlags` 去掉 `':'`；`_parse` 在切候选前认出 `:` 前缀并编译 `&&` 链（坏正则 → `parseFailed`）；`_ParsedRule.regexes`；`_RegexBranch`；`_check` 在值规则位置拒 `unsupported::`；`_matches` → `_regexScopes`（页面正文来自 `DomScope.body`，元素 scope 用 outerHTML，JSON 值 → `parseFailed`）；`_evaluate` 对 `RegexScope` 走 `_evaluateRegexItem`（`$N` 模板 + `##` 替换，非模板规则 → `unsupported:regex:item`）。
+- 测试：`rule_engine_test.dart` 新增 `matrix #20` 组 9 例（语料两条原样、模板/URL 模板/带替换、正则链、值规则位拒绝、非模板条目拒绝、坏正则、JSON scope）；`_unsupportedRules` 里删掉 `:regex`（它现在是支持的）。
+
+文档：book-source.md §3 矩阵 #20 改「已确认」+ 新增 `:正则` 注记（三条语义）、§11 的 `:` 行改为「只在值规则位置拒绝」；engine-parity.md §4 #20 行、§9.2 行、§9.4 表、§7 的 S5 行（S5a/S5b/S5d/S5e 已交付、S5c 登记不做、只剩 #22 @webJs 语料 0 源）。
+
+门禁：dart format 0 / analyze 0 / 全量 2665 例过 / coverage exit 0（core 98.93、domain 97.10、data 95.68）。
+
+M25 引擎对齐切片至此全部收口（S1–S4、S5a、S5b、S5d、S5e 已交付；S5c 复核取消；S5d 的设备探针与 S5a/S5b 的探针一起等手动跑；S6b/S6c 归 M25 之后的文件型/图片字节链路）。
+
+## 2026-10-27 — 正文获取两处缺陷修复：多匹配合并 + HTML 转纯文本（PO18 / 免费小说）
+
+用户报障（2026-10-27）：PO18 系正文页显示大量 HTML 片段；免费小说正文只有一行字。语料 `bookSource (1).json`。
+
+根因两条（都在正文章节边界，与具体站点无关）：
+
+1. **`PageFetchService.content` 只取第一条匹配。** 它用 `extractFirst`，而上游 `getString` 是
+   `getStringList` 用换行拼接。语料里 `content: "#content p@textNodes"`（免费小说，`#77` 与普通版各一条）
+   是「一段一个 `<p>`」，取第一条就只剩一行。→ 改用 `extractJoined`（同一入口，缓存的仍是成品正文）。
+2. **`@html` / `@all` 的正文从来没有转成纯文本。** 阅读端 `readerBodyText` 按换行分段、纯文本渲染；
+   语料 249 条 `content` 规则里 **83 条**以 `@html`/`@all` 结尾（PO18 系 `id.booktxt@html`、
+   `#nr@html`、顶点小说网 `class.font_max@html` 等），所以页面把 `<p>`/`<br>` 原样印出来。
+   上游保留 HTML 并由自己的富文本视图渲染——这是本仓**有意差异**（engine-parity §3.1 已登记）。
+
+修复：
+- 新文件 `lib/features/book_source/domain/html_to_text.dart`：**扫描器**（不建 DOM，正文已为跑规则解析过一次）
+  → 块级标签（p/div/br/li/tr/td/h1-6/pre/table…）变换行、行内标签剥掉、`<script>`/`<style>` 内容整段丢弃、
+  注释/doctype 丢弃、实体解码（`&nbsp;` `&amp;` `&hellip;` `&#32;` `&#x4E2D;`，未知实体原样留）、
+  `1 < 2` 这种字面小于号不当标签、带引号属性里的 `>` 不截断、空行与缩进折叠、图片丢弃。
+  纯文本输入走快路径原样返回。
+- `FetchContent._finish`：先 `htmlToText(text)`，**再**跑 `replaceRegex` 与净化规则（这些规则是作者对着
+  能读的正文写的：`&nbsp;`、`\<.*` 之类清理 HTML 残留），成品再 `.trim()`（`replaceRegex` 删掉整段会
+  留下那一段的换行）。
+- 测试：`html_to_text_test.dart` 10 例（纯文本快路径、段落/换行、行内标签、script/style、注释、实体、
+  缩进折叠、字面 `<`、属性里的 `>`、图片）；`fetch_content_test.dart` 新增 3 例（多 `<p>` 全部保留、
+  `@html` 出纯文本且不含 `<`、转换先于 `replaceRegex`）。
+
+文档：book-source.md §4.1 的 `content` 行 + 新增「正文的统一形状」四条注记；engine-parity §3.1 把
+「正文 HTML 化」改成「HTML → 纯文本（有意差异，83/249 条规则受影响）」。
+
+门禁：format 0 / analyze 0 / 全量 **2678** 例过 / coverage exit 0（core 98.93、domain 97.07、data 95.68）。
+
+## 2026-10-27 — M26-R7 日志改造第一阶段：取消脱敏 + 落文件（按天/7 天/20 MB）+ 运行时级别 + Dart 侧崩溃栈
+
+用户裁决四项：① release 也不脱敏（开源软件，脱敏过度设计）；② 按天轮转、保留 7 天 / 总 20 MB；③ 崩溃只做 Dart 侧；④ 搜索关键词原样记录。
+
+落地（ADR-0082）：
+- **删掉脱敏**：`core/logging/redaction.dart` 与其 12 条测试整份删除；8 个文件的 `redactUrl`/`redactMessage` 调用改为原样插值；`describeError` 移到 `error_text.dart` 并返回 `<类型: 原文>`（`FormatException` 不重复类型前缀）。保留的纪律是「请求头与正文不交给日志」（C-SEC-4 已改措辞）。
+- **落文件**：`core/logging/log_file.dart` —— 目录 `getApplicationSupportDirectory()/logs`（三平台同规则），`app-YYYY-MM-DD.log` 按天切；`prune()` 先删 7 天以前，再最旧优先删到 ≤ 20 MB（当天永远保留）；追加写串行排队（`flush()`）、崩溃行 `appendSync`；写失败只丢那一行。
+- **运行时级别**：`AppLogger.setLevel` + 门面自判级别（`logger` 侧 `Level.all`）；`AppSettings.logLevel`（`settings.logLevel`）持久化；设置页新增「诊断」区的等级下拉，改完立即生效。
+- **崩溃栈**：`core/logging/crash_handlers.dart` 接 `FlutterError.onError` / `PlatformDispatcher.onError` / `Isolate.current.addErrorListener`，记录以 `CRASH` 开头、带完整栈、同步落盘，之后仍转发原 handler。原生崩溃不做（登记）。
+- **装配**：`main()` 首帧前建 `LogFile` + `prune()` + 覆盖 `logFileProvider` + 装崩溃处理器 + 把设置里的级别套上门面，并写一行 `app start`（平台 / 日志路径 / 级别）。
+- **管理页**：`LogFilesPage`（文件名、大小、合计、清空、复制目录路径）；`settingsLogLevel` 等 16 条 l10n（中英各一份、已 gen）。
+
+测试：`log_file_test.dart` 12 例（按天切 / appendSync / 7 天 / 20 MB / 清空 / 忽略无关文件 / 排队写 / 运行时级别 / off）；`app_logger_test.dart`、`http_client_test.dart` 改为断言原文。
+
+门禁：format 0 / analyze 0 / **2657 例全过** / coverage exit 0（core 98.10、domain 97.08、data 95.69）。
+
+**未做（本里程碑后续）**：
+1. 详情页「多源自由切换」：搜索结果里同名书的多条命中（`SearchBook.origins`）应直接作为换源候选，当前 `ChangeBookSourceSheet` 只按书名重新搜索。
+2. 搜索期内存/闪退：目前只能靠新日志文件定位；计划加「每次搜索的计数与 RSS 采样」+ 去掉可疑的累积点，再用真机日志确认。

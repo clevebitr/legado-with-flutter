@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-27
+
+The engine-alignment milestone (M25) and the diagnostics foundation. 2 657 host tests, `flutter analyze`
+clean.
+
+### Added
+
+- **`source` object completed (S5a).** The sandbox sees the fields the corpus reads (`key`,
+  `bookSourceUrl`, `bookSourceName`, `bookSourceComment`, `header`, `loginUrl`), the keyed `put`/`get`
+  store, upstream's no-argument whole-variable shape, `getLoginHeaderMap`/`removeLoginHeader` (log-out
+  also drops the source's cookies) and `putLoginInfo`/`removeLoginInfo` written through to the source row.
+- **XPath (S5b).** An in-repo subset (paths, node tests, eight axes, the predicates the corpus uses and a
+  union) replaces the named rejection; anything outside it reports `unsupported:xpath:<syntax>`.
+  ADR-0080 records why no dependency was usable.
+- **Rhino package shim (S5d).** `Packages.java.lang.String`/`System`/`Thread`, `java.util.UUID`/`Arrays`/
+  `HashMap`/`ArrayList`, `android.util.Base64`, `TextUtils`, hutool `DigestUtil`/`Base64` and Legado's
+  `StrResponse` work; every other member stays a named rejection (ADR-0081).
+- **`:regex` list rules (S5e).** A regex chain on `&&`, one item per match, `$N` templates on the item's
+  fields.
+- **File logging (ADR-0082).** Logs go to `app-YYYY-MM-DD.log` under the app's support directory (one file
+  per day, seven days kept, 20 MB cap), the level is switchable at runtime in Settings, and Dart-side
+  crashes are recorded with their stacks.
+
+### Changed
+
+- **Logs are no longer redacted** (release included): URLs, search keywords and raw error text are written
+  as-is. Request headers and page bodies are still never handed to the logger (C-SEC-4).
+- **Chapter bodies are plain text.** Every `content` match now participates (upstream's `getString` join)
+  and `@html`/`@all` markup is converted before `replaceRegex` and the purge rules run.
+
+### Fixed
+
+- A chapter whose `content` rule matches per paragraph no longer collapses to one line.
+- Chapters whose rule yields HTML no longer show `<p>`/`<br>` tags in the reader.
+- The corpus census counted leading `@css:` rules, `{{...}}` templates and `+@css:` prefixes as nested
+  extraction segments; matrix #30 is now correctly zero sources (S5c).
+
 ## [Unreleased]
 
 ### The remaining work is ordered by a real corpus (M25, DECISIONS #49)
