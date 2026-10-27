@@ -11,5 +11,5 @@
 /// the fallback honest without a `package_info_plus` dependency.
 const String appVersion = String.fromEnvironment(
   'APP_VERSION',
-  defaultValue: '0.1.0+1',
+  defaultValue: '0.2.0+1',
 );
