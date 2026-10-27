@@ -837,3 +837,24 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 3. 注释里写 `matrix #5 / #8` 只算覆盖 #5：正则只吃第一个编号，所以每个编号都要单独成文。
 
 验证：format 0；analyze 0 issue；flutter test 2587 例全过（新增 3）；G3（基准脚本冒烟）留给 M26/M27。
+
+## 2026-10-27 — M25 语料普查（334 源）与由此定下的 S5/S6 排序
+
+用户提供真实语料（2026-10-27）：`C:\Users\xiaol\Downloads\Mobile Devices\bookSource (1).json`（255 条，用户称「大部分可用」）与同目录 `bookSource.json`（291 条）。两份合并按 `bookSourceUrl` 去重后 **334 个源**：type0 文本 280 / type2 图片 35 / type1 音频 7 / type3 文件 7 / type4 视频 5。之前 DECISIONS #35/#37 提到的 corpus_a/corpus_b 已不在磁盘上，这份是新的基线。
+
+工具：新增 `tool/spot_check/corpus_census.dart`（静态、不联网、`dart run` 即可，口径见 `tool/spot_check/README.md` §8）。`java.*` 的「已实现」名单**从 `quickjs_worker.dart` 前奏读**（surface 键 + `__javaRejectedNames`），因此工具不会自己漂移；`source.*` 与全局变量名单手写。产物是 `engine-parity.md` 的新 §9（普查表）+ 各行的「语料命中」列。
+
+数据结论（决定排序）：
+- **最大语法缺口是裸 `//`（XPath 省略标志）：43 源 / 155 处**；`@xpath:` 带标志 0 处（语料都写裸 `//`）。→ S5b（需依赖 + ADR）。
+- **matrix #30 嵌套提取段：22 源 / 125 处**（`class.a@css:.b` 这类）。→ S5c。
+- **`source` 对象的字段与别名：约 30 源**（`source.key` 14、`bookSourceUrl` 10、`bookSourceComment` 5、`put/get` 4/3、`getLoginHeaderMap`/`removeLoginHeader`/`putLoginInfo(Map)`/`removeLoginInfo` 2/2/3/1）。→ **S5a，改动最小、收益最高**。
+- **Rhino 互操作：`java.lang` 13 源、`java.util` 10、`java.io` 4、`java.security` 3、`java.net` 1**；真实写法是 `new Packages.java.lang.String(bytes,'UTF-8')`、`java.util.UUID.randomUUID()`、`java.util.Arrays.copyOfRange(raw,0,16)`、`new java.util.HashMap()`（给 `java.upLoginData`）——多数有一行等价替代。→ S5d 需 ADR 裁「最小 shim」vs 维持拒绝。
+- **`imageStyle` 不是缺口**：49 源声明，取值只有 `FULL` 26 / `0` 20 / `full` 2 / `Full` 1，`left`/`right` 命中 0；本仓 full/single/默认已覆盖。
+- **`downloadUrls` 11 源（type3 共 7 个文件源）** → S6b；`imageDecode` 2 源、`coverDecodeJs` 1 源 → S6c（要「返回字节的 job」+ 落盘 + 阅读端从字节渲染）。
+- **语料命中 0、可明确「不做」**：`ruleReview` / `eventListener` / `customButton` / `homepageModules` / `@webJs` / `imageStyle` 的 left/right。
+- 反向验证：`connect` 9 源、`putLoginHeader` 6 源、`jsLib` 19 源、`bookUrlPattern` 52 源——S1/S2/S3b 的选点都被语料证实。
+- 其余动作类成员（`refreshExplore` 4 / `upLoginData` 3 / `searchBook` 2 / `refreshTocUrl` 2 / `getStrResponse`/`initUrl`/`url`/`headerMap`/`open` 各 1、`readTxtFile` 1、`cache.getFile|putFile` 1）已逐条登记去向（多为「不做 + 触发条件」）。
+
+新顺序：**S5a（source 对象/别名）→ S5b（XPath 43 源）→ S5c（#30 22 源）→ S5d（Rhino shim，先 ADR）→ S5e（`:正则` 2 源）→ S6b（文件源）→ S6c（图片字节）**。S5/S6 的旧排序已被 §9.4 取代。
+
+复跑命令（新对话可直接用）：`dart run tool/spot_check/corpus_census.dart --source="C:/Users/xiaol/Downloads/Mobile Devices/bookSource (1).json" --source="C:/Users/xiaol/Downloads/Mobile Devices/bookSource.json"`。

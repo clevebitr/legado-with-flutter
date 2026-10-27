@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The remaining work is ordered by a real corpus (M25, DECISIONS #49)
+
+A new `tool/spot_check/corpus_census.dart` counts what two real exports actually use — 334 sources after
+deduplication (280 text / 35 image / 7 audio / 7 file / 5 video) — without touching the network or the JS
+engine, so it runs with plain `dart run`. Its `java.*` "implemented" set is read out of the sandbox prelude,
+so the tool cannot drift from the engine.
+
+The numbers changed the plan:
+
+- the biggest syntax gap is a **bare `//` XPath head: 43 sources**, with `@xpath:` itself at zero;
+- **nested extraction segments (`class.a@css:.b`): 22 sources / 125 places**;
+- the **`source` object's fields** (`key` 14, `bookSourceUrl` 10, `bookSourceComment` 5) plus its
+  `put`/`get` and login-header aliases cover roughly 30 sources for a tenth of the effort — so that
+  becomes S5a;
+- Rhino interop (`java.lang` 13, `java.util` 10, `java.io` 4, `java.security` 3) needs an ADR: the real
+  calls are `new java.lang.String(bytes,'UTF-8')`, `java.util.UUID.randomUUID()`,
+  `java.util.Arrays.copyOfRange(...)`, `java.util.HashMap`, all of which have one-line equivalents;
+- **`imageStyle`, `ruleReview`, `eventListener`, `customButton`, `homepageModules` and `@webJs` are
+  confirmed non-issues**: the corpus only ever writes `FULL`/`0` for `imageStyle` (which the existing
+  `full`/`single`/default already covers) and never uses the others at all.
+
+`engine-parity.md` §9 records the census and the resulting order
+(S5a → S5b → S5c → S5d → S5e → S6b → S6c).
+
 ### Documentation can no longer drift from the engine (ADR-0078 S7, M25)
 
 Two gates in `test/docs/book_source_doc_test.dart` (the one place a test has no `lib/` counterpart):

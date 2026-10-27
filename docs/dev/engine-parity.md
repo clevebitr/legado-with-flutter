@@ -38,10 +38,10 @@
 | 能力 | 上游证据 | 本仓现状 | 语料命中 | 去向 |
 |---|---|---|---|---|
 | ✅ `jsLib`（源内 JS 库，作为每个脚本的 prototype scope） | `BaseSource.kt:335-339`、`AnalyzeRule.kt:848`、`SharedJsScope.kt:23-60` | **已对齐**（M25/S1）：字段建模为 `BookSource.jsLib`；`JsLibStore` 解析（纯 JS 直通 / JSON 对象里的 http(s) 值逐条下载按序拼接，缓存 16 条、失败不缓存）→ worker 在同一函数作用域里先跑库再跑规则；库失败与规则失败分开（`js:lib`）。三条有意差异：库顶 `let`/`const` 规则不可见（Rhino ES5 同样不认）、缓存只在内存、`source.jsLib` 不在 `source` 绑定里 | 待 M27 | 已对齐（`book-source.md` §6） |
-| ⚠ `coverDecodeJs`（封面二次解密） | `ImageUtils.kt:66-69` | 未建模 | | S1 之后按需（M27 普查决定） |
-| ⚠ `ruleReview`（段评九字段） | `rule/ReviewRule.kt:9-20` | 未建模 | | M27 后另立里程碑（要 UI） |
+| ⚠ `coverDecodeJs`（封面二次解密） | `ImageUtils.kt:66-69` | 未建模 | **1 源**（§9.1） | **S6c**（与 `imageDecode` 共用字节通道） |
+| ⚠ `ruleReview`（段评九字段） | `rule/ReviewRule.kt:9-20` | 未建模 | **0 源**（§9.1） | 不做（要 UI；语料命中 0，触发 = 出现依赖段评的源） |
 | ✅ `bookUrlPattern`（搜索 URL 命中即按详情页解析；`bookList` 为空时回落详情页） | `BookList.kt:62-84`、`:100-110` | **已对齐**（M25/S2）：最终 URL 与 pattern 全匹配即用 `ruleBookInfo` 读成一条结果；无 pattern 且列表为空（或列表规则一条未命中）时同样回落详情页；坏正则只记 warning | 待 M27 | 已对齐（`book-source.md` §4） |
-| ⚠ `eventListener` / `callBackJs` / `customButton` / `homepageModules` | `BookSource.kt:104-112`、`SourceCallBack.kt:54/94/117` | 未建模（`callBackJs` 见 B4） | | S2 / 后续 |
+| ⚠ `eventListener` / `callBackJs` / `customButton` / `homepageModules` | `BookSource.kt:104-112`、`SourceCallBack.kt:54/94/117` | 未建模（`callBackJs` 见 B4） | **0 源**（§9.1） | 不做（要 UI/事件面；语料命中 0，触发 = 出现依赖它们的源） |
 | `enabledExplore` | `BookSource.kt:52` | `extra`，发现页仍会尝试 | | 有意差异（未提供单源发现开关 UI） |
 | `enabledCookieJar`（单源 CookieJar） | `BaseSource.kt:56-58` | 无按源语义（Cookie 按域共享） | | 有意差异（ADR-0072 §决策 2） |
 | `speakText` / `speakSpeed`（HttpTTS 源的朗读参数） | `AnalyzeUrl.kt:83`、`:371-372`、`HttpReadAloudService.kt:612-630` | **不绑定**：只由上游的 HttpTTS 源表提供，本仓只有系统 TTS，没有那条链路 | | 有意差异（触发 = 引入 HttpTTS 朗读引擎） |
@@ -57,8 +57,8 @@
 | ✅ `title`（正文反取章节名 + `reviewImg`） | `BookContent.kt:165-190` | **已对齐（解析）**（M25/S2）：正文页标题与 `reviewImg` 进 `ChapterContent`；值里的标签会剔掉（上游会把 `<div id=…>` 当下标，属小差异）。**阅读端尚未采用**这个改名（端口仍只要正文） | 待 M27 | 解析已对齐；阅读端采用归后续 |
 | ⚠ `payAction`（付费章节解锁动作） | `ReadBookViewModel.kt:2623`、`MangaReaderActionRepository.kt:237` | **已建模、不执行**：本仓没有付费内容 UI，执行它也没有落点 | | 有意差异（触发 = 加入付费章节解锁 UI） |
 | ⚠ `callBackJs`（事件回调） | `SourceCallBack.kt:54/94/117` | **已建模、不执行**：`ContentRule.callBackJs` + `BookSource.eventListener` 都进导出往返，事件面不存在 | | 有意差异（触发 = 阅读器事件回调需求） |
-| `imageDecode`（图片字节解密） | `ContentRule.kt:21` | 显式拒绝（`fetch_manga_pages.dart:30-41`） | | **S6** |
-| `imageStyle`（`full`/`single`/`left`/`right`/居中） | `ContentRule.kt:20` | 部分（只 `full`/`single`，ADR-0069 G5） | | **S6** |
+| `imageDecode`（图片字节解密） | `ContentRule.kt:21` | 显式拒绝（`fetch_manga_pages.dart:30-41`） | **2 源** | **S6c**（要「返回字节的 job」+ 解密图落盘 + 阅读端从字节渲染） |
+| `imageStyle`（`full`/`single`/`left`/`right`/居中） | `ContentRule.kt:20` | **够用**：`full` / `single` / 默认三分支；`left` / `right` 未实现（ADR-0069 G5） | **49 源声明，取值只有 `FULL`/`0`/`full`/`Full`**（§9.1） | 维持（`left`/`right` 语料命中 0） |
 | 正文 HTML 化（`formatKeepImg`：相对 `<img>` 补全、`<usehtml>` 保真） | `BookContent.kt:207-216`、`HtmlFormatter.kt:151-195` | **无**：正文原样落库，阅读端也不渲染 HTML/内联图 | | **S6** |
 | 正文分页并发（多值 `nextContentUrl`，≤4） | `BookContent.kt:113-141` | 串行 | | **已知热点**（M26 R4） |
 | 「下一页 == 下一章」提前停止 | `BookContent.kt:90-96` | 无（`nextChapterUrl` 自 M25/S3b 起已下发，判定只差 `walk` 里的一个比较） | | S2（低） |
@@ -78,7 +78,7 @@
 
 | 能力 | 上游证据 | 本仓现状 | 语料命中 | 去向 |
 |---|---|---|---|---|
-| ⚠ `downloadUrls`（文件型源，`bookSourceType=3`） | `BookInfo.kt:171-180` | **未建模** → 文件型源完全不可用 | | **S6** |
+| ⚠ `downloadUrls`（文件型源，`bookSourceType=3`） | `BookInfo.kt:171-180` | **未建模** → 文件型源完全不可用 | **11 源**（type3 共 7 个源） | **S6b** |
 | ⚠ `relatedBooks`（详情页相关推荐模块） | `BookInfoViewModel.kt:2009` | 未建模 | | S6 之后（要 UI） |
 | `tocHtml` 复用（`tocUrl == baseUrl` 时省一次请求） | `BookInfo.kt:167-170` | 无 | | 已知热点（M26） |
 | 发现页表单型分类（`text`/`button`/`toggle`/`select` + `chars`/`default`/`action`/`style`） | `rule/ExploreKind.kt:9-49` | 显式拒绝（ADR-0035 §决策 6） | | 有意差异（触发 = 出现只能靠筛选器的真实源） |
@@ -142,8 +142,8 @@
 | **S3b**（第二组 ✅） | `source.*` 簇（源身份 + 登录头） | 已落地：`core/js/source_login_header.dart`（仓库 + 内存 store）、`book_sources.login_header`（v13）、`PageFetchService.headersOf` 的登录头合并、`CookieManager.mergeCookieHeader`、前奏 `source.getKey/getTag/getLoginHeader/putLoginHeader` + `source.login()` 具名拒绝、真引擎探针 4 条 | S3b 第一组（已闭环） |
 | **S3b**（第三组 ✅） | 全局绑定（D2）+ 平台族 | 已落地：`JsPageContext` 的 `src` / `chapter` / `nextChapterUrl` / `fromBookInfo` 与 `forPage` 传播、`SourceInfoMapStore`（`infoMap`）、`core/platform/install_id.dart`（`androidId`）、`js_sync_call` 的 `connect` / `ajaxAll`、`core/platform/external_url_opener.dart` + `url_launcher`（`openUrl`）、真引擎探针 5 条 | S3b 第二组（已闭环） |
 | **S4** ✅ | URL 方言五条 + 列表尾部 `@js:` | 已落地：`url_template.dart` 的 `renderPageList` / `encodeUrlQuery`（安全集照抄上游两处）、`rule_engine.dart` 的 `_expandUrlSegments`（`@result` 链）与 `+` 前缀、列表规则「任一段是 JS」走段链、`page_fetch_service.dart` 的 GET query 全量编码 | — |
-| **S5** | 矩阵 #20/#21/#22/#30 | `rule_engine.dart`（+ 依赖） | M27 普查定序 |
-| **S6** | 非文本链路 + 正文 HTML 化 | `fetch_manga_pages`/新 usecase、`content_purifier`、阅读端 | S2 |
+| **S5** | 矩阵 #20/#21/#22/#30 | `rule_engine.dart`（+ 依赖） | **已由 §9 的语料普查定序**：S5a `source` 对象 → S5b XPath（43 源）→ S5c #30（22 源）→ S5d Rhino shim → S5e `:正则`（2 源） |
+| **S6** | 非文本链路 + 正文 HTML 化 | `fetch_manga_pages`/新 usecase、`content_purifier`、阅读端 | S2；**按 §9 拆成 S6b（文件型 11 源）/ S6c（图片字节 2 源）**，`imageStyle` 的 left/right 与正文 HTML 化语料命中为 0，排到最后 |
 | **S7**（门禁部分 ✅） | 文档与拒绝清单收敛 + 门禁 G1/G2 | 已落地：`test/docs/book_source_doc_test.dart`（G1：§11 两个名单与 `__javaRejectedNames` / `__javaInteropNames` 逐字对照；G2：矩阵每行「已确认」必须有具名用例 `matrix #N`）、§11 的名单改成机器可读的 `text` 块、Rhino 互操作包名补全到 8 个。剩余：S1–S6 收尾后按 §8 出口判据复核一遍 | S1–S4 |
 
 ## 8. 验收与出口判据
@@ -173,3 +173,80 @@
 ```bash
 SPOT_CHECK_ARGS="--list=<collection.json>" flutter run -d windows -t tool/spot_check/spot_check.dart
 ```
+
+---
+
+## 9. 语料普查（2026-10-27，决定 S5/S6 的排序）
+
+工具：`tool/spot_check/corpus_census.dart`（静态、不联网、`dart run` 即可，口径见 `tool/spot_check/README.md` §8）。
+
+```bash
+dart run tool/spot_check/corpus_census.dart \
+  --source="<bookSource (1).json>" --source="<bookSource.json>"
+```
+
+**语料**：两份真实导出合并去重后 **334 个源**——type0 文本 280 / type2 图片 35 / type1 音频 7 /
+type3 文件 7 / type4 视频 5。下表「源数」= 用到该项的不同书源数，「处数」= 原始出现次数。
+
+### 9.1 书源级字段（缺口候选）
+
+| 字段 | 源数 | 结论 |
+|---|---|---|
+| `ruleContent.imageStyle` | 49 | **不是缺口**：取值只有 `FULL`（26）/ `0`（20）/ `full`（2）/ `Full`（1）——全是「最大宽度」或默认；本仓 `full` / `single` / 默认已覆盖。`left` / `right` 的语料命中 = 0 |
+| `ruleBookInfo.downloadUrls` | 11 | 文件型源（type3 共 7 个）完全不可用 → **S6b** |
+| `ruleContent.title` | 11 | 解析已对齐（S2），**阅读端未采用** → 后续 UI 切片 |
+| `ruleContent.imageDecode` | 2 | **S6c**（要「返回字节的 job」+ 解密图落盘 + 阅读端从字节渲染） |
+| `coverDecodeJs` | 1 | 低（同 S6c 的字节通道，做则顺带） |
+| `ruleContent.payAction` | 1 | 登记差异（无付费 UI） |
+| `ruleReview` / `eventListener` / `customButton` / `homepageModules` | **0** | **数据支持「不做」**：维持具名登记，不再排期 |
+
+已实现并被语料用到的字段（说明前几刀选得对）：`bookUrlPattern` 52、`jsLib` 19、`loginUi` 19、
+`ruleToc.isVolume` 14、`loginCheckJs` 10、`ruleToc.isPay` 6、`ruleToc.preUpdateJs` 2。
+
+### 9.2 规则语法（缺口候选）
+
+| 语法 | 源数 | 处数 | 现状 / 去向 |
+|---|---|---|---|
+| 裸 `//` 开头（XPath 省略标志） | **43** | 155 | 显式拒绝 → **最大语法缺口，S5b** |
+| 嵌套提取段（matrix #30 形状，如 `class.a@css:.b`） | **22** | 125 | 显式拒绝 → **S5c** |
+| `@xpath:` 带标志 | 0 | 0 | 语料里没人这么写（都写裸 `//`），随 S5b 一起做 |
+| `:正则`（matrix #20） | 2 | 2 | 低（S5e，与 #30 同批或登记） |
+| `@webJs`（matrix #22） | **0** | 0 | **数据支持「不做」**：维持具名拒绝 |
+| `%%` 交叉合并 | 1 | 1 | 已支持 |
+| `:eq/:gt/:lt` 伪类 | 5 | 11 | 已支持（改写成 `:nth-child`） |
+| 列表尾部 `@js:` / `+` 前缀 / `<1,2,3>` / `@result` | 7 / 5 / 0 / 0 | 7 / 5 / 0 / 0 | S4 已交付（后两项语料为 0，属兼容性收尾） |
+
+### 9.3 沙箱绑定（语料里出现、本仓尚未提供）
+
+| 成员 | 源数 | 处数 | 去向 |
+|---|---|---|---|
+| `source.key` | 14 | 20 | 它就是 `bookSourceUrl`（上游 `getKey()`）→ **S5a** |
+| `source.bookSourceUrl` | 10 | 148 | 源对象的字段 → **S5a** |
+| `source.bookSourceComment` | 5 | 27 | 同上（自定义变量说明，脚本用 `eval()` 当代码跑）→ **S5a** |
+| `source.put` / `source.get` | 4 / 3 | 11 / 3 | 上游的每源持久变量，本仓已有 `source.setVariable`/`getVariable` → **S5a 做别名** |
+| `source.getLoginHeaderMap` / `removeLoginHeader` / `putLoginInfo(Map)` / `removeLoginInfo` | 2 / 2 / 2+1 / 1 | 7 / 4 / 3 / 1 | 登录态的其余入口 → **S5a**（`removeLoginHeader` 现在只有「不绑定」的登记） |
+| `source.header` / `source.loginUrl` / `source.bookSourceName` | 2 / 2 / 1 | 2 / 2 / 1 | 源对象字段 → **S5a** |
+| Rhino 互操作：`java.lang` / `java.util` / `java.io` / `java.security` / `java.net` | **13 / 10 / 4 / 3 / 1** | 21 / 17 / 5 / 6 / 2 | 真实写法是 `new Packages.java.lang.String(bytes,'UTF-8')`、`java.util.UUID.randomUUID()`、`java.util.Arrays.copyOfRange(raw,0,16)`、`new java.util.HashMap()`（给 `java.upLoginData`）→ **S5d：需要 ADR 决定「最小 shim」还是维持具名拒绝**（多数写法有一行等价替代） |
+| `java.refreshExplore` / `refreshTocUrl` / `searchBook` | 4 / 2 / 2 | 18 / 2 / 2 | 引擎/UI 动作，不是数据面 → 登记差异（触发 = 需要脚本触发刷新） |
+| `java.upLoginData` | 3 | 4 | 登录表单的动态改造 → 登记差异（ADR-0072） |
+| `java.getStrResponse` / `initUrl` / `url` / `headerMap` | 1 / 1 / 1 / 1 | 2 / 1 / 1 / 1 | 只在 `loginCheckJs` 里有效的 `AnalyzeUrl` 成员 → 登记差异 |
+| `java.open` | 1 | 1 | 需要平台能力 → 登记差异 |
+| `java.readTxtFile` | 1 | 1 | 沙箱禁忌（C-SRC-3） |
+| `cache.getFile` / `putFile` | 1 | 1 | 文件缓存 → 登记差异（触发 = 有源依赖跨会话文件缓存） |
+
+`java.*` 的其余成员（`ajax` 60 源、`getString` 45、`toast` 28、`md5Encode` 24、`log` 23、
+`createSymmetricCrypto` 13、`connect` 9、`putLoginHeader` 6、`ajaxAll` 1、`openUrl` 1 …）**都已有实现**：
+这份普查同时验证了 S3a/S3b 的选点（`connect` 9 源、`source.getLoginHeader*` 8 源都真实存在）。
+
+### 9.4 由此定下的切片顺序（取代 §7 的旧排序）
+
+| 片 | 内容 | 语料依据 | 依赖 |
+|---|---|---|---|
+| **S5a** | `source` 对象补全（`key` / `bookSourceUrl` / `bookSourceName` / `bookSourceComment` / `header` / `loginUrl`）+ `source.put`/`get` 别名 + `getLoginHeaderMap` / `removeLoginHeader` / `putLoginInfo(Map)` / `removeLoginInfo` | 约 30 个源，改动最小 | S3b（已闭环） |
+| **S5b** | XPath：裸 `//` 与 `@xpath:`（新依赖 + ADR） | **43 源 / 155 处**，剩余最大语法缺口 | ADR |
+| **S5c** | matrix #30 嵌套提取段 | 22 源 / 125 处 | S4（已闭环） |
+| **S5d** | Rhino 互操作最小 shim（`java.lang.String` / `java.util.UUID` / `Arrays` / `HashMap`）**或**维持拒绝（ADR 裁决） | 13+10 源 | ADR |
+| **S5e** | `:正则`（matrix #20） | 2 源 → 可与 S5c 同批，或登记 | — |
+| **S6b** | 文件型源（`downloadUrls` + type3 链路） | 11 源 / 7 个文件源 | S2 |
+| **S6c** | 图片字节通道（`imageDecode` 2 源、`coverDecodeJs` 1 源）+ 阅读端从字节渲染 | 2 源 | 字节 job |
+| **不做（有数据支撑）** | `ruleReview` / `eventListener` / `customButton` / `homepageModules` / `@webJs` / `imageStyle` 的 `left`/`right` | 全部 **0 源** | — |
