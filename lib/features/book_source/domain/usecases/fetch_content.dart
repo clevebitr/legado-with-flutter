@@ -87,6 +87,17 @@ final class FetchContent {
           intro: request.intro,
           kind: request.kind,
         ),
+        // 正文阶段的两条全局绑定（M25/S3b）：`chapter` 是正在读的这一章，`nextChapterUrl` 是目录里
+        // 它后面那条地址（上游由 ReadBookViewModel 设进 AnalyzeRule）。
+        chapter: JsChapterInfo(
+          title: request.title,
+          url: url,
+          isVip: request.isVip,
+          isPay: request.isPay,
+          isVolume: request.isVolume,
+          updateTime: request.updateTime,
+        ),
+        nextChapterUrl: request.nextChapterUrl,
       ),
       headers: headers,
       sourceId: source.url,

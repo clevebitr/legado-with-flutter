@@ -14,6 +14,7 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_lib.dart';
 import 'package:flutter_reader/core/js/js_sync_call.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
+import 'package:flutter_reader/core/js/source_info_map.dart';
 import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
@@ -21,6 +22,7 @@ import 'package:flutter_reader/core/logging/redaction.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/platform/external_url_opener.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/platform/user_messages.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
@@ -81,6 +83,9 @@ final class QuickJsWorkerBridge implements JsBridge {
     CookieManager? cookies,
     SourceVariableStore? sourceVariables,
     SourceLoginHeaderStore? loginHeaders,
+    SourceInfoMapStore? infoMaps,
+    ExternalUrlOpener externalUrlOpener = const UnboundExternalUrlOpener(),
+    this.androidId,
     UserMessages userMessages = const UnboundUserMessages(),
     this._timeout = defaultJsTimeout,
     this._killGrace = defaultJsKillGrace,
@@ -91,6 +96,8 @@ final class QuickJsWorkerBridge implements JsBridge {
        _cookies = cookies,
        _sourceVariables = sourceVariables,
        _loginHeaders = loginHeaders,
+       _infoMaps = infoMaps,
+       _externalUrlOpener = externalUrlOpener,
        _userMessages = userMessages;
 
   final AppLogger _logger;
@@ -106,6 +113,12 @@ final class QuickJsWorkerBridge implements JsBridge {
   final CookieManager? _cookies;
   final SourceVariableStore? _sourceVariables;
   final SourceLoginHeaderStore? _loginHeaders;
+  final SourceInfoMapStore? _infoMaps;
+  final ExternalUrlOpener _externalUrlOpener;
+
+  /// The install id `java.androidId` answers with (M25/S3b); `null` until the host hydrated one.
+  final String? androidId;
+
   final UserMessages _userMessages;
 
   final Queue<_PendingJob> _pending = Queue<_PendingJob>();
@@ -211,6 +224,9 @@ final class QuickJsWorkerBridge implements JsBridge {
       cookies: _cookies,
       sourceVariables: _sourceVariables,
       loginHeaders: _loginHeaders,
+      infoMaps: _infoMaps,
+      externalUrlOpener: _externalUrlOpener,
+      androidId: androidId,
       userMessages: _userMessages,
     );
     _session = created;
@@ -246,10 +262,16 @@ final class _WorkerSession {
     required CookieManager? cookies,
     required SourceVariableStore? sourceVariables,
     required SourceLoginHeaderStore? loginHeaders,
+    required SourceInfoMapStore? infoMaps,
+    required ExternalUrlOpener externalUrlOpener,
+    required String? androidId,
     required UserMessages userMessages,
   }) : _cookies = cookies,
        _sourceVariables = sourceVariables,
        _loginHeaders = loginHeaders,
+       _infoMaps = infoMaps,
+       _externalUrlOpener = externalUrlOpener,
+       _androidId = androidId,
        _userMessages = userMessages {
     _subscription = _handle.messages.listen(
       _onMessage,
@@ -270,6 +292,9 @@ final class _WorkerSession {
   final CookieManager? _cookies;
   final SourceVariableStore? _sourceVariables;
   final SourceLoginHeaderStore? _loginHeaders;
+  final SourceInfoMapStore? _infoMaps;
+  final ExternalUrlOpener _externalUrlOpener;
+  final String? _androidId;
   final UserMessages _userMessages;
 
   /// Milliseconds the job's wall clock spent on something other than its own CPU.
@@ -312,9 +337,16 @@ final class _WorkerSession {
     _toasts.clear();
     _handle.send(<String, Object?>{
       'type': 'evaluate',
-      'job': job.toJson(),
-      // 登录头随 job 下传（快照），写回时再随结果上来：worker 读不到库，也不该为它多跑一趟。
+      // 安装 id 是**主机**事实（`java.androidId`），job 自己不知道：由桥补进载荷，job 若显式带了
+      // 一个（测试）就以 job 的为准。
+      'job': <String, Object?>{
+        ...job.toJson(),
+        'androidId': job.androidId ?? _androidId,
+      },
+      // 登录头与 `infoMap` 都随 job 下传（快照），写回时再随结果上来：worker 读不到库，
+      // 也不该为它们多跑一趟。
       'loginHeader': _loginHeaders?.snapshot(job.source.url),
+      'infoMap': _infoMaps?.snapshot(job.source.url),
     });
     _budget = Timer(_timeout + _killGrace, _onBudgetExpired);
 
@@ -384,6 +416,8 @@ final class _WorkerSession {
       if (message.containsKey('loginHeader')) {
         _applyLoginHeader(job.source.url, message['loginHeader']);
       }
+      // `infoMap`（M25/S3b）：探索规则把它当一张可写的小表，写回即合并进内存 store。
+      _infoMaps?.merge(job.source.url, decodeJsVariables(message['infoMap']));
     }
 
     // 边界失败已经定了答案，脚本自己写出的值不再算数。
@@ -534,9 +568,15 @@ final class _WorkerSession {
 
       return;
     }
-    // toast 是一次性 UI 事件，不占额度也不受预算影响：规则已经跑了，消息要么贴要么不贴。
+    // toast 与 `openUrl` 是一次性 UI 事件，不占额度也不受预算影响：规则已经跑了，消息要么贴
+    // 要么不贴、链接要么开要么不开（上游 `openUrl` 同样只是起一个确认页就返回）。
     if (call.binding == jsToastBinding) {
       _serveToast(call);
+
+      return;
+    }
+    if (call.binding == jsOpenUrlBinding) {
+      _serveOpenUrl(call);
 
       return;
     }
@@ -861,6 +901,10 @@ final class _WorkerSession {
           ) =>
             ParseFailure<Object?>(kind: kind, rulePath: rulePath),
         };
+      case JsSyncOperation.connect:
+        return _connect(request, job);
+      case JsSyncOperation.ajaxAll:
+        return _ajaxAll(request, job);
       case JsSyncOperation.getCookie:
       case JsSyncOperation.cookieGet:
         return _readCookie(request, job);
@@ -869,6 +913,99 @@ final class _WorkerSession {
       case JsSyncOperation.cookieRemove:
         return _removeCookie(request, job);
     }
+  }
+
+  /// `java.connect(url[, header[, callTimeout]])`: one response, with the failure swallowed.
+  ///
+  /// Upstream wraps the request in `runCatching` and answers `StrResponse(url, stackTrace)` on
+  /// failure, because a rule uses `connect` as「try this address」rather than as a required page.
+  /// Our answer is the same **shape** with a readable body (the failure kind, not a stack trace —
+  /// a registered difference): the script can look at `code()` / `body` and decide.
+  Future<ParseResult<Object?>> _connect(
+    JsSyncRequest request,
+    JsJob job,
+  ) async {
+    final String sourceId = job.source.url;
+    final ParseResult<HttpResponse> response = await _http.get(
+      request.url,
+      rulePath: job.rulePath,
+      headers: _headersOrNull(
+        mergeJsHttpHeaders(job.sourceHeaders, request.headers),
+      ),
+      sourceId: sourceId.isEmpty ? null : sourceId,
+    );
+
+    return switch (response) {
+      ParseSuccess<HttpResponse>(:final HttpResponse data) =>
+        ParseSuccess<Object?>(
+          jsResponsePayload(
+            url: data.url,
+            body: data.body,
+            code: data.statusCode,
+            headers: data.headers,
+          ),
+        ),
+      ParseFailure<HttpResponse>(
+        :final ParseFailureKind kind,
+        rulePath: final String rulePath,
+      ) =>
+        ParseSuccess<Object?>(
+          jsResponsePayload(
+            url: request.url,
+            body: 'connect failed ($rulePath): ${kind.name}',
+            code: 0,
+            headers: const <String, List<String>>{},
+          ),
+        ),
+    };
+  }
+
+  /// `java.ajaxAll(urlList[, skipRateLimit])`: every response, and **one failure fails the call**.
+  ///
+  /// Upstream fetches with `mapAsync(threadCount)` and lets an exception through, so a rule that
+  /// wants to tolerate a bad address wraps the call itself. `skipRateLimit` is accepted and ignored:
+  /// the per-source budget is enforced by the request layer and this repository never bypasses it
+  /// (`book-source.md` §8, C-NET-6).
+  Future<ParseResult<Object?>> _ajaxAll(
+    JsSyncRequest request,
+    JsJob job,
+  ) async {
+    final String sourceId = job.source.url;
+    final List<String> urls = request.urls;
+    final List<ParseResult<HttpResponse>> responses = await Future.wait(
+      <Future<ParseResult<HttpResponse>>>[
+        for (final String url in urls)
+          _http.get(
+            url,
+            rulePath: job.rulePath,
+            headers: _headersOrNull(
+              mergeJsHttpHeaders(job.sourceHeaders, request.headers),
+            ),
+            sourceId: sourceId.isEmpty ? null : sourceId,
+          ),
+      ],
+    );
+    final List<Object?> payloads = <Object?>[];
+    for (final ParseResult<HttpResponse> response in responses) {
+      switch (response) {
+        case ParseSuccess<HttpResponse>(:final HttpResponse data):
+          payloads.add(
+            jsResponsePayload(
+              url: data.url,
+              body: data.body,
+              code: data.statusCode,
+              headers: data.headers,
+            ),
+          );
+        case ParseFailure<HttpResponse>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ):
+          return ParseFailure<Object?>(kind: kind, rulePath: rulePath);
+      }
+    }
+
+    return ParseSuccess<Object?>(payloads);
   }
 
   // 读 Cookie 走内存宗（`cookieHeaderFor` 同步），所以这一路真的不需要等。
@@ -946,6 +1083,25 @@ final class _WorkerSession {
       _userMessages.show(request.message);
     }
     _reply(JsHostReply.success(call.callId, ''));
+  }
+
+  // `java.openUrl`：先答复（规则不等人），再把地址交给装配根绑定的确认弹窗。
+  //
+  // 上游 `openUrl` 同样返回 void：它起一个「要在浏览器里打开吗」的确认页，用户点确认之后才真的
+  // 打开。本仓的确认弹窗由 `ExternalUrlOpener` 的实现在 UI 层完成（C-ARCH-2：`core/` 不认识 widget）。
+  void _serveOpenUrl(JsHostCall call) {
+    final JsOpenUrlRequest? request = decodeJsOpenUrlRequest(call.args);
+    if (request == null) {
+      _reply(JsHostReply.rejected(call.callId, 'malformed openUrl call'));
+
+      return;
+    }
+    final JsJob? job = _inFlightJob;
+    _reply(JsHostReply.success(call.callId, ''));
+    _logger.info('[js:$_field] openUrl: ${redactUrl(request.url)}');
+    unawaited(
+      _externalUrlOpener.open(request.url, sourceName: job?.source.name ?? ''),
+    );
   }
 
   // 传输失败只拒绝脚本的 Promise（规则可换镜像重试），不直接判 job 失败。

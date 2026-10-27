@@ -10,6 +10,7 @@ import 'package:flutter_reader/core/js/js_lib.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
+import 'package:flutter_reader/core/js/source_info_map.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'js_bridge_provider.g.dart';
@@ -35,12 +36,25 @@ JsBridge jsBridge(Ref ref) {
     sourceVariables: ref.watch(sourceVariableStoreProvider),
     // 登录头（`source.putLoginHeader`，M25/S3b）：随 job 下传、写过就写穿并合并其中的 Cookie。
     loginHeaders: ref.watch(sourceLoginHeaderStoreProvider),
+    // 探索规则读写的 `infoMap`（M25/S3b）：内存表，随 worker 的会话活着。
+    infoMaps: ref.watch(sourceInfoMapStoreProvider),
+    // `java.openUrl`（M25/S3b）：确认弹窗 + 系统浏览器，由装配根绑定（`core/` 不认识 widget）。
+    externalUrlOpener: ref.watch(externalUrlOpenerProvider),
+    // `java.androidId`（M25/S3b）：`main()` 在第一帧之前 hydrate 出来的安装 id。
+    androidId: ref.watch(installIdProvider).value,
     userMessages: ref.watch(userMessagesProvider),
   );
   ref.onDispose(() => unawaited(bridge.dispose()));
 
   return bridge;
 }
+
+/// Provides the per-source `infoMap` (`book-source.md` §6, M25/S3b).
+///
+/// In memory only, like `cache.*`: it is explore state, not a record, and it is read and written by
+/// every job, so a rebuild between two stages must not wipe it — hence `keepAlive`.
+@Riverpod(keepAlive: true)
+SourceInfoMapStore sourceInfoMapStore(Ref ref) => SourceInfoMapStore();
 
 /// Provides the rule variables shared by `@put:` / `@get:` and `java.put` /
 /// `java.get`.

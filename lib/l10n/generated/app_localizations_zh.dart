@@ -1939,4 +1939,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsBackgroundImageFailed => '背景图没能保存，请再试一次。';
+
+  @override
+  String get externalLinkTitle => '打开这个地址？';
+
+  @override
+  String externalLinkFrom(Object source) {
+    return '$source 想在浏览器里打开这个地址：';
+  }
+
+  @override
+  String get externalLinkOpen => '打开';
+
+  @override
+  String get externalLinkCancel => '取消';
 }

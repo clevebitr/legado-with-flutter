@@ -2003,4 +2003,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsBackgroundImageFailed =>
       'The background image could not be saved; try again.';
+
+  @override
+  String get externalLinkTitle => 'Open this address?';
+
+  @override
+  String externalLinkFrom(Object source) {
+    return '$source wants to open this address in your browser:';
+  }
+
+  @override
+  String get externalLinkOpen => 'Open';
+
+  @override
+  String get externalLinkCancel => 'Cancel';
 }

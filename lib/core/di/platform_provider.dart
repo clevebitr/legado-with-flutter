@@ -4,6 +4,7 @@ import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
+import 'package:flutter_reader/core/platform/external_url_opener.dart';
 import 'package:flutter_reader/core/platform/file_selector_background_image_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
@@ -11,6 +12,7 @@ import 'package:flutter_reader/core/platform/file_selector_backup_directory_pick
 import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
 import 'package:flutter_reader/core/platform/flutter_secure_storage_secret_store.dart';
+import 'package:flutter_reader/core/platform/install_id.dart';
 import 'package:flutter_reader/core/platform/json_file_picker.dart';
 import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
@@ -133,6 +135,23 @@ LongRunningTask longRunningTask(Ref ref) =>
 @Riverpod(keepAlive: true)
 SourceVerification sourceVerification(Ref ref) =>
     UnboundSourceVerification(logger: ref.watch(appLoggerProvider));
+
+/// Provides the install id `java.androidId` answers with (M25/S3b).
+///
+/// The holder is read **synchronously** from every job, so `main()` awaits `InstallId.hydrate`
+/// before the first frame (the cookie jar's pattern, ADR-0068 §决策 4). A build that never hydrated
+/// it answers `''`, which is what the sandbox does when the host has no id.
+@Riverpod(keepAlive: true)
+InstallId installId(Ref ref) => InstallId(logger: ref.watch(appLoggerProvider));
+
+/// Provides the confirmation dialog `java.openUrl` shows before a rule opens an address.
+///
+/// Silent by default for the same reason as [sourceVerification]: `core/` cannot show a widget, so
+/// the composition root binds the real one. A build without the override still runs every rule —
+/// the bridge logs the address it refused to open.
+@Riverpod(keepAlive: true)
+ExternalUrlOpener externalUrlOpener(Ref ref) =>
+    const UnboundExternalUrlOpener();
 
 /// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
 ///

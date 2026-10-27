@@ -475,6 +475,7 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 每书源 **Cookie 隔离**（本仓的 Cookie 罐按域共享） | **未做（ADR-0072 §决策 2）**：M22-a 先把「能看能删」做出来，共享语义保持不变。触发 = 出现「两个源同域但需要不同会话」的真实需求 |
 | 页面请求的 job 里读不到 `source.getLoginInfo*` | **未做（M22-a，ADR-0072 实现注记）**：登录信息只喂给登录自己的 job；要一路传到 `PageFetchService` 造的每个 job 上。触发 = 出现「`loginCheckJs` / 字段规则里读登录信息」的真实源 |
 | `java.upLoginData`（脚本动态改登录表单） | **未做（ADR-0072）**：要 UI 与沙箱的双向通道。触发 = 出现只能用它的真实源 |
+| **HttpTTS 源**（网络朗读：独立源表 + url/contentType/concurrentRate 规则面 + `speakText`/`speakSpeed` 绑定） | **未做（M25/S3b 裁决，2026-10-26）**：本仓只有系统 TTS（`flutter_tts`），`java.speakText` / `speakSpeed` 因此**不绑定**（规则读到会 `ReferenceError`，不是恒空值）。触发 = 用户要求接入云端 TTS 书源 |
 | 登录信息（`login_info`）与登录头（`login_header`）**明文存库** | **登记差异（ADR-0072 §决策 3）**：与 v8 起明文存的 Cookie 同级；触发 = 引入 `flutter_secure_storage` 或系统密钥库封装时一并改。登录头本身已落地（M25/S3b：`source.putLoginHeader` / `getLoginHeader` + 请求头与 Cookie 合并，见 `book-source.md` §6）；`java.upLoginData` 仍未实现 |
 | 备份的**自动执行**与 **WebDAV** 上传/下载 | ✅ **已闭环（M22-c，2026-10-25，ADR-0074 §决策 2/6）**：启动时 1 天节流 + 保留份数 N（N=1 即上游 `onlyLatestBackup`）；WebDAV 四条动作（PROPFIND/PUT/GET/DELETE）与远端保留份数，凭据在系统密钥库 |
 | 备份的**覆盖式恢复**与「恢复前自动备份」 | ✅ **已闭环（M22-c，ADR-0074 §决策 3）**：一个事务里清空七张表再写入；覆盖前先写时间戳安全副本，写不出来就中止 |

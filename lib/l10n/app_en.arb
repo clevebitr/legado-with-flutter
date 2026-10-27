@@ -2793,5 +2793,26 @@
   "settingsBackgroundImageFailed": "The background image could not be saved; try again.",
   "@settingsBackgroundImageFailed": {
     "@description": "背景图没能保存，请再试一次。"
+  },
+  "externalLinkTitle": "Open this address?",
+  "@externalLinkTitle": {
+    "@description": "java.openUrl 的确认弹窗标题"
+  },
+  "externalLinkFrom": "{source} wants to open this address in your browser:",
+  "@externalLinkFrom": {
+    "@description": "java.openUrl 的确认弹窗正文，{source} 是书源名",
+    "@placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "externalLinkOpen": "Open",
+  "@externalLinkOpen": {
+    "@description": "确认弹窗的打开按钮"
+  },
+  "externalLinkCancel": "Cancel",
+  "@externalLinkCancel": {
+    "@description": "确认弹窗的取消按钮"
   }
 }

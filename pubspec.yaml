@@ -80,6 +80,10 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   pointycastle: ^4.0.0
 
+  # `java.openUrl` 要真的把地址交给系统浏览器（M25/S3b，ADR-0078 §实现注记）：BSD-3-Clause，
+  # 三端与 Web 都有实现。只在装配根的确认弹窗实现里使用，其余层只认 `ExternalUrlOpener` 端口。
+  url_launcher: ^6.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

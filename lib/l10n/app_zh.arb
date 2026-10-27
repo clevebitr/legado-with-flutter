@@ -591,5 +591,9 @@
   "settingsBackgroundImageChoose": "选择图片",
   "settingsBackgroundImageRemove": "移除",
   "settingsBackgroundImageHint": "图片会复制到应用目录，原图删除也不影响。",
-  "settingsBackgroundImageFailed": "背景图没能保存，请再试一次。"
+  "settingsBackgroundImageFailed": "背景图没能保存，请再试一次。",
+  "externalLinkTitle": "打开这个地址？",
+  "externalLinkFrom": "{source} 想在浏览器里打开这个地址：",
+  "externalLinkOpen": "打开",
+  "externalLinkCancel": "取消"
 }

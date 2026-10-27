@@ -248,6 +248,10 @@ final class JsJob {
     this.loginInfo = const <String, String>{},
     this.webViewUA = defaultUserAgent,
     this.androidId,
+    this.src,
+    this.chapter,
+    this.nextChapterUrl,
+    this.fromBookInfo = false,
   });
 
   /// The JavaScript the rule asked for, with the `@js:` flag already removed.
@@ -318,6 +322,29 @@ final class JsJob {
   /// (registered in `book-source.md` §6).
   final String? androidId;
 
+  /// The page body the rule was read on (the `src` binding, M25/S3b).
+  ///
+  /// Upstream's `AnalyzeRule.evalJS` binds `src` to the scope's content — the fetched page, or a
+  /// `java.setContent(html)` replacement made before this evaluation. It is `null` where there is no
+  /// page (a URL rule, a `header` rule), which is also upstream's value there.
+  final String? src;
+
+  /// The chapter this job belongs to (the `chapter` binding, M25/S3b), or `null` when the stage has
+  /// none — a search page, a detail page, or a `tocRule.formatJs` pass (which rebinds `chapter` per
+  /// chapter inside the loop).
+  final JsChapterInfo? chapter;
+
+  /// The next chapter's URL (the `nextChapterUrl` binding), when the reader knows it.
+  ///
+  /// Upstream sets it on the content stage so a `nextContentUrl` / `content` rule can tell "the next
+  /// page is the next chapter" apart (and so a rule can build that address).
+  final String? nextChapterUrl;
+
+  /// Whether the running rules were reached from the book info stage (the `fromBookInfo` binding).
+  ///
+  /// Sources use it to answer differently on the detail page than on a list page.
+  final bool fromBookInfo;
+
   /// The page the rule was read on (the `baseUrl` binding).
   final String baseUrl;
 
@@ -371,6 +398,10 @@ final class JsJob {
     'loginInfo': loginInfo,
     'webViewUA': webViewUA,
     'androidId': androidId,
+    'src': src,
+    'chapter': chapter?.toJson(),
+    'nextChapterUrl': nextChapterUrl,
+    'fromBookInfo': fromBookInfo,
   };
 }
 

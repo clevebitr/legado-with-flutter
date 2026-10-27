@@ -14,6 +14,10 @@ final class JsPageContext {
     this.bookName,
     this.chapterTitle,
     this.book,
+    this.src,
+    this.chapter,
+    this.nextChapterUrl,
+    this.fromBookInfo = false,
   }) : source = source ?? const JsSourceInfo(name: '', url: '');
 
   /// The URL the page was fetched from.
@@ -36,6 +40,46 @@ final class JsPageContext {
 
   /// The book source's own `header` field, used as the default for `http.*` calls.
   final Map<String, String>? headers;
+
+  /// The body of the page this context belongs to (the `src` binding, M25/S3b).
+  ///
+  /// Set by the page fetcher right after the body is decoded, so every rule on the page — and on
+  /// an element of it — sees the same text. `null` for a context that has no page (a URL rule, a
+  /// `header` rule).
+  final String? src;
+
+  /// The chapter this stage is reading (the `chapter` binding), when it has one.
+  final JsChapterInfo? chapter;
+
+  /// The next chapter's URL (the `nextChapterUrl` binding), when the reader knows it.
+  final String? nextChapterUrl;
+
+  /// Whether these rules were reached from the book info stage (the `fromBookInfo` binding).
+  final bool fromBookInfo;
+
+  /// The same stage context on **one page** of it: the URL, page number, request headers and body
+  /// change, everything the stage declared (book, chapter, `nextChapterUrl`, `fromBookInfo`) stays.
+  ///
+  /// A paging walk goes through this, which is what makes `chapter` / `nextChapterUrl` visible on
+  /// page 2 exactly as on page 1.
+  JsPageContext forPage({
+    required String baseUrl,
+    required int page,
+    Map<String, String>? headers,
+    String? src,
+  }) => JsPageContext(
+    baseUrl: baseUrl,
+    page: page,
+    source: source,
+    headers: headers,
+    bookName: bookName,
+    chapterTitle: chapterTitle,
+    book: book,
+    src: src,
+    chapter: chapter,
+    nextChapterUrl: nextChapterUrl,
+    fromBookInfo: fromBookInfo,
+  );
 }
 
 /// The value a rule is evaluated against: either the DOM or a decoded JSON value.

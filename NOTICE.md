@@ -209,6 +209,18 @@ MIT 56 / Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none）。
 > 代价是行为与上游不完全相同（没有 `fixT2sDict()` 的港台排除词表），差异登记在
 > `docs/dev/book-source.md` §6。
 
+**2026-10-26 增量（M25/S3b：`java.openUrl`）：** `dependencies` 新增 `url_launcher ^6.3.2`
+（**BSD-3-Clause**，Flutter 官方维护；Android / iOS / Windows / macOS / Linux / Web 六个平台实现
+同为 BSD-3-Clause）。只有装配根的确认弹窗实现用它，其余层只见 `core/platform/` 的
+`ExternalUrlOpener` 端口。`dart run tool/scan_licenses.dart` 复算：**210 包 / BSD-3 121 / MIT 56 /
+Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**；GPL / LGPL / AGPL / 无许可证 / 未识别
+仍为 0，MPL 白名单仍只有 `enough_convert`。
+
+> **为什么这次接受一个浏览器插件：** 2026-10-14 的 ADR-0055 §决策 4 为了「关于页显示源码地址」
+> 特意不引 `url_launcher`（可复制文本就够了）。`java.openUrl` 不同：它是**书源规则**要真的把用户
+> 带到站外（上游 `JsExtensions.kt:1162-1185` 先弹确认页再开浏览器），可复制文本不构成实现；
+> 拒绝它意味着这类源只能靠用户手动抄地址。确认弹窗由本仓自己画，`url_launcher` 只负责最后一步。
+
 **直接依赖明细：**
 
 | 依赖 | 版本 | 许可证 |
@@ -250,6 +262,7 @@ MIT 56 / Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none）。
 | `media_kit` | 1.2.6 | MIT |
 | `media_kit_libs_windows_audio` | 1.0.9 | MIT（随包 libmpv / FFmpeg 动态库：LGPL-2.1+，手工登记） |
 | `pointycastle` | 4.0.0 | MIT |
+| `url_launcher`（+ 6 个平台实现） | 6.3.2 | BSD-3-Clause |
 | `flutter_inappwebview` | 6.1.5 | Apache-2.0 |
 | `mocktail`（dev） | 1.0.5 | MIT |
 | `flutter` / `flutter_localizations` / `flutter_test` / `integration_test`（SDK） | 3.47.7 | BSD-3-Clause（Flutter SDK） |

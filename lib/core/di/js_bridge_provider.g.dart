@@ -61,7 +61,69 @@ final class JsBridgeProvider
   }
 }
 
-String _$jsBridgeHash() => r'cc30601962ec9a0551616d5f0f4d9e1a44c56813';
+String _$jsBridgeHash() => r'2980d936ca40c13bdaf91b4a3960a3f21b4adae9';
+
+/// Provides the per-source `infoMap` (`book-source.md` §6, M25/S3b).
+///
+/// In memory only, like `cache.*`: it is explore state, not a record, and it is read and written by
+/// every job, so a rebuild between two stages must not wipe it — hence `keepAlive`.
+
+@ProviderFor(sourceInfoMapStore)
+final sourceInfoMapStoreProvider = SourceInfoMapStoreProvider._();
+
+/// Provides the per-source `infoMap` (`book-source.md` §6, M25/S3b).
+///
+/// In memory only, like `cache.*`: it is explore state, not a record, and it is read and written by
+/// every job, so a rebuild between two stages must not wipe it — hence `keepAlive`.
+
+final class SourceInfoMapStoreProvider
+    extends
+        $FunctionalProvider<
+          SourceInfoMapStore,
+          SourceInfoMapStore,
+          SourceInfoMapStore
+        >
+    with $Provider<SourceInfoMapStore> {
+  /// Provides the per-source `infoMap` (`book-source.md` §6, M25/S3b).
+  ///
+  /// In memory only, like `cache.*`: it is explore state, not a record, and it is read and written by
+  /// every job, so a rebuild between two stages must not wipe it — hence `keepAlive`.
+  SourceInfoMapStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sourceInfoMapStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sourceInfoMapStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<SourceInfoMapStore> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SourceInfoMapStore create(Ref ref) {
+    return sourceInfoMapStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SourceInfoMapStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SourceInfoMapStore>(value),
+    );
+  }
+}
+
+String _$sourceInfoMapStoreHash() =>
+    r'14de203b059a85667e2da16b9320749ea3dda959';
 
 /// Provides the rule variables shared by `@put:` / `@get:` and `java.put` /
 /// `java.get`.

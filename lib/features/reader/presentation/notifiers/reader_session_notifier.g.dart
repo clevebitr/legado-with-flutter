@@ -192,7 +192,7 @@ final class ReaderContentProvider
   }
 }
 
-String _$readerContentHash() => r'84c32a892dd86cb9b83bdb6d790a58667a381c7c';
+String _$readerContentHash() => r'3dccf34c6f2c9bbd16b3d893b30689adf38de75e';
 
 /// Reads the body of one chapter (`docs/dev/roadmap.md` 5.3).
 ///

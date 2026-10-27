@@ -8,11 +8,13 @@ import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
+import 'package:flutter_reader/core/js/source_info_map.dart';
 import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
+import 'package:flutter_reader/core/platform/external_url_opener.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/platform/user_messages.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
@@ -32,6 +34,8 @@ typedef _Fixture = ({
   JsVariableStore variables,
   SourceVariableStore sourceVariables,
   SourceLoginHeaderStore loginHeaders,
+  SourceInfoMapStore infoMaps,
+  _FakeExternalUrlOpener opener,
   InMemoryCookieManager cookies,
   _FakeUserMessages messages,
   _FakeVerification verification,
@@ -51,6 +55,8 @@ _Fixture _buildBridge({
   JsVariableStore? variables,
   SourceVariableStore? sourceVariables,
   SourceLoginHeaderStore? loginHeaders,
+  SourceInfoMapStore? infoMaps,
+  _FakeExternalUrlOpener? opener,
   InMemoryCookieManager? cookies,
   bool bindCookies = true,
   void Function(FakeJsWorkerHandle worker)? configure,
@@ -65,6 +71,8 @@ _Fixture _buildBridge({
       sourceVariables ?? SourceVariableStore();
   final SourceLoginHeaderStore loginHeaderStore =
       loginHeaders ?? SourceLoginHeaderStore();
+  final SourceInfoMapStore infoMapStore = infoMaps ?? SourceInfoMapStore();
+  final _FakeExternalUrlOpener fakeOpener = opener ?? _FakeExternalUrlOpener();
   final InMemoryCookieManager cookieJar = cookies ?? InMemoryCookieManager();
   final _FakeUserMessages messages = _FakeUserMessages();
   final _FakeVerification fakeVerification =
@@ -92,6 +100,9 @@ _Fixture _buildBridge({
       cookies: bindCookies ? cookieJar : null,
       sourceVariables: sourceStore,
       loginHeaders: loginHeaderStore,
+      infoMaps: infoMapStore,
+      externalUrlOpener: fakeOpener,
+      androidId: 'test-install-id',
       userMessages: messages,
     ),
     printer: printer,
@@ -100,6 +111,8 @@ _Fixture _buildBridge({
     variables: store,
     sourceVariables: sourceStore,
     loginHeaders: loginHeaderStore,
+    infoMaps: infoMapStore,
+    opener: fakeOpener,
     cookies: cookieJar,
     messages: messages,
     verification: fakeVerification,
@@ -249,6 +262,22 @@ final class _FakeUserMessages implements UserMessages {
 
   @override
   void show(String message) => messages.add(message);
+}
+
+/// Records what `java.openUrl` asked to open (the real one shows a dialog).
+final class _FakeExternalUrlOpener implements ExternalUrlOpener {
+  /// Every `(url, sourceName)` the bridge handed over, in order.
+  final List<(String, String)> opened = <(String, String)>[];
+
+  /// What [open] answers; the bridge ignores it, a test may assert it was awaited.
+  bool answer = true;
+
+  @override
+  Future<bool> open(String url, {String sourceName = ''}) async {
+    opened.add((url, sourceName));
+
+    return answer;
+  }
 }
 
 /// Serves rendered pages for `java.webView` (the real one is a WebView).
@@ -2401,6 +2430,236 @@ void main() {
         contains(contains('malformed login header')),
       );
     });
+  });
+
+  group('stage bindings', () {
+    test('evaluate_givenAnInstallId_sendsItWithTheJob', () async {
+      // `java.androidId` 是主机事实：job 自己不带，桥补进载荷（M25/S3b）。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+
+      final Map<String, Object?> job =
+          fixture.workers.single.sent.last['job']! as Map<String, Object?>;
+      expect(job['androidId'], 'test-install-id');
+      await _finish(fixture.workers.single, call);
+    });
+
+    test('evaluate_sendsTheInfoMapSnapshotWithTheJob', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.infoMaps.merge('https://example-novel.test', <String, String?>{
+        'kind': '玄幻',
+      });
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+
+      expect(fixture.workers.single.sent.last['infoMap'], <String, String>{
+        'kind': '玄幻',
+      });
+      await _finish(fixture.workers.single, call);
+    });
+
+    test('evaluate_givenAReportedInfoMap_mergesItBack', () async {
+      // 规则里的 `infoMap.x = y` 由 worker 读回来、桥合并进 store，下一条规则就看得见。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'infoMap': <String, String>{'kind': '玄幻', 'page': '2'},
+      });
+      await call;
+
+      expect(
+        fixture.infoMaps.snapshot('https://example-novel.test'),
+        <String, String>{'kind': '玄幻', 'page': '2'},
+      );
+    });
+
+    test('evaluate_givenAnInfoMapWithAnUnusableValue_dropsIt', () async {
+      // worker 只会发字符串，但信封是外部输入：非字符串按「删键」处理，不炸掉 job。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'infoMap': <String, Object?>{'kind': 7},
+      });
+      final ParseResult<Object?> result = await call;
+
+      expect(result, isA<ParseSuccess<Object?>>());
+      expect(fixture.infoMaps.snapshot('https://example-novel.test'), isEmpty);
+    });
+  });
+
+  group('connect and ajaxAll', () {
+    test('connect_givenAPage_answersTheResponseObject', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.http.serve('https://example-novel.test/a', '<html>A');
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'connect',
+          'url': 'https://example-novel.test/a',
+        }),
+      );
+      await pumpEventQueue();
+
+      // 第一次是哨兵：宿主取页并答复，重放后才拿到值。
+      final Map<String, Object?> reply = _replies(worker).last;
+      expect(reply['ok'], isTrue);
+      final Map<Object?, Object?> value =
+          reply['value']! as Map<Object?, Object?>;
+      expect(value['body'], '<html>A');
+      expect(value[jsResponseMarker], isTrue);
+      await _finish(worker, call);
+    });
+
+    test('connect_givenAFailingPage_answersAResponseNotAFailure', () async {
+      // 上游 `connect` 把失败吞成响应正文：规则靠 `code()` / `body` 自己判断。
+      final _Fixture fixture = _buildBridge();
+      fixture.http.failWith(
+        'https://example-novel.test/a',
+        ParseFailureKind.networkFailed,
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'connect',
+          'url': 'https://example-novel.test/a',
+        }),
+      );
+      await pumpEventQueue();
+
+      final Map<String, Object?> reply = _replies(worker).last;
+      expect(reply['ok'], isTrue);
+      final Map<Object?, Object?> value =
+          reply['value']! as Map<Object?, Object?>;
+      expect(value['body'], contains('networkFailed'));
+      await _finish(worker, call);
+    });
+
+    test('ajaxAll_givenEveryPage_answersOneResponseEach', () async {
+      final _Fixture fixture = _buildBridge();
+      fixture.http
+        ..serve('https://example-novel.test/1', 'one')
+        ..serve('https://example-novel.test/2', 'two');
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'ajaxAll',
+          'urls': <String>[
+            'https://example-novel.test/1',
+            'https://example-novel.test/2',
+          ],
+        }),
+      );
+      await pumpEventQueue();
+
+      final Map<String, Object?> reply = _replies(worker).last;
+      expect(reply['ok'], isTrue);
+      final List<Object?> values = reply['value']! as List<Object?>;
+      expect(values, hasLength(2));
+      expect((values.first! as Map<Object?, Object?>)['body'], 'one');
+      await _finish(worker, call);
+    });
+
+    test('ajaxAll_givenOneBadPage_failsTheCall', () async {
+      // 上游 `mapAsync` 不吞异常：一页失败整次调用抛错，规则自己 try/catch。
+      final _Fixture fixture = _buildBridge();
+      fixture.http
+        ..serve('https://example-novel.test/1', 'one')
+        ..failWith(
+          'https://example-novel.test/2',
+          ParseFailureKind.networkFailed,
+        );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      final FakeJsWorkerHandle worker = fixture.workers.single;
+      worker.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'ajaxAll',
+          'urls': <String>[
+            'https://example-novel.test/1',
+            'https://example-novel.test/2',
+          ],
+        }),
+      );
+      await pumpEventQueue();
+
+      final Map<String, Object?> reply = _replies(worker).last;
+      expect(reply['ok'], isFalse);
+      expect(reply['message'], ParseFailureKind.networkFailed.name);
+      await _finish(worker, call);
+    });
+  });
+
+  group('openUrl', () {
+    test('openUrl_whenARuleAsks_handsTheAddressToThePort', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(
+        _hostCall(1, jsOpenUrlBinding, <String, Object?>{
+          'url': 'https://a.test/book/1',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(fixture.opener.opened.single.$1, 'https://a.test/book/1');
+      expect(fixture.opener.opened.single.$2, '示例书源');
+      expect(_replies(fixture.workers.single).single['ok'], isTrue);
+      await _finish(fixture.workers.single, call);
+    });
+
+    test(
+      'openUrl_givenAMalformedCall_isRejectedWithoutFailingTheJob',
+      () async {
+        final _Fixture fixture = _buildBridge();
+        final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+          _job(script: 'hold'),
+        );
+        await pumpEventQueue();
+        fixture.workers.single.emit(
+          _hostCall(1, jsOpenUrlBinding, <String, Object?>{'url': ''}),
+        );
+        await pumpEventQueue();
+
+        expect(fixture.opener.opened, isEmpty);
+        expect(_replies(fixture.workers.single).single['ok'], isFalse);
+        await _finish(fixture.workers.single, call);
+      },
+    );
   });
 
   group('toasts', () {

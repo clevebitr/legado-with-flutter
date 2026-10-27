@@ -32,6 +32,10 @@ abstract interface class ChapterContentProvider {
   /// [bookName] / [chapterTitle] answer `java.get('bookName')` / `java.get('title')` for the
   /// source's rules (§6, ADR-0049). Both are optional context: an empty value leaves the read to
   /// the source's variables.
+  ///
+  /// The rest is what the content stage's rules see as the `chapter` / `nextChapterUrl` bindings
+  /// (M25/S3b): the chapter being read and the address after it. Empty / false means the reader
+  /// has not loaded the TOC yet, which is what a rule sees upstream before the list arrives.
   Future<ParseResult<String>> fetch({
     required String sourceUrl,
     required String chapterUrl,
@@ -39,6 +43,11 @@ abstract interface class ChapterContentProvider {
     String chapterTitle = '',
     String bookUrl = '',
     String tocUrl = '',
+    String nextChapterUrl = '',
+    bool isVip = false,
+    bool isPay = false,
+    bool isVolume = false,
+    String? updateTime,
   });
 }
 
@@ -86,6 +95,11 @@ final class UnboundChapterContentProvider implements ChapterContentProvider {
     String chapterTitle = '',
     String bookUrl = '',
     String tocUrl = '',
+    String nextChapterUrl = '',
+    bool isVip = false,
+    bool isPay = false,
+    bool isVolume = false,
+    String? updateTime,
   }) async {
     _logger.warning(
       'No ChapterContentProvider is bound: the reader cannot read a chapter body.',

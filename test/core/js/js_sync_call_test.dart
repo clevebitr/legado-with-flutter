@@ -9,6 +9,7 @@ void main() {
         'ajax': JsSyncOperation.ajax,
         'post': JsSyncOperation.post,
         'head': JsSyncOperation.head,
+        'connect': JsSyncOperation.connect,
         'getCookie': JsSyncOperation.getCookie,
         'cookieGet': JsSyncOperation.cookieGet,
         'cookieSet': JsSyncOperation.cookieSet,
@@ -25,6 +26,36 @@ void main() {
         expect(request?.url, 'https://a.test/page');
         expect(request?.headers, isEmpty);
       }
+    });
+
+    test('decodeJsSyncRequest_givenAnAjaxAll_keepsTheAddressList', () {
+      // M25/S3b：`java.ajaxAll(urlList)` 带的是列表而不是单个地址。
+      final JsSyncRequest? request = decodeJsSyncRequest(<String, Object?>{
+        'operation': 'ajaxAll',
+        'urls': <Object?>['https://a.test/1', 'https://a.test/2'],
+      });
+
+      expect(request?.operation, JsSyncOperation.ajaxAll);
+      expect(request?.urls, <String>['https://a.test/1', 'https://a.test/2']);
+      expect(request?.url, isEmpty);
+    });
+
+    test('decodeJsSyncRequest_givenAnAjaxAllWithoutAddresses_isNull', () {
+      // 空列表取不到任何页面，拼错了就明确拒绝，而不是答一个空数组。
+      expect(
+        decodeJsSyncRequest(<String, Object?>{
+          'operation': 'ajaxAll',
+          'urls': const <Object?>[],
+        }),
+        isNull,
+      );
+      expect(
+        decodeJsSyncRequest(<String, Object?>{
+          'operation': 'ajaxAll',
+          'urls': const <Object?>['https://a.test/1', 7],
+        }),
+        isNull,
+      );
     });
 
     test('decodeJsSyncRequest_givenAPost_keepsBodyAndHeaders', () {
@@ -96,6 +127,7 @@ void main() {
         'body': null,
         'headers': const <String, String>{},
         'key': 'g3jy9sqo0ws',
+        'urls': const <String>[],
       });
     });
   });
@@ -117,6 +149,23 @@ void main() {
       expect(_request(operation: JsSyncOperation.head).cacheKey, isNot(base));
       // 空 body 与「没有 body」是同一次调用：信封里两者都写成 null / ''。
       expect(_request(body: '').cacheKey, base);
+    });
+
+    test('cacheKey_givenDifferentAjaxAllLists_differs', () {
+      // 一次 `ajaxAll` 是一个整体答案，所以缓存键必须带整张表。
+      const JsSyncRequest one = JsSyncRequest(
+        operation: JsSyncOperation.ajaxAll,
+        url: '',
+        urls: <String>['https://a.test/1', 'https://a.test/2'],
+      );
+      const JsSyncRequest two = JsSyncRequest(
+        operation: JsSyncOperation.ajaxAll,
+        url: '',
+        urls: <String>['https://a.test/1'],
+      );
+
+      expect(one.cacheKey, isNot(two.cacheKey));
+      expect(one.cacheKey, one.cacheKey);
     });
 
     test('cacheKey_givenTwoUrlsThatOnlyDifferInSeparatorPosition_differs', () {

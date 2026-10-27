@@ -3653,6 +3653,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The background image could not be saved; try again.'**
   String get settingsBackgroundImageFailed;
+
+  /// No description provided for @externalLinkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open this address?'**
+  String get externalLinkTitle;
+
+  /// No description provided for @externalLinkFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'{source} wants to open this address in your browser:'**
+  String externalLinkFrom(Object source);
+
+  /// No description provided for @externalLinkOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get externalLinkOpen;
+
+  /// No description provided for @externalLinkCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get externalLinkCancel;
 }
 
 class _AppLocalizationsDelegate

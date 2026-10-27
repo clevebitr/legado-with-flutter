@@ -349,6 +349,44 @@ void main() {
     });
   });
 
+  group('decodeJsOpenUrlRequest', () {
+    test('decodeJsOpenUrlRequest_givenAnAddress_readsIt', () {
+      final JsOpenUrlRequest? request = decodeJsOpenUrlRequest(
+        <String, Object?>{'url': ' https://a.test/book/1 '},
+      );
+
+      expect(request?.url, 'https://a.test/book/1');
+      expect(request?.mimeType, isNull);
+    });
+
+    test('decodeJsOpenUrlRequest_givenAMimeType_keepsIt', () {
+      expect(
+        decodeJsOpenUrlRequest(<String, Object?>{
+          'url': 'https://a.test/a',
+          'mimeType': 'text/html',
+        })?.mimeType,
+        'text/html',
+      );
+    });
+
+    test('decodeJsOpenUrlRequest_givenAnEmptyAddress_isNull', () {
+      // 空地址弹窗没有意义，也开不出任何东西：调用方会明确拒绝而不是弹一个空框。
+      expect(decodeJsOpenUrlRequest(<String, Object?>{'url': '   '}), isNull);
+      expect(decodeJsOpenUrlRequest('nonsense'), isNull);
+      expect(decodeJsOpenUrlRequest(<String, Object?>{'url': 7}), isNull);
+    });
+
+    test('decodeJsOpenUrlRequest_givenAnAddressPastTheBound_isNull', () {
+      // 上游 `require(url.length < 64 * 1024)` 的同一道门。
+      expect(
+        decodeJsOpenUrlRequest(<String, Object?>{
+          'url': 'https://a.test/${'a' * maxJsOpenUrlLength}',
+        }),
+        isNull,
+      );
+    });
+  });
+
   group('applyJsSourceCall', () {
     test('applyJsSourceCall_givenAGet_answersTheStoredValue', () {
       final Map<String, String?> variables = <String, String?>{'token': 'abc'};

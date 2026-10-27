@@ -39,6 +39,8 @@ final class FetchBookInfo {
         // 详情阶段还不知道书名 / 作者（它们和 tocUrl 在同一次读取里），先把两个 URL 给规则：
         // `book.tocUrl` / `book.bookUrl` 在这一阶段指向书籍页本身（上游的回落口径）。
         book: JsBookInfo(bookUrl: url, tocUrl: url),
+        // `fromBookInfo`（M25/S3b）：规则可以据此区分「在详情页跑」与「在列表页跑」。
+        fromBookInfo: true,
       ),
       headers: headers,
       sourceId: source.url,

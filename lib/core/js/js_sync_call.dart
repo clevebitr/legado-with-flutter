@@ -30,6 +30,18 @@ enum JsSyncOperation {
   /// `java.head(url)`: the whole response of a HEAD.
   head,
 
+  /// `java.connect(url[, header[, callTimeout]])`: the whole response, with a **failure swallowed**.
+  ///
+  /// Upstream wraps the fetch in `runCatching` and answers a response whose body is the error text,
+  /// because a rule uses it as「try this address」rather than as a required page.
+  connect,
+
+  /// `java.ajaxAll(urlList[, skipRateLimit])`: the whole responses of several addresses.
+  ///
+  /// Upstream fetches them concurrently (`mapAsync(threadCount)`) and **propagates** a failure, so
+  /// one bad address fails the call; `skipRateLimit` only bypasses the per-source budget there.
+  ajaxAll,
+
   /// `java.getCookie(url[, key])`: one cookie's value, or the whole `Cookie` header without `key`.
   getCookie,
 
@@ -52,6 +64,7 @@ final class JsSyncRequest {
     this.body,
     this.headers = const <String, String>{},
     this.key,
+    this.urls = const <String>[],
   });
 
   /// The verb the rule called.
@@ -69,6 +82,9 @@ final class JsSyncRequest {
   /// The cookie name, for the three cookie verbs; `null` asks for the whole header.
   final String? key;
 
+  /// The addresses of a [JsSyncOperation.ajaxAll]; empty for every other verb.
+  final List<String> urls;
+
   /// The JSON envelope the worker sends to the bridge.
   Map<String, Object?> toJson() => <String, Object?>{
     'operation': operation.name,
@@ -76,6 +92,7 @@ final class JsSyncRequest {
     'body': body,
     'headers': headers,
     'key': key,
+    'urls': urls,
   };
 
   /// The identity of this call inside one job's replay cache.
@@ -87,6 +104,7 @@ final class JsSyncRequest {
     url,
     body ?? '',
     key ?? '',
+    urls.join(_cacheKeySeparator),
   ].join(_cacheKeySeparator);
 }
 
@@ -104,6 +122,8 @@ JsSyncRequest? decodeJsSyncRequest(Object? args) {
     'ajax' => JsSyncOperation.ajax,
     'post' => JsSyncOperation.post,
     'head' => JsSyncOperation.head,
+    'connect' => JsSyncOperation.connect,
+    'ajaxAll' => JsSyncOperation.ajaxAll,
     'getCookie' => JsSyncOperation.getCookie,
     'cookieGet' => JsSyncOperation.cookieGet,
     'cookieSet' => JsSyncOperation.cookieSet,
@@ -113,7 +133,16 @@ JsSyncRequest? decodeJsSyncRequest(Object? args) {
   final Object? url = args['url'];
   final Object? body = args['body'];
   final Object? key = args['key'];
-  if (operation == null || url is! String || url.isEmpty) {
+  final List<String> urls = _urlsOf(args['urls']);
+  if (operation == null) {
+    return null;
+  }
+  // `ajaxAll` 带的是地址列表；别的动词带的是单个地址。
+  if (operation == JsSyncOperation.ajaxAll) {
+    if (urls.isEmpty) {
+      return null;
+    }
+  } else if (url is! String || url.isEmpty) {
     return null;
   }
   if (body is! String? || key is! String?) {
@@ -132,11 +161,29 @@ JsSyncRequest? decodeJsSyncRequest(Object? args) {
 
   return JsSyncRequest(
     operation: operation,
-    url: url,
+    // `ajaxAll` 没有单个地址：空串表示「见 urls」，与别的动词的必填 url 区分开。
+    url: url is String ? url : '',
     body: body,
     headers: headers,
     key: key,
+    urls: urls,
   );
+}
+
+/// Reads the address list of a `java.ajaxAll` call; anything unusable answers an empty list.
+List<String> _urlsOf(Object? value) {
+  if (value is! List) {
+    return const <String>[];
+  }
+  final List<String> urls = <String>[];
+  for (final Object? entry in value) {
+    if (entry is! String || entry.isEmpty) {
+      return const <String>[];
+    }
+    urls.add(entry);
+  }
+
+  return urls;
 }
 
 Map<String, String>? _headersOf(Object? value) {

@@ -620,6 +620,128 @@ final class SourceVerificationProvider
 String _$sourceVerificationHash() =>
     r'f8f51b442facda34452fd3c221f42a3f012cdeb3';
 
+/// Provides the install id `java.androidId` answers with (M25/S3b).
+///
+/// The holder is read **synchronously** from every job, so `main()` awaits `InstallId.hydrate`
+/// before the first frame (the cookie jar's pattern, ADR-0068 §决策 4). A build that never hydrated
+/// it answers `''`, which is what the sandbox does when the host has no id.
+
+@ProviderFor(installId)
+final installIdProvider = InstallIdProvider._();
+
+/// Provides the install id `java.androidId` answers with (M25/S3b).
+///
+/// The holder is read **synchronously** from every job, so `main()` awaits `InstallId.hydrate`
+/// before the first frame (the cookie jar's pattern, ADR-0068 §决策 4). A build that never hydrated
+/// it answers `''`, which is what the sandbox does when the host has no id.
+
+final class InstallIdProvider
+    extends $FunctionalProvider<InstallId, InstallId, InstallId>
+    with $Provider<InstallId> {
+  /// Provides the install id `java.androidId` answers with (M25/S3b).
+  ///
+  /// The holder is read **synchronously** from every job, so `main()` awaits `InstallId.hydrate`
+  /// before the first frame (the cookie jar's pattern, ADR-0068 §决策 4). A build that never hydrated
+  /// it answers `''`, which is what the sandbox does when the host has no id.
+  InstallIdProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'installIdProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$installIdHash();
+
+  @$internal
+  @override
+  $ProviderElement<InstallId> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  InstallId create(Ref ref) {
+    return installId(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(InstallId value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<InstallId>(value),
+    );
+  }
+}
+
+String _$installIdHash() => r'b9731d8589a58bb8598e109e9f1cb435b1782733';
+
+/// Provides the confirmation dialog `java.openUrl` shows before a rule opens an address.
+///
+/// Silent by default for the same reason as [sourceVerification]: `core/` cannot show a widget, so
+/// the composition root binds the real one. A build without the override still runs every rule —
+/// the bridge logs the address it refused to open.
+
+@ProviderFor(externalUrlOpener)
+final externalUrlOpenerProvider = ExternalUrlOpenerProvider._();
+
+/// Provides the confirmation dialog `java.openUrl` shows before a rule opens an address.
+///
+/// Silent by default for the same reason as [sourceVerification]: `core/` cannot show a widget, so
+/// the composition root binds the real one. A build without the override still runs every rule —
+/// the bridge logs the address it refused to open.
+
+final class ExternalUrlOpenerProvider
+    extends
+        $FunctionalProvider<
+          ExternalUrlOpener,
+          ExternalUrlOpener,
+          ExternalUrlOpener
+        >
+    with $Provider<ExternalUrlOpener> {
+  /// Provides the confirmation dialog `java.openUrl` shows before a rule opens an address.
+  ///
+  /// Silent by default for the same reason as [sourceVerification]: `core/` cannot show a widget, so
+  /// the composition root binds the real one. A build without the override still runs every rule —
+  /// the bridge logs the address it refused to open.
+  ExternalUrlOpenerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'externalUrlOpenerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$externalUrlOpenerHash();
+
+  @$internal
+  @override
+  $ProviderElement<ExternalUrlOpener> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  ExternalUrlOpener create(Ref ref) {
+    return externalUrlOpener(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ExternalUrlOpener value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ExternalUrlOpener>(value),
+    );
+  }
+}
+
+String _$externalUrlOpenerHash() => r'4c8d2aed52e421567304648d3d1b4a4bd7260fa7';
+
 /// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
 ///
 /// It lives in `core/di/` because two features use it (the source engine's page fetch and the JS

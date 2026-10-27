@@ -180,6 +180,9 @@ final class _Worker {
   // 写过后随结果回传（桥据此写穿并合并 Cookie）。
   JsLoginHeaderSlot _loginHeader = JsLoginHeaderSlot(null);
 
+  // 当前 job 是否拿到了 `infoMap`（M25/S3b）：没拿到就不该凭空造一个对象，也不必回传。
+  bool _infoMapSeeded = false;
+
   // 一趟重放已经拿到的同步答案；下一趟从这里同步返回（ADR-0076 §决策 1）。
   final JsSyncCache _syncCache = JsSyncCache();
 
@@ -257,6 +260,12 @@ final class _Worker {
     // toast 是单向的：转发给宿主后不等它，规则不会被一条提示挡住（ADR-0076 §决策 1）。
     _runtime.onMessage(jsToastBinding, (Object? args) {
       unawaited(_notify(jsToastBinding, args));
+
+      return '';
+    });
+    // `java.openUrl` 同样单向：宿主弹确认框、开浏览器，规则不等（M25/S3b）。
+    _runtime.onMessage(jsOpenUrlBinding, (Object? args) {
+      unawaited(_notify(jsOpenUrlBinding, args));
 
       return '';
     });
@@ -343,6 +352,12 @@ final class _Worker {
     }
 
     final Map<String, Object?> fields = Map<String, Object?>.from(job);
+    // `infoMap`（M25/S3b）随**信封**下来（桥按源快照），落进 job 字段后由前奏绑成对象。
+    final Object? seedInfoMap = envelope is Map ? envelope['infoMap'] : null;
+    _infoMapSeeded = seedInfoMap is Map;
+    if (seedInfoMap is Map) {
+      fields['infoMap'] = seedInfoMap;
+    }
     // 每趟重跑都从快照重新播种：只有取页成功的那一趟的写入才算数（ADR-0076 §决策 1）。
     final Map<String, String?> seedVariables = decodeJsVariables(
       fields['variables'],
@@ -402,6 +417,7 @@ final class _Worker {
           'variables': _variables,
           'sourceVariables': _sourceVariables,
           ..._touchedLoginHeader(),
+          ..._reportedInfoMap(),
         });
 
         return;
@@ -421,6 +437,7 @@ final class _Worker {
         'variables': _variables,
         'sourceVariables': _sourceVariables,
         ..._touchedLoginHeader(),
+        ..._reportedInfoMap(),
       });
 
       return;
@@ -436,6 +453,7 @@ final class _Worker {
         'variables': _variables,
         'sourceVariables': _sourceVariables,
         ..._touchedLoginHeader(),
+        ..._reportedInfoMap(),
       });
 
       return;
@@ -452,6 +470,7 @@ final class _Worker {
       'variables': _variables,
       'sourceVariables': _sourceVariables,
       ..._touchedLoginHeader(),
+      ..._reportedInfoMap(),
     });
   }
 
@@ -459,6 +478,52 @@ final class _Worker {
   Map<String, Object?> _touchedLoginHeader() => _loginHeader.touched
       ? <String, Object?>{'loginHeader': _loginHeader.value}
       : const <String, Object?>{};
+
+  // `infoMap` 是**可写**的小表（上游给规则的是同一个对象）：job 结束时把脚本里那份读回来，
+  // 桥据此合并进内存 store，下一条探索规则就看得见这次写进去的值。
+  //
+  // 用一次独立的求值读，而不是在规则作用域里回传：规则可能把结果换成 Promise、也可能抛错，
+  // 而这一个小对象两种情况下都得带回宿主。job 没拿到 `infoMap` 时一次求值都不做。
+  Map<String, Object?> _reportedInfoMap() {
+    if (!_infoMapSeeded) {
+      return const <String, Object?>{};
+    }
+    final Map<String, String> values = <String, String>{};
+    final String text = _readInfoMapJson();
+    if (text.isEmpty || text == 'null') {
+      return <String, Object?>{'infoMap': values};
+    }
+    try {
+      final Object? decoded = jsonDecode(text);
+      if (decoded is Map) {
+        for (final MapEntry<Object?, Object?> entry in decoded.entries) {
+          final Object? key = entry.key;
+          final Object? value = entry.value;
+          if (key is String && value != null) {
+            // 上游的表是 `Map<String, String>`：数字 / 布尔一律按字符串收下。
+            values[key] = value is String ? value : value.toString();
+          }
+        }
+      }
+    } on FormatException {
+      // 规则把 `infoMap` 换成了不能序列化的东西：这一趟不合并，也不影响规则自己的答案。
+      return const <String, Object?>{};
+    }
+
+    return <String, Object?>{'infoMap': values};
+  }
+
+  String _readInfoMapJson() {
+    final JsEvalResult read = _runtime.evaluate(
+      'JSON.stringify(typeof infoMap === "undefined" || infoMap === null '
+      '? null : infoMap)',
+    );
+    if (read.isError) {
+      return '';
+    }
+
+    return read.stringResult;
+  }
 
   // 单向转发：答复到了也只是清掉 callId，规则不会等它。
   Future<void> _notify(String binding, Object? args) async {
@@ -536,6 +601,23 @@ String _evaluationSource(Map<String, Object?> fields) {
   final Object? book = fields['book'];
   buffer.writeln(
     'var book = __sandboxBook(${book == null ? 'null' : jsonEncode(book)});',
+  );
+  // M25/S3b 的五条全局绑定（上游 `AnalyzeRule.evalJS` / `AnalyzeUrl.evalJS`）：页正文、章节、
+  // 下一章地址、阶段标记与探索分类变量。缺席一律给 `null` / `false`——上游那里也是这几个值，
+  // 用 `undefined` 会让 `String(src)` 拼出 "undefined"。
+  buffer.writeln('var src = ${jsonEncode(fields['src'])};');
+  buffer.writeln(
+    'var chapter = __sandboxChapter(${jsonEncode(fields['chapter'])});',
+  );
+  buffer.writeln(
+    'var nextChapterUrl = ${jsonEncode(fields['nextChapterUrl'])};',
+  );
+  buffer.writeln(
+    'var fromBookInfo = ${jsonEncode(fields['fromBookInfo'] == true)};',
+  );
+  buffer.writeln(
+    'var infoMap = __sandboxInfoMap('
+    '${jsonEncode(fields['infoMap'] ?? const <String, String>{})});',
   );
   // key 只有 URL 规则才有；缺席时删掉 globalThis 属性（var 建的属性删不掉，会漏到下一个 job）。
   if (key != null) {
@@ -1097,6 +1179,56 @@ globalThis.__sandboxSource = function (data, loginInfo) {
   return Object.freeze(source);
 };
 
+// 沙箱的 `chapter` 对象（上游 `AnalyzeRule.evalJS` 绑的 `BookChapter`）：字段来自 `JsChapterInfo`，
+// 方法只有 `getVariable` / `putVariable`。上游把它们写在**章自己的**变量表里，本仓与 `book` 同样
+// 落规则变量表（差异登记在 book-source.md §6）；`tocRule.formatJs` 的循环另有自己的 `chapter`。
+// 沙箱的 `infoMap`（上游 `InfoMap.kt:10-40`）：**同一个对象**跨规则共享的小表，探索规则用它
+// 记住 token / 分类参数。值随 job 下来、job 结束时宿主把整份读回去（`_reportedInfoMap`），所以
+// 直接写属性的规则也能生效；`save()` / `saveNow()` 只是上游的持久化开关，本仓的值本来就在会话里
+// （差异登记在 book-source.md §6），方法保留是为了让规则不报 "not a function"。
+globalThis.__sandboxInfoMap = function (seed) {
+  var data = seed || {};
+  var define = function (name, fn) {
+    Object.defineProperty(data, name, { value: fn, enumerable: false });
+  };
+  define('save', function () {});
+  define('saveNow', function () {});
+  define('get', function () { return data; });
+  define('set', function (value) {
+    if (value && typeof value === 'object') {
+      for (var key in value) {
+        if (Object.prototype.hasOwnProperty.call(value, key)) {
+          data[key] = String(value[key]);
+        }
+      }
+    }
+  });
+  return data;
+};
+
+globalThis.__sandboxChapter = function (data) {
+  if (data === null || data === undefined) {
+    return null;
+  }
+  var chapter = {};
+  for (var field in data) {
+    if (Object.prototype.hasOwnProperty.call(data, field)) {
+      chapter[field] = data[field];
+    }
+  }
+  chapter.getVariable = function (key) {
+    return __java({ operation: 'get', key: String(key) });
+  };
+  chapter.putVariable = function (key, value) {
+    var call = { operation: 'put', key: String(key) };
+    if (value !== undefined && value !== null) {
+      call.value = String(value);
+    }
+    __java(call);
+  };
+  return chapter;
+};
+
 globalThis.__sandboxBook = function (data) {
   if (data === null || data === undefined) {
     return null;
@@ -1139,7 +1271,6 @@ globalThis.__sandboxBook = function (data) {
 // 定义为**变量**读写（ADR-0034），它们的名字被占用；上游那套同步 HTTP 的 `get(url)` 仍然没有可用
 // 拼写，只能走 `ajax` 这一族（ADR-0076 §决策 1）。
 globalThis.__javaRejectedNames = [
-  'ajaxAll', 'connect',
   'downloadFile', 'cacheFile', 'importScript',
   // 非对称与签名：上游有，但语料里没有；连模式都不在支持面内（book-source.md §11）。
   'createAsymmetricCrypto', 'createSign'
@@ -1211,6 +1342,46 @@ globalThis.java = (function () {
     // 传输失败抛错，规则自己的 try/catch 照常可用。
     ajax: function (url, headers) {
       return __sync('ajax', __syncCall('ajax', { url: url, headers: headers }));
+    },
+    // `java.connect(url[, header[, callTimeout]])`：与 `ajax` 的区别是**答响应对象**，而且失败
+    // 也是「答案」（上游 runCatching 后把错误正文塞进响应），规则自己看 `code()` 判断。
+    connect: function (url, header) {
+      // 上游还有第三个参数 `callTimeout`：本仓的超时归请求层（book-source.md §8），不按规则给。
+      return __sandboxValue(
+        __sync('connect', __syncCall('connect', { url: url, headers: header }))
+      );
+    },
+    // `java.ajaxAll(urlList[, skipRateLimit])`：并发取多页，答响应对象数组。任一页失败整次调用
+    // 抛错（上游 `mapAsync` 不吞异常），`skipRateLimit` 本仓收下但**不绕过**单源预算（book-source.md §8）。
+    ajaxAll: function (urlList, skipRateLimit) {
+      var urls = [];
+      if (urlList && typeof urlList.length === 'number') {
+        for (var index = 0; index < urlList.length; index++) {
+          urls.push(String(urlList[index]));
+        }
+      }
+      var value = __sync('ajaxAll', {
+        operation: 'ajaxAll',
+        urls: urls,
+        skipRateLimit: skipRateLimit === true
+      });
+      if (!value || typeof value.length !== 'number') {
+        return [];
+      }
+      var responses = [];
+      for (var i = 0; i < value.length; i++) {
+        responses.push(__sandboxValue(value[i]));
+      }
+      return responses;
+    },
+    // `java.openUrl(url[, mimeType])`：单向事件（规则不等人）。上游起一个确认页再开浏览器；
+    // 本仓把地址交给 `ExternalUrlOpener`，确认与打开都在 UI 层完成。
+    openUrl: function (url, mimeType) {
+      var payload = { url: String(url) };
+      if (mimeType !== undefined && mimeType !== null) {
+        payload.mimeType = String(mimeType);
+      }
+      sendMessage('openUrl', JSON.stringify(payload));
     },
     post: function (url, body, headers) {
       return __sandboxValue(__sync('post', __syncCall('post', {

@@ -253,9 +253,7 @@ final class PageFetchService {
             headers: requestHeaders,
             page: page,
             source: source,
-            bookName: context.bookName,
-            chapterTitle: context.chapterTitle,
-            book: context.book,
+            stage: context,
             rulePath: rulePath,
             login: login,
             sourceRegex: sourceRegex,
@@ -301,14 +299,12 @@ final class PageFetchService {
     final ParseResult<HttpResponse> shaped = await _applyBodyJs(
       response,
       options.bodyJs,
-      context: JsPageContext(
+      // `bodyJs` 跑的仍是这一阶段的规则：书的上下文照旧带下去，但没有 `src`——它处理的
+      // 正是 `result`（上游 `bodyJs` 走 AnalyzeUrl.evalJS，同样不绑 `src`）。
+      context: context.forPage(
         baseUrl: url,
         page: page,
-        source: source,
         headers: requestHeaders,
-        bookName: context.bookName,
-        chapterTitle: context.chapterTitle,
-        book: context.book,
       ),
     );
 
@@ -318,9 +314,7 @@ final class PageFetchService {
       headers: requestHeaders,
       page: page,
       source: source,
-      bookName: context.bookName,
-      chapterTitle: context.chapterTitle,
-      book: context.book,
+      stage: context,
       rulePath: rulePath,
       login: login,
       sourceRegex: sourceRegex,
@@ -422,6 +416,10 @@ final class PageFetchService {
   /// (`book-source.md` §6); they default to the first page and an empty source so a caller
   /// that has no book source context still gets a valid context. [login] carries the source's
   /// login fields, which run over this page exactly as they do in [fetchRule].
+  ///
+  /// [context] is the stage's own bindings (book, chapter, `nextChapterUrl`, `fromBookInfo`,
+  /// `infoMap`, …): a caller that has one passes it and gets it back on the page, which keeps this
+  /// short path and [fetchRule] answering the same `@js:` surface.
   Future<ParseResult<RuleScope>> fetch(
     String url, {
     required String rulePath,
@@ -433,6 +431,7 @@ final class PageFetchService {
     String? bookName,
     String? chapterTitle,
     JsBookInfo? book,
+    JsPageContext? context,
     SourceLoginGuard? login,
     String? sourceRegex,
   }) async {
@@ -450,9 +449,16 @@ final class PageFetchService {
       headers: headers,
       page: page,
       source: source,
-      bookName: bookName,
-      chapterTitle: chapterTitle,
-      book: book,
+      stage:
+          context ??
+          JsPageContext(
+            baseUrl: url,
+            page: page,
+            source: source,
+            bookName: bookName,
+            chapterTitle: chapterTitle,
+            book: book,
+          ),
       rulePath: rulePath,
       login: login,
       sourceRegex: sourceRegex,
@@ -478,10 +484,8 @@ final class PageFetchService {
     required Map<String, String>? headers,
     required int page,
     required JsSourceInfo? source,
+    required JsPageContext stage,
     required String rulePath,
-    String? bookName,
-    String? chapterTitle,
-    JsBookInfo? book,
     SourceLoginGuard? login,
     String? sourceRegex,
   }) async {
@@ -507,16 +511,14 @@ final class PageFetchService {
           case ParseSuccess<String>(:final String data):
             body = data;
         }
-        final JsPageContext context = JsPageContext(
+        // 阶段声明的上下文原样带到这一页：只换 URL / 页码 / 请求头，并补上本页正文（`src` 绑定，
+        // M25/S3b）。`bookName` / `chapter` / `nextChapterUrl` / `fromBookInfo` / `infoMap` 因此
+        // 在这一页的每条规则上都看得见（ADR-0049 对「书与章节是页面属性」的同一立场）。
+        final JsPageContext context = stage.forPage(
           baseUrl: pageUrl,
           page: page,
-          source: source,
           headers: headers,
-          // §6 的 `java.get('bookName' / 'title')`：书与章节是**页面**的属性，所以它必须
-          // 建在页面 scope 上，再由引擎继承到每个条目与每条规则（ADR-0049）。
-          bookName: bookName,
-          chapterTitle: chapterTitle,
-          book: book,
+          src: body,
         );
         final FetchedPage pageScope = FetchedPage(
           url: pageUrl,
@@ -1249,9 +1251,9 @@ final class PageFetchService {
         // 正在取的这一页就是 `pages.length + 1`（1-based），与翻页规则里的 `{{page}}` 同口径。
         page: pages.length + 1,
         source: source,
-        bookName: context.bookName,
-        chapterTitle: context.chapterTitle,
-        book: context.book,
+        // 阶段的上下文整份带下去：`chapter` / `nextChapterUrl` / `fromBookInfo` 在第 2 页上
+        // 与第 1 页一样（M25/S3b）。
+        context: context,
         login: login,
         sourceRegex: sourceRegex,
       );

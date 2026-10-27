@@ -312,6 +312,10 @@ final class RuleEngine {
             bookName: context.bookName,
             chapterTitle: context.chapterTitle,
             book: context.book,
+            src: context.src,
+            chapter: context.chapter,
+            nextChapterUrl: context.nextChapterUrl,
+            fromBookInfo: context.fromBookInfo,
             result: result,
             response: response,
           ),
@@ -1088,6 +1092,10 @@ final class RuleEngine {
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
         book: context.book,
+        src: context.src,
+        chapter: context.chapter,
+        nextChapterUrl: context.nextChapterUrl,
+        fromBookInfo: context.fromBookInfo,
       ),
     );
 

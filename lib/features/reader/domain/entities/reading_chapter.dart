@@ -18,5 +18,20 @@ abstract class ReadingChapter with _$ReadingChapter {
 
     /// The absolute chapter URL.
     required String url,
+
+    /// Whether the source marked the chapter VIP-only (`chapter.isVip`, M25/S3b).
+    ///
+    /// The reader itself only needs the title and the address, but the content stage's rules read
+    /// the chapter as `chapter.*` upstream, so the flags have to reach the adapter that builds them.
+    @Default(false) bool isVip,
+
+    /// Whether the source marked the chapter as bought (`chapter.isPay`).
+    @Default(false) bool isPay,
+
+    /// Whether this entry is a volume heading rather than a chapter (`chapter.isVolume`).
+    @Default(false) bool isVolume,
+
+    /// The display-only update time the source had, or `null`.
+    String? updateTime,
   }) = _ReadingChapter;
 }

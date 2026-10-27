@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -414,6 +415,44 @@ void main() {
 
         expect(bridge.jobs.single.bookName, '示例书');
         expect(bridge.jobs.single.chapterTitle, '第一章');
+      },
+    );
+
+    test(
+      'execute_givenAChapterWithNeighbours_feedsTheChapterBindings',
+      () async {
+        // M25/S3b：正文阶段的 `chapter` / `nextChapterUrl` 是目录给出的，规则靠它们拼下一页。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_chapterUrl, '<div id="content">正文。</div>');
+        final FakeJsBridge bridge = FakeJsBridge()..result = '正文';
+
+        _data(
+          await FetchContent(
+            pages: _service(http, bridge),
+            cache: FakeContentCache(),
+          ).execute(
+            _jsContentSource(),
+            const ChapterRequest(
+              url: _chapterUrl,
+              title: '第一章',
+              bookName: '示例书',
+              nextChapterUrl: 'https://example-novel.test/book/1/2.html',
+              isVip: true,
+              isPay: true,
+              updateTime: '2026-10-26',
+            ),
+          ),
+        );
+
+        final JsJob job = bridge.jobs.single;
+        expect(job.chapter?.title, '第一章');
+        expect(job.chapter?.url, _chapterUrl);
+        expect(job.chapter?.isVip, isTrue);
+        expect(job.chapter?.isPay, isTrue);
+        expect(job.chapter?.updateTime, '2026-10-26');
+        expect(job.nextChapterUrl, 'https://example-novel.test/book/1/2.html');
+        // 正文页的正文就是 `src`（上游 `AnalyzeRule.evalJS` 的 `content`）。
+        expect(job.src, '<div id="content">正文。</div>');
       },
     );
 

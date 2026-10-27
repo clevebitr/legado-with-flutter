@@ -7,6 +7,7 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
+import 'package:flutter_reader/core/js/source_info_map.dart';
 import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
@@ -14,6 +15,7 @@ import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/platform/external_url_opener.dart';
 import 'package:flutter_reader/core/platform/user_messages.dart';
 import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
@@ -49,6 +51,9 @@ void main() {
   late SourceVariableStore sourceVariables;
   // 登录头（`source.putLoginHeader`，M25/S3b）：也走「快照下发 + 写回写穿」这条路。
   late SourceLoginHeaderStore loginHeaders;
+  // `infoMap`（M25/S3b）与 `java.openUrl` 的端口。
+  late SourceInfoMapStore infoMaps;
+  late _ProbeExternalUrlOpener opener;
   late _CollectingMessages messages;
 
   setUp(() {
@@ -58,6 +63,8 @@ void main() {
     // 真实存储的读写在 `source_variable_dao_test` 里；探针只需要「值能存、能取回」。
     sourceVariables = SourceVariableStore();
     loginHeaders = SourceLoginHeaderStore();
+    infoMaps = SourceInfoMapStore();
+    opener = _ProbeExternalUrlOpener();
     messages = _CollectingMessages();
     bridge = QuickJsWorkerBridge(
       logger: AppLogger(level: LogLevel.debug, printer: printer),
@@ -67,6 +74,9 @@ void main() {
       cookies: cookies,
       sourceVariables: sourceVariables,
       loginHeaders: loginHeaders,
+      infoMaps: infoMaps,
+      externalUrlOpener: opener,
+      androidId: 'probe-install-id',
       userMessages: messages,
     );
   });
@@ -1445,6 +1455,94 @@ void main() {
     );
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('jsBridge_whenTheStageBindsAPage_seesSrcChapterAndNeighbours', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3b：`src` / `chapter` / `nextChapterUrl` / `fromBookInfo` 都随 job 下来。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "src + '|' + chapter.title + '|' + chapter.url + '|' + "
+            "chapter.isVip + '|' + nextChapterUrl + '|' + fromBookInfo + '|' + "
+            "chapter.getVariable('stage')",
+        src: '<html>page</html>',
+        chapter: const JsChapterInfo(
+          title: '第一章',
+          url: 'https://js.test/1',
+          isVip: true,
+        ),
+        nextChapterUrl: 'https://js.test/2',
+        fromBookInfo: true,
+        variables: const <String, String>{'stage': 'detail'},
+      ),
+    );
+
+    expect(
+      _value(result),
+      '<html>page</html>|第一章|https://js.test/1|true|https://js.test/2|'
+      'true|detail',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheInfoMapIsWritten_isThereForTheNextJob', (
+    WidgetTester tester,
+  ) async {
+    // 上游给每条规则的是**同一个** `infoMap` 对象：写进去的值下一次探索还看得见。
+    await bridge.evaluate(
+      _job(script: 'infoMap.kind = "玄幻"; infoMap["page"] = 2; "ok"'),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "infoMap.kind + '|' + infoMap.page + '|' + typeof infoMap.save",
+      ),
+    );
+
+    expect(_value(result), '玄幻|2|function');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenConnectAndAjaxAllAreUsed_answersResponses', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3b：`connect` 答响应对象（失败也答），`ajaxAll` 答响应数组（一页失败整次抛错）。
+    http.body = '<html>page</html>';
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            'var one = java.connect("https://js.test/1"); '
+            'var many = java.ajaxAll(["https://js.test/2", "https://js.test/3"]); '
+            "one.body + '|' + one.code() + '|' + many.length + '|' + "
+            'many[0].body',
+      ),
+    );
+
+    expect(_value(result), '<html>page</html>|200|2|<html>page</html>');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenOpenUrlIsCalled_reachesThePort', (
+    WidgetTester tester,
+  ) async {
+    // `java.openUrl` 是单向事件：宿主弹确认框、开浏览器，规则不等它。
+    await bridge.evaluate(
+      _job(script: "java.openUrl('https://js.test/book/1'); 'ok'"),
+    );
+    await pumpEventQueue();
+
+    expect(opener.opened.single.$1, 'https://js.test/book/1');
+    expect(opener.opened.single.$2, '示例书源');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenAndroidIdIsRead_answersTheHostValue', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'java.androidId()'),
+    );
+
+    expect(_value(result), 'probe-install-id');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('jsBridge_whenFormattingTitles_runsOncePerChapterInOneScope', (
     WidgetTester tester,
   ) async {
@@ -1546,6 +1644,10 @@ JsJob _job({
   required String script,
   Map<String, String>? sourceHeaders,
   Map<String, String> variables = const <String, String>{},
+  String? src,
+  JsChapterInfo? chapter,
+  String? nextChapterUrl,
+  bool fromBookInfo = false,
   Map<String, String> sourceVariables = const <String, String>{},
   String? jsLib,
   JsSourceInfo source = const JsSourceInfo(
@@ -1571,6 +1673,10 @@ JsJob _job({
   bookName: bookName,
   chapterTitle: chapterTitle,
   book: book,
+  src: src,
+  chapter: chapter,
+  nextChapterUrl: nextChapterUrl,
+  fromBookInfo: fromBookInfo,
 );
 
 /// A `tocRule.formatJs` job: one script, one chapter list, one scope (ADR-0078 S2).
@@ -1750,6 +1856,19 @@ final class _ProbeHttpClient implements HttpClient {
       url: 'https://js.test/',
     ),
   );
+}
+
+/// Records what `java.openUrl` asked to open (the real port shows a dialog + the browser).
+final class _ProbeExternalUrlOpener implements ExternalUrlOpener {
+  /// Every `(url, sourceName)` the bridge handed over, in order.
+  final List<(String, String)> opened = <(String, String)>[];
+
+  @override
+  Future<bool> open(String url, {String sourceName = ''}) async {
+    opened.add((url, sourceName));
+
+    return true;
+  }
 }
 
 /// Collects `java.toast` messages; the real port shows a snack bar.

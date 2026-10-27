@@ -672,6 +672,93 @@ void main() {
     });
   });
 
+  group('PageFetchService stage bindings', () {
+    test('fetchRule_givenAPage_carriesTheBodyAsSrc', () async {
+      // M25/S3b：`src` 是这一页的正文（上游 `AnalyzeRule.evalJS` 的 `content`），元素级规则
+      // 与 `loginCheckJs` 读到的都是同一份。
+      final FakeJsBridge bridge = FakeJsBridge()..result = null;
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=x',
+          '<div class="result">ok</div>',
+        );
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/s?q={{key}}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{'key': 'x'},
+        context: _context(),
+        login: const SourceLoginGuard(checkScript: 'result'),
+      );
+
+      final JsJob job = bridge.jobs.singleWhere(
+        (JsJob job) => job.rulePath == 'loginCheckJs',
+      );
+      expect(job.src, '<div class="result">ok</div>');
+    });
+
+    test('fetchRule_givenAStageContext_keepsChapterAndBookInfo', () async {
+      // 阶段声明的上下文整份带到页面上（M25/S3b）：`chapter` / `nextChapterUrl` /
+      // `fromBookInfo` 在第二页与第一页一样，`src` 换成那一页的正文。
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+      const JsChapterInfo chapter = JsChapterInfo(
+        title: '第一章',
+        url: 'https://example-novel.test/1.html',
+        isVip: true,
+      );
+
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/1.html?v=2',
+          '<div class="content">正文</div>',
+        );
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/1.html?v=2',
+        rulePath: 'contentRule.nextContentUrl',
+        params: const <String, String>{},
+        context: const JsPageContext(
+          baseUrl: 'https://example-novel.test/1.html',
+          source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+          chapter: chapter,
+          nextChapterUrl: 'https://example-novel.test/2.html',
+          fromBookInfo: true,
+        ),
+        login: const SourceLoginGuard(checkScript: 'result'),
+      );
+
+      final JsJob job = bridge.jobs.singleWhere(
+        (JsJob job) => job.rulePath == 'loginCheckJs',
+      );
+      expect(fetched, isA<ParseSuccess<FetchedPage>>());
+      expect(job.chapter?.title, '第一章');
+      expect(job.chapter?.isVip, isTrue);
+      expect(job.nextChapterUrl, 'https://example-novel.test/2.html');
+      expect(job.fromBookInfo, isTrue);
+      expect(job.src, isNotNull);
+    });
+  });
+
   group('PageFetchService headersOf', () {
     test('headersOf_givenAStaticObject_answersItUnchanged', () async {
       final ({PageFetchService pages, FakeLogPrinter printer}) service =

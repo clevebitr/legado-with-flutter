@@ -55,34 +55,52 @@ Future<ParseResult<List<ReadingChapter>>> readerChapters(
 Future<ParseResult<String>> readerContent(
   Ref ref,
   (ReaderBook, String) request,
-) => ref
-    .watch(readerChapterContentProvider)
-    .fetch(
-      sourceUrl: request.$1.sourceUrl,
-      chapterUrl: request.$2,
-      bookName: request.$1.name,
-      // 章节名来自目录：阅读器手里就有，顺手喂给 `java.get('title')`。
-      chapterTitle: _chapterTitleOf(ref, request.$1, request.$2),
-      bookUrl: request.$1.bookUrl,
-      tocUrl: request.$1.tocUrl,
-    );
+) {
+  // 目录里这一章与下一章：`java.get('title')`、`chapter` 与 `nextChapterUrl` 三个绑定都从这里来
+  // （M25/S3b），目录还没加载时全部按「不知道」传（上游在列表到达前也是这个状态）。
+  final _ChapterPosition? position = _positionOf(ref, request.$1, request.$2);
 
-/// The title the chapter list gave [chapterUrl], or empty when the list has not loaded yet.
-String _chapterTitleOf(Ref ref, ReaderBook book, String chapterUrl) {
+  return ref
+      .watch(readerChapterContentProvider)
+      .fetch(
+        sourceUrl: request.$1.sourceUrl,
+        chapterUrl: request.$2,
+        bookName: request.$1.name,
+        chapterTitle: position?.chapter.title ?? '',
+        bookUrl: request.$1.bookUrl,
+        tocUrl: request.$1.tocUrl,
+        nextChapterUrl: position?.nextUrl ?? '',
+        isVip: position?.chapter.isVip ?? false,
+        isPay: position?.chapter.isPay ?? false,
+        isVolume: position?.chapter.isVolume ?? false,
+        updateTime: position?.chapter.updateTime,
+      );
+}
+
+/// One chapter's place in the table of contents: the chapter itself plus the next chapter's URL.
+typedef _ChapterPosition = ({ReadingChapter chapter, String nextUrl});
+
+/// Where [chapterUrl] sits in [book]'s chapter list, or `null` while the list has not loaded.
+_ChapterPosition? _positionOf(Ref ref, ReaderBook book, String chapterUrl) {
   final ParseResult<List<ReadingChapter>>? loaded = ref
       .read(readerChaptersProvider(book))
       .value;
   if (loaded is! ParseSuccess<List<ReadingChapter>>) {
-    return '';
+    return null;
   }
+  final List<ReadingChapter> chapters = loaded.data;
+  for (var index = 0; index < chapters.length; index++) {
+    if (chapters[index].url == chapterUrl) {
+      // 卷标题不是可读章节，但它后面的那一章就是「下一章」——按列表顺序取紧邻的下一条。
+      final String nextUrl = index + 1 < chapters.length
+          ? chapters[index + 1].url
+          : '';
 
-  for (final ReadingChapter chapter in loaded.data) {
-    if (chapter.url == chapterUrl) {
-      return chapter.title;
+      return (chapter: chapters[index], nextUrl: nextUrl);
     }
   }
 
-  return '';
+  return null;
 }
 
 /// The chapter index the session is on, or `null` while it is loading.

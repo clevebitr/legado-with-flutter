@@ -737,6 +737,14 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `source.getKey()` / `source.getTag()` | `String` | 源身份：`getKey()` = `bookSourceUrl`（= `source.url`），`getTag()` = `bookSourceName`（= `source.name`）；纯读取，不过通道 | M25/S3b |
 | `source.getLoginHeader()` | `String?` | 登录头 JSON（上游存在 `CacheManager` 的 `loginHeader_<url>`）；本仓存 `book_sources.login_header` 列，随 job 下传。**没有值时是 `null`**（`getVariable` 才是空串） | M25/S3b |
 | `source.putLoginHeader(header)` | `void` | 写入登录头并**立即写穿**：同一 job 内读回新值，job 结束后下一个阶段的请求自动带上它（§2 的请求头合并），其中的 `Cookie` 同时并进 Cookie 宗 | M25/S3b |
+| `src` | `String?` | **当前页正文**（上游 `AnalyzeRule.evalJS` 绑的 `content`）：整页规则与元素级规则读到同一份；没有页面的 job（URL 规则、`header` 规则）是 `null` | M25/S3b |
+| `chapter` | 对象 \| `null` | 正在读的这一章：`title` / `url` / `isVip` / `isPay` / `isVolume` / `updateTime` + `getVariable(k)` / `putVariable(k,v)`（与 `book` 一样落**规则变量表**，差异见下）。搜索 / 详情 / 目录阶段是 `null`；`tocRule.formatJs` 的循环里逐章重绑 | M25/S3b |
+| `nextChapterUrl` | `String?` | 目录里这一章**后面**那条地址；阅读器还没加载目录时是 `null` | M25/S3b |
+| `fromBookInfo` | `bool` | 这一串规则是不是从**详情阶段**跑起来的（上游 `isFromBookInfo`）；别处恒为 `false` | M25/S3b |
+| `infoMap` | 可变对象 | 每源**一张小表**（上游 `InfoMap`，缓存键 `infoMap_<url>`）：直接写属性即可，`save()` / `saveNow()` / `get()` / `set(v)` 都在，值在本会话内跨规则可见。差异：**不落盘**（与 `cache.*` 同一裁决） | M25/S3b |
+| `java.connect(url[, header])` | 响应对象 | 与 `ajax` 同一条同步通道，但**答响应对象**，且**失败也是答案**（上游 `runCatching` 后把错误正文塞进响应）。差异：失败正文是可读的 kind 名（`connect failed (…)`），不是 Java 堆栈 | M25/S3b |
+| `java.ajaxAll(urlList[, skipRateLimit])` | 响应对象数组 | 并发取多页，**任一页失败整次调用抛错**（上游 `mapAsync` 不吞异常）。差异：`skipRateLimit` 收下但**不绕过**单源预算（§8） | M25/S3b |
+| `java.openUrl(url[, mimeType])` | `void` | 单向事件：宿主弹**确认弹窗**，用户同意后才交给系统浏览器。地址超过 64 K 字符即拒绝（上游同一道门） | M25/S3b |
 | `java.startBrowser(url, title[, html])` | `void` | 打开**可见 WebView**让用户过人机验证；不等结果（ADR-0068 §决策 5） | M21a |
 | `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])` | `Promise<{url, body}>` | 同上但等用户按「完成」，成功后按需用新 cookie 重取；**本仓返回 Promise，规则里要 `await`**（上游是同步，差异见注记）。同一个 `op+url` 在一个 job 里只问一次：重放的那一趟直接拿到上次的答案（ADR-0076 §决策 4） | M21a / M24 |
 | `java.getVerificationCode(imageUrl)` | `Promise<String>` | 图片验证码对话框，返回用户输入的字符串；**需 `await`**。答案同样按 `op+url` 记忆，重放不重复弹窗 | M21a / M24 |
@@ -811,7 +819,7 @@ java.replaceFont(result, errorFont, correctFont);
 | `htmlFormat(str)` | 上游 `HtmlFormatter.formatKeepImg`：标签 → 段落、只留 `<img src>`（含 `,{…}` 选项）、统一段首缩进 | ✅ M25/S3b |
 | `t2s(str)` / `s2t(str)` | 繁简互转，最长匹配；码表见下方注记 | ✅ M25/S3b |
 | `getWebViewUA()` | 随 job 下发的 UA 常量（与请求默认 UA 同一出处） | ✅ M25/S3b |
-| `androidId()` | 随 job 下发的安装 id；宿主没有时答空串（**与上游 Android ID 语义不同**，见注记） | ⏳ M25/S3b（端口待接） |
+| `androidId()` | 本仓自己生成并持久化的安装 id（v4 UUID，`main()` 在第一帧之前 hydrate）；宿主没 hydrate 时答空串（**不是** Android ID，见注记） | ✅ M25/S3b |
 | `cache.put/get/getInt/getLong/getDouble/putMemory/getFromMemory/delete/deleteMemory` | **内存 LRU**（容量 + 单值长度上限，随 worker 存亡）；上游是「内存 + 持久表」两层 | ✅ M25/S3b（差异见注记） |
 | `base64Encode(str)` / `base64Decode(str)` | = `crypto.base64Encode` / `crypto.base64Decode`；前者对齐上游 flags = 2（`Base64.NO_WRAP`），非法输入抛错 | ✅ 已落地（M1-b1b） |
 | `encodeURI(str)` | **Java `URLEncoder.encode(str, "UTF-8")`**：空格 → `+`，保留 `A-Za-z0-9` 与 `-_.*`，其余 UTF-8 字节 `%XX` 大写——**不是** JS 的 `encodeURI`（上游 `JsExtensions.kt:683-689`） | ✅ 已落地（M1-b1b） |
@@ -917,10 +925,10 @@ java.replaceFont(result, errorFont, correctFont);
 3. **`toURL().origin` 按意图实现**：上游那一行把整个 URL 又插进了 `host:` 与端口之间
    （`"${protocol}://$host:${mUrl}:${mUrl.port}"`，`JsURL.kt:22-25`），带端口的源会拿到
    `https://a.test:https://a.test/p:8443` 这种值。本仓答 `scheme://host[:port]`。
-4. **`androidId()` 不是 Android ID**：上游取 `Settings.Secure.ANDROID_ID`，本仓没有这个标识，装配根
-   下发一个**每次安装稳定**的 id（同样 16 位十六进制）；宿主没提供时答空串而不是 `undefined`。
-   `java.openUrl` / `java.connect` / `java.ajaxAll` 仍在 S3b 的剩余部分（全局 `chapter` / `src` /
-   `nextChapterUrl` / `fromBookInfo` / `infoMap` / `speakText` 绑定同理）。
+4. **`androidId()` 不是 Android ID**：上游取 `Settings.Secure.ANDROID_ID`；本仓没有这个标识，改在首次
+   启动时生成一个 **v4 UUID** 存进轻量开关（`InstallId`），重启不变、卸载才换。宿主没 hydrate 过时答
+   空串而不是 `undefined`。差异：格式不是 16 位十六进制，**依赖 Android 格式做解析的规则不适用**；
+   只要「一个稳定 id」的规则照常工作。
 
 **登录头（M25/S3b，上游 `BaseSource.getLoginHeader` / `putLoginHeader`）：** 登录脚本换来的 token 写在
 这里，之后**每个阶段的请求都自动带上**：`headersOf` 把它合并**在源自己的 `header` 之上**（上游
@@ -936,6 +944,20 @@ map。四条要知道的：
 4. **两条与上游不同的地方**：`source.removeLoginHeader()` **未绑定**（上游没标 `@JavascriptInterface`，
    登出是 UI 的事，本仓不出登出入口）；规则内调用 `source.login()` **具名拒绝**——登录脚本由登录页跑
    （`SignIn`，同一段 `loginUrl` 脚本），规则里重入 worker 会死锁。
+
+**阶段上下文绑定（M25/S3b，`src` / `chapter` / `nextChapterUrl` / `fromBookInfo` / `infoMap`）：**
+这五条都是**阶段事实**，由造 job 的那一层填，规则只读。四条要知道的：
+
+1. **`chapter` 的变量是规则变量。** 上游把 `chapter.putVariable` 写进章自己的 map；本仓与 `book` 同口径
+   落规则变量表（`java.get` / `java.put` 的同一张），差异与 `book` 的那条一起登记。
+2. **`infoMap` 只在会话里。** 上游的值落在 `CacheManager`（`infoMap_<url>`，可选 `saveTime`），重启后还在；
+   本仓按 `cache.*` 的同一裁决只做内存（容量按源 LRU 32 个），`save()` / `saveNow()` 保留为空操作，
+   免得规则报 `not a function`。触发条件：出现「探索 token 要跨启动保留」的真实源。
+3. **`speakText` / `speakSpeed` 不绑定。** 它们只由上游的 **HttpTTS 源**提供（另一张源表 + 自己的一套
+   朗读规则），本仓只有系统 TTS，没有那条链路 → 规则里读它们会得到 `ReferenceError` 而不是一个恒为空的
+   值（有意差异，触发 = 引入 HttpTTS 朗读引擎）。
+4. **`src` 是 job 开始时的正文。** `java.setContent(html)` 之后同一个 job 里的 `src` 不变（它已经是
+   快照），下一页/下一条规则才看到新正文——上游每次 `evalJS` 重新绑 `content`，效果相同。
 
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
 `eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。
@@ -1278,11 +1300,15 @@ Cookie 合并）**已实现**。两条仍与上游不同：① 登录**信息**�
 - **`java.*` 的具名拒绝族（ADR-0037 §决策 5；形态与实现档位见 §6 的兼容面表）：**
   其中 `get` / `put` 不在拒绝族里——§6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**
   读写（ADR-0034），名字被占用，上游那套同步返回 body 的 `get(url)` 因此仍无可用拼写。
-  **重放层落地后仍拒绝的：** `ajaxAll` / `connect`（上游同步返回响应对象，只要整表的规则才需要）、
-  `webViewGetElements`（本仓没有元素列表形态的渲染接口）、`downloadFile` / `cacheFile` / `importScript`
-  （沙箱禁忌或需要平台能力）、`htmlFormat` / `refreshBookUrl`（零散）——命中即抛**可读错误**，
-  不得落到 `undefined is not a function`。多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)`）
+  **仍拒绝的：** `webViewGetElements`（本仓没有元素列表形态的渲染接口）、`downloadFile` / `cacheFile` /
+  `importScript`（沙箱禁忌或需要平台能力）——命中即抛**可读错误**，不得落到
+  `undefined is not a function`。多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)`）
   同样具名拒绝：本仓没有 flags / charset 语义。
+  **已随 M25/S3b 落地、不再拒绝：** `java.connect` / `java.ajaxAll` / `java.openUrl` / `java.androidId`，
+  以及阶段上下文绑定 `src` / `chapter` / `nextChapterUrl` / `fromBookInfo` / `infoMap`（语义见 §6）。
+  **M25/S3b 登记的两条有意差异：** `speakText` / `speakSpeed` 只由上游的 **HttpTTS 源**提供，本仓没有那条
+  链路，所以**不绑定**（触发 = 引入 HttpTTS 朗读引擎）；`java.androidId()` 答的是本仓自己生成并持久化的
+  UUID，而不是 Android 的 16 位十六进制 id。
   **已随 M24 落地、不再拒绝：** `java.ajax` / `java.post` / `java.head` / `java.getCookie` / `java.setContent` /
   `java.toast` / `java.longToast` / `cookie.*` / `source.getVariable`（语义见 §6）。
   **已随 M25/S3a 落地、不再拒绝：** `java.md5Encode16` / `base64DecodeToByteArray` / `hexDecodeToByteArray` /

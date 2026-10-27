@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Rules see the page, the chapter and the platform (ADR-0078 S3b, M25)
+
+The last slice of S3b. The sandbox now carries the bindings upstream's `AnalyzeRule` / `AnalyzeUrl` set up,
+and the `java.*` family that needs the platform:
+
+- **`src`** is the page body a rule was read on (the same text for a whole-page rule, an element rule and
+  `loginCheckJs`); **`chapter`** is the chapter being read (`title` / `url` / `isVip` / `isPay` / `isVolume` /
+  `updateTime` + `getVariable` / `putVariable`); **`nextChapterUrl`** is the address after it in the TOC;
+  **`fromBookInfo`** marks rules reached from the detail stage. All four ride on `JsPageContext`, so a paged
+  walk carries them to page 2 as well.
+- **`infoMap`** is the per-source scratch map explore rules use to remember a token across category loads. It
+  is a mutable object (`save()` / `saveNow()` / `get()` / `set()`), shared for the session like `cache.*` —
+  no database row, registered as the difference.
+- **`java.connect`** answers a response object and **swallows** a failure into its body (upstream's
+  `runCatching`), while **`java.ajaxAll`** fetches every address and fails the call if any of them does
+  (upstream's `mapAsync`). Both replay like the rest of the synchronous family; `skipRateLimit` is accepted
+  but never bypasses the per-source budget.
+- **`java.openUrl`** shows a confirmation dialog and then hands the address to the system browser — the one
+  new dependency (`url_launcher`, BSD-3) and the only place it is used, behind a `core/platform` port.
+- **`java.androidId`** answers a generated v4 UUID persisted on first launch (upstream returns Android's
+  `ANDROID_ID`; the format difference is registered).
+- **`speakText` / `speakSpeed` stay unbound**: they only exist for upstream's HttpTTS sources, which this app
+  does not have. A rule that reads them fails loudly instead of seeing a permanently empty value.
+
 ### A source can save and use its login header (ADR-0078 S3b, M25)
 
 `source.getLoginHeader()` / `source.putLoginHeader(header)` and `source.getKey()` / `source.getTag()`

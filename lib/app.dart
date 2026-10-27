@@ -13,6 +13,7 @@ import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
 import 'package:flutter_reader/core/network/persistent_cookie_manager.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
+import 'package:flutter_reader/core/platform/external_url_opener.dart';
 import 'package:flutter_reader/core/platform/in_app_web_view_page_fetcher.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
@@ -94,6 +95,7 @@ import 'package:flutter_reader/features/shell/presentation/shell_route.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// The composition root's provider overrides (ADR-0041 §决策 2, ADR-0042).
 ///
@@ -153,6 +155,10 @@ List<Override> appProviderOverrides() => <Override>[
   // `java.toast` / `java.longToast` 要贴到界面上（ADR-0076 §决策 1）：`core/` 不认识 widget，
   // 所以由装配根把它绑成一个 snack bar。规则永远不等这条消息。
   userMessagesProvider.overrideWith((Ref ref) => const _RootUserMessages()),
+  // `java.openUrl` 要真的开浏览器（M25/S3b）：确认弹窗在 UI 层，`core/` 只认端口。
+  externalUrlOpenerProvider.overrideWith(
+    (Ref ref) => const _RootExternalUrlOpener(),
+  ),
 ];
 
 /// `PurgeRuleSource` bound to the rules feature, which owns the table (ADR-0070 §决策 3).
@@ -220,6 +226,64 @@ final class _RestoreHook implements RestoreCompletionHook {
   void onRestored() {
     _ref.invalidate(settingsProvider);
     _ref.invalidate(readerSettingsProvider);
+  }
+}
+
+/// `ExternalUrlOpener` bound to a confirmation dialog plus the platform browser.
+///
+/// Upstream's `java.openUrl` starts a confirmation screen before anything is opened
+/// (`JsExtensions.kt:1162-1185`), and a book source must not be able to launch anything behind the
+/// user's back — so the address is shown in full, and only 「打开」 reaches `url_launcher`.
+///
+/// The dialog is shown through [appNavigatorKey] because the request arrives from a plain object
+/// (the JS bridge) that has no `BuildContext`; that is the same reason the verification page is
+/// pushed from there (ADR-0068 §决策 3).
+final class _RootExternalUrlOpener implements ExternalUrlOpener {
+  const _RootExternalUrlOpener();
+
+  @override
+  Future<bool> open(String url, {String sourceName = ''}) async {
+    final BuildContext? context = appNavigatorKey.currentContext;
+    if (context == null) {
+      return false;
+    }
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext dialogContext) => AlertDialog(
+            title: Text(l10n.externalLinkTitle),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (sourceName.isNotEmpty)
+                  Text(l10n.externalLinkFrom(sourceName)),
+                const SizedBox(height: 8),
+                // 地址可能很长：可选可复制，不折行看不出内容时用户还能拿走它。
+                SelectableText(url),
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(l10n.externalLinkCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: Text(l10n.externalLinkOpen),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) {
+      return false;
+    }
+    final Uri? uri = Uri.tryParse(url);
+
+    return uri != null &&
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }
 
@@ -1040,7 +1104,15 @@ extension on _ChapterListSource {
 
     return <ReadingChapter>[
       for (var index = 0; index < chapters.length; index++)
-        ReadingChapter(title: titles[index], url: chapters[index].url),
+        ReadingChapter(
+          title: titles[index],
+          url: chapters[index].url,
+          // 阅读端自己不用它们，但正文阶段的 `chapter` 绑定要用（M25/S3b）。
+          isVip: chapters[index].isVip,
+          isPay: chapters[index].isPay,
+          isVolume: chapters[index].isVolume,
+          updateTime: chapters[index].updateTime,
+        ),
     ];
   }
 }
@@ -1062,6 +1134,11 @@ final class _ChapterContentSource implements ChapterContentProvider {
     String chapterTitle = '',
     String bookUrl = '',
     String tocUrl = '',
+    String nextChapterUrl = '',
+    bool isVip = false,
+    bool isPay = false,
+    bool isVolume = false,
+    String? updateTime,
   }) async {
     final BookSource? source = await _sourceByUrl(_ref, sourceUrl);
     if (source == null) {
@@ -1083,6 +1160,11 @@ final class _ChapterContentSource implements ChapterContentProvider {
             bookName: bookName,
             bookUrl: bookUrl,
             tocUrl: tocUrl,
+            nextChapterUrl: nextChapterUrl,
+            isVip: isVip,
+            isPay: isPay,
+            isVolume: isVolume,
+            updateTime: updateTime,
           ),
         );
 

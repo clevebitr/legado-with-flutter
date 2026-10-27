@@ -288,3 +288,48 @@ reviewImg、只有图时保留目录名、`replaceRegex` 看得到副文、二�
 `build_runner build` 后生成物无漂移。真引擎探针新增 4 条（`getKey`/`getTag`、无值答 `null`、写入跨 job
 并合并 Cookie、`source.login()` 落到 `js:error`）：**65 例在 Windows 与 Android 模拟器双端全绿**；
 `integration_test/on_disk_database_test.dart` 6 例在 Windows 全绿（v13 建库路径）。
+
+## 实现注记（2026-10-26，S3b 第三组：全局绑定 D2 + 平台族）
+
+用户裁决（2026-10-26）：这一轮把 S3b 收尾——**两块都做**（D2 全局绑定 + 平台族），`java.openUrl` 引
+`url_launcher` 并自己做确认弹窗，`infoMap` 一并实现；`speakText` / `speakSpeed` 只能由上游的 **HttpTTS
+源**（另一张源表 + 自己的朗读规则）提供，本仓只有系统 TTS，因此**不绑定**并登记为有意差异（触发 = 引入
+HttpTTS 朗读引擎）。
+
+1. **阶段上下文只有一个模板。** `src` / `chapter` / `nextChapterUrl` / `fromBookInfo` 都是「这一阶段发生
+   的事」，所以它们住在 `JsPageContext`，由 `forPage` 原样带到每一页（只换 URL / 页码 / 请求头 / 正文）。
+   造 job 的两个地方（`evaluateJs`、`_runScript`）因此只多了一组 `context.*` 透传；翻页的第 2 页与第 1 页
+   看到的东西一样，这是 `walk` 改调 `fetch(context: …)` 换来的。
+2. **`src` 由页面自己填。** `_pageOf` 拿到解码后的正文时才建 context，所以 `src` 在整页规则、元素级规则
+   与 `loginCheckJs` 上都是同一份；`java.setContent` 之后同一 job 内不变（上游每次 `evalJS` 重新绑
+   `content`，等价）。
+3. **`chapter` 的变量落规则变量表。** 上游 `chapter.putVariable` 写章自己的 map；本仓与 `book` 同一口径
+   （`__sandboxChapter` 的 get/put 走 `java.get/put`），差异登记在 `book-source.md` §6。阅读端为此把
+   `isVip` / `isPay` / `isVolume` / `updateTime` 带进了 `ReadingChapter`（它原本「只留标题与地址」是为了
+   C-ARCH-2 的最小化；内容阶段的 `chapter` 绑定需要这几个值），`nextChapterUrl` 由 `readerContent` 从目录里
+   取紧邻的下一条。
+4. **`infoMap` 是「键是源、值是表」的内存 store。** 上游给规则的是同一个 `InfoMap` 对象（缓存键
+   `infoMap_<url>`，`save()` 才落 `CacheManager`）。本仓把它做成 `SourceInfoMapStore`（按源的 LRU，32 个源）：
+   桥把快照塞进信封，worker 在 job 结束时**再求值一次**把 `JSON.stringify(infoMap)` 读回来（规则可能
+   await、也可能抛错，两种情况下这张表都得带回宿主），桥合并进 store。`save()` / `saveNow()` 保留为空操作
+   ——本仓没有 `Cache` 表，值本来就在会话里；差异与触发条件写在 `book-source.md` §6。
+5. **`connect` 吞失败、`ajaxAll` 不吞。** 这是上游的现成语义（`runCatching` vs `mapAsync`），不是我们的
+   取舍：`connect` 失败时答一个 `code() == 0`、正文写着 `connect failed (field): kind` 的响应（差异：
+   上游塞的是 Java 堆栈），`ajaxAll` 任一页失败即整次调用抛错。两者都走重放层，`ajaxAll` 的缓存键带整张
+   地址表；`skipRateLimit` 收下但**不绕过**单源预算（C-NET-6）。
+6. **`androidId` 是「首启生成 + 持久化」的 UUID。** 上游用 `Settings.Secure.ANDROID_ID`；本仓没有这个标识，
+   在 `main()` 里 hydrate（与 Cookie 宗同一时点，ADR-0068 §决策 4）并写进轻量开关。桥把值补进 job 载荷
+   （与登录头同理：这是主机事实，不是 job 的产物）。差异：格式不同，依赖 Android 格式的规则不适用。
+7. **`openUrl` 是唯一需要新依赖的绑定。** 上游先起一个确认页再开浏览器（`JsExtensions.kt:1162-1185`）；
+   本仓用 `core/platform/external_url_opener.dart` 端口 + 装配根的确认弹窗（`appNavigatorKey` 拿到
+   `BuildContext`），最后一步才交给 `url_launcher`（BSD-3-Clause）。`core/` 依旧不认识 widget，`url_launcher`
+   只出现在 `app.dart` 的实现里；许可证复扫 210 包 Risky none（`NOTICE.md` §5）。
+
+验证：`test/core/js/source_info_map_test.dart` 7 例、`test/core/platform/install_id_test.dart` 6 例、
+`js_sync_call_test` 新增 3 例（`connect` / `ajaxAll` 的解码与缓存键）、`js_bindings_test` 新增 4 例
+（`openUrl` 信封）、`js_bridge_test` 新增 11 例（安装 id 注入、`infoMap` 快照/回写/坏值、
+`connect` 成功与失败、`ajaxAll` 全成/一败、`openUrl` 两例）、`page_fetch_service_test` 新增 2 例
+（`src` 与阶段上下文的传播）、`fetch_content_test`/`fetch_book_info_test` 各 1 例；全量 `flutter test`
+**2565 例全过**，`check_coverage` exit 0，`build_runner` 后生成物无漂移。真引擎探针新增 5 条（阶段绑定一次
+跑完、`infoMap` 跨 job、`connect`+`ajaxAll`、`openUrl` 到端口、`androidId`）：**70 例在 Windows 与 Android
+模拟器双端全绿**。

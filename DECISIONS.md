@@ -784,3 +784,23 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 4. 设备级探针里日志的 error message 是脱敏的（error=<String: N chars, sha256=…>），断言「错误可读」只能看形状（rulePath = field:js:error）+ 日志前缀，不能 contains 脚本抛出的那句话。
 
 验证：format 0；analyze 0 issue；flutter test 2530 例全过；check_coverage exit 0（core 98.89 / domain 98.66 / data 95.68）；build_runner 后生成物无漂移（190 个 g.dart 无变化，仅新增 provider/表列相关）；真引擎探针 65 例在 Windows 与 Android 模拟器双端全绿（新增 4 条：getKey/getTag、无值答 null、写入跨 job 并合并 Cookie、source.login() 落 js:error）；integration_test/on_disk_database_test.dart 6 例在 Windows 全绿。
+
+## 2026-10-27 — M25/S3b 第三组落地：全局绑定 D2 + 平台族（S3b 收尾）
+
+用户裁决（2026-10-26）：S3b 收尾，**两块都做**（D2 全局绑定 + 平台族）；`java.openUrl` 引 url_launcher 并自己做确认弹窗；`infoMap` 一并实现；`speakText`/`speakSpeed` 不做（见下）。
+
+落地形态（行为面归 book-source.md §6/§11，为什么归 ADR-0078 §实现注记 S3b 第三组，台账归 engine-parity.md §5 D）：
+- **阶段绑定**住在 JsPageContext：`src`（这一页的正文，`_pageOf` 填）、`chapter`（JsChapterInfo，正文阶段由目录给）、`nextChapterUrl`（目录里紧邻的下一条）、`fromBookInfo`（详情阶段置 true）。新增 `forPage` 让整份上下文随翻页传播，`walk` 改调 fetch(context:) 后第 2 页与第 1 页看到的东西一致。
+- **`infoMap`** 是 per-source 的内存 store（LRU 32 源）：桥塞快照进信封，worker 在 job 结束后**再求值一次**读回 `JSON.stringify(infoMap)`（规则可能 await 或抛错，两条路径都要带回），桥合并。`save()`/`saveNow()` 是空操作（没有 Cache 表；值本来就在会话里）。
+- **`connect` 吞失败、`ajaxAll` 不吞**（上游 runCatching vs mapAsync 的现成语义）；二者走重放层，ajaxAll 的缓存键带整张地址表；`skipRateLimit` 收下但不绕过单源预算。
+- **`androidId`** 是首启生成、写进轻量开关的 v4 UUID，`main()` 在 runApp 之前 hydrate（与 Cookie 宗同一时点）；桥把值补进 job 载荷。
+- **`openUrl`** 走新端口 `ExternalUrlOpener` + 装配根确认弹窗（appNavigatorKey 拿 context），最后一步才用 `url_launcher`（BSD-3，新依赖）；地址超过 64 K 拒绝（上游同一道门）。
+- **`speakText`/`speakSpeed` 不绑定**：只由上游 HttpTTS 源表提供，本仓只有系统 TTS → 有意差异，触发 = 引入 HttpTTS 朗读引擎；规则里读到它们是 ReferenceError，而不是一个恒为空的假值。
+
+踩坑（值得记的四条）：
+1. `PreferenceStore` 是 final class，测试没法 implements；`InstallId` 因此改成吃小端口 `InstallIdStore`（`PreferenceInstallIdStore` 是唯一生产实现），既能测「写失败也只留 warning」，也让 core/platform 不直接 import core/storage。
+2. `sendMessage('openUrl', …)` 必须在 worker 的 `runtime.onMessage` 注册过（M24 已经踩过一次）：这次与 toast 同一形状（`_notify` 单向转发）。
+3. 读 `infoMap` 不能靠规则作用域回传（Promise / 抛错两条路径会漏），用**独立的第二次求值**读 `JSON.stringify(infoMap)`，代价是一次极小的 eval。
+4. 设备级探针里断言「错误可读」只能看形状：日志 message 是脱敏的（`error=<String: N chars, sha256=…>`），所以断言 rulePath 形状而不是错误文本（上一轮已记过一次，这轮又验证了一遍）。
+
+验证：format 0；analyze 0 issue；flutter test 2565 例全过；check_coverage exit 0；build_runner 无漂移；`dart run tool/scan_licenses.dart` 210 包 Risky none（新增 url_launcher BSD-3）；真引擎探针 70 例在 Windows 与 Android 模拟器双端全绿（新增 5 条）；`on_disk_database_test` 未受影响。

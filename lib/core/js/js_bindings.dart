@@ -41,6 +41,12 @@ const String jsParseBinding = 'parse';
 /// travels to the bridge under the same name, which fetches once and lets the script start over.
 const String jsSyncBinding = 'sync';
 
+/// The binding name of `java.openUrl`.
+///
+/// One-way like [jsToastBinding]: upstream starts a confirmation screen and returns immediately, and
+/// a rule never waits for the user to answer.
+const String jsOpenUrlBinding = 'openUrl';
+
 /// The binding name of `java.toast` / `java.longToast`.
 ///
 /// A one-way channel: the rule never reads anything back, so nothing here can suspend it.
@@ -873,6 +879,49 @@ String applyJsSourceCall(
       return '{"ok":false}';
   }
 }
+
+/// One `java.openUrl` call.
+final class JsOpenUrlRequest {
+  /// Creates an open-url request.
+  const JsOpenUrlRequest({required this.url, this.mimeType});
+
+  /// The address the rule wants the user to open.
+  final String url;
+
+  /// The MIME type the rule declared, when it declared one.
+  final String? mimeType;
+}
+
+/// Reads one `java.openUrl` call's arguments, or `null` when they are unusable.
+///
+/// The arguments are JSON: `{url, mimeType}`. An address longer than [maxJsOpenUrlLength] is
+/// refused the way upstream refuses it (`require(url.length < 64 * 1024)`) instead of being shown in
+/// a dialog nobody can read.
+JsOpenUrlRequest? decodeJsOpenUrlRequest(Object? args) {
+  final Map<String, Object?>? call = _jsonObjectOf(args);
+  if (call == null) {
+    return null;
+  }
+  final Object? url = call['url'];
+  final Object? mimeType = call['mimeType'];
+  if (url is! String || mimeType is! String?) {
+    return null;
+  }
+  final String text = url.trim();
+  if (text.isEmpty || text.length > maxJsOpenUrlLength) {
+    return null;
+  }
+
+  return JsOpenUrlRequest(
+    url: text,
+    mimeType: mimeType == null || mimeType.trim().isEmpty
+        ? null
+        : mimeType.trim(),
+  );
+}
+
+/// Longest address `java.openUrl` accepts, matching upstream's own guard.
+const int maxJsOpenUrlLength = 64 * 1024;
 
 /// One `java.toast` / `java.longToast` call.
 final class JsToastRequest {
