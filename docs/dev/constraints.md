@@ -205,7 +205,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-SEC-1 | 禁止硬编码 API Key、Token、密码；必须经安全存储或 `--dart-define` 注入。 |
 | C-SEC-2 | 所有网络请求必须使用 HTTPS；明文 HTTP 仅在用户显式允许时可用，且必须隔离为独立设置项。 |
 | C-SEC-3 | 书源 JS 必须在沙箱中执行，仅暴露白名单 API（C-SRC-3）。 |
-| C-SEC-4 | 日志与崩溃上报禁止包含 Cookie、Token、请求头与页面正文。 |
+| C-SEC-4 | 日志与崩溃上报**不记录**请求头（`Cookie` / `Authorization`）与页面正文（调用方不得把它们交给日志）；其余内容（URL、搜索关键词、异常原文）**原样记录、不脱敏**（ADR-0082）。 |
 | C-SEC-5 | 导入外部书源 JSON 必须校验结构并限制文件体积；禁止一次性读入超大文件。 |
 
 ---
@@ -278,7 +278,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 - [ ] 通用能力放入 `core/`，未跨 feature import 内部文件（C-ARCH-2）？
 - [ ] 状态管理为 Riverpod 且 Provider 全部由 `@riverpod` 生成（C-STATE-1/2）？
 - [ ] 失败路径返回 `ParseResult`，未裸 `catch`，未吞异常（C-ERR-1/2/3）？
-- [ ] 未使用 `print`；日志未泄露 Cookie / Token / 正文（C-ERR-5、C-SEC-4）？
+- [ ] 未使用 `print`；日志没有把请求头（`Cookie` / `Authorization`）或页面正文交出去（C-ERR-5、C-SEC-4、ADR-0082）？
 - [ ] 跨 `await` 使用 `context` 前检查了 `mounted`（C-ERR-4）？
 - [ ] 网络请求经 `core/network/HttpClient`，未直接 import `dio`/`http`（C-NET-1）？
 - [ ] 编码经 `betto_charset_detector` 检测；缓存带 TTL 与稳定缓存键（C-NET-3/6）？

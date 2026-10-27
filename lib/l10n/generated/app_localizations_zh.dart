@@ -1953,4 +1953,59 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get externalLinkCancel => '取消';
+
+  @override
+  String get settingsLogLevel => '日志等级';
+
+  @override
+  String get settingsLogLevelHint => '低于该等级的记录不写入。切换立即生效。';
+
+  @override
+  String get settingsLogDebug => '调试';
+
+  @override
+  String get settingsLogInfo => '信息';
+
+  @override
+  String get settingsLogWarning => '警告';
+
+  @override
+  String get settingsLogError => '错误';
+
+  @override
+  String get settingsLogOff => '关闭';
+
+  @override
+  String get settingsDiagnostics => '诊断';
+
+  @override
+  String get settingsLogFiles => '日志文件';
+
+  @override
+  String get settingsLogFilesBody => '保留 7 天，总大小不超过 20 MB。';
+
+  @override
+  String get logFilesTitle => '日志文件';
+
+  @override
+  String get logFilesEmpty => '还没有日志文件。';
+
+  @override
+  String get logFilesClear => '清空全部日志';
+
+  @override
+  String logFilesCleared(int count) {
+    return '已删除 $count 个文件。';
+  }
+
+  @override
+  String get logFilesCopyPath => '复制目录路径';
+
+  @override
+  String get logFilesCopied => '路径已复制。';
+
+  @override
+  String logFilesTotal(String size) {
+    return '合计：$size';
+  }
 }

@@ -4,7 +4,7 @@ import 'dart:typed_data' show BytesBuilder, Uint8List;
 import 'package:dio/dio.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/logging/error_text.dart';
 import 'package:flutter_reader/core/network/charset_cache.dart';
 import 'package:flutter_reader/core/network/charset_decoder.dart';
 import 'package:flutter_reader/core/network/concurrent_rate.dart';
@@ -387,7 +387,7 @@ final class DioHttpClient implements HttpClient {
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
       // 畸形 URL 与不支持的 scheme 在这里拒绝，免得 dio 的异常落到解码分支。
       _logger.warning(
-        'Unsupported request URL rejected: rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
+        'Unsupported request URL rejected: rule=$rulePath url=$url',
       );
 
       return failure(ParseFailureKind.networkFailed, null);
@@ -395,7 +395,7 @@ final class DioHttpClient implements HttpClient {
     if (uri.scheme == 'http' && !_policy.allowPlainHttp) {
       // 明文 HTTP 需用户显式开启；失败分类里没有策略桶，用 networkFailed 承载。
       _logger.warning(
-        'Plaintext HTTP rejected by policy: rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
+        'Plaintext HTTP rejected by policy: rule=$rulePath url=$url',
       );
 
       return failure(ParseFailureKind.networkFailed, null);
@@ -461,7 +461,7 @@ final class DioHttpClient implements HttpClient {
       _logger.warning(
         'Request failed for rule=$rulePath '
         'type=${error.type.name} status=${error.response?.statusCode} '
-        'url=${redactUrl(url, keyword: keyword)}',
+        'url=$url',
         describeError(error),
         stackTrace,
       );
@@ -479,9 +479,7 @@ final class DioHttpClient implements HttpClient {
     final ParseFailureKind? statusKind = _failureKindForStatus(status);
 
     if (statusKind != null) {
-      _logger.warning(
-        'HTTP $status for rule=$rulePath url=${redactUrl(url, keyword: keyword)}',
-      );
+      _logger.warning('HTTP $status for rule=$rulePath url=$url');
       await _discard(responseBody);
 
       return ParseFailure<_RawResponse>(kind: statusKind, rulePath: rulePath);
@@ -493,7 +491,7 @@ final class DioHttpClient implements HttpClient {
     } on BodyTooLargeException catch (error, stackTrace) {
       _logger.warning(
         'Response body passed the caller limit: rule=$rulePath '
-        'limit=${error.limitBytes} url=${redactUrl(url, keyword: keyword)}',
+        'limit=${error.limitBytes} url=$url',
         describeError(error),
         stackTrace,
       );
@@ -510,7 +508,7 @@ final class DioHttpClient implements HttpClient {
           : ParseFailureKind.networkFailed;
       _logger.warning(
         'Response body could not be read: rule=$rulePath kind=${kind.name} '
-        'url=${redactUrl(url, keyword: keyword)}',
+        'url=$url',
         describeError(error),
         stackTrace,
       );
@@ -579,7 +577,7 @@ final class DioHttpClient implements HttpClient {
           'Declared charset ${decoded.charset} carried illegal bytes; '
           '${decoded.malformedByteCount} malformed byte replacement(s) inserted: '
           'rule=$rulePath source=${sourceId ?? 'unknown'} '
-          'url=${redactUrl(url, keyword: keyword)}',
+          'url=$url',
         );
       }
 
@@ -595,7 +593,7 @@ final class DioHttpClient implements HttpClient {
       // 嗅探车道解码失败必须显式报错，不能静默替换成乱码。
       _logger.warning(
         'Body decoding failed for rule=$rulePath source=${sourceId ?? 'unknown'} '
-        'url=${redactUrl(url, keyword: keyword)}',
+        'url=$url',
         describeError(error),
         stackTrace,
       );

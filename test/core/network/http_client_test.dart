@@ -472,9 +472,10 @@ void main() {
         ParseFailureKind.networkFailed,
       );
       expect(fixture.adapter.requests, isEmpty);
+      // 日志不脱敏（ADR-0082）：拒掉的地址原样记，才看得出哪里写错了。
       expect(
         fixture.printer.events.single.message,
-        contains('<unparsable-url>'),
+        contains('url=http://[bad'),
       );
     });
 
@@ -503,7 +504,7 @@ void main() {
         ParseFailureKind.networkFailed,
       );
       expect(fixture.adapter.requests, isEmpty);
-      expect(fixture.printer.events.single.message, contains('token=***'));
+      expect(fixture.printer.events.single.message, contains('token=abc123'));
     });
 
     test('get_whenPlainHttpIsAllowed_sendsTheRequest', () async {
@@ -632,12 +633,15 @@ void main() {
 
       final Object? loggedError = fixture.printer.events.single.error;
 
+      // 异常文本原样落库：定位坏源要靠那句 Dio 报错本身（这条桩只答 "request cancelled"）。
       expect(loggedError, isA<String>());
-      expect(loggedError, isNot(contains('example.com')));
-      expect(fixture.printer.events.single.message, contains('token=***'));
+      expect(loggedError, contains('request cancelled'));
+      expect(fixture.printer.events.single.message, contains('token=abc123'));
     });
 
-    test('get_whenSearchUrlFails_keepsTheKeywordOutOfTheLog', () async {
+    test('get_whenSearchUrlFails_logsTheUrlAndTheKeyword', () async {
+      // 日志不脱敏之后，关键词也在里面：搜索失败最常见的原因就是关键词被站点重定向，
+      // 看不到它等于少了一半线索（ADR-0082）。
       final _Fixture fixture = _buildClient();
       fixture.adapter.enqueueFailure(DioExceptionType.cancel);
 
@@ -647,7 +651,7 @@ void main() {
         keyword: 'hello',
       );
 
-      expect(fixture.printer.events.single.message, isNot(contains('hello')));
+      expect(fixture.printer.events.single.message, contains('/search/hello'));
     });
 
     test('get_givenMoreRequestsThanTheSourcesBudget_queuesTheExcess', () async {

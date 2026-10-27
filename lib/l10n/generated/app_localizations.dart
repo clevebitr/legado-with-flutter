@@ -3677,6 +3677,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get externalLinkCancel;
+
+  /// Log verbosity setting (ADR-0082).
+  ///
+  /// In en, this message translates to:
+  /// **'Log level'**
+  String get settingsLogLevel;
+
+  /// No description provided for @settingsLogLevelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Records below this level are dropped. Applies immediately.'**
+  String get settingsLogLevelHint;
+
+  /// No description provided for @settingsLogDebug.
+  ///
+  /// In en, this message translates to:
+  /// **'debug'**
+  String get settingsLogDebug;
+
+  /// No description provided for @settingsLogInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'info'**
+  String get settingsLogInfo;
+
+  /// No description provided for @settingsLogWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'warning'**
+  String get settingsLogWarning;
+
+  /// No description provided for @settingsLogError.
+  ///
+  /// In en, this message translates to:
+  /// **'error'**
+  String get settingsLogError;
+
+  /// No description provided for @settingsLogOff.
+  ///
+  /// In en, this message translates to:
+  /// **'off'**
+  String get settingsLogOff;
+
+  /// No description provided for @settingsDiagnostics.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics'**
+  String get settingsDiagnostics;
+
+  /// No description provided for @settingsLogFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Log files'**
+  String get settingsLogFiles;
+
+  /// No description provided for @settingsLogFilesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Kept for 7 days, at most 20 MB in total.'**
+  String get settingsLogFilesBody;
+
+  /// No description provided for @logFilesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Log files'**
+  String get logFilesTitle;
+
+  /// No description provided for @logFilesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No log file yet.'**
+  String get logFilesEmpty;
+
+  /// No description provided for @logFilesClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear every log file'**
+  String get logFilesClear;
+
+  /// No description provided for @logFilesCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted {count} file(s).'**
+  String logFilesCleared(int count);
+
+  /// No description provided for @logFilesCopyPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy the folder path'**
+  String get logFilesCopyPath;
+
+  /// No description provided for @logFilesCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Path copied.'**
+  String get logFilesCopied;
+
+  /// No description provided for @logFilesTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total: {size}'**
+  String logFilesTotal(String size);
 }
 
 class _AppLocalizationsDelegate

@@ -1,6 +1,6 @@
 import 'package:flutter_reader/core/js/js_helpers.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/logging/error_text.dart';
 import 'package:flutter_reader/core/storage/preference_store.dart';
 
 // 私有字段不能做具名初始化形参（Dart 限制），手写赋值是必要的。
@@ -77,7 +77,7 @@ final class InstallId {
       await store.write(generated);
     } on Exception catch (error, stackTrace) {
       _logger?.warning(
-        'Could not persist the install id: key=${redactUrl(preferenceKey)}',
+        'Could not persist the install id: key=$preferenceKey',
         describeError(error),
         stackTrace,
       );

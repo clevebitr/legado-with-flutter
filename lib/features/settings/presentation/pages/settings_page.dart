@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_theme_mode.dart';
 import 'package:flutter_reader/features/settings/presentation/notifiers/settings_notifier.dart';
+import 'package:flutter_reader/features/settings/presentation/pages/log_files_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -116,6 +118,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ref.read(settingsProvider.notifier).setAllowPlainHttp(allow),
         ),
       ),
+      _heading(l10n.settingsDiagnostics, tokens),
+      _logLevel(ref, settings, tokens, l10n),
+      ListTile(
+        leading: const Icon(Icons.description_outlined),
+        title: Text(l10n.settingsLogFiles),
+        subtitle: Text(l10n.settingsLogFilesBody),
+        onTap: () => unawaited(
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (BuildContext context) => const LogFilesPage(),
+            ),
+          ),
+        ),
+      ),
       _heading(l10n.settingsCache, tokens),
       ListTile(
         leading: const Icon(Icons.cleaning_services_outlined),
@@ -124,6 +140,41 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         onTap: () => unawaited(_clearCache(context, ref, l10n)),
       ),
     ],
+  );
+
+  /// Builds the log-level selector (`ADR-0082`): the change applies to the running app at once.
+  Widget _logLevel(
+    WidgetRef ref,
+    AppSettings settings,
+    M3ETheme tokens,
+    AppLocalizations l10n,
+  ) => Padding(
+    padding: EdgeInsets.symmetric(horizontal: tokens.spacing.lg),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        DropdownButton<LogLevel>(
+          value: settings.logLevel,
+          isExpanded: true,
+          items: <DropdownMenuItem<LogLevel>>[
+            for (final LogLevel level in LogLevel.values)
+              DropdownMenuItem<LogLevel>(
+                value: level,
+                child: Text(logLevelLabel(level, l10n)),
+              ),
+          ],
+          onChanged: (LogLevel? level) {
+            if (level != null) {
+              unawaited(ref.read(settingsProvider.notifier).setLogLevel(level));
+            }
+          },
+        ),
+        Text(
+          l10n.settingsLogLevelHint,
+          style: tokens.typography.base.bodySmall,
+        ),
+      ],
+    ),
   );
 
   /// Builds a section heading.

@@ -595,5 +595,22 @@
   "externalLinkTitle": "打开这个地址？",
   "externalLinkFrom": "{source} 想在浏览器里打开这个地址：",
   "externalLinkOpen": "打开",
-  "externalLinkCancel": "取消"
+  "externalLinkCancel": "取消",
+  "settingsLogLevel": "日志等级",
+  "settingsLogLevelHint": "低于该等级的记录不写入。切换立即生效。",
+  "settingsLogDebug": "调试",
+  "settingsLogInfo": "信息",
+  "settingsLogWarning": "警告",
+  "settingsLogError": "错误",
+  "settingsLogOff": "关闭",
+  "settingsDiagnostics": "诊断",
+  "settingsLogFiles": "日志文件",
+  "settingsLogFilesBody": "保留 7 天，总大小不超过 20 MB。",
+  "logFilesTitle": "日志文件",
+  "logFilesEmpty": "还没有日志文件。",
+  "logFilesClear": "清空全部日志",
+  "logFilesCleared": "已删除 {count} 个文件。",
+  "logFilesCopyPath": "复制目录路径",
+  "logFilesCopied": "路径已复制。",
+  "logFilesTotal": "合计：{size}"
 }

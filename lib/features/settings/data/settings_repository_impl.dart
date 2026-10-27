@@ -1,3 +1,4 @@
+import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/request_limiter.dart';
 import 'package:flutter_reader/core/storage/preference_store.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
@@ -25,6 +26,9 @@ const String _seedColorKey = 'settings.seedColor';
 /// `shared_preferences` key of the theme background file name (`ADR-0075` §决策 1).
 const String _backgroundImageKey = 'settings.backgroundImage';
 
+/// `shared_preferences` key of the log level (`ADR-0082`).
+const String _logLevelKey = 'settings.logLevel';
+
 /// [SettingsRepository] on top of [PreferenceStore] (`docs/dev/roadmap.md` 5.6, C-NET-9).
 ///
 /// Every read is defensive: a value written by an older build, a hand-edited store or a wrong
@@ -46,6 +50,7 @@ final class SettingsRepositoryImpl implements SettingsRepository {
     final String? storedBackgroundImage = _store.readString(
       _backgroundImageKey,
     );
+    final String? storedLogLevel = _store.readString(_logLevelKey);
 
     return AppSettings(
       themeMode: storedTheme == null
@@ -57,6 +62,9 @@ final class SettingsRepositoryImpl implements SettingsRepository {
       allowPlainHttp: storedPlainHttp ?? false,
       seedColor: storedSeedColor,
       backgroundImageName: storedBackgroundImage,
+      logLevel: storedLogLevel == null
+          ? defaultLogLevel
+          : LogLevel.parse(storedLogLevel),
     );
   }
 
@@ -67,6 +75,7 @@ final class SettingsRepositoryImpl implements SettingsRepository {
     await _store.writeDouble(_fontScaleKey, settings.fontScale);
     await _store.writeInt(_concurrencyKey, settings.maxConcurrentPerSource);
     await _store.writeBool(_plainHttpKey, settings.allowPlainHttp);
+    await _store.writeString(_logLevelKey, settings.logLevel.name);
     if (settings.seedColor case final int seed) {
       await _store.writeInt(_seedColorKey, seed);
     } else {

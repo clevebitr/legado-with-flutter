@@ -2814,5 +2814,39 @@
   "externalLinkCancel": "Cancel",
   "@externalLinkCancel": {
     "@description": "确认弹窗的取消按钮"
+  },
+  "settingsLogLevel": "Log level",
+  "settingsLogLevelHint": "Records below this level are dropped. Applies immediately.",
+  "settingsLogDebug": "debug",
+  "settingsLogInfo": "info",
+  "settingsLogWarning": "warning",
+  "settingsLogError": "error",
+  "settingsLogOff": "off",
+  "settingsDiagnostics": "Diagnostics",
+  "settingsLogFiles": "Log files",
+  "settingsLogFilesBody": "Kept for 7 days, at most 20 MB in total.",
+  "logFilesTitle": "Log files",
+  "logFilesEmpty": "No log file yet.",
+  "logFilesClear": "Clear every log file",
+  "logFilesCleared": "Deleted {count} file(s).",
+  "logFilesCopyPath": "Copy the folder path",
+  "logFilesCopied": "Path copied.",
+  "logFilesTotal": "Total: {size}",
+  "@settingsLogLevel": {
+    "description": "Log verbosity setting (ADR-0082)."
+  },
+  "@logFilesCleared": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@logFilesTotal": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
   }
 }

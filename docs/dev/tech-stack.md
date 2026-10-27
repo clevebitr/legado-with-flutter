@@ -213,7 +213,7 @@ m3e.spacing.md;
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |
 |---|---|---|---|---|
 | `logger` | `^2.8.0` | 日志实现；业务侧只允许通过 `core/logging` 使用 | MIT | C-ERR-5、C-SEC-4 |
-| `crypto` | `^3.0.7` | 日志脱敏摘要（SHA-256）与 `@js:` 的 `crypto.md5` / `sha1`；仅 `core/logging/redaction.dart` 与 `core/js/` 使用 | BSD-3-Clause | C-SEC-4、ADR-0006 §5 |
+| `crypto` | `^3.0.7` | `@js:` 的 `crypto.md5` / `sha1` / `HMac*` 与密钥族派生；仅 `core/js/` 使用（日志脱敏已随 ADR-0082 取消） | BSD-3-Clause | ADR-0078 S3a |
 | `pointycastle` | `^4.0.0` | `@js:` 沙箱的密钥类 crypto（`java.createSymmetricCrypto` 的 AES / DES / DESede × ECB / CBC × PKCS5 / NoPadding）；仅 `core/js/js_crypto.dart` 使用，纯 Dart | MIT | C-DEP-7、ADR-0078 §实现注记 |
 | `url_launcher` | `^6.3.2` | `java.openUrl` 的最后一步：用户确认后把地址交给系统浏览器；仅装配根的 `ExternalUrlOpener` 实现使用，其余层只见端口 | BSD-3-Clause | C-DEP-7、ADR-0078 §实现注记 |
 

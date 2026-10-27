@@ -2017,4 +2017,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get externalLinkCancel => 'Cancel';
+
+  @override
+  String get settingsLogLevel => 'Log level';
+
+  @override
+  String get settingsLogLevelHint =>
+      'Records below this level are dropped. Applies immediately.';
+
+  @override
+  String get settingsLogDebug => 'debug';
+
+  @override
+  String get settingsLogInfo => 'info';
+
+  @override
+  String get settingsLogWarning => 'warning';
+
+  @override
+  String get settingsLogError => 'error';
+
+  @override
+  String get settingsLogOff => 'off';
+
+  @override
+  String get settingsDiagnostics => 'Diagnostics';
+
+  @override
+  String get settingsLogFiles => 'Log files';
+
+  @override
+  String get settingsLogFilesBody => 'Kept for 7 days, at most 20 MB in total.';
+
+  @override
+  String get logFilesTitle => 'Log files';
+
+  @override
+  String get logFilesEmpty => 'No log file yet.';
+
+  @override
+  String get logFilesClear => 'Clear every log file';
+
+  @override
+  String logFilesCleared(int count) {
+    return 'Deleted $count file(s).';
+  }
+
+  @override
+  String get logFilesCopyPath => 'Copy the folder path';
+
+  @override
+  String get logFilesCopied => 'Path copied.';
+
+  @override
+  String logFilesTotal(String size) {
+    return 'Total: $size';
+  }
 }
