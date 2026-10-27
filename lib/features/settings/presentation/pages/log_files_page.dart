@@ -14,6 +14,12 @@ import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
 
+/// Lists the log files in [file]'s directory (`ADR-0082`).
+///
+/// A seam for widget tests: a real directory read runs in the test's fake-async zone and never
+/// completes, so tests hand in a fixed list instead of touching the disk.
+typedef LogFileLister = Future<List<LogFileInfo>> Function(LogFile file);
+
 /// Lists the on-disk log files and lets the user clear or share them (`ADR-0082`, `ADR-0083`).
 ///
 /// The page is the "management" half of file logging: without it the only way to reclaim the space
@@ -25,7 +31,12 @@ import 'package:m3e_design/m3e_design.dart';
 /// way out of that directory without a storage permission (ADR-0083).
 final class LogFilesPage extends ConsumerStatefulWidget {
   /// Creates the page.
-  const LogFilesPage({super.key});
+  ///
+  /// [listFiles] is a test seam; production leaves it `null` and reads the log directory.
+  const LogFilesPage({super.key, this.listFiles});
+
+  /// Replaces the real directory read when set (tests only).
+  final LogFileLister? listFiles;
 
   @override
   ConsumerState<LogFilesPage> createState() => _LogFilesPageState();
@@ -42,7 +53,9 @@ class _LogFilesPageState extends ConsumerState<LogFilesPage> {
     // 先等排队中的写入落盘，再看大小，否则刚写的一行会被算漏。
     await file.flush();
 
-    return file.list();
+    final LogFileLister? listFiles = widget.listFiles;
+
+    return listFiles == null ? file.list() : listFiles(file);
   }
 
   @override

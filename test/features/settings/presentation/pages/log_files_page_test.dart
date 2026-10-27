@@ -46,24 +46,17 @@ final class _RecordingFileSharer implements FileSharer {
 AppLocalizations _l10n(WidgetTester tester) =>
     AppLocalizations.of(tester.element(find.byType(LogFilesPage)));
 
-/// Creates a temporary log directory and writes one file into it.
-Future<Directory> _logsWithOneFile(WidgetTester tester) async {
-  final Directory directory = await tester.runAsync(
-    () => Directory.systemTemp.createTemp('log_files_page'),
-  ) as Directory;
-  addTearDown(() async {
-    await directory.delete(recursive: true);
-  });
-  await tester.runAsync(
-    () => File('${directory.path}/app-2026-10-27.log').writeAsString('line\n'),
-  );
-
-  return directory;
-}
+/// The one log file the page lists; the path is never read because [LogFilesPage.listFiles]
+/// replaces the directory scan.
+LogFileInfo _oneLog() => LogFileInfo(
+  file: File('/tmp/logs/app-2026-10-27.log'),
+  bytes: 5,
+  day: DateTime.utc(2026, 10, 27),
+);
 
 Future<_RecordingFileSharer> _pump(
   WidgetTester tester, {
-  required Directory directory,
+  required List<LogFileInfo> files,
   bool supported = true,
   ParseFailure<bool>? failure,
 }) async {
@@ -78,7 +71,9 @@ Future<_RecordingFileSharer> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        logFileProvider.overrideWithValue(LogFile(directory: directory)),
+        logFileProvider.overrideWithValue(
+          LogFile(directory: Directory('/tmp/logs')),
+        ),
         fileSharerProvider.overrideWithValue(sharer),
       ],
       child: MaterialApp(
@@ -86,13 +81,9 @@ Future<_RecordingFileSharer> _pump(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: buildReaderTheme(fallbackLightColorScheme()),
-        home: const LogFilesPage(),
+        home: LogFilesPage(listFiles: (LogFile file) async => files),
       ),
     ),
-  );
-  // 读目录与 flush 都是真实文件 IO：假时钟等不到它们。
-  await tester.runAsync(
-    () => Future<void>.delayed(const Duration(milliseconds: 50)),
   );
   await tester.pumpAndSettle();
 
@@ -103,10 +94,9 @@ void main() {
   testWidgets('page_givenOneFile_sharesEveryFileOnDisk', (
     WidgetTester tester,
   ) async {
-    final Directory directory = await _logsWithOneFile(tester);
     final _RecordingFileSharer sharer = await _pump(
       tester,
-      directory: directory,
+      files: <LogFileInfo>[_oneLog()],
     );
     final AppLocalizations l10n = _l10n(tester);
 
@@ -114,9 +104,6 @@ void main() {
     expect(find.text(l10n.logFilesShareAll), findsOneWidget);
 
     await tester.tap(find.text(l10n.logFilesShareAll));
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 20)),
-    );
     await tester.pumpAndSettle();
 
     expect(sharer.called, isTrue);
@@ -124,15 +111,14 @@ void main() {
     final ShareableFile file = sharer.shared.single;
     expect(file.name, 'app-2026-10-27.log');
     expect(file.mimeType, 'text/plain');
-    expect(file.path, '${directory.path}/app-2026-10-27.log');
+    expect(file.path, '/tmp/logs/app-2026-10-27.log');
     expect(file.bytes, isNull);
   });
 
   testWidgets('page_whenSharingFails_saysSo', (WidgetTester tester) async {
-    final Directory directory = await _logsWithOneFile(tester);
     await _pump(
       tester,
-      directory: directory,
+      files: <LogFileInfo>[_oneLog()],
       failure: const ParseFailure<bool>(
         kind: ParseFailureKind.parseFailed,
         rulePath: 'share',
@@ -141,9 +127,6 @@ void main() {
     final AppLocalizations l10n = _l10n(tester);
 
     await tester.tap(find.text(l10n.logFilesShareAll));
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 20)),
-    );
     await tester.pumpAndSettle();
 
     expect(find.text(l10n.logFilesShareFailed), findsOneWidget);
@@ -152,8 +135,7 @@ void main() {
   testWidgets('page_givenNoShareSheet_hidesEveryShareAction', (
     WidgetTester tester,
   ) async {
-    final Directory directory = await _logsWithOneFile(tester);
-    await _pump(tester, directory: directory, supported: false);
+    await _pump(tester, files: <LogFileInfo>[_oneLog()], supported: false);
     final AppLocalizations l10n = _l10n(tester);
 
     expect(find.text(l10n.logFilesShareAll), findsNothing);
@@ -163,13 +145,7 @@ void main() {
   testWidgets('page_givenNoLogFile_hidesTheShareAllEntry', (
     WidgetTester tester,
   ) async {
-    final Directory directory = await tester.runAsync(
-      () => Directory.systemTemp.createTemp('log_files_page_empty'),
-    ) as Directory;
-    addTearDown(() async {
-      await directory.delete(recursive: true);
-    });
-    await _pump(tester, directory: directory);
+    await _pump(tester, files: const <LogFileInfo>[]);
     final AppLocalizations l10n = _l10n(tester);
 
     expect(find.text(l10n.logFilesEmpty), findsOneWidget);
