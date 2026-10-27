@@ -804,3 +804,20 @@ G3 基准脚本冒烟（tool/bench，不进 CI）：P1/P2 的数字写进 engine
 4. 设备级探针里断言「错误可读」只能看形状：日志 message 是脱敏的（`error=<String: N chars, sha256=…>`），所以断言 rulePath 形状而不是错误文本（上一轮已记过一次，这轮又验证了一遍）。
 
 验证：format 0；analyze 0 issue；flutter test 2565 例全过；check_coverage exit 0；build_runner 无漂移；`dart run tool/scan_licenses.dart` 210 包 Risky none（新增 url_launcher BSD-3）；真引擎探针 70 例在 Windows 与 Android 模拟器双端全绿（新增 5 条）；`on_disk_database_test` 未受影响。
+
+## 2026-10-27 — M25/S4 落地：URL 方言五条 + 列表尾部 @js:
+
+用户裁决（2026-10-26）：S4 一轮做完，不拆半片。
+
+落地形态（行为面归 book-source.md §3 #7/#14 与 §4.3，为什么归 ADR-0078 §实现注记 S4，台账归 engine-parity.md §4 C5/C6）：
+- **URL 规则是链**（上游 `analyzeJs`）：`renderUrl` 先跑 `_expandUrlSegments`（字面段替换当前值、先把 `@result` 换成它；脚本收当前值作 `result`、返回值成为新值），再走 `{{…}}`，最后页码列表。顺带补齐「整条规则就是一个 `@js:`」的 URL——此前它会被当字面地址发出去。body 不做这一步（上游只对地址跑 analyzeJs）。
+- **页码列表** `<1,2,3>`：按请求页码取第 n 个、超出取末项（`page < size` 的上游判据）；页码来自 `JsPageContext.page`。
+- **GET query 全量编码**：声明 `charset` 时整条 query 按该编码转义，安全集**照抄两处**（判「已编码」用 `NetworkUtils.notNeedEncodingQuery`，真编码用 `AnalyzeUrl.encodeQueryParams`），空格因此是 `%20`；`escape` 方言未建模并登记。
+- **`+` 前缀**：先剥 `-` 再剥 `+`，两者都只是标记（`-+rule` 仍倒序）。
+- **列表尾部 `@js:`**：列表规则「任一段是 JS 段」即走段链解释器；脚本看到条目内容（`outerHtml`），不是 jsoup 元素（既有口径）。
+
+踩坑（两条）：
+1. **嵌套柜口必须显式**：第一版只放开顶层，`parse.getElements('class.count@js:result')` 直接无限递归（段链里的脚本再起 job，fake bridge 把 parse 请求重放给同一段链）→ 生产里是队列自锁，测试里是整文件 6 分钟挂死。现在嵌套的 `@js:` 仍报 `unsupported:@js:list`，并带字段前缀（与 `js:parse-scope` / `js:parse-recursion` 同形）。
+2. **`@js:` 贪婪吞到行尾**：想在脚本后再写字面段只能用 `<js>…</js>`；写测试时先按「拼接」理解会立刻失败——字面段是**替换**，只在 `@result` 处保留旧值。
+
+验证：format 0；analyze 0 issue；flutter test 2584 例全过；check_coverage exit 0；build_runner 无漂移；新增 17 例单测（url_template 9 / rule_engine 6 / page_fetch 2）+ 1 条改写（尾部 `@js:` 从「拒绝」改为「跑段链」）。S4 不需要新的沙箱绑定，真引擎探针仍是 70 例，未重跑双端（无绑定面变化）。

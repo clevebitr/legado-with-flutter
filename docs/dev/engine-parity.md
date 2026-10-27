@@ -93,11 +93,11 @@
 | #21 `@xpath:` 与裸 `//` | `AnalyzeByXPath.kt`、`AnalyzeRule.kt:623-638` | 显式拒绝（`:31-38`、`:2936`） | | **S5**（需引依赖 + ADR） |
 | #22 `@webJs`（规则级后台 WebView 脚本） | `AppPattern.WebJS_PATTERN`、`AnalyzeRule.kt:245/341/398/435` | 显式拒绝 `unsupported:@webjs` | | **S5**（复用 `WebPageFetcher`） |
 | #30 提取段嵌套规则（`class.a@css:.b`） | `AnalyzeByJSoup.kt:200-282` | 显式拒绝 `unsupported:nested-rule`（`:2746`） | | **S5** |
-| ⚠ 列表规则**尾部** `@js:`（`class.list@tag.li@js:result`） | `AnalyzeRule.kt:439`（任一段是 JS 段即可） | **部分**：只支持「整条规则 = JS」与 `<js>` 分段链；尾部形态报 `unsupported:@js:list`（`:2658-2665`，测试 `rule_engine_test.dart:3256`） | | **S4** |
-| ⚠ URL 页码列表 `<1,2,3>`（按页取第 n 个，超出取末值） | `AnalyzeUrl.kt:777`、`:203-213` | 无实现 | | **S4** |
-| ⚠ URL 段链 `@result`（字面段引用上一段脚本产出） | `AnalyzeUrl.kt:157-176` | 无实现（规则体内用 `{{result}}`） | | **S4** |
-| ⚠ GET query **全量**按 `charset` 编码 | `AnalyzeUrl.kt:268-273`、`:295-300` | 只编码 `{{key}}`（`url_template.dart`） | | **S4** |
-| ⚠ `+` 正序前缀（`bookList` / `chapterList`） | `BookList.kt:73-75`、`BookChapterList.kt:43-45` | 只剥 `-`（`:2562-2564`）→ `parseFailed` | | **S4** |
+| ✅ 列表规则**尾部** `@js:`（`class.list@tag.li@js:result`） | `AnalyzeRule.kt:435-440`（任一段是 JS 段即可） | **已对齐**（M25/S4）：只要列表规则**任一段**是 JS 段就走段链解释器，脚本拿到上一段的条目内容、返回值逐项成为条目。两条边界仍拒绝并留标记：**嵌套**的 `parse.getElements` 里的 `@js:` 报 `unsupported:@js:list`（再起一个 job 会排在发起它的 job 后面，ADR-0030），脚本看到的是条目**内容**（元素 `outerHtml`）而不是 jsoup 元素——`attr()` / `text()` 这类写法不成立（§6 的同一立场） | 待 M27 | 已对齐（差异见 `book-source.md` §3 #14） |
+| ✅ URL 页码列表 `<1,2,3>`（按页取第 n 个，超出取末值） | `AnalyzeUrl.kt:777`、`:203-213` | **已对齐**（M25/S4）：`renderPageList` 在 `{{…}}` 之后替换，页码来自请求（`JsPageContext.page`），超出取末项 | 待 M27 | 已对齐（`book-source.md` §4.3） |
+| ✅ URL 段链 `@result`（字面段引用上一段脚本产出） | `AnalyzeUrl.kt:157-176` | **已对齐**（M25/S4）：`renderUrl` 先跑 `analyzeJs` 的同一套链（字面段替换、`@result` 代入、脚本收 `result`），所以「整条规则就是一个 `@js:`」的 URL 也成立 | 待 M27 | 已对齐（`book-source.md` §4.3） |
+| ✅ GET query **全量**按 `charset` 编码 | `AnalyzeUrl.kt:268-273`、`:295-300` | **已对齐**（M25/S4）：声明 `charset` 时整条 query 按该编码转义（安全集照抄 `encodeQueryParams`，空格 `%20`），已经编码过的 query 原样保留。差异：`charset: "escape"` 方言未建模（地址原样发出） | 待 M27 | 已对齐（`book-source.md` §4.3） |
+| ✅ `+` 正序前缀（`bookList` / `chapterList`） | `BookList.kt:73-75`、`BookChapterList.kt:59-65` | **已对齐**（M25/S4）：先剥 `-` 再剥 `+`，两者都只是标记（`-+rule` 仍倒序） | 待 M27 | 已对齐（`book-source.md` §3 #7） |
 | HTML 实体反转义（`unescape` 默认 true） | `AnalyzeRule.getString/getStringList` | 不做；`getString(rule, true)` 具名拒绝 | | 有意差异（ADR-0037 §后果） |
 | `@css:` 的 jsoup 扩展伪类（`:containsOwn(a b)`、裸正则 `:matches(x)`） | jsoup `Selector` | cascadia `parseFailed`（响亮失败） | | 有意差异（矩阵 #12 注记） |
 | 页面是 JSON 时规则自动进 JSON 模式 | `AnalyzeRule.SourceRule.init`（`isJSON`） | 不自动切（ADR-0047 §决策 6） | | 有意差异（实测无增益） |
@@ -141,7 +141,7 @@
 | **S3b**（第一组 ✅） | 纯计算族 + `cache.*` | 已落地：`core/js/js_helpers.dart`（uuid/timeFormatUTC/toNumChapter/toURL/htmlFormat/t2s/s2t）、`core/js/zh_converter.dart` + `zh_tables.dart` + `assets/zh/*.txt`（OpenCC 码表）、`core/js/js_cache.dart`（内存 LRU）、前奏绑定 + 真引擎探针 5 条 | S3a（已闭环） |
 | **S3b**（第二组 ✅） | `source.*` 簇（源身份 + 登录头） | 已落地：`core/js/source_login_header.dart`（仓库 + 内存 store）、`book_sources.login_header`（v13）、`PageFetchService.headersOf` 的登录头合并、`CookieManager.mergeCookieHeader`、前奏 `source.getKey/getTag/getLoginHeader/putLoginHeader` + `source.login()` 具名拒绝、真引擎探针 4 条 | S3b 第一组（已闭环） |
 | **S3b**（第三组 ✅） | 全局绑定（D2）+ 平台族 | 已落地：`JsPageContext` 的 `src` / `chapter` / `nextChapterUrl` / `fromBookInfo` 与 `forPage` 传播、`SourceInfoMapStore`（`infoMap`）、`core/platform/install_id.dart`（`androidId`）、`js_sync_call` 的 `connect` / `ajaxAll`、`core/platform/external_url_opener.dart` + `url_launcher`（`openUrl`）、真引擎探针 5 条 | S3b 第二组（已闭环） |
-| **S4** | URL 方言五条 + 列表尾部 `@js:` | `url_rule.dart`、`rule_engine.dart` | — |
+| **S4** ✅ | URL 方言五条 + 列表尾部 `@js:` | 已落地：`url_template.dart` 的 `renderPageList` / `encodeUrlQuery`（安全集照抄上游两处）、`rule_engine.dart` 的 `_expandUrlSegments`（`@result` 链）与 `+` 前缀、列表规则「任一段是 JS」走段链、`page_fetch_service.dart` 的 GET query 全量编码 | — |
 | **S5** | 矩阵 #20/#21/#22/#30 | `rule_engine.dart`（+ 依赖） | M27 普查定序 |
 | **S6** | 非文本链路 + 正文 HTML 化 | `fetch_manga_pages`/新 usecase、`content_purifier`、阅读端 | S2 |
 | **S7** | 文档与拒绝清单收敛 + 门禁 G1/G2 | `book-source.md` §2/§3/§11、`test/` | S1–S6 |

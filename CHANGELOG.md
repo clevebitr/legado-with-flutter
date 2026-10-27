@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### URL rules speak upstream's full dialect (ADR-0078 S4, M25)
+
+Five dialects the engine used to reject or ignore, all of them plain rule-surface work:
+
+- **A URL rule is a chain**: literal pieces plus `@js:` / `<js>` scripts, where a script receives what the
+  chain produced so far and a literal replaces it (substituting `@result` first). A rule that is nothing but
+  a script therefore renders its value — `searchUrl: "@js:'https://a.test/s?q=' + key"` used to be sent as a
+  literal address.
+- **`<1,2,3>` page lists** pick the entry for the page being fetched, and the last entry past the end.
+- **A declared `charset` escapes the whole GET query**, not just `{{key}}` — GBK sites decode their
+  parameters correctly now. An already-encoded query is left alone; upstream's `escape` dialect is not
+  modelled and is registered as such.
+- **`+` is accepted as the explicit「ascending」prefix** (stripped like `-`), so a rule that says so no
+  longer fails.
+- **A list rule may end in `@js:`**: any JS segment routes the rule through the segment chain, so
+  `class.list@tag.li@js:…` works. The script sees each item's content (its `outerHtml`), not a DOM handle.
+
 ### Rules see the page, the chapter and the platform (ADR-0078 S3b, M25)
 
 The last slice of S3b. The sandbox now carries the bindings upstream's `AnalyzeRule` / `AnalyzeUrl` set up,

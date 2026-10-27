@@ -759,6 +759,71 @@ void main() {
     });
   });
 
+  group('PageFetchService URL dialect', () {
+    test('fetchRule_givenADeclaredCharset_encodesTheWholeQuery', () async {
+      // M25/S4：声明了 `charset` 的 GET 把整条 query 按该编码转义（上游 `analyzeQuery`），
+      // 不只是 `{{key}}`——GBK 站点的中文参数靠这一条才对得上。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=%BD%A3%C0%B4&p=2',
+          '<div>x</div>',
+        );
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge());
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: service.printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: service.printer),
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/s?q=剑来&p={{page}},{"charset":"gbk"}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{'page': '2'},
+        context: _context(),
+      );
+
+      expect(
+        http.requestedUrls.single,
+        'https://example-novel.test/s?q=%BD%A3%C0%B4&p=2',
+      );
+    });
+
+    test('fetchRule_givenAPageList_asksThePageEntry', () async {
+      // 页码列表 `<1,2,3>`：第 2 页请求第二个地址（上游 `pagePattern`）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve('https://example-novel.test/2.html', '<div>x</div>');
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/<1,2,3>.html',
+        rulePath: 'searchUrl',
+        params: const <String, String>{},
+        page: 2,
+        context: const JsPageContext(
+          baseUrl: 'https://example-novel.test/',
+          page: 2,
+          source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+        ),
+      );
+
+      expect(http.requestedUrls.single, 'https://example-novel.test/2.html');
+    });
+  });
+
   group('PageFetchService headersOf', () {
     test('headersOf_givenAStaticObject_answersItUnchanged', () async {
       final ({PageFetchService pages, FakeLogPrinter printer}) service =

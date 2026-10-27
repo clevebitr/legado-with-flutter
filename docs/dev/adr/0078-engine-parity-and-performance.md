@@ -333,3 +333,37 @@ HttpTTS 朗读引擎）。
 **2565 例全过**，`check_coverage` exit 0，`build_runner` 后生成物无漂移。真引擎探针新增 5 条（阶段绑定一次
 跑完、`infoMap` 跨 job、`connect`+`ajaxAll`、`openUrl` 到端口、`androidId`）：**70 例在 Windows 与 Android
 模拟器双端全绿**。
+
+## 实现注记（2026-10-26，S4：URL 方言五条 + 列表尾部 `@js:`）
+
+用户裁决（2026-10-26）：S4 一轮做完，不拆半片。
+
+1. **URL 规则其实是一条链（`analyzeJs`）。** 上游 `AnalyzeUrl.initUrl` 的次序是「JS 段 → `{{…}}` →
+   页码列表」，`renderUrl` 现在照抄：先跑 `_expandUrlSegments`，再做原来的 `{{…}}` 展开，最后由
+   `renderUrlTemplate` 收尾。链的语义是上游原样：**字面段替换**当前值并先把其中的 `@result` 换掉，脚本
+   收当前值作 `result`、返回值成为新值。这顺带把「整条规则就是一个 `@js:`」的 URL（真实语料常见写法）
+   补齐了——此前它会被当成字面地址发出去。**body 不做这一步**（`expandSegments: false`）：上游只对地址
+   跑 `analyzeJs`。
+2. **`@js:` 贪婪，链里要用 `<js>`。** `JS_PATTERN` 的 `@js:([\w\W]*)` 吞到规则尾部，所以「脚本之后再写
+   字面段」只能写 `<js>…</js>`。两份测试都按这个事实写，避免把语义误解成「拼接」。
+3. **页码列表在 `{{…}}` 之后。** `<1,2,3>` 按请求页码取第 n 个、超出取末项（`page < size` 的上游判据
+   让「正好等于长度」也落到末项）。页码来自 `JsPageContext.page`，所以 `walk` 的第 n 页天然对得上。
+4. **query 全量编码只在声明了 `charset` 时发生。** 安全集**照抄两处**而不是合并成一处：判「已编码」
+   用 `NetworkUtils.notNeedEncodingQuery`，真编码用 `AnalyzeUrl.encodeQueryParams`（多 `%`、`_`、`.`、
+   `-`、`~`）。空格因此是 `%20`（不是表单的 `+`）。`charset: "escape"` 是上游另一套方言，本仓没建模：
+   地址原样发出并在 `book-source.md` §4.3 登记。
+5. **列表规则的 JS 柜口分两层。** 顶层只在「任一段是 JS 段」时进段链解释器（`_selectAllSegments`）；
+   **嵌套**的 `parse.getElements` 仍拒 `@js:`，因为段链里的脚本要再起一个 job，而 worker 正在跑发起
+   这次嵌套的 job（ADR-0030 §决策 1/3）。这层差别写进了 `_jsListMarker` 的注释与 `_check` 的注释，
+   测试两边都钉住——第一版只改顶层，嵌套用例直接**无限递归**（fake bridge 把 parse 请求重放给同一
+   段链），说明这条边界必须显式。
+6. **脚本看到的是条目内容，不是元素。** 沙箱没有 DOM 句柄，段链里的 `result` 是元素的 `outerHtml`
+   字符串列表（§6 的既有口径），所以 `attr()` / `text()` 这类写法不成立；这是登录在
+   `book-source.md` §3 #14 的差异，不是新缺口。
+
+验证：`url_template_test` 新增 9 例（页码列表的页内/超界/无页、query 编码的 GBK / 空格 / 已编码 /
+无 charset / `escape`）、`rule_engine_test` 新增 6 例（脚本链、脚本后的字面段、整条规则脚本、页码列表、
+`+` 前缀、`-+` 仍倒序）与 1 条改写（尾部 `@js:` 现在跑段链）、`page_fetch_service_test` 新增 2 例
+（GET query 全量编码、页码列表选页）；全量 `flutter test` **2584 例全过**，`check_coverage` exit 0，
+`build_runner` 后生成物无漂移。真引擎探针未加新用例：S4 的五条都不需要新的沙箱绑定（链用的就是既有
+`evaluateJs`），设备级 70 例照旧双端全绿。

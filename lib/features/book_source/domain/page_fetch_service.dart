@@ -186,10 +186,13 @@ final class PageFetchService {
         'option=$ignored source=${sourceId ?? 'unknown'}',
       );
     }
-    final String url = resolveAbsoluteUrl(
-      renderedRule.template.trim(),
-      context.baseUrl,
-    );
+    // M25/S4：URL 规则声明了 `charset` 时，GET 的**整条 query** 按该编码转义（上游
+    // `analyzeQuery`；只编码 `{{key}}` 会让「GBK 站点的中文参数」在服务端解错）。已经编码过的
+    // query 原样保留，`escape` 方言不在此列（`book-source.md` §4.3）。
+    final String addressed = options.method == UrlRequestMethod.get
+        ? encodeUrlQuery(renderedRule.template.trim(), options.charset)
+        : renderedRule.template.trim();
+    final String url = resolveAbsoluteUrl(addressed, context.baseUrl);
 
     final Map<String, String> requestHeaders = <String, String>{
       ...?headers,

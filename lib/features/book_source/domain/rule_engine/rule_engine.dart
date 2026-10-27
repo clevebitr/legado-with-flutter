@@ -64,6 +64,17 @@ const String _putScanFlag = '@put:';
 /// The opening brace of matrix #19's legacy JSONPath rule.
 const String _jsonTemplateOpen = r'{$';
 
+/// The literal a URL-rule chain replaces with what it produced so far (`@result`, upstream
+/// `AnalyzeUrl.kt:166`).
+const String _urlChainVariable = '@result';
+
+/// The `rulePath` marker of a nested **list** rule that would need its own `@js:` job.
+///
+/// A nested list rule runs inside the job that asked for it, so a script segment there would have to
+/// queue behind its own caller (ADR-0030 §决策 1/3). The top-level form is fine — a list rule's own
+/// `@js:` is part of the same evaluation (matrix #14) — this marker is only for the nested shape.
+const String _jsListMarker = 'unsupported:@js:list';
+
 /// The URL variable that carries the search keyword (`book-source.md` §4).
 ///
 /// It is the one variable a URL rule escapes, and the one a JSON body must receive verbatim.
@@ -433,11 +444,13 @@ final class RuleEngine {
       return const ParseSuccess<List<RuleScope>>(<RuleScope>[]);
     }
 
-    // 矩阵 #14 / #31 的列表形态：`bookList` / `chapterList` 写成 JS（裸 `@js:` 或 `<js>`），
-    // 上游 `getElements` 的 `Mode.Js` 分支就是 `evalJS`，返回的数组逐项成为一个条目
-    // （`AnalyzeRule.kt:439`）。
-    if (_hasJsBlock(rule) ||
-        rule.trimLeft().toLowerCase().startsWith(_jsFlag)) {
+    // 矩阵 #14 / #31 的列表形态：**任一段**是 JS 段（`<js>` 或 `@js:`，包括
+    // `class.list@tag.li@js:result` 这种尾部写法）就走段链解释器——上游 `getElements` 的段循环
+    // 里，`Mode.Js` 分支同样是 `evalJS`，它的结果成为下一段的输入（`AnalyzeRule.kt:435-440`）。
+    //
+    // 脚本看到的是上一段的**条目内容**（元素的 `outerHtml`、JSON 值），不是 jsoup 元素：沙箱里
+    // 没有 DOM 句柄（§6），所以 `attr()` / `text()` 这类写法仍然不成立，差异登记在 §3。
+    if (_jsSegmentsOf(rule).any((_RuleSegment segment) => segment.isScript)) {
       return _selectAllSegments(rule, scope, rulePath: rulePath, depth: depth);
     }
 
@@ -1788,6 +1801,13 @@ final class RuleEngine {
   /// `book-source.md` §4.3) and only affects how `key` is escaped; [encodeKeyword] is `false`
   /// when the template is a **body** that must carry the keyword verbatim (a JSON payload,
   /// which upstream does not form-encode either).
+  ///
+  /// [expandSegments] runs upstream's `analyzeJs` first: a URL rule may be a **chain** of literal
+  /// text and `@js:` / `<js>` scripts, where a literal piece replaces `@result` with what the chain
+  /// produced so far and each script receives it as `result` (`AnalyzeUrl.kt:157-176`). A rule that
+  /// is nothing but a script therefore renders its value — the form a source writes as
+  /// `searchUrl: "@js:'https://a.test/s?q=' + key"`. A **body** keeps it off ([expandSegments]
+  /// `false`): upstream expands the address only.
   Future<ParseResult<String>> renderUrl(
     String template, {
     required String rulePath,
@@ -1795,30 +1815,46 @@ final class RuleEngine {
     required JsPageContext context,
     String? charset,
     bool encodeKeyword = true,
+    bool expandSegments = true,
   }) async {
+    String source = template;
+    if (expandSegments) {
+      final _Parsed<String> chained = await _expandUrlSegments(
+        template,
+        rulePath: rulePath,
+        context: context,
+      );
+      switch (chained) {
+        case _ParsedFailure<String>(:final _RuleRejection rejection):
+          return _fail<String>(rejection, field: rulePath);
+        case _ParsedValue<String>(:final String value):
+          source = value;
+      }
+    }
+
     final StringBuffer out = StringBuffer();
     var index = 0;
-    while (index < template.length) {
-      final int at = template.indexOf('{{', index);
+    while (index < source.length) {
+      final int at = source.indexOf('{{', index);
       if (at < 0) {
-        out.write(template.substring(index));
+        out.write(source.substring(index));
         break;
       }
-      final int end = _templateEnd(template, at);
+      final int end = _templateEnd(source, at);
       if (end < 0) {
         // §4：不得把字面 `{{…}}` 交给请求层 —— 在 URL 里它只能显式失败。
         return _fail<String>(_malformed(rulePath), field: rulePath);
       }
 
-      out.write(template.substring(index, at));
-      final String inner = template.substring(at + 2, end - 2).trim();
+      out.write(source.substring(index, at));
+      final String inner = source.substring(at + 2, end - 2).trim();
       if (params.containsKey(inner)) {
         if (!encodeKeyword && inner == _urlKeywordVariable) {
           // 非表单载荷（JSON / XML body）里关键词必须原样出现。
           out.write(params[inner]);
         } else {
           // 交给同步渲染器统一处理（`key` 只编码一次）：原样搬过去。
-          out.write(template.substring(at, end));
+          out.write(source.substring(at, end));
         }
       } else {
         final _Parsed<String> value = await _urlJsValue(
@@ -1843,8 +1879,68 @@ final class RuleEngine {
         params,
         logger: _logger,
         charset: charset,
+        page: context.page,
       ),
     );
+  }
+
+  /// Upstream's `AnalyzeUrl.analyzeJs` (`:160-176`): a URL rule is a chain of literal pieces and
+  /// `@js:` / `<js>` scripts.
+  ///
+  /// The running value starts as the whole rule. A literal piece **replaces** `@result` with it (all
+  /// occurrences), and a script receives it as `result`; the script's value becomes the new running
+  /// value. Upstream trims every literal piece, and a piece that trims to nothing contributes
+  /// nothing — an empty piece must not wipe the chain.
+  Future<_Parsed<String>> _expandUrlSegments(
+    String template, {
+    required String rulePath,
+    required JsPageContext context,
+  }) async {
+    final Iterable<RegExpMatch> matches = _jsSegmentPattern.allMatches(
+      template,
+    );
+    if (matches.isEmpty) {
+      return _ParsedValue<String>(template);
+    }
+
+    String running = template;
+    var start = 0;
+    for (final RegExpMatch match in matches) {
+      if (match.start > start) {
+        final String literal = template.substring(start, match.start).trim();
+        if (literal.isNotEmpty) {
+          running = literal.replaceAll(_urlChainVariable, running);
+        }
+      }
+      final String block = (match.group(1) ?? '').trim();
+      final String script = block.isNotEmpty ? block : (match.group(2) ?? '');
+      final ParseResult<Object?> evaluated = await evaluateJs(
+        script,
+        rulePath: rulePath,
+        context: context,
+        result: running,
+      );
+      switch (evaluated) {
+        case ParseFailure<Object?>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ):
+          return _ParsedFailure<String>(
+            _RuleRejection(kind: kind, rulePath: rulePath),
+          );
+        case ParseSuccess<Object?>(:final Object? data):
+          running = data?.toString() ?? '';
+      }
+      start = match.end;
+    }
+    if (template.length > start) {
+      final String literal = template.substring(start).trim();
+      if (literal.isNotEmpty) {
+        running = literal.replaceAll(_urlChainVariable, running);
+      }
+    }
+
+    return _ParsedValue<String>(running);
   }
 
   /// Evaluates one non-template `{{…}}` of a URL (§4, matrix #18).
@@ -2152,8 +2248,9 @@ final class RuleEngine {
   /// * a nested rule that itself needs `@js:` — the one worker is busy running the job that asked
   ///   (ADR-0030 §决策 1/3), so a nested evaluation could only wait on its own queue. The value
   ///   shape (`parse.getString`) reports it as `js:parse-recursion`; the element shape
-  ///   (`parse.getElements`) reports `unsupported:@js:list`, because list rules do not accept
-  ///   `@js:` at all (matrix #14's list boundary).
+  ///   (`parse.getElements`) reports `unsupported:@js:list`, because a nested **list** rule that
+  ///   needs `@js:` would have to run another job (the top-level rule form is fine: matrix #14 and
+  ///   the trailing-`@js:` list chain both go through `_selectAllSegments`).
   ///
   /// `parse.getString` answers with the first value, or `''` when the nested rule matched
   /// nothing — upstream's `getString` shape, which rules do string work on. `parse.getElements`
@@ -2194,6 +2291,17 @@ final class RuleEngine {
     }
 
     if (request.wantsList) {
+      // 元素形状（`parse.getElements`）的 `@js:` 柜口：段链里的脚本要再起一个 job，而 worker
+      // 正在跑发起这次嵌套的 job（ADR-0030 §决策 1/3）——顶层列表规则的 `@js:` 不受影响，
+      // 那是同一次评价里的段链（矩阵 #14），这里只是「嵌套再嵌套」这一档。
+      if (_jsSegmentsOf(request.rule)
+          .any((_RuleSegment segment) => segment.isScript)) {
+        return failureAt<Object?>(
+          kind: ParseFailureKind.unsupportedRule,
+          rulePath: '$field:$_jsListMarker',
+        );
+      }
+
       return switch (await selectAll(
         request.rule,
         effective,
@@ -2677,7 +2785,13 @@ final class RuleEngine {
     // 矩阵 #7：`-` 是整条规则的前缀（`-class.odd@tag.a@href`）。必须在按 `@`
     // 切段之前摘掉，否则它会变成一个空段，后面的标志头也会被切错。
     final bool reverse = rawBody.startsWith('-');
-    final String stripped = (reverse ? rawBody.substring(1) : rawBody).trim();
+    // `+` 是「正序」的显式写法：上游先剥 `-` 再剥 `+`，两个都只当标记（`BookList.kt:73-75`、
+    // `BookChapterList.kt:59-65`），所以 `-+rule` 仍然是倒序。
+    final String withoutReverse = (reverse ? rawBody.substring(1) : rawBody)
+        .trim();
+    final String stripped = withoutReverse.startsWith('+')
+        ? withoutReverse.substring(1).trim()
+        : withoutReverse;
     // 矩阵 #15：`@@` 是规则体前缀（上游 `AnalyzeRule.kt:612-615`：剥掉两字符、模式不变），
     // 所以必须比 `@` 切段早——否则它会变成一个空段。
     final String body = stripped.startsWith(_defaultRuleFlag)
@@ -2767,9 +2881,9 @@ final class RuleEngine {
     final String body = parsed.body;
 
     if (!hasExtraction && parsed.jsScript != null) {
-      // 矩阵 #14 目前只实现**值规则**上的 `@js:`（终段）。列表规则上的 JS 要的是「JS
-      // 返回一列元素」的契约（上游 `getElements` 的 `Mode.Js` 分支，AnalyzeRule.kt:439），
-      // 该契约尚未成型，所以显式拒绝——顶层列表规则被拒仍整次失败（C-SRC-4）。
+      // 列表规则上的 `@js:` 由 `_selectAllRule` 提前交给段链解释器（矩阵 #14 / `AnalyzeRule.kt:439`），
+      // 走到这里的只可能是**没有 JS 段**的规则；留着这一档是为了让 `_check` 与 `_parse` 的契约
+      // 完整（两个入口共享同一个解析），而不是一条可达分支。
       return _ParsedFailure<List<_CheckedCandidate>>(_unsupported('@js:list'));
     }
 

@@ -1575,6 +1575,43 @@ void main() {
       );
     });
 
+    test('selectAll_givenLeadingPlus_keepsThePageOrder', () async {
+      // M25/S4：`+` 是「正序」的显式写法——上游只剥掉它（`BookList.kt:73-75`、
+      // `BookChapterList.kt:59-65`），顺序仍是页面顺序。
+      final List<Element> elements = await _elements(
+        _engine().selectAll(
+          '+class.result-list@tag.li',
+          _scope(_document(_listHtml)),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(
+        elements.map(
+          (Element element) => element.querySelector('a')?.attributes['href'],
+        ),
+        <String?>['/book/1', '/book/2', '/book/3'],
+      );
+    });
+
+    test('selectAll_givenDashThenPlus_stillReverses', () async {
+      // 上游先剥 `-` 再剥 `+`，所以两个前缀同时出现时倒序仍然生效。
+      final List<Element> elements = await _elements(
+        _engine().selectAll(
+          '-+class.result-list@tag.li',
+          _scope(_document(_listHtml)),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(
+        elements.map(
+          (Element element) => element.querySelector('a')?.attributes['href'],
+        ),
+        <String?>['/book/3', '/book/2', '/book/1'],
+      );
+    });
+
     test('extractAll_givenLeadingDash_reversesTheValues', () async {
       expect(
         await _values(
@@ -3306,21 +3343,23 @@ void main() {
       expect(bridge.jobs.single.source.group, '分组');
     });
 
-    test('selectAll_givenJsOnAListRule_reportsTheListBoundary', () async {
-      final FakeJsBridge bridge = FakeJsBridge();
+    test('selectAll_givenATrailingJsOnAListRule_runsItOverTheItems', () async {
+      // M25/S4：列表规则的**任一段**可以是 JS 段（上游 `AnalyzeRule.kt:435-440` 的段循环），
+      // 所以 `class.list@tag.li@js:...` 的尾部脚本是支持的；脚本拿到的是上一段的条目内容。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = <String>['https://example-novel.test/1.html'];
 
-      final ParseFailure<Never> failure = await _failure(
+      final List<RuleScope> scopes = await _matches(
         _engine(null, bridge).selectAll(
-          'class.result-list@js:result',
+          'class.result-list@tag.li@js:result',
           _pageWithContext(_listHtml),
           rulePath: 'searchRule.bookList',
         ),
       );
 
-      // 3.4 只实现值规则上的 `@js:`；列表规则需要「JS 返回一列元素」的契约，显式拒绝。
-      expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@js:list');
-      expect(bridge.jobs, isEmpty);
+      expect(bridge.jobs.single.script, 'result');
+      expect(bridge.jobs.single.result, isA<List<Object?>>());
+      expect(scopes, hasLength(1));
     });
 
     test('applyReplaceRule_givenAJsRule_runsItOnTheText', () async {
@@ -3660,10 +3699,10 @@ void main() {
           ),
         );
 
-        // 元素形状由列表规则的柜口拒绝：矩阵 #14 还没有「JS 返回一列元素」的契约，
-        // 所以它的名字是 `unsupported:@js:list`（与顶层列表规则上的 `@js:` 同口径）。
+        // 嵌套的**元素形状**仍然拒绝：段链里的脚本要再起一个 job，而 worker 正在跑发起这次
+        // 嵌套的 job（ADR-0030 §决策 1/3）。顶层列表规则的 `@js:` 不受影响（同组的另一条用例）。
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@js:list');
+        expect(failure.rulePath, 'searchRule.bookList:unsupported:@js:list');
       },
     );
 
@@ -4324,6 +4363,98 @@ void main() {
       page: 1,
       source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
     );
+
+    test(
+      'renderUrl_givenAScriptChain_feedsEachScriptTheRunningValue',
+      () async {
+        // M25/S4：URL 规则是「字面段 + JS 段」的链（上游 AnalyzeUrl.kt:157-176）。第一段脚本拿到
+        // 整条规则，第二段拿到第一段的结果。`@js:` 贪婪吞到行尾，所以链里要用 `<js>…</js>`。
+        final FakeJsBridge bridge = FakeJsBridge()
+          ..result = 'https://example-novel.test/list/2/';
+        const String rule =
+            "https://example-novel.test/list<js>'https://example-novel.test/list/2/'"
+            "</js><js>result + 'x'</js>";
+
+        final String url = await _text(
+          _engine(null, bridge).renderUrl(
+            rule,
+            rulePath: 'ruleContent',
+            params: const <String, String>{},
+            context: context,
+          ),
+        );
+
+        expect(bridge.jobs, hasLength(2));
+        expect(
+          bridge.jobs.first.script,
+          "'https://example-novel.test/list/2/'",
+        );
+        // 字面段**替换**链的值（只有 `@result` 处才保留旧值），所以第一段脚本看到的是那个前缀。
+        expect(bridge.jobs.first.result, 'https://example-novel.test/list');
+        expect(bridge.jobs.last.script, "result + 'x'");
+        // 第二段看到的是第一段的返回值。
+        expect(bridge.jobs.last.result, 'https://example-novel.test/list/2/');
+        expect(url, 'https://example-novel.test/list/2/');
+      },
+    );
+
+    test('renderUrl_givenALiteralAfterTheScript_substitutesResult', () async {
+      // 尾部字面段**替换**链的值，但先把 `@result` 换成它（上游 `it.replace("@result", result)`）。
+      final FakeJsBridge bridge = FakeJsBridge()..result = '/list/2';
+
+      final String url = await _text(
+        _engine(null, bridge).renderUrl(
+          "https://example-novel.test<js>'/list/2'</js>@result/index.html",
+          rulePath: 'ruleContent',
+          params: const <String, String>{},
+          context: context,
+        ),
+      );
+
+      expect(url, '/list/2/index.html');
+    });
+
+    test('renderUrl_givenAWholeRuleScript_answersTheScriptValue', () async {
+      // `searchUrl: "@js:…"` 这类「整条规则就是一个脚本」的写法（真实语料常见）。
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = 'https://example-novel.test/search?q=x';
+
+      final String url = await _text(
+        _engine(null, bridge).renderUrl(
+          "@js:'https://example-novel.test/search?q=' + key",
+          rulePath: 'searchUrl',
+          params: const <String, String>{'key': 'x'},
+          context: context,
+        ),
+      );
+
+      expect(url, 'https://example-novel.test/search?q=x');
+      expect(
+        bridge.jobs.single.script,
+        "'https://example-novel.test/search?q=' + key",
+      );
+    });
+
+    test('renderUrl_givenAPageList_rendersThePageEntry', () async {
+      // 页码列表按**请求的页码**取值，超出取末项（上游 AnalyzeUrl.kt:203-213）。
+      final String url = await _text(
+        _engine().renderUrl(
+          'https://example-novel.test/<1,2,3>.html?p={{page}}',
+          rulePath: 'searchUrl',
+          params: const <String, String>{'page': '9'},
+          context: const JsPageContext(
+            baseUrl: 'https://example-novel.test/',
+            page: 9,
+            source: JsSourceInfo(
+              name: '示例书源',
+              url: 'https://example-novel.test',
+            ),
+          ),
+        ),
+      );
+
+      expect(url, 'https://example-novel.test/3.html?p=9');
+    });
 
     test('renderUrl_givenM0Variables_encodesTheKeywordOnce', () async {
       final String url = await _text(
