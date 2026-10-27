@@ -144,7 +144,7 @@
 | **S4** ✅ | URL 方言五条 + 列表尾部 `@js:` | 已落地：`url_template.dart` 的 `renderPageList` / `encodeUrlQuery`（安全集照抄上游两处）、`rule_engine.dart` 的 `_expandUrlSegments`（`@result` 链）与 `+` 前缀、列表规则「任一段是 JS」走段链、`page_fetch_service.dart` 的 GET query 全量编码 | — |
 | **S5** | 矩阵 #20/#21/#22/#30 | `rule_engine.dart`（+ 依赖） | M27 普查定序 |
 | **S6** | 非文本链路 + 正文 HTML 化 | `fetch_manga_pages`/新 usecase、`content_purifier`、阅读端 | S2 |
-| **S7** | 文档与拒绝清单收敛 + 门禁 G1/G2 | `book-source.md` §2/§3/§11、`test/` | S1–S6 |
+| **S7**（门禁部分 ✅） | 文档与拒绝清单收敛 + 门禁 G1/G2 | 已落地：`test/docs/book_source_doc_test.dart`（G1：§11 两个名单与 `__javaRejectedNames` / `__javaInteropNames` 逐字对照；G2：矩阵每行「已确认」必须有具名用例 `matrix #N`）、§11 的名单改成机器可读的 `text` 块、Rhino 互操作包名补全到 8 个。剩余：S1–S6 收尾后按 §8 出口判据复核一遍 | S1–S4 |
 
 ## 8. 验收与出口判据
 

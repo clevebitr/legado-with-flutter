@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation can no longer drift from the engine (ADR-0078 S7, M25)
+
+Two gates in `test/docs/book_source_doc_test.dart` (the one place a test has no `lib/` counterpart):
+
+- **G1**: the two rejection lists in `book-source.md` §11 (the named `java.*` members and the Rhino
+  interop packages) are now machine-readable `text` blocks, and the gate compares them with
+  `__javaRejectedNames` / `__javaInteropNames` in the sandbox prelude — changing one side without the
+  other fails the suite. The first run caught a real drift: the doc named four interop packages, the
+  sandbox rejects eight.
+- **G2**: every matrix row marked 已确认 in `book-source.md` §3 must be named by a test
+  (`matrix #N`), so a row cannot keep claiming coverage after its test is gone. Ten rows were
+  covered but unmarked; each now points at the test that covers it.
+
+`docs/dev/testing.md` §3 records the `test/docs/` exception.
+
 ### URL rules speak upstream's full dialect (ADR-0078 S4, M25)
 
 Five dialects the engine used to reject or ignore, all of them plain rule-surface work:

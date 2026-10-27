@@ -1405,7 +1405,7 @@ void main() {
   });
 
   group('PageFetchService post-processing', () {
-    // ADR-0068 §决策 7：`sourceRegex` 先截取再建 scope，`bodyJs` 对响应体跑脚本。
+    // ADR-0068 §决策 7：`sourceRegex` 先截取再建 scope（matrix #23），`bodyJs` 对响应体跑脚本。
     test('sourceRegex_givenAMatch_buildsTheScopeFromTheFragment', () async {
       final FakeLogPrinter printer = FakeLogPrinter();
       final FakeHttpClient http = FakeHttpClient()

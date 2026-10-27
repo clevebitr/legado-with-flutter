@@ -78,6 +78,13 @@ dart run tool/check_coverage.dart --allowlist=    # 不使用 allowlist（排查
   `test/core/error/parse_result_test.dart`；**设备级集成测试**放在 `integration_test/` 下平铺，
   不镜像 `lib/`（ADR-0017 §决策 5、`docs/dev/test-environment.md`）。
   `lib/**` 下禁止出现 `*_test.dart`。
+- **唯一例外：文档漂移门禁**（`test/docs/book_source_doc_test.dart`）。它们比对的是
+  `docs/dev/book-source.md` 与代码/用例，没有 `lib/` 对应物，所以固定放在 `test/docs/`。两条门禁
+  （M27 的 G1/G2，ADR-0078 §切片 S7）：
+  - **G1**：§11 的两个 `text` 代码块必须与 `quickjs_worker.dart` 的 `__javaRejectedNames` /
+    `__javaInteropNames` 逐字一致——改实现必须改文档，反之亦然；
+  - **G2**：§3 矩阵里状态为「已确认」的每一行都必须有具名用例（测试文件里出现 `matrix #N`），
+    行号不变而用例被删时这里先红。
 - 测试名：`方法名_场景_预期结果`（C-TEST-3）。
 
 ```dart

@@ -1017,6 +1017,7 @@ void main() {
       return (handle as Map<String, Object?>)['id'] as int;
     }
 
+    // matrix #24：字体反爬（`queryTTF` / `queryBase64TTF` / `replaceFont`，ADR-0068 §决策 9）。
     test('queryTtf_givenAFontBase64_answersAHandle', () {
       final Object? handle = _valueOf(
         applyJsJavaCall(<String, String?>{}, <String, Object?>{

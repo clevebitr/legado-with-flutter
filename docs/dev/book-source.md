@@ -1318,6 +1318,17 @@ Cookie 合并）**已实现**。两条仍与上游不同：① 登录**信息**�
   `importScript`（沙箱禁忌或需要平台能力）——命中即抛**可读错误**，不得落到
   `undefined is not a function`。多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)`）
   同样具名拒绝：本仓没有 flags / charset 语义。
+  **这份名单是机器的对照面（S7 门禁 G1）：** 下面两个代码块必须与
+  `lib/core/js/quickjs_worker.dart` 的 `__javaRejectedNames` / `__javaInteropNames` **逐字一致**，
+  由 `test/docs/book_source_doc_test.dart` 校验——改任何一边都会让门禁失败（ADR-0012）。
+
+```text
+downloadFile
+cacheFile
+importScript
+createAsymmetricCrypto
+createSign
+```
   **已随 M25/S3b 落地、不再拒绝：** `java.connect` / `java.ajaxAll` / `java.openUrl` / `java.androidId`，
   以及阶段上下文绑定 `src` / `chapter` / `nextChapterUrl` / `fromBookInfo` / `infoMap`（语义见 §6）。
   **M25/S3b 登记的两条有意差异：** `speakText` / `speakSpeed` 只由上游的 **HttpTTS 源**提供，本仓没有那条
@@ -1333,5 +1344,15 @@ Cookie 合并）**已实现**。两条仍与上游不同：① 登录**信息**�
   CFB / OFB / CTR / GCM 这类模式与非对称（`createAsymmetricCrypto`）、签名（`createSign`）**仍是具名拒绝**
   （前两者在上面的拒绝族里，模式不匹配则报 `unsupported mode`）。重新评审的触发条件：真实语料出现
   该 transformation 且有能复现的源。
-- Rhino Java 互操作（`java.lang` / `java.security` / `java.util` / `java.net`，以及 `Packages.*`）：
-  `new java.util.ArrayList()` 这类写法命中**抛错 Proxy**，报可读原因。
+- Rhino Java 互操作（`Packages.*` 与下列 `java.*` 包，命中**抛错 Proxy**，报可读原因）：
+
+```text
+lang
+security
+util
+net
+io
+nio
+math
+text
+```

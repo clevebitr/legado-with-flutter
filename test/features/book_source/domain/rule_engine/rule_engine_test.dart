@@ -273,6 +273,8 @@ Future<List<String?>> _hrefsForList(String position) =>
     _hrefsFor('tag.li$position');
 
 void main() {
+  // matrix #2（`class` / `id` / `tag` 三种选择器类型）、matrix #5（正负位置索引）与
+  // matrix #8（提取内容 `text` / `href` / `src` …）的用例就在这一组与 extractAll 组里。
   group('RuleEngine selectAll', () {
     test('selectAll_givenClassThenTagRule_returnsEveryMatch', () async {
       final List<Element> elements = await _elements(
@@ -1038,6 +1040,7 @@ void main() {
     );
   });
 
+  // matrix #25：`##match##replace###` 只取第一个匹配并在其内部替换。
   group('RuleEngine ## replacement', () {
     test(
       'extractAll_givenReplacementWithoutItsSecondPart_deletesTheMatch',
@@ -1936,6 +1939,7 @@ void main() {
     });
   });
 
+  // 三种连接符：matrix #10（`||` 依次尝试）、matrix #11（`&&` 并集）、matrix #27（`%%` 交叉合并）。
   group('RuleEngine connectors (#10 || / #11 && / #27 %%)', () {
     test(
       'extractAll_givenDoublePipe_takesTheFirstCandidateWithValues',
@@ -2139,6 +2143,7 @@ void main() {
     });
   });
 
+  // matrix #12（`@css:` 选择器）与 matrix #29（其内的 jsoup 索引伪类 `:eq` / `:gt` / `:lt`）。
   group('RuleEngine matrix #12 (@css:)', () {
     test('selectAll_givenCssRule_returnsEveryMatch', () async {
       final List<Element> elements = await _elements(

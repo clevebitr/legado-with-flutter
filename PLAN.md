@@ -42,4 +42,4 @@ auto-breakpoint: false
 ## Current: M25 — M25 — 引擎对齐上游行为：字段/语法/方言（详见 #35）
 
 goal: 引擎行为对齐上游 + 高性能（详见 #35-#37）
-breakpoint: S3b 三组已全部交付；下一步 S4 URL 方言（#46）
+breakpoint: S4 已交付；下一步 S5 语法 #20/#30，或先补 S7 门禁（#47）
