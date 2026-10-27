@@ -280,6 +280,7 @@ void main() {
         final JsPageContext? jsContext = switch (scope) {
           DomScope(:final JsPageContext? jsContext) => jsContext,
           JsonScope(:final JsPageContext? jsContext) => jsContext,
+          RegexScope(:final JsPageContext? jsContext) => jsContext,
         };
         expect(jsContext?.baseUrl, 'https://example-novel.test/book/9/?9bdb14');
       },

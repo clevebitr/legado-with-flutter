@@ -1010,7 +1010,13 @@ final class PageFetchService {
     };
   }
 
-  /// Returns the single value of the **top-level content** rule.
+  /// Returns the **whole body** the top-level `content` rule reads.
+  ///
+  /// Every match contributes, joined with a newline — upstream's `getString`
+  /// (`AnalyzeRule.getString` joins `getStringList` with a newline), which is what makes
+  /// `#content p@textNodes` answer every paragraph instead of the first one. Taking only the
+  /// first match silently truncated a chapter to one line for exactly that corpus shape
+  /// (`book-source.md` §4.3).
   ///
   /// Matching nothing is [ParseFailureKind.parseFailed] (`book-source.md` §7).
   ///
@@ -1024,20 +1030,20 @@ final class PageFetchService {
     RuleScope scope,
     String rulePath,
   ) async {
-    final ParseResult<String?> parsed = await _engine.extractFirst(
+    final ParseResult<String> parsed = await _engine.extractJoined(
       rule ?? '',
       scope,
       rulePath: rulePath,
     );
 
     return switch (parsed) {
-      ParseFailure<String?>(
+      ParseFailure<String>(
         :final ParseFailureKind kind,
         rulePath: final String failedAt,
       ) =>
         failureAt<String>(kind: kind, rulePath: failedAt),
-      ParseSuccess<String?>(:final String? data) =>
-        data == null || data.isEmpty ? _noMatch(rulePath) : ParseSuccess(data),
+      ParseSuccess<String>(:final String data) =>
+        data.isEmpty ? _noMatch(rulePath) : ParseSuccess(data),
     };
   }
 
@@ -1432,6 +1438,7 @@ final class PageFetchService {
     final JsPageContext? context = switch (scope) {
       DomScope(:final JsPageContext? jsContext) => jsContext,
       JsonScope(:final JsPageContext? jsContext) => jsContext,
+      RegexScope(:final JsPageContext? jsContext) => jsContext,
     };
 
     return JsPageContext(

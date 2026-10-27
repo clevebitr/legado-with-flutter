@@ -195,6 +195,99 @@ void main() {
       expect(content, '正文第一段。\n正文第二段。\n正文第三段。');
     });
 
+    test(
+      'execute_givenAMultiParagraphTextNodesRule_keepsEveryParagraph',
+      () async {
+        // 语料（免费小说）：`#content p@textNodes`。正文规则要答**每一段**——只取第一条匹配会让
+        // 整章只剩一行（2026-10-27 真源回归发现）。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            _chapterUrl,
+            '<html><body><div id="content">'
+            '<p>第一段。</p><p>第二段。</p><p>第三段。</p>'
+            '</div></body></html>',
+          );
+        final BookSource source = _source();
+
+        final String content = _body(
+          await FetchContent(
+            pages: _service(http),
+            cache: FakeContentCache(),
+          ).execute(
+            source.copyWith(
+              contentRule: source.contentRule.copyWith(
+                content: '#content p@textNodes',
+              ),
+            ),
+            const ChapterRequest(url: _chapterUrl),
+          ),
+        );
+
+        expect(content, '第一段。\n第二段。\n第三段。');
+      },
+    );
+
+    test('execute_givenAnHtmlContentRule_answersPlainText', () async {
+      // 语料（PO18 系）：`id.booktxt@html`。上游把正文当 HTML 留着、由富文本视图渲染；本仓的
+      // 阅读端是纯文本，所以标签必须在这里摘掉，否则 `<p>` / `<br>` 会印在页面上。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _chapterUrl,
+          '<html><body><div id="booktxt">'
+          '<p>第一段&amp;其一</p><p>第二段<br>换行<img src="x.jpg"></p>'
+          '<script>var fake = "<p>脚本里的假正文</p>";</script>'
+          '</div></body></html>',
+        );
+      final BookSource source = _source();
+
+      final String content = _body(
+        await FetchContent(
+          pages: _service(http),
+          cache: FakeContentCache(),
+        ).execute(
+          source.copyWith(
+            contentRule: source.contentRule.copyWith(
+              content: 'id.booktxt@html',
+            ),
+          ),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(content, '第一段&其一\n第二段\n换行');
+      expect(content, isNot(contains('<')));
+    });
+
+    test('execute_givenAnHtmlBody_replaceRegexSeesThePlainText', () async {
+      // 转换发生在 `replaceRegex` **之前**：那些规则是作者对着能读的正文写的（`&nbsp;`、
+      // `\<.*` 之类清理 HTML 残留的写法），让它们继续面对标签只会把真文字一起删掉。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _chapterUrl,
+          '<html><body><div id="booktxt">'
+          '<p>第一段</p><p>请勿开启浏览器阅读模式</p>'
+          '</div></body></html>',
+        );
+      final BookSource source = _source();
+
+      final String content = _body(
+        await FetchContent(
+          pages: _service(http),
+          cache: FakeContentCache(),
+        ).execute(
+          source.copyWith(
+            contentRule: source.contentRule.copyWith(
+              content: 'id.booktxt@html',
+              replaceRegex: '##请勿开启浏览器阅读模式.*',
+            ),
+          ),
+          const ChapterRequest(url: _chapterUrl),
+        ),
+      );
+
+      expect(content, '第一段');
+    });
+
     test('execute_givenACachedChapter_returnsItWithoutAnyRequest', () async {
       // docs/dev/roadmap.md 5.2 的验收：命中缓存时**一个请求都不发**（缓存存的是成品正文，
       // 所以命中可以直接跳过整个引擎，连源自己的限速都不必进预算）。
@@ -306,7 +399,7 @@ void main() {
           ..serve(_chapterUrl, _page('chapter_page.html'));
         final BookSource source = _source();
         final BookSource withJs = source.copyWith(
-          contentRule: source.contentRule.copyWith(content: '@xpath://div'),
+          contentRule: source.contentRule.copyWith(content: '@webJs:'),
         );
 
         final ParseFailure<Never> failure = _failure(
@@ -317,7 +410,7 @@ void main() {
         );
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@xpath:');
+        expect(failure.rulePath, 'unsupported:@webJs');
       },
     );
 
@@ -484,7 +577,7 @@ void main() {
           pages: service.pages,
           cache: FakeContentCache(),
         ).execute(
-          _purifyingSource('@xpath://div'),
+          _purifyingSource('@webJs:'),
           const ChapterRequest(url: _chapterUrl),
         ),
       );

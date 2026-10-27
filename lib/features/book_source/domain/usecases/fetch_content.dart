@@ -7,6 +7,7 @@ import 'package:flutter_reader/features/book_source/domain/content_purifier.dart
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_content.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
+import 'package:flutter_reader/features/book_source/domain/html_to_text.dart';
 import 'package:flutter_reader/features/book_source/domain/page_fetch_service.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
 import 'package:flutter_reader/features/book_source/domain/source_login.dart';
@@ -305,6 +306,17 @@ final class FetchContent {
       fallback: request.title,
     );
 
+    // 正文在**统一成纯文本之后**才交给 `replaceRegex` 与净化规则。
+    //
+    // 上游把正文当 HTML 留着、由自己的富文本视图渲染；本仓的阅读端是纯文本
+    // （`readerBodyText` 按换行分段），所以 `@html` / `@all` / 脚本 `outerHTML` 产出的标签必须
+    // 在这里摘掉，否则语料里 249 条 `content` 规则中的 83 条会把 `<p>` / `<br>` 印在页面上。
+    //
+    // 顺序有意把转换放在 `replaceRegex` **之前**：这些替换规则是用户/作者对着**能读的正文**写的
+    // （`&nbsp;`、`\<.*` 这类清理 HTML 残留的写法），让它们继续面对标签只会把真文字一起删掉。
+    // 差异登记在 `book-source.md` §4.3。
+    text = htmlToText(text);
+
     // `replaceRegex` 与净化用同一个上下文：`@js:` 替换要在沙箱里读到同一页（ADR-0071 §决策 5）。
     final JsPageContext jsContext = JsPageContext(
       baseUrl: request.url,
@@ -314,8 +326,10 @@ final class FetchContent {
       chapterTitle: request.title,
       book: _bookOf(request),
     );
+    // 末尾的 `trim`：`replaceRegex` 删掉一整段之后会留下那一段的换行，阅读端虽然会丢掉空行，
+    // 但缓存里的成品不该以空行结尾（正文的「首尾空白」是解析残留，不是内容）。
     final ChapterContent content = ChapterContent(
-      body: await _purifier.purgeContent(
+      body: (await _purifier.purgeContent(
         await _pages.replaceContent(
           rules.replaceRegex,
           text,
@@ -324,7 +338,7 @@ final class FetchContent {
           jsContext: jsContext,
         ),
         context: jsContext,
-      ),
+      )).trim(),
       title: title.name,
       reviewImg: title.reviewImg,
       lyric: lyric,
