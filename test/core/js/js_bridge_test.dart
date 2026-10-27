@@ -10,6 +10,7 @@ import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
 import 'package:flutter_reader/core/js/source_info_map.dart';
 import 'package:flutter_reader/core/js/source_login_header.dart';
+import 'package:flutter_reader/core/js/source_login_info.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -34,6 +35,7 @@ typedef _Fixture = ({
   JsVariableStore variables,
   SourceVariableStore sourceVariables,
   SourceLoginHeaderStore loginHeaders,
+  InMemorySourceLoginInfoWriter loginInfos,
   SourceInfoMapStore infoMaps,
   _FakeExternalUrlOpener opener,
   InMemoryCookieManager cookies,
@@ -55,10 +57,12 @@ _Fixture _buildBridge({
   JsVariableStore? variables,
   SourceVariableStore? sourceVariables,
   SourceLoginHeaderStore? loginHeaders,
+  InMemorySourceLoginInfoWriter? loginInfos,
   SourceInfoMapStore? infoMaps,
   _FakeExternalUrlOpener? opener,
   InMemoryCookieManager? cookies,
   bool bindCookies = true,
+  bool bindLoginInfoWriter = true,
   void Function(FakeJsWorkerHandle worker)? configure,
   _FakeVerification? verification,
   _FakeWebPages? webPages,
@@ -71,6 +75,8 @@ _Fixture _buildBridge({
       sourceVariables ?? SourceVariableStore();
   final SourceLoginHeaderStore loginHeaderStore =
       loginHeaders ?? SourceLoginHeaderStore();
+  final InMemorySourceLoginInfoWriter loginInfoWriter =
+      loginInfos ?? InMemorySourceLoginInfoWriter();
   final SourceInfoMapStore infoMapStore = infoMaps ?? SourceInfoMapStore();
   final _FakeExternalUrlOpener fakeOpener = opener ?? _FakeExternalUrlOpener();
   final InMemoryCookieManager cookieJar = cookies ?? InMemoryCookieManager();
@@ -100,6 +106,7 @@ _Fixture _buildBridge({
       cookies: bindCookies ? cookieJar : null,
       sourceVariables: sourceStore,
       loginHeaders: loginHeaderStore,
+      loginInfos: bindLoginInfoWriter ? loginInfoWriter : null,
       infoMaps: infoMapStore,
       externalUrlOpener: fakeOpener,
       androidId: 'test-install-id',
@@ -111,6 +118,7 @@ _Fixture _buildBridge({
     variables: store,
     sourceVariables: sourceStore,
     loginHeaders: loginHeaderStore,
+    loginInfos: loginInfoWriter,
     infoMaps: infoMapStore,
     opener: fakeOpener,
     cookies: cookieJar,
@@ -127,12 +135,13 @@ JsJob _job({
   JsParseEvaluator? parseEvaluator,
   Map<String, String>? sourceHeaders,
   String? jsLib,
+  String? sourceUrl,
 }) => JsJob(
   script: script,
   rulePath: rulePath,
   baseUrl: 'https://example-novel.test/search',
   page: 2,
-  source: _sourceInfo(),
+  source: sourceUrl == null ? _sourceInfo() : _sourceInfo('测试分组', sourceUrl),
   result: 'raw',
   sourceHeaders: sourceHeaders,
   parseEvaluator: parseEvaluator,
@@ -160,8 +169,10 @@ List<Map<String, Object?>> _replies(FakeJsWorkerHandle worker) =>
 /// [group] is a parameter on purpose: a `const` construction is evaluated at compile
 /// time, which would leave [JsSourceInfo]'s constructor line unmeasured by the coverage
 /// gate (ADR-0019).
-JsSourceInfo _sourceInfo([String group = '测试分组']) =>
-    JsSourceInfo(name: '示例书源', url: 'https://example-novel.test', group: group);
+JsSourceInfo _sourceInfo([
+  String group = '测试分组',
+  String url = 'https://example-novel.test',
+]) => JsSourceInfo(name: '示例书源', url: url, group: group);
 
 /// The script of one `evaluate` envelope the fake received.
 Object? _scriptOf(Map<String, Object?> envelope) {
@@ -2430,6 +2441,187 @@ void main() {
         contains(contains('malformed login header')),
       );
     });
+  });
+
+  group('login info', () {
+    test('evaluate_givenAReportedLoginInfo_writesItByUrl', () async {
+      // `source.putLoginInfo` 落的是 `book_sources.login_info`，键是源 URL（M25/S5a）。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        // worker 已经把值规整成字符串（上游的表是 `Map<String, String>`）。
+        'loginInfo': <String, Object?>{'账号': 'alice', '记住': '1'},
+      });
+      await call;
+
+      expect(fixture.loginInfos.written, <String, Map<String, String>?>{
+        'https://example-novel.test': <String, String>{
+          '账号': 'alice',
+          '记住': '1',
+        },
+      });
+    });
+
+    test('evaluate_givenARemovedLoginInfo_clearsTheColumn', () async {
+      // `source.removeLoginInfo()`：上报 `null`，写穿时清掉那一列。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'loginInfo': null,
+      });
+      await call;
+
+      expect(
+        fixture.loginInfos.written,
+        containsPair('https://example-novel.test', null),
+      );
+    });
+
+    test('evaluate_withoutAReportedLoginInfo_writesNothing', () async {
+      // 读一次不该触发一次库写：信封里没有这个键就没有写入。
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+      });
+      await call;
+
+      expect(fixture.loginInfos.written, isEmpty);
+    });
+
+    test('evaluate_givenAMalformedLoginInfo_logsAndKeepsGoing', () async {
+      final _Fixture fixture = _buildBridge();
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'loginInfo': 'nonsense',
+      });
+      final ParseResult<Object?> result = await call;
+
+      expect(result, isA<ParseSuccess<Object?>>());
+      expect(
+        fixture.printer.events.map((LogEvent event) => event.message),
+        contains(contains('malformed login info')),
+      );
+      expect(fixture.loginInfos.written, isEmpty);
+    });
+
+    test('evaluate_withoutAWriter_logsAndKeepsGoing', () async {
+      // 没装配写入口（例如只跑解析的构建）不能装作存好了：丢一条 warning，job 照常完成。
+      final _Fixture fixture = _buildBridge(bindLoginInfoWriter: false);
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(<String, Object?>{
+        'type': 'result',
+        'ok': true,
+        'value': 'v',
+        'elapsedMs': 0,
+        'loginInfo': <String, Object?>{'账号': 'alice'},
+      });
+      final ParseResult<Object?> result = await call;
+
+      expect(result, isA<ParseSuccess<Object?>>());
+      expect(
+        fixture.printer.events.map((LogEvent event) => event.message),
+        contains(contains('no writer is wired')),
+      );
+    });
+  });
+
+  group('logout', () {
+    test(
+      'evaluate_givenAClearedLoginHeader_dropsTheHeaderAndItsCookies',
+      () async {
+        // 上游 `removeLoginHeader` = 删缓存 + `CookieStore.removeCookie(getKey())`（M25/S5a）。
+        final SourceLoginHeaderRepository repository =
+            InMemorySourceLoginHeaderRepository();
+        final SourceLoginHeaderStore loginHeaders = SourceLoginHeaderStore(
+          repository: repository,
+        );
+        await loginHeaders.ensureLoaded('https://example-novel.test');
+        loginHeaders.put('https://example-novel.test', '{"Cookie":"sid=1"}');
+        final _Fixture fixture = _buildBridge(loginHeaders: loginHeaders);
+        fixture.cookies.storeFromResponse(
+          Uri.parse('https://example-novel.test/'),
+          <String>['sid=1', 'keep=2'],
+        );
+        final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+          _job(script: 'hold'),
+        );
+        await pumpEventQueue();
+        fixture.workers.single.emit(<String, Object?>{
+          'type': 'result',
+          'ok': true,
+          'value': 'v',
+          'elapsedMs': 0,
+          'loginHeader': null,
+          'loginHeaderCleared': true,
+        });
+        await call;
+
+        expect(await repository.read('https://example-novel.test'), isNull);
+        expect(
+          fixture.cookies.cookieHeaderFor(
+            Uri.parse('https://example-novel.test/'),
+          ),
+          isNull,
+        );
+      },
+    );
+
+    test(
+      'evaluate_givenAClearedHeaderWithoutAHost_skipsTheCookieCleanup',
+      () async {
+        // 源 URL 不是绝对地址时清不了 Cookie：留一条 debug，job 照常结束。
+        final _Fixture fixture = _buildBridge();
+        final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+          _job(script: 'hold', sourceUrl: 'not-a-url'),
+        );
+        await pumpEventQueue();
+        fixture.workers.single.emit(<String, Object?>{
+          'type': 'result',
+          'ok': true,
+          'value': 'v',
+          'elapsedMs': 0,
+          'loginHeader': null,
+          'loginHeaderCleared': true,
+        });
+
+        expect(await call, isA<ParseSuccess<Object?>>());
+        expect(
+          fixture.printer.events.map((LogEvent event) => event.message),
+          contains(contains('has no host')),
+        );
+      },
+    );
   });
 
   group('stage bindings', () {

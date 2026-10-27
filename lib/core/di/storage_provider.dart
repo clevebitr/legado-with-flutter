@@ -4,6 +4,7 @@ import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/database_executor_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/js/source_login_header.dart';
+import 'package:flutter_reader/core/js/source_login_info.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/network/cookie_store.dart';
 import 'package:flutter_reader/core/storage/book_source_dao.dart';
@@ -18,6 +19,7 @@ import 'package:flutter_reader/core/storage/read_record_dao.dart';
 import 'package:flutter_reader/core/storage/rule_dao.dart';
 import 'package:flutter_reader/core/storage/shelf_group_dao.dart';
 import 'package:flutter_reader/core/storage/source_login_header_dao_repository.dart';
+import 'package:flutter_reader/core/storage/source_login_info_dao_repository.dart';
 import 'package:flutter_reader/core/storage/source_variable_dao.dart';
 import 'package:flutter_reader/core/storage/source_variable_dao_repository.dart';
 import 'package:path_provider/path_provider.dart';
@@ -118,6 +120,18 @@ SourceLoginHeaderStore sourceLoginHeaderStore(Ref ref) =>
         ref.watch(bookSourceDaoProvider),
         logger: ref.watch(appLoggerProvider),
       ),
+      logger: ref.watch(appLoggerProvider),
+    );
+
+/// Provides the writer behind `source.putLoginInfo` / `source.removeLoginInfo` (M25/S5a).
+///
+/// Write-only on purpose: a job still receives the login form's values as a snapshot
+/// (ADR-0072 §决策 3), so nothing has to be read back per source — the write goes straight to the
+/// column the login form reads.
+@Riverpod(keepAlive: true)
+SourceLoginInfoWriter sourceLoginInfoWriter(Ref ref) =>
+    SourceLoginInfoDaoRepository(
+      ref.watch(bookSourceDaoProvider),
       logger: ref.watch(appLoggerProvider),
     );
 

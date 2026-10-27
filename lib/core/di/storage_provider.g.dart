@@ -558,6 +558,71 @@ final class SourceLoginHeaderStoreProvider
 String _$sourceLoginHeaderStoreHash() =>
     r'd22d169d99931f36b461ed5658caeca0c95f4203';
 
+/// Provides the writer behind `source.putLoginInfo` / `source.removeLoginInfo` (M25/S5a).
+///
+/// Write-only on purpose: a job still receives the login form's values as a snapshot
+/// (ADR-0072 §决策 3), so nothing has to be read back per source — the write goes straight to the
+/// column the login form reads.
+
+@ProviderFor(sourceLoginInfoWriter)
+final sourceLoginInfoWriterProvider = SourceLoginInfoWriterProvider._();
+
+/// Provides the writer behind `source.putLoginInfo` / `source.removeLoginInfo` (M25/S5a).
+///
+/// Write-only on purpose: a job still receives the login form's values as a snapshot
+/// (ADR-0072 §决策 3), so nothing has to be read back per source — the write goes straight to the
+/// column the login form reads.
+
+final class SourceLoginInfoWriterProvider
+    extends
+        $FunctionalProvider<
+          SourceLoginInfoWriter,
+          SourceLoginInfoWriter,
+          SourceLoginInfoWriter
+        >
+    with $Provider<SourceLoginInfoWriter> {
+  /// Provides the writer behind `source.putLoginInfo` / `source.removeLoginInfo` (M25/S5a).
+  ///
+  /// Write-only on purpose: a job still receives the login form's values as a snapshot
+  /// (ADR-0072 §决策 3), so nothing has to be read back per source — the write goes straight to the
+  /// column the login form reads.
+  SourceLoginInfoWriterProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sourceLoginInfoWriterProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sourceLoginInfoWriterHash();
+
+  @$internal
+  @override
+  $ProviderElement<SourceLoginInfoWriter> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SourceLoginInfoWriter create(Ref ref) {
+    return sourceLoginInfoWriter(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SourceLoginInfoWriter value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SourceLoginInfoWriter>(value),
+    );
+  }
+}
+
+String _$sourceLoginInfoWriterHash() =>
+    r'2fb3e00df840c17fb4344ddd7c0427409f7e7049';
+
 /// Provides the DAO of the reading records.
 
 @ProviderFor(readRecordDao)

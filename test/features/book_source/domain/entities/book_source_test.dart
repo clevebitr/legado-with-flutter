@@ -285,7 +285,7 @@ void main() {
     });
 
     test('jsSourceInfo_carriesTheLibraryForTheEngineButNotForTheSandbox', () {
-      // `source` 绑定仍只有三个字段（防信息外泄），库脚本只给引擎用。
+      // 库脚本只给引擎用：白名单里的字段照旧，`jsLib` 不进 `source` 绑定（M25/S5a 的字段同表）。
       final BookSource source = BookSource.fromLegadoJson(
         _minimalJson()..['jsLib'] = 'var lib = 1;',
       );
@@ -295,7 +295,66 @@ void main() {
         'name',
         'url',
         'group',
+        'key',
+        'bookSourceUrl',
+        'bookSourceName',
+        'bookSourceComment',
+        'header',
+        'loginUrl',
       ]);
+      expect(source.jsSourceInfo.toJson(), isNot(contains('jsLib')));
+    });
+  });
+
+  group('BookSource source view (M25/S5a)', () {
+    test('jsSourceInfo_givenTheCorpusFields_carriesThemVerbatim', () {
+      // 语料把 `bookSourceComment` 当脚本库（`eval(String(...))`）、把 `loginUrl` 当可复用脚本，
+      // 两者都必须是原文；`key` / `bookSourceUrl` / `bookSourceName` 是上游的字段名。
+      final BookSource source = BookSource.fromLegadoJson(
+        _minimalJson()
+          ..['bookSourceComment'] = 'var helper = 1;'
+          ..['loginUrl'] = '@js:function login(){}'
+          ..['header'] = '{"User-Agent":"x"}',
+      );
+      final Map<String, Object?> json = source.jsSourceInfo.toJson();
+
+      expect(json['bookSourceComment'], 'var helper = 1;');
+      expect(json['loginUrl'], '@js:function login(){}');
+      // JSON 形态的 header 按解析后的表重新序列化（差异登记在 book-source.md §6）。
+      expect(json['header'], '{"User-Agent":"x"}');
+      expect(json['key'], 'https://example-novel.test');
+      expect(json['bookSourceUrl'], 'https://example-novel.test');
+      expect(json['bookSourceName'], '最小书源');
+    });
+
+    test('jsSourceInfo_givenARuleFormHeader_keepsTheDeclaredText', () {
+      // 规则形态的 header 必须原文：真实源靠前缀（`js:` / `js>`）判断要不要自己求值。
+      final BookSource source = BookSource.fromLegadoJson(
+        _minimalJson()..['header'] = '<js>JSON.stringify({a:1})</js>',
+      );
+
+      expect(
+        source.jsSourceInfo.toJson()['header'],
+        '<js>JSON.stringify({a:1})</js>',
+      );
+    });
+
+    test('jsSourceInfo_withoutOptionalFields_answersNulls', () {
+      final BookSource source = BookSource.fromLegadoJson(_minimalJson());
+      final Map<String, Object?> json = source.jsSourceInfo.toJson();
+
+      expect(json['header'], isNull);
+      expect(json['loginUrl'], isNull);
+      expect(json['bookSourceComment'], isNull);
+    });
+
+    test('jsSourceInfo_givenANonStringComment_answersNull', () {
+      // `extra` 里什么都可能：非字符串不该让沙箱视图炸掉（`extra` 是导入保真的兜底）。
+      final BookSource source = BookSource.fromLegadoJson(
+        _minimalJson()..['bookSourceComment'] = <String, Object?>{'a': 1},
+      );
+
+      expect(source.jsSourceInfo.toJson()['bookSourceComment'], isNull);
     });
   });
 

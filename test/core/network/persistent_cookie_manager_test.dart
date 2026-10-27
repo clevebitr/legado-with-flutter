@@ -141,6 +141,30 @@ void main() {
       expect(store.purgedAt, hasLength(1));
     });
 
+    test(
+      'removeCookiesFor_whenTheSourceLogsOut_dropsMemoryAndStorage',
+      () async {
+        // `source.removeLoginHeader`（M25/S5a）：内存与库都要清，否则重启后会话又回来了。
+        store.rows['example.com|/|session'] = _cookie();
+        store.rows['other.test|/|keep'] = _cookie(domain: 'other.test');
+        await manager.hydrate();
+
+        manager.removeCookiesFor(Uri.parse('https://example.com/book/1'));
+        await flush();
+
+        expect(
+          manager.cookieHeaderFor(Uri.parse('https://example.com/')),
+          isNull,
+        );
+        expect(store.rows.keys, <String>['other.test|/|keep']);
+        // 别的域的会话照旧可用。
+        expect(
+          manager.cookieHeaderFor(Uri.parse('https://other.test/')),
+          'session=abc',
+        );
+      },
+    );
+
     test('hydrate_whenNothingExpired_doesNotPurge', () async {
       store.rows['example.com|/|session'] = _cookie();
 

@@ -180,6 +180,10 @@ final class _Worker {
   // 写过后随结果回传（桥据此写穿并合并 Cookie）。
   JsLoginHeaderSlot _loginHeader = JsLoginHeaderSlot(null);
 
+  // 当前 job 的登录信息（`source.getLoginInfo*` / `putLoginInfo` / `removeLoginInfo`，M25/S5a）：
+  // 读的是快照（ADR-0072 §决策 3），写过后随结果回传（桥据此写穿 `login_info`）。
+  JsLoginInfoSlot _loginInfo = JsLoginInfoSlot(null);
+
   // 当前 job 是否拿到了 `infoMap`（M25/S3b）：没拿到就不该凭空造一个对象，也不必回传。
   bool _infoMapSeeded = false;
 
@@ -269,11 +273,15 @@ final class _Worker {
 
       return '';
     });
-    // 每源变量也只在 isolate 内转一图：快照进来、写入随结果出去。
+    // 每源变量与登录门扇都只在 isolate 内转一圈：快照进来、写入随结果出去。
     _runtime.onMessage(
       jsSourceBinding,
-      (Object? args) =>
-          applyJsSourceCall(_sourceVariables, args, loginHeader: _loginHeader),
+      (Object? args) => applyJsSourceCall(
+        _sourceVariables,
+        args,
+        loginHeader: _loginHeader,
+        loginInfo: _loginInfo,
+      ),
     );
     // 同步族先问缓存；命中就当场答复，未命中就抛哨兵，由 evaluate 取页后重跑。
     _runtime.onMessage(jsSyncBinding, _applySync);
@@ -334,6 +342,7 @@ final class _Worker {
     _variables = <String, String?>{};
     _sourceVariables = <String, String?>{};
     _loginHeader = JsLoginHeaderSlot(null);
+    _loginInfo = JsLoginInfoSlot(null);
     _fonts.clear();
     _ciphers.clear();
     _syncCache.clear();
@@ -369,6 +378,10 @@ final class _Worker {
     final Object? seedLoginHeader = envelope is Map
         ? envelope['loginHeader']
         : null;
+    // 登录信息（M22-a）：快照在 job 里（登录页自己的 job 才有值）。
+    final Map<String, String> seedLoginInfo = decodeJsLoginInfo(
+      fields['loginInfo'],
+    );
     _named = decodeJsNamedContext(fields);
     // 简繁码表按需解析（`java.t2s` / `java.s2t`），并挂进本 job 的 helper 上下文。
     final String? scriptText = fields['script'] is String
@@ -393,6 +406,9 @@ final class _Worker {
       _loginHeader = JsLoginHeaderSlot(
         seedLoginHeader is String ? seedLoginHeader : null,
       );
+      _loginInfo = JsLoginInfoSlot(
+        seedLoginInfo.isEmpty ? null : Map<String, String>.of(seedLoginInfo),
+      );
       _contentOverride = null;
       _pendingSync = null;
       result = _runtime.evaluate(_evaluationSource(fields));
@@ -416,7 +432,7 @@ final class _Worker {
           'elapsedMs': stopwatch.elapsedMilliseconds,
           'variables': _variables,
           'sourceVariables': _sourceVariables,
-          ..._touchedLoginHeader(),
+          ..._touchedLoginState(),
           ..._reportedInfoMap(),
         });
 
@@ -436,7 +452,7 @@ final class _Worker {
         // 脚本报错前可能已经 java.put：上游的写入立即生效，失败也要回传。
         'variables': _variables,
         'sourceVariables': _sourceVariables,
-        ..._touchedLoginHeader(),
+        ..._touchedLoginState(),
         ..._reportedInfoMap(),
       });
 
@@ -452,7 +468,7 @@ final class _Worker {
         'elapsedMs': stopwatch.elapsedMilliseconds,
         'variables': _variables,
         'sourceVariables': _sourceVariables,
-        ..._touchedLoginHeader(),
+        ..._touchedLoginState(),
         ..._reportedInfoMap(),
       });
 
@@ -469,15 +485,27 @@ final class _Worker {
       'elapsedMs': stopwatch.elapsedMilliseconds,
       'variables': _variables,
       'sourceVariables': _sourceVariables,
-      ..._touchedLoginHeader(),
+      ..._touchedLoginState(),
       ..._reportedInfoMap(),
     });
   }
 
-  // 登录头只在规则**写过**时随结果回传：`source.getLoginHeader()` 一次不该触发一次落库。
-  Map<String, Object?> _touchedLoginHeader() => _loginHeader.touched
-      ? <String, Object?>{'loginHeader': _loginHeader.value}
-      : const <String, Object?>{};
+  // 登录门扇只在规则**写过**时随结果回传：`source.getLoginHeader()` 一次不该触发一次落库。
+  // `loginHeaderCleared` 是「登出」的第二个动作（清该源 Cookie，M25/S5a），桥据此决定要做什么。
+  Map<String, Object?> _touchedLoginState() {
+    final Map<String, Object?> reported = <String, Object?>{};
+    if (_loginHeader.touched) {
+      reported['loginHeader'] = _loginHeader.value;
+    }
+    if (_loginHeader.cleared) {
+      reported['loginHeaderCleared'] = true;
+    }
+    if (_loginInfo.touched) {
+      reported['loginInfo'] = _loginInfo.value;
+    }
+
+    return reported;
+  }
 
   // `infoMap` 是**可写**的小表（上游给规则的是同一个对象）：job 结束时把脚本里那份读回来，
   // 桥据此合并进内存 store，下一条探索规则就看得见这次写进去的值。
@@ -594,10 +622,7 @@ String _evaluationSource(Map<String, Object?> fields) {
     ..writeln('var baseUrl = ${jsonEncode(fields['baseUrl'])};')
     ..writeln('var result = __sandboxValue(${jsonEncode(result)});')
     ..writeln('var page = ${jsonEncode(fields['page'])};')
-    ..writeln(
-      'var source = __sandboxSource(${jsonEncode(fields['source'])}, '
-      '${jsonEncode(fields['loginInfo'] ?? const <String, String>{})});',
-    );
+    ..writeln('var source = __sandboxSource(${jsonEncode(fields['source'])});');
   final Object? book = fields['book'];
   buffer.writeln(
     'var book = __sandboxBook(${book == null ? 'null' : jsonEncode(book)});',
@@ -1120,37 +1145,105 @@ globalThis.__sandboxValue = function (value) {
   return value;
 };
 
-// `source` 对象：字段照旧冻结，另挂两个**登录信息**读取器（ADR-0072 §决策 3）。
-// 它们是同步的纯读取：值随 job 进来（ADR-0034 的快照做法），不回写宿主。
-globalThis.__sandboxSource = function (data, loginInfo) {
+// 上游把 `getLoginHeaderMap()` / `getLoginInfoMap()` 的答案做成 **Java `Map`**（`source` 就是源对象，
+// Rhino 把公开方法的 `Map` 返回值原样交给脚本），所以真实语料写 `source.getLoginInfoMap().get("账号")`。
+// 本仓给的是「普通 JS 对象 + 同名方法」：数据键可枚举（`JSON.stringify` 看到的就是它们），方法不可枚举，
+// 覆盖语料用到的读法（`get` / `put` / `remove` / `containsKey` / `size` / `isEmpty`）。
+// 每次调用都从槽位重建一张新表：上游的 `getLoginInfoMap()` 每次也是重新解一份，改返回值不该漏进存储。
+globalThis.__javaMap = function (data) {
+  var map = {};
+  if (data && typeof data === 'object') {
+    for (var field in data) {
+      if (Object.prototype.hasOwnProperty.call(data, field)) {
+        map[field] = data[field];
+      }
+    }
+  }
+  var has = function (name) {
+    return Object.prototype.hasOwnProperty.call(map, name);
+  };
+  var define = function (name, fn) {
+    Object.defineProperty(map, name, { value: fn, enumerable: false });
+  };
+  define('get', function (key) {
+    var name = String(key);
+    return has(name) ? map[name] : null;
+  });
+  define('containsKey', function (key) { return has(String(key)); });
+  define('put', function (key, value) {
+    var name = String(key);
+    var previous = has(name) ? map[name] : null;
+    map[name] = String(value);
+    return previous;
+  });
+  define('remove', function (key) {
+    var name = String(key);
+    var previous = has(name) ? map[name] : null;
+    delete map[name];
+    return previous;
+  });
+  define('size', function () {
+    var count = 0;
+    for (var name in map) {
+      if (has(name)) { count++; }
+    }
+    return count;
+  });
+  define('isEmpty', function () { return map.size() === 0; });
+  return map;
+};
+
+// `source` 对象（M0 起，M25/S5a 补全）：字段是**白名单**（上游绑的是整个源实体，本仓不那样做），
+// 方法按上游 `BaseSource` 的形状挂上去。字段整体冻结，方法只能经由它们改状态（变量 / 登录头 /
+// 登录信息），所以规则直接 `source.xxx = …` 不会漏到下一份规则。
+globalThis.__sandboxSource = function (data) {
   var source = {};
   for (var field in data) {
     source[field] = data[field];
   }
-  var info = loginInfo || {};
+  // 登录信息（M22-a 读，M25/S5a 写）：值随 job 进来，写入随结果回传（桥写穿 `login_info`）。
   source.getLoginInfoMap = function () {
-    var copy = {};
-    for (var key in info) {
-      copy[key] = info[key];
-    }
-    return copy;
+    return __javaMap(__sourceRawCall({ operation: 'getLoginInfo' }) || {});
   };
   source.getLoginInfo = function () {
     return JSON.stringify(source.getLoginInfoMap());
   };
-  // 每源持久变量（ADR-0076 §决策 1）：与 `java.get` / `java.put` 的规则变量不是同一张表，
-  // 差别在持久性（`book-source.md` §6）。`putVariable` 是上游的另一种拼写，指同一件事。
-  source.getVariable = function (key) {
-    return __sourceCall({ operation: 'get', key: String(key) });
+  source.putLoginInfo = function (info) {
+    // 上游签名是 `putLoginInfo(info: String): Boolean`：只收 JSON 文本，收下就答 true。
+    return __sourceRawCall({
+      operation: 'putLoginInfo',
+      value: (typeof info === 'string') ? info : null
+    }) === true;
   };
-  source.setVariable = function (key, value) {
-    var call = { operation: 'put', key: String(key) };
-    if (value !== undefined && value !== null) {
-      call.value = String(value);
+  source.removeLoginInfo = function () {
+    __sourceCall({ operation: 'removeLoginInfo' });
+  };
+  // 整份变量（上游 `BaseSource.getVariable` / `setVariable` / `putVariable`：**无参**，值是一份
+  // 字符串，源拿它当自己的小仓库）。与 `java.get` / `java.put` 的规则变量不是同一张表，差别在
+  // 持久性（`book-source.md` §6）。
+  source.getVariable = function () {
+    return __sourceCall({ operation: 'getVariable' });
+  };
+  source.setVariable = function (variable) {
+    var call = { operation: 'putVariable' };
+    if (variable !== undefined && variable !== null) {
+      call.value = String(variable);
     }
     __sourceCall(call);
   };
   source.putVariable = source.setVariable;
+  // 带名字的键值（上游 `BaseSource.put` / `get`）：`put` 把值答回去（真实源拿返回值拼 URL），
+  // `get` 未写过时答空串。
+  source.put = function (key, value) {
+    var call = { operation: 'put', key: String(key) };
+    if (value !== undefined && value !== null) {
+      call.value = String(value);
+    }
+    return __sourceCall(call);
+  };
+  source.get = function (key) {
+    return __sourceCall({ operation: 'get', key: String(key) });
+  };
   // 源身份（`BaseSource.getKey` / `getTag`）：上游分别答 `bookSourceUrl` / `bookSourceName`，
   // 两者本就在字段里，所以不需要过通道。
   source.getKey = function () {
@@ -1168,6 +1261,23 @@ globalThis.__sandboxSource = function (data, loginInfo) {
       throw new Error('source.putLoginHeader: header must be a string');
     }
     __sourceRawCall({ operation: 'putLoginHeader', value: header });
+  };
+  // `getLoginHeaderMap()` 是同一份登录头的 map 形态（上游 `GSON.fromJsonObject`）：没有时答 null。
+  source.getLoginHeaderMap = function () {
+    var header = source.getLoginHeader();
+    if (header === null || header === '') {
+      return null;
+    }
+    try {
+      return __javaMap(JSON.parse(header));
+    } catch (error) {
+      // 坏值只让 map 形态读不到（上游 `fromJsonObject` 同样答 null），不拖垮整条规则。
+      return null;
+    }
+  };
+  // 登出（M25/S5a）：删登录头 + 清这个源的 Cookie（上游 `CookieStore.removeCookie(getKey())`）。
+  source.removeLoginHeader = function () {
+    __sourceCall({ operation: 'removeLoginHeader' });
   };
   // 规则内触发的登录：本仓把**同一段** `loginUrl` 脚本交给登录页（`SignIn`，ADR-0072 §决策 3），
   // 规则内部没有地方跑它（重入同一个 worker 会死锁），因此具名拒绝（book-source.md §11）。
@@ -1278,13 +1388,233 @@ globalThis.__javaRejectedNames = [
 
 globalThis.__javaInteropNames = ['lang', 'security', 'util', 'net', 'io', 'nio', 'math', 'text'];
 
-// Rhino 的另一条互操作入口 `Packages.java.lang.…`（ADR-0037 §决策 5）：具名拒绝，
-// 不让它落到 `Packages is not defined` 那种更难懂的错误。
-globalThis.Packages = new Proxy({}, {
-  get: function () {
-    throw new Error('Packages.* interop is not supported (M2): see book-source.md §11');
+// ── Rhino 互操作**最小垫片**（M25/S5d，ADR-0081） ─────────────────────────────────────────────
+//
+// 上游把 Rhino 的 Java 包入口原样交给脚本（`Packages` / `JavaImporter`）。语料里有一批「一行就能
+// 等价实现」的写法（`new java.lang.String(bytes,'UTF-8')`、`UUID.randomUUID()`、
+// `Arrays.copyOfRange`、`android.util.Base64`、hutool 的 `DigestUtil.md5`…），这里按**白名单**兑现；
+// 白名单之外的成员仍然**具名拒绝**（错误里带完整包路径），不落到 `undefined is not a function`
+// （C-SRC-4）。`javax.crypto` / `java.io` 流 / `okhttp3` / `org.jsoup` 这类需要真实 Java 对象的不在
+// 白名单里（ADR-0081 §被否的备选）。
+globalThis.__bytesOfHex = function (value) {
+  var text = String(value).replace(/\s+/g, '');
+  var out = new Uint8Array(Math.floor(text.length / 2));
+  for (var index = 0; index < out.length; index++) {
+    out[index] = parseInt(text.substr(index * 2, 2), 16) & 0xff;
+  }
+  return out;
+};
+
+var __B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+// 字节与 base64 的互转留在脚本侧：`android.util.Base64` 这类调用不该为一次编码多跑一趟宿主。
+globalThis.__bytesToBase64 = function (bytes) {
+  var data = bytes || [];
+  var out = '';
+  for (var index = 0; index < data.length; index += 3) {
+    var b0 = data[index] & 0xff;
+    var hasB1 = index + 1 < data.length;
+    var hasB2 = index + 2 < data.length;
+    var b1 = hasB1 ? data[index + 1] & 0xff : 0;
+    var b2 = hasB2 ? data[index + 2] & 0xff : 0;
+    out += __B64.charAt(b0 >> 2);
+    out += __B64.charAt(((b0 & 3) << 4) | (b1 >> 4));
+    out += hasB1 ? __B64.charAt(((b1 & 15) << 2) | (b2 >> 6)) : '=';
+    out += hasB2 ? __B64.charAt(b2 & 63) : '=';
+  }
+  return out;
+};
+
+globalThis.__base64ToBytes = function (value) {
+  var text = String(value).replace(/[^A-Za-z0-9+/]/g, '');
+  var out = [];
+  for (var index = 0; index < text.length; index += 4) {
+    var c0 = __B64.indexOf(text.charAt(index));
+    var c1 = __B64.indexOf(text.charAt(index + 1));
+    var c2 = __B64.indexOf(text.charAt(index + 2));
+    var c3 = __B64.indexOf(text.charAt(index + 3));
+    if (c0 < 0 || c1 < 0) { break; }
+    out.push(((c0 << 2) | (c1 >> 4)) & 0xff);
+    if (c2 >= 0) { out.push(((c1 << 4) | (c2 >> 2)) & 0xff); }
+    if (c3 >= 0) { out.push(((c2 << 6) | c3) & 0xff); }
+  }
+  return new Uint8Array(out);
+};
+
+// 一个包节点：白名单里的名字正常取，其余具名拒绝并给出**完整**路径。
+globalThis.__packageNode = function (path, members) {
+  return new Proxy(members, {
+    get: function (target, name) {
+      if (typeof name === 'symbol') { return target[name]; }
+      if (Object.prototype.hasOwnProperty.call(target, name)) { return target[name]; }
+      var full = path ? (path + '.' + String(name)) : String(name);
+      throw new Error('Packages.' + full +
+        ' is not supported (M25/S5d): see book-source.md §11');
+    }
+  });
+};
+
+// `java.lang.String` 上游两用：`new String(bytes,'UTF-8')` 是解码、`String(x).getBytes('UTF-8')` 是编码。
+// 解码直接复用主机的 `bytesToStr`（与 `java.bytesToStr` 同一实现），编码走 `__textBytes`。
+globalThis.__javaLangString = function (value, charset) {
+  var isBytes = value !== null && typeof value === 'object' &&
+    (value instanceof Uint8Array || Array.isArray(value));
+  if (charset !== undefined && isBytes) {
+    // `new` 只认**对象**返回值：原语会被丢掉，所以解出来的文本要装箱（`String(...)` 照样取值）。
+    return new String(__cryptoCall({
+      operation: 'bytesToStr',
+      value: value,
+      charset: String(charset)
+    }));
+  }
+  var text = (value === undefined || value === null) ? '' : String(value);
+  var boxed = new String(text);
+  boxed.getBytes = function (charset2) { return __textBytes(text, charset2); };
+  return boxed;
+};
+
+// `java.util.Arrays`：只答「新数组」，与 Java 一样不共享底层缓冲。
+globalThis.__javaArrays = __packageNode('java.util.Arrays', {
+  copyOfRange: function (source, from, to) {
+    var data = source || [];
+    var start = Number(from) || 0;
+    var end = (to === undefined || to === null) ? data.length : Number(to);
+    return Array.prototype.slice.call(data, start, end);
+  },
+  copyOf: function (source, length) {
+    var data = source || [];
+    var wanted = Number(length) || 0;
+    var out = Array.prototype.slice.call(data, 0, wanted);
+    while (out.length < wanted) { out.push(0); }
+    return out;
+  },
+  toString: function (source) {
+    var data = source || [];
+    var parts = [];
+    for (var index = 0; index < data.length; index++) {
+      parts.push(String(data[index]));
+    }
+    return '[' + parts.join(', ') + ']';
   }
 });
+
+// `java.util.ArrayList`：Java 的 `List` 在这里就是一个数组，`add` / `size` 不可枚举（不影响 JSON）。
+globalThis.__javaArrayList = function () {
+  var list = [];
+  Object.defineProperty(list, 'add', {
+    value: function (value) { list.push(value); return true; },
+    enumerable: false
+  });
+  Object.defineProperty(list, 'size', {
+    value: function () { return list.length; },
+    enumerable: false
+  });
+  return list;
+};
+
+// hutool 的摘要族：语料只用到 md5 / md5Hex，其余成员写到就是具名拒绝。
+globalThis.__javaHutoolDigest = __packageNode('cn.hutool.crypto.digest.DigestUtil', {
+  // 与 `java.md5Encode` 同一实现（宿主侧 hex 摘要），`md5` 再把 hex 还原成 16 字节。
+  md5: function (value) { return __bytesOfHex(__crypto('md5', value)); },
+  md5Hex: function (value) { return String(__crypto('md5', value)); }
+});
+
+globalThis.Packages = __packageNode('', {
+  java: __packageNode('java', {
+    lang: __packageNode('java.lang', {
+      String: __javaLangString,
+      System: __packageNode('java.lang.System', {
+        currentTimeMillis: function () { return Date.now(); }
+      }),
+      // 沙箱里既没有线程也没有「让出 CPU 等一会儿」的办法（ADR-0081 §决策 3）：`sleep` 是空操作。
+      Thread: __packageNode('java.lang.Thread', {
+        sleep: function () { return 0; }
+      })
+    }),
+    util: __packageNode('java.util', {
+      UUID: __packageNode('java.util.UUID', {
+        randomUUID: function () {
+          var id = __helper({ operation: 'randomUUID' });
+          return { toString: function () { return String(id); } };
+        }
+      }),
+      Arrays: __javaArrays,
+      ArrayList: __javaArrayList,
+      HashMap: __javaMap,
+      LinkedHashMap: __javaMap
+    })
+  }),
+  android: __packageNode('android', {
+    util: __packageNode('android.util', {
+      Base64: __packageNode('android.util.Base64', {
+        NO_WRAP: 2,
+        DEFAULT: 0,
+        URL_SAFE: 8,
+        encodeToString: function (bytes) { return __bytesToBase64(bytes); },
+        decode: function (value) { return __base64ToBytes(value); }
+      })
+    }),
+    text: __packageNode('android.text', {
+      TextUtils: __packageNode('android.text.TextUtils', {
+        isEmpty: function (value) {
+          return value === undefined || value === null || String(value).length === 0;
+        }
+      })
+    })
+  }),
+  cn: __packageNode('cn', {
+    hutool: __packageNode('cn.hutool', {
+      core: __packageNode('cn.hutool.core', {
+        codec: __packageNode('cn.hutool.core.codec', {
+          Base64: __packageNode('cn.hutool.core.codec.Base64', {
+            encode: function (value) {
+              return __bytesToBase64(__textBytes(String(value), 'UTF-8'));
+            },
+            decode: function (value) { return __base64ToBytes(value); },
+            decodeStr: function (value) {
+              return __cryptoCall({
+                operation: 'bytesToStr',
+                value: __base64ToBytes(value),
+                charset: 'UTF-8'
+              });
+            }
+          })
+        })
+      }),
+      crypto: __packageNode('cn.hutool.crypto', {
+        digest: __packageNode('cn.hutool.crypto.digest', {
+          DigestUtil: __javaHutoolDigest
+        })
+      })
+    })
+  }),
+  io: __packageNode('io', {
+    legado: __packageNode('io.legado', {
+      app: __packageNode('io.legado.app', {
+        help: __packageNode('io.legado.app.help', {
+          http: __packageNode('io.legado.app.help.http', {
+            // 上游 `StrResponse` 就是「一个地址 + 一段正文」的响应壳：与 `loginCheckJs` 的
+            // `result` 同形，所以直接复用那个构造器（脚本把它 `return` 出去就替换了页面）。
+            StrResponse: function (url, body) {
+              return __sandboxStrResponse({
+                __url: (url === undefined || url === null) ? '' : String(url),
+                body: (body === undefined || body === null) ? '' : String(body),
+                // 上游两参构造的 `StrResponse` 是「这一页就成功了」，状态码默认 200。
+                __code: 200
+              });
+            }
+          })
+        })
+      })
+    })
+  })
+});
+
+// `JavaImporter` + `with(importer)` 要把类名直接带进作用域，那是 Java 对象模型的完整仿真（语料用它
+// 装 `javax.crypto`），不在最小垫片里：给一个具名错误，而不是 `JavaImporter is not defined`。
+globalThis.JavaImporter = function () {
+  throw new Error('JavaImporter is not supported (M25/S5d): see book-source.md §11');
+};
 
 // 验证族（ADR-0068 §决策 5）：这些调用等的是**人**，所以走独立的 host 频道，返回 Promise。
 // 上游是「同步阻塞」，本仓的沙箱不可能阻塞 QuickJS 去等宿主，因此规则里要 `await`（差异登记在

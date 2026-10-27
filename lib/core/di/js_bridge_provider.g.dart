@@ -61,7 +61,7 @@ final class JsBridgeProvider
   }
 }
 
-String _$jsBridgeHash() => r'2980d936ca40c13bdaf91b4a3960a3f21b4adae9';
+String _$jsBridgeHash() => r'ef2509fcbad82a4f9653adda92877edfcc2a12d4';
 
 /// Provides the per-source `infoMap` (`book-source.md` §6, M25/S3b).
 ///

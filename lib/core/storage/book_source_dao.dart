@@ -229,6 +229,18 @@ class BookSourceDao extends DatabaseAccessor<ReaderDatabase>
             ..where(($BookSourcesTable table) => table.id.equals(id)))
           .write(BookSourcesCompanion(loginInfo: Value<String?>(loginInfo)));
 
+  /// Writes the login info of every row whose URL is [sourceUrl] (`source.putLoginInfo`, M25/S5a).
+  ///
+  /// A running rule only has the URL, so this is the write side for what the sandbox stores; the
+  /// rows are kept in step for the same reason as [writeLoginHeaderByUrl].
+  Future<int> writeLoginInfoByUrl({
+    required String sourceUrl,
+    required String? loginInfo,
+  }) =>
+      (update(bookSources)
+            ..where(($BookSourcesTable table) => table.url.equals(sourceUrl)))
+          .write(BookSourcesCompanion(loginInfo: Value<String?>(loginInfo)));
+
   /// Refreshes the stored payload of row [id] — the idempotent half of a re-import.
   ///
   /// Only `payload` and `updatedAt` change; user state and display metadata stay.

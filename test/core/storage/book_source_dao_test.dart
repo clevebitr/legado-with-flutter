@@ -531,6 +531,28 @@ void main() {
       );
     });
 
+    test('writeLoginInfoByUrl_writesEveryRowOfThatUrl', () async {
+      // M25/S5a：`source.putLoginInfo` 只有源 URL，写的是这个 URL 的整组行（同 S3b 的登录头）。
+      final int first = await insert(name: '甲');
+      final int second = await insert(name: '乙');
+
+      await dao.writeLoginInfoByUrl(
+        sourceUrl: 'https://example.test',
+        loginInfo: '{"账号":"n"}',
+      );
+
+      expect((await dao.findById(first))?.loginInfo, '{"账号":"n"}');
+      expect((await dao.findById(second))?.loginInfo, '{"账号":"n"}');
+
+      await dao.writeLoginInfoByUrl(
+        sourceUrl: 'https://example.test',
+        loginInfo: null,
+      );
+
+      expect((await dao.findById(first))?.loginInfo, isNull);
+      expect((await dao.findById(second))?.loginInfo, isNull);
+    });
+
     test('findLoginHeaderByUrl_whenNoRowHasOne_answersNull', () async {
       await insert();
 

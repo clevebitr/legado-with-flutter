@@ -36,6 +36,8 @@ JsBridge jsBridge(Ref ref) {
     sourceVariables: ref.watch(sourceVariableStoreProvider),
     // 登录头（`source.putLoginHeader`，M25/S3b）：随 job 下传、写过就写穿并合并其中的 Cookie。
     loginHeaders: ref.watch(sourceLoginHeaderStoreProvider),
+    // 登录信息（`source.putLoginInfo` / `removeLoginInfo`，M25/S5a）：只在规则写过时写穿 `login_info`。
+    loginInfos: ref.watch(sourceLoginInfoWriterProvider),
     // 探索规则读写的 `infoMap`（M25/S3b）：内存表，随 worker 的会话活着。
     infoMaps: ref.watch(sourceInfoMapStoreProvider),
     // `java.openUrl`（M25/S3b）：确认弹窗 + 系统浏览器，由装配根绑定（`core/` 不认识 widget）。

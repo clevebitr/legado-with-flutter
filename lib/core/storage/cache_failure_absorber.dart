@@ -3,7 +3,7 @@ import 'package:drift/drift.dart'
 import 'package:drift/isolate.dart' show DriftRemoteException;
 import 'package:drift/native.dart' show SqliteException;
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/logging/error_text.dart';
 
 /// Runs one cache operation and turns a database failure into a cache miss.
 ///
@@ -40,7 +40,7 @@ void _report(
   String url,
 ) {
   logger.debug(
-    '$scope unavailable: url=${redactUrl(url)}',
+    '$scope unavailable: url=$url',
     describeError(error),
     stackTrace,
   );

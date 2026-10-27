@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/logging/error_text.dart';
 
 // 私有字段不能做具名初始化形参（Dart 限制），手写赋值是必要的。
 // ignore_for_file: prefer_initializing_formals
@@ -104,7 +104,7 @@ final class SourceLoginHeaderStore {
     } on Exception catch (error, stackTrace) {
       // 首读失败按「没有登录头」处理：重试会拖慢每一个 job，而没有它只是少带一个头。
       _logger?.warning(
-        'Could not read the login header: source=${redactUrl(sourceUrl)}',
+        'Could not read the login header: source=$sourceUrl',
         describeError(error),
         stackTrace,
       );
@@ -129,7 +129,7 @@ final class SourceLoginHeaderStore {
       } on Exception catch (error, stackTrace) {
         // 落库失败只记 warning：登录头丢了只是要重新登录一次。
         _logger?.warning(
-          'Could not persist the login header: source=${redactUrl(sourceUrl)}',
+          'Could not persist the login header: source=$sourceUrl',
           describeError(error),
           stackTrace,
         );

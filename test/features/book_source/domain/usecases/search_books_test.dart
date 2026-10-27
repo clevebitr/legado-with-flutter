@@ -325,7 +325,7 @@ void main() {
         final BookSource source = _source();
         // ADR-0026 §决策 2：非顶层字段被拒 → 置空 + warning，搜索结果照常返回。
         final BookSource withJs = source.copyWith(
-          searchRule: source.searchRule.copyWith(name: '@xpath://div'),
+          searchRule: source.searchRule.copyWith(name: '@webJs:'),
         );
 
         final ParseResult<List<Book>> result = await SearchBooks(
@@ -350,7 +350,7 @@ void main() {
             _service(http);
         final BookSource source = _source();
         final BookSource withXpath = source.copyWith(
-          searchRule: source.searchRule.copyWith(bookList: '@xpath://div'),
+          searchRule: source.searchRule.copyWith(bookList: '@webJs:'),
         );
 
         final ParseFailure<Never> failure = _failure(
@@ -359,7 +359,7 @@ void main() {
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
         // 顶层列表规则被拒必须整次失败（C-SRC-4），且报的是那条语法本身。
-        expect(failure.rulePath, 'unsupported:@xpath:');
+        expect(failure.rulePath, 'unsupported:@webJs');
       },
     );
 

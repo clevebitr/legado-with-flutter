@@ -4,7 +4,7 @@ import 'dart:async';
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/logging/error_text.dart';
 
 /// The persisted side of a book source's variable map (`source.getVariable` /
 /// `source.setVariable`, ADR-0076 §决策 1).
@@ -152,7 +152,7 @@ final class SourceVariableStore {
       await repository.write(sourceUrl, <String, String?>{...values});
     } on Exception catch (error, stackTrace) {
       _logger?.warning(
-        'Could not persist the source variables: source=${redactUrl(sourceUrl)}',
+        'Could not persist the source variables: source=$sourceUrl',
         describeError(error),
         stackTrace,
       );
@@ -167,7 +167,7 @@ final class SourceVariableStore {
       return await repository.read(sourceUrl);
     } on Exception catch (error, stackTrace) {
       _logger?.warning(
-        'Could not read the source variables: source=${redactUrl(sourceUrl)}',
+        'Could not read the source variables: source=$sourceUrl',
         describeError(error),
         stackTrace,
       );

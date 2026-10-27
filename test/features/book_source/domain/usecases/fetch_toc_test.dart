@@ -225,7 +225,7 @@ void main() {
           ..serve(_tocUrl, _page('book_page.html'));
         final BookSource source = _source();
         final BookSource withJs = source.copyWith(
-          tocRule: source.tocRule.copyWith(chapterName: '@xpath://div'),
+          tocRule: source.tocRule.copyWith(chapterName: '@webJs:'),
         );
         final ({PageFetchService pages, FakeLogPrinter printer}) service =
             _service(http);
@@ -453,7 +453,7 @@ void main() {
 
         final List<Chapter> chapters = _data(
           await FetchToc(pages: service.pages)
-              .execute(_pagingSource('@xpath://div'), _tocUrl),
+              .execute(_pagingSource('@webJs:'), _tocUrl),
         );
 
         // ADR-0026 §决策 2：非顶层字段被拒 → 降级为「没有下一页」+ warning。

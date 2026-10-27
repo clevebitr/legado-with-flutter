@@ -159,8 +159,8 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 | 17 | `java.put(key,value)` / `java.get(key)`（**仅限 js 内**，js 中不能使用 `@get`） | — | 所有字段 | M1 | 已确认 |
 | 18 | `{{}}` 内嵌规则 / JS（搜索 URL 与发现 URL 内**只能**用 JS；其他位置默认 JS，用其他规则必须带标志头 `@@` / `//` 或 `@xpath:` / `$.` 或 `@json:` / `@css:`） | `{{result.match(...)}}` | 所有字段 | M1 | 已确认 |
 | 19 | `{}`（阅读 2.0 遗留规则，**只能**用 JSONPath，应尽量避免） | `{$.data.name}` | 所有字段 | M1 | 已确认 |
-| 20 | `:正则规则`（不可省略标志；**仅书籍列表与目录列表**） | 待按原版实现确认 | 仅书籍列表、目录列表 | **M2** | 待验证 |
-| 21 | `@xpath:` XPath（以 `//` 开头时可省略标志） | `@xpath://div[@id='a']/text()` | 所有字段 | **M2** | 不支持 |
+| 20 | `:正则规则`（不可省略标志；**仅书籍列表与目录列表**；`&&` 在里面是**正则链**不是分支连接符） | `:(?s)(\d+)" class="(isvip)?[^"]*name[^>]*>([^<]*)` | 仅书籍列表、目录列表 | **M25/S5e** | 已确认（每条匹配成一个条目，条目字段用 `$1` / `$2` / `$0` 模板取组值，可带 `##正则##替换`；值规则位置具名拒绝 `unsupported::`，条目上的非模板规则具名拒绝 `unsupported:regex:item`。语义见下方 `:正则` 注记） |
+| 21 | `@xpath:` XPath（以 `//` 开头时可省略标志；本仓**只认 `//`**，见下方注记） | `@xpath://div[@id='a']/text()` | 所有字段 | **M25/S5b** | 已确认（自研子集：路径 + `*` / 标签 / `text()` / `@attr`、谓词（位置、`@a='v'`、`contains()`、`not()`、`starts-with()`、`position()`/`last()`、存在性路径）、`\|` 并集、`following-sibling::` 等七个轴；其余轴与函数**具名拒绝**。语义见下方 XPath 注记） |
 | 22 | `@webJs` 网页 JS | — | 正文规则 | **M2** | 不支持 |
 | 23 | `sourceRegex` 源码正则 | `sourceRegex`（`ruleContent`） | 正文规则 | **M21a** | 已确认（先截取再建 scope，不命中即 `parseFailed`；见 §4.3 与 ADR-0068） |
 | 24 | 字体反爬字形映射 | `queryTTF` / `queryBase64TTF` / `replaceFont` | 正文替换规则 | **M21a** | 已确认（自研 `cmap` + `post` 解析；字形名优先、id 兜底，见 §6） |
@@ -169,7 +169,7 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 | 27 | `%%` 并行交叉合并（与 `\|\|`、`&&` 同级的选择器连接符） | — | 所有字段 | **M0** → Phase 3.2（与 #10 / #11 同族，复用同一套连接符切分） | 已确认 |
 | 28 | 索引作为 `@` 分段后每段的首规则：`.1` / `[1]` / `!0` / `children[1]`，等价于 `children` + 该索引（可与 #5 / #6 / #26 的位置写法组合）；**任意段末尾**的 `.N` / `.-N`（纯数字）同样是索引（`#id img.0`，ADR-0069 G3） | `head@.1@text`、`head@[1]@text`、`head@children[1]@text`、`#image_div img.0@src`（等价） | 所有字段 | **M0** → Phase 3.1（已实现） | 已确认 |
 | 29 | `@css:` 内的 jsoup 索引伪类 `:eq(n)` / `:gt(n)` / `:lt(n)`（**兄弟索引**，0-based，**不是**结果集索引） | `@css:div#info > p:eq(3) @text` | 所有字段 | **M0** → Phase 3.2 | 已确认 |
-| 30 | 提取段里的**嵌套规则**（末段本身是一条规则，如 `class.a@css:.b`） | `class.a@css:.b` | 所有字段 | **M2 / 暂不实现**（复审触发条件：真实语料统计显示使用率 > 0 且影响可用率时改判 M1） | 不支持 |
+| 30 | 提取段里的**嵌套规则**（末段本身是一条规则，如 `class.a@css:.b`） | `class.a@css:.b` | 所有字段 | **M2 / 登记不做**（2026-10-27 复核：修掉普查探测器后语料命中 **0 源 / 0 处**，见下方 #30 注记） | 有意差异（触发 = 出现依赖它的真实源） |
 | 31 | `<js>…</js>` JS 包装（**任意位置**，可作其他规则的分隔符；与 #14 同能力、不同包装） | `tag.li<js>…</js>//a`（原版文档示例） | 所有字段 | **M12**（值规则与列表规则都支持） | 已确认（**分段链**：上一段产出是下一段 `result`，`{{result}}` 由此拼进后续文本；ADR-0047 §决策 2） |
 
 > **G4 状态（2026-10-14）：** #15–#19 **全部**已翻「已确认」，逐行证据（源名 + 字段 + 产出样本）见
@@ -214,6 +214,12 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 >   html / all / 属性）扩成「提取值可以是子规则」，与 `##` 替换、以及 JSON / JS 的 scope 改造
 >   三者叠加，属「接口形状未定型就横向铺开」；且当前无使用率证据。`rulePath` 用
 >   **`unsupported:nested-rule`**，与已支持的中段 `@css:` 区分开。
+>   **2026-10-27 复核（M25/S5c）：** 原先登记的「22 源 / 125 处」是**普查工具误报**——探测器用
+>   `text.split('@').skip(1)` 切段（不管括号、引号、`{{…}}` 与 `@js:`），于是把三类**已支持**的写法
+>   算成了 #30：① 整条规则以 `@css:` / `@json:` 开头又含后续 `@`（117 条）、② `{{@css:…@text}}`
+>   模板里的内联规则、③ `+@css:` / `-@css:` 正倒序前缀。按「括号感知切段 + 首段非空（去掉 `+`/`-`/`@@`）」
+>   重算后命中 **0 源 / 0 处**，`corpus_census.dart` 已改成这个口径。因此它维持「不做」，但改为
+>   **有意差异 + 触发条件（出现依赖它的真实源）**，不再排在切片里。
 > - **#12 注记（裁决 5）：** `@css:` 内的**状态伪类**（`:hover` / `:visited` / `:focus` …）在静态
 >   DOM 下**恒不匹配**，这是正确答案而不是错误：实现为「成功且结果为空」，不报
 >   `unsupportedRule`。同处登记两处 cascadia ≠ jsoup 的差异（当前都表现为 `parseFailed`，
@@ -343,7 +349,7 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > 「`class` / `id` / `tag` / `text` / `children`，**或一段原始 CSS**」。类型不在这五个之内时
 > （`.searchresult`、`li`、`dd`、`p`、`tr!0`、`#txt`、`div.item`），该段整体作为 CSS 选择器交给
 > cascadia；`!` / `[...]` 后缀仍按位置解析（`tr!0` 不是合法 CSS）。`unsupportedRule` 只留给真正
-> 未实现的标志（`@xpath:` / 裸 `//` / `:正则` / `@webJs`）。依据：G2b spot-check 实测
+> 未实现的标志（`:正则` / `@webJs`；XPath 自 M25/S5b 起支持，见下方注记）。依据：G2b spot-check 实测
 > **197 条 M0 源中 137 条（69.5%）** 依赖该写法（复算命令与输出见 `tool/spot_check/README.md` §3；
 > ADR-0032 §背景的原始 157/270 已作废）。
 >
@@ -357,13 +363,51 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > `:168`（`private fun analyzeJs()`）、`:171`（`JS_PATTERN.findAll(ruleUrl)`）—— 因此它在 **URL 规则**
 > 里同样生效。核对日期：2026-10-12。
 
+> **`:正则` 注记（2026-10-27，M25/S5e）：** 上游只在 `getElements` / `getElement` 里有 `Mode.Regex`
+> 分支（`AnalyzeRule.kt:393/430`），`getString` / `getStringList` 没有——所以这一条**只作用于书籍列表与
+> 目录列表**，值规则位置写了 `:` 是具名拒绝（`unsupported::`），而不是一个悄悄返回规则原文的结果。
+> 三条要与上游对齐的语义：
+>
+> 1. **`&&` 是正则链**（`AnalyzeByRegex.getElements` 的 `rule.splitNotBlank("&&")`）：除最后一条外，
+>    每条正则把文本**缩到自己的匹配段**再交给下一条；最后一条每个匹配产出一个条目。
+> 2. **条目 = 一次匹配的全部组**：`[整段, 组1, 组2, …]`（Java 的 `groupValues`，含 `$0` 整段）。
+>    条目字段用模板取组值：`chapterName: $2$3`、`chapterUrl: https://a.test/c/$1`（上游
+>    `SourceRule.splitRegex` 拆 `\$\d{1,2}`，`makeUpRule` 用该条的组值填回）。模板可以带
+>    `##正则##替换`（矩阵 #9）。
+> 3. **文本来源是页面正文**（`DomScope.body`，元素 scope 上是它的 `outerHTML`）；对着 JSON 值跑正则
+>    是 `parseFailed`（没有正文）。条目上的非模板规则（例如 `class.a@text`）具名拒绝为
+>    `unsupported:regex:item`——正则匹配没有 DOM 可选。
+>
+> 语料命中 **2 源 / 2 处**，都是目录列表（若夏的 `<id> isvip 章节名` 三段组、快眼小说的
+> `正文卷…/dl && href="…">名字` 正则链）。
+
+> **XPath 注记（2026-10-27，M25/S5b，ADR-0080）：** 上游把「以 `/` 开头」的规则都当 XPath
+> （`AnalyzeRule.kt:637-639`），本仓只认 **`//`** 与 **`@xpath:`**（大小写不敏感）：语料里 131 处 XPath
+> 没有一处以单个 `/` 开头，而根相对地址（`/static/x.jpg`）也可能落进 `coverUrl` 这类规则字段——把
+> 「`/` 开头一律 XPath」照搬进来会让那种源静默变成一条选不中的表达式。支持面是**自研子集**（没有可用的
+> Dart 3 XPath 包，取舍见 ADR-0080）：
+>
+> - **路径**：`/`（子）、`//`（后代）、`.` / `..`、`@attr`（属性轴）；
+> - **节点测试**：标签名、`*`、`text()`；
+> - **轴**：`child` / `descendant` / `descendant-or-self` / `self` / `parent` / `following-sibling` /
+>   `preceding-sibling` / `attribute`；
+> - **谓词**：`[N]`、`[@a='v']`（`'` 与 `"` 都收）、`[contains(@class,'x')]`、`[contains(text(),'x')]`、
+>   `[not(...)]`、`[starts-with(...)]`、`[position() < last()-1]`、`[.//a]`（存在性）、`[a and b]` / `or`；
+> - **并集**：`|`（答案是**节点集合**，按文档顺序去重）。
+>
+> 三条语义口径：① 结果是**文档顺序**（`//h2/a//text()` 答 `<b>粗体</b>尾巴` 的先后）；② 元素的值是
+> 折叠空白后的整段文本（与 `text` 提取同一口径），`text()` 只答**直接**文本子节点；③ 列表规则必须选中
+> 元素——选中文本 / 属性的列表规则是 `parseFailed`，不静默少几条。**具名拒绝**（`rulePath` 为
+> `unsupported:xpath:<语法>`）：`ancestor` / `ancestor-or-self` / `following` / `preceding` / `namespace`
+> 轴、`node()` / `comment()` 节点测试、`@*`、以及 `count()` / `normalize-space()` / `concat()` 等函数。
+
 ### 3.1 实现分期（对齐 ADR-0014）
 
 | 阶段 | 范围 | 完成判定 |
 |---|---|---|
 | **M0** | 矩阵 #1–#14、#25、#26、#27、#28、#29；搜索 / 详情 / 目录 / 正文四段完整字段；`nextTocUrl`；`nextContentUrl`；`{{key}}`、`{{page}}`、`{{baseUrl}}` | 至少 2 个真实书源完成「搜索 → 详情 → 目录 → 正文」离线回放 |
 | **M1** | 矩阵 #15–#19；`exploreUrl` 发现页；`canReName`；`updateTime`；`java.timeFormat`；`concurrentRate` | 每条语法至少 1 条真实书源验证记录 |
-| **M2 / 暂不实现** | 矩阵 #20–#24、#30；登录脚本与登录 UI；RSS / 订阅源；朗读规则 | 命中时返回 `ParseFailure(unsupportedRule)` |
+| **M2 / 暂不实现** | 矩阵 #20、#22、#30；登录脚本与登录 UI；RSS / 订阅源；朗读规则 | 命中时返回 `ParseFailure(unsupportedRule)` |
 
 **M0 未全部通过前，不得发布「支持导入书源」的版本。**
 命中 M2 或任何未实现语法时，禁止静默返回空结果（C-SRC-4）。
@@ -446,10 +490,27 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 | `preUpdateJs` | 取目录**之前**跑的脚本；失败即整段目录失败 | **M25/S2** |
 | `updateTime` | 可调用 `java.timeFormat(timestamp)` 转为 `yyyy/MM/dd HH:mm` | M1 |
 | `nextTocUrl` | 支持**单个 URL** 或 **URL 数组**；JS 返回 `[]` / `null` / `""` 时停止加载下一页 | M0 |
-| `content` | 正文内容；可含多个 `##` 替换 | M0 |
+| `content` | 正文内容；**每一个匹配都参与**（上游 `getString` 用换行拼接 `getStringList`），结果统一成**纯文本**（`@html` / `@all` 的标签在这里摘掉） | M0 / M26 |
 | `nextContentUrl` | 正文分页；返回空即停止 | M0 |
 | `replaceRegex` | 正文的批量替换规则 | M0 |
 | `canReName` | 允许重命名书籍 | M1 |
+
+> **正文的统一形状（2026-10-27，M26 前置修复）：** 正文交给 `replaceRegex` 与净化规则之前，先
+> 变成**纯文本**，并且**每个匹配都参与**。两条都是对着真实语料修的：
+>
+> 1. **多匹配拼接。** `content` 以前只取第一条匹配，`#content p@textNodes` 这种「一段一个元素」的
+>   规则会让整章只剩一行（免费小说）。现在按上游 `getString` 的口径把全部匹配用换行拼起来
+>   换行 → 与分页拼接、副文追加同一形状）。
+> 2. **HTML → 纯文本。** 语料 249 条 `content` 规则里有 **83 条**以 `@html` / `@all` 结尾，产出的是
+>   标签（PO18 系、顶点小说网等）。上游把正文当 HTML 留着、由自己的富文本视图渲染；本仓的阅读端
+>   是纯文本（`readerBodyText` 按换行分段），所以标签必须在正文边界就摘掉：块级标签（`p` / `div` /
+>    `br` / `li` / `tr` …）变成换行，行内标签剥掉，`<script>` / `<style>` 的**内容**整段丢弃，
+>   `&nbsp;` / `&amp;` / `&#xNN;` 解码，空行与缩进折叠，图片丢弃（阅读端没有图片落点，S6c 才有）。
+> 3. **转换在 `replaceRegex` 之前。** 这些替换规则是作者对着**能读的正文**写的（`&nbsp;`、`\<.*`
+>   这类清理 HTML 残留的写法）；让它们继续面对标签，会把标签后面的真文字一起删掉。成品正文再做一次
+>   首尾 `trim`（`replaceRegex` 删掉一整段会留下那一段的换行）。
+> 4. 实现是**扫描器不是 DOM**（`html_to_text.dart`）：正文已经为跑规则解析过一次，为了丢标签再解析
+>   一遍是 M26 要去掉的那类工作；纯文本输入直接原样返回。
 
 > **§4.1 的分页与净化语义（2026-10-12，随 `docs/dev/roadmap.md` 3.5 落地）：** 上表是原版语义；
 > 本仓实现到哪一步、以及与原版有意不同的地方，逐条记在这里（原来的「返回空即停止」太粗，
@@ -489,7 +550,7 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 >   本仓的正文保持解析出来的原样（否则语料回归里已有的正文会被改形）。
 >   规则体带选择器时报 `parseFailed`（规则里没有可选的 DOM）；`@js:` 净化规则在沙箱里跑
 >   （`result` = 拼接后的整章正文，与上游 `analyzeRule.getString(replaceRegex, contentStr)` 同形），
->   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
+>   其余未实现标志（`@webJs` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
 >   （ADR-0026 §决策 2）。
 
 > **副文与正文页标题（2026-10-26，M25/S2，ADR-0078）：** `ruleContent` 的另外两条字段也该生效了，
@@ -733,7 +794,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `result` | `String?` \| `List` \| 响应对象 | 当前页 responseBody（原版同名变量） | M0 |
 | `result`（**仅 `loginCheckJs`**） | 响应对象 | `body` 属性 + `url()` / `code()` / `headers()` / `header(name)` / `cookie()` / `contentType()` / `isSuccessful()` / `String(result)`——上游 `StrResponse` 的形状。拦截器的返回值决定页面（见下方「`loginCheckJs` 的返回值」） | M21a |
 | `page` | `int` | 当前页码 | M0 |
-| `source` | 只读对象 | 仅 `name`、`url`、`group`，其余不可见 | M0 |
+| `source` | 只读对象 | **白名单字段**（M25/S5a）：`name` / `url` / `group`（本仓名）+ 上游名 `key` / `bookSourceUrl` / `bookSourceName` / `bookSourceComment` / `header` / `loginUrl`，其余不可见（`jsLib` 只在宿主侧） | M0 / M25/S5a |
 | `book` | 对象（字段 + 方法） | 字段 `name` / `author` / `bookUrl` / `tocUrl` / `intro` / `kind`；阶段不知道时为 `null`。方法：`putVariable(k,v)` / `getVariable(k)`（= `java.put` / `java.get` 的规则变量表）、`setType` / `getType` / `setReverseToc` / `getReverseToc`（job 内可读回，**不影响宿主**）、`type` 字段。ADR-0061 §决策 5、ADR-0062 §决策 2 | M17 / M24 |
 | `http.get(url, options)` | `String` | 经 `core/network/HttpClient` 代理，受超时与重试策略约束；`{response:true}` 改为返回整个响应对象 | M0 / M21a |
 | `http.post(url, options)` | `String` | 同上 | M0 / M21a |
@@ -747,9 +808,14 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `cookie.getCookie(url[, key])` / `cookie.setCookie(url, value)` / `cookie.removeCookie(url, key)` | `String?` / `void` / `void` | 与 `java.getCookie` 同一通道的上游另一种拼写；`setCookie` 可传一对也可传整条 `a=1; b=2`（逐对落宗），`removeCookie` 等价「空值 + `Max-Age=0`」 | M24 |
 | `java.setContent(html)` | `void` | 把本 job 的页级 scope 换成这份 HTML：随后的 `java.getString*` / `parse.*` 读新页面（`result` 绑定不变） | M24 |
 | `java.toast(msg)` / `java.longToast(msg)` | `void` | 转发到装配根绑定的 `UserMessages`（snack bar），同一 job 内同句只贴一次，同时记 info 日志 | M24 |
-| `source.getVariable(key)` / `setVariable(key, value)` / `putVariable(k, v)` | `String` / `void` | **每源持久变量**（Drift 表 `source_variables`），与 `java.get` / `put` 的规则变量**不是**同一张表；`setVariable` 写 `null` 删键 | M24 |
+| `source.getVariable()` / `setVariable(v)` / `putVariable(v)` | `String` / `void` | **整份变量**，无参（上游 `BaseSource.kt:283-295`）：源拿它当自己的小仓库（语料里 54 处读、41 处写，`setVariable(JSON.stringify(...))` + `getVariable()` 是主流写法）。存在 `source_variables` 的**无名条目**里（与 `put`/`get` 同一张表），写 `null` / 不传即删除；与 `java.get` / `put` 的规则变量**不是**同一张表。**M25/S5a 改正**：S3b 曾做成 `getVariable(key)` 的键值形状（语料命中 0） | M24 / M25/S5a |
+| `source.put(k, v)` / `source.get(k)` | `String` / `String` | **按名键值**（上游 `v_<url>_<name>`）：`put` 把值原样答回去（真实源拿返回值拼 URL），`get` 未写过答空串 | M25/S5a |
 | `source.getKey()` / `source.getTag()` | `String` | 源身份：`getKey()` = `bookSourceUrl`（= `source.url`），`getTag()` = `bookSourceName`（= `source.name`）；纯读取，不过通道 | M25/S3b |
 | `source.getLoginHeader()` | `String?` | 登录头 JSON（上游存在 `CacheManager` 的 `loginHeader_<url>`）；本仓存 `book_sources.login_header` 列，随 job 下传。**没有值时是 `null`**（`getVariable` 才是空串） | M25/S3b |
+| `source.getLoginHeaderMap()` | 对象 \| `null` | 登录头的 map 形态（上游 `GSON.fromJsonObject`）：**Java `Map` 的读法都可用**（`get` / `put` / `remove` / `containsKey` / `size` / `isEmpty`，方法不可枚举，`JSON.stringify` 只看数据），没有登录头或值不是 JSON 对象时答 `null` | M25/S5a |
+| `source.removeLoginHeader()` | `void` | **登出**：删登录头，并清掉这个源 URL 会发的 Cookie（上游 `CookieStore.removeCookie(getKey())`）。规则自己能清、不需要 UI | M25/S5a |
+| `source.getLoginInfoMap()` / `getLoginInfo()` | 对象 / `String` | 登录表单收集的值（ADR-0072 §决策 3）的**快照**：`Map` 的读法同 `getLoginHeaderMap()`；没有值时答空表（`getLoginInfo()` 答 `"{}"`）。只有登录自己的 job 里读得到（`roadmap.md` §3.7 的登记差异） | M22-a |
+| `source.putLoginInfo(json)` / `removeLoginInfo()` | `bool` / `void` | **写登录信息**（M25/S5a）：只收 JSON 文本，收下就 `true`；解析不出对象时答 `false`（上游照样存，读时退回空表）。写入随 job 结束写穿 `book_sources.login_info`（按 URL），同一 job 内 `getLoginInfoMap()` 立刻读到新值 | M25/S5a |
 | `source.putLoginHeader(header)` | `void` | 写入登录头并**立即写穿**：同一 job 内读回新值，job 结束后下一个阶段的请求自动带上它（§2 的请求头合并），其中的 `Cookie` 同时并进 Cookie 宗 | M25/S3b |
 | `src` | `String?` | **当前页正文**（上游 `AnalyzeRule.evalJS` 绑的 `content`）：整页规则与元素级规则读到同一份；没有页面的 job（URL 规则、`header` 规则）是 `null` | M25/S3b |
 | `chapter` | 对象 \| `null` | 正在读的这一章：`title` / `url` / `isVip` / `isPay` / `isVolume` / `updateTime` + `getVariable(k)` / `putVariable(k,v)`（与 `book` 一样落**规则变量表**，差异见下）。搜索 / 详情 / 目录阶段是 `null`；`tocRule.formatJs` 的循环里逐章重绑 | M25/S3b |
@@ -955,9 +1021,10 @@ map。四条要知道的：
    只存头不并宗的话下一次请求会被宗里的旧 Cookie 盖掉。
 3. **值的形状是「JSON 对象文本」**，本仓照上游不校验：解析不出来时只记 warning 并跳过合并
    （坏值不该让请求失败），但 `putLoginHeader` 只收字符串。
-4. **两条与上游不同的地方**：`source.removeLoginHeader()` **未绑定**（上游没标 `@JavascriptInterface`，
-   登出是 UI 的事，本仓不出登出入口）；规则内调用 `source.login()` **具名拒绝**——登录脚本由登录页跑
-   （`SignIn`，同一段 `loginUrl` 脚本），规则里重入 worker 会死锁。
+4. **一条与上游不同的地方**：规则内调用 `source.login()` **具名拒绝**——登录脚本由登录页跑
+   （`SignIn`，同一段 `loginUrl` 脚本），规则里重入 worker 会死锁。`source.removeLoginHeader()` **M25/S5a
+   起已绑定**：删登录头 + 清这个源 URL 会发的 Cookie（上游 `CookieStore.removeCookie(getKey())`），
+   所以语料里那些 `clearLogin()` / `gx()` 按钮写法能跑。
 
 **阶段上下文绑定（M25/S3b，`src` / `chapter` / `nextChapterUrl` / `fromBookInfo` / `infoMap`）：**
 这五条都是**阶段事实**，由造 job 的那一层填，规则只读。四条要知道的：
@@ -973,14 +1040,57 @@ map。四条要知道的：
 4. **`src` 是 job 开始时的正文。** `java.setContent(html)` 之后同一个 job 里的 `src` 不变（它已经是
    快照），下一页/下一条规则才看到新正文——上游每次 `evalJS` 重新绑 `content`，效果相同。
 
+**`source` 对象（M25/S5a）：** 上游把**整个源实体**绑成 `source`（`BaseSource.evalJS` 的
+`bindings["source"] = this`），所以任何公开字段都读得到。本仓不那样做（会把 `payload` / 行 id / 宿主
+字段一起漏出去），改成**白名单字段**（表里那一行）+ 方法面。五条要知道的：
+
+1. **字段是白名单，不是实体。** `key`（= `bookSourceUrl`）、`bookSourceUrl`、`bookSourceName`、
+   `bookSourceComment`、`header`、`loginUrl`；本仓自己的 `name` / `url` / `group` 保留（同一批值的旧名）。
+   `jsLib` **仍不外泄**（库脚本要读自己的文本就是循环依赖）。
+2. **`header` 的两种形态不同源**：规则形态（`@js:` / `<js>`）是**声明原文**——真实源靠前缀判断要不要
+   自己求值；JSON 形态是**解析后的表重新序列化**，所以空白与键序不是作者写的那份（唯一的相关差异，
+   `JSON.parse(source.header)` 与字符串前缀判断都照常成立）。
+3. **`bookSourceComment` 不单独建模**（留在 `extra`，§2 的未建模清单）：五个源拿它当脚本库
+   （`eval(String(source.bookSourceComment))`），所以这里给的就是声明的原文，读不到才答 `null`。
+4. **两套变量不是一回事**：`put(k, v)` / `get(k)` 是**按名键值**（上游 `v_<url>_<name>`），
+   `getVariable()` / `setVariable(v)` / `putVariable(v)` 是**整份字符串**（上游 `sourceVariable_<url>`）。
+   本仓两者共用 `source_variables` 表——整份变量落在**无名条目**里，好处是只有一套写穿路径。
+   `put` 答回写入的值（真实源拿返回值拼 URL），`get` 未写过答空串。
+5. **登录信息（`login_info`）可写。** `putLoginInfo(json)` / `removeLoginInfo()` 在**同一个 job 内**立刻
+   可见（读的也是同一份槽位），job 结束时由桥写穿 `book_sources.login_info`（按 URL，同登录头）。
+   只收字符串：解析不出对象就答 `false`，不把读不回来的文本写进库（上游会存）。
+
+**`Packages.*` 最小垫片（M25/S5d，ADR-0081）：** 上游把 Rhino 的 Java 包入口原样交给脚本，语料里有一批
+「一行就能等价实现」的写法。本仓按**白名单**兑现它们，白名单外的成员仍然具名拒绝（错误里带完整包路径）。
+术语与边界：
+
+1. **只做数据/编码/集合，不做对象模型。** 白名单是：`java.lang.String`（`new String(bytes,'UTF-8')`
+   解码、`String(x).getBytes('UTF-8')` 编码）、`java.lang.System.currentTimeMillis`、
+   `java.lang.Thread.sleep`（**空操作**：沙箱里没有线程，也不会为一个 `sleep` 让出预算）、
+   `java.util.UUID.randomUUID().toString()`、`java.util.Arrays`（`copyOfRange` / `copyOf` / `toString`）、
+   `java.util.HashMap` / `LinkedHashMap`（`Map` 读法同 §6 的登录头 map）/ `java.util.ArrayList`
+   （数组 + 不可枚举的 `add` / `size`）、`android.util.Base64`（`encodeToString` / `decode`，
+   `NO_WRAP` 等常量照有）、`android.text.TextUtils.isEmpty`、hutool 的 `DigestUtil.md5` / `md5Hex` 与
+   `cn.hutool.core.codec.Base64`（`encode` / `decode` / `decodeStr`）、
+   `io.legado.app.help.http.StrResponse(url, body)`（与 `loginCheckJs` 的 `result` 同形，脚本把它
+   `return` 出去就替换页面）。
+2. **`javax.crypto` / `java.io` 流 / `java.net.URL` / `okhttp3` / `org.jsoup` / `JavaImporter` 不在白名单里。**
+   它们要的是真实 Java 对象（密码器、流、HTTP 客户端、DOM），本仓的等价能力在 `java.*` 与 `crypto.*`
+   上（`createSymmetricCrypto` / `java.ajax` / `parse.*`），因此维持具名拒绝：错误里给出**到第一个未知段**
+   的路径（`Packages.javax`、`Packages.java.util.TreeMap`），`new JavaImporter(…)` 报
+   `JavaImporter is not supported`。
+3. **`java` 不是包。** 上游 `java` 绑定是 `JsExtensions` 实例，`java.lang.*` 在上游也不存在；本仓同样只在
+   `Packages.*` 下提供白名单，`java.lang` / `java.util` … 这 8 个名字仍是抛错 Proxy（§11 的名单）。
+
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
-`eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。
+`eval` 之外任意代码加载、`source` 的完整实体（只给白名单字段，S5a）。
 
 > **JS 侧形态（本表是唯一出处；ADR-0029 §决策 3，2026-10-11 生效）：** 本表「形态」列描述的是**值类型**；
 > 调用能否同步取值另有一层，判定标准是「该绑定是否需要在别处执行」：
 >
-> - **立即返回值（同步）**：`java.put` / `java.get` / `source.getVariable` / `source.setVariable`、
->   `source.getKey` / `getTag` / `getLoginHeader` / `putLoginHeader`、`log.*`、
+> - **立即返回值（同步）**：`java.put` / `java.get` / `source.getVariable` / `setVariable` / `putVariable` /
+>   `put` / `get` / `getKey` / `getTag` / `getLoginHeader` / `putLoginHeader` / `getLoginHeaderMap` /
+>   `removeLoginHeader` / `getLoginInfo` / `getLoginInfoMap` / `putLoginInfo` / `removeLoginInfo`、`log.*`、
 >   `crypto.*`、`java.timeFormat`，以及**重放层**里的 `java.ajax` / `java.post` / `java.head` / `java.getCookie` /
 >   `cookie.*`（ADR-0076 §决策 1：它们值上同步，背后是「未命中则抛哨兵 → 取页 → 从头重跑」）。
 >   前提是它们要么只在运行时所在 isolate 内完成（变量存 Dart 侧、按 `sourceId` 键控，见 ADR-0030 §决策 4），
@@ -1154,7 +1264,7 @@ map。四条要知道的：
   - 顶层匹配成功但集合为空 → **成功**，返回空列表（搜索无结果属正常业务）。
 - 失败必须携带 `rulePath`（C-SRC-8），格式 `<字段名>` 或 `<字段名>.<子字段>`，
   例如 `searchRule.bookList`、`tocRule.chapterUrl`、`contentRule.content`；
-  命中未实现语法时用 `unsupported:<语法名>`，例如 `unsupported:@xpath:`。
+  命中未实现语法时用 `unsupported:<语法名>`，例如 `unsupported:@webJs`、`unsupported:xpath:ancestor::`。
 - 失败对象**禁止**携带用户可见文案（C-ERR-7）。
 
 ---
@@ -1259,7 +1369,7 @@ map。四条要知道的：
 | 前缀大小写 | `@css:`/`@CSS:`、`@json:`/`@Json:`、`@js:`/`@JS:` 各 1 条 |
 | 失败单测 | §7 表中每个 `ParseFailureKind` 至少 1 条单测 |
 | 链路测试 | 至少 2 个书源完成「搜索 → 详情 → 目录 → 正文」离线回放（已达成 **G2a 离线回放**：1 个 HTML 默认规则源 + 1 个 JSON 接口源；其中 JSON 源的 2 条 URL 规则按 `test/fixtures/json/README.md` 改写，因此**不**等于真实站点回放——只有真实抓取页面 / 真实链路才能把 §3 矩阵的状态列改为「已确认」，归 `docs/dev/roadmap.md` §3.4 的 3.7） |
-| M2 拒绝测试 | `@xpath:` 与 `:` 正则规则各 1 条，断言返回 `unsupportedRule` |
+| M2 拒绝测试 | `:正则` 与 `@webJs` 各 1 条，断言返回 `unsupportedRule`（XPath 已支持，其**未实现子集**的拒绝由 `matrix #21` 那组用例覆盖） |
 | 真实书源验证 | 每个 M0/M1 语法行需在 PR 中附验证记录，并把状态列改为「已确认」 |
 | 网络隔离 | 单元测试禁止真实联网；`HttpClient` 必须可注入替身（C-NET-8） |
 
@@ -1282,7 +1392,7 @@ map。四条要知道的：
 > | `#14` 列表 JS + §4.3 `charset` | 飞卢小说💰（`b.faloo.com`，`searchUrl` 带 `{"charset":"gbk"}`） | 搜索 → 详情 → 目录 → 正文 | 已确认（search=28 / toc=1087 / content=1156，`sha256=d208052977d3039c`）；目录页数由 291 变为 1087，证明 GBK 链路真的被解开 |
 > | `$.[*]` 方言（§3 的 #13 变体） | 有声听书网 | 搜索 | 由 `parseFailed` 变为真命中（2 条） |
 >
-> 未覆盖的部分（`@xpath:` / `webJs` / `sourceRegex`）保持「不支持」，不受本轮影响。
+> 未覆盖的部分（`@webJs` / `sourceRegex`）保持「不支持」，不受本轮影响；XPath 自 M25/S5b 起支持（§3 注记）。
 
 > **#13（`@json:` / 裸 `$.`）的当前证据（2026-10-11）：**
 > 语法 `#13 @json:`；书源 示例书源（JSON 规则，真实导出结构，已脱敏，
@@ -1302,14 +1412,18 @@ map。四条要知道的：
 
 命中以下任一语法必须在导入或解析时明确拒绝并给出可读提示，不得假装成功：
 
-- `@xpath:` XPath 规则（需要引入 XPath 依赖，须先开 ADR）
-- `:` 正则规则（仅书籍列表与目录列表）
+- `:` 正则规则在**值规则位置**（它只作用于书籍列表与目录列表；条目上的非 `$N` 模板同样具名拒绝，
+  见 §3 的 `:正则` 注记）
+- **XPath 里本仓没实现的那部分**（M25/S5b，语义与支持面见 §3 的 XPath 注记）：`ancestor` /
+  `ancestor-or-self` / `following` / `preceding` / `namespace` 轴、`node()` / `comment()` 节点测试、
+  `@*`、以及 `count()` / `normalize-space()` / `concat()` 这类函数——命中即 `unsupported:xpath:<语法>`
 - 原生登录表单的**后续交互**：`java.upLoginData`（脚本动态改表单）仍未实现；`loginUi` 的
-text / password / button / select / toggle + `action` JS、`source.getLoginInfo()` / `getLoginInfoMap()`
-（M22-a，ADR-0072 §决策 3）与 `source.putLoginHeader` / `getLoginHeader`（M25/S3b，含请求头合并与
-Cookie 合并）**已实现**。两条仍与上游不同：① 登录**信息**（`loginInfo`）只喂给登录自己的脚本 job，
-页面请求的 job 里还读不到（登记在 `roadmap.md` §3.7）；② 规则内 `source.login()` 与
-`source.removeLoginHeader()` **具名拒绝 / 未绑定**（登录走登录页，登出没有入口）
+text / password / button / select / toggle + `action` JS、`source.getLoginInfo()` / `getLoginInfoMap()` /
+`putLoginInfo` / `removeLoginInfo`（M22-a 读、M25/S5a 写，ADR-0072 §决策 3）与
+`source.putLoginHeader` / `getLoginHeader` / `getLoginHeaderMap` / `removeLoginHeader`（M25/S3b + S5a，
+含请求头合并、Cookie 合并与登出清 Cookie）**已实现**。两条仍与上游不同：① 登录**信息**（`loginInfo`）
+只喂给登录自己的脚本 job，页面请求的 job 里还读不到（登记在 `roadmap.md` §3.7）；② 规则内
+`source.login()` **具名拒绝**（登录走登录页）——登出已有入口，不再拒绝
 - 图片字节解密 `ruleContent.imageDecode`（非空即显式 `unsupportedRule`，ADR-0069 G5）
 - **`java.*` 的具名拒绝族（ADR-0037 §决策 5；形态与实现档位见 §6 的兼容面表）：**
   其中 `get` / `put` 不在拒绝族里——§6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**
@@ -1336,6 +1450,9 @@ createSign
   UUID，而不是 Android 的 16 位十六进制 id。
   **已随 M24 落地、不再拒绝：** `java.ajax` / `java.post` / `java.head` / `java.getCookie` / `java.setContent` /
   `java.toast` / `java.longToast` / `cookie.*` / `source.getVariable`（语义见 §6）。
+  **已随 M25/S5a 落地、不再拒绝：** `source` 的白名单字段（`key` / `bookSourceUrl` / `bookSourceName` /
+  `bookSourceComment` / `header` / `loginUrl`）、`source.put` / `get`、`getLoginHeaderMap` /
+  `removeLoginHeader`、`putLoginInfo` / `removeLoginInfo`（语义见 §6「`source` 对象」）。
   **已随 M25/S3a 落地、不再拒绝：** `java.md5Encode16` / `base64DecodeToByteArray` / `hexDecodeToByteArray` /
   `hexEncodeToString` / `hexDecodeToString` / `strToBytes` / `bytesToStr` / `digestHex` / `digestBase64Str` /
   `HMacHex` / `HMacBase64` / `createSymmetricCrypto` / `aes*` / `des*` / `tripleDES*`（语义见 §6
@@ -1356,3 +1473,7 @@ nio
 math
 text
 ```
+  **M25/S5d 之后的口径（ADR-0081）：** 上面的 8 个名字仍然是抛错 Proxy（本仓 `java` 是扩展面、不是包），
+  但 Rhino 真正的包入口 `Packages.*` 有了**最小垫片**：白名单成员（`java.lang.String`、`java.util.*`、
+  `android.util.Base64`、hutool 的 `DigestUtil` / `Base64`、`…http.StrResponse` 等）可用，白名单外的名字
+  抛 `Packages.<包.类.成员> is not supported`；`new JavaImporter(…)` 同样具名拒绝。清单与边界见 §6。

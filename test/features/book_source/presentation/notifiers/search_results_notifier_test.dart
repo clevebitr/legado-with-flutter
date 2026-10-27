@@ -3,6 +3,7 @@ import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/source_login_header.dart';
+import 'package:flutter_reader/core/js/source_login_info.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -38,6 +39,10 @@ void main() {
             ),
             sourceLoginHeaderStoreProvider.overrideWithValue(
               SourceLoginHeaderStore(),
+            ),
+            // 登录信息的写入口（M25/S5a）同样默认落库，这里要的只是「协作者抛异常」。
+            sourceLoginInfoWriterProvider.overrideWithValue(
+              InMemorySourceLoginInfoWriter(),
             ),
             cookieStoreProvider.overrideWithValue(FakeCookieStore()),
           ],
@@ -88,6 +93,10 @@ void main() {
             ),
             sourceLoginHeaderStoreProvider.overrideWithValue(
               SourceLoginHeaderStore(),
+            ),
+            // 登录信息的写入口（M25/S5a）同样默认落库，这里要的只是「协作者抛异常」。
+            sourceLoginInfoWriterProvider.overrideWithValue(
+              InMemorySourceLoginInfoWriter(),
             ),
             cookieStoreProvider.overrideWithValue(FakeCookieStore()),
           ],

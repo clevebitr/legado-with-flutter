@@ -4,7 +4,6 @@ import 'dart:convert';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
 
@@ -144,7 +143,7 @@ final class JsLibStore {
           :final String rulePath,
         ):
           _logger?.warning(
-            'Could not download the source jsLib: url=${redactUrl(url)} '
+            'Could not download the source jsLib: url=$url '
             'kind=${kind.name}',
           );
 

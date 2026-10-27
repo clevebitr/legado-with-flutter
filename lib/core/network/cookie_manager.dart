@@ -23,6 +23,13 @@ abstract interface class CookieManager {
   /// `CookieStore.replaceCookie(getKey(), cookie)` so the jar — not the header map — is what sends
   /// it later (`BaseSource.kt:150-153`). Cookies with the same name are replaced.
   void mergeCookieHeader(Uri url, String cookieHeader);
+
+  /// Drops every cookie [url] would send (`source.removeLoginHeader`, M25/S5a).
+  ///
+  /// Upstream's logout deletes the whole cookie record of the source's second-level domain
+  /// (`CookieStore.removeCookie(getKey())`), so the unit is 「what this source's URL would send」,
+  /// not one name: a source has no way to say which cookies the login created.
+  void removeCookiesFor(Uri url);
 }
 
 /// In-memory [CookieManager].
@@ -93,6 +100,28 @@ final class InMemoryCookieManager implements CookieManager {
     for (final StoredCookie cookie in parseCookieHeader(url, cookieHeader)) {
       store(cookie);
     }
+  }
+
+  @override
+  void removeCookiesFor(Uri url) {
+    final String host = url.host.toLowerCase();
+    _cookiesByDomain.removeWhere(
+      (String domain, Map<String, StoredCookie> byName) =>
+          _hostMatchesDomain(host, domain),
+    );
+  }
+
+  /// The domains in the jar that [url] would receive cookies from, expired ones included.
+  ///
+  /// The persistent jar needs them to delete the same cookies from storage: it can only delete a
+  /// whole domain, and the domain of a stored cookie is not derivable from the URL alone.
+  Set<String> domainsFor(Uri url) {
+    final String host = url.host.toLowerCase();
+
+    return <String>{
+      for (final String domain in _cookiesByDomain.keys)
+        if (_hostMatchesDomain(host, domain)) domain,
+    };
   }
 
   /// Every stored cookie, expired ones included (the persistent jar purges them).

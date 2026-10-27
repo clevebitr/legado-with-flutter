@@ -190,7 +190,7 @@ void main() {
           ..serve(_bookUrl, _page('book_page.html'));
         final BookSource source = _source();
         final BookSource withJs = source.copyWith(
-          bookInfoRule: source.bookInfoRule?.copyWith(intro: '@xpath://div'),
+          bookInfoRule: source.bookInfoRule?.copyWith(intro: '@webJs:'),
         );
         final FakeLogPrinter printer = FakeLogPrinter();
         final AppLogger logger = AppLogger(
@@ -433,7 +433,7 @@ void main() {
         await FetchBookInfo(pages: _service(http)).execute(
           _source().copyWith(
             bookInfoRule: const BookInfoRule(
-              init: '@xpath://div',
+              init: '@webJs:',
               name: 'class.book-name@text',
             ),
           ),
@@ -444,7 +444,7 @@ void main() {
       // init 不适用 ADR-0026 的非顶层降级：丢掉 scope 会静默清空所有字段。
       // rulePath 按 §7 取语法标记（而非字段路径），与被拒规则的通用口径一致。
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@xpath:');
+      expect(failure.rulePath, 'unsupported:@webJs');
     });
   });
 }

@@ -468,15 +468,30 @@ Map<String, String> _toStringMap(Map<Object?, Object?> raw) {
   return headers;
 }
 
-/// The sandbox view of a book source; only `name`, `url` and `group` are exposed.
+/// The sandbox view of a book source (`source.*`, M25/S5a).
 extension BookSourceJsView on BookSource {
   /// The read-only object the sandbox receives as `source`.
   ///
   /// [jsLib] travels along but is **not** sent to the sandbox (`JsSourceInfo.toJson` drops it): it
   /// is the rule engine's input for resolving the library (ADR-0078 S1).
-  JsSourceInfo get jsSourceInfo =>
-      JsSourceInfo(name: name, url: url, group: group, jsLib: jsLib);
+  JsSourceInfo get jsSourceInfo => JsSourceInfo(
+    name: name,
+    url: url,
+    group: group,
+    jsLib: jsLib,
+    // `bookSourceComment` 不单独建模，落在 [extra]（`book-source.md` §2 的未建模清单）；源把它
+    // 当脚本库用时，规则读到的就是声明的原文。
+    comment: _stringOrNull(extra['bookSourceComment']),
+    header: headerRule ?? (headers == null ? null : jsonEncode(headers)),
+    loginUrl: loginUrl,
+  );
 }
+
+/// [value] when it is a string, `null` otherwise.
+///
+/// Used for fields the model keeps in `extra`: a source may declare anything there, and a
+/// non-string value must not crash the sandbox view.
+String? _stringOrNull(Object? value) => value is String ? value : null;
 
 // 用序列化后的 Legado 键名比对，才能正确判断哪些键未被建模。
 Map<String, Object?> _unrecognisedKeys(

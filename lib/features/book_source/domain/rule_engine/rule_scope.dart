@@ -114,6 +114,22 @@ final class DomScope extends RuleScope {
   final JsPageContext? jsContext;
 }
 
+/// The variant one **regex match** produces (`book-source.md` §3 matrix #20).
+///
+/// Upstream's `AnalyzeByRegex` answers one list per match: `[整段, 组1, 组2, …]`. The per-item
+/// field rules then refer to those groups as `$1` / `$2` templates — `chapterName: $2$3`,
+/// `chapterUrl: https://a.test/c/$1` — which is the only shape the corpus uses.
+final class RegexScope extends RuleScope {
+  /// Creates a scope from one match's groups; `groups[0]` is the whole match.
+  const RegexScope(this.groups, {this.jsContext});
+
+  /// The match's groups, `groups[0]` being the whole match (Java's `groupValues`).
+  final List<String> groups;
+
+  /// The page a `@js:` rule on this scope runs against; see [DomScope.jsContext].
+  final JsPageContext? jsContext;
+}
+
 /// The JSON variant of [RuleScope].
 final class JsonScope extends RuleScope {
   /// Creates a JSON scope around a decoded [value].

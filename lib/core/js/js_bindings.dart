@@ -797,6 +797,26 @@ Map<String, String?> decodeJsVariables(Object? value) {
   return variables;
 }
 
+/// Reads the job's `loginInfo` snapshot (`source.getLoginInfo*`), ignoring unusable entries.
+///
+/// The values come from the login form, so they are strings by construction; a hand-built job in a
+/// test may pass anything, and a non-string entry must not make the login door fail.
+Map<String, String> decodeJsLoginInfo(Object? value) {
+  final Map<String, String> info = <String, String>{};
+  if (value is! Map) {
+    return info;
+  }
+  for (final MapEntry<Object?, Object?> entry in value.entries) {
+    final Object? key = entry.key;
+    final Object? entryValue = entry.value;
+    if (key is String && entryValue is String) {
+      info[key] = entryValue;
+    }
+  }
+
+  return info;
+}
+
 /// The job-local **login header** of `source.getLoginHeader` / `putLoginHeader` (M25/S3b).
 ///
 /// Seeded from the job envelope with the value the store holds, written by the rule, and reported
@@ -811,7 +831,47 @@ final class JsLoginHeaderSlot {
 
   /// Whether the rule wrote the slot during this job.
   bool touched = false;
+
+  /// Whether the rule **removed** the header (`source.removeLoginHeader`, M25/S5a).
+  ///
+  /// A removal is not the same report as a write of `null`: upstream also drops the source's
+  /// cookies (`BaseSource.removeLoginHeader` → `CookieStore.removeCookie(getKey())`), and only the
+  /// bridge can do that.
+  bool cleared = false;
+
+  /// Marks the slot as removed by the rule.
+  void clear() {
+    value = null;
+    touched = true;
+    cleared = true;
+  }
 }
+
+/// The job-local **login info** of `source.getLoginInfo*` / `putLoginInfo` / `removeLoginInfo`
+/// (M22-a reads, M25/S5a writes).
+///
+/// Same contract as [JsLoginHeaderSlot]: seeded from the job, written by the rule, reported back
+/// only when the rule wrote it. `null` means 「no login info」, which is also what a removal
+/// reports.
+final class JsLoginInfoSlot {
+  /// Creates a slot seeded with [value].
+  JsLoginInfoSlot(this.value);
+
+  /// The values `loginUi` collected, or `null` when the source never signed in.
+  Map<String, String>? value;
+
+  /// Whether the rule changed the slot during this job.
+  bool touched = false;
+}
+
+/// The name the source's **whole** variable blob is stored under (`source.getVariable`).
+///
+/// Upstream keeps that blob in one cache entry per source (`sourceVariable_<url>`,
+/// `BaseSource.kt:283-295`), next to the per-name entries `source.put` / `get` use
+/// (`v_<url>_<name>`, `:305-320`). This repository stores both in `source_variables`, so the blob
+/// is the **unnamed** entry: an empty name is what 「the variable has no name」 means, and it keeps
+/// one storage with one write-through path instead of a second column that carries a single string.
+const String sourceVariableBlobName = '';
 
 /// Applies one `source.*` call and returns a JSON envelope.
 ///
@@ -820,13 +880,14 @@ final class JsLoginHeaderSlot {
 /// is therefore visible to later reads in the same job, and persists because the bridge merges the
 /// returned map back into the store.
 ///
-/// [loginHeader] is the same contract for `source.getLoginHeader` / `putLoginHeader`; passing
-/// `null` means the job seeded none, and the two operations then fail **loudly** (`{'ok':false}`)
-/// instead of pretending the source has no login header.
+/// [loginHeader] and [loginInfo] are the same contract for the two login doors; passing `null`
+/// means the job seeded none, and those operations then fail **loudly** (`{'ok':false}`) instead of
+/// pretending the source has nothing stored.
 String applyJsSourceCall(
   Map<String, String?> variables,
   Object? args, {
   JsLoginHeaderSlot? loginHeader,
+  JsLoginInfoSlot? loginInfo,
 }) {
   final Map<String, Object?>? call = _jsonObjectOf(args);
   if (call == null) {
@@ -853,6 +914,39 @@ String applyJsSourceCall(
       loginHeader.touched = true;
 
       return '{"ok":true}';
+    case 'removeLoginHeader':
+      if (loginHeader == null) {
+        return '{"ok":false}';
+      }
+      loginHeader.clear();
+
+      return '{"ok":true}';
+    case 'getLoginInfo':
+      if (loginInfo == null) {
+        return '{"ok":false}';
+      }
+
+      return jsonEncode(<String, Object?>{
+        'ok': true,
+        'value': loginInfo.value ?? const <String, String>{},
+      });
+    case 'putLoginInfo':
+      return _putLoginInfo(loginInfo, call['value']);
+    case 'removeLoginInfo':
+      if (loginInfo == null) {
+        return '{"ok":false}';
+      }
+      loginInfo.value = null;
+      loginInfo.touched = true;
+
+      return '{"ok":true}';
+  }
+
+  // 整份变量（`source.getVariable` / `setVariable` / `putVariable`）没有名字，所以它在
+  // [sourceVariableBlobName] 这个条目里；带名字的读写是 `source.get` / `put`。
+  if (call['operation'] == 'getVariable' ||
+      call['operation'] == 'putVariable') {
+    return _applyBlobVariable(variables, call);
   }
 
   final Object? key = call['key'];
@@ -865,7 +959,7 @@ String applyJsSourceCall(
     case 'get':
       return jsonEncode(<String, Object?>{
         'ok': true,
-        // 未写过的变量答空串：上游的 `getVariable` 同样不区分「没有」与「空」。
+        // 未写过的变量答空串：上游的 `get` 不区分「没有」与「空」。
         'value': variables[key] ?? '',
       });
     case 'put':
@@ -874,10 +968,64 @@ String applyJsSourceCall(
       }
       variables[key] = value;
 
-      return '{"ok":true}';
+      // 上游 `put(key, value): String` 把值原样答回去：真实源里就有
+      // `return base + source.put('surl', …)` 这种拿返回值拼 URL 的写法。
+      return jsonEncode(<String, Object?>{'ok': true, 'value': value ?? ''});
     default:
       return '{"ok":false}';
   }
+}
+
+String _applyBlobVariable(
+  Map<String, String?> variables,
+  Map<String, Object?> call,
+) {
+  final Object? value = call['value'];
+  if (call['operation'] == 'getVariable') {
+    return jsonEncode(<String, Object?>{
+      'ok': true,
+      'value': variables[sourceVariableBlobName] ?? '',
+    });
+  }
+  if (value is! String?) {
+    return '{"ok":false}';
+  }
+  variables[sourceVariableBlobName] = value;
+
+  return '{"ok":true}';
+}
+
+// `putLoginInfo(info: String): Boolean`（上游：加密整份 JSON 存起来，读时再解）。本仓的列本身
+// 就是一个 JSON map，所以写入时先解成表：解不出来就答 false，而不是把一段读不回来的文本写进库。
+// 值一律按字符串收下（上游的 map 是 `Map<String, String>`）。
+String _putLoginInfo(JsLoginInfoSlot? slot, Object? raw) {
+  if (slot == null) {
+    return '{"ok":false}';
+  }
+  if (raw is! String) {
+    return jsonEncode(<String, Object?>{'ok': true, 'value': false});
+  }
+  Object? decoded;
+  try {
+    decoded = jsonDecode(raw);
+  } on FormatException {
+    return jsonEncode(<String, Object?>{'ok': true, 'value': false});
+  }
+  if (decoded is! Map) {
+    return jsonEncode(<String, Object?>{'ok': true, 'value': false});
+  }
+  final Map<String, String> info = <String, String>{};
+  for (final MapEntry<Object?, Object?> entry in decoded.entries) {
+    final Object? key = entry.key;
+    final Object? value = entry.value;
+    if (key is String && value != null) {
+      info[key] = value is String ? value : value.toString();
+    }
+  }
+  slot.value = info;
+  slot.touched = true;
+
+  return jsonEncode(<String, Object?>{'ok': true, 'value': true});
 }
 
 /// One `java.openUrl` call.

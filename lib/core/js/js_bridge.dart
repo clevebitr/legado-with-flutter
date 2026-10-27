@@ -3,7 +3,12 @@ import 'package:flutter_reader/core/network/http_policy.dart';
 
 /// The book source fields a rule sees as `source`.
 ///
-/// Only `name`, `url` and `group` are exposed; everything else stays on the host.
+/// Upstream binds the **whole `BookSource` entity** (`BaseSource.kt:352-360`), so any of its public
+/// fields and methods is reachable from a script. Exposing the entity is not an option here (it
+/// would leak `payload`, ids and host-only fields), so this class is a **whitelist** of the fields
+/// the corpus actually reads (M25/S5a): the two `bookSource*` names plus `key`, `header`,
+/// `loginUrl` and `bookSourceComment`. `name` / `url` / `group` are this repository's own names for
+/// the same three values and stay for backward compatibility.
 final class JsSourceInfo {
   /// Creates the sandbox view of a book source.
   const JsSourceInfo({
@@ -11,12 +16,15 @@ final class JsSourceInfo {
     required this.url,
     this.group,
     this.jsLib,
+    this.comment,
+    this.header,
+    this.loginUrl,
   });
 
-  /// The source's display name.
+  /// The source's display name (`bookSourceName`).
   final String name;
 
-  /// The source's URL, which is also its id.
+  /// The source's URL, which is also its id (`bookSourceUrl`, and `key` upstream).
   final String url;
 
   /// The source's group, when it declares one.
@@ -24,16 +32,44 @@ final class JsSourceInfo {
 
   /// The source's `jsLib`, as declared (`book-source.md` §6).
   ///
-  /// **Host-side only**: [toJson] does not send it, so the sandbox's `source` object stays the
-  /// three fields above (the whole entity is deliberately not exposed). The rule engine reads it
-  /// here and resolves it through `JsLibStore` before building the job.
+  /// **Host-side only**: [toJson] does not send it, so the sandbox's `source` object never sees it
+  /// (a library that needs its own text would be circular). The rule engine reads it here and
+  /// resolves it through `JsLibStore` before building the job.
   final String? jsLib;
+
+  /// The source's `bookSourceComment`, when it declares one.
+  ///
+  /// Real sources use it as a **script library**: five sources in the 2026-10-27 corpus run
+  /// `eval(String(source.bookSourceComment))` to get helpers and URL tables. The field is not
+  /// modelled as such (it stays in `BookSource.extra`), so nothing here interprets it either.
+  final String? comment;
+
+  /// The source's `header` field as declared, or `null` when it declares none.
+  ///
+  /// A rule-form header (`@js:` / `<js>`) travels verbatim, which is what sources inspect to decide
+  /// whether they must evaluate it themselves; a JSON-form header travels **re-serialised** from
+  /// the parsed map, so its whitespace and key order are not the author's
+  /// (`book-source.md` §6 registers that difference).
+  final String? header;
+
+  /// The source's `loginUrl` as declared, or `null` when it declares none.
+  ///
+  /// Sources `eval(String(source.loginUrl))` to reuse the sign-in script from a field rule, so the
+  /// text is handed over verbatim — flags included (`book-source.md` §6).
+  final String? loginUrl;
 
   /// The JSON object the sandbox receives as `source`.
   Map<String, Object?> toJson() => <String, Object?>{
     'name': name,
     'url': url,
     'group': group,
+    // 上游的字段名与 `key`：语料里 10 个源写 `source.bookSourceUrl`、14 个写 `source.key`。
+    'key': url,
+    'bookSourceUrl': url,
+    'bookSourceName': name,
+    'bookSourceComment': comment,
+    'header': header,
+    'loginUrl': loginUrl,
   };
 }
 

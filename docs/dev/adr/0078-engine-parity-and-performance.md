@@ -389,3 +389,49 @@ HttpTTS 朗读引擎）。
 
 验证：`test/docs/book_source_doc_test.dart` 3 例（G1 两条、G2 一条）；全量 `flutter test` 2587 例全过。
 G3（基准脚本冒烟）留给 M26/M27。
+
+## 实现注记（2026-10-27，S5a：`source` 对象补全）
+
+用户裁决（2026-10-27，三项）：① `source.getVariable` / `setVariable` / `putVariable` **顺手改成上游的
+无参形状**；② `putLoginInfo` / `removeLoginInfo` **按 URL 写穿存储**；③ `removeLoginHeader` **连 Cookie
+一起清**。依据是 2026-10-27 的 334 源语料普查（`engine-parity.md` §9.3）：约 30 个源用到这一族，其中
+无参 `getVariable()` 读到 54 次、单参 `setVariable(v)` 写 41 次，而本仓 S3b 当初做的键值形状**命中 0**。
+
+1. **字段是白名单，不是实体。** 上游把整个 `BookSource` 实例绑成 `source`（`BaseSource.kt:352-360`），
+   读得到任何公开字段；本仓若照抄就得把 `payload`、行 id、`jsLib` 一起交出去。`JsSourceInfo` 因此只多
+   六个字段：`key` / `bookSourceUrl` / `bookSourceName` / `bookSourceComment` / `header` / `loginUrl`
+   （原有的 `name` / `url` / `group` 保留，是同一批值的旧名）。`bookSourceComment` **不单独建模**：
+   它在 `extra` 里（§2 的未建模清单），而语料拿它当脚本库（`eval(String(...))`），所以取原文即可。
+2. **`header` 两种形态两套来源。** 规则形态（`@js:` / `<js>`）走 `headerRule`，是声明原文——真实源
+   靠前缀判断要不要自己求值；JSON 形态只有解析后的 map，于是**重新序列化**。这是唯一的行为差异，
+   已登记（`book-source.md` §6）：`JSON.parse(source.header)` 与前缀判断都照常成立。
+3. **整份变量 = 无名条目。** 上游有两个存储：整份变量 `sourceVariable_<url>`（一个字符串）与按名键值
+   `v_<url>_<name>`。本仓只有 `source_variables` 一张表，于是「整份」落在**空名条目**里——空名字就是
+   「这份变量没有名字」，好处是**没有迁移、没有第二个 store、只有一条写穿路径**。`put` 答回写入的值
+   （真实源拿返回值拼 URL），`get` 未写过答空串，两个都是上游语义。
+4. **Java `Map` 用「对象 + 不可枚举方法」兑现。** `getLoginHeaderMap()` / `getLoginInfoMap()` 上游返回
+   `java.util.Map`，语料直接 `.get("账号")`（9 个源），而 S3b 的 `getLoginInfoMap()` 曾返回普通对象。
+   现在两者都过前奏的 `__javaMap`：数据键可枚举（`JSON.stringify` 看到了就是它们），`get` / `put` /
+   `remove` / `containsKey` / `size` / `isEmpty` 不可枚举。**不假装是 Java 对象**：`keySet()` /
+   `entrySet()` 这类没有实现，命中就是 `not a function`（§6 列的是实际给到的那一组）。
+5. **登录信息只有一个写入口，没有读 store。** job 已经带着登录信息的快照（ADR-0072 §决策 3），所以
+   不需要像登录头那样再 hydration 一份；`putLoginInfo` / `removeLoginInfo` 只改 job 内的槽位，job 结束时
+   随结果回传，桥经 `SourceLoginInfoWriter`（core 端口）写穿 `book_sources.login_info`（按 URL，与登录头
+   同形）。于是「同一个 job 内写完立刻读得到」与上游一致，而**读一次不会引发一次库写**。
+   `putLoginInfo` 只收字符串：解析不出对象答 `false`（上游会照样存，读时退回空表）——把一段读不回来
+   的文本写进列里只会让下一次登录页显示空表单而看不出原因。
+6. **登出要连 Cookie 一起清。** 上游 `removeLoginHeader` 除了删缓存还调 `CookieStore.removeCookie(getKey())`，
+   清的是这条 URL 二级域的整条记录。`CookieManager` 因此多一个 `removeCookiesFor(url)`（内存宗与持久宗
+   都实现；持久宗先问内存「这条 URL 会收到哪些域」再按域删，因为存储只能按域删）。只删头不清宗的话，
+   下一次请求仍然带着旧会话上去——「退出登录」会看起来没生效。
+7. **老 API 的测试要跟着改。** S3b 的键值形状有自己的 6 条用例，改形状后它们被重写成「整份变量」的
+   用例，而不是留一个兼容分支：语料命中 0 的键值形状没有兼容价值，留分支只会让下一个读代码的人以为
+   上游是那个形状。
+
+验证：`flutter test` **2621 例全过**（`js_bindings_test` 新增 15 例、`js_bridge_test` 新增 7 例、
+`cookie_manager_test` / `persistent_cookie_manager_test` 3 例、`book_source_dao_test` 1 例、
+新增 `source_login_info_dao_repository_test` 4 例、`book_source_test` 4 例）；`dart format` 0 漂移，
+`flutter analyze` 0 警告，`check_coverage` exit 0（core 98.93 / domain 98.54 / data 95.68），
+`build_runner build` 后生成物无漂移。真引擎探针**新增 6 条**（字段白名单、`put`/`get` 跨 job、整份变量
+跨 job、`putLoginInfo` + `getLoginInfoMap().get()` 写穿、`removeLoginHeader` 清 Cookie 与清头、
+`putLoginInfo` 拒坏 JSON）——**尚未在设备上跑**，`flutter test` 用的是假 worker，前奏不参与。

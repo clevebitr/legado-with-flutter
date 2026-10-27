@@ -16,9 +16,10 @@ import 'package:flutter_reader/core/js/js_sync_call.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/source_info_map.dart';
 import 'package:flutter_reader/core/js/source_login_header.dart';
+import 'package:flutter_reader/core/js/source_login_info.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/logging/error_text.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
@@ -83,6 +84,7 @@ final class QuickJsWorkerBridge implements JsBridge {
     CookieManager? cookies,
     SourceVariableStore? sourceVariables,
     SourceLoginHeaderStore? loginHeaders,
+    SourceLoginInfoWriter? loginInfos,
     SourceInfoMapStore? infoMaps,
     ExternalUrlOpener externalUrlOpener = const UnboundExternalUrlOpener(),
     this.androidId,
@@ -96,6 +98,7 @@ final class QuickJsWorkerBridge implements JsBridge {
        _cookies = cookies,
        _sourceVariables = sourceVariables,
        _loginHeaders = loginHeaders,
+       _loginInfos = loginInfos,
        _infoMaps = infoMaps,
        _externalUrlOpener = externalUrlOpener,
        _userMessages = userMessages;
@@ -113,6 +116,7 @@ final class QuickJsWorkerBridge implements JsBridge {
   final CookieManager? _cookies;
   final SourceVariableStore? _sourceVariables;
   final SourceLoginHeaderStore? _loginHeaders;
+  final SourceLoginInfoWriter? _loginInfos;
   final SourceInfoMapStore? _infoMaps;
   final ExternalUrlOpener _externalUrlOpener;
 
@@ -224,6 +228,7 @@ final class QuickJsWorkerBridge implements JsBridge {
       cookies: _cookies,
       sourceVariables: _sourceVariables,
       loginHeaders: _loginHeaders,
+      loginInfos: _loginInfos,
       infoMaps: _infoMaps,
       externalUrlOpener: _externalUrlOpener,
       androidId: androidId,
@@ -262,6 +267,7 @@ final class _WorkerSession {
     required CookieManager? cookies,
     required SourceVariableStore? sourceVariables,
     required SourceLoginHeaderStore? loginHeaders,
+    required SourceLoginInfoWriter? loginInfos,
     required SourceInfoMapStore? infoMaps,
     required ExternalUrlOpener externalUrlOpener,
     required String? androidId,
@@ -269,6 +275,7 @@ final class _WorkerSession {
   }) : _cookies = cookies,
        _sourceVariables = sourceVariables,
        _loginHeaders = loginHeaders,
+       _loginInfos = loginInfos,
        _infoMaps = infoMaps,
        _externalUrlOpener = externalUrlOpener,
        _androidId = androidId,
@@ -292,6 +299,7 @@ final class _WorkerSession {
   final CookieManager? _cookies;
   final SourceVariableStore? _sourceVariables;
   final SourceLoginHeaderStore? _loginHeaders;
+  final SourceLoginInfoWriter? _loginInfos;
   final SourceInfoMapStore? _infoMaps;
   final ExternalUrlOpener _externalUrlOpener;
   final String? _androidId;
@@ -413,8 +421,15 @@ final class _WorkerSession {
         decodeJsVariables(message['sourceVariables']),
       );
       // 登录头只在规则写过时才上来（M25/S3b）：读一次不该触发一次落库。
-      if (message.containsKey('loginHeader')) {
+      // 登出（M25/S5a）是同一份状态上的另一件事：删登录头，并清掉这个源的 Cookie。
+      if (message['loginHeaderCleared'] == true) {
+        _clearLoginHeader(job.source.url);
+      } else if (message.containsKey('loginHeader')) {
         _applyLoginHeader(job.source.url, message['loginHeader']);
+      }
+      // 登录信息（M25/S5a）：`source.putLoginInfo` / `removeLoginInfo` 同样只在写过时上来。
+      if (message.containsKey('loginInfo')) {
+        _applyLoginInfo(job.source.url, message['loginInfo']);
       }
       // `infoMap`（M25/S3b）：探索规则把它当一张可写的小表，写回即合并进内存 store。
       _infoMaps?.merge(job.source.url, decodeJsVariables(message['infoMap']));
@@ -498,9 +513,7 @@ final class _WorkerSession {
   // 登录头存下来而不合并，下一次请求就会把登录 Cookie 丢掉。
   void _applyLoginHeader(String sourceUrl, Object? raw) {
     if (raw is! String) {
-      _logger.warning(
-        'Ignoring a malformed login header: source=${redactUrl(sourceUrl)}',
-      );
+      _logger.warning('Ignoring a malformed login header: source=$sourceUrl');
 
       return;
     }
@@ -514,12 +527,58 @@ final class _WorkerSession {
     if (url == null || url.host.isEmpty) {
       _logger.debug(
         'Skipping the login header cookie, the source URL has no host: '
-        'source=${redactUrl(sourceUrl)}',
+        'source=$sourceUrl',
       );
 
       return;
     }
     cookies.mergeCookieHeader(url, cookie);
+  }
+
+  // 登出（`source.removeLoginHeader`，M25/S5a）：登录头删掉，这个源的 Cookie 也一起清。
+  //
+  // 上游就这两步（`BaseSource.removeLoginHeader` → `CacheManager.delete` +
+  // `CookieStore.removeCookie(getKey())`）：只删头不清宗，下一次请求仍然带着旧会话上去。
+  void _clearLoginHeader(String sourceUrl) {
+    _loginHeaders?.put(sourceUrl, null);
+    final CookieManager? cookies = _cookies;
+    final Uri? url = Uri.tryParse(sourceUrl);
+    if (cookies == null || url == null || url.host.isEmpty) {
+      _logger.debug(
+        'Skipping the logout cookie cleanup, the source URL has no host: '
+        'source=$sourceUrl',
+      );
+
+      return;
+    }
+    cookies.removeCookiesFor(url);
+  }
+
+  // 登录信息（`source.putLoginInfo` / `removeLoginInfo`，M25/S5a）：按 URL 写穿 `login_info`。
+  //
+  // 沙箱里的登录信息是**快照**（ADR-0072 §决策 3），一套写入路径就是结果信封：worker 只在规则写过时
+  // 带上这个键，所以一次读取不会引发一次库写。
+  void _applyLoginInfo(String sourceUrl, Object? raw) {
+    final SourceLoginInfoWriter? writer = _loginInfos;
+    if (writer == null) {
+      _logger.warning(
+        'Dropping the login info, no writer is wired: '
+        'source=$sourceUrl',
+      );
+
+      return;
+    }
+    if (raw == null) {
+      unawaited(writer.write(sourceUrl, null));
+
+      return;
+    }
+    if (raw is! Map) {
+      _logger.warning('Ignoring a malformed login info: source=$sourceUrl');
+
+      return;
+    }
+    unawaited(writer.write(sourceUrl, decodeJsLoginInfo(raw)));
   }
 
   void _onLog(Map<String, Object?> message) {
@@ -1098,7 +1157,7 @@ final class _WorkerSession {
     }
     final JsJob? job = _inFlightJob;
     _reply(JsHostReply.success(call.callId, ''));
-    _logger.info('[js:$_field] openUrl: ${redactUrl(request.url)}');
+    _logger.info('[js:$_field] openUrl: ${request.url}');
     unawaited(
       _externalUrlOpener.open(request.url, sourceName: job?.source.name ?? ''),
     );

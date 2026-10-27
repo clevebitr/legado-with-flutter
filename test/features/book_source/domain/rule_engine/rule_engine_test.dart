@@ -57,10 +57,10 @@ const String _jsonBody =
 /// them, with the syntax name `rulePath` has to carry
 /// (`docs/dev/book-source.md` §7).
 const Map<String, String> _unsupportedRules = <String, String>{
-  '@xpath://div': 'unsupported:@xpath:',
   '@webJs': 'unsupported:@webJs',
-  '//div': 'unsupported://',
-  ':regex': 'unsupported::',
+  // `:正则` 自 S5e 起是**支持**的（matrix #20），所以不在这张表里；它在值规则位置仍是
+  // `unsupported::`，由 `matrix #20` 那组用例覆盖。
+
   // 矩阵 #7 的 `-` 先摘掉再识别标志头，所以标志头的报错保持原样（不能被 `-` 顶掉）。
   // 矩阵 #15：中段 `@@`（`@` 切分后留空段，必须在切段前判掉，否则误报畸形）。
   'class.a@@class.b@text': 'unsupported:@@',
@@ -75,8 +75,8 @@ const Map<String, String> _unsupportedSelectors = <String, String>{
   'json:\$.data': 'unsupported:@json:',
   // 名称里的 `:` 不属于任何已实现写法（矩阵 #6 的 `:` 只在 `!` 列表与位置段内）。
   'tag.a:b': 'unsupported::',
-  // 裸 `//` 是矩阵 #21 的 XPath（M2）：即使写在选择器位置也不能当 CSS 退（ADR-0032 §决策 3）。
-  '//div': 'unsupported://',
+  // 裸 `//` 写在**中间段**仍是未实现写法：矩阵 #21 的 XPath 只认分支开头（S5b）。
+  'class.a@//div': 'unsupported://',
 };
 
 /// Selector segments that are structurally broken, so `rulePath` stays the field
@@ -196,6 +196,7 @@ Future<List<Element>> _elements(
         DomScope(node: final Element element) => element,
         DomScope() => fail('Expected an element match, got another node.'),
         JsonScope() => fail('Expected a DOM match but got a JSON one.'),
+        RegexScope() => fail('Expected a DOM match but got a regex one.'),
       },
   ],
   ParseFailure<List<RuleScope>>(:final ParseFailureKind kind) => fail(
@@ -466,7 +467,7 @@ void main() {
       final FakeLogPrinter printer = FakeLogPrinter();
 
       await _engine(printer).selectAll(
-        '@xpath://div',
+        '@webJs',
         _scope(_document(_listHtml)),
         rulePath: 'searchRule.name',
       );
@@ -479,7 +480,7 @@ void main() {
       );
       expect(
         printer.events.single.message.toString(),
-        contains('unsupported:@xpath:'),
+        contains('unsupported:@webJs'),
       );
     });
 
@@ -639,7 +640,7 @@ void main() {
       'extractFirst_givenARejectedTemplateInsideAScript_failsTheRule',
       () async {
         final ParseResult<String?> result = await _engine().extractFirst(
-          r'@js:{{@xpath://div}}',
+          r'@js:{{@webJs}}',
           _scope(_document('<p>x</p>')),
           rulePath: 'contentRule.content',
         );
@@ -655,7 +656,7 @@ void main() {
       'extractFirst_givenARejectedTemplateInsideAJsBlock_failsTheRule',
       () async {
         final ParseResult<String?> result = await _engine().extractFirst(
-          '<js>{{@xpath://div}}</js>',
+          '<js>{{@webJs}}</js>',
           _scope(_document('<p>x</p>')),
           rulePath: 'contentRule.content',
         );
@@ -1302,17 +1303,17 @@ void main() {
       expect(
         (await _failure(
           _engine().applyReplaceRule(
-            '@XPath://div',
+            '@webJs:',
             '正文。',
             rulePath: 'contentRule.replaceRegex',
           ),
         )).rulePath,
-        'unsupported:@XPath:',
+        'unsupported:@webJs',
       );
       expect(
         (await _failure(
           _engine().applyReplaceRule(
-            '@xpath://div',
+            '@webJs',
             '正文。',
             rulePath: 'contentRule.replaceRegex',
           ),
@@ -1369,14 +1370,14 @@ void main() {
     test('extractFirst_givenRejectedRule_returnsTheSameFailure', () async {
       final ParseFailure<Never> failure = await _failure(
         _engine().extractFirst(
-          '@xpath://div',
+          '@webJs',
           _scope(_document(_listHtml)),
           rulePath: 'searchRule.intro',
         ),
       );
 
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@xpath:');
+      expect(failure.rulePath, 'unsupported:@webJs');
     });
   });
 
@@ -1903,7 +1904,7 @@ void main() {
       expect(
         (await _failure(
           _engine().extractJoined(
-            '@xpath://div',
+            '@webJs',
             _scope(_document(pageHtml)),
             rulePath: 'contentRule.content',
           ),
@@ -2132,18 +2133,348 @@ void main() {
       // body 级标志检查只覆盖规则开头；后续候选的标志头由选择器层拒绝。
       final ParseFailure<Never> failure = await _failure(
         _engine().selectAll(
-          'class.result-list||@xpath://div',
+          'class.result-list||@webJs:',
           _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
       );
 
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@xpath:');
+      expect(failure.rulePath, 'unsupported:@webJs:');
     });
   });
 
   // matrix #12（`@css:` 选择器）与 matrix #29（其内的 jsoup 索引伪类 `:eq` / `:gt` / `:lt`）。
+  // matrix #20（`:正则`，S5e）：只作用于书籍列表 / 目录列表，`&&` 在里面是**正则链**，
+  // 每条匹配的组值由条目字段用 `$1` / `$2` 模板取用。
+  group('RuleEngine matrix #20 (:正则)', () {
+    // 抄自语料（若夏的目录页）：三条组分别是 id、isvip 标记、章节名。
+    const String tocHtml =
+        '<dl><dd><a href="/c/1" class="chapter name">第一章</a>'
+        '<a href="/c/2" class="isvip chapter name">第二章</a></dd></dl>';
+    const String listRule = r':(\d+)" class="(isvip)?[^"]*name[^>]*>([^<]*)';
+
+    test('selectAll_givenARegexListRule_answersOneScopePerMatch', () async {
+      final List<RuleScope> scopes = await _matches(
+        _engine().selectAll(
+          ':class="([^"]*?)name[^>]*>([^<]*)',
+          _page(tocHtml),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(scopes, hasLength(2));
+      expect(
+        <List<String>>[
+          for (final RuleScope scope in scopes)
+            if (scope is RegexScope) scope.groups,
+        ],
+        <List<String>>[
+          <String>['class="chapter name">第一章', 'chapter ', '第一章'],
+          <String>['class="isvip chapter name">第二章', 'isvip chapter ', '第二章'],
+        ],
+      );
+    });
+
+    test('selectAll_givenARegexChain_narrowsTheTextFirst', () async {
+      // 语料（快眼小说）：`正文卷.../dl` 先把文本缩小到这一卷，再用第二条正则取 href 与名字。
+      final List<RuleScope> scopes = await _matches(
+        _engine().selectAll(
+          r':正文卷[\s\S]*?/dl&&href ="([^"]+)">([^<]+)',
+          _page('<p>前言</p>正文卷<dl>href ="/c/7">第七章</dl>尾巴'),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(scopes, hasLength(1));
+      expect((scopes.single as RegexScope).groups, <String>[
+        'href ="/c/7">第七章',
+        '/c/7',
+        '第七章',
+      ]);
+    });
+
+    test('extractFirst_givenAnItemTemplate_fillsTheGroups', () async {
+      // 语料：`chapterName: $2$3`。
+      final ParseResult<List<RuleScope>> scopes = await _engine().selectAll(
+        listRule,
+        _page(tocHtml),
+        rulePath: 'tocRule.chapterList',
+      );
+      final RuleScope item =
+          (scopes as ParseSuccess<List<RuleScope>>).data.first;
+
+      expect(
+        await _first(
+          _engine().extractFirst(
+            r'$2$3',
+            item,
+            rulePath: 'tocRule.chapterName',
+          ),
+        ),
+        '第一章',
+      );
+    });
+
+    test('extractFirst_givenAnItemUrlTemplate_buildsTheUrl', () async {
+      // 语料：`chapterUrl: https://a.heiyan.com/ajax/chapter/content/$1`。
+      final ParseResult<List<RuleScope>> scopes = await _engine().selectAll(
+        listRule,
+        _page(tocHtml),
+        rulePath: 'tocRule.chapterList',
+      );
+      final RuleScope item = (scopes as ParseSuccess<List<RuleScope>>).data[1];
+
+      expect(
+        await _first(
+          _engine().extractFirst(
+            'https://a.test/content/\$1',
+            item,
+            rulePath: 'tocRule.chapterUrl',
+          ),
+        ),
+        'https://a.test/content/2',
+      );
+    });
+
+    test('extractFirst_givenAnItemTemplateWithReplacement_appliesIt', () async {
+      // 语料：`chapterName: $2##[\(（【].*?[求更谢乐发订合补加].*?[】）\)]`（去掉求更提示）。
+      final ParseResult<List<RuleScope>> scopes = await _engine().selectAll(
+        ':name[^>]*>([^<]*(?:【求更】)?[^<]*)',
+        _page('<a class="name">第一章</a><a class="name">第二章【求更】</a>'),
+        rulePath: 'tocRule.chapterList',
+      );
+      final RuleScope item = (scopes as ParseSuccess<List<RuleScope>>).data[1];
+
+      expect(
+        await _first(
+          _engine().extractFirst(
+            r'$1##[\(（【].*?[求更].*',
+            item,
+            rulePath: 'tocRule.chapterName',
+          ),
+        ),
+        '第二章',
+      );
+    });
+
+    test('extractAll_givenARegexValueRule_isNamedUnsupported', () async {
+      // 上游 `getString` 没有 Regex 分支（落到 `else -> rule`，等于答规则原文），所以值规则位置
+      // 是具名拒绝，而不是一个悄悄返回原文的结果。
+      final ParseFailure<Never> failure = await _failure(
+        _engine().extractAll(
+          ':([^<]+)',
+          _page(tocHtml),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported::');
+    });
+
+    test('extractFirst_givenANonTemplateItemRule_isNamedUnsupported', () async {
+      final ParseResult<List<RuleScope>> scopes = await _engine().selectAll(
+        listRule,
+        _page(tocHtml),
+        rulePath: 'tocRule.chapterList',
+      );
+      final RuleScope item =
+          (scopes as ParseSuccess<List<RuleScope>>).data.first;
+
+      final ParseFailure<Never> failure = await _failure(
+        _engine().extractFirst(
+          'tag.a@text',
+          item,
+          rulePath: 'tocRule.chapterName',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:regex:item');
+    });
+
+    test('selectAll_givenAMalformedRegex_failsAsMalformed', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().selectAll(
+          ':([',
+          _page(tocHtml),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'tocRule.chapterList');
+    });
+
+    test('selectAll_givenARegexRuleAgainstJson_failsAsMalformed', () async {
+      // 正则要的是**页面正文**：JSON 值没有正文，规则只能报畸形（C-SRC-4）。
+      final ParseFailure<Never> failure = await _failure(
+        _engine().selectAll(
+          ':([^<]+)',
+          RuleScope.json(const <String, Object?>{'a': 1}),
+          rulePath: 'tocRule.chapterList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+    });
+  });
+
+  // matrix #21（XPath，S5b）：整条分支就是一条 XPath，`[@class='a']` 与 `/@content` 里的 `@`
+  // 都属于表达式本身，所以这里**不**按 `@` 切段。
+  group('RuleEngine matrix #21 (@xpath:)', () {
+    const String html =
+        '<html><body><ul class="list"><li><a href="/1">One</a></li>'
+        '<li><a href="/2">Two</a></li></ul>'
+        '<meta property="og:title" content="书名"></body></html>';
+
+    test('selectAll_givenABareDoubleSlashRule_answersElementScopes', () async {
+      // 语料最常见的形状：裸 `//` 开头（21 源 / 131 处，2026-10-27 普查）。
+      final List<RuleScope> scopes = await _matches(
+        _engine().selectAll(
+          "//ul[@class='list']/li",
+          _scope(_document(html)),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(scopes, hasLength(2));
+      expect(
+        <String>[
+          for (final RuleScope scope in scopes)
+            if (scope is DomScope) '${scope.node.text}',
+        ],
+        <String>['One', 'Two'],
+      );
+    });
+
+    test('selectAll_givenTheXPathFlag_isTheSameRule', () async {
+      // `@xpath:` 与裸 `//` 等价，前缀大小写不敏感（§3 的同一口径）。
+      expect(
+        await _elements(
+          _engine().selectAll(
+            '@XPath://ul/li',
+            _scope(_document(html)),
+            rulePath: 'searchRule.bookList',
+          ),
+        ),
+        hasLength(2),
+      );
+    });
+
+    test('extractAll_givenAnAttributeStep_answersTheValue', () async {
+      // 语料：`//meta[@property='og:title']/@content`（封面 / 书名的通用形状）。
+      expect(
+        await _values(
+          _engine().extractAll(
+            "//meta[@property='og:title']/@content",
+            _scope(_document(html)),
+            rulePath: 'bookInfoRule.name',
+          ),
+        ),
+        <String>['书名'],
+      );
+    });
+
+    test('extractAll_givenTextNodes_answersEachOfThem', () async {
+      // `text()` 是节点测试，不是提取段：结果按文档顺序逐个数。
+      expect(
+        await _values(
+          _engine().extractAll(
+            '//ul/li/a/text()',
+            _scope(_document(html)),
+            rulePath: 'searchRule.name',
+          ),
+        ),
+        <String>['One', 'Two'],
+      );
+    });
+
+    test('extractFirst_givenAUnion_answersInDocumentOrder', () async {
+      // `|` 的答案是**节点集合**：顺序按文档走，不是按分支写的先后（XPath 1.0 §3.3）。
+      expect(
+        await _first(
+          _engine().extractFirst(
+            '//ul/li[2]/a/@href|//ul/li[1]/a/@href',
+            _scope(_document(html)),
+            rulePath: 'tocRule.nextTocUrl',
+          ),
+        ),
+        '/1',
+      );
+    });
+
+    test('selectAll_givenXPathRejection_namesTheAxis', () async {
+      // 具名拒绝：`rulePath` 带语法名，而不是一个泛化的 unsupportedRule。
+      final ParseFailure<Never> failure = await _failure(
+        _engine().selectAll(
+          '//li/ancestor::ul',
+          _scope(_document(html)),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.unsupportedRule);
+      expect(failure.rulePath, 'unsupported:xpath:ancestor::');
+    });
+
+    test('selectAll_givenAMalformedXPath_keepsTheFieldPath', () async {
+      final ParseFailure<Never> failure = await _failure(
+        _engine().selectAll(
+          '//ul[',
+          _scope(_document(html)),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.bookList');
+    });
+
+    test('selectAll_givenXPathSelectingText_failsAsMalformed', () async {
+      // 列表规则的答案要能当 scope，文本节点做不到：显式失败而不是悄悄少几条。
+      final ParseFailure<Never> failure = await _failure(
+        _engine().selectAll(
+          '//li/a/text()',
+          _scope(_document(html)),
+          rulePath: 'searchRule.bookList',
+        ),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'searchRule.bookList');
+    });
+
+    test('extractAll_givenXPathAgainstJsonScope_fails', () async {
+      // JSON 值没有 DOM：XPath 对着它跑只能是规则写错了（C-SRC-4）。
+      expect(
+        (await _failure(
+          _engine().extractAll(
+            '//div',
+            RuleScope.json(const <String, Object?>{'a': 1}),
+            rulePath: 'searchRule.name',
+          ),
+        )).kind,
+        ParseFailureKind.parseFailed,
+      );
+    });
+
+    test('extractAll_givenXPathAndJsonConnector_failsAsMalformed', () async {
+      // `&&` 只合并同种规则（§3 的 `&&` 注记）：DOM 与 JSON 拼在一起没有定义。
+      expect(
+        (await _failure(
+          _engine().extractAll(
+            r'//div&&$.a',
+            _scope(_document(html)),
+            rulePath: 'searchRule.name',
+          ),
+        )).kind,
+        ParseFailureKind.parseFailed,
+      );
+    });
+  });
+
   group('RuleEngine matrix #12 (@css:)', () {
     test('selectAll_givenCssRule_returnsEveryMatch', () async {
       final List<Element> elements = await _elements(
@@ -2710,7 +3041,7 @@ void main() {
         expect(items, hasLength(1));
         expect(switch (items.single) {
           JsonScope(:final Object? value) => value,
-          DomScope() => fail('Expected a JSON scope.'),
+          DomScope() || RegexScope() => fail('Expected a JSON scope.'),
         }, 'One');
       },
     );
@@ -3527,7 +3858,7 @@ void main() {
         final FakeJsBridge bridge = FakeJsBridge()
           ..parseRequests.add(
             const JsParseRequest(
-              rule: '@xpath://div',
+              rule: '@webJs',
               wantsList: true,
               wantsValues: true,
             ),
@@ -3552,13 +3883,13 @@ void main() {
       () async {
         final FakeJsBridge bridge = FakeJsBridge()
           ..parseRequests.add(
-            const JsParseRequest(rule: '@xpath://div', wantsList: true),
+            const JsParseRequest(rule: '@webJs', wantsList: true),
           );
 
         expect(
           (await _failure(
             _engine(null, bridge).extractAll(
-              "@js:java.getElements('@xpath://div')",
+              "@js:java.getElements('@webJs')",
               _pageWithContext(_listHtml),
               rulePath: 'contentRule.content',
             ),
@@ -3714,12 +4045,12 @@ void main() {
     test('extractFirst_givenAParseRuleThatIsRejected_propagatesIt', () async {
       final FakeJsBridge bridge = FakeJsBridge()
         ..parseRequests.add(
-          const JsParseRequest(rule: '@xpath://div', wantsList: false),
+          const JsParseRequest(rule: '@webJs', wantsList: false),
         );
 
       final ParseFailure<Never> failure = await _failure(
         _engine(null, bridge).extractFirst(
-          "@js:parse.getString('@xpath://div', result)",
+          "@js:parse.getString('@webJs', result)",
           _pageWithContext(_countHtml),
           rulePath: 'contentRule.content',
         ),
@@ -3727,7 +4058,7 @@ void main() {
 
       // 嵌套规则的失败就是该 job 的失败（C-SRC-4），并且按 §7 的写法定位到语法。
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@xpath:');
+      expect(failure.rulePath, 'unsupported:@webJs');
     });
 
     test('extractFirst_givenASourceWithHeaders_passesThemIntoTheJob', () async {
@@ -3764,12 +4095,12 @@ void main() {
       () async {
         final FakeJsBridge bridge = FakeJsBridge()
           ..parseRequests.add(
-            const JsParseRequest(rule: '@xpath://div', wantsList: true),
+            const JsParseRequest(rule: '@webJs', wantsList: true),
           );
 
         final ParseFailure<Never> failure = await _failure(
           _engine(null, bridge).extractAll(
-            "@js:parse.getElements('@xpath://div', result)",
+            "@js:parse.getElements('@webJs', result)",
             _pageWithContext(_countHtml),
             rulePath: 'searchRule.bookList',
           ),
@@ -3777,7 +4108,7 @@ void main() {
 
         // 两种形状（getString / getElements）的失败都要原样上抛，不得被吞成空值。
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@xpath:');
+        expect(failure.rulePath, 'unsupported:@webJs');
       },
     );
 
@@ -3998,7 +4329,7 @@ void main() {
     test('extractFirst_givenARejectedPutValue_failsTheWholeRule', () async {
       final ParseFailure<Never> failure = await _failure(
         _engine().extractFirst(
-          '@put:{a://div}class.result.0@tag.a@text',
+          '@put:{a:@webJs:}class.result.0@tag.a@text',
           _scope(_document(_listHtml)),
           rulePath: 'searchRule.name',
         ),
@@ -4006,7 +4337,7 @@ void main() {
 
       // 写入失败了就没有“后半个规则”可言：按 C-SRC-4 显式失败，不静默跳过。
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported://');
+      expect(failure.rulePath, 'unsupported:@webJs');
     });
 
     test('extractFirst_givenAMalformedPutBody_isIgnored', () async {
@@ -4616,7 +4947,7 @@ void main() {
     test('selectAll_givenAFailingExpansion_returnsTheFailure', () async {
       final ParseFailure<Never> failure = await _failure(
         _engine().selectAll(
-          '@put:{a://div}class.result',
+          '@put:{a:@webJs:}class.result',
           _scope(_document(_listHtml)),
           rulePath: 'searchRule.bookList',
         ),
@@ -4624,7 +4955,7 @@ void main() {
 
       // 列表规则同样先过展开（矩阵 #16）：展开失败就是整条规则失败（C-SRC-4）。
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported://');
+      expect(failure.rulePath, 'unsupported:@webJs');
     });
 
     test(
@@ -4652,7 +4983,7 @@ void main() {
       () async {
         final ParseFailure<Never> failure = await _failure(
           _engine().extractAll(
-            '@put:{a://div}@js:result',
+            '@put:{a:@webJs:}@js:result',
             _pageWithContext(_listHtml),
             rulePath: 'contentRule.content',
           ),
@@ -4660,7 +4991,7 @@ void main() {
 
         // `@js:` 之前的展开失败与脚本无关，仍然是这条规则的失败。
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported://');
+        expect(failure.rulePath, 'unsupported:@webJs');
       },
     );
 
@@ -4932,7 +5263,7 @@ void main() {
     test('extractAll_givenALiteralWhoseRuleFails_failsTheWholeRule', () async {
       final ParseFailure<Never> failure = await _failure(
         _engine().extractAll(
-          r"@js:java.getString('@xpath://div')",
+          r"@js:java.getString('@webJs')",
           _pageWithContext(_listHtml),
           rulePath: 'contentRule.content',
         ),
@@ -4940,7 +5271,7 @@ void main() {
 
       // 半个脚本拿着空值比失败更糟：内联失败即整条规则失败（ADR-0037 §决策 3）。
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@xpath:');
+      expect(failure.rulePath, 'unsupported:@webJs');
     });
 
     test(
@@ -4948,7 +5279,7 @@ void main() {
       () async {
         final ParseFailure<Never> failure = await _failure(
           _engine().extractAll(
-            r"@js:java.getStringList('@xpath://div').length",
+            r"@js:java.getStringList('@webJs').length",
             _pageWithContext(_listHtml),
             rulePath: 'contentRule.content',
           ),
@@ -4956,7 +5287,7 @@ void main() {
 
         // 列表形态的内联失败同样整条规则失败（ADR-0037 §决策 3）。
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@xpath:');
+        expect(failure.rulePath, 'unsupported:@webJs');
       },
     );
 

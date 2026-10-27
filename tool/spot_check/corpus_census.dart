@@ -248,6 +248,10 @@ void _censusRules(
   for (final ({String path, String text}) rule in source.rules) {
     final String text = rule.text;
     final String lower = text.toLowerCase();
+    // `@js:` 脚本与 `{{…}}` 模板里的 `//` / `@` 不是规则语法：注释里一个 `//`、模板里一个
+    // `@css:` 都会让「裸 // 开头」「嵌套提取段」这类**位置敏感**的探测器误报。位置敏感的判定
+    // 一律用这份「去掉脚本与模板之后的规则体」，其余（有没有用过某写法）仍看原文。
+    final String body = _ruleHeadOf(text);
 
     // ── 规则语法 ────────────────────────────────────────────────────────────
     final int js = countOf(RegExp(r'@js:|<js>', caseSensitive: false), text);
@@ -257,17 +261,11 @@ void _censusRules(
     if (RegExp(r'^\s*(?:[-+])?\s*@js:', caseSensitive: false).hasMatch(text)) {
       hit(syntax, '@js: 整条规则即脚本');
     }
-    // 段链里的「再一个规则」（matrix #30）：非首段带**选择器类**标志头。`@js:` / `@put:` /
-    // `@get:` 是本仓已支持的段（matrix #14 / #16），不算缺口。
-    for (final String segment in text.split('@').skip(1)) {
-      final String head = segment.toLowerCase();
-      if (head.startsWith('css:') ||
-          head.startsWith('json:') ||
-          head.startsWith('xpath:') ||
-          head.startsWith('webjs:')) {
-        hit(syntax, '嵌套提取段（matrix #30 形状）');
-        break;
-      }
+    // 段链里的「再一个规则」（matrix #30）：**首段不空**、后面某段带选择器类标志头。
+    // 首段为空说明是「整条规则以 `@css:` / `@json:` 开头」（matrix #12 / #13，已支持）；
+    // `@js:` / `@put:` / `@get:` 是已支持的段（#14 / #16），不算缺口。
+    if (_hasNestedRuleSegment(body)) {
+      hit(syntax, '嵌套提取段（matrix #30 形状）');
     }
     if (lower.contains('@css:')) {
       hit(syntax, '@css:');
@@ -278,13 +276,13 @@ void _censusRules(
     if (lower.contains('@xpath:')) {
       hit(syntax, '@xpath:（matrix #21）');
     }
-    if (RegExp(r'^\s*//').hasMatch(text)) {
+    if (RegExp(r'^(?:[-+])?\s*//').hasMatch(body)) {
       hit(syntax, '裸 // 开头（matrix #21）');
     }
     if (lower.contains('@webjs:')) {
       hit(syntax, '@webJs（matrix #22）');
     }
-    if (RegExp(r'^\s*:').hasMatch(text) && !text.trimLeft().startsWith('::')) {
+    if (RegExp(r'^\s*:').hasMatch(body) && !body.trimLeft().startsWith('::')) {
       hit(syntax, ':正则（matrix #20）');
     }
     if (lower.contains('@put:') ||
@@ -320,7 +318,7 @@ void _censusRules(
         .hasMatch(text)) {
       hit(syntax, 'URL 选项 webView / bodyJs / webJs / retry / readTimeout');
     }
-    if (RegExp(r'^\s*\+').hasMatch(text)) {
+    if (RegExp(r'^\s*\+').hasMatch(body)) {
       hit(syntax, '+ 正序前缀');
     }
     if (RegExp(r'(?:bookList|chapterList)$').hasMatch(rule.path) &&
@@ -353,6 +351,109 @@ void _censusRules(
       }
     }
   }
+}
+
+/// The rule body of [text] with `@js:` / `<js>` bodies and `{{…}}` templates removed.
+///
+/// Only the detectors that ask **where** a syntax sits may use it: a `//` that starts a script line
+/// is a comment and a `@css:` inside `{{…}}` belongs to the inner rule, so neither says anything
+/// about the outer rule's head or its segments.
+String _ruleHeadOf(String text) {
+  final String lower = text.toLowerCase();
+  final StringBuffer buffer = StringBuffer();
+  var index = 0;
+  while (index < text.length) {
+    if (lower.startsWith('@js:', index)) {
+      break;
+    }
+    final String char = text[index];
+    if (char == '<' || char == '{') {
+      final Match? skipped = char == '<'
+          ? _jsBlock.matchAsPrefix(text, index)
+          : _template.matchAsPrefix(text, index);
+      if (skipped != null) {
+        index = skipped.end;
+
+        continue;
+      }
+    }
+    buffer.write(char);
+    index++;
+  }
+
+  return buffer.toString();
+}
+
+/// `<js>…</js>`, the block part of a rule body.
+final RegExp _jsBlock = RegExp(r'<js>[\w\W]*?</js>', caseSensitive: false);
+
+/// One `{{…}}` template.
+final RegExp _template = RegExp(r'\{\{[\w\W]*?\}\}');
+
+/// Whether [rule] has a segment **(not the first) that is itself a flag-bearing rule**.
+///
+/// A leading `@css:` / `@json:` leaves an empty first segment, which is matrix #12 / #13 rather
+/// than matrix #30. Segments are split on top-level `@` only: `[@class='a']` and `'a@b'` keep their
+/// `@`.
+bool _hasNestedRuleSegment(String rule) {
+  final List<String> segments = _segmentsOf(rule);
+  // 首段只剩下标志字符（`+` / `-` 正倒序、`@@` 默认规则）时，后面那个 `@css:` 其实是**整条规则
+  // 的标志头**（matrix #12 / #13 / #15），不是段链里的第二条规则。
+  final String first = segments.first.trim().replaceAll(RegExp('^[-+]+'), '');
+  if (first.replaceAll('@', '').trim().isEmpty) {
+    return false;
+  }
+  for (final String segment in segments.skip(1)) {
+    final String body = segment.trim().toLowerCase();
+    if (body.startsWith('css:') ||
+        body.startsWith('json:') ||
+        body.startsWith('xpath:') ||
+        body.startsWith('webjs:')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/// Splits a rule on top-level `@`, i.e. outside quotes, brackets and parentheses.
+List<String> _segmentsOf(String rule) {
+  final List<String> segments = <String>[];
+  final StringBuffer buffer = StringBuffer();
+  var depth = 0;
+  String? quote;
+  for (var index = 0; index < rule.length; index++) {
+    final String char = rule[index];
+    if (quote != null) {
+      buffer.write(char);
+      if (char == quote) {
+        quote = null;
+      }
+
+      continue;
+    }
+    if (char == '"' || char == "'") {
+      quote = char;
+      buffer.write(char);
+
+      continue;
+    }
+    if (char == '[' || char == '(') {
+      depth++;
+    } else if (char == ']' || char == ')') {
+      depth = depth == 0 ? 0 : depth - 1;
+    }
+    if (char == '@' && depth == 0) {
+      segments.add(buffer.toString());
+      buffer.clear();
+
+      continue;
+    }
+    buffer.write(char);
+  }
+  segments.add(buffer.toString());
+
+  return segments;
 }
 
 /// The script bodies of [text] (`@js:…` to the end, `<js>…</js>` blocks).
@@ -418,19 +519,33 @@ List<String> _preludeArray(String source, String name) {
 
 /// 沙箱**已实现**的 `source.*` 成员。
 const Set<String> _knownSource = <String>{
-  'getVariable',
-  'setVariable',
-  'putVariable',
-  'getLoginInfo',
-  'getLoginInfoMap',
-  'getKey',
-  'getTag',
-  'getLoginHeader',
-  'putLoginHeader',
-  'login',
+  // M25/S5a：`source` 对象的白名单字段（上游名 + 本仓的旧名）。
+  'key',
+  'bookSourceUrl',
+  'bookSourceName',
+  'bookSourceComment',
+  'header',
+  'loginUrl',
   'name',
   'url',
   'group',
+  // 整份变量（上游无参形状）、按名键值、身份与登录门扇。
+  'getVariable',
+  'setVariable',
+  'putVariable',
+  'put',
+  'get',
+  'getKey',
+  'getTag',
+  'getLoginInfo',
+  'getLoginInfoMap',
+  'putLoginInfo',
+  'removeLoginInfo',
+  'getLoginHeader',
+  'putLoginHeader',
+  'getLoginHeaderMap',
+  'removeLoginHeader',
+  'login',
 };
 
 /// 沙箱**已实现**的全局变量。

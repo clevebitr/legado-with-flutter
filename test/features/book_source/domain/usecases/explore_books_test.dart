@@ -247,7 +247,7 @@ void main() {
         final FakeHttpClient http = FakeHttpClient()
           ..serve(_categoryUrl, _page('explore-list'));
         final BookSource source = _source(
-          exploreRule: const ExploreRule(bookList: '@xpath://div'),
+          exploreRule: const ExploreRule(bookList: '@webJs:'),
         );
 
         final ParseFailure<Never> failure = _failure(
@@ -259,7 +259,7 @@ void main() {
 
         // 顶层列表规则被拒仍整次失败（C-SRC-4 / §7）。
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@xpath:');
+        expect(failure.rulePath, 'unsupported:@webJs');
       },
     );
 
