@@ -171,23 +171,84 @@ final class JsonFilePickerProvider
 
 String _$jsonFilePickerHash() => r'2c6acd27ff8a29e555afbdc24db48da8f0c725e9';
 
-/// Provides the platform save dialog for single-source export.
+/// Provides the system share sheet, or a no-op on platforms without one (`ADR-0083`).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Only mobile uses it today: on Android/iOS the export and log directories are private, while a
+/// desktop already has a save dialog and a reachable folder. Capability detection, not a platform
+/// branch in the UI, decides whether the log page offers sharing.
+
+@ProviderFor(fileSharer)
+final fileSharerProvider = FileSharerProvider._();
+
+/// Provides the system share sheet, or a no-op on platforms without one (`ADR-0083`).
+///
+/// Only mobile uses it today: on Android/iOS the export and log directories are private, while a
+/// desktop already has a save dialog and a reachable folder. Capability detection, not a platform
+/// branch in the UI, decides whether the log page offers sharing.
+
+final class FileSharerProvider
+    extends $FunctionalProvider<FileSharer, FileSharer, FileSharer>
+    with $Provider<FileSharer> {
+  /// Provides the system share sheet, or a no-op on platforms without one (`ADR-0083`).
+  ///
+  /// Only mobile uses it today: on Android/iOS the export and log directories are private, while a
+  /// desktop already has a save dialog and a reachable folder. Capability detection, not a platform
+  /// branch in the UI, decides whether the log page offers sharing.
+  FileSharerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'fileSharerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$fileSharerHash();
+
+  @$internal
+  @override
+  $ProviderElement<FileSharer> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  FileSharer create(Ref ref) {
+    return fileSharer(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(FileSharer value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<FileSharer>(value),
+    );
+  }
+}
+
+String _$fileSharerHash() => r'2b9d48b785ff6afdcacd01a37b1cd9e848dd6ff3';
+
+/// Provides the platform save path for single-source export.
+///
+/// Mobile platforms have no save dialog, so they hand the document to the system share sheet
+/// (`ADR-0083`). Unsupported platforms report `not saved` instead of throwing.
 
 @ProviderFor(jsonFileSaver)
 final jsonFileSaverProvider = JsonFileSaverProvider._();
 
-/// Provides the platform save dialog for single-source export.
+/// Provides the platform save path for single-source export.
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Mobile platforms have no save dialog, so they hand the document to the system share sheet
+/// (`ADR-0083`). Unsupported platforms report `not saved` instead of throwing.
 
 final class JsonFileSaverProvider
     extends $FunctionalProvider<JsonFileSaver, JsonFileSaver, JsonFileSaver>
     with $Provider<JsonFileSaver> {
-  /// Provides the platform save dialog for single-source export.
+  /// Provides the platform save path for single-source export.
   ///
-  /// Unsupported platforms report `not saved` instead of throwing.
+  /// Mobile platforms have no save dialog, so they hand the document to the system share sheet
+  /// (`ADR-0083`). Unsupported platforms report `not saved` instead of throwing.
   JsonFileSaverProvider._()
     : super(
         from: null,
@@ -221,18 +282,20 @@ final class JsonFileSaverProvider
   }
 }
 
-String _$jsonFileSaverHash() => r'51d513898a1bf349e8152385c6c8a72590d2add9';
+String _$jsonFileSaverHash() => r'dd7cd423ca70e9787c788f80a30a9506fa6bb021';
 
-/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+/// Provides the platform save path for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Mobile platforms share the archive instead of opening a save dialog (`ADR-0083`). Unsupported
+/// platforms report `not saved` instead of throwing.
 
 @ProviderFor(backupArchiveSaver)
 final backupArchiveSaverProvider = BackupArchiveSaverProvider._();
 
-/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+/// Provides the platform save path for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Mobile platforms share the archive instead of opening a save dialog (`ADR-0083`). Unsupported
+/// platforms report `not saved` instead of throwing.
 
 final class BackupArchiveSaverProvider
     extends
@@ -242,9 +305,10 @@ final class BackupArchiveSaverProvider
           BackupArchiveSaver
         >
     with $Provider<BackupArchiveSaver> {
-  /// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+  /// Provides the platform save path for backups (`docs/dev/roadmap.md` M22, ADR-0073).
   ///
-  /// Unsupported platforms report `not saved` instead of throwing.
+  /// Mobile platforms share the archive instead of opening a save dialog (`ADR-0083`). Unsupported
+  /// platforms report `not saved` instead of throwing.
   BackupArchiveSaverProvider._()
     : super(
         from: null,
@@ -280,7 +344,7 @@ final class BackupArchiveSaverProvider
 }
 
 String _$backupArchiveSaverHash() =>
-    r'3d40b6a2082c5dc2ff9d2a3ff20b8a5605b28a90';
+    r'c611ae117e9419c77e47dae2c6db5e87ec0a04b3';
 
 /// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///

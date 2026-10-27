@@ -10,12 +10,16 @@ import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.
 import 'package:flutter_reader/core/platform/file_selector_backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/file_sharer.dart';
 import 'package:flutter_reader/core/platform/flutter_secure_storage_secret_store.dart';
 import 'package:flutter_reader/core/platform/json_file_picker.dart';
 import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:flutter_reader/core/platform/secret_store.dart';
+import 'package:flutter_reader/core/platform/share_plus_file_sharer.dart';
+import 'package:flutter_reader/core/platform/sharing_backup_archive_saver.dart';
+import 'package:flutter_reader/core/platform/sharing_json_file_saver.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -36,8 +40,6 @@ const Map<String, FakePlatformInfo> _shippedPlatforms =
 /// Ports whose real implementation is available on every shipped platform.
 const List<_Port> _dialogPorts = <_Port>[
   ('jsonFilePicker', FileSelectorJsonFilePicker, _jsonFilePicker),
-  ('jsonFileSaver', FileSelectorJsonFileSaver, _jsonFileSaver),
-  ('backupArchiveSaver', FileSelectorBackupArchiveSaver, _archiveSaver),
   ('backupArchivePicker', FileSelectorBackupArchivePicker, _archivePicker),
   (
     'backupDirectoryPicker',
@@ -54,6 +56,8 @@ Object _jsonFileSaver(ProviderContainer container) =>
     container.read(jsonFileSaverProvider);
 Object _archiveSaver(ProviderContainer container) =>
     container.read(backupArchiveSaverProvider);
+Object _fileSharer(ProviderContainer container) =>
+    container.read(fileSharerProvider);
 Object _archivePicker(ProviderContainer container) =>
     container.read(backupArchivePickerProvider);
 Object _directoryPicker(ProviderContainer container) =>
@@ -97,6 +101,32 @@ void main() {
     }
   });
 
+  test('fileExportPorts_givenAMobilePlatform_shareInsteadOfSaving', () {
+    // Android / iOS 没有保存对话框（file_selector 的 getSaveLocation 未实现），
+    // 导出改走系统分享（ADR-0083 §决策 1）。
+    for (final MapEntry<String, FakePlatformInfo> platform
+        in _shippedPlatforms.entries) {
+      final ProviderContainer container = _containerFor(platform.value);
+      final bool isMobile = !platform.value.isDesktop;
+
+      expect(
+        _jsonFileSaver(container).runtimeType,
+        isMobile ? SharingJsonFileSaver : FileSelectorJsonFileSaver,
+        reason: 'jsonFileSaver on ${platform.key}',
+      );
+      expect(
+        _archiveSaver(container).runtimeType,
+        isMobile ? SharingBackupArchiveSaver : FileSelectorBackupArchiveSaver,
+        reason: 'backupArchiveSaver on ${platform.key}',
+      );
+      expect(
+        _fileSharer(container).runtimeType,
+        isMobile ? SharePlusFileSharer : UnsupportedFileSharer,
+        reason: 'fileSharer on ${platform.key}',
+      );
+    }
+  });
+
   group('unsupported platform', () {
     test('filePorts_answerNotSavedInsteadOfThrowing', () async {
       // platform.md §2：没有该能力的平台给 no-op 实现，调用方不必判断平台。
@@ -106,6 +136,7 @@ void main() {
         container.read(jsonFileSaverProvider),
         isA<UnsupportedJsonFileSaver>(),
       );
+      expect(container.read(fileSharerProvider), isA<UnsupportedFileSharer>());
       final ParseResult<bool> saved = await container
           .read(jsonFileSaverProvider)
           .save(suggestedName: 'a.json', contents: '{}');

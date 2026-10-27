@@ -71,6 +71,10 @@ dependencies:
   json_annotation: ^4.12.0
   file_selector: ^1.1.0
 
+  # 系统分享：移动端导出与日志分享走系统分享面板（C-PLT-1、ADR-0083）。
+  # BSD-3-Clause，Flutter Community 维护；Android 用 ACTION_SEND、iOS 用 UIActivityViewController。
+  share_plus: ^13.3.1
+
   # 播放后端与 WebView（ADR-0061）：
   # Windows 用 media_kit（libmpv，随包二进制 LGPL-2.1+ 白名单）；Android / iOS 仍用 just_audio。
   # flutter_inappwebview 提供 `,{webView:…}` 的 headless WebView（Apache-2.0）。

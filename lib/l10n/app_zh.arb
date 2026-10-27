@@ -612,5 +612,9 @@
   "logFilesCleared": "已删除 {count} 个文件。",
   "logFilesCopyPath": "复制目录路径",
   "logFilesCopied": "路径已复制。",
-  "logFilesTotal": "合计：{size}"
+  "logFilesTotal": "合计：{size}",
+  "logFilesShareAll": "分享全部日志",
+  "logFilesShareFile": "分享该文件",
+  "logFilesShareBody": "目录只在应用内可读；分享会把副本交给其他应用。",
+  "logFilesShareFailed": "无法分享日志文件。"
 }

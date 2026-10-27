@@ -11,6 +11,7 @@ import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.
 import 'package:flutter_reader/core/platform/file_selector_backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/file_sharer.dart';
 import 'package:flutter_reader/core/platform/flutter_secure_storage_secret_store.dart';
 import 'package:flutter_reader/core/platform/install_id.dart';
 import 'package:flutter_reader/core/platform/json_file_picker.dart';
@@ -18,6 +19,9 @@ import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
 import 'package:flutter_reader/core/platform/secret_store.dart';
+import 'package:flutter_reader/core/platform/share_plus_file_sharer.dart';
+import 'package:flutter_reader/core/platform/sharing_backup_archive_saver.dart';
+import 'package:flutter_reader/core/platform/sharing_json_file_saver.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -49,26 +53,50 @@ JsonFilePicker jsonFilePicker(Ref ref) {
       : const UnsupportedJsonFilePicker();
 }
 
-/// Provides the platform save dialog for single-source export.
+/// Provides the system share sheet, or a no-op on platforms without one (`ADR-0083`).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Only mobile uses it today: on Android/iOS the export and log directories are private, while a
+/// desktop already has a save dialog and a reachable folder. Capability detection, not a platform
+/// branch in the UI, decides whether the log page offers sharing.
+@Riverpod(keepAlive: true)
+FileSharer fileSharer(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile
+      ? SharePlusFileSharer()
+      : const UnsupportedFileSharer();
+}
+
+/// Provides the platform save path for single-source export.
+///
+/// Mobile platforms have no save dialog, so they hand the document to the system share sheet
+/// (`ADR-0083`). Unsupported platforms report `not saved` instead of throwing.
 @Riverpod(keepAlive: true)
 JsonFileSaver jsonFileSaver(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 
-  return platform.isMobile || platform.isDesktop
+  if (platform.isMobile) {
+    return SharingJsonFileSaver(sharer: ref.watch(fileSharerProvider));
+  }
+
+  return platform.isDesktop
       ? const FileSelectorJsonFileSaver()
       : const UnsupportedJsonFileSaver();
 }
 
-/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+/// Provides the platform save path for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Mobile platforms share the archive instead of opening a save dialog (`ADR-0083`). Unsupported
+/// platforms report `not saved` instead of throwing.
 @Riverpod(keepAlive: true)
 BackupArchiveSaver backupArchiveSaver(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 
-  return platform.isMobile || platform.isDesktop
+  if (platform.isMobile) {
+    return SharingBackupArchiveSaver(sharer: ref.watch(fileSharerProvider));
+  }
+
+  return platform.isDesktop
       ? const FileSelectorBackupArchiveSaver()
       : const UnsupportedBackupArchiveSaver();
 }

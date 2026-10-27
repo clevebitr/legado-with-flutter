@@ -44,6 +44,19 @@ clean.
 
 ## [Unreleased]
 
+### Mobile exports and log sharing (ADR-0083)
+
+- **Exports work on Android and iOS again.** `file_selector` has no save dialog there, so
+  `JsonFileSaver` and `BackupArchiveSaver` now hand the document/zip to the system share sheet
+  (`share_plus`, BSD-3-Clause) on mobile; the desktop save dialog is unchanged.
+- **Logs leave the private directory.** The log page gained “share every log file” and a per-file
+  share button, both available only when the platform reports a share sheet. Files stay on disk
+  (paths are passed to the plugin, not read into memory) and are flushed before sharing.
+- Cancelling a share is silent (`ParseSuccess(false)`); only a real platform failure shows an error.
+- `share_plus ^13.3.1` + `share_plus_platform_interface ^7.2.0` are new dependencies; no storage
+  permission was added.
+
+
 ### The remaining work is ordered by a real corpus (M25, DECISIONS #49)
 
 A new `tool/spot_check/corpus_census.dart` counts what two real exports actually use — 334 sources after

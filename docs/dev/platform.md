@@ -44,7 +44,8 @@ Please enable Developer Mode in your system settings.
 或执行 `start ms-settings:developers`。
 
 > 本项目依赖多个带原生代码的插件（`drift_flutter`、`path_provider`、`shared_preferences`、
-> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`、`just_audio_windows`、`flutter_tts`），
+> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`、`just_audio_windows`、`flutter_tts`、
+> `share_plus`），
 > 因此该开关是 Windows 开发的**硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
 
 **M17 / M24 起新增的 Windows 构建与能力前提（ADR-0054 A-0、ADR-0062 实测）：**
@@ -76,6 +77,7 @@ Please enable Developer Mode in your system settings.
 | `PlaybackNotification` | 媒体通知 / 锁屏控制（Android / iOS 由 `audio_service` 实现；Windows 返回 no-op 的 `null` 句柄） | 音频播放器在播放状态变化时 `attach` / `update` / `detach`；**UI 不判断平台**（ADR-0054 §决策 3/4） |
 | `WebPageFetcher` | `,{webView:…}` 的 headless WebView（三端）；不支持的平台 `isSupported == false`，调用方回落普通 GET | `PageFetchService` 在 `webView` + GET + 无 body 时调用（ADR-0061 §决策 4） |
 | `usesMediaKitPlayback` | 播放后端的平台选择：Windows 用 media_kit，Android / iOS 用 just_audio | `reader/di.dart` 选适配器；**业务层不判断平台**（ADR-0061 §决策 1） |
+| `FileSharer` | 系统分享面板（Android `ACTION_SEND` / iOS `UIActivityViewController`）；不支持的平台 `isSupported == false` | 移动端的导出（书源 / 净化规则 / 备份）与日志页在 `isSupported` 时用分享代替保存对话框；**UI 只问能力，不判断平台**（ADR-0083） |
 
 **契约：** 每个接口在不支持的平台返回 `null` 或 no-op，**禁止抛出异常**；
 调用方必须把 `null` 当作正常分支处理，不得用 `!` 解包（C-TYPE-2）。
@@ -128,6 +130,7 @@ pageTransitionsTheme: const PageTransitionsTheme(
 ## 5. 路径与文件系统
 
 - 所有路径必须经 `path_provider` 获取（C-PLT-3）。
+- Android / iOS 的应用私有目录无法被文件管理器访问：导出与日志必须经 `FileSharer` 交给系统分享，或由用户显式选择路径（ADR-0083）。
 - 目录划分：
 
 | 用途 | 位置 |
@@ -151,6 +154,7 @@ pageTransitionsTheme: const PageTransitionsTheme(
 - [ ] Android 8–11 主题使用种子色且无崩溃
 - [ ] 状态栏/导航栏在 edge-to-edge 下内容不被遮挡
 - [ ] 批量书源校验运行期间 `LongRunningTask.isSupported` 为 true，退出后 wake lock 已释放（`dumpsys power` 无残留 tag）
+- [ ] 导出书源 / 净化规则 / 备份与日志分享都能拉起系统分享面板，取消后不弹错误
 
 **iOS**
 

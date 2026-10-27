@@ -2832,6 +2832,10 @@
   "logFilesCopyPath": "Copy the folder path",
   "logFilesCopied": "Path copied.",
   "logFilesTotal": "Total: {size}",
+  "logFilesShareAll": "Share every log file",
+  "logFilesShareFile": "Share this file",
+  "logFilesShareBody": "The folder is private to the app; sharing hands a copy to another app.",
+  "logFilesShareFailed": "Could not share the log files.",
   "@settingsLogLevel": {
     "description": "Log verbosity setting (ADR-0082)."
   },
@@ -2848,5 +2852,17 @@
         "type": "String"
       }
     }
+  },
+  "@logFilesShareAll": {
+    "description": "List entry that opens the system share sheet with all log files (ADR-0083)."
+  },
+  "@logFilesShareFile": {
+    "description": "Tooltip of the share button on one log file row."
+  },
+  "@logFilesShareBody": {
+    "description": "Explains why the log folder needs a share action on Android."
+  },
+  "@logFilesShareFailed": {
+    "description": "Snack bar shown when the system share sheet fails."
   }
 }

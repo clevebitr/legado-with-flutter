@@ -3779,6 +3779,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Total: {size}'**
   String logFilesTotal(String size);
+
+  /// List entry that opens the system share sheet with all log files (ADR-0083).
+  ///
+  /// In en, this message translates to:
+  /// **'Share every log file'**
+  String get logFilesShareAll;
+
+  /// Tooltip of the share button on one log file row.
+  ///
+  /// In en, this message translates to:
+  /// **'Share this file'**
+  String get logFilesShareFile;
+
+  /// Explains why the log folder needs a share action on Android.
+  ///
+  /// In en, this message translates to:
+  /// **'The folder is private to the app; sharing hands a copy to another app.'**
+  String get logFilesShareBody;
+
+  /// Snack bar shown when the system share sheet fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not share the log files.'**
+  String get logFilesShareFailed;
 }
 
 class _AppLocalizationsDelegate

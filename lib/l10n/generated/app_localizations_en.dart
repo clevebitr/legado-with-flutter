@@ -2073,4 +2073,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String logFilesTotal(String size) {
     return 'Total: $size';
   }
+
+  @override
+  String get logFilesShareAll => 'Share every log file';
+
+  @override
+  String get logFilesShareFile => 'Share this file';
+
+  @override
+  String get logFilesShareBody =>
+      'The folder is private to the app; sharing hands a copy to another app.';
+
+  @override
+  String get logFilesShareFailed => 'Could not share the log files.';
 }

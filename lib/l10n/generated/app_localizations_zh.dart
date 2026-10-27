@@ -2008,4 +2008,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String logFilesTotal(String size) {
     return '合计：$size';
   }
+
+  @override
+  String get logFilesShareAll => '分享全部日志';
+
+  @override
+  String get logFilesShareFile => '分享该文件';
+
+  @override
+  String get logFilesShareBody => '目录只在应用内可读；分享会把副本交给其他应用。';
+
+  @override
+  String get logFilesShareFailed => '无法分享日志文件。';
 }

@@ -221,6 +221,15 @@ Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**；GPL / LGPL / AGPL / 
 > 带到站外（上游 `JsExtensions.kt:1162-1185` 先弹确认页再开浏览器），可复制文本不构成实现；
 > 拒绝它意味着这类源只能靠用户手动抄地址。确认弹窗由本仓自己画，`url_launcher` 只负责最后一步。
 
+**2026-10-27 增量（移动端导出与日志分享，ADR-0083）：** `dependencies` 新增
+`share_plus ^13.3.1`（**BSD-3-Clause**，Flutter Community 维护；Android `ACTION_SEND` /
+iOS `UIActivityViewController`），带入 `share_plus_platform_interface ^7.2.0`（同许可）与
+`mime` / `cross_file` / `file` / `url_launcher_*` / `ffi` / `web` / `win32` 等已在基线内的
+传递依赖。`dart run tool/scan_licenses.dart` 复算：**212 包 / BSD-3 123 / MIT 56 / Apache 18 /
+BSD-2 6 / MPL 1 / SDK 8，Risky items: none**。GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；
+MPL 白名单仍只有 `enough_convert`。它只在 `core/platform/` 的 `FileSharer` 适配器里引用，
+不申请任何存储权限，也不改变日志仍留在应用私有目录这一事实。
+
 **直接依赖明细：**
 
 | 依赖 | 版本 | 许可证 |
@@ -263,6 +272,7 @@ Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**；GPL / LGPL / AGPL / 
 | `media_kit_libs_windows_audio` | 1.0.9 | MIT（随包 libmpv / FFmpeg 动态库：LGPL-2.1+，手工登记） |
 | `pointycastle` | 4.0.0 | MIT |
 | `url_launcher`（+ 6 个平台实现） | 6.3.2 | BSD-3-Clause |
+| `share_plus`（+ 1 个平台接口包） | 13.3.1 | BSD-3-Clause |
 | `flutter_inappwebview` | 6.1.5 | Apache-2.0 |
 | `mocktail`（dev） | 1.0.5 | MIT |
 | `flutter` / `flutter_localizations` / `flutter_test` / `integration_test`（SDK） | 3.47.7 | BSD-3-Clause（Flutter SDK） |
@@ -297,9 +307,9 @@ dart run tool/scan_licenses.dart --list     # 额外逐包打印分类，便于�
    > **禁止把 `3. Neither the name` 当作特征串。** Dart 官方包把 BSD 第三条写成项目符号
    > `* Neither the name`；用带序号的形式只能匹配到极少数包。2026-10-11 实测：101 个包含
    > BSD 特征串，其中 95 个含第三条（仅 `cascadia` 用带序号写法），6 个不含（`sqflite*` 系列）。
-4. **计数校验：** 各许可证数量之和必须等于 `pubspec.lock` 的包数（当前 95 + 37 + 10 + 6 = 148，
-   加 8 个 Flutter SDK 自带包 = 156）。重扫后与 §5 的基线**逐项 diff**：有差异时先判断是
-   “新增/升级依赖”还是“分类规则变了”，后者必须先修规则再回写基线。
+4. **计数校验：** 各许可证数量之和必须等于 `pubspec.lock` 的包数（当前基线以 §5 最后一条增量为准）。
+   重扫后与 §5 的基线**逐项 diff**：有差异时先判断是“新增/升级依赖”还是“分类规则变了”，
+   后者必须先修规则再回写基线。
 5. 出现 GPL 系 / 无许可证文件 / 无法识别任一情况时，**先开 ADR 再决定**是否引入；
    MPL 系先查 `tool/scan_licenses.dart` 的 `_mplAllowList`：不在名单里就是风险项（退出码非 0），
    加入名单必须同时写 ADR（首例 ADR-0048）并更新本节基线。
@@ -308,4 +318,4 @@ dart run tool/scan_licenses.dart --list     # 额外逐包打印分类，便于�
 
 ---
 
-**最后更新：** 2026-10-21
+**最后更新：** 2026-10-27
