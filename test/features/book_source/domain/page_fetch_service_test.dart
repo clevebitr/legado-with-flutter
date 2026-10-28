@@ -639,7 +639,8 @@ void main() {
       expect(http.requestedUrls, isEmpty);
     });
 
-    test('fetchRule_givenUnsupportedOptions_warnsByOptionName', () async {
+    test('fetchRule_givenUnsupportedOptions_failsBeforeRequesting', () async {
+      // 未建模的选项在取值处判失败（C-SRC-4）：忽略 `origin` / `js` 只会把错误留到更远的网络层。
       final FakeLogPrinter printer = FakeLogPrinter();
       final FakeHttpClient http = FakeHttpClient()
         ..serve(
@@ -656,14 +657,19 @@ void main() {
         logger: AppLogger(level: LogLevel.debug, printer: printer),
       );
 
-      await pages.fetchRule(
+      final ParseResult<FetchedPage> result = await pages.fetchRule(
         'https://example-novel.test/s?k={{key}},{"origin":"https://a.test"}',
         rulePath: 'searchUrl',
         params: <String, String>{'key': '剑来'},
         context: _context(),
       );
 
-      expect(http.requestedMethods, <String>['GET']);
+      expect(
+        (result as ParseFailure<FetchedPage>).kind,
+        ParseFailureKind.unsupportedRule,
+      );
+      expect(result.rulePath, 'unsupported:url-options:origin');
+      expect(http.requestedMethods, isEmpty);
       expect(
         printer.events
             .map((LogEvent event) => event.message.toString())
@@ -1403,6 +1409,54 @@ void main() {
         hasLength(2),
       );
     });
+
+    test(
+      'walk_givenTheNextPageIsTheNextChapter_stopsBeforeReadingIt',
+      () async {
+        // 上游 BookContent.kt:90-96：翻页规则指到**下一章**时提前停止。没有这一条，站点把
+        // 「下一章」写进 nextContentUrl 的源会被整本连读，直到 50 页上限。
+        final FakeLogPrinter printer = FakeLogPrinter();
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            'https://example-novel.test/book/1/ch1.html',
+            '<div class="body">第一页</div>'
+                '<a id="next" href="ch2.html">下一章</a>',
+          );
+        final PageFetchService pages = PageFetchService(
+          engine: RuleEngine(
+            logger: AppLogger(level: LogLevel.debug, printer: printer),
+            jsBridge: FakeJsBridge(),
+            variables: JsVariableStore(),
+          ),
+          http: http,
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+        );
+
+        final PageWalk walk = _data(
+          await pages.walk(
+            rule: 'https://example-novel.test/book/1/ch1.html',
+            rulePath: 'ruleContent',
+            nextRule: '@css:a#next @href',
+            nextRulePath: 'contentRule.nextContentUrl',
+            context: const JsPageContext(
+              baseUrl: 'https://example-novel.test/book/1/',
+              page: 1,
+              source: JsSourceInfo(
+                name: '示例书源',
+                url: 'https://example-novel.test',
+              ),
+              nextChapterUrl: 'https://example-novel.test/book/1/ch2.html',
+            ),
+            sourceId: 'https://example-novel.test',
+          ),
+        );
+
+        expect(walk.pages, hasLength(1));
+        expect(http.requestedUrls, <String>[
+          'https://example-novel.test/book/1/ch1.html',
+        ]);
+      },
+    );
   });
 
   group('PageFetchService post-processing', () {

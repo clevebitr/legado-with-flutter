@@ -170,7 +170,10 @@ Future<ParseResult<List<Book>>> readBooks(
     final String? url = bookUrl.dataOrNull;
     if (url == null || url.isEmpty) {
       // 单条缺 URL 不中断整页结果，只跳过并记录。
-      pages.warn('$noun without URL skipped: source=$sourceId');
+      pages.warnThrottled(
+        'no-url|$sourceId|$noun',
+        '$noun without URL skipped: source=$sourceId',
+      );
       continue;
     }
 
@@ -208,9 +211,10 @@ String? _coverOf(String? value, PageFetchService pages, String baseUrl) {
   }
   final String clean = stripUrlOptions(value);
   if (clean != value) {
-    pages.warn(
+    pages.warnThrottled(
+      'cover-options|$baseUrl',
       'Cover URL options dropped (covers carry no request headers): '
-      'base=$baseUrl',
+          'base=$baseUrl',
     );
   }
 

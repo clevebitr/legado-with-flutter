@@ -171,6 +171,8 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 | 29 | `@css:` 内的 jsoup 索引伪类 `:eq(n)` / `:gt(n)` / `:lt(n)`（**兄弟索引**，0-based，**不是**结果集索引） | `@css:div#info > p:eq(3) @text` | 所有字段 | **M0** → Phase 3.2 | 已确认 |
 | 30 | 提取段里的**嵌套规则**（末段本身是一条规则，如 `class.a@css:.b`） | `class.a@css:.b` | 所有字段 | **M2 / 登记不做**（2026-10-27 复核：修掉普查探测器后语料命中 **0 源 / 0 处**，见下方 #30 注记） | 有意差异（触发 = 出现依赖它的真实源） |
 | 31 | `<js>…</js>` JS 包装（**任意位置**，可作其他规则的分隔符；与 #14 同能力、不同包装） | `tag.li<js>…</js>//a`（原版文档示例） | 所有字段 | **M12**（值规则与列表规则都支持） | 已确认（**分段链**：上一段产出是下一段 `result`，`{{result}}` 由此拼进后续文本；ADR-0047 §决策 2） |
+| 32 | 默认规则里的**属性选择器**：`[attr]` / `[attr=v]` / `[attr*=v]`，可带标签名（`meta[...]`） | `[property$=image]@content`、`meta[name=description]@content` | 所有字段 | **M27** | 已确认（`[` 后是字母 / `_` 时整段交给 cascadia；索引列表仍归 #6 / #26 / #33。上游 `AnalyzeByJSoup.kt:406-440` 的 `findIndexSet` 解析不出索引就 `break`，整段留给 jsoup） |
+| 33 | 位置列表 `.N:M[:N]`（`.` 是筛选，`:` 分隔序号，可负数；与 #6 的 `!` 同族） | `tag.div.-1:10:2`、`span.1:2`、`p.3:4:5:6:7` | 所有字段 | **M27** | 已确认（上游 `ElementsSingle` 注释与 `AnalyzeByJSoup.kt:406`：非 `[]` 式索引里 `:` 分隔、`.` / `!` 决定筛选；顺序按写法，不是升序） |
 
 > **G4 状态（2026-10-14）：** #15–#19 **全部**已翻「已确认」，逐行证据（源名 + 字段 + 产出样本）见
 > `tool/spot_check/README.md` §4 的 G4 记录（RUN 1 = 漫客栈，#16/#18/#19；RUN 2 = QB女生派生，#17；
@@ -182,6 +184,26 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > `ruleSearch.kind` 加一个 `@@` 前缀（选择器与替换段逐字不动）：search 产出 `kind=武侠`，
 > 其余三段计数/哈希与 G2b 记录逐字相同（toc 1310、content 3031 / `sha256=6578ef3efc456856`）。
 > 活源普查（319/25）保留为背景证据。
+
+> **#32 / #33 为 2026-10-28 日志取证补录（M27）：** 真实书源日志（54 源全量校验）暴露了两条
+> **上游早已有、矩阵却没有行**的写法，补录同样追加在表尾：
+>
+> - **#32 属性选择器。** `[property$=image]` / `meta[name=description]` / `a[href*="_"]` 在本仓
+>   一直被当成索引列表（`[` 后一律进索引解析）→ `parseFailed`；日志里 4 个 meta 驱动的详情页
+>   字段全空（静态普查 10 源 / 31 处）。上游是「索引解析不出就当 CSS」，本仓照此判定：`[` 后
+>   首个非空格字符是字母 / `_` 即整段交给 cascadia，数字 / `-` / `!` / 空串仍走索引。
+>   **不加引号的属性值：** 真实源写的是 jsoup 方言 `[property=og:novel:book_name]`（值里有 `:`），
+>   而 CSS 只允许不加引号的标识符；本仓在交给 cascadia **之前**把这种值包成双引号（已加引号 / 纯
+>   标识符不动），否则修复只会把这些字段从 `parseFailed` 变成仍是 `parseFailed`。
+>   **尚未对齐的一处：** jsoup 的 `[attr~=regex]` 是**正则子串匹配**，CSS 的 `~=` 是「空白分隔的整词」
+>   —— `[property~=category|status|tags]` 因此在本仓解析成功但**匹配不到**（3 源，仅影响 `kind` 展示，
+>   登记在 `engine-parity.md`）。
+>   **仍然更严的差异：** 已实现的类型名后面写属性选择器（`tag.li[x]`）在本仓是 `parseFailed`，
+>   上游会把它当标签名的一部分静默无匹配（登记在 `engine-parity.md`）。
+> - **#33 位置列表。** 上游把 `span.1:2` / `li.4:6` 读成「`.` 筛选 + `:` 分隔的序号列表」
+>   （`ElementsSingle` 注释的 `tag.div.-1:10:2`），本仓此前只实现了 `!` 那张表；日志里 3 个源的
+>   `kind` / `wordCount` 因它置空（静态 10 源 / 15 处）。顺序按写法保留（`2:0` 就是第 2 个再第 0 个），
+>   与 `[N,M]` 的顺序语义一致。
 
 > **#25–#27 为 2026-10-11 补录（回执 B3）：** 这三条语法此前只存在于上游实现里，本仓矩阵没有行，
 > 于是出现「引擎拒绝得对、账本却没记」的缺口。补录时**追加在表尾而不是插在中间**：`docs/dev/roadmap.md`
@@ -227,6 +249,30 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 >   `Invalid argument`（jsoup 接受；真实语料的 `containsOwn(下一页)` 无空格，可用）；
 >   `:matches(x)` 必须写成 `:matches(/x/)`（jsoup 收裸正则）。
 
+> **#10 注记（2026-10-28，M27）：空分支与「`##` 属于整条规则」。** 上游把一条值规则切成
+> 候选后，空候选 / 空分支直接跳过（`AnalyzeByJSoup.getString` 的 `temp.isNullOrEmpty()`），
+> 而 `##` 的替换段属于**整条规则**（`AnalyzeRule.kt:339`：规则体为空但有替换时跳过求值、
+> 把替换打在上一段结果上）。因此真实写法 `class.span@text||##最新章节.*`（天地中文的
+> `wordCount`）在本仓不再 `parseFailed`：空候选不贡献值，替换照常应用。
+> **边界：** 整条规则都是空（`-` 只剩倒置前缀、`&&` 只剩连接符）仍报 `parseFailed`——
+> 那是写错，不是一个可跳过的候选（C-SRC-4）。一个候选解析失败仍结束整条规则，不会去尝下一个
+> `||` 分支（与上游的「失败态不存在」不同，属 C-SRC-4 的响亮失败，登记在 `engine-parity.md`）。
+
+> **#9 / #25 注记（2026-10-28，M27 第二轮日志）：只有替换段的字段规则。** 一条字段规则可以
+> 没有选择器，只写 `##pattern##replace###`：上游 `getString` 里替换对象是**这一层的内容**
+> ——页面给 body，条目给元素的 HTML（`Element.toString()`），JSON 条目是 Java `Map` 的
+> `toString()`（本仓用 JSON 文本，与矩阵 #13 的登记差异同源）。真实源用它从条目 HTML 里抽地址：
+> `##href="//m.qidian.com/chapter/(\d+)/0/"##https://m.qidian.com/book/$1/###`（千寻、未来天王、
+> 肉文屋的 `ruleSearch.bookUrl` / `ruleBookInfo.*`）。`###` 的「首个匹配内替换」语义不变；
+> 模式不命中时结果是空串（单值字段即「没有值」）。
+
+> **行首装饰性 `@` 注记（2026-10-28，M27 第二轮日志）：** 上游 `RuleAnalyzer.trim()` 在切段前
+> 把行首的 `@` 与空白**一并剥掉**，所以真实源写的 `@tag.td.2@text` / `@href` /
+> `@onclick@js:…` 等于去掉那个 `@`。标志头不受影响：剥掉后 `_flagOf` 会把它补回来，`@js:` /
+> `@css:` / `@json:` / `@xpath:` / `@put:` / `@get:` / `@webJs` / `@@` 仍是语法。
+> 语料命中：三九小说 6 条、金银小说网 6 条、阅友小说 2 条、笔趣阁 gei / 版主13 / 开心看漫画 /
+> PO5 / 废纸文学各 1–2 条（只差这一个字符就整片搜索字段 `parseFailed`）。
+
 > **#13 注记（2026-10-11，随 3.2 落地；接口裁决见 ADR-0028）：**
 >
 > - `@json:` 与裸 `$.` / `$[` 作用于 **scope**：整页 scope 同时带 DOM 与原始 body，
@@ -240,6 +286,13 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 >   （上游 `AnalyzeByJSonPath.kt:137` 的 `read<ArrayList<Any>>`），所以 `bookList: $.info.Datas`
 >   给 30 个条目而不是 1 个数组——这两点都是 3.7 的真实源回归（`tool/spot_check/README.md` §4b）
 >   发现的保真缺口，已修。
+> - **JSON 条目上的裸键（2026-10-28，M27）：** 条目的 scope 是 JSON **对象**时，一条**没有选择器**
+>   的规则就是成员名（上游 `AnalyzeRule.kt:331` 的 `LinkedTreeMap` 分支），值按矩阵 #13 的形状
+>   返回（字符串原样 / 列表展开 / 对象 JSON 文本）。真实源：`ruleToc.chapterUrl` 写成
+>   `$.pic@put:{img:pic}`，其中 `pic` 就是条目成员；本仓此前在 JSON scope 上看不到选择器就报
+>   `parseFailed`，导致整条规则与正文 `@get:{img}` 一起失效（日志 511 条）。
+>   **边界：** 只有 map 条目能这么读；列表 / 标量条目、以及 JSON **页**（ADR-0047 §决策 6 的
+>   「不自动切模式」）仍然按原来的口径响亮失败。
 > - **JSONPath 方言：`]` 后直接跟成员名（2026-10-13，b5）：** 上游的 JsonPath 接受
 >   `$.a[0]b` / `$.data.page[*]image`，而 RFC 9535 那个解析器只认 `].`。本仓在把表达式交给
 >   解析器**之前**把「`]` 紧跟标识符（字母 / `_` / 非 ASCII，即中文键）」归一成 `].`；
@@ -320,6 +373,21 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 >   模板时，那就是遗留写法 `{$.data.name}`。列表规则里只取其中的 JSONPath，字面文本不贡献元素
 >   （矩阵「只能用 JSONPath」）。
 >
+> **#14 的条目形态（2026-10-28，M27 第二轮日志）：** 列表规则由脚本产出时，条目按值分流：
+> 字符串若形如 `{…}` / `[…]`（上游 `String?.isJson()`）**解码成 JSON 条目**（所以
+> `$.title` / `$.url` 命中，福书网的章列表就是 `JSON.stringify({title,url})` 的数组），其余字符串
+> 当 HTML 片段解析；对象 / 数组 / 标量仍是 JSON scope。
+>
+> **`result` 的元素垫片（同一轮的取舍）：** 上游在**条目上的裸 `@js:`** 里把 `result` 绑成 jsoup
+> `Element`，真实源因此会写 `result.attr('href')`、`result.select('span').get(1).text()`。沙箱没有
+> DOM（ADR-0029 §决策 5），本仓改为**宿主就地求值再内联**：只处理参数是字面量的链
+> （`attr` / `text` / `ownText` / `html` / `outerHtml` / `select` / `children` / `parent` /
+> `first` / `last` / `get` / `size` / `elementSiblingIndex`），替换成一个 JS 字面量；
+> 变量参数（`get(i)`）或链里出现未知元素方法时**整条不内联**，脚本原样交给沙箱响亮失败。
+> 整页 `result` 仍是正文文本（上游同形），不做这个替换。真实源证据：re0zero 的
+> `tocRule.isVolume = @js:result.attr('href')…`（920 次 `not a function`）、福书网的
+> `ruleExplore.author`、金银小说网的 11 条搜索字段。
+
 > **展开的两处边界（已登记，均有测试）：** ① 展开深度上限（8 层）：上游的递归替换没有上限，
 > 而按源变量可以装着规则文本，自引用会让一条字段永远展开下去，故以可定位的 `parseFailed` 收场；
 > ② 未闭合的 `{{…}` 在规则字段里原样留下（上游的 `{{[\w\W]*?}}` 也匹配不上），但在 **URL** 里
@@ -586,6 +654,12 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 > - **`preUpdateJs` 在第一个请求之前跑，失败即失败。** 上游 `runPreUpdateJs(...).getOrThrow()`
 >   会中断整次目录更新；本仓连请求都不发（`FetchToc` 在 `walk` 之前执行）。
 
+> **「下一页 == 下一章」提前停止（2026-10-28，M27 第二轮日志）。** 上游 `BookContent.kt:90-96`
+> 在翻页遍历里比较「下一页地址」与 `nextChapterUrl`，相同就停。本仓的 `walk` 现在也做这个比较
+> （两边都按当前页绝对化）；校验阶段按上游 `BookSourceCheckRepository.kt:222-230` 把目录的
+> **第 2 章**作为 `nextChapterUrl` 传进正文请求（卷标题不参与）。没有这一条，站点把「下一章」
+> 写进 `nextContentUrl` 的源会被整本连读，直到 50 页上限（一轮日志里 14 个源）。
+
 > **正文缓存（2026-10-14，`docs/dev/roadmap.md` 5.2）：** 一章的**成品正文**（分页已拼好、`replaceRegex` 已跑过）
 > 存进与 charset 缓存同一张 `cache_entries`，键复用 `CacheDao` 的稳定键（`ruleField` 固定为
 > `content`、`page` 固定为 1，键含**书源 ID**，所以两个书源发布同一章节 URL 也不会串味）；
@@ -619,7 +693,7 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 | `overrideUrlRegex` | 命中则把该 URL 当结果页，停止加载 | ✅ M21a |
 | `retry` | 这一条请求的重试次数（规则侧上限 3） | ✅ M21a |
 | `readTimeout` | 这一条请求的响应超时（上限 120 s） | ✅ M21a |
-| `origin` / `type` / `js` / `dnsIp` / `proxy` / `callTimeout` / `HEAD` / `encodedForm` | 本仓没有对应实现，按名记 `unsupported` 并 warning | ❌ **裁决不做**（ADR-0068 2026-10-24 增补：理由与重开触发条件逐项写死） |
+| `origin` / `type` / `js` / `dnsIp` / `proxy` / `callTimeout` / `HEAD` / `encodedForm` | 本仓没有对应实现 | ❌ **裁决不做**（ADR-0068 2026-10-24 增补）。**2026-10-28 改判：** 这些选项不再「忽略后照发」，而是**在取值处 `unsupportedRule` 失败**（`rulePath=unsupported:url-options:<名字>`）——丢掉 `js` 会改写地址，忽略只会把错误推到更远的网络层 |
 
 约定：
 
@@ -805,7 +879,7 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `java.post(url, body, headers)` | 响应对象 | **同步**返回响应对象（与 `loginCheckJs` 的 `result` 同形：`body` 属性 + `url()` / `code()` / `header(name)` …），规则靠它读 `Location` | M24 |
 | `java.head(url)` | 响应对象 | 同上，动词是 `HEAD`（`HttpClient.head`），正文为空 | M24 |
 | `java.getCookie(url[, key])` | `String?` | 读 Cookie 宗；带 `key` 时给该 cookie 的值（没有则 `null`），不带时给整条 `Cookie` 头（没有则 `''`） | M24 |
-| `cookie.getCookie(url[, key])` / `cookie.setCookie(url, value)` / `cookie.removeCookie(url, key)` | `String?` / `void` / `void` | 与 `java.getCookie` 同一通道的上游另一种拼写；`setCookie` 可传一对也可传整条 `a=1; b=2`（逐对落宗），`removeCookie` 等价「空值 + `Max-Age=0`」 | M24 |
+| `cookie.getCookie(url[, key])` / `cookie.setCookie(url, value)` / `cookie.removeCookie(url[, key])` | `String?` / `void` / `void` | 与 `java.getCookie` 同一通道的上游另一种拼写；`setCookie` 可传一对也可传整条 `a=1; b=2`（逐对落宗）。**`removeCookie` 上游只绑了一个参数**（`CookieStore.kt:79`：删「这个 URL 会发的整份 Cookie」，真实源写 `cookie.removeCookie(source.getKey())`）；本仓额外接受第二个参数表示按名删除（「空值 + `Max-Age=0`」），两种都可用 | M24 / M27 |
 | `java.setContent(html)` | `void` | 把本 job 的页级 scope 换成这份 HTML：随后的 `java.getString*` / `parse.*` 读新页面（`result` 绑定不变） | M24 |
 | `java.toast(msg)` / `java.longToast(msg)` | `void` | 转发到装配根绑定的 `UserMessages`（snack bar），同一 job 内同句只贴一次，同时记 info 日志 | M24 |
 | `source.getVariable()` / `setVariable(v)` / `putVariable(v)` | `String` / `void` | **整份变量**，无参（上游 `BaseSource.kt:283-295`）：源拿它当自己的小仓库（语料里 54 处读、41 处写，`setVariable(JSON.stringify(...))` + `getVariable()` 是主流写法）。存在 `source_variables` 的**无名条目**里（与 `put`/`get` 同一张表），写 `null` / 不传即删除；与 `java.get` / `put` 的规则变量**不是**同一张表。**M25/S5a 改正**：S3b 曾做成 `getVariable(key)` 的键值形状（语料命中 0） | M24 / M25/S5a |

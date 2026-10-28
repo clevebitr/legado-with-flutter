@@ -11,6 +11,7 @@ import 'package:flutter_reader/features/book_source/domain/page_fetch_service.da
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/fake_js_bridge.dart';
@@ -238,9 +239,15 @@ void main() {
         // 按上游 `if (title.isNotEmpty)` 丢掉（BookChapterList.kt:263-270），所以目录是空的、
         // 阶段仍然成功（不是失败），拒绝记录照旧留在日志里。
         expect(result.dataOrNull, isEmpty);
+        // 字段级降级是 WARN；引擎的 `Rejected rule` 已降为 debug，逐章复制的行不再刷屏。
+        final Iterable<String> warnings = service.printer.events
+            .where((LogEvent event) => event.level == Level.warning)
+            .map((LogEvent event) => event.message.toString());
         expect(
-          service.printer.events.last.message.toString(),
-          allOf(contains('tocRule.chapterName'), contains(source.url)),
+          warnings,
+          anyElement(
+            allOf(contains('tocRule.chapterName'), contains(source.url)),
+          ),
         );
       },
     );

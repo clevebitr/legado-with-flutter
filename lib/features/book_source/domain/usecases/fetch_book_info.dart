@@ -80,9 +80,10 @@ final class FetchBookInfo {
     }
     final String clean = stripUrlOptions(value);
     if (clean != value) {
-      pages.warn(
+      pages.warnThrottled(
+        'cover-options|$baseUrl',
         'Cover URL options dropped (covers carry no request headers): '
-        'base=$baseUrl',
+            'base=$baseUrl',
       );
     }
 

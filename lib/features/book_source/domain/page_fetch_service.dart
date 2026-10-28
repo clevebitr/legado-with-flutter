@@ -4,9 +4,11 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/logging/log_throttle.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
+import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
@@ -80,13 +82,17 @@ final class PageFetchService {
     required this._logger,
     this._webPages,
     this._loginHeaders,
-  });
+    Clock clock = const SystemClock(),
+  }) : _throttle = LogThrottle(clock: clock);
 
   final RuleEngine _engine;
   final HttpClient _http;
   final AppLogger _logger;
   final WebPageFetcher? _webPages;
   final SourceLoginHeaderStore? _loginHeaders;
+
+  /// 逐条目重复的警告（同一源、同一字段）按窗口聚合，见 [warnThrottled]。
+  final LogThrottle _throttle;
 
   /// Fetches one **URL rule** and parses the body into a page scope
   /// (`book-source.md` §4.3).
@@ -180,10 +186,19 @@ final class PageFetchService {
     // `webView` 现在是 UrlRuleOptions 的**字段**（M21a，ADR-0068 §决策 6），不再是「被忽略的选项」。
     final bool canWebView =
         options.webView && (_webPages?.isSupported ?? false);
-    for (final String ignored in options.unsupported) {
-      _logger.warning(
-        'Ignoring an unsupported URL option: rule=$rulePath '
-        'option=$ignored source=${sourceId ?? 'unknown'}',
+    // 未建模的选项在**取值处**判失败，不再「忽略后照发」：被丢掉的 `js` 会改写地址或请求，
+    // 忽略只会把一条更远的网络错误留给用户（C-SRC-4、`book-source.md` §4.3）。
+    if (options.unsupported.isNotEmpty) {
+      final String ignored = options.unsupported.first;
+      warnThrottled(
+        'url-option|${sourceId ?? ''}|$rulePath|$ignored',
+        'Unsupported URL option: rule=$rulePath option=$ignored '
+            'source=${sourceId ?? 'unknown'}',
+      );
+
+      return failureAt<FetchedPage>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'unsupported:url-options:$ignored',
       );
     }
     // M25/S4：URL 规则声明了 `charset` 时，GET 的**整条 query** 按该编码转义（上游
@@ -193,6 +208,18 @@ final class PageFetchService {
         ? encodeUrlQuery(renderedRule.template.trim(), options.charset)
         : renderedRule.template.trim();
     final String url = resolveAbsoluteUrl(addressed, context.baseUrl);
+    if (!_isFetchableUrl(url)) {
+      // `javascript:;` / `undefined` / 规则拼错的相对值：在发请求之前就判失败，并只记一条。
+      warnThrottled(
+        'bad-url|${sourceId ?? ''}|$rulePath',
+        'Request URL is not http(s): rule=$rulePath url=$url',
+      );
+
+      return failureAt<FetchedPage>(
+        kind: ParseFailureKind.parseFailed,
+        rulePath: rulePath,
+      );
+    }
 
     final Map<String, String> requestHeaders = <String, String>{
       ...?headers,
@@ -438,6 +465,19 @@ final class PageFetchService {
     SourceLoginGuard? login,
     String? sourceRegex,
   }) async {
+    if (!_isFetchableUrl(url)) {
+      // 翻页规则指到 `javascript:;` / `undefined` 时同样在请求之前收口。
+      warnThrottled(
+        'bad-url|${sourceId ?? ''}|$rulePath',
+        'Request URL is not http(s): rule=$rulePath url=$url',
+      );
+
+      return failureAt<RuleScope>(
+        kind: ParseFailureKind.parseFailed,
+        rulePath: rulePath,
+      );
+    }
+
     final ParseResult<HttpResponse> response = await _http.get(
       url,
       rulePath: rulePath,
@@ -948,9 +988,10 @@ final class PageFetchService {
     ParseFailureKind kind,
     String consequence,
   ) {
-    _logger.warning(
+    warnThrottled(
+      'degraded|$sourceId|$rulePath|${kind.name}|$consequence',
       'Field rule degraded to $consequence: source=$sourceId field=$rulePath '
-      'kind=${kind.name}',
+          'kind=${kind.name}',
     );
   }
 
@@ -1247,6 +1288,11 @@ final class PageFetchService {
       }
 
       final String pageUrl = pending.removeAt(0);
+      // 上游 `BookContent.kt:90-96`：翻页规则指到**下一章**时提前停止。没有这一条，站点把
+      // 「下一章」放在 `nextContentUrl` 里的源会被整本连读，直到 50 页上限（一轮日志里 14 个源）。
+      if (_pointsAtNextChapter(pageUrl, context.nextChapterUrl)) {
+        break;
+      }
       if (!visited.add(pageUrl)) {
         // 翻页规则指回了已经读过的页（本站的页码列表常同时列出上一页）：跳过而不是重读。
         continue;
@@ -1295,6 +1341,19 @@ final class PageFetchService {
     }
 
     return ParseSuccess<PageWalk>(PageWalk(pages: pages));
+  }
+
+  /// Whether [pageUrl] is the next chapter's address (upstream's "next page == next chapter" stop).
+  ///
+  /// Both sides may be relative or absolute; the comparison resolves [nextChapterUrl] against
+  /// [pageUrl] so `../12.html` and `https://a.test/book/12.html` count as the same page.
+  bool _pointsAtNextChapter(String pageUrl, String? nextChapterUrl) {
+    if (nextChapterUrl == null || nextChapterUrl.trim().isEmpty) {
+      return false;
+    }
+    final String next = resolveAbsoluteUrl(nextChapterUrl.trim(), pageUrl);
+
+    return next == pageUrl;
   }
 
   /// Returns the absolute URLs a **paging** rule points at (`book-source.md` §4.1).
@@ -1547,6 +1606,32 @@ final class PageFetchService {
   /// logger of its own; the message must never carry a page body or a keyword
   /// (C-ERR-8, C-SEC-4).
   void warn(String message) => _logger.warning(message);
+
+  /// Logs [message] at most once per [LogThrottle] window for [key].
+  ///
+  /// Per-item and per-chapter warnings use this: a broken field on a 1000-chapter source wrote
+  /// the same line 1000 times, which buries every other signal. The first line still names the
+  /// field; later ones are counted and the next written line carries `suppressed=N`.
+  void warnThrottled(String key, String message) {
+    final int? suppressed = _throttle.admit(key);
+    if (suppressed == null) {
+      return;
+    }
+    _logger.warning(
+      suppressed == 0 ? message : '$message suppressed=$suppressed',
+    );
+  }
+
+  /// Whether [url] is something `HttpClient` can actually send.
+  ///
+  /// A rule can render to `javascript:;` / `undefined` / a bare relative value; catching that here
+  /// keeps the request layer (and its log) for real transport problems, and turns the field into a
+  /// locatable failure instead of a `networkFailed` from `Uri.tryParse`.
+  bool _isFetchableUrl(String url) {
+    final Uri? uri = Uri.tryParse(url);
+
+    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+  }
 
   /// Builds the failure for a top-level rule that matched nothing.
   ParseFailure<T> _noMatch<T>(String rulePath) =>

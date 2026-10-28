@@ -20,6 +20,7 @@ import 'package:flutter_reader/core/js/source_login_info.dart';
 import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/error_text.dart';
+import 'package:flutter_reader/core/logging/log_throttle.dart';
 import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
@@ -289,6 +290,10 @@ final class _WorkerSession {
 
   final JsWorkerHandle _handle;
   final AppLogger _logger;
+
+  /// `JS rule failed` 按 (字段, 错误) 聚合：一次目录扫描会让同一个失败复制上千行。
+  final LogThrottle _failureThrottle = LogThrottle();
+
   final HttpClient _http;
   final JsVariableStore _variables;
   final Duration _timeout;
@@ -494,10 +499,14 @@ final class _WorkerSession {
       return;
     }
 
-    _logger.warning(
-      'JS rule failed: field=$_field '
-      'error=${error == null ? 'unknown' : describeError(error)}',
-    );
+    final String description = error == null ? 'unknown' : describeError(error);
+    final int? suppressed = _failureThrottle.admit('$_field|$description');
+    if (suppressed != null) {
+      _logger.warning(
+        'JS rule failed: field=$_field error=$description'
+        '${suppressed == 0 ? '' : ' suppressed=$suppressed'}',
+      );
+    }
     _completeInFlight(
       failureAt<Object?>(
         kind: ParseFailureKind.parseFailed,
@@ -889,9 +898,15 @@ final class _WorkerSession {
         :final ParseFailureKind kind,
         :final String rulePath,
       ):
-        _logger.warning(
-          'Synchronous JS fetch failed: field=$rulePath kind=${kind.name}',
+        final int? suppressed = _failureThrottle.admit(
+          'sync|$rulePath|${kind.name}',
         );
+        if (suppressed != null) {
+          _logger.warning(
+            'Synchronous JS fetch failed: field=$rulePath kind=${kind.name}'
+            '${suppressed == 0 ? '' : ' suppressed=$suppressed'}',
+          );
+        }
         _reply(JsHostReply.rejected(call.callId, kind.name));
     }
   }
@@ -1110,15 +1125,26 @@ final class _WorkerSession {
   }
 
   ParseResult<Object?> _removeCookie(JsSyncRequest request, JsJob job) {
-    final String? key = request.key;
     final CookieManager? cookies = _cookies;
-    if (cookies == null || key == null || key.isEmpty) {
+    if (cookies == null) {
       return _unsupportedSync('cookie.removeCookie', job);
     }
+    final Uri? url = Uri.tryParse(request.url);
+    if (url == null) {
+      return _unsupportedSync('cookie.removeCookie', job);
+    }
+    final String? key = request.key;
+    if (key == null || key.isEmpty) {
+      // 上游绑的是 `CookieStore`，只有一个参数：`removeCookie(url)` 删「这个地址会发的整份
+      // Cookie」（`CookieStore.kt:79`，真实源写 `cookie.removeCookie(source.getKey())`）。
+      // 按名删除是 `CookieManager` 的另一个重载，上游没有绑给 JS；两条都收是为了让依赖它的
+      // 源也能跑，语义各按各的。
+      cookies.removeCookiesFor(url);
+
+      return const ParseSuccess<Object?>('');
+    }
     // 空值 + Max-Age=0 就是删除指令，CookieManager 与持久化层都认这个形状。
-    cookies.storeFromResponse(Uri.parse(request.url), <String>[
-      '$key=; Max-Age=0',
-    ]);
+    cookies.storeFromResponse(url, <String>['$key=; Max-Age=0']);
 
     return const ParseSuccess<Object?>('');
   }

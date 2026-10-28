@@ -2244,8 +2244,40 @@ void main() {
       );
     });
 
-    test('cookieVerbs_givenNoJarOrNoName_areRejectedAsUnsupported', () async {
-      // 两种「做不到」：装配根没给 Cookie 宗，或者删除没给名字。两者都必须显式拒绝。
+    test('removeCookie_givenNoKey_dropsEveryCookieForTheUrl', () async {
+      // 上游绑的是 `CookieStore`：`removeCookie(url)` 只有一个参数，删「这个地址会发的整份
+      // Cookie」（`CookieStore.kt:79`）。真实源写 `cookie.removeCookie(source.getKey())`。
+      final _Fixture fixture = _buildBridge();
+      fixture.cookies.storeFromResponse(
+        Uri.parse('https://example-novel.test/'),
+        <String>['a=1', 'b=2'],
+      );
+      final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
+        _job(script: 'hold'),
+      );
+      await pumpEventQueue();
+      fixture.workers.single.emit(
+        _hostCall(1, jsSyncBinding, <String, Object?>{
+          'operation': 'cookieRemove',
+          'url': 'https://example-novel.test/',
+        }),
+      );
+      await pumpEventQueue();
+
+      expect(
+        fixture.cookies.cookieHeaderFor(
+          Uri.parse('https://example-novel.test/'),
+        ),
+        isNull,
+      );
+      expect(
+        await _finish(fixture.workers.single, call),
+        isA<ParseSuccess<Object?>>(),
+      );
+    });
+
+    test('cookieVerbs_givenNoJar_areRejectedAsUnsupported', () async {
+      // 装配根没给 Cookie 宗：读、写、删都必须显式拒绝（C-SRC-4）。
       final _Fixture fixture = _buildBridge(bindCookies: false);
       final Future<ParseResult<Object?>> call = fixture.bridge.evaluate(
         _job(script: 'hold'),

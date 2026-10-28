@@ -389,9 +389,10 @@ final class FetchContent {
       :final ParseFailureKind kind,
       :final String rulePath,
     )) {
-      _pages.warn(
+      _pages.warnThrottled(
+        'sub-content|${source.url}|$rulePath|${kind.name}',
         'Sub-content page could not be read: source=${source.url} '
-        'field=$rulePath kind=${kind.name}',
+            'field=$rulePath kind=${kind.name}',
       );
 
       return '';

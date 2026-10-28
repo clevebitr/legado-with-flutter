@@ -67,6 +67,7 @@ BookSource _source({
   String tocList = 'class.chapter',
   String contentRule = 'id.content@text',
   String? checkKeyWord,
+  String? nextContentUrl,
 }) => BookSource.fromLegadoJson(<String, Object?>{
   'bookSourceName': '校验用例源',
   'bookSourceUrl': _baseUrl,
@@ -87,7 +88,10 @@ BookSource _source({
     'chapterName': 'tag.a@text',
     'chapterUrl': 'tag.a.0@href',
   },
-  'ruleContent': <String, Object?>{'content': contentRule},
+  'ruleContent': <String, Object?>{
+    'content': contentRule,
+    'nextContentUrl': ?nextContentUrl,
+  },
 });
 
 /// One search result page.
@@ -177,6 +181,28 @@ FakeHttpClient _healthy() => FakeHttpClient()
 
 void main() {
   group('CheckBookSource', () {
+    test('execute_givenTheNextContentUrlPointsAtTheNextChapter_stopsEarly', () async {
+      // 上游 BookSourceCheckRepository.kt:222-230 把目录第 2 章作为 nextChapterUrl 传下去；
+      // 正文翻页规则指到它时停止，而不是把整本读成 50 页（一轮日志里 14 个源撞上限）。
+      final FakeHttpClient http = _healthy()
+        ..serve(
+          _chapterUrl,
+          '<div id="content">第一页</div>'
+          '<a id="next" href="2.html">下一章</a>',
+        );
+      final _Fixture fixture = _fixture(http);
+
+      _report(
+        await fixture.check.execute(
+          _source(nextContentUrl: '@css:a#next @href'),
+          const SourceCheckSettings(keyword: _keyword),
+        ),
+      );
+
+      expect(http.requestedUrls, contains(_chapterUrl));
+      expect(http.requestedUrls, isNot(contains('$_baseUrl/book/1/2.html')));
+    });
+
     test('execute_givenAHealthySource_succeedsOnEveryStage', () async {
       final _Fixture fixture = _fixture(_healthy());
 

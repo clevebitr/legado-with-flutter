@@ -61,7 +61,7 @@
 | `imageStyle`（`full`/`single`/`left`/`right`/居中） | `ContentRule.kt:20` | **够用**：`full` / `single` / 默认三分支；`left` / `right` 未实现（ADR-0069 G5） | **49 源声明，取值只有 `FULL`/`0`/`full`/`Full`**（§9.1） | 维持（`left`/`right` 语料命中 0） |
 | 正文 HTML → 纯文本（本仓**有意**与上游不同） | `BookContent.kt:207-216`、`HtmlFormatter.kt:151-195`（上游保留 HTML，由富文本视图渲染） | **已做**（2026-10-27）：`content` 的每个匹配都参与（上游 `getString` 的换行拼接），并在 `replaceRegex` 之前把 HTML 转成纯文本（块级标签→换行、行内剥掉、script/style 丢弃、实体解码、图片丢弃）。阅读端是纯文本，所以这是必要差异 | **83 / 249 条 `content` 规则产出 HTML**（2026-10-27 语料） | 有意差异（触发 = 阅读端支持富文本并需要内联图时改成上游口径） |
 | 正文分页并发（多值 `nextContentUrl`，≤4） | `BookContent.kt:113-141` | 串行 | | **已知热点**（M26 R4） |
-| 「下一页 == 下一章」提前停止 | `BookContent.kt:90-96` | 无（`nextChapterUrl` 自 M25/S3b 起已下发，判定只差 `walk` 里的一个比较） | | S2（低） |
+| ✅ 「下一页 == 下一章」提前停止 | `BookContent.kt:90-96`、`BookSourceCheckRepository.kt:222-230` | **已对齐**（M27 第二轮）：`walk` 比较下一页与 `nextChapterUrl`（两边绝对化）；校验阶段把目录第 2 章传下去 | 14 源跑满 50 页（本机 254 源） | 已对齐（`book-source.md` §4.1 注记） |
 
 ### 3.2 `ruleToc`
 
@@ -81,6 +81,7 @@
 | ⚠ `downloadUrls`（文件型源，`bookSourceType=3`） | `BookInfo.kt:171-180` | **未建模** → 文件型源完全不可用 | **11 源**（type3 共 7 个源） | **S6b** |
 | ⚠ `relatedBooks`（详情页相关推荐模块） | `BookInfoViewModel.kt:2009` | 未建模 | | S6 之后（要 UI） |
 | `tocHtml` 复用（`tocUrl == baseUrl` 时省一次请求） | `BookInfo.kt:167-170` | 无 | | 已知热点（M26） |
+| 列表条目缺 `bookUrl` 时**回落当前页** | `BookList.kt:282`（`bookUrl.isEmpty() -> baseUrl`） | 跳过该条目 + warning（`book_list_fields.dart`） | 1 源 / 11 条（本机 23uswx，均是无链接的推荐块） | 有意差异（回落会造出一批指向分类页的垃圾书；触发 = 出现依赖它的单书站） |
 | 发现页表单型分类（`text`/`button`/`toggle`/`select` + `chars`/`default`/`action`/`style`） | `rule/ExploreKind.kt:9-49` | 显式拒绝（ADR-0035 §决策 6） | | 有意差异（触发 = 出现只能靠筛选器的真实源） |
 | 发现页 `infoMap` / 排名模块 | `AnalyzeUrl.kt:376`、`executeForRanking` | 显式拒绝 | | 有意差异（同上） |
 | `init`（详情页换 scope） | `BookInfo.kt:58-64` | 已对齐（M1-b6） | | 已对齐 |
@@ -100,7 +101,19 @@
 | ✅ `+` 正序前缀（`bookList` / `chapterList`） | `BookList.kt:73-75`、`BookChapterList.kt:59-65` | **已对齐**（M25/S4）：先剥 `-` 再剥 `+`，两者都只是标记（`-+rule` 仍倒序） | 待 M27 | 已对齐（`book-source.md` §3 #7） |
 | HTML 实体反转义（`unescape` 默认 true） | `AnalyzeRule.getString/getStringList` | 不做；`getString(rule, true)` 具名拒绝 | | 有意差异（ADR-0037 §后果） |
 | `@css:` 的 jsoup 扩展伪类（`:containsOwn(a b)`、裸正则 `:matches(x)`） | jsoup `Selector` | cascadia `parseFailed`（响亮失败） | | 有意差异（矩阵 #12 注记） |
-| 页面是 JSON 时规则自动进 JSON 模式 | `AnalyzeRule.SourceRule.init`（`isJSON`） | 不自动切（ADR-0047 §决策 6） | | 有意差异（实测无增益） |
+| ✅ 默认规则里的**属性选择器**（`[attr]` / `[attr=v]` / `meta[...]`） | `AnalyzeByJSoup.kt:406-440`（`findIndexSet` 解析不出索引就 `break`，整段留给 jsoup） | **已对齐**（M27，矩阵 #32）：`[` 后首个非空格字符是字母 / `_` 时整段交给 cascadia；数字 / `-` / `!` / 空串仍走索引列表 | **10 源 / 31 处**（本机 54 源，2026-10-28） | 已对齐 |
+| ✅ 位置列表 `.N:M[:N]`（`.` 筛选 + `:` 分隔序号） | `AnalyzeByJSoup.kt:280-288`、`:406` | **已对齐**（M27，矩阵 #33）：`.N:M` 进与 `!N:M` 同一个索引读取器，顺序按写法保留 | **10 源 / 15 处**（本机 54 源） | 已对齐 |
+| ✅ JSON 条目上的裸键（map 直接取成员） | `AnalyzeRule.kt:331`（`else if (result is LinkedTreeMap<*, *>) result[rule]`） | **已对齐**（M27，矩阵 #13 注记）：JsonScope + Map + 无选择器 → `map[key]`，值按 #13 的形状返回；列表 / 标量条目仍 `parseFailed` | 1 源（520diandu，日志 511 条降级） | 已对齐 |
+| ✅ `\|\|` 的空候选（`A\|\|##replace`） | `AnalyzeByJSoup.getString`（空规则 `temp.isNullOrEmpty()` 跳过）、`AnalyzeRule.kt:339` | **已对齐**（M27，矩阵 #10 注记）：空候选 / 空分支不产出值，`##` 属于整条规则；整条规则都空仍 `parseFailed` | 1 源 / 2 字段（天地中文） | 已对齐 |
+| `\|\|` 的某个候选**解析失败**时结束整条规则 | 上游没有「解析失败」这一态（失败降级成空串，继续试下一个） | 部分：C-SRC-4 的响亮失败 | — | 有意差异（触发 = 真实源只能靠后备分支救活） |
+| jsoup 的 `[attr~=regex]`（正则**子串**匹配） | jsoup `Evaluator.AttributeWithValueMatching`（`Pattern.matcher(...).find()`） | 按 CSS `~=` 读（空白分隔的整词），因此解析成功但不匹配（`_quoteAttributeValues` 会先加引号） | 3 源 / 3 处（`[property~=category|status|tags]` 一类，仅 `kind`） | 有意差异（要做需在 cascadia 外挂正则后置过滤器；触发 = 出现依赖 `~=` 的非展示字段） |
+| 已实现类型名后跟属性选择器，如 `tag.li[x]` | jsoup `getElementsByTag("li[x]")` → 静默无匹配 | 显式 `parseFailed` | 0 源 | 有意差异（比上游更严，C-SRC-4） |
+| 页面是 JSON 时规则**整体**自动进 JSON 模式 | `AnalyzeRule.SourceRule.init`（`isJSON`） | 不自动切（ADR-0047 §决策 6）；**条目**上的裸键已按上行对齐 | | 有意差异（页面级自动切实测无增益；条目级是真缺口，已修） |
+| ✅ 行首装饰性 `@`（`RuleAnalyzer.trim()` 在切段前剥掉） | `RuleAnalyzer.kt:15-22`、`AnalyzeRule.kt:208-210` | **已对齐**（M27 第二轮）：单个 `@` 在切段前剥掉（标志头由 `_flagOf` 补回） | **8 源**（本机 254 源） | 已对齐（`book-source.md` §3 注记） |
+| ✅ 只有替换段的字段规则（替换对象是 scope 内容） | `AnalyzeRule.getString`（`result` 仍是 content） | **已对齐**（M27 第二轮）：`##pattern##replace###` 在页面 body / 条目 HTML / JSON 文本上替换；不命中给空串 | **10+ 源** | 已对齐（`book-source.md` §3 注记） |
+| ✅ 脚本列表条目的 JSON 字符串（`String?.isJson()`） | `StringExtensions.kt:47-55`、`AnalyzeRule.setContent` | **已对齐**（M27 第二轮）：`{…}` / `[…]` 解码成 JSON scope，其余当 HTML 片段 | 1 源（福书网，872 次） | 已对齐（`book-source.md` §3 #14 注记） |
+| `result` 元素句柄（`Element` / `Elements` 的 `.attr` / `.text` / `.select`） | jsoup `Element` | **部分**（M27 第二轮）：**字面量参数**的链由宿主就地求值再内联（13 个方法）；变量参数 / 未覆盖方法不内联（脚本照旧响亮失败）；整页 `result` 仍是正文文本 | 964 次 `not a function`（本机 254 源） | 有意差异（触发 = 出现非字面量参数或未覆盖方法的真源） |
+| 未建模的 URL 选项（`origin` / `js` / `dnsIp` …） | `UrlOption` | **显式失败**（M27 第二轮改判）：`unsupportedRule` + `rulePath=unsupported:url-options:<名字>`，不再忽略后照发 | 3 处（`searchUrl` / `ruleBookInfo`） | 有意差异（C-SRC-4 的响亮失败；`book-source.md` §4.3） |
 
 ## 5. D — JS 沙箱绑定面
 
@@ -120,6 +133,10 @@
 | 文件/压缩包族（`readFile` / `unzipFile` / `getZipStringContent` …） | `JsExtensions.kt:727-976` | 具名拒绝 | | 有意差异（沙箱禁忌，C-SRC-3） |
 | Rhino Java 互操作（`Packages.*` / `JavaImporter`） | `JsExtensions.kt`、Rhino 的包入口 | **部分对齐**（M25/S5d，ADR-0081）：白名单垫片 = `java.lang.String` / `System.currentTimeMillis` / `Thread.sleep`（**空操作**）、`java.util.UUID` / `Arrays` / `HashMap` / `LinkedHashMap` / `ArrayList`、`android.util.Base64` / `TextUtils.isEmpty`、hutool `DigestUtil.md5(md5Hex)` / `Base64`、`io.legado.app.help.http.StrResponse`。白名单外的成员具名拒绝（带完整包路径），`JavaImporter` 亦然；`javax.crypto` / `java.io` 流 / `java.net.URL` / `okhttp3` / `org.jsoup` 不做（要真实 Java 对象，本仓等价能力在 `java.*` / `crypto.*`） | 19 源用 `Packages.*`；其中 **6 源只需白名单**、13 源要 `javax.crypto` 或流/网络类 | 有意差异（触发 = 出现只差 `javax.crypto` 一个能力的真实源） |
 | 已对齐（对照用） | `java.ajax/post/head/getCookie/setContent/toast`、`cookie.*`、`queryTTF`/`queryBase64TTF`/`replaceFont`、`startBrowser*`/`getVerificationCode`/`webView*`、`getString*`/`getElements`；以及**执行前注入的 `jsLib` 库作用域**（S1） | 已落地（ADR-0068 / 0076 / 0078 S1） | | 已对齐 |
+| ✅ `cookie.removeCookie(url)` 单参 | `CookieStore.kt:79`（绑定的是 `CookieStore`，只有一个参数：删该 URL 会发的整份 Cookie） | **已对齐**（M27）：无 `key` 删整份（`removeCookiesFor`），带 `key` 按名删（本仓扩展的 `CookieManager` 拼写） | 1 源（八零电子书） | 已对齐（`book-source.md` §6） |
+| `java.getElements` 的元素句柄（`.text()` / `.attr()` / `.size()`） | `AnalyzeByJSoup` 的 `Elements`（Java 对象） | 只给元素文档（`outerHtml` 字符串 / JSON 值）；列表尾部 `@js:` 与 `parse.getElements` 的同一立场已登记，但 `java.getElements` 的内联快路径没单列 | 1 源（次元小说，file 型源本身受 S6b 阻） | 有意差异（要真 DOM 句柄；触发 = 语料 ≥3 源） |
+| 响应对象的 `.raw()` / `.raw().request().url()` | `StrResponse.raw`（OkHttp 对象） | 未建模；等价能力是 `url()` / `code()` / `header()` | 1 源（趣书网吧的 e-search 重定向） | 有意差异（触发 = 出现只差 `.raw()` 的源） |
+| `@put` 的值规则失败时**写空串并继续** | `AnalyzeRule.kt:455-458`（`put(key, getString(value))`，失败就是空串） | 整个字段 `parseFailed`（`_storePutEntries` 上抛） | 0 源（本机除已修的裸键外无） | 有意差异（C-SRC-4 的响亮失败；触发 = 出现靠容错才能跑的真源） |
 
 ## 6. E — 非文本书源
 
@@ -148,6 +165,7 @@
 | **S5** ✅（#22 除外） | 矩阵 #20/#22 | `rule_engine.dart` | S5a/S5b/S5d/S5e 已交付；S5c #30 复核后 0 源 → 登记不做；只剩 #22 `@webJs`（语料 0 源，维持具名拒绝） |
 | **S6** | 非文本链路 + 正文 HTML 化 | `fetch_manga_pages`/新 usecase、`content_purifier`、阅读端 | S2；**按 §9 拆成 S6b（文件型 11 源）/ S6c（图片字节 2 源）**，`imageStyle` 的 left/right 与正文 HTML 化语料命中为 0，排到最后 |
 | **S7**（门禁部分 ✅） | 文档与拒绝清单收敛 + 门禁 G1/G2 | 已落地：`test/docs/book_source_doc_test.dart`（G1：§11 两个名单与 `__javaRejectedNames` / `__javaInteropNames` 逐字对照；G2：矩阵每行「已确认」必须有具名用例 `matrix #N`）、§11 的名单改成机器可读的 `text` 块、Rhino 互操作包名补全到 8 个。剩余：S1–S6 收尾后按 §8 出口判据复核一遍 | S1–S4 |
+| **M27 日志取证片** ✅ | 真实日志（54 源全量校验）暴露的 6 项缺口：矩阵 #32 属性选择器、#33 位置列表、JSON 条目裸键、URL 段链 `key`、`cookie.removeCookie(url)` 单参、`\|\|` 空候选 | `rule_engine.dart`（`_isAttributeSelector` / `_dotIndexList` / `_domValues` / `_candidatesOf` / `_expandUrlSegments`）、`quickjs_worker_bridge._removeCookie`、三个测试文件 | — （决策见 `DECISIONS.md` #63） |
 
 ## 8. 验收与出口判据
 
@@ -197,6 +215,10 @@ type3 文件 7 / type4 视频 5。下表「源数」= 用到该项的不同书�
 | `%%` 交叉合并 | 1 | 1 | 已支持 |
 | `:eq/:gt/:lt` 伪类 | 5 | 11 | 已支持（改写成 `:nth-child`） |
 | 列表尾部 `@js:` / `+` 前缀 / `<1,2,3>` / `@result` | 7 / 5 / 0 / 0 | 7 / 5 / 0 / 0 | S4 已交付（后两项语料为 0，属兼容性收尾） |
+| 属性选择器 `[attr]` / `[attr=v]`（matrix #32） | **10** | 31 | ✅ M27 已落地（本机 54 源的静态普查；日志里 4 个详情页因此全空）。之前的普查探测器不认这种形态，与 `.N:M` 一起漏网 |
+| 位置列表 `.N:M[:N]`（matrix #33） | **10** | 15 | ✅ M27 已落地（本机 54 源；日志里 3 个源的 `kind` / `wordCount` 因此置空） |
+| JSON 条目上的裸键（如 `$.pic@put:{img:pic}` 的 `pic`） | **1** | 1 | ✅ M27 已落地（520diandu；日志 511 条降级 + 511 章回落目录页）。台账原先把「JSON 自动模式」整体记为无增益，现改为「页面级无意差异，条目级已对齐」 |
+| `@put` 值规则失败 → 空串继续（上游 `AnalyzeRule.kt:455-458`） | 0 | 0 | 维持响亮失败（有意差异，见 §5） |
 
 ### 9.3 沙箱绑定（语料里出现、本仓尚未提供）
 

@@ -65,6 +65,13 @@ const String _valueSeparator = '\n';
 /// The trailing `.N` / `.-N` index a degraded segment may carry (matrix #28's dot form).
 final RegExp _dotIndex = RegExp(r'^-?\d+$');
 
+/// The trailing `.N:M[:N]` position list a degraded segment may carry (matrix #33).
+///
+/// Upstream's `ElementsSingle.findIndexSet` reads `tag.div.-1:10:2` as “indices -1, 10 and 2”
+/// (`AnalyzeByJSoup.kt:280-288`): the dot form of matrix #6's `:`-separated list, where `.`
+/// selects and `!` excludes.
+final RegExp _dotIndexList = RegExp(r'^-?\d+(?::-?\d+)+$');
+
 /// The `@put:` flag, lower-cased for a case-insensitive scan.
 const String _putScanFlag = '@put:';
 
@@ -358,6 +365,7 @@ final class RuleEngine {
     required JsPageContext context,
     Object? result,
     JsResponseView? response,
+    String? key,
   }) async {
     if (script.trim().isEmpty) {
       return const ParseSuccess<Object?>(null);
@@ -390,6 +398,7 @@ final class RuleEngine {
             fromBookInfo: context.fromBookInfo,
             result: result,
             response: response,
+            key: key,
           ),
         );
     }
@@ -658,13 +667,35 @@ final class RuleEngine {
       for (final Object? item in items)
         if (item != null)
           switch (item) {
-            final String text => RuleScope.dom(
-              html_parser.parse(text),
-              jsContext: jsContext,
-            ),
+            // 上游 `setContent(string)` 用 `isJson()`（`{…}` / `[…]`）决定读法：JSON 文本按
+            // JSON 条目读（`$.title` 能命中），其余当 HTML 片段解析。真实源把章列表写成
+            // `list.push(JSON.stringify({title, url}))`，逐字段再用 `$.title` / `$.url`。
+            final String text =>
+              _jsonScriptItem(text, jsContext: jsContext) ??
+                  RuleScope.dom(html_parser.parse(text), jsContext: jsContext),
             _ => RuleScope.json(item, jsContext: jsContext),
           },
     ];
+  }
+
+  /// A script-produced string that **is** a JSON document, as a JSON scope (matrix #13).
+  ///
+  /// The check mirrors upstream's `String?.isJson()`: only `{…}` and `[…]` qualify. A text that
+  /// looks like JSON but does not decode stays an HTML fragment, which is what a script producing
+  /// a literal brace-prefixed snippet meant.
+  RuleScope? _jsonScriptItem(String text, {required JsPageContext? jsContext}) {
+    final String trimmed = text.trim();
+    final bool looksJson =
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'));
+    if (!looksJson) {
+      return null;
+    }
+    try {
+      return RuleScope.json(jsonDecode(trimmed), jsContext: jsContext);
+    } on FormatException {
+      return null;
+    }
   }
 
   /// Runs every branch of a candidate from [scope] and merges the matches.
@@ -1029,6 +1060,21 @@ final class RuleEngine {
     }
 
     final _ParsedRule parsed = _parseForEvaluation(expanded.text);
+    // 矩阵 #9 的「只有替换段」写法：`##pattern##replace###` 没有选择器，替换对象是**这一层的
+    // 内容**（上游 `getString` 里 `result` 仍是 content：页面给 body，条目给元素的
+    // `toString()` / HTML）。真实源用它从条目 HTML 里抽地址：千寻的
+    // `##href="//m.qidian.com/chapter/(\d+)/0/"##https://m.qidian.com/book/$1/###`。
+    if (parsed.body.isEmpty &&
+        !parsed.isBareJs &&
+        parsed.replacementParts.length > 1) {
+      final String? content = _replacementContentOf(scope);
+      if (content == null) {
+        return _fail<List<String>>(_malformed(rulePath), field: rulePath);
+      }
+
+      return ParseSuccess<List<String>>(_finish(<String>[content], parsed));
+    }
+
     final List<String> merged;
     if (parsed.isBareJs) {
       // `@js:` 独立成规则：没有选择器要跑，`result` 就是这一层的内容（§6 的 result 绑定：
@@ -1082,6 +1128,7 @@ final class RuleEngine {
       scope,
       field: rulePath,
       allowJs: allowJs,
+      elementResult: parsed.isBareJs,
     );
 
     return switch (evaluated) {
@@ -1089,6 +1136,219 @@ final class RuleEngine {
       ParseSuccess<List<String>>(:final List<String> data) =>
         ParseSuccess<List<String>>(_finish(data, parsed)),
     };
+  }
+
+  /// One host-evaluable `result.…` call chain (ADR-0037 §决策 3 的同族：宿主就地内联).
+  static final RegExp _elementChain = RegExp(
+    r'''(?<![\w$.])result((?:\s*\.\s*[A-Za-z][A-Za-z0-9_]*\s*\((?:[^()]*)\))+)''',
+  );
+
+  /// The element methods this shim knows; a chain that stops on one of them is not inlined.
+  static const Set<String> _elementOperations = <String>{
+    'select',
+    'children',
+    'parent',
+    'first',
+    'last',
+    'get',
+    'size',
+    'text',
+    'ownText',
+    'html',
+    'outerHtml',
+    'attr',
+    'elementSiblingIndex',
+  };
+
+  /// One `.op(argument)` of an element chain; the argument is parsed separately so a
+  /// non-literal one can stop the inlining instead of being silently skipped.
+  static final RegExp _elementCall = RegExp(
+    r'''\.\s*([A-Za-z][A-Za-z0-9_]*)\s*\(([^()]*)\)''',
+  );
+
+  /// Inlines literal `result.attr('href')`-shaped chains with the value the host reads.
+  ///
+  /// Upstream binds `result` to the jsoup **element** for a bare `@js:` item field, so real
+  /// sources walk it: `result.attr('href')`, `result.select('span').get(1).text()`. The sandbox has
+  /// no DOM (ADR-0029 §决策 5), but the host owns the element — so a chain whose arguments are
+  /// **literals** is evaluated here and substituted as a JavaScript literal, before the job is
+  /// built. Anything else (a variable index, a non-DOM receiver) is left untouched and keeps
+  /// failing loudly; that is the registered boundary of this shim.
+  String _inlineElementChains(String script, RuleScope scope) {
+    final Node? node = scope is DomScope && scope.body == null
+        ? scope.node
+        : null;
+    if (node is! Element || !script.contains('result')) {
+      return script;
+    }
+
+    return script.replaceAllMapped(_elementChain, (Match match) {
+      final String chain = match.group(1) ?? '';
+      final _ElementPrefix? prefix = _evaluateElementPrefix(node, chain);
+
+      // 只替换宿主认得出来的**前缀**：`result.attr('href').endsWith('x')` 里后半段是字符串
+      // 自己的方法，留在脚本里由 JS 跑；一个都认不出来就原样保留（响亮失败）。
+      return prefix == null
+          ? (match.group(0) ?? '')
+          : '${prefix.literal}${chain.substring(prefix.consumed)}';
+    });
+  }
+
+  /// The literal one element-chain **prefix** evaluates to, and how much of the chain it used.
+  _ElementPrefix? _evaluateElementPrefix(Element element, String chain) {
+    _ElementChain? current = _ChainElements(<Element>[element]);
+    var consumed = 0;
+    for (final RegExpMatch call in _elementCall.allMatches(chain)) {
+      if (call.start != consumed) {
+        break;
+      }
+      final String operation = call.group(1) ?? '';
+      final String rawArgument = (call.group(2) ?? '').trim();
+      final String? argument = _stringLiteralOf(rawArgument);
+      final int? number = int.tryParse(rawArgument);
+      if (rawArgument.isNotEmpty && argument == null && number == null) {
+        // 变量/表达式参数：元素方法停下来（整条不内联），字符串方法把前缀当最终值。
+        if (_elementOperations.contains(operation)) {
+          return null;
+        }
+        break;
+      }
+      final _ElementChain? next = _applyElementCall(
+        current,
+        operation,
+        argument,
+        number,
+      );
+      if (next == null) {
+        // 元素链在中间断了（`get(i)` 这种变量索引、越界、未知元素方法）：整条不内联，
+        // 让脚本原样交给沙箱响亮失败，而不是换成一个语义更远的替身。
+        if (_elementOperations.contains(operation)) {
+          return null;
+        }
+        // 非元素方法（`attr(…)` 之后的 `.endsWith(…)` 之类）：前缀已经是最终值，停在这里。
+        break;
+      }
+      current = next;
+      consumed = call.end;
+    }
+    if (consumed == 0 || current == null) {
+      return null;
+    }
+
+    return (literal: current.toJsLiteral(), consumed: consumed);
+  }
+
+  /// The text of a quoted literal argument, or `null` when [argument] is not one.
+  String? _stringLiteralOf(String argument) {
+    if (argument.length < 2) {
+      return null;
+    }
+    final String quote = argument[0];
+    if ((quote != '"' && quote != "'") || !argument.endsWith(quote)) {
+      return null;
+    }
+
+    return argument.substring(1, argument.length - 1);
+  }
+
+  /// Applies one chain call, or answers `null` when this repository cannot evaluate it.
+  _ElementChain? _applyElementCall(
+    _ElementChain? current,
+    String operation,
+    String? argument,
+    int? number,
+  ) {
+    if (current is! _ChainElements) {
+      // 上游字符串/数字没有这些成员；`String(result).trim()` 这类写法走 JS 本身，不需要这里。
+      return null;
+    }
+    final List<Element> elements = current.elements;
+    switch (operation) {
+      case 'select':
+        if (argument == null) {
+          return null;
+        }
+        final List<Element> matched = <Element>[];
+        for (final Element element in elements) {
+          matched.addAll(_selectWithin(element, argument));
+        }
+
+        return _ChainElements(matched);
+      case 'children':
+        return _ChainElements(<Element>[
+          for (final Element element in elements)
+            ...element.children.whereType<Element>(),
+        ]);
+      case 'parent':
+        return _ChainElements(<Element>[
+          for (final Element element in elements)
+            if (element.parent is Element) element.parent!,
+        ]);
+      case 'first':
+        return elements.isEmpty
+            ? null
+            : _ChainElements(<Element>[elements.first]);
+      case 'last':
+        return elements.isEmpty
+            ? null
+            : _ChainElements(<Element>[elements.last]);
+      case 'get':
+        if (number == null || number < 0 || number >= elements.length) {
+          return null;
+        }
+
+        return _ChainElements(<Element>[elements[number]]);
+      case 'size':
+        return _ChainNumber(elements.length);
+      case 'text':
+        return _ChainString(
+          elements
+              .map((Element element) => _collapseWhitespace(element.text))
+              .join(' '),
+        );
+      case 'ownText':
+        return _ChainString(elements.isEmpty ? '' : _ownTextOf(elements.first));
+      case 'html':
+        return _ChainString(elements.isEmpty ? '' : elements.first.innerHtml);
+      case 'outerHtml':
+        return _ChainString(elements.isEmpty ? '' : elements.first.outerHtml);
+      case 'attr':
+        if (argument == null) {
+          return null;
+        }
+
+        return _ChainString(
+          elements.isEmpty ? '' : elements.first.attributes[argument] ?? '',
+        );
+      case 'elementSiblingIndex':
+        if (elements.isEmpty) {
+          return null;
+        }
+        final Node? parent = elements.first.parent;
+
+        return _ChainNumber(
+          parent is Element
+              ? parent.children
+                    .whereType<Element>()
+                    .toList(growable: false)
+                    .indexOf(elements.first)
+              : 0,
+        );
+    }
+
+    return null;
+  }
+
+  /// The elements [selector] matches inside [element], the element itself included (jsoup).
+  List<Element> _selectWithin(Element element, String selector) {
+    try {
+      return <Element>[
+        if (cascadia.matches(element, selector)) element,
+        ...cascadia.queryAll(element, selector),
+      ];
+    } on FormatException {
+      return const <Element>[];
+    }
   }
 
   /// Runs one terminal `@js:` script on [result] (matrix #14).
@@ -1108,6 +1368,7 @@ final class RuleEngine {
     RuleScope scope, {
     required String field,
     required bool allowJs,
+    bool elementResult = false,
   }) async {
     final ParseResult<Object?> evaluated = await _runScript(
       script,
@@ -1115,6 +1376,7 @@ final class RuleEngine {
       scope,
       field: field,
       allowJs: allowJs,
+      elementResult: elementResult,
     );
 
     return switch (evaluated) {
@@ -1140,6 +1402,7 @@ final class RuleEngine {
     RuleScope scope, {
     required String field,
     required bool allowJs,
+    bool elementResult = false,
   }) async {
     if (!allowJs) {
       // 嵌套求值（`parse.*` 的递推，或 `{{}}` 里的 JS）不能碰沙箱：单 worker 正在跑的就是
@@ -1161,7 +1424,10 @@ final class RuleEngine {
     final String scriptText;
     switch (inlined) {
       case ParseSuccess<String>(:final String data):
-        scriptText = data;
+        // 元素句柄的最小垫片：**只有 `result` 本身就是这一层内容**时才成立（裸 `@js:` / 首个
+        // `<js>` 段）。选择器之后的 `@js:` 拿到的是提取出来的字符串（上游同形），在那里把
+        // `result.attr(…)` 当 DOM 读会静默给出错值——所以用 elementResult 把两者分开。
+        scriptText = elementResult ? _inlineElementChains(data, scope) : data;
       case ParseFailure<String>(
         :final ParseFailureKind kind,
         :final String rulePath,
@@ -1301,6 +1567,9 @@ final class RuleEngine {
           scope,
           field: rulePath,
           allowJs: allowJs,
+          // 首个脚本段的 `result` 就是这一层的内容（页面 body / 条目元素）；后面的段拿到的是
+          // 上一段的产出，不再是元素。
+          elementResult: !hasResult,
         );
       } else {
         evaluated = await _evaluate(
@@ -1895,7 +2164,10 @@ final class RuleEngine {
   /// by [params] first.
   ///
   /// [rulePath] names the field the URL came from (`searchUrl`, `tocRule.nextTocUrl`), so a
-  /// failing script stays locatable (C-SRC-8).
+  /// failing script stays locatable (C-SRC-8). The keyword is exposed to **every** script of the
+  /// rule — the `{{…}}` templates and the `@js:` / `<js>` segments alike — as `key`
+  /// (`AnalyzeUrl.kt:377`); a `@js:` segment used to be the one place where it was missing, which
+  /// is what made a real source's `searchUrl` fail with `'key' is not defined`.
   ///
   /// [charset] is the request's declared encoding (`url,{“charset”:“gbk”}`,
   /// `book-source.md` §4.3) and only affects how `key` is escaped; [encodeKeyword] is `false`
@@ -1923,6 +2195,7 @@ final class RuleEngine {
         template,
         rulePath: rulePath,
         context: context,
+        params: params,
       );
       switch (chained) {
         case _ParsedFailure<String>(:final _RuleRejection rejection):
@@ -1995,6 +2268,7 @@ final class RuleEngine {
     String template, {
     required String rulePath,
     required JsPageContext context,
+    required Map<String, String> params,
   }) async {
     final Iterable<RegExpMatch> matches = _jsSegmentPattern.allMatches(
       template,
@@ -2019,6 +2293,8 @@ final class RuleEngine {
         rulePath: rulePath,
         context: context,
         result: running,
+        // 上游 `AnalyzeUrl.evalJS` 的绑定（`AnalyzeUrl.kt:377`）：URL 链里的 `@js:` 也能读 `key`。
+        key: params['key'],
       );
       switch (evaluated) {
         case ParseFailure<Object?>(
@@ -2333,6 +2609,18 @@ final class RuleEngine {
       jsContext ?? const JsPageContext(baseUrl: ''),
   };
 
+  /// The text a **replacement-only** rule (`##pattern##replace`) applies to.
+  ///
+  /// Upstream's `getString` keeps the scope's content as `result` and runs the replacement on
+  /// `result.toString()`: the page body for a page, the element's `outerHtml` for an item. A JSON
+  /// item would be a Java `Map` there; this repository uses its JSON text (the same registered
+  /// difference as matrix #13).
+  String? _replacementContentOf(RuleScope scope) => switch (_resultOf(scope)) {
+    null => null,
+    final String text => text,
+    final Object? value => jsonEncode(value),
+  };
+
   /// The page content a bare `@js:` rule receives as `result` (`book-source.md` §6).
   ///
   /// A page scope answers with its response body. An **element** scope answers with the
@@ -2589,18 +2877,45 @@ final class RuleEngine {
     return const _ParsedValue<List<String>>(<String>[]);
   }
 
+  /// Extracts one selector branch's values, including the JSON-item bare-key form.
+  ///
+  /// Upstream's `AnalyzeRule.getString` has a `LinkedTreeMap` branch that reads the whole rule as
+  /// one member name (`AnalyzeRule.kt:331`), which is how a real source's
+  /// `$.pic@put:{img:pic}` gets the `pic` member of the item. A [JsonScope] holding a map
+  /// therefore answers a **selector-less** rule with `map[key]`, through the same value shape as
+  /// matrix #13 ([_jsonValues]): a string as is, a list expanded, a map as JSON text.
+  ///
+  /// The boundary is deliberately narrow: only a map answers, and only when the rule has no
+  /// selector step. A JSON **page** is still read as DOM (ADR-0047 §决策 6), and a list or scalar
+  /// item still fails loudly instead of guessing what a bare name could mean (C-SRC-4).
+  _Parsed<List<String>> _domValues(
+    _DomBranch dom,
+    RuleScope scope, {
+    required String field,
+  }) {
+    if (dom.selectors.isEmpty && scope is JsonScope) {
+      final Object? value = scope.value;
+      final String key = dom.extraction;
+      if (value is Map<Object?, Object?> && key.isNotEmpty) {
+        return _ParsedValue<List<String>>(<String>[..._jsonValues(value[key])]);
+      }
+    }
+
+    return switch (_matchElements(dom, scope, field: field)) {
+      _ParsedFailure<List<Element>>(:final _RuleRejection rejection) =>
+        _ParsedFailure<List<String>>(rejection),
+      _ParsedValue<List<Element>>(:final List<Element> value) =>
+        _ParsedValue<List<String>>(_extract(dom.extraction, value)),
+    };
+  }
+
   /// Extracts the values of one value-rule branch from [scope].
   _Parsed<List<String>> _values(
     _RuleBranch branch,
     RuleScope scope, {
     required String field,
   }) => switch (branch) {
-    final _DomBranch dom => switch (_matchElements(dom, scope, field: field)) {
-      _ParsedFailure<List<Element>>(:final _RuleRejection rejection) =>
-        _ParsedFailure<List<String>>(rejection),
-      _ParsedValue<List<Element>>(:final List<Element> value) =>
-        _ParsedValue<List<String>>(_extract(dom.extraction, value)),
-    },
+    final _DomBranch dom => _domValues(dom, scope, field: field),
     final _XPathBranch xpath => switch (_xpathMatches(
       xpath,
       scope,
@@ -3178,10 +3493,36 @@ final class RuleEngine {
   /// `||` binds loosest, so it is split first: `a&&b||c` is `(a&&b) || c`
   /// (`book-source.md` §3.2, architect ruling 1). Inside a candidate `%%` and `&&` are
   /// the same level, so the first one to occur decides.
-  List<_RuleCandidate> _candidatesOf(String body) => <_RuleCandidate>[
-    for (final String candidate in _splitRule(body, <String>['||']).parts)
-      _candidateOf(candidate),
-  ];
+  List<_RuleCandidate> _candidatesOf(String body) {
+    final List<_RuleCandidate> raw = <_RuleCandidate>[
+      for (final String candidate in _splitRule(body, <String>['||']).parts)
+        _candidateOf(candidate),
+    ];
+    final bool hasValue = raw.any(
+      (_RuleCandidate candidate) =>
+          candidate.branches.any((String branch) => branch.trim().isNotEmpty),
+    );
+    // 整条规则都为空（`-` 只剩倒置前缀、`&&` 只剩连接符）：那是写错了，不是可以被跳过的
+    // 候选，原样交给 [_readBranch] 报畸形（C-SRC-4）。
+    if (!hasValue) {
+      return raw;
+    }
+
+    // 空候选与空分支不产出任何值：上游对空规则直接跳过（`AnalyzeByJSoup.getString` 的
+    // `temp.isNullOrEmpty()`）。真实写法是把 `##` 替换挂在候选后面
+    // （`class.span@text||##最新章节.*`），`##` 属于整条规则，切完就剩一个空候选。
+    return <_RuleCandidate>[
+      for (final _RuleCandidate candidate in raw)
+        if (candidate.branches.any((String branch) => branch.trim().isNotEmpty))
+          _RuleCandidate(
+            branches: <String>[
+              for (final String branch in candidate.branches)
+                if (branch.trim().isNotEmpty) branch,
+            ],
+            connector: candidate.connector,
+          ),
+    ];
+  }
 
   /// Splits one candidate into its branches.
   ///
@@ -3215,12 +3556,25 @@ final class RuleEngine {
   /// a flag really follows, so `@foo` stays a broken rule.
   List<String> _segmentsOf(String branch) {
     final String trimmed = branch.trim();
-    final String text =
-        trimmed.startsWith('@') && _flagSegment.hasMatch(trimmed.substring(1))
-        ? trimmed.substring(1)
-        : trimmed;
+    // 上游 `RuleAnalyzer.trim()` 在切段前把行首的 `@` / 空白一并剥掉，所以真实语料里的
+    // `@tag.td.2@text` / `@href` / `@onclick@js:…` 等同于去掉那个 `@`。标志头不能剥：
+    // `@js:` / `@css:` / `@json:` / `@xpath:` / `@put:` / `@get:` / `@webJs` / `@@` 都是语法。
+    final String text = _stripLeadingAt(trimmed);
 
     return text.split('@').map((String segment) => segment.trim()).toList();
+  }
+
+  /// Strips a single leading `@` (upstream `RuleAnalyzer.trim()`).
+  ///
+  /// A flag head loses the `@` here too: [_flagOf] puts it back when it reads the segment, so
+  /// `@js:` keeps being matrix #14 while `@tag.li.0@text` becomes the selector it means. `@@`
+  /// (matrix #15) is a rule-body prefix and was already stripped by [_parse].
+  String _stripLeadingAt(String text) {
+    if (!text.startsWith('@') || text.startsWith(_defaultRuleFlag)) {
+      return text;
+    }
+
+    return text.substring(1).trimLeft();
   }
 
   /// Reads [parsed] into the selector steps it runs, or reports the rejection.
@@ -3618,6 +3972,13 @@ final class RuleEngine {
     String segment, {
     required String field,
   }) {
+    // 矩阵 #32 先判：属性值里可以带 `.`（`a[href*=".html"]`），先把整段认成属性选择器，
+    // 后面的位置切分才不会切错。
+    final int bracket = segment.indexOf('[');
+    if (bracket >= 0 && _isAttributeSelector(segment, bracket)) {
+      return _ParsedValue<_NamedSelector>((name: segment, selection: null));
+    }
+
     // 上游把**任何**段末尾的 `.N` 当索引（`ElementsSingle`）：`#image_div img.0` 读的是
     // 「`#image_div img` 的第 0 个」，不是「类名 0」。只有纯数字（可带负号）才算索引，
     // 所以 `div.item` / `.result-item` 仍是 CSS（ADR-0069 G3）。
@@ -3630,7 +3991,16 @@ final class RuleEngine {
       );
     }
 
-    final int bracket = segment.indexOf('[');
+    // 矩阵 #33：`.` 形态的位置列表（`span.1:2`、`li.4:6`、`p.3:4:5:6:7`）。上游用同一个
+    // `findIndexSet` 读它，`:` 分隔序号、`.` 表示筛选（`!` 表示排除）。
+    if (dot > 0 && _dotIndexList.hasMatch(segment.substring(dot + 1))) {
+      return _indexSuffix(
+        segment.substring(0, dot),
+        segment.substring(dot + 1),
+        field: field,
+      );
+    }
+
     if (bracket >= 0) {
       return _indexSuffix(
         segment.substring(0, bracket),
@@ -3964,10 +4334,118 @@ final class RuleEngine {
       _ParsedFailure<String>(:final _RuleRejection rejection) =>
         _ParsedFailure<_SelectorStep>(rejection),
       _ParsedValue<String>(:final String value) => _compileCss(
-        value,
+        _quoteAttributeValues(value),
         field: field,
       ),
     };
+  }
+
+  /// One attribute selector's name, operator and (possibly unquoted) value.
+  static final RegExp _attributeValue = RegExp(
+    r'''^\s*([^\s~|^$*=]+)\s*(~=|\|=|\^=|\$=|\*=|=)\s*(.*?)\s*$''',
+  );
+
+  /// An attribute value that CSS accepts without quotes.
+  static final RegExp _plainAttributeValue = RegExp(r'^[A-Za-z0-9_-]+$');
+
+  /// Quotes the unquoted attribute values jsoup accepts but CSS does not (matrix #32).
+  ///
+  /// Real book sources are written for jsoup, which reads `[property=og:novel:book_name]` and
+  /// `[property~=category|status|tags]` literally. CSS only allows an identifier unquoted, so the
+  /// `:` / `|` makes cascadia reject the whole selector — a `parseFailed` the page cannot explain.
+  /// Wrapping such a value in double quotes keeps the matching inside cascadia (C-SRC-6); values
+  /// that are already quoted, or are plain identifiers, are left byte for byte.
+  String _quoteAttributeValues(String selector) {
+    final StringBuffer out = StringBuffer();
+    var index = 0;
+    while (index < selector.length) {
+      final String character = selector[index];
+      if (character == '"' || character == "'") {
+        final int end = _quotedEnd(selector, index);
+        final int next = end < 0 ? selector.length : end + 1;
+        out.write(selector.substring(index, next));
+        index = next;
+        continue;
+      }
+      if (character != '[') {
+        out.write(character);
+        index++;
+        continue;
+      }
+      final int close = _attributeEnd(selector, index + 1);
+      if (close < 0) {
+        // 未闭合：原样交给 cascadia 报错，不在这里猜。
+        out.write(selector.substring(index));
+        break;
+      }
+      out
+        ..write('[')
+        ..write(_quoteAttributeBody(selector.substring(index + 1, close)))
+        ..write(']');
+      index = close + 1;
+    }
+
+    return out.toString();
+  }
+
+  /// The index of the `]` closing an attribute selector, or `-1` when it is unclosed.
+  int _attributeEnd(String selector, int start) {
+    var index = start;
+    while (index < selector.length) {
+      final String character = selector[index];
+      if (character == '"' || character == "'") {
+        final int end = _quotedEnd(selector, index);
+        if (end < 0) {
+          return -1;
+        }
+        index = end + 1;
+        continue;
+      }
+      if (character == ']') {
+        return index;
+      }
+      index++;
+    }
+
+    return -1;
+  }
+
+  /// The index of the quote closing the one at [start], or `-1`.
+  int _quotedEnd(String selector, int start) {
+    final String quote = selector[start];
+    var index = start + 1;
+    while (index < selector.length) {
+      final String character = selector[index];
+      if (character == r'\') {
+        index += 2;
+        continue;
+      }
+      if (character == quote) {
+        return index;
+      }
+      index++;
+    }
+
+    return -1;
+  }
+
+  /// Wraps one attribute body's unquoted value when CSS would not accept it.
+  String _quoteAttributeBody(String body) {
+    final RegExpMatch? match = _attributeValue.firstMatch(body);
+    if (match == null) {
+      return body;
+    }
+    final String value = match.group(3) ?? '';
+    if (value.isEmpty ||
+        value.startsWith('"') ||
+        value.startsWith("'") ||
+        _plainAttributeValue.hasMatch(value)) {
+      return body;
+    }
+    final String quoted =
+        '"${value.replaceAll(r'\', r'\\').replaceAll('"', r'\"')}"';
+
+    return '${match.group(1)}${match.group(2)}$quoted';
   }
 
   /// Parses the rewritten [selector] with cascadia, or reports why it cannot be
@@ -4063,11 +4541,38 @@ final class RuleEngine {
       // 裸 `children`（矩阵 #4）与 `children.li.0`（忽略第二、三段）都不是索引写法。
       return _looksLikeIndexExpression(expression) ? expression : null;
     }
-    if (type.startsWith('[') || type.startsWith('!')) {
+    if (type.startsWith('[')) {
+      // 矩阵 #32：`[property=…]` / `[x]` 是属性选择器，不是索引列表——上游 `findIndexSet`
+      // 解析不出索引就整段交给 jsoup（`AnalyzeByJSoup.kt:406-440`）。只有 `[` 后是数字、
+      // `-`、`!` 或空串时才走矩阵 #26。
+      return _isAttributeSelector(segment, 0) ? null : segment;
+    }
+    if (type.startsWith('!')) {
       return segment;
     }
 
     return null;
+  }
+
+  /// Whether the `[...]` starting at [bracket] is a **CSS attribute selector** (matrix #32).
+  ///
+  /// An index list always starts with a digit, `-`, `!` or an empty body, while an attribute name
+  /// starts with a letter or `_`. Upstream's `findIndexSet` draws the same line by giving up on the
+  /// first non-index character and leaving the whole segment to jsoup, which is what makes
+  /// `[property$=image]`, `meta[name=description]` and `a[href*="_"]` match at all.
+  bool _isAttributeSelector(String text, int bracket) {
+    var index = bracket + 1;
+    while (index < text.length && text[index] == ' ') {
+      index++;
+    }
+    if (index >= text.length) {
+      return false;
+    }
+    final int first = text.codeUnitAt(index);
+
+    return (first >= 0x41 && first <= 0x5A) ||
+        (first >= 0x61 && first <= 0x7A) ||
+        first == 0x5F;
   }
 
   /// Whether [text] starts like an index expression (an index, a range or a list).
@@ -4173,7 +4678,9 @@ final class RuleEngine {
 
   /// Logs [rejection] and turns it into the caller's result type (C-SRC-4).
   ParseResult<T> _fail<T>(_RuleRejection rejection, {required String field}) {
-    _logger.warning(
+    // 每次求值都会经过这里，而目录/列表是「一条字段 × N 个条目」：一个坏字段能把同一行刷上千次。
+    // 失败本身由字段级的 `Field rule degraded`（WARN，已按窗口聚合）与阶段结论承担，这里留 debug。
+    _logger.debug(
       'Rejected rule: field=$field reason=${rejection.rulePath} '
       'kind=${rejection.kind.name}',
     );
@@ -4196,6 +4703,49 @@ final class RuleEngine {
 
     values.add(value);
   }
+}
+
+/// The literal a host-evaluated `result.…` chain prefix becomes, and its length in the script.
+typedef _ElementPrefix = ({String literal, int consumed});
+
+/// One intermediate value of a host-evaluated `result.…` chain.
+sealed class _ElementChain {
+  const _ElementChain();
+
+  /// The JavaScript literal this value becomes in the script.
+  String toJsLiteral();
+}
+
+/// A list of elements (upstream `Elements` or a single `Element`).
+final class _ChainElements extends _ElementChain {
+  const _ChainElements(this.elements);
+
+  final List<Element> elements;
+
+  @override
+  String toJsLiteral() => jsonEncode(<String>[
+    for (final Element element in elements) element.outerHtml,
+  ]);
+}
+
+/// A string the chain produced (`text` / `attr` / `html` / `outerHtml`).
+final class _ChainString extends _ElementChain {
+  const _ChainString(this.value);
+
+  final String value;
+
+  @override
+  String toJsLiteral() => jsonEncode(value);
+}
+
+/// A number the chain produced (`size` / `elementSiblingIndex`).
+final class _ChainNumber extends _ElementChain {
+  const _ChainNumber(this.value);
+
+  final int value;
+
+  @override
+  String toJsLiteral() => value.toString();
 }
 
 /// Snapshot of the engine's rule-compilation counters.

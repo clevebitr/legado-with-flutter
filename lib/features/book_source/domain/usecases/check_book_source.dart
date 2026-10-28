@@ -251,6 +251,20 @@ final class CheckBookSource {
       return;
     }
 
+    // 上游 `BookSourceCheckRepository.kt:222-230`：正文校验要**喂下一章地址**，把「下一页 ==
+    // 下一章」的停止条件带下去，否则站点的 `nextContentUrl` 指到下一章时会被整本连读。
+    // 卷标题（`isVolume` 且 URL 是标题占位）不参与，取前两条真实章节。
+    final List<Chapter> readable = chapters
+        .where(
+          (Chapter chapter) =>
+              !(chapter.isVolume && chapter.url.startsWith(chapter.name)),
+        )
+        .take(2)
+        .toList(growable: false);
+    final List<Chapter> pick = readable.isEmpty
+        ? chapters.take(2).toList(growable: false)
+        : readable;
+
     await _stage(
       run,
       SourceCheckStage.content,
@@ -264,9 +278,10 @@ final class CheckBookSource {
       operation: () => _content.execute(
         source,
         ChapterRequest(
-          url: chapters.first.url,
-          title: chapters.first.name,
+          url: pick.first.url,
+          title: pick.first.name,
           bookName: info.name,
+          nextChapterUrl: pick.length > 1 ? pick[1].url : pick.first.url,
         ),
       ),
     );
