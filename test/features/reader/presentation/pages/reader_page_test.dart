@@ -421,9 +421,10 @@ void main() {
         );
 
         await tester.drag(find.byType(PageView), const Offset(-600, 0));
-        await tester.pumpAndSettle();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
 
-        // 跨章翻页：会话进入下一章，页面上不再是「本章读完」而是第二章正文。
+        // 跨章翻页：会话进入下一章；正文到了就在这一页换上来（ADR-0086 §决策 7）。
         expect(
           fixture.container
               .read(readerSessionProvider(_book))
@@ -431,7 +432,8 @@ void main() {
               ?.chapterIndex,
           1,
         );
-        expect(find.textContaining('第二章正文'), findsOneWidget);
+        // 章界不再是一页「本章读完 + 下一章」；正文没到就是这一章的加载页。
+        expect(find.text('This is the last chapter'), findsNothing);
       },
     );
 
@@ -458,11 +460,26 @@ void main() {
       ].join('\n');
 
       await _pump(tester, fixture);
-      // 一次拖到底：两章的正文加起来远高于一屏，滑到末尾的视口顶一定落在第二章里。
-      await tester.drag(find.byType(ReaderScrollFlow), const Offset(0, -40000));
-      await tester.pumpAndSettle();
+      // 一段一段往下滑（每段不到一屏，免得撞上过卷动画）：视口顶一旦落进第二章，
+      // 会话就该自己换过去（ADR-0086 §决策 7）。
+      for (
+        var attempt = 0;
+        attempt < 10 &&
+            fixture.container
+                    .read(readerSessionProvider(_book))
+                    .value
+                    ?.chapterIndex !=
+                1;
+        attempt++
+      ) {
+        await tester.drag(
+          find.byType(ReaderScrollFlow),
+          const Offset(0, -1600),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      await tester.pump(const Duration(milliseconds: 400));
 
-      // 一路滑下去：会话自己进了第二章，进度也落了盘。
       expect(
         fixture.container
             .read(readerSessionProvider(_book))
@@ -503,11 +520,11 @@ void main() {
 
       await _pump(tester, fixture);
 
-      // 章标题这时候出现两次：正文里的章头（ADR-0086 §决策 7）与状态栏的那一份。
+      // 状态行只有进度 + 时间 + 电量；章名归正文里的章头（ADR-0086 §决策 7），不再重复。
       expect(
         find.descendant(
           of: find.byType(ReaderStatusBar),
-          matching: find.text('第1章 开端'),
+          matching: find.textContaining('本章'),
         ),
         findsOneWidget,
       );

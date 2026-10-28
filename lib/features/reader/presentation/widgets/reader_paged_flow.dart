@@ -102,13 +102,13 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   /// The text scale of the last build, kept so pages can also be measured outside `build`.
   TextScaler _textScaler = TextScaler.noScaling;
 
-  /// How many pages sit before the anchor chapter.
+  /// The pages the rendered slots still owe the reader, as «where the reader was», applied after
+  /// the frame.
   ///
-  /// This is what keeps the reader on the same text when pages are added or dropped above it.
-  int _leadingPages = 0;
-
-  /// The pages the rendered window still owes the reader, applied after the frame.
-  int _pendingPageJump = 0;
+  /// Compensating by a page *count* is wrong here: the slots recentre on the session chapter, so
+  /// the page index of the same text moves differently from «pages before the anchor». What is
+  /// invariant is the text under the viewport — so that is what is remembered and put back.
+  ({int index, int charOffset})? _pendingReland;
 
   PageController? _controller;
 
@@ -135,9 +135,6 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
 
   /// Whether the slots still have to be rebuilt when the drag ends.
   bool _rebuildPending = false;
-
-  /// The position to re-land on after the pages were re-measured (a rotated screen), if any.
-  ({int index, int charOffset})? _pendingReland;
 
   @override
   void dispose() {
@@ -226,15 +223,13 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   /// [compensate] is off while a new viewport size is being measured: the page count then changes
   /// because every page changed, not because a chapter appeared above the reader.
   void _measurePages({bool compensate = true}) {
+    // 重排前先记住「视口里是哪段字」，重排后按它找回来（见 [_pendingReland]）。
+    final _FlowPage? before = compensate ? _currentPage() : null;
     final List<_FlowPage> pages = <_FlowPage>[];
-    var anchorLeading = 0;
     for (final ReaderFlowChapter chapter in _visible) {
       final String? text = chapter.text;
       if (text == null) {
         // 正文还没到：这一章占一页（标题 + 正在加载），读者能翻进来看到它在路上。
-        if (chapter.index < widget.anchorIndex) {
-          anchorLeading++;
-        }
         pages.add((
           index: chapter.index,
           url: chapter.url,
@@ -247,9 +242,6 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
         continue;
       }
       final List<int> starts = _startsOf(chapter);
-      if (chapter.index < widget.anchorIndex) {
-        anchorLeading += starts.length;
-      }
       for (var page = 0; page < starts.length; page++) {
         pages.add((
           index: chapter.index,
@@ -261,38 +253,11 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
         ));
       }
     }
-    final int added = anchorLeading - _leadingPages;
     _pages = pages;
-    _leadingPages = anchorLeading;
-    if (compensate && added != 0) {
-      _pendingPageJump += added;
-      _scheduleFrame();
-    }
-  }
-
-  /// Moves the controller by the pending pages, after the frame.
-  void _applyPendingJump() {
-    final int pages = _pendingPageJump;
-    _pendingPageJump = 0;
-    final PageController? controller = _controller;
-    if (pages == 0 || controller == null || !controller.hasClients) {
+    if (before == null) {
       return;
     }
-    final double extent = controller.position.viewportDimension;
-    if (extent <= 0) {
-      return;
-    }
-    final ScrollPosition position = controller.position;
-    final double target = (position.pixels + pages * extent).clamp(
-      position.minScrollExtent,
-      position.maxScrollExtent,
-    );
-    if (target == position.pixels) {
-      return;
-    }
-    _compensating = true;
-    position.jumpTo(target);
-    _compensating = false;
+    _pendingReland = (index: before.index, charOffset: before.start);
   }
 
   @override
@@ -328,7 +293,7 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
               ? 0
               : _pages.length + (_isLastChapter ? 1 : 0);
           final PageController controller = _controller ??= PageController(
-            initialPage: _pageKey(_leadingPages),
+            initialPage: _pageKey(0),
           );
           _scheduleRestore();
 
@@ -429,7 +394,6 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
         _rebuildPending = false;
         _applySlots(_slots());
       }
-      _applyPendingJump();
       final PageController? controller = _controller;
       if (controller == null || !controller.hasClients) {
         return;
@@ -490,7 +454,7 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
 
   /// The page under the viewport, reported to the page unless a jump is still to be applied.
   void _reportCurrentPage() {
-    if (_restorePending || _pendingPageJump != 0) {
+    if (_restorePending || _pendingReland != null) {
       return;
     }
     final _FlowPage? page = _currentPage();
