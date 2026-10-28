@@ -1050,8 +1050,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       (String url, String _) => !keep.contains(url),
     );
     _prefetchFailed.removeWhere((String url) => !keep.contains(url));
-    _laidOut.removeWhere((String url, ({int signature, String text}) _) =>
-        !keep.contains(url));
+    _laidOut.removeWhere(
+      (String url, ({int signature, String text}) _) => !keep.contains(url),
+    );
   }
 
   /// Starts one real prefetch for [chapter], once per chapter URL.

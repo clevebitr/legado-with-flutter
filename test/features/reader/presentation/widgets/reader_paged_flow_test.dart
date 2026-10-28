@@ -32,7 +32,6 @@ Future<void> _advance(WidgetTester tester, {int frames = 5}) async {
   }
 }
 
-
 /// A flow the case can rebuild with a different set of bodies.
 class _Harness {
   _Harness(this.bodies, {this.anchorIndex = 0, this.chapters = _chapters});
@@ -169,13 +168,10 @@ void main() {
     testWidgets('build_givenThePreviousChapterInHand_turnsBackIntoTail', (
       WidgetTester tester,
     ) async {
-      final _Harness harness = _Harness(
-        <String, String>{
-          'https://source.test/1.html': _body('第一章'),
-          'https://source.test/2.html': _body('第二章'),
-        },
-        anchorIndex: 1,
-      );
+      final _Harness harness = _Harness(<String, String>{
+        'https://source.test/1.html': _body('第一章'),
+        'https://source.test/2.html': _body('第二章'),
+      }, anchorIndex: 1);
 
       await harness.pump(tester);
       await tester.drag(find.byType(PageView), const Offset(400, 0));

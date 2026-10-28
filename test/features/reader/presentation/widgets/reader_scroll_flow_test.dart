@@ -32,7 +32,6 @@ Future<void> _advance(WidgetTester tester, {int frames = 5}) async {
   }
 }
 
-
 /// What one case observed from the flow.
 final class _Probe {
   final List<({int index, int charOffset})> progress =

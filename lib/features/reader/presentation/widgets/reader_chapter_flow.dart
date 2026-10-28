@@ -100,10 +100,7 @@ class ReaderChapterWindow {
   ///
   /// The caller is expected to compensate its scroll offset for the chapters above the anchor that
   /// this returns (a scroll flow then moves its offset by their height); the ones below cost nothing.
-  List<ReaderFlowChapter> retain({
-    required int anchorIndex,
-    int radius = 1,
-  }) {
+  List<ReaderFlowChapter> retain({required int anchorIndex, int radius = 1}) {
     final List<ReaderFlowChapter> dropped = <ReaderFlowChapter>[
       for (final ReaderFlowChapter chapter in _rendered.values)
         if ((chapter.index - anchorIndex).abs() > radius) chapter,

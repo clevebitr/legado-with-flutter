@@ -55,10 +55,11 @@ void main() {
         },
       );
 
-      expect(
-        visible.map((ReaderFlowChapter chapter) => chapter.index),
-        <int>[0, 1, 2],
-      );
+      expect(visible.map((ReaderFlowChapter chapter) => chapter.index), <int>[
+        0,
+        1,
+        2,
+      ]);
     });
 
     test('sync_givenAGapBeforeTheAnchor_stopsAtTheGap', () {
@@ -143,10 +144,10 @@ void main() {
         bodies: <String, String>{'https://source.test/2.html': '正文二'},
       );
 
-      expect(
-        visible.map((ReaderFlowChapter chapter) => chapter.index),
-        <int>[0, 1],
-      );
+      expect(visible.map((ReaderFlowChapter chapter) => chapter.index), <int>[
+        0,
+        1,
+      ]);
     });
 
     test('retain_givenChaptersWithinTheRadius_keepsThem', () {
@@ -188,17 +189,18 @@ void main() {
 
       final List<ReaderFlowChapter> dropped = window.retain(anchorIndex: 0);
 
-      expect(
-        dropped.map((ReaderFlowChapter chapter) => chapter.index),
-        <int>[2],
-      );
+      expect(dropped.map((ReaderFlowChapter chapter) => chapter.index), <int>[
+        2,
+      ]);
       // 落下的章不再回来：内存里只留相邻的一章（ADR-0085 §决策 3）。
       expect(
-        window.sync(
-          chapters: _chapters,
-          anchorIndex: 0,
-          bodies: const <String, String>{},
-        ).map((ReaderFlowChapter chapter) => chapter.index),
+        window
+            .sync(
+              chapters: _chapters,
+              anchorIndex: 0,
+              bodies: const <String, String>{},
+            )
+            .map((ReaderFlowChapter chapter) => chapter.index),
         <int>[0, 1],
       );
     });
@@ -224,10 +226,7 @@ void main() {
       var retried = 0;
       await _pumpStrip(
         tester,
-        ReaderChapterPendingStrip(
-          isFailed: true,
-          onRetry: () => retried++,
-        ),
+        ReaderChapterPendingStrip(isFailed: true, onRetry: () => retried++),
       );
 
       // 读失败的章不能一直画成「还在加载」。

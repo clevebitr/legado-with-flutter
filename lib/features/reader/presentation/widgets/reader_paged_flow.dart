@@ -280,7 +280,10 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
             _starts.clear();
             _measurePages(compensate: false);
             if (current != null) {
-              _pendingReland = (index: current.index, charOffset: current.start);
+              _pendingReland = (
+                index: current.index,
+                charOffset: current.start,
+              );
             }
           }
           WidgetsBinding.instance.addPostFrameCallback((_) => _afterLayout());
@@ -403,8 +406,8 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
     if (controller == null || !controller.hasClients) {
       return null;
     }
-    final int position = (controller.page ?? 0).round() -
-        (_leadingPending ? 1 : 0);
+    final int position =
+        (controller.page ?? 0).round() - (_leadingPending ? 1 : 0);
     if (position < 0 || position >= _pages.length) {
       return null;
     }
