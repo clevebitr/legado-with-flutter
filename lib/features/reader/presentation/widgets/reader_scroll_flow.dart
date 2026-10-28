@@ -279,10 +279,7 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
       return false;
     }
     final double below =
-        tops.last +
-        _heightOf(chapters.last) +
-        widget.padding -
-        tops[position];
+        tops.last + _heightOf(chapters.last) + widget.padding - tops[position];
 
     return below >= _viewportHeight;
   }
@@ -547,9 +544,8 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
       final bool settle = _settlePending;
       _settlePending = false;
       if (settle) {
-        final ({int index, int charOffset, double fraction})? anchor = _anchorAt(
-          _offset,
-        );
+        final ({int index, int charOffset, double fraction})? anchor =
+            _anchorAt(_offset);
         if (anchor != null) {
           widget.onSettled(anchor.index, anchor.charOffset);
         }
