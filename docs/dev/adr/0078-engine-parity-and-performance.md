@@ -435,3 +435,114 @@ G3（基准脚本冒烟）留给 M26/M27。
 `build_runner build` 后生成物无漂移。真引擎探针**新增 6 条**（字段白名单、`put`/`get` 跨 job、整份变量
 跨 job、`putLoginInfo` + `getLoginInfoMap().get()` 写穿、`removeLoginHeader` 清 Cookie 与清头、
 `putLoginInfo` 拒坏 JSON）——**尚未在设备上跑**，`flutter test` 用的是假 worker，前奏不参与。
+
+## 实现注记（2026-10-28，M26-R1：基准脚本与改前数字）
+
+决策 4 的落地形态（数字归 `tool/bench/README.md` §5 与 `engine-parity.md` §11，本节只记裁决与坑）：
+
+1. **基准是 `tool/` 入口，必须 `--release`。** `tool/bench/bench.dart` 与 `tool/spot_check/` 同一模式：
+   `flutter run -d windows --release -t tool/bench/bench.dart`，选项走 `BENCH_ARGS`（`flutter run` 不转发
+   命令行参数）。`dart run` 不可行——引擎的 `@js:` 路径与 `AppLogger` 都要 Flutter 运行时。
+   夹具就地确定性生成（单章 199.7 KB、千章目录 86.9 KB），不往仓库塞第三方页面。
+2. **P3 需要一个观测点，否则它不可测。** 「同一条规则只编译一次」是命中率，不能从耗时反推，所以
+   `RuleEngine` 多了只读的 `compileStats`（`lookups` / `compilations` / `hits` / `hitRate`），计数落在
+   `_parseForEvaluation` 这个接缝上——它同时是 R1 缓存该插入的位置。生产代码只写不读，消费方是
+   `tool/bench/` 与一条单测（`compileStats_givenRepeatedEvaluationWithoutACache_countsEveryParse`，
+   把「改前 lookups == compilations」钉住）。这条单测在 R1 落地时**必须**被改成 ≥95% 命中。
+3. **阈值维持初值，验收改用前后差值**（2026-10-28 用户裁决）。实测 P1 6.31 ms（初值 40）、
+   P2 17.76 ms（初值 300）——两者已在初值之内 5 倍以上，过线不再有信息量；决策 4 允许「实测后只收紧」，
+   但收紧会让换机/机器负载变成误报，所以记为「同一命令的改前/改后差值」，阈值本身不动。
+4. **两条读数决定了 R2/R3 的靶子**：P1 里「提取」占 57%（3.59 / 6.31，比 HTML 解析的 2.60 ms 还多），
+   P2 里 1000 条条目字段占 69%（12.19 / 17.76）。这两块正是决策 3 允许的「共享 `RuleScope`」与
+   「条目批量提取」。
+5. **基准自己的坑**：`Stopwatch.reset()` 只清零、**不重新 start**，第一版脚本把每个阶段的第二次及
+   之后的测量都记成 `0.00 ms`（表面上看是「提取不要钱」）。现在统一用
+   「停止 → 读数 → `reset()` → `start()`」的一次性辅助；夹具命中校验也不能用 `assert`
+   （`--release` 会丢掉它，基准就会在「规则其实没命中」的情况下报出好数字）。
+
+改前基线（Windows 11 / Flutter 3.47.7 / `--release` / 复跑两次 p50 差异 ≤1.2%）：
+P1 p50 **6.31 ms** / p95 6.66；P2（CSS 形态）p50 **17.76 ms** / p95 20.04；P2（`:正则` 形态）p50 10.71；
+线性度 250→2000 章每章 16.6→18.6 µs；P3 **0.0%**（lookups 600 = compilations 600）。
+
+## 实现注记（2026-10-28，M26-R1：规则编译缓存落地）
+
+决策 3 的第一张重构面（R1）落地形态。数字归 `tool/bench/README.md` §5.2 与 `engine-parity.md` §11：
+
+1. **缓存分两层，键不一样。** 拆步骤（`_parse`：`##` 分段、`-` / `@@` 前缀、`@js:` 切分、`||` / `&&` 候选）
+   只依赖**规则文本**；编译选择器（`_check`：cascadia / JSONPath / 正则链 / XPath）还依赖
+   `hasExtraction`（末段是选择器还是提取段）与 `field`（畸形规则的 `rulePath` 就是字段路径，C-SRC-8）。
+   两个键分开，避免为了「一个键」把 `field` 塞进错误信息，也避免列表读法与取值读法互相污染。
+2. **共享实例是安全的，因为编译产物全是不可变的。** 选择器步骤、`RegExp` 链、`JsonPath`
+   （包文档明写「parsed once, may be used many times」）、`XPathExpression`（`select` 的中间态全是局部变量）
+   都没有跨求值状态——与引擎既有的「不改 scope、不改元素」是同一条契约。这也是缓存能直接跨页面、
+   跨书源复用的前提。
+3. **「随书源 reload 失效」被更强的性质取代。** 键只含规则文本 / 字段 / 读法，不含书源状态，所以缓存项
+   永远有效，不需要失效钩子；代价只在于**内存**，因此两层都有 LRU 上限（256 / 512，命中时重插入以维持
+   「最久未用先淘汰」的顺序）。一次会话导入多个书源的长期运行由上限兜住（P6 的同一顾虑）。
+4. **计数仍是唯一判据。** `compileStats` 的 `lookups` 现在含「拆步骤 + 编译选择器」两次查找，
+   `compilations` 只在真编译时加一；P3 因此是 `1 - compilations / lookups`，不掺耗时。
+5. **收益与预期一致，且差异本身是证据。** P2 的条目字段 −39%（1000 条 × 同一批规则的重复解析被压成各一次）、
+   P2 总时长 −28%；P1 只有 −2%，因为一章正文只求值一次同一条规则，成本在 HTML 解析与多段拼接上；
+   P3 从 0% 到 99.7%（`compilations` 只 4 次，其中 2 条 P1/P2 已经预热）。
+6. **基准脚本的退出坑（踩过）。** `--release` 的 Windows 产物里 `exit()` 会卡在 VM 关闭阶段
+   （最小复现：`main` 只做 `ensureInitialized(); exit(0);` 也挂住），`flutter run` 因此永远等不到断开事件。
+   现在的标准跑法是 `flutter build windows --release -t tool/bench/bench.dart` + 直接跑产物，
+   脚本收尾自我结束；**退出码不再有含义**，成败看 stdout 与 `--out`（`tool/bench/README.md` §2）。
+
+验证：`flutter test` **2679 例全过**（新增 5 条 `compileStats` 用例：只编译一次 / 列表与取值各编译一次 /
+两个字段各自报自己的 `rulePath` / 超限淘汰 / 空快照）；format 0、analyze 0、coverage exit 0、
+`build_runner` 无生成物漂移。
+
+## 实现注记（2026-10-28，M26：P5/P6 首次量出，未做优化）
+
+决策 4 的 P5/P6 此前只是纸面指标。数字归 `tool/bench/README.md` §5.3 与 `engine-parity.md` §11：
+
+1. **P5 需要一个计数器，`--only=p5` 只量到一半。** 决策 4 的 P5 有两半：job 固定开销（≤3 ms）与
+   `java.getString` 字面量内联覆盖（≥90%）。耗时可以由 bench 直接测，覆盖率不行——它是「嵌套调用里
+   有多少走了内联」。所以 `RuleEngine` 加了只读的 `inlineStats`：`inlinedCalls` 计在
+   `_inlineLiteralJavaRules` 的每次替换上，`bridgedCalls` 计在 `_parseEvaluatorFor`（`parse.*` 请求）
+   上，覆盖率 = `inlined / (inlined + bridged)`。与 `compileStats` 同一立场：只写不读，消费方是
+   `tool/bench`、`tool/spot_check` 与两条单测。
+2. **P5 压在阈值上，且省的不是「解析」。** 空脚本 job 往返 p50 2.83–3.03 ms（目标 ≤3 ms，p95 3.17–3.62）。
+   一个 job 的固定成本 = isolate 两跳消息 + 沙箱前奏（`Uint8Array` / `java.*` 绑定 / `jsLib` 解析）
+   + 结果信封的 JSON 编解码。R5 的「按 `sourceId + 脚本 hash` 缓存编译结果」只省其中一段，**所以 R5
+   开工前必须先分段量**，否则改完不知道省的是哪一段。
+3. **覆盖率取决于语料写法，不是引擎选择。** 字面量写法（`java.timeFormat(java.getString('$.x')*1000)`，
+   语料主流）100% 内联；带变量写法（`java.getString(expr)`）0%，因为内联的前提就是字面量首参。
+   因此「≥90%」这个数必须在真实源上取：`tool/spot_check` 现在每次运行结束都会打印
+   `rules: lookups/compilations` 与 `nested: inlined/bridged`，M27 的 L1 逐源回归顺手就有语料数字。
+4. **P6 用 RSS 前后差，拿不到「峰值」。** Dart 没有 GC 钩子，`--only=p6` 记三个数：首次（近似工作集）、
+   后续中位（每次操作的净增长）、最大。实测单章 1.06 / 0.88 / 3.13 MB、千章目录 1.55 / 0.46 / 7.09 MB，
+   相对目标（8 / 32 MB）有一个量级余量；但「后续中位」不为 0，说明每轮都有常驻增长——10 轮样本分辨不出
+   「堆增长」与「页缓存」，按决策 4 的原文，真机与按轮采样留给 `integration_test`。
+5. **两个工具都要能失败。** bench 的 `_verify` 用 `StateError` 而不是 `assert`（`--release` 会丢掉 assert），
+   并且 `PlatformDispatcher.onError` 一旦接到错误就结束进程——否则 `--release` 下未捕获的异常既不退出也
+   不报错（同一个 VM 关闭问题：`exit()` 在 AOT 里挂住）。这条坑已写进 `tool/bench/README.md` §2。
+
+## 实现注记（2026-10-28，R5 开工前置：P5 分段把靶子改了）
+
+决策 3 的第五张面（R5）写的是「JS 通道：把一条规则一个 job 的开销降到固定成本（脚本编译结果按
+`sourceId + script hash` 缓存）」。P5 分段量过之后，这条**靶子需要修正**（数字见 `tool/bench/README.md` §5.4）：
+
+| 段 | p50 | 说明 |
+|---|---|---|
+| 裸 `Isolate` echo 往返 | 0.04 ms | 消息底座 |
+| 引擎侧（假桥） | <0.005 ms | 内联扫描 + 作业构造 + `jsLib` 解析 |
+| 桥 + worker：空脚本 | 2.87 ms | 固定开销全在这里 |
+| + `jsLib`（40 B） | 2.93 ms | 库本身 ≈ 0 |
+| + 32 KB 结果信封 | 3.24 ms | 信封 ≈ +0.37 ms |
+| + 45 KB 脚本源码 | 7.05 ms | 源码 ≈ **94 µs/KB** |
+
+结论与修正：
+
+1. **固定成本 = 每 job 重新解析的那份沙箱源码。** `quickjs_worker.dart` 的 `_evaluationSource()` 把
+   `_prelude`（52 KB / 1438 行：`java.*`、`crypto`、`cache`、`Packages`、`parse` 全套绑定）拼在规则前面，
+   而沙箱**每个 job 都重跑**（有意为之：`globalThis` 共享，不重跑会把上一 job 的重绑定漏给下一个）。
+2. **「按脚本 hash 缓存编译结果」收益极小**：真实规则脚本几百字节，按 94 µs/KB 算不到 0.05 ms。
+   R5 的动作应改为「**沙箱源码一次编译 + 每 job 只重置状态与绑定**」。
+3. **代价与风险**：要把 `_prelude` 里**无状态的定义**（`globalThis.__xxx = function…`）与**有状态的重建**
+   （`cache` / `java` / `source` / `infoMap` 这些闭包 IIFE）分开，逐条确认哪些 `globalThis.*` 必须每 job 新建。
+   `quickjs_worker.dart` 带 `coverage:ignore-file`，只有 `integration_test/js_bridge_test.dart` 的真引擎探针
+   覆盖它，所以这项改动**必须双端实跑设备用例**（Windows + Android），不能只看主机侧绿。
+4. 这条修正不影响决策 4 的阈值（P5 仍是 ≤3 ms），只改「怎么达成」；按决策 3 的纪律，行为面一律不动
+   （绑定名字、`globalThis` 泄漏语义、配额数值、信封形状都不变）。

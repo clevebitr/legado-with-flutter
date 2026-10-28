@@ -41,5 +41,5 @@ auto-breakpoint: false
 
 ## Current: M26 — M26 — 引擎高性能重构：指标 P1-P6（详见 #36）
 
-goal: 同一行为更快：P1-P6 达标且行为测试全绿（#36）
-breakpoint: M26-R1：bench 基线（P1/P2/P3）先跑出「改前」数字（#36）
+goal: 同一行为更快：P1/P2 差值验收、P3 ≥95%（#36）
+breakpoint: P5 分段完成；R5 改为「沙箱前奏一次编译」，待用户裁决是否开工

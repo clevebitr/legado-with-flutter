@@ -240,6 +240,9 @@ final RegExp _whitespace = RegExp(r'\s+');
 ///
 /// The engine is stateless, so one instance can evaluate rules concurrently
 /// (C-SRC-9), and it never mutates the scope it is given or its elements.
+///
+/// The one exception is the rule-compilation counters behind [compileStats]: they are
+/// diagnostics for the P3 metric of `docs/dev/adr/0078` 决策 4 and carry no behaviour.
 final class RuleEngine {
   /// Creates an engine that reports rejected rules through `logger`, runs `@js:` rules
   /// on `jsBridge` and reads / writes the rules' variables in `variables`.
@@ -274,6 +277,57 @@ final class RuleEngine {
   final JsVariableStore _variables;
   final SourceVariableStore _sourceVariables;
   final JsLibStore _jsLib;
+
+  int _ruleLookups = 0;
+  int _ruleCompilations = 0;
+  int _inlinedJavaCalls = 0;
+  int _bridgedJavaCalls = 0;
+
+  /// Parsed rule texts by text ("R1"): a rule's steps are a pure function of its text.
+  final Map<String, _ParsedRule> _parsedRules = <String, _ParsedRule>{};
+
+  /// Compiled selectors by (text, field, `hasExtraction`); see [_checkForEvaluation].
+  final Map<
+    ({String rule, String field, bool hasExtraction}),
+    _Parsed<List<_CheckedCandidate>>
+  >
+  _checkedRules =
+      <
+        ({String rule, String field, bool hasExtraction}),
+        _Parsed<List<_CheckedCandidate>>
+      >{};
+
+  /// How many rule texts one session keeps translated into steps.
+  ///
+  /// A real book source declares 20–40 rule texts; 256 covers several imported sources and still
+  /// bounds the engine (which lives as long as the app, ADR-0078 决策 4 的 P6).
+  static const int _parsedRuleCacheLimit = 256;
+
+  /// How many compiled selector sets one session keeps.
+  ///
+  /// Wider than [_parsedRuleCacheLimit] because the key carries the field: the same text may be
+  /// compiled once for a list rule and once for a value rule, and each field has its own entry.
+  static const int _checkedRuleCacheLimit = 512;
+
+  /// How often a rule text had to be turned into steps, and how often that was a real compile.
+  ///
+  /// The P3 metric of `docs/dev/adr/0078` 决策 4 ("one rule text is compiled once per session")
+  /// is a hit rate, so it needs both ends counted rather than inferred from wall clock:
+  /// `lookups` is every evaluation that asked for a rule (parse **and** selector compile) and
+  /// `compilations` is the subset that really worked. `tool/bench/` reads this pair; no production
+  /// code does.
+  RuleCompileStats get compileStats =>
+      RuleCompileStats(lookups: _ruleLookups, compilations: _ruleCompilations);
+
+  /// How the sandbox's **nested rule calls** were served: inline on the host, or through a job.
+  ///
+  /// The P5 metric of `docs/dev/adr/0078` 决策 4 asks for ≥90% of the nested calls to take the
+  /// literal-inline path (ADR-0037 §决策 3①), because only that path is synchronous and free of a
+  /// worker round trip. Same stance as [compileStats]: diagnostics only, read by `tool/bench/`.
+  JsInlineStats get inlineStats => JsInlineStats(
+    inlinedCalls: _inlinedJavaCalls,
+    bridgedCalls: _bridgedJavaCalls,
+  );
 
   /// Evaluates one **whole-field** JavaScript expression and returns its raw value.
   ///
@@ -483,8 +537,9 @@ final class RuleEngine {
       return const ParseSuccess<List<RuleScope>>(<RuleScope>[]);
     }
 
-    final _ParsedRule parsed = _parse(expanded);
-    final _Parsed<List<_CheckedCandidate>> check = _check(
+    final _ParsedRule parsed = _parseForEvaluation(expanded);
+    final _Parsed<List<_CheckedCandidate>> check = _checkForEvaluation(
+      expanded,
       parsed,
       field: rulePath,
       hasExtraction: false,
@@ -963,7 +1018,7 @@ final class RuleEngine {
       // 上游把带 `{{}}` / `@get:` 的规则切成 **Regex 模式**（`AnalyzeRule.kt:674-680`），
       // 而 `AnalyzeByRegex` 不拿它当选择器读：替换后的整段文本就是这一条规则的值。
       // 这也是 `{{@@class.a@text}}` / `“地址/{{@get:{x}}}”` 这类写法能工作的原因。
-      final _ParsedRule substituted = _parse(expanded.text);
+      final _ParsedRule substituted = _parseForEvaluation(expanded.text);
       if (substituted.body.isEmpty) {
         return const ParseSuccess<List<String>>(<String>[]);
       }
@@ -973,14 +1028,15 @@ final class RuleEngine {
       );
     }
 
-    final _ParsedRule parsed = _parse(expanded.text);
+    final _ParsedRule parsed = _parseForEvaluation(expanded.text);
     final List<String> merged;
     if (parsed.isBareJs) {
       // `@js:` 独立成规则：没有选择器要跑，`result` 就是这一层的内容（§6 的 result 绑定：
       // 页面给正文，JSON 条目给条目对象）。
       merged = const <String>[];
     } else {
-      final _Parsed<List<_CheckedCandidate>> check = _check(
+      final _Parsed<List<_CheckedCandidate>> check = _checkForEvaluation(
+        expanded.text,
         parsed,
         field: rulePath,
         hasExtraction: true,
@@ -1408,6 +1464,8 @@ final class RuleEngine {
             // ——异步路径（`parse.getString`）就是这个形状（ADR-0069 G9）。
             _ => jsonEncode(data.join(_valueSeparator)),
           });
+          // P5 的观测点：这一次嵌套调用没有跨进 sandbox。
+          _inlinedJavaCalls++;
       }
     }
 
@@ -2304,6 +2362,8 @@ final class RuleEngine {
     RuleScope scope, {
     required String field,
   }) => (JsParseRequest request) async {
+    // P5 的观测点：这一次嵌套调用没能内联，只能把规则交回宿主并等待这一次 job。
+    _bridgedJavaCalls++;
     // `java.setContent(html)` 换掉页级 scope（ADR-0076 §决策 1）：上游在同一个评价里换 content，
     // 本仓的 scope 在宿主上，所以按覆盖后的正文重建一个页级 scope 再求值。
     final RuleScope effective = _withContent(scope, request.content);
@@ -2958,6 +3018,82 @@ final class RuleEngine {
     return classes
         .map((String token) => '.${cascadia.escapeCssIdent(token)}')
         .join();
+  }
+
+  /// Parses [rule] for one evaluation, serving it from the compile cache when it is known.
+  ///
+  /// The cache is the "R1" refactor face of `docs/dev/adr/0078` 决策 3: the compiled steps of a
+  /// rule text do not depend on the page, the field or the score, so one text only has to be
+  /// parsed once per session (P3).
+  ///
+  /// Sharing is safe because everything the parse produces is immutable — selector steps, the
+  /// `RegExp` chain, the compiled `JsonPath` and the `XPathExpression` — and evaluation never
+  /// mutates them (the engine's own contract: it never mutates a scope or its elements).
+  _ParsedRule _parseForEvaluation(String rule) {
+    _ruleLookups++;
+    final _ParsedRule? cached = _parsedRules.remove(rule);
+    if (cached != null) {
+      // Reinsert so the eviction order is least-recently-used rather than oldest-inserted.
+      _parsedRules[rule] = cached;
+
+      return cached;
+    }
+
+    final _ParsedRule parsed = _parse(rule);
+    _ruleCompilations++;
+    _remember(_parsedRules, rule, parsed, _parsedRuleCacheLimit);
+
+    return parsed;
+  }
+
+  /// Compiles the selectors of [rule] for one evaluation, or serves them from the cache.
+  ///
+  /// The key carries `field` and `hasExtraction` on purpose: a malformed rule names the field it
+  /// belongs to as its `rulePath` (C-SRC-8), and the last segment of a rule is a selector in a list
+  /// rule but the extraction in a value rule (`book_source_doc` matrix #8). Two callers that differ
+  /// in either respect therefore get their own entry, and no failure can be reported against
+  /// another field's path.
+  _Parsed<List<_CheckedCandidate>> _checkForEvaluation(
+    String rule,
+    _ParsedRule parsed, {
+    required String field,
+    required bool hasExtraction,
+  }) {
+    _ruleLookups++;
+    final ({String rule, String field, bool hasExtraction}) key = (
+      rule: rule,
+      field: field,
+      hasExtraction: hasExtraction,
+    );
+    final _Parsed<List<_CheckedCandidate>>? cached = _checkedRules.remove(key);
+    if (cached != null) {
+      _checkedRules[key] = cached;
+
+      return cached;
+    }
+
+    final _Parsed<List<_CheckedCandidate>> checked = _check(
+      parsed,
+      field: field,
+      hasExtraction: hasExtraction,
+    );
+    _ruleCompilations++;
+    _remember(_checkedRules, key, checked, _checkedRuleCacheLimit);
+
+    return checked;
+  }
+
+  /// Stores [value] under [key], evicting the least recently used entry past [limit].
+  ///
+  /// Both maps are insertion-ordered, and every hit reinserts its entry (see
+  /// [_parseForEvaluation]), so `keys.first` is the least recently used one. A cap matters because
+  /// the engine lives as long as the app: without it a long session would accumulate every rule text
+  /// of every imported source.
+  void _remember<K, V>(Map<K, V> cache, K key, V value, int limit) {
+    cache[key] = value;
+    while (cache.length > limit) {
+      cache.remove(cache.keys.first);
+    }
   }
 
   /// Splits [rule] into its `##` parts, its leading `-` and its `@`-separated
@@ -4060,6 +4196,47 @@ final class RuleEngine {
 
     values.add(value);
   }
+}
+
+/// Snapshot of the engine's rule-compilation counters.
+///
+/// Read by `tool/bench/` to report the P3 hit rate of `docs/dev/adr/0078` 决策 4; [RuleEngine] never
+/// reads it back, so it cannot influence behaviour.
+final class RuleCompileStats {
+  /// Creates a snapshot from the engine's raw counts.
+  const RuleCompileStats({required this.lookups, required this.compilations});
+
+  /// Evaluations that asked for a rule text to become steps.
+  final int lookups;
+
+  /// Those that really parsed the text (a cache miss, once the compile cache lands).
+  final int compilations;
+
+  /// Lookups served without parsing.
+  int get hits => lookups - compilations;
+
+  /// Share of lookups served without parsing, `0` when nothing was looked up.
+  double get hitRate => lookups == 0 ? 0 : hits / lookups;
+}
+
+/// How the sandbox's nested rule calls were served, and the share that stayed on the host.
+///
+/// Read by `tool/bench/` for the P5 inline-coverage metric (`docs/dev/adr/0078` 决策 4).
+final class JsInlineStats {
+  /// Creates a snapshot from the engine's raw counts.
+  const JsInlineStats({required this.inlinedCalls, required this.bridgedCalls});
+
+  /// `java.getString('…')`-shaped calls the host evaluated and inlined into the script.
+  final int inlinedCalls;
+
+  /// Nested calls that had to cross into the sandbox (`parse.*` requests) instead.
+  final int bridgedCalls;
+
+  /// Nested calls seen, whichever way they were served.
+  int get calls => inlinedCalls + bridgedCalls;
+
+  /// Share of nested calls served without a worker round trip, `0` when there were none.
+  double get inlineCoverage => calls == 0 ? 0 : inlinedCalls / calls;
 }
 
 /// One parsed rule: its body, its script, its leading `-` and its `@`-separated segments.

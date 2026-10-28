@@ -5384,4 +5384,181 @@ void main() {
       },
     );
   });
+
+  // P3 的观测点（ADR-0078 决策 3/4，`tool/bench/`）：命中率必须由「求值次数」与「真编译次数」
+  // 两个计数算出来，而不是从耗时推算。R1 之前两者相等（每次求值都编译），R1 之后同一份规则
+  // 文本在一次会话里只编译一次（`compilations` 固定为 2：一次拆步骤 + 一次编译选择器）。
+  group('RuleEngine compileStats', () {
+    test('compileStats_givenRepeatedEvaluation_compilesTheRuleOnce', () async {
+      final RuleEngine engine = _engine();
+      final RuleScope page = _scope(_document(_countHtml));
+
+      // 20 次求值 = 20 次拆步骤 + 20 次编译选择器 = 40 次查找；首次那 2 次才是真编译。
+      for (var index = 0; index < 20; index++) {
+        await _first(
+          engine.extractFirst(
+            'class.count@text',
+            page,
+            rulePath: 'searchRule.kind',
+          ),
+        );
+      }
+
+      final RuleCompileStats stats = engine.compileStats;
+      expect(stats.lookups, 40);
+      expect(stats.compilations, 2, reason: 'P3：同一规则文本一次会话只编译一次');
+      expect(stats.hits, 38);
+      // P3 的阈值（ADR-0078 决策 4）：≥95%。20 次重复时理论上限就是 95%。
+      expect(stats.hitRate, greaterThanOrEqualTo(0.95));
+    });
+
+    test(
+      'compileStats_givenOneTextAsListAndValueRule_compilesTheSelectorsTwice',
+      () async {
+        final RuleEngine engine = _engine();
+        final RuleScope page = _scope(_document(_listHtml));
+
+        // 同一条文本、同一个 field 路径的两种读法：列表规则里末段是选择器，取值规则里是提取段
+        // （矩阵 #8），所以选择器必须各编译一次；拆步骤仍然共享。
+        await _matches(
+          engine.selectAll(
+            'class.result-list@tag.li',
+            page,
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+        await _matches(
+          engine.selectAll(
+            'class.result-list@tag.li',
+            page,
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+        await _values(
+          engine.extractAll(
+            'class.result-list@tag.li',
+            page,
+            rulePath: 'searchRule.bookList',
+          ),
+        );
+
+        final RuleCompileStats stats = engine.compileStats;
+        // 3 次求值 × 2 次查找；真编译 = 1（拆步骤）+ 2（列表读法 / 取值读法各一次）。
+        expect(stats.lookups, 6);
+        expect(stats.compilations, 3);
+      },
+    );
+
+    test(
+      'compileStats_givenTwoFieldsWithOneBrokenRule_namesEachField',
+      () async {
+        final RuleEngine engine = _engine();
+        final RuleScope page = _scope(_document(_countHtml));
+
+        // 同一条**畸形**规则挂在两个字段上：缓存键带 field，所以两次都要报自己那个字段
+        // （C-SRC-8：`rulePath` 必须能定位到字段，不能被前一次求值污染）。
+        final ParseFailure<Never> first = await _failure(
+          engine.extractFirst('class.a@', page, rulePath: 'searchRule.kind'),
+        );
+        final ParseFailure<Never> second = await _failure(
+          engine.extractFirst('class.a@', page, rulePath: 'searchRule.intro'),
+        );
+
+        expect(first.kind, ParseFailureKind.parseFailed);
+        expect(first.rulePath, 'searchRule.kind');
+        expect(second.kind, ParseFailureKind.parseFailed);
+        expect(second.rulePath, 'searchRule.intro');
+      },
+    );
+
+    test(
+      'compileStats_givenMoreRulesThanTheCacheHolds_evictsTheOldest',
+      () async {
+        final RuleEngine engine = _engine();
+        final RuleScope page = _scope(_document(_countHtml));
+
+        // 超出上限（256 条规则文本）之后，最早那条要被淘汰：再求值一次必须重新编译。
+        for (var index = 0; index < 300; index++) {
+          await _first(
+            engine.extractFirst(
+              'class.count@text##$index##$index',
+              page,
+              rulePath: 'searchRule.kind',
+            ),
+          );
+        }
+        final RuleCompileStats afterFill = engine.compileStats;
+        await _first(
+          engine.extractFirst(
+            'class.count@text##0##0',
+            page,
+            rulePath: 'searchRule.kind',
+          ),
+        );
+        final RuleCompileStats afterEviction = engine.compileStats;
+
+        expect(
+          afterEviction.compilations,
+          afterFill.compilations + 1,
+          reason: '被淘汰的规则文本要重新编译',
+        );
+      },
+    );
+
+    test('inlineStats_givenALiteralNestedCall_inlinesItOnTheHost', () async {
+      final RuleEngine engine = _engine();
+
+      // 语料主流写法：`java.timeFormat(java.getString('$.x')*1000)` 里的嵌套是字面量规则，
+      // 宿主在构造 job 之前就求值并内联（ADR-0037 §决策 3①），所以不跨 sandbox。
+      await _text(
+        engine.extractJoined(
+          r"{{java.timeFormat(java.getString('$.data.count')*1000)}}",
+          _page(_jsonBody),
+          rulePath: 'tocRule.updateTime',
+        ),
+      );
+
+      final JsInlineStats stats = engine.inlineStats;
+      expect(stats.inlinedCalls, 1);
+      expect(stats.bridgedCalls, 0);
+      expect(stats.calls, 1);
+      expect(stats.inlineCoverage, 1);
+    });
+
+    test('inlineStats_givenANonLiteralNestedCall_countsItAsBridged', () async {
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..parseRequests.add(
+          const JsParseRequest(
+            rule: r'$.data.name',
+            wantsList: false,
+            wantsValues: false,
+          ),
+        );
+
+      final RuleEngine engine = _engine(null, bridge);
+      // 首参是表达式：内联路径不成立，脚本在 worker 里只能回头问宿主（`parse.*`）。
+      await _values(
+        engine.extractAll(
+          r'@js:java.getString(result.length > 0 ? "$.data.name" : "$.data.name")',
+          _page(_jsonBody),
+          rulePath: 'searchRule.name',
+        ),
+      );
+
+      final JsInlineStats stats = engine.inlineStats;
+      expect(stats.inlinedCalls, 0);
+      expect(stats.bridgedCalls, 1);
+      expect(stats.calls, 1);
+      expect(stats.inlineCoverage, 0);
+    });
+
+    test('compileStats_givenNoEvaluation_answersAnEmptySnapshot', () {
+      final RuleCompileStats stats = _engine().compileStats;
+
+      expect(stats.lookups, 0);
+      expect(stats.hits, 0);
+      // 没有求值时命中率是 0 而不是 NaN：基准脚本会直接打印它。
+      expect(stats.hitRate, 0);
+    });
+  });
 }

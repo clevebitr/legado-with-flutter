@@ -288,23 +288,32 @@ Future<_Report> _runChain(
   );
   // 引擎与桥共一份变量表：`@put:` / `@get:` 与 `java.put` / `java.get` 是同一份（ADR-0034）。
   final JsVariableStore variables = JsVariableStore();
-  final PageFetchService pages = PageFetchService(
-    engine: RuleEngine(
+  final RuleEngine engine = RuleEngine(
+    logger: logger,
+    jsBridge: QuickJsWorkerBridge(
       logger: logger,
-      jsBridge: QuickJsWorkerBridge(
-        logger: logger,
-        launch: launchQuickJsWorker,
-        http: http,
-        variables: variables,
-      ),
+      launch: launchQuickJsWorker,
+      http: http,
       variables: variables,
     ),
+    variables: variables,
+  );
+  final PageFetchService pages = PageFetchService(
+    engine: engine,
     http: http,
     logger: logger,
     // 真源里的 `,{webView:…}` 用真实 headless WebView（ADR-0061）。
     webPages: InAppWebViewPageFetcher(logger: logger),
   );
   final _Report report = _Report(source: source, keyword: keyword);
+  // 每条返回路径都把引擎计数带上（P3 命中率 / P5 内联覆盖率），不额外占一条路径。
+  _Report finish() {
+    report.compileStats = engine.compileStats;
+    report.inlineStats = engine.inlineStats;
+
+    return report;
+  }
+
   if (audio) {
     report.requiredStages = <String>[
       'search',
@@ -340,7 +349,7 @@ Future<_Report> _runChain(
       report.fail('search', kind, rulePath);
   }
   if (books.isEmpty) {
-    return report;
+    return finish();
   }
 
   final Book first = books.first;
@@ -368,7 +377,7 @@ Future<_Report> _runChain(
       :final String rulePath,
     ):
       report.fail('bookInfo', kind, rulePath);
-      return report;
+      return finish();
   }
 
   final List<Chapter> chapters = <Chapter>[];
@@ -394,7 +403,7 @@ Future<_Report> _runChain(
       report.fail('toc', kind, rulePath);
   }
   if (chapters.isEmpty) {
-    return report;
+    return finish();
   }
 
   if (audio) {
@@ -406,7 +415,7 @@ Future<_Report> _runChain(
       play: play,
     );
 
-    return report;
+    return finish();
   }
 
   switch (await FetchContent(
@@ -428,7 +437,7 @@ Future<_Report> _runChain(
       report.fail('content', kind, rulePath);
   }
 
-  return report;
+  return finish();
 }
 
 /// The audio branch of the chain (`docs/dev/roadmap.md` §3.10, ADR-0054 A-1/A-2).
@@ -1194,6 +1203,16 @@ final class _Report {
   /// The keyword the search template was rendered with.
   final String keyword;
 
+  /// 规则编译与嵌套调用的引擎计数（P3 / P5 的语料侧口径，ADR-0078 决策 4）。
+  ///
+  /// `tool/bench` 量的是合成夹具上的固定开销；这次运行跑的是**真实书源**，所以它给出的
+  /// 内联覆盖率才是 P5 那句「≥90% 的嵌套调用走内联」的语料数字（M27 的 L1 逐源回归就是
+  /// 用这条命令顺手取）。
+  RuleCompileStats? compileStats;
+
+  /// 见 [compileStats]；这一项是 P5 的内联覆盖率。
+  JsInlineStats? inlineStats;
+
   /// Wall-clock time the whole chain took, in milliseconds.
   ///
   /// It is recorded because `concurrentRate` (`book-source.md` §8) is only observable as
@@ -1235,6 +1254,22 @@ final class _Report {
     'headers': source.headers,
     'complete': isComplete,
     'elapsedMs': elapsedMilliseconds,
+    'ruleCompile': switch (compileStats) {
+      final RuleCompileStats stats => <String, Object?>{
+        'lookups': stats.lookups,
+        'compilations': stats.compilations,
+        'hitRate': stats.hitRate,
+      },
+      null => null,
+    },
+    'jsInline': switch (inlineStats) {
+      final JsInlineStats stats => <String, Object?>{
+        'inlinedCalls': stats.inlinedCalls,
+        'bridgedCalls': stats.bridgedCalls,
+        'coverage': stats.inlineCoverage,
+      },
+      null => null,
+    },
     'stages': <String, Object?>{
       for (final MapEntry<String, ({int count, List<String> samples})> entry
           in _stages.entries)
@@ -1264,6 +1299,20 @@ final class _Report {
     stdout.writeln(
       'rate   : ${source.concurrentRate?.trim().isNotEmpty ?? false ? source.concurrentRate : 'none declared'}',
     );
+    if (compileStats case final RuleCompileStats compile) {
+      stdout.writeln(
+        'rules  : lookups ${compile.lookups} / compilations '
+        '${compile.compilations}（命中率 '
+        '${(compile.hitRate * 100).toStringAsFixed(1)}%）',
+      );
+    }
+    if (inlineStats case final JsInlineStats inline) {
+      stdout.writeln(
+        'nested : inlined ${inline.inlinedCalls} / bridged '
+        '${inline.bridgedCalls}（内联覆盖率 '
+        '${(inline.inlineCoverage * 100).toStringAsFixed(1)}%）',
+      );
+    }
     for (final String stage in requiredStages) {
       final ({int count, List<String> samples})? ok = _stages[stage];
       final ({ParseFailureKind kind, String rulePath})? failure =
