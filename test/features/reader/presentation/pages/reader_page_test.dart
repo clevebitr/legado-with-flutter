@@ -19,6 +19,7 @@ import 'package:flutter_reader/features/reader/presentation/notifiers/reader_ses
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_scroll_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -421,6 +422,43 @@ void main() {
         expect(find.textContaining('第二章正文'), findsOneWidget);
       },
     );
+
+    testWidgets('scrollMode_whenTheNextChapterIsInHand_showsItInTheSameFlow', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+
+      await _pump(tester, fixture);
+
+      // 下一章正文是预取来的（`pumpAndSettle` 等它落地），已经接在同一份滚动正文里：
+      // 章末不再是一个需要点一下的页（ADR-0085 §决策 2）。
+      expect(fixture.content.requests, contains('https://source.test/2.html'));
+      expect(find.textContaining('第二章正文'), findsOneWidget);
+    });
+
+    testWidgets('scrollMode_whenScrolledToTheEnd_opensTheNextChapter', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+      // 第二章也写长（远高于一屏）：只有它占满视野时，滑到末尾的视口顶才落在它里面。
+      fixture.content.bodies['https://source.test/2.html'] = <String>[
+        for (var index = 0; index < 200; index++) '第二章第${index + 1}行：正文内容。',
+      ].join('\n');
+
+      await _pump(tester, fixture);
+      await tester.drag(find.byType(ReaderScrollFlow), const Offset(0, -4000));
+      await tester.pumpAndSettle();
+
+      // 一路滑下去：会话自己进了第二章，进度也落了盘。
+      expect(
+        fixture.container
+            .read(readerSessionProvider(_book))
+            .value
+            ?.chapterIndex,
+        1,
+      );
+      expect(fixture.progress.writes, isNotEmpty);
+    });
 
     testWidgets('dispose_whenLeaving_writesThePosition', (
       WidgetTester tester,

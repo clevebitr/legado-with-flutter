@@ -91,6 +91,68 @@ void main() {
     });
   });
 
+  group('readerTextHeight', () {
+    test('readerTextHeight_givenAnEmptyText_answersZero', () {
+      expect(
+        readerTextHeight(
+          text: '',
+          style: _style,
+          width: _size.width,
+          textScaler: TextScaler.noScaling,
+        ),
+        0,
+      );
+    });
+
+    test('readerTextHeight_givenNoWidth_answersZero', () {
+      // 布局还没算出来时不能量出一个「一列排下来」的假高度。
+      expect(
+        readerTextHeight(
+          text: _longText(),
+          style: _style,
+          width: 0,
+          textScaler: TextScaler.noScaling,
+        ),
+        0,
+      );
+    });
+
+    test('readerTextHeight_givenMoreLines_answersMoreHeight', () {
+      final double short = readerTextHeight(
+        text: _longText(4),
+        style: _style,
+        width: _size.width,
+        textScaler: TextScaler.noScaling,
+      );
+      final double tall = readerTextHeight(
+        text: _longText(40),
+        style: _style,
+        width: _size.width,
+        textScaler: TextScaler.noScaling,
+      );
+
+      expect(short, greaterThan(0));
+      expect(tall, greaterThan(short));
+    });
+
+    test('readerTextHeight_givenALargerTextScale_answersMoreHeight', () {
+      final double plain = readerTextHeight(
+        text: _longText(10),
+        style: _style,
+        width: _size.width,
+        textScaler: TextScaler.noScaling,
+      );
+      final double scaled = readerTextHeight(
+        text: _longText(10),
+        style: _style,
+        width: _size.width,
+        textScaler: const TextScaler.linear(2),
+      );
+
+      expect(scaled, greaterThan(plain));
+    });
+  });
+
   group('readerPageOf', () {
     test('readerPageOf_givenAnOffsetOnTheFirstPage_answersZero', () {
       expect(readerPageOf(<int>[0, 100, 200], 0), 0);

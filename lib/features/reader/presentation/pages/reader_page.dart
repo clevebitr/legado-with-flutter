@@ -27,7 +27,9 @@ import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts
 import 'package:flutter_reader/features/reader/presentation/pages/manga_reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_book_scope.dart';
-import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_chapter_flow.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_paged_flow.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_scroll_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_search_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_source_sheet.dart';
@@ -78,8 +80,6 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 /// State of the reader page: the scroll controller, the save bookkeeping and the last position.
 class _ReaderPageState extends ConsumerState<ReaderPage> {
-  final ScrollController _scroll = ScrollController();
-
   /// The book currently open. It starts as the route's book and **changes** on a source switch:
   /// every provider below is keyed by it, so a new value naturally re-reads the new source
   /// (ADR-0051 §决策 3) — no navigation, no flash, and the reader stays where it was.
@@ -94,14 +94,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Clock? _clock;
   DateTime? _sessionStartedAt;
 
-  /// The chapter whose restore offset was already applied (the page restores once per chapter).
-  String? _restoredChapterUrl;
-
   /// Bumped when a jump must restore again inside the **same** chapter.
   ///
-  /// The paged body restores once per widget instance, so a bookmark jump that stays in the same
-  /// chapter would otherwise be ignored; a new key gives it a fresh body that restores at the
-  /// requested offset (ADR-0066 §决策 7).
+  /// The flows restore once per widget instance, so a bookmark jump that stays in the same
+  /// chapter would otherwise be ignored; a new key gives them a fresh instance that restores at
+  /// the requested offset (ADR-0066 §决策 7).
   int _restoreNonce = 0;
 
   /// Whether the chapter the route asked for was already opened.
@@ -140,6 +137,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// The map is pruned to the current and the next chapter on every build, so reading a thousand
   /// chapters does not keep a thousand bodies alive.
   final Map<String, String> _prefetchedBodies = <String, String>{};
+
+  /// Bodies already laid out for the current paragraph settings, keyed by chapter URL.
+  ///
+  /// The flows are rebuilt on every progress write, so the paragraph transform has to run once per
+  /// body rather than once per frame (C-PERF-1).
+  final Map<String, ({int signature, String text})> _laidOut =
+      <String, ({int signature, String text})>{};
 
   /// Chapter URLs whose prefetch is in flight (a rebuild must not start it twice).
   final Set<String> _prefetching = <String>{};
@@ -198,7 +202,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _recordSession();
     _tts?.onReaderClosed();
     _chromeTimer?.cancel();
-    _scroll.dispose();
     super.dispose();
   }
 
@@ -603,11 +606,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   /// Jumps to chapter [index] and keeps the chrome alive.
+  /// Jumps to chapter [index] and keeps the chrome alive.
+  ///
+  /// A jump is **explicit**: the flows are rebuilt at the new position ([_restoreNonce]) instead of
+  /// continuing from where the reader was, which is what makes a table-of-contents tap, a bookmark
+  /// or a slider drag land exactly where it says (ADR-0085 §决策 4).
   void _jumpToChapter(int index, {int charOffset = 0}) {
     if (_chapters.isEmpty) {
       return;
     }
     final int target = index.clamp(0, _chapters.length - 1);
+    setState(() => _restoreNonce++);
     unawaited(
       ref
           .read(readerSessionProvider(_book).notifier)
@@ -653,12 +662,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       case ParseSuccess<ReaderSourceSwitch>(:final ReaderSourceSwitch data):
         setState(() {
           _book = data.book;
-          _restoredChapterUrl = null;
+          // 换源就是换一份目录：正文流程必须按新身份的章节重新定位（ADR-0085 §决策 4）。
+          _restoreNonce++;
           _lastBody = null;
-          // 旧源的正文不能带到新源：换源后重新预取当前 + 下一章。
+          // 旧源的正文不能带到新源：换源后重新预取相邻章。
           _prefetchedBodies.clear();
           _prefetching.clear();
           _prefetchFailed.clear();
+          _laidOut.clear();
           _prefetchGeneration++;
         });
         // 退出守护要按换源后的身份判断「在不在书架」，否则会拿旧 URL 再问一次。
@@ -807,9 +818,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       if (!mounted) {
         return;
       }
-      // 同一章内的跳转必须让正文重新恢复一次：滚动正文按章缓存恢复目标，分页正文每个实例只恢复
-      // 一次，所以这里清掉章标记并换一个实例（见 [_restoreNonce]）。
-      _restoredChapterUrl = null;
+      // 同一章内的跳转必须让正文重新恢复一次：两个流程每个实例只恢复一次，所以这里换一个实例
+      // （见 [_restoreNonce]）。
       _restoreNonce++;
       unawaited(
         ref
@@ -838,16 +848,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _lastChapterUrl = chapter.url;
     _lastChapterName = chapter.title.isEmpty ? null : chapter.title;
 
+    final ReadingChapter? previousChapter = session.chapterIndex > 0
+        ? chapters[session.chapterIndex - 1]
+        : null;
     final ReadingChapter? nextChapter =
         session.chapterIndex + 1 < chapters.length
         ? chapters[session.chapterIndex + 1]
         : null;
-    // 只保留当前章与下一章的预取正文：读一本书不该把整本的正文都留在内存里。
-    _prunePrefetch(chapter.url, nextChapter?.url);
-    final String? currentPrefetched = _prefetchedBodies[chapter.url];
-    final String? nextPrefetched = nextChapter == null
-        ? null
-        : _prefetchedBodies[nextChapter.url];
+    // 只保留相邻三章（上一章 / 本章 / 下一章）的预取正文：读一本书不该把整本的正文都留在
+    // 内存里（ADR-0085 §决策 3）。
+    _prunePrefetch(<String>{
+      if (previousChapter != null) previousChapter.url,
+      chapter.url,
+      if (nextChapter != null) nextChapter.url,
+    });
+    if (previousChapter != null) {
+      _schedulePrefetch(previousChapter);
+    }
     if (nextChapter != null) {
       _schedulePrefetch(nextChapter);
     }
@@ -864,46 +881,74 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // ADR-0062 §决策 5：读出声时把那句话画出来。这个 provider 只在读声时才有值，
     // 所以没开 TTS 的读者只多一次空读，不会因此拉起语音引擎。
     final ReaderTtsHighlight? spoken = ref.watch(readerTtsHighlighterProvider);
-    final ({int start, int end})? spokenRange =
-        spoken != null && spoken.chapterUrl == chapter.url
-        ? (start: spoken.start, end: spoken.end)
-        : null;
+    final ReaderFlowHighlight? highlight = spoken == null
+        ? null
+        : (url: spoken.chapterUrl, start: spoken.start, end: spoken.end);
 
     // 段距与首行缩进是**排版**（ADR-0051 §决策 4）：在渲染前套一次，正文数据不动。
-    Widget bodyFor(String data) {
-      _remembered(data);
-      final String laidOut = readerBodyText(data, settings);
+    Widget flowFor(String data) {
+      final Map<String, String> bodies = <String, String>{
+        for (final ReadingChapter candidate in _flowChapters(
+          chapters,
+          session.chapterIndex,
+        ))
+          if (candidate.url == chapter.url
+                  ? data
+                  : _prefetchedBodies[candidate.url]
+              case final String body)
+            candidate.url: _laidOutBody(candidate.url, body, settings),
+      };
+      _remembered(bodies[chapter.url] ?? data);
+      final ReaderFlowRestore restore = (
+        index: session.chapterIndex,
+        charOffset: session.charOffset,
+        nonce: _restoreNonce,
+      );
+      // 排版一变（字号 / 行距 / 字体）或读者显式跳转，正文按新位置重建一次；普通滚动与跨章
+      // 接力不换实例，否则「接着往下滑」就要先重建再定位（ADR-0085 §决策 4）。
+      final ValueKey<String> key = ValueKey<String>(
+        '${settings.pageMode}|${style.fontSize}|${style.height}|'
+        '${settings.fontFamily}|$_restoreNonce',
+      );
+      final double padding = _paddingOf(settings);
+      final TextStyle highlightStyle = spokenSentenceStyle(context, style);
 
       return settings.pageMode == ReaderPageMode.scroll
-          ? _scrollBody(
-              chapter,
-              laidOut,
-              style,
-              session.charOffset,
-              palette,
-              _paddingOf(settings),
-              spokenRange,
+          ? ReaderScrollFlow(
+              key: key,
+              chapters: chapters,
+              anchorIndex: session.chapterIndex,
+              bodies: bodies,
+              failed: _prefetchFailed,
+              restore: restore,
+              highlight: highlight,
+              style: style,
+              highlightStyle: highlightStyle,
+              padding: padding,
+              onProgress: _followFlow,
+              onSettled: _settleFlow,
+              onNeedChapter: _needChapter,
             )
-          : _pagedBody(
-              chapter,
-              laidOut,
-              style,
-              session.charOffset,
-              chapters.length,
-              session.chapterIndex,
-              palette,
-              _paddingOf(settings),
-              spokenRange,
-              // 下一章正文已预取时，把它的页接在当前章后面：越过章界是连续翻页，不是加载。
-              nextText: nextPrefetched == null
-                  ? null
-                  : readerBodyText(nextPrefetched, settings),
+          : ReaderPagedFlow(
+              key: key,
+              chapters: chapters,
+              anchorIndex: session.chapterIndex,
+              bodies: bodies,
+              failed: _prefetchFailed,
+              restore: restore,
+              highlight: highlight,
+              style: style,
+              highlightStyle: highlightStyle,
+              padding: padding,
+              onProgress: _followFlow,
+              onSettled: _settleFlow,
+              onNeedChapter: _needChapter,
             );
     }
 
     // 预取的正文就是这一章的：直接渲染，不再看 provider，翻章没有加载圈。
-    if (currentPrefetched != null) {
-      return _tapZones(child: bodyFor(currentPrefetched));
+    if (_prefetchedBodies[chapter.url] case final String prefetched) {
+      return _tapZones(child: flowFor(prefetched));
     }
 
     final AsyncValue<ParseResult<String>> content = ref.watch(
@@ -915,7 +960,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       child: switch (content) {
         AsyncData<ParseResult<String>>(:final ParseResult<String> value) =>
           switch (value) {
-            ParseSuccess<String>(:final String data) => bodyFor(data),
+            ParseSuccess<String>(:final String data) => flowFor(data),
             ParseFailure<String>(:final ParseFailureKind kind) =>
               FailureMessage(
                 kind: kind,
@@ -933,14 +978,80 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  /// Keeps the prefetched bodies down to the current and the next chapter.
-  void _prunePrefetch(String currentUrl, String? nextUrl) {
+  /// The chapters the flows render around [index]: the previous one, itself and the next one.
+  List<ReadingChapter> _flowChapters(List<ReadingChapter> chapters, int index) {
+    return <ReadingChapter>[
+      if (index > 0) chapters[index - 1],
+      chapters[index],
+      if (index + 1 < chapters.length) chapters[index + 1],
+    ];
+  }
+
+  /// Follows the flow: a new chapter switches the session, a new offset inside it is progress.
+  ///
+  /// Crossing a chapter boundary is **not** a jump: the flows keep their scroll position and the
+  /// page only moves the session, which is what the tool bar, the read-aloud engine and the saved
+  /// position follow (ADR-0085 §决策 2).
+  void _followFlow(int index, int charOffset) {
+    final ReaderSession session = ref.read(
+      readerSessionProvider(_book).notifier,
+    );
+    final int? current = ref
+        .read(readerSessionProvider(_book))
+        .value
+        ?.chapterIndex;
+    _lastIndex = index;
+    _lastOffset = charOffset;
+    if (current == index) {
+      session.updateOffset(charOffset);
+
+      return;
+    }
+    unawaited(session.selectChapter(index, charOffset: charOffset));
+  }
+
+  /// Writes the position out when a scroll or a page turn settles (ADR-0044 §决策 2).
+  void _settleFlow(int index, int charOffset) {
+    _followFlow(index, charOffset);
+    unawaited(ref.read(readerSessionProvider(_book).notifier).saveProgress());
+  }
+
+  /// Reads the body of chapter [index] on the flow's behalf, retrying a failed read.
+  void _needChapter(int index) {
+    if (index < 0 || index >= _chapters.length) {
+      return;
+    }
+    final ReadingChapter chapter = _chapters[index];
+    // 接力加载与「重试」走同一条路：先清掉失败标记，否则预取会认为这一章不值得再试。
+    _prefetchFailed.remove(chapter.url);
+    _schedulePrefetch(chapter);
+  }
+
+  /// [body] with the paragraph transform of [settings] applied, computed once per body.
+  String _laidOutBody(String url, String body, ReaderSettings settings) {
+    final int signature = Object.hash(
+      settings.paragraphSpacing,
+      settings.firstLineIndent,
+      body.length,
+    );
+    final ({int signature, String text})? cached = _laidOut[url];
+    if (cached != null && cached.signature == signature) {
+      return cached.text;
+    }
+    final String text = readerBodyText(body, settings);
+    _laidOut[url] = (signature: signature, text: text);
+
+    return text;
+  }
+
+  /// Keeps the prefetched bodies down to [keep] (the neighbour window of the current chapter).
+  void _prunePrefetch(Set<String> keep) {
     _prefetchedBodies.removeWhere(
-      (String url, String _) => url != currentUrl && url != nextUrl,
+      (String url, String _) => !keep.contains(url),
     );
-    _prefetchFailed.removeWhere(
-      (String url) => url != currentUrl && url != nextUrl,
-    );
+    _prefetchFailed.removeWhere((String url) => !keep.contains(url));
+    _laidOut.removeWhere((String url, ({int signature, String text}) _) =>
+        !keep.contains(url));
   }
 
   /// Starts one real prefetch for [chapter], once per chapter URL.
@@ -970,9 +1081,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ///
   /// It deliberately does **not** listen to `readerContentProvider`: that would only keep a
   /// provider alive, not guarantee the body is in hand before the turn. The port writes the same
-  /// content cache the normal read uses, and the map below is what the next chapter renders from.
+  /// content cache the normal read uses, and the map below is what the flows render from.
+  ///
+  /// The request carries the very same chapter context as [readerContentProvider] — its place in
+  /// the TOC, the chapter after it, VIP/pay flags — because a prefetched body is now the **usual**
+  /// one: a rule that reads `nextChapterUrl` must not see a different value just because the
+  /// reader got there by scrolling (M25/S3b).
   Future<void> _prefetch(ReadingChapter chapter, int generation) async {
     try {
+      final int index = _chapters.indexWhere(
+        (ReadingChapter candidate) => candidate.url == chapter.url,
+      );
+      final String nextUrl = index >= 0 && index + 1 < _chapters.length
+          ? _chapters[index + 1].url
+          : '';
       final ParseResult<String> result = await ref
           .read(readerChapterContentProvider)
           .fetch(
@@ -982,6 +1104,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             chapterTitle: chapter.title,
             bookUrl: _book.bookUrl,
             tocUrl: _book.tocUrl,
+            nextChapterUrl: nextUrl,
+            isVip: chapter.isVip,
+            isPay: chapter.isPay,
+            isVolume: chapter.isVolume,
+            updateTime: chapter.updateTime,
           );
       if (!mounted || generation != _prefetchGeneration) {
         return;
@@ -990,12 +1117,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           when data.isNotEmpty) {
         setState(() => _prefetchedBodies[chapter.url] = data);
       } else {
-        // 失败或空正文：记下来避免每个 build 重试；打开这一章时由它自己的 provider 重试/报错。
-        _prefetchFailed.add(chapter.url);
+        // 失败或空正文：记下来避免每个 build 重试，并让占位条换成「重新加载」。
+        setState(() => _prefetchFailed.add(chapter.url));
       }
     } on Exception {
       if (mounted && generation == _prefetchGeneration) {
-        _prefetchFailed.add(chapter.url);
+        setState(() => _prefetchFailed.add(chapter.url));
       }
     } finally {
       if (generation == _prefetchGeneration) {
@@ -1031,114 +1158,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     },
   );
 
-  /// The scrolling body: one `Text`, restored once per chapter, saved when a scroll settles.
-  Widget _scrollBody(
-    ReadingChapter chapter,
-    String body,
-    TextStyle style,
-    int initialOffset,
-    ({Color background, Color foreground}) palette,
-    double padding,
-    ({int start, int end})? spokenRange,
-  ) => NotificationListener<ScrollEndNotification>(
-    onNotification: (ScrollEndNotification notification) {
-      // 滚动停下时记一次：按比例换算成字符偏移（ADR-0044 §决策 4）。
-      final double max = _scroll.hasClients
-          ? _scroll.position.maxScrollExtent
-          : 0;
-      final int offset = max <= 0
-          ? 0
-          : (_scroll.offset / max * body.length).round();
-      _rememberOffset(offset);
-      unawaited(ref.read(readerSessionProvider(_book).notifier).saveProgress());
-
-      return false;
-    },
-    child: SingleChildScrollView(
-      controller: _scroll,
-      padding: EdgeInsets.all(padding),
-      child: _restoredScrollText(
-        chapter,
-        body,
-        style,
-        initialOffset,
-        spokenRange,
-      ),
-    ),
-  );
-
-  /// The body text, jumped to [initialOffset] the first time this chapter is shown.
-  Widget _restoredScrollText(
-    ReadingChapter chapter,
-    String body,
-    TextStyle style,
-    int initialOffset,
-    ({int start, int end})? spokenRange,
-  ) {
-    if (_restoredChapterUrl != chapter.url) {
-      _restoredChapterUrl = chapter.url;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scroll.hasClients) {
-          return;
-        }
-        final double max = _scroll.position.maxScrollExtent;
-        if (max <= 0 || initialOffset <= 0 || body.isEmpty) {
-          return;
-        }
-        _scroll.jumpTo((initialOffset / body.length * max).clamp(0, max));
-      });
-    }
-
-    return readingText(
-      body: body,
-      style: style,
-      highlightStyle: spokenSentenceStyle(context, style),
-      highlight: spokenRange,
-    );
-  }
-
-  /// The paged body: pages measured by [readerPageStarts], turned horizontally.
-  Widget _pagedBody(
-    ReadingChapter chapter,
-    String body,
-    TextStyle style,
-    int initialOffset,
-    int chapterCount,
-    int chapterIndex,
-    ({Color background, Color foreground}) palette,
-    double padding,
-    ({int start, int end})? spokenRange, {
-    String? nextText,
-  }) {
-    return Padding(
-      padding: EdgeInsets.all(padding),
-      child: _PagedBody(
-        key: ValueKey<String>(
-          '${chapter.url}|${style.fontSize}|${style.height}|$_restoreNonce',
-        ),
-        text: body,
-        nextText: nextText,
-        style: style,
-        initialOffset: initialOffset,
-        foreground: palette.foreground,
-        isLastChapter: chapterIndex == chapterCount - 1,
-        spokenRange: spokenRange,
-        onOffsetChanged: _rememberOffset,
-        onNextChapter: () => unawaited(
-          ref.read(readerSessionProvider(_book).notifier).nextChapter(),
-        ),
-        onNextChapterStarted: (int charOffset) =>
-            _jumpToChapter(chapterIndex + 1, charOffset: charOffset),
-      ),
-    );
-  }
-
-  /// Remembers [offset] in the session; the next chapter switch or exit writes it.
-  void _rememberOffset(int offset) {
-    _lastOffset = offset;
-    ref.read(readerSessionProvider(_book).notifier).updateOffset(offset);
-  }
-
   /// The chapters of [chapters], or none while they load.
   List<ReadingChapter> _chaptersOf(
     AsyncValue<ParseResult<List<ReadingChapter>>> chapters,
@@ -1162,12 +1181,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return _book.name.isEmpty ? l10n.bookSourceReaderTitle : _book.name;
   }
 
-  /// Remembers the loaded body for the percent label and answers `true` (so it reads as a
-  /// condition in the layout switch).
-  bool _remembered(String body) {
+  /// Remembers the loaded body for the percent label and the bookmark excerpt.
+  void _remembered(String body) {
     _lastBody = body;
-
-    return true;
   }
 
   /// The padding the body uses, from the page-margin preset (ADR-0051 §决策 4).
@@ -1259,199 +1275,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-/// The horizontally paged body (`docs/dev/roadmap.md` 5.3, ADR-0044 §决策 4).
-///
-/// The page boundaries are measured per layout, because a page is "what fits at this font size in
-/// this box" and nothing else. The last item is the end of the chapter: it offers the next chapter
-/// instead of pretending the body continues (cross-chapter paging is registered as open).
-class _PagedBody extends StatefulWidget {
-  const _PagedBody({
-    required this.text,
-    this.nextText,
-    required this.style,
-    required this.initialOffset,
-    required this.foreground,
-    required this.isLastChapter,
-    required this.spokenRange,
-    required this.onOffsetChanged,
-    required this.onNextChapter,
-    this.onNextChapterStarted,
-    super.key,
-  });
-
-  final String text;
-
-  /// The next chapter's body when it was prefetched; its pages continue after [text].
-  final String? nextText;
-
-  final TextStyle style;
-  final int initialOffset;
-  final Color foreground;
-  final bool isLastChapter;
-
-  /// The sentence being read aloud, as an offset range of [text] (ADR-0062 §决策 5).
-  final ({int start, int end})? spokenRange;
-
-  final ValueChanged<int> onOffsetChanged;
-  final VoidCallback onNextChapter;
-
-  /// Called with the character offset when the turn enters [nextText].
-  final ValueChanged<int>? onNextChapterStarted;
-
-  @override
-  State<_PagedBody> createState() => _PagedBodyState();
-}
-
-/// State of the paged body: the page list, the controller and the restore jump.
-class _PagedBodyState extends State<_PagedBody> {
-  PageController? _controller;
-  List<int> _starts = const <int>[0];
-  List<int> _nextStarts = const <int>[];
-  bool _restored = false;
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final M3ETheme tokens = context.m3e;
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final String? nextText = widget.nextText;
-        _starts = readerPageStarts(
-          text: widget.text,
-          style: widget.style,
-          size: constraints.biggest,
-          textScaler: MediaQuery.textScalerOf(context),
-        );
-        _nextStarts = nextText == null || nextText.isEmpty
-            ? const <int>[]
-            : readerPageStarts(
-                text: nextText,
-                style: widget.style,
-                size: constraints.biggest,
-                textScaler: MediaQuery.textScalerOf(context),
-              );
-        final int currentPages = _starts.length;
-        final int nextPages = _nextStarts.length;
-        final bool hasNext = nextPages > 0;
-        final PageController controller = _controller ??= PageController(
-          // 从预取页跨章时，新实例直接落在被滑到的那一页，而不是先画首页再跳。
-          initialPage: readerPageOf(_starts, widget.initialOffset),
-        );
-        _restoreOnce(controller);
-
-        return PageView.builder(
-          controller: controller,
-          itemCount: currentPages + (hasNext ? nextPages : 1),
-          onPageChanged: (int page) {
-            if (page < currentPages) {
-              widget.onOffsetChanged(_starts[page]);
-            } else if (hasNext) {
-              // 越过章界：把会话切到下一章，并落在这一页的字符偏移上。
-              widget.onNextChapterStarted?.call(
-                _nextStarts[page - currentPages],
-              );
-            }
-          },
-          itemBuilder: (BuildContext context, int page) {
-            if (page < currentPages) {
-              final int start = _starts[page];
-              final int end = page + 1 < currentPages
-                  ? _starts[page + 1]
-                  : widget.text.length;
-
-              return SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                child: readingText(
-                  body: widget.text,
-                  start: start,
-                  end: end,
-                  style: widget.style,
-                  highlightStyle: spokenSentenceStyle(context, widget.style),
-                  highlight: widget.spokenRange,
-                ),
-              );
-            }
-            if (hasNext && nextText != null) {
-              final int nextPage = page - currentPages;
-              final int start = _nextStarts[nextPage];
-              final int end = nextPage + 1 < nextPages
-                  ? _nextStarts[nextPage + 1]
-                  : nextText.length;
-
-              return SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
-                child: readingText(
-                  body: nextText,
-                  start: start,
-                  end: end,
-                  style: widget.style,
-                  highlightStyle: spokenSentenceStyle(context, widget.style),
-                  highlight: null,
-                ),
-              );
-            }
-
-            return _chapterEnd(l10n, tokens);
-          },
-        );
-      },
-    );
-  }
-
-  /// Jumps to the page that holds the restored offset, once.
-  void _restoreOnce(PageController controller) {
-    if (_restored || widget.initialOffset <= 0) {
-      return;
-    }
-    _restored = true;
-    final int page = readerPageOf(_starts, widget.initialOffset);
-    if (page == 0) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && controller.hasClients) {
-        controller.jumpToPage(page);
-      }
-    });
-  }
-
-  /// The last page: the chapter is over, the next one is one tap away.
-  Widget _chapterEnd(AppLocalizations l10n, M3ETheme tokens) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(tokens.spacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              widget.isLastChapter
-                  ? l10n.readerLastChapter
-                  : l10n.readerChapterEnd,
-              style: tokens.typography.base.bodyLarge?.copyWith(
-                color: widget.foreground,
-              ),
-            ),
-            if (!widget.isLastChapter) ...<Widget>[
-              SizedBox(height: tokens.spacing.lg),
-              FilledButton(
-                onPressed: widget.onNextChapter,
-                child: Text(l10n.readerNextChapter),
-              ),
-            ],
-          ],
         ),
       ),
     );

@@ -1216,11 +1216,17 @@ abstract class AppLocalizations {
   /// **'Next chapter'**
   String get readerNextChapter;
 
-  /// Shown on the last page of a chapter in paged mode.
+  /// Shown where a chapter that has not arrived yet will appear.
   ///
   /// In en, this message translates to:
-  /// **'End of this chapter'**
-  String get readerChapterEnd;
+  /// **'Loading the neighbouring chapter…'**
+  String get readerChapterLoading;
+
+  /// Action that tries to read a neighbouring chapter again.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload this chapter'**
+  String get readerChapterRetry;
 
   /// Shown when the open chapter is the last one.
   ///

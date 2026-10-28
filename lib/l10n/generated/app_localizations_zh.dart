@@ -609,7 +609,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerNextChapter => '下一章';
 
   @override
-  String get readerChapterEnd => '本章读完';
+  String get readerChapterLoading => '正在加载相邻章节…';
+
+  @override
+  String get readerChapterRetry => '重新加载这一章';
 
   @override
   String get readerLastChapter => '已是最后一章';

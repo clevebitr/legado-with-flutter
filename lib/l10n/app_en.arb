@@ -840,9 +840,13 @@
   "@readerNextChapter": {
     "description": "Action that opens the next chapter."
   },
-  "readerChapterEnd": "End of this chapter",
-  "@readerChapterEnd": {
-    "description": "Shown on the last page of a chapter in paged mode."
+  "readerChapterLoading": "Loading the neighbouring chapter…",
+  "@readerChapterLoading": {
+    "description": "Shown where a chapter that has not arrived yet will appear."
+  },
+  "readerChapterRetry": "Reload this chapter",
+  "@readerChapterRetry": {
+    "description": "Action that tries to read a neighbouring chapter again."
   },
   "readerLastChapter": "This is the last chapter",
   "@readerLastChapter": {

@@ -51,6 +51,38 @@ List<int> readerPageStarts({
   return starts;
 }
 
+/// The height [text] occupies at [style] inside a [width]-wide box.
+///
+/// The continuous scroll flow stacks whole chapters instead of pages, so it has no page numbers to
+/// count: it needs the rendered height of each chapter to answer three questions with the same one
+/// measurement (`docs/dev/adr/0085-continuous-chapter-reading.md`):
+///
+/// * which chapter the top of the viewport is in, and how far into it (the estimate of
+///   ADR-0044 §决策 4);
+/// * how far the scroll offset has to move when a chapter is prepended or dropped above it, so the
+///   text under the reader's eyes never shifts;
+/// * whether the end of the last chapter in hand is close enough to ask for the next one.
+///
+/// It uses the same measurement as [readerPageStarts] — a [TextPainter] at the width and
+/// [textScaler] the viewport will use — because the very same `Text` paints the body afterwards.
+double readerTextHeight({
+  required String text,
+  required TextStyle style,
+  required double width,
+  required TextScaler textScaler,
+}) {
+  if (text.isEmpty || width <= 0) {
+    return 0;
+  }
+  final TextPainter painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: TextDirection.ltr,
+    textScaler: textScaler,
+  )..layout(maxWidth: width);
+
+  return painter.height;
+}
+
 /// The index of the page that contains [charOffset] (`docs/dev/roadmap.md` 5.3).
 ///
 /// Restoration uses it to turn a stored offset back into a page number; an offset past the end
