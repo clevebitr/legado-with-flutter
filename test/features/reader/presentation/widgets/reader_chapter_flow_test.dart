@@ -51,10 +51,7 @@ void main() {
         includePrevious: true,
       );
 
-      expect(
-        slots.map((ReaderFlowChapter slot) => slot.index),
-        <int>[0, 1, 2],
-      );
+      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[0, 1, 2]);
     });
 
     test('of_givenTheFirstChapter_hasNoPreviousSlot', () {
@@ -132,10 +129,7 @@ void main() {
       var retried = 0;
       await _pumpStrip(
         tester,
-        ReaderChapterPendingStrip(
-          isFailed: true,
-          onRetry: () => retried++,
-        ),
+        ReaderChapterPendingStrip(isFailed: true, onRetry: () => retried++),
       );
 
       // 读失败的章不能一直画成「还在加载」。

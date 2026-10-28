@@ -623,7 +623,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerNextChapter => '下一章';
 
   @override
-  String get readerChapterLoading => '正在加载相邻章节…';
+  String get readerChapterLoading => '正在加载…';
 
   @override
   String get readerChapterRetry => '重新加载这一章';

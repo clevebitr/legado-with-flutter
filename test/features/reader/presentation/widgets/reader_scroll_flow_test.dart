@@ -104,10 +104,7 @@ void main() {
     ) async {
       await _pumpFlow(
         tester,
-        bodies: <int, String>{
-          0: _body('第一章'),
-          1: _body('第二章'),
-        },
+        bodies: <int, String>{0: _body('第一章'), 1: _body('第二章')},
       );
 
       // 章标题印在正文之前（ADR-0086 §决策 7）；每章只出现一次。
@@ -137,20 +134,21 @@ void main() {
       expect(find.text('同一份正文'), findsNWidgets(2));
     });
 
-    testWidgets('build_givenTheNextBodyMissing_printsItsTitleAndALoadingBlock', (
-      WidgetTester tester,
-    ) async {
-      final _Probe probe = await _pumpFlow(
-        tester,
-        bodies: <int, String>{0: _body('第一章')},
-      );
+    testWidgets(
+      'build_givenTheNextBodyMissing_printsItsTitleAndALoadingBlock',
+      (WidgetTester tester) async {
+        final _Probe probe = await _pumpFlow(
+          tester,
+          bodies: <int, String>{0: _body('第一章')},
+        );
 
-      // 下一章还没到：标题先出来，正文位置是「正在加载」，并且流程自己去要这一章。
-      expect(find.text('第2章'), findsOneWidget);
-      expect(find.byType(ReaderChapterPendingStrip), findsOneWidget);
-      expect(find.text('Loading…'), findsOneWidget);
-      expect(probe.requested, contains(1));
-    });
+        // 下一章还没到：标题先出来，正文位置是「正在加载」，并且流程自己去要这一章。
+        expect(find.text('第2章'), findsOneWidget);
+        expect(find.byType(ReaderChapterPendingStrip), findsOneWidget);
+        expect(find.text('Loading…'), findsOneWidget);
+        expect(probe.requested, contains(1));
+      },
+    );
 
     testWidgets('build_givenTheAnchorBodyMissing_printsItsTitleAndLoading', (
       WidgetTester tester,
@@ -184,10 +182,7 @@ void main() {
     ) async {
       final _Probe probe = await _pumpFlow(
         tester,
-        bodies: <int, String>{
-          0: _body('第一章'),
-          1: _body('第二章'),
-        },
+        bodies: <int, String>{0: _body('第一章'), 1: _body('第二章')},
       );
 
       await _scrollBy(tester, -6000);
@@ -202,10 +197,7 @@ void main() {
       final _Probe probe = await _pumpFlow(
         tester,
         anchorIndex: 1,
-        bodies: <int, String>{
-          0: _body('第一章'),
-          1: _body('第二章'),
-        },
+        bodies: <int, String>{0: _body('第一章'), 1: _body('第二章')},
         // 从第二章开头读起，向上滑就该回到第一章的尾巴。
         restore: (index: 1, charOffset: 0, nonce: 1),
       );
@@ -221,10 +213,7 @@ void main() {
     ) async {
       final _Probe probe = await _pumpFlow(
         tester,
-        bodies: <int, String>{
-          0: _body('第一章'),
-          1: _body('第二章'),
-        },
+        bodies: <int, String>{0: _body('第一章'), 1: _body('第二章')},
         restore: (index: 1, charOffset: 10, nonce: 1),
       );
 
@@ -252,10 +241,7 @@ void main() {
     ) async {
       await _pumpFlow(
         tester,
-        bodies: <int, String>{
-          0: _body('第一章'),
-          1: _body('第二章'),
-        },
+        bodies: <int, String>{0: _body('第一章'), 1: _body('第二章')},
         highlight: (url: 'https://source.test/2.html', start: 0, end: 2),
       );
 

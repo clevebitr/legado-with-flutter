@@ -61,9 +61,11 @@ class ReaderChapterSlots {
       return const <ReaderFlowChapter>[];
     }
     final List<ReaderFlowChapter> slots = <ReaderFlowChapter>[
-      if (includePrevious && anchorIndex > 0) _slot(chapters, bodies, anchorIndex - 1),
+      if (includePrevious && anchorIndex > 0)
+        _slot(chapters, bodies, anchorIndex - 1),
       _slot(chapters, bodies, anchorIndex),
-      if (anchorIndex + 1 < chapters.length) _slot(chapters, bodies, anchorIndex + 1),
+      if (anchorIndex + 1 < chapters.length)
+        _slot(chapters, bodies, anchorIndex + 1),
     ];
 
     return slots;

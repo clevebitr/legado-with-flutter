@@ -162,8 +162,12 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   );
 
   /// The measuring signature: a change here invalidates every measured page list.
-  int get _signature =>
-      Object.hash(_size.width, _size.height, widget.style, _textScaler.scale(1));
+  int get _signature => Object.hash(
+    _size.width,
+    _size.height,
+    widget.style,
+    _textScaler.scale(1),
+  );
 
   /// The page starts of [chapter], measured once per size, style and text scale.
   List<int> _startsOf(ReaderFlowChapter chapter) {
@@ -344,8 +348,7 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
 
   /// Whether the last rendered chapter is the book's last chapter.
   bool get _isLastChapter =>
-      _visible.isNotEmpty &&
-      _visible.last.index == widget.chapters.length - 1;
+      _visible.isNotEmpty && _visible.last.index == widget.chapters.length - 1;
 
   /// The page the flow opens at for the pending restore.
   int _pageKey(int fallback) {

@@ -1243,7 +1243,7 @@ abstract class AppLocalizations {
   /// Shown where a chapter that has not arrived yet will appear.
   ///
   /// In en, this message translates to:
-  /// **'Loading the neighbouring chapter…'**
+  /// **'Loading…'**
   String get readerChapterLoading;
 
   /// Action that tries to read a neighbouring chapter again.

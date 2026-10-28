@@ -650,7 +650,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerNextChapter => 'Next chapter';
 
   @override
-  String get readerChapterLoading => 'Loading the neighbouring chapter…';
+  String get readerChapterLoading => 'Loading…';
 
   @override
   String get readerChapterRetry => 'Reload this chapter';

@@ -105,7 +105,8 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
     int,
     ({int signature, int length, int titleLength, _Measure measure})
   >
-  _heights = <int, ({int signature, int length, int titleLength, _Measure measure})>{};
+  _heights =
+      <int, ({int signature, int length, int titleLength, _Measure measure})>{};
 
   /// The slots currently rendered, in reading order.
   List<ReaderFlowChapter> _slots = const <ReaderFlowChapter>[];
@@ -196,8 +197,8 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
     final int signature = _signature;
     final int length = chapter.text?.length ?? 0;
     final int titleLength = chapter.title.length;
-    final ({int signature, int length, int titleLength, _Measure measure})? cached =
-        _heights[chapter.index];
+    final ({int signature, int length, int titleLength, _Measure measure})?
+    cached = _heights[chapter.index];
     if (cached != null &&
         cached.signature == signature &&
         cached.length == length &&
@@ -603,9 +604,8 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
       final bool settle = _settlePending;
       _settlePending = false;
       if (settle) {
-        final ({int index, int charOffset, double fraction})? anchor = _anchorAt(
-          _offset,
-        );
+        final ({int index, int charOffset, double fraction})? anchor =
+            _anchorAt(_offset);
         if (anchor != null) {
           widget.onSettled(anchor.index, anchor.charOffset);
         }
@@ -658,7 +658,10 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
       return null;
     }
 
-    return (index: anchor.index, charOffset: (anchor.fraction * body.length).round());
+    return (
+      index: anchor.index,
+      charOffset: (anchor.fraction * body.length).round(),
+    );
   }
 
   /// Collects the scroll metrics and schedules the frame's bookkeeping.
