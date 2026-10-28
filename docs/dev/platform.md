@@ -75,6 +75,7 @@ Please enable Developer Mode in your system settings.
 | `HapticsController` | 触感反馈能力探测与降级 | 组件内调用，不判断平台 |
 | `LongRunningTask` | 长任务的前台标记（Android 为 `PARTIAL_WAKE_LOCK`） | 批量书源校验开始 / 结束时 `acquire` / `release`（ADR-0043 §决策 3） |
 | `PlaybackNotification` | 媒体通知 / 锁屏控制（Android / iOS 由 `audio_service` 实现；Windows 返回 no-op 的 `null` 句柄） | 音频播放器在播放状态变化时 `attach` / `update` / `detach`；**UI 不判断平台**（ADR-0054 §决策 3/4） |
+| `SourceCheckNotification` | 批量校验的**状态通知**（Android 用 `MainActivity` 的 `NotificationManager`：当前源名 + completed/total + 进度条 + 完成提醒；其他平台 no-op） | `SourceCheck` notifier 在每次结论后推一条进度、收尾推结果；文案由页面从 ARB 传入（C-UI-5）。**不是**前台服务：校验仍在主 isolate 里跑，通知只解决「切到后台也能看见进度」（与上游 `BookSourceCheckService` 的差异：没有 Service 保活，ADR-0043 的「无前台服务」登记不变） |
 | `WebPageFetcher` | `,{webView:…}` 的 headless WebView（三端）；不支持的平台 `isSupported == false`，调用方回落普通 GET | `PageFetchService` 在 `webView` + GET + 无 body 时调用（ADR-0061 §决策 4） |
 | `usesMediaKitPlayback` | 播放后端的平台选择：Windows 用 media_kit，Android / iOS 用 just_audio | `reader/di.dart` 选适配器；**业务层不判断平台**（ADR-0061 §决策 1） |
 | `FileSharer` | 系统分享面板（Android `ACTION_SEND` / iOS `UIActivityViewController`）；不支持的平台 `isSupported == false` | 移动端的导出（书源 / 净化规则 / 备份）与日志页在 `isSupported` 时用分享代替保存对话框；**UI 只问能力，不判断平台**（ADR-0083） |

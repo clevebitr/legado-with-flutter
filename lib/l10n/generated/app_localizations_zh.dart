@@ -466,6 +466,26 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get bookSourceCheckNotificationChannel => '书源校验';
+
+  @override
+  String get bookSourceCheckNotificationTitle => '正在校验书源';
+
+  @override
+  String bookSourceCheckNotificationProgress(
+    String name,
+    int completed,
+    int total,
+  ) {
+    return '$name · $completed/$total';
+  }
+
+  @override
+  String bookSourceCheckNotificationFinished(int succeeded, int failed) {
+    return '校验完成：成功 $succeeded，失败 $failed';
+  }
+
+  @override
   String get bookSourceCheckOpenDebug => '调试该书源';
 
   @override

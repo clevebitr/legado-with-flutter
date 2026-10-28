@@ -622,6 +622,68 @@ final class LongRunningTaskProvider
 
 String _$longRunningTaskHash() => r'c4f24b2ab4e07af40943e68f73e182a163752df6';
 
+/// Provides the batch check's progress notification.
+///
+/// Only Android has a system notification surface here; other platforms (and the tests) get the
+/// no-op. The check itself never depends on it.
+
+@ProviderFor(sourceCheckNotification)
+final sourceCheckNotificationProvider = SourceCheckNotificationProvider._();
+
+/// Provides the batch check's progress notification.
+///
+/// Only Android has a system notification surface here; other platforms (and the tests) get the
+/// no-op. The check itself never depends on it.
+
+final class SourceCheckNotificationProvider
+    extends
+        $FunctionalProvider<
+          SourceCheckNotification,
+          SourceCheckNotification,
+          SourceCheckNotification
+        >
+    with $Provider<SourceCheckNotification> {
+  /// Provides the batch check's progress notification.
+  ///
+  /// Only Android has a system notification surface here; other platforms (and the tests) get the
+  /// no-op. The check itself never depends on it.
+  SourceCheckNotificationProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sourceCheckNotificationProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sourceCheckNotificationHash();
+
+  @$internal
+  @override
+  $ProviderElement<SourceCheckNotification> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SourceCheckNotification create(Ref ref) {
+    return sourceCheckNotification(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SourceCheckNotification value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SourceCheckNotification>(value),
+    );
+  }
+}
+
+String _$sourceCheckNotificationHash() =>
+    r'529c720021995b4f62262d3f97c698239590c027';
+
 /// Provides visible-WebView verification, unbound by default.
 ///
 /// An unbound port answers `isSupported == false`, which surfaces as

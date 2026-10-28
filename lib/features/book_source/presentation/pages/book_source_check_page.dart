@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/platform/source_check_notification.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
@@ -446,7 +447,7 @@ class _BookSourceCheckPageState extends ConsumerState<BookSourceCheckPage> {
               child: FilledButton.icon(
                 onPressed: state.isRunning
                     ? () => ref.read(sourceCheckProvider.notifier).cancel()
-                    : () => _start(state),
+                    : () => _start(state, l10n),
                 icon: Icon(
                   state.isRunning ? Icons.stop : Icons.fact_check_outlined,
                 ),
@@ -467,7 +468,7 @@ class _BookSourceCheckPageState extends ConsumerState<BookSourceCheckPage> {
   ///
   /// 运行的集合 = 当前筛选留下的行 ∩ 用户的勾选（ADR-0057）：筛选本身就是「哪些源参与」的
   /// 第一层答案，旧的「未勾选就把全库丢进去」会把 500 条源全跑一遍。
-  void _start(SourceCheckState state) {
+  void _start(SourceCheckState state, AppLocalizations l10n) {
     final List<StoredBookSource> sources =
         ref.read(bookSourceListProvider).value ?? <StoredBookSource>[];
     final Set<int> selected = _effectiveSelection(_visible(sources));
@@ -486,8 +487,23 @@ class _BookSourceCheckPageState extends ConsumerState<BookSourceCheckPage> {
       return;
     }
 
-    unawaited(ref.read(sourceCheckProvider.notifier).start(chosen));
+    unawaited(
+      ref
+          .read(sourceCheckProvider.notifier)
+          .start(chosen, notification: _notificationText(l10n)),
+    );
   }
+
+  /// The localized text of the system notification a run may show (Android).
+  SourceCheckNotificationText _notificationText(AppLocalizations l10n) =>
+      SourceCheckNotificationText(
+        channelName: l10n.bookSourceCheckNotificationChannel,
+        title: l10n.bookSourceCheckNotificationTitle,
+        progress: (String name, int completed, int total) =>
+            l10n.bookSourceCheckNotificationProgress(name, completed, total),
+        finished: (int succeeded, int failed) =>
+            l10n.bookSourceCheckNotificationFinished(succeeded, failed),
+      );
 
   /// The ids the start button will run: the visible rows, narrowed by the ticks.
   ///

@@ -641,6 +641,41 @@
       }
     }
   },
+  "bookSourceCheckNotificationChannel": "Book source check",
+  "@bookSourceCheckNotificationChannel": {
+    "description": "Name of the Android notification channel used by the batch check."
+  },
+  "bookSourceCheckNotificationTitle": "Checking book sources",
+  "@bookSourceCheckNotificationTitle": {
+    "description": "Title of the ongoing notification shown while a batch check runs."
+  },
+  "bookSourceCheckNotificationProgress": "{name} · {completed}/{total}",
+  "@bookSourceCheckNotificationProgress": {
+    "description": "Line of the ongoing check notification: the source being checked and the progress.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "bookSourceCheckNotificationFinished": "Check finished: {succeeded} passed, {failed} failed",
+  "@bookSourceCheckNotificationFinished": {
+    "description": "Text of the notification shown when a batch check finishes.",
+    "placeholders": {
+      "succeeded": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
   "bookSourceCheckOpenDebug": "Debug this source",
   "@bookSourceCheckOpenDebug": {
     "description": "Tooltip of the action that opens the debug console."

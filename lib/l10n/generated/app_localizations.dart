@@ -942,6 +942,34 @@ abstract class AppLocalizations {
   /// **'Took {millis} ms'**
   String bookSourceCheckElapsed(int millis);
 
+  /// Name of the Android notification channel used by the batch check.
+  ///
+  /// In en, this message translates to:
+  /// **'Book source check'**
+  String get bookSourceCheckNotificationChannel;
+
+  /// Title of the ongoing notification shown while a batch check runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking book sources'**
+  String get bookSourceCheckNotificationTitle;
+
+  /// Line of the ongoing check notification: the source being checked and the progress.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {completed}/{total}'**
+  String bookSourceCheckNotificationProgress(
+    String name,
+    int completed,
+    int total,
+  );
+
+  /// Text of the notification shown when a batch check finishes.
+  ///
+  /// In en, this message translates to:
+  /// **'Check finished: {succeeded} passed, {failed} failed'**
+  String bookSourceCheckNotificationFinished(int succeeded, int failed);
+
   /// Tooltip of the action that opens the debug console.
   ///
   /// In en, this message translates to:

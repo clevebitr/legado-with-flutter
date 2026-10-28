@@ -22,6 +22,7 @@ import 'package:flutter_reader/core/platform/secret_store.dart';
 import 'package:flutter_reader/core/platform/share_plus_file_sharer.dart';
 import 'package:flutter_reader/core/platform/sharing_backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/sharing_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/source_check_notification.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -155,6 +156,16 @@ LongRunningTask longRunningTask(Ref ref) =>
     ref.watch(platformInfoProvider).isAndroid
     ? MethodChannelLongRunningTask(logger: ref.watch(appLoggerProvider))
     : const UnsupportedLongRunningTask();
+
+/// Provides the batch check's progress notification.
+///
+/// Only Android has a system notification surface here; other platforms (and the tests) get the
+/// no-op. The check itself never depends on it.
+@Riverpod(keepAlive: true)
+SourceCheckNotification sourceCheckNotification(Ref ref) =>
+    ref.watch(platformInfoProvider).isAndroid
+    ? MethodChannelSourceCheckNotification(logger: ref.watch(appLoggerProvider))
+    : const NoopSourceCheckNotification();
 
 /// Provides visible-WebView verification, unbound by default.
 ///

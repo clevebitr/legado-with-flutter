@@ -491,6 +491,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get bookSourceCheckNotificationChannel => 'Book source check';
+
+  @override
+  String get bookSourceCheckNotificationTitle => 'Checking book sources';
+
+  @override
+  String bookSourceCheckNotificationProgress(
+    String name,
+    int completed,
+    int total,
+  ) {
+    return '$name · $completed/$total';
+  }
+
+  @override
+  String bookSourceCheckNotificationFinished(int succeeded, int failed) {
+    return 'Check finished: $succeeded passed, $failed failed';
+  }
+
+  @override
   String get bookSourceCheckOpenDebug => 'Debug this source';
 
   @override
