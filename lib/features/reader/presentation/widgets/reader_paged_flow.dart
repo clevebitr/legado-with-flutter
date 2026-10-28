@@ -126,18 +126,20 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   /// Guards the flow's own page jumps: their notifications are not reader turns.
   bool _compensating = false;
 
+  /// The pages the rendered window still owes the reader, applied after the frame.
+  ///
+  /// `jumpToPage` cannot run while the tree builds or lays out: it dispatches a scroll notification
+  /// the app bar listens to, and marking a widget dirty there is an assertion.
+  int _pendingPageJump = 0;
+
+  /// Whether the one post-frame pass of this frame is already scheduled.
+  bool _frameScheduled = false;
+
+  /// Whether the last notification of this frame ended a drag.
+  bool _settlePending = false;
+
   /// The position to re-land on after the pages were re-measured (a rotated screen), if any.
   ({int index, int charOffset})? _pendingReland;
-
-  @override
-  void initState() {
-    super.initState();
-    _visible = _window.sync(
-      chapters: widget.chapters,
-      anchorIndex: widget.anchorIndex,
-      bodies: widget.bodies,
-    );
-  }
 
   @override
   void dispose() {
@@ -246,12 +248,15 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
     _leadingPages = anchorLeading;
     if (compensate && added != 0) {
       // 上方多了 / 少了 added 页：页码跟着挪同样多，手指下的那段字不动。
-      _jumpPages(added);
+      _pendingPageJump += added;
+      _scheduleFrame();
     }
   }
 
-  /// Moves the controller by [pages] pages without letting the notification be read as a turn.
-  void _jumpPages(int pages) {
+  /// Moves the controller by the pending pages, after the frame.
+  void _applyPendingJump() {
+    final int pages = _pendingPageJump;
+    _pendingPageJump = 0;
     final PageController? controller = _controller;
     if (pages == 0 || controller == null || !controller.hasClients) {
       return;
@@ -260,8 +265,16 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
     if (extent <= 0) {
       return;
     }
+    final ScrollPosition position = controller.position;
+    final double target = (position.pixels + pages * extent).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if (target == position.pixels) {
+      return;
+    }
     _compensating = true;
-    controller.position.jumpTo(controller.position.pixels + pages * extent);
+    position.jumpTo(target);
     _compensating = false;
   }
 
@@ -272,6 +285,16 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           final Size size = constraints.biggest;
+          if (_visible.isEmpty) {
+            _visible = _window.sync(
+              chapters: widget.chapters,
+              anchorIndex: widget.anchorIndex,
+              bodies: widget.bodies,
+            );
+            _size = size;
+            _textScaler = MediaQuery.textScalerOf(context);
+            _measurePages(compensate: false);
+          }
           if (size != _size) {
             // 视口变了（旋屏 / 改窗口）：页要重排，页码没有意义了，位置按字符偏移重找。
             final _FlowPage? current = _currentPage();
@@ -286,7 +309,7 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
               );
             }
           }
-          WidgetsBinding.instance.addPostFrameCallback((_) => _afterLayout());
+          _scheduleFrame();
 
           final int pageCount = _visible.isEmpty
               ? 0
@@ -377,27 +400,51 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
     });
   }
 
-  /// Reads the settled page after layout: it asks for a pending neighbour and reports the page.
-  void _afterLayout() {
-    final PageController? controller = _controller;
-    if (!mounted || controller == null || !controller.hasClients) {
+  /// Schedules this frame's bookkeeping, once.
+  ///
+  /// The page jumps, the requests and the report all run here rather than in `build` or inside a
+  /// scroll notification, where the tree may be laying out another widget.
+  void _scheduleFrame() {
+    if (_frameScheduled) {
       return;
     }
-    _reland(controller);
-    final int page = (controller.page ?? 0).round();
-    final int position = page - (_leadingPending ? 1 : 0);
-    // 提前一页接力：等翻到占位页再抓，读者看到的仍是一次「正在加载」。
-    if (position <= 0) {
-      if (_beforeIndex case final int before) {
-        _request(before, isBefore: true);
+    _frameScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _frameScheduled = false;
+      if (!mounted) {
+        return;
       }
-    }
-    if (position >= _pages.length - 1) {
-      if (_afterIndex case final int after) {
-        _request(after, isBefore: false);
+      _applyPendingJump();
+      final PageController? controller = _controller;
+      if (controller == null || !controller.hasClients) {
+        return;
       }
-    }
-    _reportCurrentPage();
+      _reland(controller);
+      final int position =
+          (controller.page ?? 0).round() - (_leadingPending ? 1 : 0);
+      // 提前一页接力：等翻到占位页再抓，读者看到的仍是一次「正在加载」。
+      if (position <= 0) {
+        if (_beforeIndex case final int before) {
+          _request(before, isBefore: true);
+        }
+      }
+      if (position >= _pages.length - 1) {
+        if (_afterIndex case final int after) {
+          _request(after, isBefore: false);
+        }
+      }
+      _reportCurrentPage();
+      final bool settle = _settlePending;
+      _settlePending = false;
+      if (settle) {
+        final _FlowPage? page = _currentPage();
+        if (page != null) {
+          widget.onSettled(page.index, page.start);
+        }
+        _frozen = null;
+        _reconcile();
+      }
+    });
   }
 
   /// The page the viewport shows, or `null` on a placeholder page.
@@ -435,7 +482,11 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   /// still to be applied.
   void _reportCurrentPage() {
     final PageController? controller = _controller;
-    if (controller == null || !controller.hasClients || _restorePending) {
+    if (controller == null ||
+        !controller.hasClients ||
+        _restorePending ||
+        // 页码还没补上时，此刻的页号指向的是「挪动前」的那一页：报出去会把会话带到别处。
+        _pendingPageJump != 0) {
       return;
     }
     final int page = (controller.page ?? 0).round();
@@ -454,17 +505,16 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
     return restore != null && restore.nonce != _appliedRestoreNonce;
   }
 
-  /// Handles the page turning: reports the new position and keeps the window honest.
+  /// Handles the page turning: the report and the write-out run after the frame.
+  ///
+  /// `PageView` reports the new page from a scroll notification, which can be dispatched while a
+  /// viewport corrects its own pixels — a provider write there is a `markNeedsBuild during build`.
   void _onPageChanged(int page) {
-    final int position = page - (_leadingPending ? 1 : 0);
-    if (position >= 0 && position < _pages.length) {
-      final _FlowPage flowPage = _pages[position];
-      widget.onSettled(flowPage.index, flowPage.start);
-    }
-    _reportCurrentPage();
+    _settlePending = true;
+    _scheduleFrame();
   }
 
-  /// Freezes the window while the reader drags, and reconciles it once the turn settles.
+  /// Freezes the window while the reader drags; the settle itself runs after the frame.
   bool _onNotification(ScrollNotification notification) {
     if (_compensating) {
       return false;
@@ -474,8 +524,8 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
       _frozen = _visible;
     }
     if (notification is ScrollEndNotification) {
-      _frozen = null;
-      _reconcile();
+      _settlePending = true;
+      _scheduleFrame();
     }
 
     return false;

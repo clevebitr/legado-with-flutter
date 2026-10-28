@@ -446,7 +446,8 @@ void main() {
       ].join('\n');
 
       await _pump(tester, fixture);
-      await tester.drag(find.byType(ReaderScrollFlow), const Offset(0, -4000));
+      // 一次拖到底：两章的正文加起来远高于一屏，滑到末尾的视口顶一定落在第二章里。
+      await tester.drag(find.byType(ReaderScrollFlow), const Offset(0, -40000));
       await tester.pumpAndSettle();
 
       // 一路滑下去：会话自己进了第二章，进度也落了盘。

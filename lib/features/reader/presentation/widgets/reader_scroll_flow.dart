@@ -129,6 +129,25 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   /// Guards the flow's own offset jumps: their notifications are not reader scrolls.
   bool _compensating = false;
 
+  /// The offset the rendered window change still owes the reader, applied after the frame.
+  ///
+  /// It cannot be applied while the tree is building or laying out: `jumpTo` dispatches a
+  /// [ScrollNotification] that the app bar listens to, and marking a widget dirty there is illegal
+  /// (it threw `_RenderLayoutBuilder was mutated in _RenderSingleChildViewport.performLayout`).
+  double _pendingJump = 0;
+
+  /// Whether the one post-frame pass of this frame is already scheduled.
+  bool _frameScheduled = false;
+
+  /// Whether the last notification of this frame ended a scroll (a settle).
+  bool _settlePending = false;
+
+  /// Whether the chapters below the anchor fill a viewport, so a chapter may sit above it.
+  ///
+  /// A shorter body cannot hold the anchor at the top of the screen: the content above would push
+  /// it off and no scroll offset could compensate (there is nowhere to scroll to).
+  bool _canHoldAbove = false;
+
   /// Whether the pending strip above / below the flow is on screen.
   bool _showBefore = false;
   bool _showAfter = false;
@@ -136,16 +155,6 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   /// The chapter each pending strip already asked for, so one fetch is one request.
   int? _requestedBefore;
   int? _requestedAfter;
-
-  @override
-  void initState() {
-    super.initState();
-    _visible = _window.sync(
-      chapters: widget.chapters,
-      anchorIndex: widget.anchorIndex,
-      bodies: widget.bodies,
-    );
-  }
 
   @override
   void dispose() {
@@ -211,30 +220,99 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   /// Replaces the rendered chapters, keeping the anchor where the reader sees it.
   void _applyStructure(List<ReaderFlowChapter> next) {
     // 锚点章的正文可能还没到（刚跳章）：空窗口会把正文抹掉，宁可先什么都不换。
-    if (next.isEmpty || _sameChapters(_visible, next)) {
-      if (next.isNotEmpty) {
-        _visible = next;
-      }
-
+    if (next.isEmpty) {
       return;
     }
     final int anchorIndex = _anchor?.index ?? widget.anchorIndex;
+    final int anchorPosition = next.indexWhere(
+      (ReaderFlowChapter chapter) => chapter.index == anchorIndex,
+    );
+    if (anchorPosition < 0) {
+      // 锚点章不在新窗口里（换书 / 换源）：位置交给 restore 处理。
+      _visible = next;
+      _tops = _topsOf(next);
+
+      return;
+    }
+    final bool holds =
+        _holdsAbove(next, anchorPosition, _topsOf(next)) &&
+        (_alreadyAbove(anchorIndex) || _offset <= _viewportHeight);
+    // 锚点以下撑不起一屏时不画上面的章：那样的正文会被顶出屏幕，而偏移无处可补
+    // （可滚动范围小于要补的高度），会话会被拽回上一章。已经画出来的上章也不会因为
+    // 读者往下滑就被撤掉——撤掉要挪偏移，而挪偏移正是「手指下的字跳一下」。
+    final List<ReaderFlowChapter> rendered = holds
+        ? next
+        : next.sublist(anchorPosition);
+    if (_sameChapters(_visible, rendered)) {
+      _visible = rendered;
+
+      return;
+    }
+    final List<double> tops = _topsOf(rendered);
     final int before = _visible.indexWhere(
       (ReaderFlowChapter chapter) => chapter.index == anchorIndex,
     );
-    final List<double> oldTops = _topsOf(_visible);
-    final List<double> newTops = _topsOf(next);
-    final int after = next.indexWhere(
+    final int after = rendered.indexWhere(
       (ReaderFlowChapter chapter) => chapter.index == anchorIndex,
     );
-    _visible = next;
-    _tops = newTops;
-    if (before < 0 || after < 0) {
-      // 锚点章不在新旧任一窗口里（换书 / 换源）：位置交给 restore 处理。
+    final bool firstFill = _visible.isEmpty || _tops.length != _visible.length;
+    final double oldTop = firstFill ? tops[after] : _tops[before];
+    _visible = rendered;
+    _tops = tops;
+    if (firstFill || before < 0) {
       return;
     }
     // 锚点上方的内容高度变了多少，偏移就跟着挪多少：手指下的那行字一动不动。
-    _jumpBy(newTops[after] - oldTops[before]);
+    _pendingJump += tops[after] - oldTop;
+    _scheduleFrame();
+  }
+
+  /// Whether the chapters of [chapters] below [position] fill a viewport.
+  ///
+  /// [position] is an index into [chapters] (already the anchor's), and [tops] its measured tops.
+  bool _holdsAbove(
+    List<ReaderFlowChapter> chapters,
+    int position,
+    List<double> tops,
+  ) {
+    if (position < 0 || tops.length != chapters.length || chapters.isEmpty) {
+      return false;
+    }
+    final double below =
+        tops.last +
+        _heightOf(chapters.last) +
+        widget.padding -
+        tops[position];
+
+    return below >= _viewportHeight;
+  }
+
+  /// Whether the rendered window already starts before [anchorIndex].
+  bool _alreadyAbove(int anchorIndex) =>
+      _visible.isNotEmpty && _visible.first.index < anchorIndex;
+
+  /// Whether the previous chapter is in hand but not on screen yet, while the reader is at the top.
+  ///
+  /// The previous chapter is only painted once the reader is close to the top: painting it earlier
+  /// would shift the text under a reader who is deep inside the chapter, and there is nothing to
+  /// gain from it.
+  bool get _shouldPrepend {
+    final ({int index, double fraction})? anchor = _anchor;
+    if (_visible.isEmpty ||
+        _offset > _viewportHeight ||
+        !_canHoldAbove ||
+        anchor == null) {
+      return false;
+    }
+    final int index = anchor.index - 1;
+    if (index < 0 || index >= widget.chapters.length) {
+      return false;
+    }
+    if (_visible.first.index <= index) {
+      return false;
+    }
+
+    return widget.bodies.containsKey(widget.chapters[index].url);
   }
 
   /// Whether [a] and [b] name the same chapters in the same order.
@@ -251,18 +329,20 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
     return true;
   }
 
-  /// Moves the offset by [delta] without letting the notification be read as a reader scroll.
-  void _jumpBy(double delta) {
+  /// Applies the offset the window change owes the reader, after the frame.
+  void _applyPendingJump() {
+    final double delta = _pendingJump;
+    _pendingJump = 0;
     if (delta == 0 || !_scroll.hasClients) {
       return;
     }
-    final double target = _scroll.offset + delta;
-    final double clamped = target < 0 ? 0 : target;
-    if (clamped == _scroll.offset) {
+    final double max = _scroll.position.maxScrollExtent;
+    final double target = (_scroll.offset + delta).clamp(0, max <= 0 ? 0 : max);
+    if (target == _scroll.offset) {
       return;
     }
     _compensating = true;
-    _scroll.jumpTo(clamped);
+    _scroll.jumpTo(target);
     _compensating = false;
   }
 
@@ -347,12 +427,30 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
         _width = measured;
         _textScaler = textScaler;
         _viewportHeight = constraints.maxHeight;
+        if (_visible.isEmpty) {
+          // 第一帧才知道视口多高：窗口在这里才第一次落地（见 [_applyStructure] 的几何门槛）。
+          _applyStructure(
+            _window.sync(
+              chapters: widget.chapters,
+              anchorIndex: widget.anchorIndex,
+              bodies: widget.bodies,
+            ),
+          );
+        }
         _tops = _topsOf(_visible);
+        _canHoldAbove = _holdsAbove(
+          _visible,
+          _visible.indexWhere(
+            (ReaderFlowChapter chapter) =>
+                chapter.index == (_anchor?.index ?? widget.anchorIndex),
+          ),
+          _tops,
+        );
         if (remeasured) {
           _pendingReland = _anchorCharOf(_anchor);
         }
         _scheduleRestore();
-        WidgetsBinding.instance.addPostFrameCallback((_) => _afterLayout());
+        _scheduleFrame();
 
         return NotificationListener<ScrollNotification>(
           onNotification: _onNotification,
@@ -362,7 +460,7 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                if (_showBefore)
+                if (_canHoldAbove && _showBefore)
                   if (_beforeIndex case final int before)
                     ReaderChapterPendingStrip(
                       isFailed: _isFailed(before),
@@ -422,17 +520,48 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
     });
   }
 
-  /// Reads the scroll metrics after layout, so short chapters and new bodies settle too.
-  void _afterLayout() {
-    if (!mounted || !_scroll.hasClients) {
+  /// Schedules this frame's bookkeeping, once.
+  ///
+  /// Everything that touches the scroll position or a provider runs here rather than in `build`,
+  /// `didUpdateWidget` or a scroll notification: those can run inside another widget's layout, and
+  /// both `jumpTo` and a provider write mark widgets dirty.
+  void _scheduleFrame() {
+    if (_frameScheduled) {
       return;
     }
-    _offset = _scroll.position.pixels;
-    _maxExtent = _scroll.position.maxScrollExtent;
-    _viewportHeight = _scroll.position.viewportDimension;
-    _reland();
-    _report();
-    _updateStrips();
+    _frameScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _frameScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _applyPendingJump();
+      if (!_scroll.hasClients) {
+        return;
+      }
+      _offset = _scroll.position.pixels;
+      _maxExtent = _scroll.position.maxScrollExtent;
+      _viewportHeight = _scroll.position.viewportDimension;
+      _reland();
+      _report();
+      final bool settle = _settlePending;
+      _settlePending = false;
+      if (settle) {
+        final ({int index, int charOffset, double fraction})? anchor = _anchorAt(
+          _offset,
+        );
+        if (anchor != null) {
+          widget.onSettled(anchor.index, anchor.charOffset);
+        }
+        _frozen = null;
+        // 手势结束：把冻结的窗口换成当前该显示的那一份，并顺手丢掉远处已渲染的章。
+        _reconcile();
+      }
+      if (_shouldPrepend) {
+        _reconcile();
+      }
+      _updateStrips();
+    });
   }
 
   /// Puts the anchor back at the viewport top after the text was re-measured.
@@ -474,7 +603,10 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
     );
   }
 
-  /// Handles every scroll notification: anchor reporting, drag freezing and the settle work.
+  /// Collects the scroll metrics and schedules the frame's bookkeeping.
+  ///
+  /// Nothing is mutated here: a notification can be dispatched *during* layout (a viewport that
+  /// corrects its own pixels), and a rebuild from that point on is an assertion.
   bool _onNotification(ScrollNotification notification) {
     if (_compensating) {
       return false;
@@ -484,28 +616,24 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
     _viewportHeight = notification.metrics.viewportDimension;
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null) {
+      // 手指按着的时候不换结构：换结构要挪偏移，而挪偏移会取消这次手势。
       _frozen = _visible;
     }
-    if (notification is ScrollUpdateNotification) {
-      _report();
-    }
     if (notification is ScrollEndNotification) {
-      final ({int index, int charOffset, double fraction})? anchor = _anchorAt(
-        _offset,
-      );
-      if (anchor != null && !_restorePending) {
-        widget.onSettled(anchor.index, anchor.charOffset);
-      }
-      // 手势结束：把冻结的窗口换成当前该显示的那一份，并顺手丢掉远处已渲染的章。
-      _frozen = null;
-      _reconcile();
-      _updateStrips();
+      _settlePending = true;
+    }
+    if (notification is ScrollUpdateNotification ||
+        notification is ScrollEndNotification) {
+      _scheduleFrame();
     }
 
     return false;
   }
 
   /// Rebuilds the rendered window around the anchor and drops the chapters far from it.
+  ///
+  /// Runs after a settle, where a window change is cheap: the offset it owes the reader is applied
+  /// in the same pass, so no drag is cancelled.
   void _reconcile() {
     final int anchorIndex = _anchor?.index ?? widget.anchorIndex;
     _window.retain(anchorIndex: anchorIndex);
@@ -528,7 +656,8 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
     final int? before = _beforeIndex;
     final int? after = _afterIndex;
     // 一屏之内到边就开始接力：等真滑到尽头再抓，读者一定会看到一次空白。
-    final bool showBefore = before != null && _offset <= _viewportHeight;
+    final bool showBefore =
+        before != null && _canHoldAbove && _offset <= _viewportHeight;
     final bool showAfter =
         after != null && _maxExtent - _offset <= _viewportHeight;
     if (showBefore != _showBefore || showAfter != _showAfter) {
