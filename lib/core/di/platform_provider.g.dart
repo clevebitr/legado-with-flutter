@@ -622,6 +622,116 @@ final class LongRunningTaskProvider
 
 String _$longRunningTaskHash() => r'c4f24b2ab4e07af40943e68f73e182a163752df6';
 
+/// Provides the marker that keeps the display on while the reader is open.
+///
+/// Only Android implements it; elsewhere (and in tests) the no-op keeps the port total
+/// (ADR-0086 §决策 1).
+
+@ProviderFor(screenAwake)
+final screenAwakeProvider = ScreenAwakeProvider._();
+
+/// Provides the marker that keeps the display on while the reader is open.
+///
+/// Only Android implements it; elsewhere (and in tests) the no-op keeps the port total
+/// (ADR-0086 §决策 1).
+
+final class ScreenAwakeProvider
+    extends $FunctionalProvider<ScreenAwake, ScreenAwake, ScreenAwake>
+    with $Provider<ScreenAwake> {
+  /// Provides the marker that keeps the display on while the reader is open.
+  ///
+  /// Only Android implements it; elsewhere (and in tests) the no-op keeps the port total
+  /// (ADR-0086 §决策 1).
+  ScreenAwakeProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'screenAwakeProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$screenAwakeHash();
+
+  @$internal
+  @override
+  $ProviderElement<ScreenAwake> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  ScreenAwake create(Ref ref) {
+    return screenAwake(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ScreenAwake value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ScreenAwake>(value),
+    );
+  }
+}
+
+String _$screenAwakeHash() => r'19a53e08baf87dd87535071e30567497249d9924';
+
+/// Provides the device charge reader behind the reader's status line (ADR-0086 §决策 6).
+///
+/// Only Android implements it; elsewhere the status line omits the charge rather than showing a
+/// made-up value.
+
+@ProviderFor(batteryLevel)
+final batteryLevelProvider = BatteryLevelProvider._();
+
+/// Provides the device charge reader behind the reader's status line (ADR-0086 §决策 6).
+///
+/// Only Android implements it; elsewhere the status line omits the charge rather than showing a
+/// made-up value.
+
+final class BatteryLevelProvider
+    extends $FunctionalProvider<BatteryLevel, BatteryLevel, BatteryLevel>
+    with $Provider<BatteryLevel> {
+  /// Provides the device charge reader behind the reader's status line (ADR-0086 §决策 6).
+  ///
+  /// Only Android implements it; elsewhere the status line omits the charge rather than showing a
+  /// made-up value.
+  BatteryLevelProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'batteryLevelProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$batteryLevelHash();
+
+  @$internal
+  @override
+  $ProviderElement<BatteryLevel> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  BatteryLevel create(Ref ref) {
+    return batteryLevel(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BatteryLevel value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BatteryLevel>(value),
+    );
+  }
+}
+
+String _$batteryLevelHash() => r'6d849cf4f086815b92868851bdbd759e761a7da1';
+
 /// Provides the batch check's progress notification.
 ///
 /// Only Android has a system notification surface here; other platforms (and the tests) get the

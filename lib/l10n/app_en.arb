@@ -829,6 +829,27 @@
     "description": "Reader page mode that scrolls the body."
   },
   "readerPageModePaged": "Pages",
+  "readerEyeProtection": "Warm filter",
+  "@readerEyeProtection": {
+    "description": "Reader setting: strength of the blue-light reducing filter over the page."
+  },
+  "readerKeepAwake": "Keep the screen on",
+  "@readerKeepAwake": {
+    "description": "Reader setting: whether the display stays awake while reading."
+  },
+  "readerStatusLine": "Show the status line",
+  "@readerStatusLine": {
+    "description": "Reader setting: the line at the bottom with chapter, progress, time and charge."
+  },
+  "readerBatteryLevel": "{percent}% battery",
+  "@readerBatteryLevel": {
+    "description": "Charge shown in the reader's status line.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "@readerPageModePaged": {
     "description": "Reader page mode that splits the body into pages."
   },

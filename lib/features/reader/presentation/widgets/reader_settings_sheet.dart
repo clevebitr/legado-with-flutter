@@ -175,6 +175,40 @@ class ReaderSettingsSheet extends StatelessWidget {
               onSelectionChanged: (Set<ReaderPageMode> selection) =>
                   onChanged(settings.copyWith(pageMode: selection.single)),
             ),
+            SizedBox(height: tokens.spacing.md),
+            // 护眼（ADR-0086 §决策 2）：强度 0 = 关；只压暖正文，不动系统亮度。
+            _slider(
+              context,
+              label: l10n.readerEyeProtection,
+              value: settings.eyeProtection.toDouble(),
+              min: 0,
+              max: maxReaderEyeProtection.toDouble(),
+              divisions: 10,
+              onChanged: (double value) =>
+                  onChanged(settings.copyWith(eyeProtection: value.round())),
+            ),
+            // 常亮（ADR-0086 §决策 1）：默认开，因为阅读本来就是「很久不碰屏幕」。
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                l10n.readerKeepAwake,
+                style: tokens.typography.base.labelLarge,
+              ),
+              value: settings.keepScreenAwake,
+              onChanged: (bool value) =>
+                  onChanged(settings.copyWith(keepScreenAwake: value)),
+            ),
+            // 状态栏（ADR-0086 §决策 6）：章节 / 进度 / 时间 / 电量。
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                l10n.readerStatusLine,
+                style: tokens.typography.base.labelLarge,
+              ),
+              value: settings.showReaderStatus,
+              onChanged: (bool value) =>
+                  onChanged(settings.copyWith(showReaderStatus: value)),
+            ),
           ],
         ),
       ),

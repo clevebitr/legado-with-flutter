@@ -25,6 +25,21 @@ const double maxReaderBrightness = 1;
 /// The brightness a reader starts with (no dimming).
 const double defaultReaderBrightness = 1;
 
+/// The strongest warm (blue-light reducing) filter the reader offers.
+const int maxReaderEyeProtection = 100;
+
+/// The warm filter a reader starts with (off).
+const int defaultReaderEyeProtection = 0;
+
+/// The shortest auto-read interval, in seconds.
+const int minReaderAutoReadSeconds = 3;
+
+/// The longest auto-read interval, in seconds.
+const int maxReaderAutoReadSeconds = 60;
+
+/// The auto-read interval a reader starts with (ADR-0086 §决策 3).
+const int defaultReaderAutoReadSeconds = 15;
+
 /// How the reader turns pages (`docs/dev/roadmap.md` 5.3, ADR-0044 §决策 4).
 enum ReaderPageMode {
   /// One vertically scrolling body.
@@ -126,6 +141,9 @@ final class ReaderSettings {
     required this.ttsVoiceName,
     required this.ttsVoiceLocale,
     required this.stopTtsOnExit,
+    required this.keepScreenAwake,
+    required this.eyeProtection,
+    required this.showReaderStatus,
   });
 
   /// Creates reader settings, clamping both numeric values into their documented ranges.
@@ -144,6 +162,9 @@ final class ReaderSettings {
     String? ttsVoiceName,
     String? ttsVoiceLocale,
     bool stopTtsOnExit = true,
+    bool keepScreenAwake = true,
+    int eyeProtection = defaultReaderEyeProtection,
+    bool showReaderStatus = true,
   }) => ReaderSettings._(
     fontScale: fontScale.clamp(minReaderFontScale, maxReaderFontScale),
     lineHeight: lineHeight.clamp(minReaderLineHeight, maxReaderLineHeight),
@@ -160,6 +181,9 @@ final class ReaderSettings {
     ttsVoiceName: ttsVoiceName,
     ttsVoiceLocale: ttsVoiceLocale,
     stopTtsOnExit: stopTtsOnExit,
+    keepScreenAwake: keepScreenAwake,
+    eyeProtection: eyeProtection.clamp(0, maxReaderEyeProtection),
+    showReaderStatus: showReaderStatus,
   );
 
   /// What a reader that has stored nothing yet uses.
@@ -178,6 +202,9 @@ final class ReaderSettings {
     ttsVoiceName: null,
     ttsVoiceLocale: null,
     stopTtsOnExit: true,
+    keepScreenAwake: true,
+    eyeProtection: defaultReaderEyeProtection,
+    showReaderStatus: true,
   );
 
   /// Body text multiplier, on top of the app's accessibility scale.
@@ -225,6 +252,16 @@ final class ReaderSettings {
   /// Whether leaving the reader stops speech (ADR-0054 §决策 5).
   final bool stopTtsOnExit;
 
+  /// Whether the display stays on while the reader is open (ADR-0086 §决策 1).
+  final bool keepScreenAwake;
+
+  /// How strong the warm (blue-light reducing) filter is, 0–100 (ADR-0086 §决策 2).
+  final int eyeProtection;
+
+  /// Whether the reading view shows the status line: chapter, progress, time, charge
+  /// (ADR-0086 §决策 6).
+  final bool showReaderStatus;
+
   /// Returns a copy with the given values, clamped the same way the factory does.
   ReaderSettings copyWith({
     double? fontScale,
@@ -241,6 +278,9 @@ final class ReaderSettings {
     String? ttsVoiceName,
     String? ttsVoiceLocale,
     bool? stopTtsOnExit,
+    bool? keepScreenAwake,
+    int? eyeProtection,
+    bool? showReaderStatus,
     bool clearTtsVoice = false,
   }) => ReaderSettings(
     fontScale: fontScale ?? this.fontScale,
@@ -259,6 +299,9 @@ final class ReaderSettings {
         ? null
         : ttsVoiceLocale ?? this.ttsVoiceLocale,
     stopTtsOnExit: stopTtsOnExit ?? this.stopTtsOnExit,
+    keepScreenAwake: keepScreenAwake ?? this.keepScreenAwake,
+    eyeProtection: eyeProtection ?? this.eyeProtection,
+    showReaderStatus: showReaderStatus ?? this.showReaderStatus,
   );
 
   @override
@@ -277,7 +320,10 @@ final class ReaderSettings {
       other.ttsPitch == ttsPitch &&
       other.ttsVoiceName == ttsVoiceName &&
       other.ttsVoiceLocale == ttsVoiceLocale &&
-      other.stopTtsOnExit == stopTtsOnExit;
+      other.stopTtsOnExit == stopTtsOnExit &&
+      other.keepScreenAwake == keepScreenAwake &&
+      other.eyeProtection == eyeProtection &&
+      other.showReaderStatus == showReaderStatus;
 
   @override
   int get hashCode => Object.hash(
@@ -295,6 +341,9 @@ final class ReaderSettings {
     ttsVoiceName,
     ttsVoiceLocale,
     stopTtsOnExit,
+    keepScreenAwake,
+    eyeProtection,
+    showReaderStatus,
   );
 }
 

@@ -31,6 +31,9 @@ void main() {
         brightness: 0.6,
         background: ReaderBackground.sepia,
         pageMode: ReaderPageMode.paged,
+        keepScreenAwake: false,
+        eyeProtection: 40,
+        showReaderStatus: false,
       );
 
       await repository.save(settings);

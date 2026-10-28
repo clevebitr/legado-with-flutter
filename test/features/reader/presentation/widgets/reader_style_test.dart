@@ -193,4 +193,39 @@ void main() {
       expect(spoken.color, isNotNull);
     });
   });
+
+  group('readerEyeProtectionMatrix', () {
+    test('readerEyeProtectionMatrix_givenZero_staysOff', () {
+      // 0 = 关：不套滤镜，正文颜色与主题完全一致。
+      expect(readerEyeProtectionMatrix(0), isNull);
+      expect(readerEyeProtectionFilter(0), isNull);
+    });
+
+    test('readerEyeProtectionMatrix_givenAFullStrength_warmsThePage', () {
+      final List<double>? matrix = readerEyeProtectionMatrix(100);
+
+      expect(matrix, isNotNull);
+      // 暖光 = 红保持、绿略降、蓝压得最狠（上游的色温方向，ADR-0086 §决策 2）。
+      expect(matrix![0], 1);
+      expect(matrix[6], lessThan(1));
+      expect(matrix[12], lessThan(matrix[6]));
+    });
+
+    test('readerEyeProtectionMatrix_givenMoreStrength_coolsMore', () {
+      final List<double> weak = readerEyeProtectionMatrix(30)!;
+      final List<double> strong = readerEyeProtectionMatrix(90)!;
+
+      // 强度越大蓝通道掉得越多，单调且可预测。
+      expect(strong[12], lessThan(weak[12]));
+    });
+
+    test('readerEyeProtectionMatrix_givenAnOutOfRangeStrength_clampsIt', () {
+      expect(readerEyeProtectionMatrix(-10), isNull);
+      expect(readerEyeProtectionMatrix(500), readerEyeProtectionMatrix(100));
+    });
+
+    test('readerEyeProtectionFilter_givenAStrength_answersAfilter', () {
+      expect(readerEyeProtectionFilter(50), isNotNull);
+    });
+  });
 }

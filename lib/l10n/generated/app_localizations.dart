@@ -1204,6 +1204,30 @@ abstract class AppLocalizations {
   /// **'Pages'**
   String get readerPageModePaged;
 
+  /// Reader setting: strength of the blue-light reducing filter over the page.
+  ///
+  /// In en, this message translates to:
+  /// **'Warm filter'**
+  String get readerEyeProtection;
+
+  /// Reader setting: whether the display stays awake while reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the screen on'**
+  String get readerKeepAwake;
+
+  /// Reader setting: the line at the bottom with chapter, progress, time and charge.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the status line'**
+  String get readerStatusLine;
+
+  /// Charge shown in the reader's status line.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% battery'**
+  String readerBatteryLevel(int percent);
+
   /// Action that opens the previous chapter.
   ///
   /// In en, this message translates to:

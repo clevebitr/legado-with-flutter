@@ -107,6 +107,33 @@ void main() {
       );
     });
 
+    test('ReaderSettings_defaults_keepTheDisplayOnAndTheStatusLineVisible', () {
+      // 默认：常亮开、护眼关、状态栏开（ADR-0086 §决策 1/2/6）。
+      expect(ReaderSettings.defaults.keepScreenAwake, isTrue);
+      expect(ReaderSettings.defaults.eyeProtection, 0);
+      expect(ReaderSettings.defaults.showReaderStatus, isTrue);
+    });
+
+    test('ReaderSettings_givenAnOutOfRangeEyeProtection_clampsIt', () {
+      expect(ReaderSettings(eyeProtection: 400).eyeProtection, 100);
+      expect(ReaderSettings(eyeProtection: -20).eyeProtection, 0);
+    });
+
+    test('ReaderSettings_whenOnlyTheStatusAxesDiffer_areNotEqual', () {
+      expect(
+        ReaderSettings.defaults,
+        isNot(ReaderSettings.defaults.copyWith(keepScreenAwake: false)),
+      );
+      expect(
+        ReaderSettings.defaults,
+        isNot(ReaderSettings.defaults.copyWith(eyeProtection: 40)),
+      );
+      expect(
+        ReaderSettings.defaults,
+        isNot(ReaderSettings.defaults.copyWith(showReaderStatus: false)),
+      );
+    });
+
     test('ReaderSettings_givenOutOfRangeNumbers_clampsThem', () {
       // 工厂钳制而不是断言：release 会剥掉 assert，手改的存储不能让正文不可读。
       final ReaderSettings high = ReaderSettings(fontScale: 5, lineHeight: 9);

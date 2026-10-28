@@ -630,6 +630,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerPageModePaged => 'Pages';
 
   @override
+  String get readerEyeProtection => 'Warm filter';
+
+  @override
+  String get readerKeepAwake => 'Keep the screen on';
+
+  @override
+  String get readerStatusLine => 'Show the status line';
+
+  @override
+  String readerBatteryLevel(int percent) {
+    return '$percent% battery';
+  }
+
+  @override
   String get readerPreviousChapter => 'Previous chapter';
 
   @override

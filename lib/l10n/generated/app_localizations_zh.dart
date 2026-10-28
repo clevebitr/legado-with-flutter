@@ -603,6 +603,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerPageModePaged => '分页';
 
   @override
+  String get readerEyeProtection => '护眼';
+
+  @override
+  String get readerKeepAwake => '阅读时常亮';
+
+  @override
+  String get readerStatusLine => '显示状态栏';
+
+  @override
+  String readerBatteryLevel(int percent) {
+    return '$percent%（电量）';
+  }
+
+  @override
   String get readerPreviousChapter => '上一章';
 
   @override

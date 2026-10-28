@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/di/clock_provider.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/platform/battery_level.dart';
+import 'package:flutter_reader/core/platform/screen_awake.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
@@ -33,6 +36,7 @@ import 'package:flutter_reader/features/reader/presentation/widgets/reader_scrol
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_search_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_source_sheet.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_status_bar.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_toc_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_tts_sheet.dart';
@@ -94,6 +98,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Clock? _clock;
   DateTime? _sessionStartedAt;
 
+  /// The “keep the display on” port and the charge reader, captured for `dispose` and for the
+  /// status line (ADR-0086 §决策 1/6).
+  ScreenAwake? _screenAwake;
+  BatteryLevel? _battery;
+
   /// Bumped when a jump must restore again inside the **same** chapter.
   ///
   /// The flows restore once per widget instance, so a bookmark jump that stays in the same
@@ -109,6 +118,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// The sheet disposes when it closes, but speech may continue; keeping the notifier here lets
   /// `dispose` apply the “stop when leaving the reader” rule (ADR-0054 §决策 5).
   ReaderTts? _tts;
+
+  /// Watches the reader's settings so the display's awake state follows them (ADR-0086 §决策 1).
+  ///
+  /// `listenManual` rather than `ref.listen` because the initial value has to be applied too, and
+  /// the widget-level listen has no `fireImmediately` (flutter_riverpod 3).
+  ProviderSubscription<AsyncValue<ReaderSettings>>? _settingsWatch;
 
   /// The last position the page saw, used by the `dispose` write.
   int _lastIndex = 0;
@@ -176,7 +191,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _store = ref.read(readerProgressStoreProvider);
     _records = ref.read(readingRecordRepositoryProvider);
     _clock = ref.read(clockProvider);
+    _screenAwake = ref.read(screenAwakeProvider);
+    _battery = ref.read(batteryLevelProvider);
     _sessionStartedAt = _clock?.now();
+    _settingsWatch = ref.listenManual<AsyncValue<ReaderSettings>>(
+      readerSettingsProvider,
+      (AsyncValue<ReaderSettings>? previous, AsyncValue<ReaderSettings> next) {
+        final ReaderSettings? current = next.value;
+        if (current == null) {
+          return;
+        }
+        unawaited(
+          _screenAwake?.setAwake(awake: current.keepScreenAwake) ??
+              Future<void>.value(),
+        );
+      },
+      fireImmediately: true,
+    );
   }
 
   @override
@@ -201,7 +232,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     _recordSession();
     _tts?.onReaderClosed();
+    _settingsWatch?.close();
     _chromeTimer?.cancel();
+    // 离开阅读器就把常亮交还系统（ADR-0086 §决策 1）；幂等，重复释放无害。
+    unawaited(_screenAwake?.setAwake(awake: false) ?? Future<void>.value());
     super.dispose();
   }
 
@@ -310,6 +344,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final AsyncValue<List<Bookmark>> marks = ref.watch(
       readerBookmarksProvider(_book),
     );
+    final ColorFilter? eyeFilter = readerEyeProtectionFilter(
+      settings.eyeProtection,
+    );
+    final List<ReadingChapter> knownChapters = _chaptersOf(chapters);
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -344,32 +382,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       body: Stack(
         children: <Widget>[
           Positioned.fill(
-            child: switch (chapters) {
-              AsyncData<ParseResult<List<ReadingChapter>>>(
-                :final ParseResult<List<ReadingChapter>> value,
-              ) =>
-                switch (value) {
-                  ParseSuccess<List<ReadingChapter>>(
-                    :final List<ReadingChapter> data,
-                  ) =>
-                    data.isEmpty
-                        ? StateMessage(message: l10n.readerNoChapter)
-                        : _sessionBody(data, settings, palette),
-                  ParseFailure<List<ReadingChapter>>(
-                    :final ParseFailureKind kind,
-                  ) =>
-                    FailureMessage(
-                      kind: kind,
-                      onRetry: () =>
-                          ref.invalidate(readerChaptersProvider(_book)),
-                    ),
-                },
-              AsyncError<ParseResult<List<ReadingChapter>>>() => FailureMessage(
-                kind: ParseFailureKind.parseFailed,
-                onRetry: () => ref.invalidate(readerChaptersProvider(_book)),
-              ),
-              _ => const Center(child: CircularProgressIndicator()),
-            },
+            // 护眼滤镜只作用在正文上（ADR-0086 §决策 2）：状态栏与亮度遮罩自己就是「看得清」
+            // 的手段，不该再被压暖。
+            child: _filtered(
+              eyeFilter,
+              _bodyOf(chapters, settings, palette, l10n),
+            ),
           ),
           // 亮度是**应用级遮罩**（ADR-0051 §决策 1）：不碰系统亮度，三端行为一致。
           if (brightness < 1)
@@ -381,11 +399,81 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 ),
               ),
             ),
+          // 状态栏（ADR-0086 §决策 6）：沉浸式把时间与电量都藏起来了，这一行把它们放回来。
+          if (settings.showReaderStatus)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _statusLine(knownChapters, settings, palette, l10n),
+            ),
         ],
       ),
       bottomNavigationBar: _chromeVisible
           ? _toolBar(context, l10n, chapters, palette, marks)
           : null,
+    );
+  }
+
+  /// [child] behind the warm filter, or untouched when the reader has it off.
+  Widget _filtered(ColorFilter? filter, Widget child) =>
+      filter == null ? child : ColorFiltered(colorFilter: filter, child: child);
+
+  /// The body of the open chapter, dispatched by the chapter list's state.
+  Widget _bodyOf(
+    AsyncValue<ParseResult<List<ReadingChapter>>> chapters,
+    ReaderSettings settings,
+    ({Color background, Color foreground}) palette,
+    AppLocalizations l10n,
+  ) => switch (chapters) {
+    AsyncData<ParseResult<List<ReadingChapter>>>(
+      :final ParseResult<List<ReadingChapter>> value,
+    ) =>
+      switch (value) {
+        ParseSuccess<List<ReadingChapter>>(:final List<ReadingChapter> data) =>
+          data.isEmpty
+              ? StateMessage(message: l10n.readerNoChapter)
+              : _sessionBody(data, settings, palette),
+        ParseFailure<List<ReadingChapter>>(:final ParseFailureKind kind) =>
+          FailureMessage(
+            kind: kind,
+            onRetry: () => ref.invalidate(readerChaptersProvider(_book)),
+          ),
+      },
+    AsyncError<ParseResult<List<ReadingChapter>>>() => FailureMessage(
+      kind: ParseFailureKind.parseFailed,
+      onRetry: () => ref.invalidate(readerChaptersProvider(_book)),
+    ),
+    _ => const Center(child: CircularProgressIndicator()),
+  };
+
+  /// The reader's status line, or nothing when the reader turned it off.
+  Widget _statusLine(
+    List<ReadingChapter> chapters,
+    ReaderSettings settings,
+    ({Color background, Color foreground}) palette,
+    AppLocalizations l10n,
+  ) {
+    final Clock? clock = _clock;
+    final BatteryLevel? battery = _battery;
+    if (!settings.showReaderStatus || clock == null || battery == null) {
+      return const SizedBox.shrink();
+    }
+    final int index = _currentIndex;
+    final String chapterName = index < chapters.length
+        ? chapters[index].title
+        : _book.name;
+    final String progress = chapters.isEmpty
+        ? l10n.readerChapterPercent(_chapterPercent)
+        : '${l10n.readerChapterProgress(index + 1, chapters.length)} · '
+              '${l10n.readerChapterPercent(_chapterPercent)}';
+
+    return ReaderStatusBar(
+      chapterName: chapterName,
+      progressText: progress,
+      clock: clock,
+      battery: battery,
+      foreground: palette.foreground,
     );
   }
 

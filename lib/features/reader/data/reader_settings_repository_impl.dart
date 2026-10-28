@@ -47,6 +47,15 @@ const String _ttsVoiceLocaleKey = 'reader.ttsVoiceLocale';
 /// `shared_preferences` key of the “stop speech when leaving the reader” switch.
 const String _stopTtsOnExitKey = 'reader.stopTtsOnExit';
 
+/// `shared_preferences` key of the “keep the display on while reading” switch.
+const String _keepScreenAwakeKey = 'reader.keepScreenAwake';
+
+/// `shared_preferences` key of the warm filter strength.
+const String _eyeProtectionKey = 'reader.eyeProtection';
+
+/// `shared_preferences` key of the “show the status line” switch.
+const String _showReaderStatusKey = 'reader.showReaderStatus';
+
 /// [ReaderSettingsRepository] on top of [PreferenceStore] (`docs/dev/roadmap.md` 5.3, C-NET-9).
 ///
 /// Every read is defensive: an unknown enum index (a store written by a newer build, or a
@@ -74,6 +83,10 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     ttsVoiceName: _nonEmpty(_store.readString(_ttsVoiceNameKey)),
     ttsVoiceLocale: _nonEmpty(_store.readString(_ttsVoiceLocaleKey)),
     stopTtsOnExit: _store.readBool(_stopTtsOnExitKey) ?? true,
+    keepScreenAwake: _store.readBool(_keepScreenAwakeKey) ?? true,
+    eyeProtection:
+        _store.readInt(_eyeProtectionKey) ?? defaultReaderEyeProtection,
+    showReaderStatus: _store.readBool(_showReaderStatusKey) ?? true,
   );
 
   @override
@@ -94,6 +107,9 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     await _store.writeString(_ttsVoiceNameKey, settings.ttsVoiceName ?? '');
     await _store.writeString(_ttsVoiceLocaleKey, settings.ttsVoiceLocale ?? '');
     await _store.writeBool(_stopTtsOnExitKey, settings.stopTtsOnExit);
+    await _store.writeBool(_keepScreenAwakeKey, settings.keepScreenAwake);
+    await _store.writeInt(_eyeProtectionKey, settings.eyeProtection);
+    await _store.writeBool(_showReaderStatusKey, settings.showReaderStatus);
   }
 
   /// Maps a stored index onto [ReaderFontFamily], defaulting when it names nothing.

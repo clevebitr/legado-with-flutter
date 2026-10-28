@@ -39,6 +39,56 @@ import 'package:m3e_design/m3e_design.dart';
   ),
 };
 
+/// The warm (blue-light reducing) filter of [strength] percent, or `null` when it is off.
+///
+/// Upstream blends towards a 2596–5500 K colour temperature (`EyeProtection.kt`); this is the same
+/// idea in one colour matrix — red keeps its weight, green loses a little and blue loses most of
+/// it, with a small negative offset on both so the tint lands on the paper rather than on the
+/// whole screen. It is a **filter over the page**, not a system feature: the display's own
+/// brightness is untouched (ADR-0086 §决策 2).
+///
+/// A pure function on purpose: the strength → filter mapping is the part worth pinning in a test.
+ColorFilter? readerEyeProtectionFilter(int strength) {
+  final List<double>? matrix = readerEyeProtectionMatrix(strength);
+
+  return matrix == null ? null : ColorFilter.matrix(matrix);
+}
+
+/// The colour matrix behind [readerEyeProtectionFilter], or `null` when the filter is off.
+///
+/// Split out because [ColorFilter] does not expose its numbers: the mapping is what a test can
+/// pin, and the widget only needs the wrapped form.
+List<double>? readerEyeProtectionMatrix(int strength) {
+  final int clamped = strength.clamp(0, maxReaderEyeProtection);
+  if (clamped == 0) {
+    return null;
+  }
+  final double k = clamped / maxReaderEyeProtection;
+
+  return <double>[
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1 - 0.08 * k,
+    0,
+    0,
+    -4 * k,
+    0,
+    0,
+    1 - 0.30 * k,
+    0,
+    -12 * k,
+    0,
+    0,
+    0,
+    1,
+    0,
+  ];
+}
+
 /// The body text style of the reader.
 ///
 /// [fontScale] multiplies the theme's body size and [lineHeight] sets its line spacing; the

@@ -8,8 +8,10 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
+import android.view.WindowManager
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -48,6 +50,29 @@ class MainActivity : AudioServiceActivity() {
                         releaseWakeLock()
                         result.success(null)
                     }
+
+                    else -> result.notImplemented()
+                }
+            }
+        // 阅读时保持屏幕常亮（ADR-0086 §决策 1）：上游用窗口的 FLAG_KEEP_SCREEN_ON，
+        // 这里用同一个系统能力，不申请任何权限。
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SCREEN_AWAKE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setAwake" -> {
+                        val awake = (call.arguments as? Map<*, *>)?.get("awake") as? Boolean ?: false
+                        setScreenAwake(awake)
+                        result.success(null)
+                    }
+
+                    else -> result.notImplemented()
+                }
+            }
+        // 状态栏的电量（ADR-0086 §决策 6）：读一次给一次，不订阅广播（状态栏自己按分钟刷新）。
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BATTERY_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "level" -> result.success(batteryLevel())
 
                     else -> result.notImplemented()
                 }
@@ -168,6 +193,24 @@ class MainActivity : AudioServiceActivity() {
         )
     }
 
+    /** Keeps the display on while a book is open (upstream `FLAG_KEEP_SCREEN_ON`). */
+    private fun setScreenAwake(awake: Boolean) {
+        if (awake) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    /** The current charge percentage, or `null` when the platform cannot report one. */
+    private fun batteryLevel(): Int? {
+        val manager = getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+            ?: return null
+        val level = manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+
+        return if (level in 0..100) level else null
+    }
+
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) {
             return
@@ -198,6 +241,10 @@ class MainActivity : AudioServiceActivity() {
         // 与 core/platform/audio_service_playback_notification.dart 的常量同名同值。
         private const val NOTIFICATION_CHANNEL = "flutter_reader/notification_permission"
         private const val NOTIFICATION_REQUEST_CODE = 1001
+
+        // 与 core/platform/screen_awake.dart、battery_level.dart 的常量同名同值。
+        private const val SCREEN_AWAKE_CHANNEL = "flutter_reader/screen_awake"
+        private const val BATTERY_CHANNEL = "flutter_reader/battery"
 
         // 与 core/platform/source_check_notification.dart 的常量同名同值。
         private const val SOURCE_CHECK_CHANNEL = "flutter_reader/source_check_notification"

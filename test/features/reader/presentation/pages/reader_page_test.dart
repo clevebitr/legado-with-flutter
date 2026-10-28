@@ -4,6 +4,7 @@ import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/platform/playback_notification.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/reader/di.dart';
@@ -31,6 +32,7 @@ import '../../../../support/fake_audio_ports.dart';
 import '../../../../support/fake_bookmark_repository.dart';
 import '../../../../support/fake_clock.dart';
 import '../../../../support/fake_log_printer.dart';
+import '../../../../support/fake_reader_platform_ports.dart';
 import '../../../../support/fake_reader_ports.dart';
 import '../../../../support/fake_reading_record_repository.dart';
 import '../../../../support/offline_corpus.dart';
@@ -65,6 +67,8 @@ typedef _Fixture = ({
   FakeReadingRecordRepository records,
   FakeClock clock,
   FakeLogPrinter printer,
+  FakeScreenAwake screenAwake,
+  FakeBatteryLevel battery,
 });
 
 /// Builds a container around the three reader ports and the settings store.
@@ -93,6 +97,8 @@ _Fixture _fixture({
       records ?? FakeReadingRecordRepository();
   final FakeClock fakeClock = clock ?? FakeClock();
   final FakeLogPrinter printer = FakeLogPrinter();
+  final FakeScreenAwake screenAwake = FakeScreenAwake();
+  final FakeBatteryLevel battery = FakeBatteryLevel(level: 80);
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       readerChapterListProvider.overrideWithValue(list),
@@ -120,6 +126,8 @@ _Fixture _fixture({
       playbackNotificationProvider.overrideWithValue(
         const NoopPlaybackNotification(),
       ),
+      screenAwakeProvider.overrideWithValue(screenAwake),
+      batteryLevelProvider.overrideWithValue(battery),
       appLoggerProvider.overrideWithValue(
         AppLogger(level: LogLevel.debug, printer: printer),
       ),
@@ -137,6 +145,8 @@ _Fixture _fixture({
     records: recordStore,
     clock: fakeClock,
     printer: printer,
+    screenAwake: screenAwake,
+    battery: battery,
   );
 }
 
@@ -216,8 +226,9 @@ void main() {
 
       await _pump(tester, fixture);
 
-      // AppBar 默认隐藏（沉浸式）：章节标题在唤出 chrome 后才出现。
-      expect(find.text('第1章 开端'), findsNothing);
+      // AppBar 默认隐藏（沉浸式）：章节标题只在唤出 chrome 后才出现在标题栏里
+      // （状态栏那一份是 ADR-0086 §决策 6 的常驻行，不是 chrome）。
+      expect(find.byType(AppBar), findsNothing);
       await _showChrome(tester);
       expect(find.text('第1章 开端'), findsWidgets);
       expect(_bodyFinder(), findsOneWidget);
@@ -459,6 +470,67 @@ void main() {
         1,
       );
       expect(fixture.progress.writes, isNotEmpty);
+    });
+
+    testWidgets('build_givenTheWarmFilterOn_wrapsTheBodyInIt', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture(
+        settings: ReaderSettings(eyeProtection: 40),
+      );
+
+      await _pump(tester, fixture);
+
+      // 护眼是正文上的一层滤镜（ADR-0086 §决策 2），不是系统亮度。
+      expect(find.byType(ColorFiltered), findsOneWidget);
+    });
+
+    testWidgets('build_givenTheWarmFilterOff_leavesTheBodyAlone', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+
+      await _pump(tester, fixture);
+
+      expect(find.byType(ColorFiltered), findsNothing);
+    });
+
+    testWidgets('build_givenTheStatusLineOn_showsChapterProgressAndCharge', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+
+      await _pump(tester, fixture);
+
+      expect(find.text('第1章 开端'), findsOneWidget);
+      expect(find.textContaining('80% battery'), findsOneWidget);
+    });
+
+    testWidgets('build_givenTheStatusLineOff_hidesIt', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture(
+        settings: ReaderSettings(showReaderStatus: false),
+      );
+
+      await _pump(tester, fixture);
+
+      expect(find.textContaining('battery'), findsNothing);
+    });
+
+    testWidgets('build_givenKeepScreenAwakeOn_asksThePlatform', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+
+      await _pump(tester, fixture);
+
+      // 阅读器一打开就要住「别息屏」，离开时交还（ADR-0086 §决策 1）。
+      expect(fixture.screenAwake.calls, <bool>[true]);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(fixture.screenAwake.calls, <bool>[true, false]);
     });
 
     testWidgets('dispose_whenLeaving_writesThePosition', (

@@ -3,6 +3,7 @@ import 'package:flutter_reader/core/platform/background_image_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/backup_directory_picker.dart';
+import 'package:flutter_reader/core/platform/battery_level.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
 import 'package:flutter_reader/core/platform/external_url_opener.dart';
 import 'package:flutter_reader/core/platform/file_selector_background_image_picker.dart';
@@ -18,6 +19,7 @@ import 'package:flutter_reader/core/platform/json_file_picker.dart';
 import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
+import 'package:flutter_reader/core/platform/screen_awake.dart';
 import 'package:flutter_reader/core/platform/secret_store.dart';
 import 'package:flutter_reader/core/platform/share_plus_file_sharer.dart';
 import 'package:flutter_reader/core/platform/sharing_backup_archive_saver.dart';
@@ -156,6 +158,24 @@ LongRunningTask longRunningTask(Ref ref) =>
     ref.watch(platformInfoProvider).isAndroid
     ? MethodChannelLongRunningTask(logger: ref.watch(appLoggerProvider))
     : const UnsupportedLongRunningTask();
+
+/// Provides the marker that keeps the display on while the reader is open.
+///
+/// Only Android implements it; elsewhere (and in tests) the no-op keeps the port total
+/// (ADR-0086 §决策 1).
+@Riverpod(keepAlive: true)
+ScreenAwake screenAwake(Ref ref) => ref.watch(platformInfoProvider).isAndroid
+    ? MethodChannelScreenAwake(logger: ref.watch(appLoggerProvider))
+    : const UnsupportedScreenAwake();
+
+/// Provides the device charge reader behind the reader's status line (ADR-0086 §决策 6).
+///
+/// Only Android implements it; elsewhere the status line omits the charge rather than showing a
+/// made-up value.
+@Riverpod(keepAlive: true)
+BatteryLevel batteryLevel(Ref ref) => ref.watch(platformInfoProvider).isAndroid
+    ? MethodChannelBatteryLevel(logger: ref.watch(appLoggerProvider))
+    : const UnsupportedBatteryLevel();
 
 /// Provides the batch check's progress notification.
 ///
