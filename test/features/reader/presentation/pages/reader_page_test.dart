@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
+import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
-import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/platform/playback_notification.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/reader/di.dart';

@@ -53,6 +53,17 @@ Android 侧由 `MainActivity` 切窗口的 `FLAG_KEEP_SCREEN_ON`，其他平台�
   `BatteryManager.BATTERY_PROPERTY_CAPACITY`）。读不到就**不画**，不写假数字（C-UI-7）。
 - **时间可注入**：`Clock` 端口（C-TEST：被测逻辑里不出现 `DateTime.now()`），30 秒刷新一次。
 
+### 决策 7 连续滚动里印章标题
+
+滚动模式把三章拼成一份文档后，读者分不出「这一章从哪开始」——上游的正文里本来就带章标题。
+所以每一段正文之前印一次该章标题（`titleMedium`，主题色取正文前景色，最多两行、超出省略），
+标题高度计入这一段的高度：偏移、锚点比例与结构补偿都按「标题 + 正文」量。
+
+- **只印标题，不印分隔线/装饰**：上游也是标题本身当分隔。
+- **分页模式不动**：页是正文的切片，标题已经在标题栏与章界页上；给每章加一页「标题页」是另
+  一个决定（登记在 §后果）。
+- 标题与正文分开量（`_Measure`）：锚点的字符比例只在**正文**上量，标题那段不该算进 0% 的位置。
+
 ## 后果
 
 - 新增两个 `core/platform` 端口与两个 Riverpod provider（`screenAwakeProvider` / `batteryLevelProvider`），

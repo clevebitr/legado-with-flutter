@@ -6,11 +6,13 @@ import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.d
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:m3e_design/m3e_design.dart';
 
-/// One chapter as a continuous flow renders it: its TOC index, its URL and its laid-out body.
+/// One chapter as a continuous flow renders it: TOC index, URL, title and laid-out body.
 ///
 /// The body is the one **after** the presentation transform of `readerBodyText` — the flows stack
-/// what they are given and never look at the source's own text.
-typedef ReaderFlowChapter = ({int index, String url, String text});
+/// what they are given and never look at the source's own text. The title travels with it because
+/// the scroll flow prints it at the chapter's start, which is what makes a chapter boundary visible
+/// in one continuous document (ADR-0086 §决策 7).
+typedef ReaderFlowChapter = ({int index, String url, String title, String text});
 
 /// Where an explicit jump lands: a chapter, a character offset inside it, and a nonce.
 ///
@@ -68,7 +70,12 @@ class ReaderChapterWindow {
     bodies.forEach((String url, String text) {
       final int? index = known[url];
       if (index != null) {
-        _rendered[url] = (index: index, url: url, text: text);
+        _rendered[url] = (
+          index: index,
+          url: url,
+          title: chapters[index].title,
+          text: text,
+        );
       }
     });
     final Map<int, ReaderFlowChapter> byIndex = <int, ReaderFlowChapter>{

@@ -9,6 +9,9 @@ import 'package:flutter_reader/features/reader/presentation/widgets/reader_style
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:m3e_design/m3e_design.dart';
 
+/// The measured height of one rendered chapter: its title and its body, separately.
+typedef _Measure = ({double title, double body});
+
 /// Renders the chapters in hand as **one** scrolling document
 /// (`docs/dev/adr/0085-continuous-chapter-reading.md`).
 ///
@@ -89,12 +92,19 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   final ScrollController _scroll = ScrollController();
   final ReaderChapterWindow _window = ReaderChapterWindow();
 
-  /// Heights measured by [readerTextHeight], keyed by chapter URL.
+  /// Measured heights of a chapter's title and body, keyed by chapter URL.
   ///
   /// Cached because the flow rebuilds on every progress write: re-measuring three chapters per
   /// frame would be the most expensive thing in the reader (C-PERF-1).
-  final Map<String, ({int signature, int length, double height})> _heights =
-      <String, ({int signature, int length, double height})>{};
+  final Map<
+    String,
+    ({int signature, int length, int titleLength, double title, double body})
+  >
+  _heights =
+      <
+        String,
+        ({int signature, int length, int titleLength, double title, double body})
+      >{};
 
   /// Chapters currently rendered, contiguous and in TOC order.
   List<ReaderFlowChapter> _visible = const <ReaderFlowChapter>[];
@@ -108,6 +118,10 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   /// The measuring box of the last build: width, text scale and the box itself.
   double _width = 0;
   TextScaler _textScaler = TextScaler.noScaling;
+
+  /// The chapter-title style and the space it takes above the body (ADR-0086 §决策 7).
+  TextStyle _titleStyle = const TextStyle();
+  double _titleSpacing = 0;
 
   /// The position the flow has to keep: the chapter at the top of the viewport and how far into it.
   ({int index, double fraction})? _anchor;
@@ -178,31 +192,56 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   }
 
   /// The measuring signature: a change here invalidates every measured height.
-  int get _signature => Object.hash(_width, widget.style, _textScaler.scale(1));
+  int get _signature => Object.hash(
+    _width,
+    widget.style,
+    _textScaler.scale(1),
+    _titleStyle,
+    _titleSpacing,
+  );
 
-  /// The height of [chapter] at the style, width and text scale currently in use.
+  /// The measured height of [chapter], title and padding included.
   double _heightOf(ReaderFlowChapter chapter) {
+    final _Measure measure = _measureOf(chapter);
+
+    return measure.title + measure.body;
+  }
+
+  /// Measures [chapter] once per style, width and text, and caches the result.
+  _Measure _measureOf(ReaderFlowChapter chapter) {
     final int signature = _signature;
-    final ({int signature, int length, double height})? cached =
-        _heights[chapter.url];
+    final ({int signature, int length, int titleLength, double title, double body})?
+    cached = _heights[chapter.url];
     if (cached != null &&
         cached.signature == signature &&
-        cached.length == chapter.text.length) {
-      return cached.height;
+        cached.length == chapter.text.length &&
+        cached.titleLength == chapter.title.length) {
+      return (title: cached.title, body: cached.body);
     }
-    final double height = readerTextHeight(
+    final double body = readerTextHeight(
       text: chapter.text,
       style: widget.style,
       width: _width,
       textScaler: _textScaler,
     );
+    final double title = chapter.title.isEmpty
+        ? 0
+        : readerTextHeight(
+                text: chapter.title,
+                style: _titleStyle,
+                width: _width,
+                textScaler: _textScaler,
+              ) +
+              _titleSpacing;
     _heights[chapter.url] = (
       signature: signature,
       length: chapter.text.length,
-      height: height,
+      titleLength: chapter.title.length,
+      title: title,
+      body: body,
     );
 
-    return height;
+    return (title: title, body: body);
   }
 
   /// The content-space top of every chapter in [chapters], the page margin included.
@@ -234,12 +273,12 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
 
       return;
     }
+    // 上一章只在「锚点章自己撑得满一屏」或「它已经在屏上」时才画。两条判据都只看章节与
+    // 窗口，不看当前滚动位置：一旦把偏移也纳入条件，读者一边滑，上一章就会一会儿加进来、
+    // 一会儿撤掉——正文看起来重复、位置也在跳。撑不满一屏的章节则根本不画上面（会把正文
+    // 顶出屏幕，而可滚动范围不够补偿）。
     final bool holds =
-        _holdsAbove(next, anchorPosition, _topsOf(next)) &&
-        (_alreadyAbove(anchorIndex) || _offset <= _viewportHeight);
-    // 锚点以下撑不起一屏时不画上面的章：那样的正文会被顶出屏幕，而偏移无处可补
-    // （可滚动范围小于要补的高度），会话会被拽回上一章。已经画出来的上章也不会因为
-    // 读者往下滑就被撤掉——撤掉要挪偏移，而挪偏移正是「手指下的字跳一下」。
+        _fillsViewport(next, anchorPosition) || _alreadyAbove(anchorIndex);
     final List<ReaderFlowChapter> rendered = holds
         ? next
         : next.sublist(anchorPosition);
@@ -267,26 +306,23 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
     _scheduleFrame();
   }
 
-  /// Whether the chapters of [chapters] below [position] fill a viewport.
-  ///
-  /// [position] is an index into [chapters] (already the anchor's), and [tops] its measured tops.
-  bool _holdsAbove(
-    List<ReaderFlowChapter> chapters,
-    int position,
-    List<double> tops,
-  ) {
-    if (position < 0 || tops.length != chapters.length || chapters.isEmpty) {
-      return false;
-    }
-    final double below =
-        tops.last + _heightOf(chapters.last) + widget.padding - tops[position];
-
-    return below >= _viewportHeight;
-  }
-
   /// Whether the rendered window already starts before [anchorIndex].
+  ///
+  /// 已经在屏上的上一章不会因为换到下一章就被撤掉：撤掉要挪偏移，那是可见的一下跳。
   bool _alreadyAbove(int anchorIndex) =>
       _visible.isNotEmpty && _visible.first.index < anchorIndex;
+
+  /// Whether the anchor chapter alone fills a viewport, so chapters may sit above it.
+  ///
+  /// A property of the chapter, never of the scroll offset: that is what keeps the above-region
+  /// from appearing and disappearing while the reader scrolls.
+  bool _fillsViewport(List<ReaderFlowChapter> chapters, int position) {
+    if (position < 0 || position >= chapters.length) {
+      return false;
+    }
+
+    return _heightOf(chapters[position]) >= _viewportHeight;
+  }
 
   /// Whether the previous chapter is in hand but not on screen yet, while the reader is at the top.
   ///
@@ -356,10 +392,11 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
       }
     }
     final ReaderFlowChapter chapter = _visible[position];
-    final double height = _heightOf(chapter);
-    final double fraction = height <= 0
+    final _Measure measure = _measureOf(chapter);
+    final double body = measure.body;
+    final double fraction = body <= 0
         ? 0
-        : ((offset - _tops[position]) / height).clamp(0.0, 1.0);
+        : ((offset - _tops[position] - measure.title) / body).clamp(0.0, 1.0);
 
     return (
       index: chapter.index,
@@ -377,12 +414,12 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
       return null;
     }
     final ReaderFlowChapter chapter = _visible[position];
-    final double height = _heightOf(chapter);
+    final _Measure measure = _measureOf(chapter);
     final double fraction = chapter.text.isEmpty
         ? 0
         : (charOffset / chapter.text.length).clamp(0.0, 1.0);
 
-    return _tops[position] + fraction * height;
+    return _tops[position] + measure.title + fraction * measure.body;
   }
 
   /// Remembers and reports the anchor for the current offset.
@@ -415,6 +452,7 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
+        final M3ETheme tokens = context.m3e;
         final double width = constraints.maxWidth - 2 * widget.padding;
         final double measured = width < 0 ? 0 : width;
         final TextScaler textScaler = MediaQuery.textScalerOf(context);
@@ -434,14 +472,19 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
             ),
           );
         }
+        _titleStyle =
+            tokens.typography.base.titleMedium?.copyWith(
+              color: widget.style.color,
+            ) ??
+            widget.style;
+        _titleSpacing = tokens.spacing.xl;
         _tops = _topsOf(_visible);
-        _canHoldAbove = _holdsAbove(
+        _canHoldAbove = _fillsViewport(
           _visible,
           _visible.indexWhere(
             (ReaderFlowChapter chapter) =>
                 chapter.index == (_anchor?.index ?? widget.anchorIndex),
           ),
-          _tops,
         );
         if (remeasured) {
           _pendingReland = _anchorCharOf(_anchor);
@@ -464,13 +507,25 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
                       // 重试是读者主动要求：绕开「这一面已经问过」的闸门。
                       onRetry: () => widget.onNeedChapter(before),
                     ),
-                for (final ReaderFlowChapter chapter in _visible)
+                for (final ReaderFlowChapter chapter in _visible) ...<Widget>[
+                  // 章标题（ADR-0086 §决策 7）：连续滚动里没有它就分不出章节从哪开始。
+                  if (chapter.title.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(top: _titleSpacing),
+                      child: Text(
+                        chapter.title,
+                        style: _titleStyle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   readingText(
                     body: chapter.text,
                     style: widget.style,
                     highlightStyle: widget.highlightStyle,
                     highlight: _highlightOf(chapter),
                   ),
+                ],
                 if (_showAfter)
                   if (_afterIndex case final int after)
                     ReaderChapterPendingStrip(

@@ -116,6 +116,45 @@ void main() {
       expect(find.byType(ReaderChapterPendingStrip), findsNothing);
     });
 
+    testWidgets('build_givenTheChaptersInHand_printsEachTitleAndBodyOnce', (
+      WidgetTester tester,
+    ) async {
+      await _pumpFlow(
+        tester,
+        bodies: <String, String>{
+          'https://source.test/1.html': _body('第一章'),
+          'https://source.test/2.html': _body('第二章'),
+        },
+      );
+
+      // 章标题在正文之前（ADR-0087 §决策 1）；每章正文只出现一次——连续滚动里
+      // 重复的正文比没有标题更难读。
+      expect(find.text('第1章'), findsOneWidget);
+      expect(find.text('第2章'), findsOneWidget);
+      expect(find.textContaining('第一章 第1行'), findsOneWidget);
+      expect(find.textContaining('第二章 第1行'), findsOneWidget);
+    });
+
+    testWidgets('scroll_givenTheNextChapterInHand_stillPrintsItOnce', (
+      WidgetTester tester,
+    ) async {
+      await _pumpFlow(
+        tester,
+        bodies: <String, String>{
+          'https://source.test/1.html': _body('第一章'),
+          'https://source.test/2.html': _body('第二章'),
+        },
+      );
+
+      // 跨过章界后窗口会重排：重排只允许「接上」，不允许把同一章再画一遍。
+      await _scrollBy(tester, -6000);
+
+      expect(find.text('第1章'), findsOneWidget);
+      expect(find.text('第2章'), findsOneWidget);
+      expect(find.textContaining('第一章 第1行'), findsOneWidget);
+      expect(find.textContaining('第二章 第1行'), findsOneWidget);
+    });
+
     testWidgets('scroll_givenTheNextChapterInHand_continuesIntoIt', (
       WidgetTester tester,
     ) async {
