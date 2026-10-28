@@ -21,8 +21,8 @@ import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_scroll_flow.dart';
-import 'package:flutter_reader/features/reader/presentation/widgets/reader_status_bar.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_status_bar.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
