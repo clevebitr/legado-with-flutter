@@ -12,7 +12,12 @@ import 'package:m3e_design/m3e_design.dart';
 /// what they are given and never look at the source's own text. The title travels with it because
 /// the scroll flow prints it at the chapter's start, which is what makes a chapter boundary visible
 /// in one continuous document (ADR-0086 §决策 7).
-typedef ReaderFlowChapter = ({int index, String url, String title, String text});
+typedef ReaderFlowChapter = ({
+  int index,
+  String url,
+  String title,
+  String text,
+});
 
 /// Where an explicit jump lands: a chapter, a character offset inside it, and a nonce.
 ///

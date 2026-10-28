@@ -103,7 +103,13 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   _heights =
       <
         String,
-        ({int signature, int length, int titleLength, double title, double body})
+        ({
+          int signature,
+          int length,
+          int titleLength,
+          double title,
+          double body,
+        })
       >{};
 
   /// Chapters currently rendered, contiguous and in TOC order.
@@ -210,7 +216,13 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   /// Measures [chapter] once per style, width and text, and caches the result.
   _Measure _measureOf(ReaderFlowChapter chapter) {
     final int signature = _signature;
-    final ({int signature, int length, int titleLength, double title, double body})?
+    final ({
+      int signature,
+      int length,
+      int titleLength,
+      double title,
+      double body,
+    })?
     cached = _heights[chapter.url];
     if (cached != null &&
         cached.signature == signature &&
