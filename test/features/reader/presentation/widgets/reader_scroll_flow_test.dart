@@ -24,7 +24,7 @@ const TextStyle _highlightStyle = TextStyle(backgroundColor: Color(0xFF00FF00));
 
 /// Advances a few frames instead of settling.
 ///
-/// A pending strip shows an indeterminate [CircularProgressIndicator], which animates forever:
+/// A loading slot shows an indeterminate [CircularProgressIndicator], which animates forever:
 /// `pumpAndSettle` would never return while one is on screen.
 Future<void> _advance(WidgetTester tester, {int frames = 5}) async {
   for (var frame = 0; frame < frames; frame++) {
@@ -49,9 +49,9 @@ final class _Probe {
 /// Pumps one scroll flow and returns what it reported.
 Future<_Probe> _pumpFlow(
   WidgetTester tester, {
-  required Map<String, String> bodies,
+  required Map<int, String> bodies,
   int anchorIndex = 0,
-  Set<String> failed = const <String>{},
+  Set<int> failed = const <int>{},
   ReaderFlowRestore? restore,
   ReaderFlowHighlight? highlight,
   List<ReadingChapter> chapters = _chapters,
@@ -99,60 +99,84 @@ Future<void> _scrollBy(WidgetTester tester, double dy) async {
 
 void main() {
   group('ReaderScrollFlow', () {
-    testWidgets('build_givenTheNextChapterInHand_rendersBothWithoutATap', (
+    testWidgets('build_givenTheNextChapterInHand_printsEachChapterOnce', (
       WidgetTester tester,
     ) async {
       await _pumpFlow(
         tester,
-        bodies: <String, String>{
-          'https://source.test/1.html': _body('第一章'),
-          'https://source.test/2.html': _body('第二章'),
+        bodies: <int, String>{
+          0: _body('第一章'),
+          1: _body('第二章'),
         },
       );
 
-      // 上一章的尾巴 / 下一章的头都在同一份滚动正文里：章界不是一页按钮。
+      // 章标题印在正文之前（ADR-0086 §决策 7）；每章只出现一次。
+      expect(find.text('第1章'), findsOneWidget);
+      expect(find.text('第2章'), findsOneWidget);
       expect(find.textContaining('第一章 第1行'), findsOneWidget);
       expect(find.textContaining('第二章 第1行'), findsOneWidget);
       expect(find.byType(ReaderChapterPendingStrip), findsNothing);
     });
 
-    testWidgets('build_givenTheChaptersInHand_printsEachTitleAndBodyOnce', (
+    testWidgets('build_givenTwoChaptersSharingAUrl_printsBothOnce', (
       WidgetTester tester,
     ) async {
+      // 同一个 URL 的两章各自成段：正文按章节下标传进来，不再按 URL 归并。
       await _pumpFlow(
         tester,
-        bodies: <String, String>{
-          'https://source.test/1.html': _body('第一章'),
-          'https://source.test/2.html': _body('第二章'),
-        },
+        chapters: const <ReadingChapter>[
+          ReadingChapter(title: '第1章', url: 'https://source.test/same.html'),
+          ReadingChapter(title: '第2章', url: 'https://source.test/same.html'),
+        ],
+        bodies: <int, String>{0: '同一份正文', 1: '同一份正文'},
       );
 
-      // 章标题在正文之前（ADR-0087 §决策 1）；每章正文只出现一次——连续滚动里
-      // 重复的正文比没有标题更难读。
       expect(find.text('第1章'), findsOneWidget);
       expect(find.text('第2章'), findsOneWidget);
-      expect(find.textContaining('第一章 第1行'), findsOneWidget);
-      expect(find.textContaining('第二章 第1行'), findsOneWidget);
+      // 两段，各自一份正文（不是一段里出现两次）。
+      expect(find.text('同一份正文'), findsNWidgets(2));
     });
 
-    testWidgets('scroll_givenTheNextChapterInHand_stillPrintsItOnce', (
+    testWidgets('build_givenTheNextBodyMissing_printsItsTitleAndALoadingBlock', (
       WidgetTester tester,
     ) async {
-      await _pumpFlow(
+      final _Probe probe = await _pumpFlow(
         tester,
-        bodies: <String, String>{
-          'https://source.test/1.html': _body('第一章'),
-          'https://source.test/2.html': _body('第二章'),
-        },
+        bodies: <int, String>{0: _body('第一章')},
       );
 
-      // 跨过章界后窗口会重排：重排只允许「接上」，不允许把同一章再画一遍。
-      await _scrollBy(tester, -6000);
+      // 下一章还没到：标题先出来，正文位置是「正在加载」，并且流程自己去要这一章。
+      expect(find.text('第2章'), findsOneWidget);
+      expect(find.byType(ReaderChapterPendingStrip), findsOneWidget);
+      expect(find.text('Loading…'), findsOneWidget);
+      expect(probe.requested, contains(1));
+    });
+
+    testWidgets('build_givenTheAnchorBodyMissing_printsItsTitleAndLoading', (
+      WidgetTester tester,
+    ) async {
+      // 刚打开就还没有正文：同样先给标题 + 正在加载，页面不再另画一个转圈。
+      await _pumpFlow(tester, bodies: const <int, String>{});
 
       expect(find.text('第1章'), findsOneWidget);
-      expect(find.text('第2章'), findsOneWidget);
-      expect(find.textContaining('第一章 第1行'), findsOneWidget);
-      expect(find.textContaining('第二章 第1行'), findsOneWidget);
+      expect(find.byType(ReaderChapterPendingStrip), findsWidgets);
+      expect(find.text('Loading…'), findsWidgets);
+    });
+
+    testWidgets('build_givenAFailedNextChapter_offersTheRetry', (
+      WidgetTester tester,
+    ) async {
+      final _Probe probe = await _pumpFlow(
+        tester,
+        bodies: <int, String>{0: '第一章正文'},
+        failed: <int>{1},
+      );
+
+      await tester.tap(find.text('Reload this chapter'));
+      await _advance(tester);
+
+      // 读失败的章给的是重试，不是永远转圈；点一次就再问一次。
+      expect(probe.requested.where((int index) => index == 1), hasLength(2));
     });
 
     testWidgets('scroll_givenTheNextChapterInHand_continuesIntoIt', (
@@ -160,9 +184,9 @@ void main() {
     ) async {
       final _Probe probe = await _pumpFlow(
         tester,
-        bodies: <String, String>{
-          'https://source.test/1.html': _body('第一章'),
-          'https://source.test/2.html': _body('第二章'),
+        bodies: <int, String>{
+          0: _body('第一章'),
+          1: _body('第二章'),
         },
       );
 
@@ -170,7 +194,6 @@ void main() {
 
       // 滑到后面，视口顶已经落在第二章：会话跟着换章，中间没有「加载中」。
       expect(probe.reportedChapters, contains(1));
-      expect(find.byType(ReaderChapterPendingStrip), findsNothing);
     });
 
     testWidgets('scroll_givenThePreviousChapterInHand_goesBackIntoItsTail', (
@@ -179,9 +202,9 @@ void main() {
       final _Probe probe = await _pumpFlow(
         tester,
         anchorIndex: 1,
-        bodies: <String, String>{
-          'https://source.test/1.html': _body('第一章'),
-          'https://source.test/2.html': _body('第二章'),
+        bodies: <int, String>{
+          0: _body('第一章'),
+          1: _body('第二章'),
         },
         // 从第二章开头读起，向上滑就该回到第一章的尾巴。
         restore: (index: 1, charOffset: 0, nonce: 1),
@@ -193,61 +216,19 @@ void main() {
       expect(probe.reportedChapters, contains(0));
     });
 
-    testWidgets('build_givenThePreviousBodyMissing_asksForIt', (
-      WidgetTester tester,
-    ) async {
-      final _Probe probe = await _pumpFlow(
-        tester,
-        anchorIndex: 1,
-        bodies: <String, String>{'https://source.test/2.html': _body('第二章')},
-      );
-
-      // 窗口上方还缺第一章：流程自己发起接力加载，不必等读者唤出菜单。
-      expect(probe.requested, contains(0));
-      expect(find.byType(ReaderChapterPendingStrip), findsOneWidget);
-    });
-
-    testWidgets('build_givenTheNextBodyMissing_asksForItAndShowsTheStrip', (
-      WidgetTester tester,
-    ) async {
-      final _Probe probe = await _pumpFlow(
-        tester,
-        bodies: <String, String>{'https://source.test/1.html': '第一章正文'},
-      );
-
-      expect(probe.requested, contains(1));
-      expect(find.byType(ReaderChapterPendingStrip), findsOneWidget);
-    });
-
-    testWidgets('retry_givenAFailedNeighbour_asksForItAgain', (
-      WidgetTester tester,
-    ) async {
-      final _Probe probe = await _pumpFlow(
-        tester,
-        bodies: <String, String>{'https://source.test/1.html': '第一章正文'},
-        failed: <String>{'https://source.test/2.html'},
-      );
-
-      await tester.tap(find.text('Reload this chapter'));
-      await _advance(tester);
-
-      // 自动接力只问一次；重试是读者主动要求的，必须再发一次。
-      expect(probe.requested.where((int index) => index == 1).length, 2);
-    });
-
     testWidgets('build_givenAnExplicitRestore_landsOnThatPosition', (
       WidgetTester tester,
     ) async {
       final _Probe probe = await _pumpFlow(
         tester,
-        bodies: <String, String>{
-          'https://source.test/1.html': _body('第一章'),
-          'https://source.test/2.html': _body('第二章'),
+        bodies: <int, String>{
+          0: _body('第一章'),
+          1: _body('第二章'),
         },
         restore: (index: 1, charOffset: 10, nonce: 1),
       );
 
-      // 显式跳转落在第二章，而不是停在「窗口第一段」的第一章开头。
+      // 显式跳转落在第二章，而不是停在窗口第一段的第一章开头。
       expect(probe.progress.first.index, 1);
       expect(probe.progress.first.charOffset, greaterThan(0));
     });
@@ -257,7 +238,7 @@ void main() {
     ) async {
       await _pumpFlow(
         tester,
-        bodies: <String, String>{'https://source.test/1.html': '第一章正文'},
+        bodies: <int, String>{0: '第一章正文'},
         chapters: const <ReadingChapter>[
           ReadingChapter(title: '第1章', url: 'https://source.test/1.html'),
         ],
@@ -271,9 +252,9 @@ void main() {
     ) async {
       await _pumpFlow(
         tester,
-        bodies: <String, String>{
-          'https://source.test/1.html': _body('第一章'),
-          'https://source.test/2.html': _body('第二章'),
+        bodies: <int, String>{
+          0: _body('第一章'),
+          1: _body('第二章'),
         },
         highlight: (url: 'https://source.test/2.html', start: 0, end: 2),
       );

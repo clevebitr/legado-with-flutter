@@ -20,7 +20,6 @@ final class _FixedClock implements Clock {
 Future<void> _pump(
   WidgetTester tester, {
   required FakeBatteryLevel battery,
-  String chapterName = '第1章 开端',
   String progressText = '第 1/2 章 · 本章 35%',
 }) async {
   await tester.pumpWidget(
@@ -30,7 +29,6 @@ Future<void> _pump(
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: ReaderStatusBar(
-          chapterName: chapterName,
           progressText: progressText,
           clock: _FixedClock(DateTime(2026, 10, 28, 9, 5)),
           battery: battery,
@@ -52,7 +50,6 @@ void main() {
 
       await _pump(tester, battery: battery);
 
-      expect(find.text('第1章 开端'), findsOneWidget);
       expect(find.text('第 1/2 章 · 本章 35%'), findsOneWidget);
       // 时间与电量：沉浸式把两者都藏起来了，状态栏负责放回来。
       expect(find.textContaining('9:05'), findsOneWidget);

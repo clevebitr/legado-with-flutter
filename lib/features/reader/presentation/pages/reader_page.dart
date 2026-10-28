@@ -460,16 +460,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return const SizedBox.shrink();
     }
     final int index = _currentIndex;
-    final String chapterName = index < chapters.length
-        ? chapters[index].title
-        : _book.name;
     final String progress = chapters.isEmpty
         ? l10n.readerChapterPercent(_chapterPercent)
         : '${l10n.readerChapterProgress(index + 1, chapters.length)} · '
               '${l10n.readerChapterPercent(_chapterPercent)}';
 
     return ReaderStatusBar(
-      chapterName: chapterName,
       progressText: progress,
       clock: clock,
       battery: battery,
@@ -956,6 +952,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (nextChapter != null) {
       _schedulePrefetch(nextChapter);
     }
+    // 本章的正文也走同一条读路径：正文还没到手时流程会先画「标题 + 正在加载」，
+    // 页面自己不再另画一个转圈（那会让正文在加载前后各画一次）。
+    final ParseResult<String>? content = ref
+        .watch(readerContentProvider((_book, chapter.url)))
+        .value;
+    final String? currentData = switch (content) {
+      ParseSuccess<String>(:final String data) => data,
+      ParseFailure<String>() => null,
+      null => null,
+    };
 
     final M3ETheme tokens = context.m3e;
     final TextStyle style = readerTextStyle(
@@ -974,40 +980,55 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         : (url: spoken.chapterUrl, start: spoken.start, end: spoken.end);
 
     // 段距与首行缩进是**排版**（ADR-0051 §决策 4）：在渲染前套一次，正文数据不动。
-    Widget flowFor(String data) {
-      final Map<String, String> bodies = <String, String>{
-        for (final ReadingChapter candidate in _flowChapters(
-          chapters,
-          session.chapterIndex,
-        ))
-          if (candidate.url == chapter.url
-                  ? data
-                  : _prefetchedBodies[candidate.url]
-              case final String body)
-            candidate.url: _laidOutBody(candidate.url, body, settings),
-      };
-      _remembered(bodies[chapter.url] ?? data);
-      final ReaderFlowRestore restore = (
-        index: session.chapterIndex,
-        charOffset: session.charOffset,
-        nonce: _restoreNonce,
-      );
-      // 排版一变（字号 / 行距 / 字体）或读者显式跳转，正文按新位置重建一次；普通滚动与跨章
-      // 接力不换实例，否则「接着往下滑」就要先重建再定位（ADR-0085 §决策 4）。
-      final ValueKey<String> key = ValueKey<String>(
-        '${settings.pageMode}|${style.fontSize}|${style.height}|'
-        '${settings.fontFamily}|$_restoreNonce',
-      );
-      final double padding = _paddingOf(settings);
-      final TextStyle highlightStyle = spokenSentenceStyle(context, style);
+    //
+    // 正文按**章节下标**交给流程（不是按 URL）：目录里两章指向同一个地址是抓取站点的常见形状，
+    // 按 URL 归并会把它们压成一份正文，看起来就是同一章被打印了两遍（ADR-0087 §决策 1）。
+    final Map<int, String> bodies = <int, String>{};
+    final Set<int> failed = <int>{};
+    for (
+      var index = session.chapterIndex - 1;
+      index <= session.chapterIndex + 1;
+      index++
+    ) {
+      if (index < 0 || index >= chapters.length) {
+        continue;
+      }
+      final ReadingChapter candidate = chapters[index];
+      if (_prefetchFailed.contains(candidate.url) ||
+          (candidate.url == chapter.url && content is ParseFailure<String>)) {
+        failed.add(index);
+      }
+      final String? raw = candidate.url == chapter.url
+          ? currentData
+          : _prefetchedBodies[candidate.url];
+      if (raw != null) {
+        bodies[index] = _laidOutBody(candidate.url, raw, settings);
+      }
+    }
+    _remembered(bodies[session.chapterIndex] ?? currentData ?? '');
+    final ReaderFlowRestore restore = (
+      index: session.chapterIndex,
+      charOffset: session.charOffset,
+      nonce: _restoreNonce,
+    );
+    // 排版一变（字号 / 行距 / 字体）或读者显式跳转，正文按新位置重建一次；普通滚动与跨章
+    // 接力不换实例，否则「接着往下滑」就要先重建再定位（ADR-0085 §决策 4）。
+    final ValueKey<String> key = ValueKey<String>(
+      '${settings.pageMode}|${style.fontSize}|${style.height}|'
+      '${settings.fontFamily}|$_restoreNonce',
+    );
+    final double padding = _paddingOf(settings);
+    final TextStyle highlightStyle = spokenSentenceStyle(context, style);
 
-      return settings.pageMode == ReaderPageMode.scroll
+    // 三区点击（ADR-0051 §决策 1）：中间 ⅓ 唤出菜单，左右各 ⅓ 收起它。
+    return _tapZones(
+      child: settings.pageMode == ReaderPageMode.scroll
           ? ReaderScrollFlow(
               key: key,
               chapters: chapters,
               anchorIndex: session.chapterIndex,
               bodies: bodies,
-              failed: _prefetchFailed,
+              failed: failed,
               restore: restore,
               highlight: highlight,
               style: style,
@@ -1022,7 +1043,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               chapters: chapters,
               anchorIndex: session.chapterIndex,
               bodies: bodies,
-              failed: _prefetchFailed,
+              failed: failed,
               restore: restore,
               highlight: highlight,
               style: style,
@@ -1031,48 +1052,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               onProgress: _followFlow,
               onSettled: _settleFlow,
               onNeedChapter: _needChapter,
-            );
-    }
-
-    // 预取的正文就是这一章的：直接渲染，不再看 provider，翻章没有加载圈。
-    if (_prefetchedBodies[chapter.url] case final String prefetched) {
-      return _tapZones(child: flowFor(prefetched));
-    }
-
-    final AsyncValue<ParseResult<String>> content = ref.watch(
-      readerContentProvider((_book, chapter.url)),
+            ),
     );
-
-    // 三区点击（ADR-0051 §决策 1）：中间 ⅓ 唤出菜单，左右各 ⅓ 唤出菜单前先收起它。
-    return _tapZones(
-      child: switch (content) {
-        AsyncData<ParseResult<String>>(:final ParseResult<String> value) =>
-          switch (value) {
-            ParseSuccess<String>(:final String data) => flowFor(data),
-            ParseFailure<String>(:final ParseFailureKind kind) =>
-              FailureMessage(
-                kind: kind,
-                onRetry: () =>
-                    ref.invalidate(readerContentProvider((_book, chapter.url))),
-              ),
-          },
-        AsyncError<ParseResult<String>>() => FailureMessage(
-          kind: ParseFailureKind.parseFailed,
-          onRetry: () =>
-              ref.invalidate(readerContentProvider((_book, chapter.url))),
-        ),
-        _ => const Center(child: CircularProgressIndicator()),
-      },
-    );
-  }
-
-  /// The chapters the flows render around [index]: the previous one, itself and the next one.
-  List<ReadingChapter> _flowChapters(List<ReadingChapter> chapters, int index) {
-    return <ReadingChapter>[
-      if (index > 0) chapters[index - 1],
-      chapters[index],
-      if (index + 1 < chapters.length) chapters[index + 1],
-    ];
   }
 
   /// Follows the flow: a new chapter switches the session, a new offset inside it is progress.
@@ -1112,6 +1093,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final ReadingChapter chapter = _chapters[index];
     // 接力加载与「重试」走同一条路：先清掉失败标记，否则预取会认为这一章不值得再试。
     _prefetchFailed.remove(chapter.url);
+    // 本章的正文是页面自己 watch 的 provider：不重取它，重试仍然拿旧结果。
+    ref.invalidate(readerContentProvider((_book, chapter.url)));
     _schedulePrefetch(chapter);
   }
 

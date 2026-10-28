@@ -861,7 +861,7 @@
   "@readerNextChapter": {
     "description": "Action that opens the next chapter."
   },
-  "readerChapterLoading": "Loading the neighbouring chapter…",
+  "readerChapterLoading": "Loading…",
   "@readerChapterLoading": {
     "description": "Shown where a chapter that has not arrived yet will appear."
   },

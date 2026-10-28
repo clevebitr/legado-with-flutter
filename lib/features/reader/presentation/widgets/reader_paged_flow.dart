@@ -9,20 +9,25 @@ import 'package:flutter_reader/features/reader/presentation/widgets/reader_style
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:m3e_design/m3e_design.dart';
 
-/// One page of the continuous flow: the window `[start, end)` of a chapter's body.
-typedef _FlowPage = ({int index, String url, String text, int start, int end});
+/// One page of the flow: a window `[start, end)` of the entry's body, or its loading page.
+typedef _FlowPage = ({
+  int index,
+  String url,
+  String? text,
+  String title,
+  int start,
+  int end,
+});
 
 /// Renders the chapters in hand as pages that keep turning across chapter boundaries
 /// (`docs/dev/adr/0085-continuous-chapter-reading.md`).
 ///
-/// The pages of the previous chapter's tail, the current chapter and the next chapter's head are
-/// one list, so turning past the last page of a chapter lands on the next chapter's first page
-/// instead of on a "next chapter" button. A neighbour whose body is not in hand yet gets a
-/// [ReaderChapterPendingStrip] page in its place: that page is what fetches it, and because the
-/// fetch only ever *appends* pages, the page the reader is looking at turns into the real first
-/// page of that chapter as soon as it arrives — no jump, no tap.
+/// The slots are derived from the session chapter (`anchor - 1`, `anchor`, `anchor + 1`) by
+/// [ReaderChapterSlots], so a chapter is never rendered twice; a slot without a body becomes a
+/// single titled loading page instead of vanishing, which is what keeps "the next chapter" a page
+/// away rather than a fetch away.
 class ReaderPagedFlow extends StatefulWidget {
-  /// Creates the flow; every chapter in [bodies] must be keyed by its TOC URL.
+  /// Creates the flow; [bodies] is keyed by chapter **index**.
   const ReaderPagedFlow({
     required this.chapters,
     required this.anchorIndex,
@@ -45,11 +50,11 @@ class ReaderPagedFlow extends StatefulWidget {
   /// The chapter the session is on.
   final int anchorIndex;
 
-  /// Laid-out bodies in hand, keyed by chapter URL (the page's prefetch window).
-  final Map<String, String> bodies;
+  /// Laid-out bodies in hand, keyed by chapter index.
+  final Map<int, String> bodies;
 
-  /// Chapters whose body could not be read, by chapter URL.
-  final Set<String> failed;
+  /// Chapter indexes whose body could not be read.
+  final Set<int> failed;
 
   /// The page the flow must open at, tagged with a nonce so a repeated jump is honoured.
   final ReaderFlowRestore? restore;
@@ -72,28 +77,23 @@ class ReaderPagedFlow extends StatefulWidget {
   /// Called when a page turn settles, so the page can write the position out.
   final void Function(int index, int charOffset) onSettled;
 
-  /// Called with a chapter index whose body the flow needs (a boundary page, or a retry).
+  /// Called with a chapter index whose body the flow needs (a loading page, or a retry).
   final void Function(int index) onNeedChapter;
 
   @override
   State<ReaderPagedFlow> createState() => _ReaderPagedFlowState();
 }
 
-/// State of the paged flow: the rendered chapters, their measured pages and the controller.
+/// State of the paged flow: the measured entries, the flattened pages and the controller.
 class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
-  final ReaderChapterWindow _window = ReaderChapterWindow();
+  /// Measured page starts, keyed by chapter index.
+  final Map<int, ({int signature, List<int> starts})> _starts =
+      <int, ({int signature, List<int> starts})>{};
 
-  /// Measured page starts, keyed by chapter URL.
-  final Map<String, ({int signature, List<int> starts})> _starts =
-      <String, ({int signature, List<int> starts})>{};
-
-  /// Chapters currently rendered, contiguous and in TOC order.
+  /// The rendered chapters, in reading order.
   List<ReaderFlowChapter> _visible = const <ReaderFlowChapter>[];
 
-  /// The rendered chapters frozen while a drag is in progress, or `null` when there is none.
-  List<ReaderFlowChapter>? _frozen;
-
-  /// Every page of [_visible], in reading order.
+  /// Every page of [_visible], in reading order (a loading chapter takes one page).
   List<_FlowPage> _pages = const <_FlowPage>[];
 
   /// The measuring box of the last build.
@@ -102,18 +102,13 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   /// The text scale of the last build, kept so pages can also be measured outside `build`.
   TextScaler _textScaler = TextScaler.noScaling;
 
-  /// How many pages sit before the anchor chapter's first page (the leading placeholder included).
+  /// How many pages sit before the anchor chapter.
   ///
   /// This is what keeps the reader on the same text when pages are added or dropped above it.
   int _leadingPages = 0;
 
-  /// Whether a neighbour without a body has a placeholder page at the start / at the end.
-  bool _leadingPending = false;
-  bool _trailingPending = false;
-
-  /// The chapter each placeholder page already asked for, so one fetch is one request.
-  int? _requestedBefore;
-  int? _requestedAfter;
+  /// The pages the rendered window still owes the reader, applied after the frame.
+  int _pendingPageJump = 0;
 
   PageController? _controller;
 
@@ -126,17 +121,20 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   /// Guards the flow's own page jumps: their notifications are not reader turns.
   bool _compensating = false;
 
-  /// The pages the rendered window still owes the reader, applied after the frame.
-  ///
-  /// `jumpToPage` cannot run while the tree builds or lays out: it dispatches a scroll notification
-  /// the app bar listens to, and marking a widget dirty there is an assertion.
-  int _pendingPageJump = 0;
-
   /// Whether the one post-frame pass of this frame is already scheduled.
   bool _frameScheduled = false;
 
   /// Whether the last notification of this frame ended a drag.
   bool _settlePending = false;
+
+  /// Whether the slots were rebuilt during the current drag.
+  bool _frozen = false;
+
+  /// The chapters this flow already asked a body for.
+  final Set<int> _requested = <int>{};
+
+  /// Whether the slots still have to be rebuilt when the drag ends.
+  bool _rebuildPending = false;
 
   /// The position to re-land on after the pages were re-measured (a rotated screen), if any.
   ({int index, int charOffset})? _pendingReland;
@@ -150,50 +148,53 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   @override
   void didUpdateWidget(ReaderPagedFlow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_frozen == null) {
-      _applyStructure(
-        _window.sync(
-          chapters: widget.chapters,
-          anchorIndex: widget.anchorIndex,
-          bodies: widget.bodies,
-        ),
-      );
+    if (!_frozen) {
+      _applySlots(_slots());
     }
   }
 
-  /// The measuring signature: a change here invalidates every measured page list.
-  int get _signature => Object.hash(
-    _size.width,
-    _size.height,
-    widget.style,
-    _textScaler.scale(1),
+  /// The slots this frame renders: the anchor and its neighbours.
+  List<ReaderFlowChapter> _slots() => ReaderChapterSlots.of(
+    chapters: widget.chapters,
+    anchorIndex: widget.anchorIndex,
+    bodies: widget.bodies,
+    includePrevious: true,
   );
+
+  /// The measuring signature: a change here invalidates every measured page list.
+  int get _signature =>
+      Object.hash(_size.width, _size.height, widget.style, _textScaler.scale(1));
 
   /// The page starts of [chapter], measured once per size, style and text scale.
   List<int> _startsOf(ReaderFlowChapter chapter) {
+    final String text = chapter.text ?? '';
     final int signature = _signature;
-    final ({int signature, List<int> starts})? cached = _starts[chapter.url];
+    final ({int signature, List<int> starts})? cached = _starts[chapter.index];
     if (cached != null && cached.signature == signature) {
       return cached.starts;
     }
-    final List<int> starts = readerPageStarts(
-      text: chapter.text,
-      style: widget.style,
-      size: _size,
-      textScaler: _textScaler,
-    );
-    _starts[chapter.url] = (signature: signature, starts: starts);
+    final List<int> starts = text.isEmpty
+        ? const <int>[0]
+        : readerPageStarts(
+            text: text,
+            style: widget.style,
+            size: _size,
+            textScaler: _textScaler,
+          );
+    _starts[chapter.index] = (signature: signature, starts: starts);
 
     return starts;
   }
 
   /// Replaces the rendered chapters, keeping the page the reader is on.
-  void _applyStructure(List<ReaderFlowChapter> next) {
-    // 锚点章的正文可能还没到（刚跳章）：空窗口会把正文抹掉，宁可先什么都不换。
-    if (next.isEmpty || _sameChapters(_visible, next)) {
-      if (next.isNotEmpty) {
-        _visible = next;
-      }
+  void _applySlots(List<ReaderFlowChapter> next) {
+    if (next.isEmpty) {
+      return;
+    }
+    if (_sameSlots(_visible, next)) {
+      _visible = next;
+      // 同一批章，只是正文到了：页表要按新正文重排（页码仍按上面的补法处理）。
+      _measurePages();
 
       return;
     }
@@ -201,13 +202,14 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
     _measurePages();
   }
 
-  /// Whether [a] and [b] name the same chapters in the same order.
-  bool _sameChapters(List<ReaderFlowChapter> a, List<ReaderFlowChapter> b) {
+  /// Whether [a] and [b] are the same chapters with the same bodies.
+  bool _sameSlots(List<ReaderFlowChapter> a, List<ReaderFlowChapter> b) {
     if (a.length != b.length) {
       return false;
     }
-    for (var index = 0; index < a.length; index++) {
-      if (a[index].index != b[index].index || a[index].url != b[index].url) {
+    for (var position = 0; position < a.length; position++) {
+      if (a[position].index != b[position].index ||
+          a[position].text?.length != b[position].text?.length) {
         return false;
       }
     }
@@ -220,34 +222,45 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   /// [compensate] is off while a new viewport size is being measured: the page count then changes
   /// because every page changed, not because a chapter appeared above the reader.
   void _measurePages({bool compensate = true}) {
-    final bool leadingPending = _beforeIndex != null;
-    final bool trailingPending = _afterIndex != null;
     final List<_FlowPage> pages = <_FlowPage>[];
-    var anchorLeading = leadingPending ? 1 : 0;
+    var anchorLeading = 0;
     for (final ReaderFlowChapter chapter in _visible) {
+      final String? text = chapter.text;
+      if (text == null) {
+        // 正文还没到：这一章占一页（标题 + 正在加载），读者能翻进来看到它在路上。
+        if (chapter.index < widget.anchorIndex) {
+          anchorLeading++;
+        }
+        pages.add((
+          index: chapter.index,
+          url: chapter.url,
+          text: null,
+          title: chapter.title,
+          start: 0,
+          end: 0,
+        ));
+
+        continue;
+      }
       final List<int> starts = _startsOf(chapter);
+      if (chapter.index < widget.anchorIndex) {
+        anchorLeading += starts.length;
+      }
       for (var page = 0; page < starts.length; page++) {
         pages.add((
           index: chapter.index,
           url: chapter.url,
-          text: chapter.text,
+          text: text,
+          title: chapter.title,
           start: starts[page],
-          end: page + 1 < starts.length
-              ? starts[page + 1]
-              : chapter.text.length,
+          end: page + 1 < starts.length ? starts[page + 1] : text.length,
         ));
-      }
-      if (chapter.index < widget.anchorIndex) {
-        anchorLeading += starts.length;
       }
     }
     final int added = anchorLeading - _leadingPages;
     _pages = pages;
-    _leadingPending = leadingPending;
-    _trailingPending = trailingPending;
     _leadingPages = anchorLeading;
     if (compensate && added != 0) {
-      // 上方多了 / 少了 added 页：页码跟着挪同样多，手指下的那段字不动。
       _pendingPageJump += added;
       _scheduleFrame();
     }
@@ -286,11 +299,7 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
         builder: (BuildContext context, BoxConstraints constraints) {
           final Size size = constraints.biggest;
           if (_visible.isEmpty) {
-            _visible = _window.sync(
-              chapters: widget.chapters,
-              anchorIndex: widget.anchorIndex,
-              bodies: widget.bodies,
-            );
+            _visible = _slots();
             _size = size;
             _textScaler = MediaQuery.textScalerOf(context);
             _measurePages(compensate: false);
@@ -313,10 +322,7 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
 
           final int pageCount = _visible.isEmpty
               ? 0
-              : _pages.length +
-                    (_leadingPending ? 1 : 0) +
-                    (_trailingPending ? 1 : 0) +
-                    (_afterIndex == null ? 1 : 0);
+              : _pages.length + (_isLastChapter ? 1 : 0);
           final PageController controller = _controller ??= PageController(
             initialPage: _pageKey(_leadingPages),
           );
@@ -335,6 +341,11 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
       ),
     );
   }
+
+  /// Whether the last rendered chapter is the book's last chapter.
+  bool get _isLastChapter =>
+      _visible.isNotEmpty &&
+      _visible.last.index == widget.chapters.length - 1;
 
   /// The page the flow opens at for the pending restore.
   int _pageKey(int fallback) {
@@ -363,11 +374,8 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
         break;
       }
     }
-    if (found < 0) {
-      return null;
-    }
 
-    return found + (_leadingPending ? 1 : 0);
+    return found < 0 ? null : found;
   }
 
   /// Jumps to the page of the pending restore once the frame that can measure it is laid out.
@@ -414,25 +422,17 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
       if (!mounted) {
         return;
       }
+      if (_rebuildPending) {
+        _rebuildPending = false;
+        _applySlots(_slots());
+      }
       _applyPendingJump();
       final PageController? controller = _controller;
       if (controller == null || !controller.hasClients) {
         return;
       }
       _reland(controller);
-      final int position =
-          (controller.page ?? 0).round() - (_leadingPending ? 1 : 0);
-      // 提前一页接力：等翻到占位页再抓，读者看到的仍是一次「正在加载」。
-      if (position <= 0) {
-        if (_beforeIndex case final int before) {
-          _request(before, isBefore: true);
-        }
-      }
-      if (position >= _pages.length - 1) {
-        if (_afterIndex case final int after) {
-          _request(after, isBefore: false);
-        }
-      }
+      _requestMissingBodies();
       _reportCurrentPage();
       final bool settle = _settlePending;
       _settlePending = false;
@@ -441,20 +441,27 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
         if (page != null) {
           widget.onSettled(page.index, page.start);
         }
-        _frozen = null;
-        _reconcile();
       }
     });
   }
 
-  /// The page the viewport shows, or `null` on a placeholder page.
+  /// Asks for the body of every rendered chapter that has none, once per chapter.
+  void _requestMissingBodies() {
+    for (final ReaderFlowChapter chapter in _visible) {
+      if (chapter.text != null || !_requested.add(chapter.index)) {
+        continue;
+      }
+      widget.onNeedChapter(chapter.index);
+    }
+  }
+
+  /// The page the viewport shows, or `null` on the end page.
   _FlowPage? _currentPage() {
     final PageController? controller = _controller;
     if (controller == null || !controller.hasClients) {
       return null;
     }
-    final int position =
-        (controller.page ?? 0).round() - (_leadingPending ? 1 : 0);
+    final int position = (controller.page ?? 0).round();
     if (position < 0 || position >= _pages.length) {
       return null;
     }
@@ -478,24 +485,16 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
     _compensating = false;
   }
 
-  /// The page under the viewport, reported to the page unless it is a placeholder or a jump is
-  /// still to be applied.
+  /// The page under the viewport, reported to the page unless a jump is still to be applied.
   void _reportCurrentPage() {
-    final PageController? controller = _controller;
-    if (controller == null ||
-        !controller.hasClients ||
-        _restorePending ||
-        // 页码还没补上时，此刻的页号指向的是「挪动前」的那一页：报出去会把会话带到别处。
-        _pendingPageJump != 0) {
+    if (_restorePending || _pendingPageJump != 0) {
       return;
     }
-    final int page = (controller.page ?? 0).round();
-    final int position = page - (_leadingPending ? 1 : 0);
-    if (position < 0 || position >= _pages.length) {
+    final _FlowPage? page = _currentPage();
+    if (page == null) {
       return;
     }
-    final _FlowPage flowPage = _pages[position];
-    widget.onProgress(flowPage.index, flowPage.start);
+    widget.onProgress(page.index, page.start);
   }
 
   /// Whether an explicit jump was asked for and has not been applied yet.
@@ -521,127 +520,67 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
     }
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null) {
-      _frozen = _visible;
+      _frozen = true;
     }
     if (notification is ScrollEndNotification) {
       _settlePending = true;
+      _rebuildPending = true;
+      _frozen = false;
       _scheduleFrame();
     }
 
     return false;
   }
 
-  /// Rebuilds the rendered window around the anchor chapter and drops the far ones.
-  void _reconcile() {
-    final int anchorIndex = widget.anchorIndex;
-    _window.retain(anchorIndex: anchorIndex);
-    final List<ReaderFlowChapter> next = _window.sync(
-      chapters: widget.chapters,
-      anchorIndex: anchorIndex,
-      bodies: widget.bodies,
-    );
-    if (next.isEmpty) {
-      return;
-    }
-    setState(() {
-      _applyStructure(next);
-    });
-  }
-
-  /// Asks the page for [index]'s body, once per chapter.
-  void _request(int index, {required bool isBefore}) {
-    if (isBefore ? _requestedBefore == index : _requestedAfter == index) {
-      return;
-    }
-    if (isBefore) {
-      _requestedBefore = index;
-    } else {
-      _requestedAfter = index;
-    }
-    widget.onNeedChapter(index);
-  }
-
-  /// The chapter before the anchor that the window does not have yet, or `null`.
-  int? get _beforeIndex => _missingNeighbour(-1);
-
-  /// The chapter after the anchor that the window does not have yet, or `null`.
-  int? get _afterIndex => _missingNeighbour(1);
-
-  /// The anchor's neighbour [step] chapters away, when the window does not have it yet.
-  ///
-  /// 相邻章已经在窗口里时不该再要一章更远的：那一次抓取会在页面的预取窗口里立刻被裁掉，
-  /// 纯属每帧重试的浪费。
-  int? _missingNeighbour(int step) {
-    if (_visible.isEmpty) {
-      return null;
-    }
-    final int index = widget.anchorIndex + step;
-    if (index < 0 || index >= widget.chapters.length) {
-      return null;
-    }
-    final bool loaded = _visible.any(
-      (ReaderFlowChapter chapter) => chapter.index == index,
-    );
-
-    return loaded ? null : index;
-  }
-
-  /// Whether the body of chapter [index] failed to load.
-  bool _isFailed(int index) {
-    if (index < 0 || index >= widget.chapters.length) {
-      return false;
-    }
-
-    return widget.failed.contains(widget.chapters[index].url);
-  }
-
-  /// The highlight range of the chapter at [url], when the read-aloud sentence belongs to it.
-  ({int start, int end})? _highlightOf(String url) {
-    final ReaderFlowHighlight? highlight = widget.highlight;
-    if (highlight == null || highlight.url != url) {
-      return null;
-    }
-
-    return (start: highlight.start, end: highlight.end);
-  }
-
   /// The widget of one page of the flow.
   Widget _page(BuildContext context, int page) {
-    final int position = page - (_leadingPending ? 1 : 0);
-    if (position < 0) {
-      if (_beforeIndex case final int before) {
-        return _pendingPage(before);
-      }
-    } else if (position < _pages.length) {
-      final _FlowPage flowPage = _pages[position];
-
-      return SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        child: readingText(
-          body: flowPage.text,
-          start: flowPage.start,
-          end: flowPage.end,
-          style: widget.style,
-          highlightStyle: widget.highlightStyle,
-          highlight: _highlightOf(flowPage.url),
-        ),
-      );
-    } else if (position == _pages.length) {
-      if (_afterIndex case final int after) {
-        return _pendingPage(after);
-      }
+    if (page < 0 || page >= _pages.length) {
+      return _bookEnd(context);
+    }
+    final _FlowPage flowPage = _pages[page];
+    final String? text = flowPage.text;
+    if (text == null) {
+      return _pendingPage(context, flowPage);
     }
 
-    return _bookEnd(context);
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: readingText(
+        body: text,
+        start: flowPage.start,
+        end: flowPage.end,
+        style: widget.style,
+        highlightStyle: widget.highlightStyle,
+        highlight: _highlightOf(flowPage.url),
+      ),
+    );
   }
 
   /// A page that stands in for a chapter whose body is still on its way.
-  Widget _pendingPage(int index) {
+  ///
+  /// It carries the chapter's own title, so the reader knows which chapter is loading.
+  Widget _pendingPage(BuildContext context, _FlowPage page) {
+    final M3ETheme tokens = context.m3e;
+
     return Center(
-      child: ReaderChapterPendingStrip(
-        isFailed: _isFailed(index),
-        // 重试是读者主动要求：不再受「这一露面已经问过」的闸门限制。
-        onRetry: () => widget.onNeedChapter(index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (page.title.isNotEmpty)
+            Text(
+              page.title,
+              style: tokens.typography.base.titleMedium?.copyWith(
+                color: widget.style.color,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          const SizedBox(height: 16),
+          ReaderChapterPendingStrip(
+            isFailed: widget.failed.contains(page.index),
+            // 重试是读者主动要求：不再受「这一面已经问过」的闸门限制。
+            onRetry: () => widget.onNeedChapter(page.index),
+          ),
+        ],
       ),
     );
   }
@@ -661,5 +600,15 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
         ),
       ),
     );
+  }
+
+  /// The highlight range of the chapter at [url], when the read-aloud sentence belongs to it.
+  ({int start, int end})? _highlightOf(String url) {
+    final ReaderFlowHighlight? highlight = widget.highlight;
+    if (highlight == null || highlight.url != url) {
+      return null;
+    }
+
+    return (start: highlight.start, end: highlight.end);
   }
 }

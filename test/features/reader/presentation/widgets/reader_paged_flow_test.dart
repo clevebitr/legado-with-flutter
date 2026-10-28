@@ -24,7 +24,7 @@ const TextStyle _highlightStyle = TextStyle(backgroundColor: Color(0xFF00FF00));
 
 /// Advances a few frames instead of settling.
 ///
-/// A pending strip shows an indeterminate [CircularProgressIndicator], which animates forever:
+/// A loading page shows an indeterminate [CircularProgressIndicator], which animates forever:
 /// `pumpAndSettle` would never return while one is on screen.
 Future<void> _advance(WidgetTester tester, {int frames = 5}) async {
   for (var frame = 0; frame < frames; frame++) {
@@ -36,8 +36,8 @@ Future<void> _advance(WidgetTester tester, {int frames = 5}) async {
 class _Harness {
   _Harness(this.bodies, {this.anchorIndex = 0, this.chapters = _chapters});
 
-  /// The bodies in hand, keyed by chapter URL.
-  final Map<String, String> bodies;
+  /// The bodies in hand, keyed by chapter index.
+  final Map<int, String> bodies;
 
   /// The session's chapter.
   final int anchorIndex;
@@ -68,7 +68,7 @@ class _Harness {
             chapters: chapters,
             anchorIndex: anchorIndex,
             bodies: bodies,
-            failed: const <String>{},
+            failed: const <int>{},
             restore: (index: anchorIndex, charOffset: 0, nonce: 1),
             highlight: null,
             style: _style,
@@ -97,23 +97,21 @@ void main() {
     testWidgets('build_givenOneShortChapter_showsItsFirstPage', (
       WidgetTester tester,
     ) async {
-      final _Harness harness = _Harness(<String, String>{
-        'https://source.test/1.html': '第一章正文',
-      });
+      final _Harness harness = _Harness(<int, String>{0: '第一章正文'});
 
       await harness.pump(tester);
 
       expect(find.textContaining('第一章正文'), findsOneWidget);
-      // 第二章没有正文但存在：先拿到占位页，而不是「本章读完 + 下一章」。
+      // 第二章没有正文但存在：它的那一页已经排上，并主动要正文。
       expect(harness.requested, contains(1));
     });
 
     testWidgets('turn_givenTheNextChapterInHand_landsOnItsFirstPage', (
       WidgetTester tester,
     ) async {
-      final _Harness harness = _Harness(<String, String>{
-        'https://source.test/1.html': '第一章正文',
-        'https://source.test/2.html': _body('第二章'),
+      final _Harness harness = _Harness(<int, String>{
+        0: '第一章正文',
+        1: _body('第二章'),
       });
 
       await harness.pump(tester);
@@ -125,36 +123,33 @@ void main() {
         contains(1),
       );
       expect(find.textContaining('第二章 第1行'), findsOneWidget);
-      expect(find.text('This is the last chapter'), findsNothing);
     });
 
-    testWidgets('turn_givenTheNextBodyMissing_showsThePlaceholderPage', (
+    testWidgets('turn_givenTheNextBodyMissing_showsItsTitleAndLoading', (
       WidgetTester tester,
     ) async {
-      final _Harness harness = _Harness(<String, String>{
-        'https://source.test/1.html': '第一章正文',
-      });
+      final _Harness harness = _Harness(<int, String>{0: '第一章正文'});
 
       await harness.pump(tester);
       await _turnPage(tester);
 
+      // 占位页带着这一章的标题：读者知道在等哪一章（ADR-0086 §决策 7）。
+      expect(find.text('第2章'), findsOneWidget);
       expect(find.byType(ReaderChapterPendingStrip), findsOneWidget);
-      expect(find.text('Loading the neighbouring chapter…'), findsOneWidget);
+      expect(find.text('Loading…'), findsOneWidget);
     });
 
     testWidgets('build_givenThePlaceholderBodyArrives_replacesItInPlace', (
       WidgetTester tester,
     ) async {
-      final _Harness harness = _Harness(<String, String>{
-        'https://source.test/1.html': '第一章正文',
-      });
+      final _Harness harness = _Harness(<int, String>{0: '第一章正文'});
 
       await harness.pump(tester);
       await _turnPage(tester);
       expect(find.byType(ReaderChapterPendingStrip), findsOneWidget);
 
       // 正文到手：占位页原地变成第二章的第一页，不跳页、不需要再翻一次。
-      harness.bodies['https://source.test/2.html'] = '第二章正文';
+      harness.bodies[1] = '第二章正文';
       await harness.pump(tester);
 
       expect(find.byType(ReaderChapterPendingStrip), findsNothing);
@@ -168,9 +163,9 @@ void main() {
     testWidgets('build_givenThePreviousChapterInHand_turnsBackIntoTail', (
       WidgetTester tester,
     ) async {
-      final _Harness harness = _Harness(<String, String>{
-        'https://source.test/1.html': _body('第一章'),
-        'https://source.test/2.html': _body('第二章'),
+      final _Harness harness = _Harness(<int, String>{
+        0: _body('第一章'),
+        1: _body('第二章'),
       }, anchorIndex: 1);
 
       await harness.pump(tester);
@@ -188,7 +183,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final _Harness harness = _Harness(
-        <String, String>{'https://source.test/1.html': '第一章正文'},
+        <int, String>{0: '第一章正文'},
         chapters: const <ReadingChapter>[
           ReadingChapter(title: '第1章', url: 'https://source.test/1.html'),
         ],
@@ -198,9 +193,7 @@ void main() {
       await _turnPage(tester);
 
       expect(find.text('This is the last chapter'), findsOneWidget);
-      // 已是最后一章：没有「下一章」按钮，也没有占位页。
       expect(find.byType(ReaderChapterPendingStrip), findsNothing);
-      expect(find.text('Next chapter'), findsNothing);
     });
   });
 }

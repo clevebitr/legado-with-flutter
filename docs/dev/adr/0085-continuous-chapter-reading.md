@@ -80,6 +80,12 @@
 - 真正的最后一章：滚动模式在正文后显示「已是最后一章」；分页模式在页表末尾多一页同样的文案。
   `readerChapterEnd`（「本章读完」）与它的按钮页随之删除——章界不再是一个要点的动作。
 
+## 修订
+
+- **2026-10-28**：§决策 1 的「窗口」实现被替换为**按章节下标派生的槽位**（`ReaderChapterSlots`）：
+  每次从会话章算出 `anchor-1 / anchor / anchor+1`，不再保留「已渲染章」也不再按 URL 归并正文。
+  原因与取舍见 ADR-0086 §决策 7 与 §修订。
+
 ## 后果
 
 - 新增 `presentation/widgets/reader_chapter_flow.dart`（窗口策略 + 占位条）、`reader_scroll_flow.dart`、

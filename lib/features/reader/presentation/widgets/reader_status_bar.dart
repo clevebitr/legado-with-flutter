@@ -22,16 +22,12 @@ const Duration readerStatusRefresh = Duration(seconds: 30);
 class ReaderStatusBar extends StatefulWidget {
   /// Creates the status line.
   const ReaderStatusBar({
-    required this.chapterName,
     required this.progressText,
     required this.clock,
     required this.battery,
     required this.foreground,
     super.key,
   });
-
-  /// The open chapter's (purified) title; empty falls back to the app name line.
-  final String chapterName;
 
   /// The position text, already localized by the caller (`第 2/10 章 · 本章 35%`).
   final String progressText;
@@ -89,16 +85,9 @@ class _ReaderStatusBarState extends State<ReaderStatusBar> {
         ),
         child: Row(
           children: <Widget>[
-            Expanded(
-              child: Text(
-                widget.chapterName,
-                style: style,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            SizedBox(width: tokens.spacing.sm),
-            Text(widget.progressText, style: style),
+            // 章节名不在这里：正文里每章都有一个章头（ADR-0086 §决策 7），
+            // 状态栏再写一遍就是同一个标题出现在两处。
+            Expanded(child: Text(widget.progressText, style: style)),
             SizedBox(width: tokens.spacing.md),
             Text(
               charge == null

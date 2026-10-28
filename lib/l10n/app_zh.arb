@@ -189,7 +189,7 @@
   "readerBatteryLevel": "{percent}%（电量）",
   "readerPreviousChapter": "上一章",
   "readerNextChapter": "下一章",
-  "readerChapterLoading": "正在加载相邻章节…",
+  "readerChapterLoading": "正在加载…",
   "readerChapterRetry": "重新加载这一章",
   "readerLastChapter": "已是最后一章",
   "readerNoChapter": "这本书没有可读的章节。",

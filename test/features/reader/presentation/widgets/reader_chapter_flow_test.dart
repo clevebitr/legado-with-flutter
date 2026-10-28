@@ -27,181 +27,87 @@ Future<void> _pumpStrip(
 }
 
 void main() {
-  group('ReaderChapterWindow', () {
-    test('sync_givenOnlyTheAnchorBody_answersThatOneChapter', () {
-      final ReaderChapterWindow window = ReaderChapterWindow();
-
-      final List<ReaderFlowChapter> visible = window.sync(
+  group('ReaderChapterSlots', () {
+    test('of_givenOnlyTheAnchorBody_answersTheAnchorAndTheNextSlot', () {
+      // 下一章没有正文也占一个槽：它要印标题 + 「正在加载」，而不是凭空消失。
+      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
         chapters: _chapters,
         anchorIndex: 1,
-        bodies: <String, String>{'https://source.test/2.html': '正文二'},
+        bodies: <int, String>{1: '正文二'},
+        includePrevious: false,
       );
 
-      expect(visible, hasLength(1));
-      expect(visible.single.index, 1);
-      expect(visible.single.text, '正文二');
+      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[1, 2]);
+      expect(slots.first.text, '正文二');
+      expect(slots.last.text, isNull);
+      expect(slots.last.title, '第3章');
     });
 
-    test('sync_givenBodiesAroundTheAnchor_answersThemInTocOrder', () {
-      final ReaderChapterWindow window = ReaderChapterWindow();
-
-      final List<ReaderFlowChapter> visible = window.sync(
+    test('of_givenIncludePrevious_startsWithTheNeighbour', () {
+      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
         chapters: _chapters,
         anchorIndex: 1,
-        bodies: <String, String>{
-          'https://source.test/3.html': '正文三',
-          'https://source.test/1.html': '正文一',
-          'https://source.test/2.html': '正文二',
-        },
+        bodies: <int, String>{0: '正文一', 1: '正文二', 2: '正文三'},
+        includePrevious: true,
       );
 
-      expect(visible.map((ReaderFlowChapter chapter) => chapter.index), <int>[
-        0,
-        1,
-        2,
-      ]);
+      expect(
+        slots.map((ReaderFlowChapter slot) => slot.index),
+        <int>[0, 1, 2],
+      );
     });
 
-    test('sync_givenAGapBeforeTheAnchor_stopsAtTheGap', () {
-      // 中间章没有正文时不能把上下一拼：读者会滑进「不存在的正文」。
-      final ReaderChapterWindow window = ReaderChapterWindow();
+    test('of_givenTheFirstChapter_hasNoPreviousSlot', () {
+      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
+        chapters: _chapters,
+        anchorIndex: 0,
+        bodies: <int, String>{0: '正文一'},
+        includePrevious: true,
+      );
 
-      final List<ReaderFlowChapter> visible = window.sync(
+      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[0, 1]);
+    });
+
+    test('of_givenTheLastChapter_hasNoNextSlot', () {
+      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
         chapters: _chapters,
         anchorIndex: 2,
-        bodies: <String, String>{
-          'https://source.test/3.html': '正文三',
-          'https://source.test/1.html': '正文一',
-        },
+        bodies: <int, String>{2: '正文三'},
+        includePrevious: false,
       );
 
-      expect(visible, hasLength(1));
-      expect(visible.single.index, 2);
+      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[2]);
     });
 
-    test('sync_givenNoBodyForTheAnchor_answersNothing', () {
-      // 当前章正文还没到手：页面显示加载态，流程不该拿一个带洞的窗口去渲染。
-      expect(
-        ReaderChapterWindow().sync(
-          chapters: _chapters,
-          anchorIndex: 0,
-          bodies: <String, String>{'https://source.test/2.html': '正文二'},
-        ),
-        isEmpty,
-      );
-    });
-
-    test('sync_givenAnEmptyToc_answersNothing', () {
-      expect(
-        ReaderChapterWindow().sync(
-          chapters: const <ReadingChapter>[],
-          anchorIndex: 0,
-          bodies: <String, String>{'https://source.test/1.html': '正文一'},
-        ),
-        isEmpty,
-      );
-    });
-
-    test('sync_givenARebuiltToc_dropsTheChaptersItNoLongerKnows', () {
-      final ReaderChapterWindow window = ReaderChapterWindow();
-      window.sync(
-        chapters: _chapters,
-        anchorIndex: 0,
-        bodies: <String, String>{
-          'https://source.test/1.html': '正文一',
-          'https://source.test/2.html': '正文二',
-        },
-      );
-
-      // 换源后地址全变：旧章不能靠「已经渲染过」继续挂在窗口里（ADR-0085 §决策 3）。
-      final List<ReaderFlowChapter> visible = window.sync(
+    test('of_givenTwoChaptersWithTheSameUrl_keepsOneSlotPerChapter', () {
+      // 抓下来的目录里两章指向同一个地址是常见形状：按 URL 归并会把它们压成一份正文，
+      // 看起来就是同一章打印了两遍（ADR-0087 §决策 1）。
+      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
         chapters: const <ReadingChapter>[
-          ReadingChapter(title: '新第一章', url: 'https://other.test/1.html'),
+          ReadingChapter(title: '第1章', url: 'https://source.test/same.html'),
+          ReadingChapter(title: '第2章', url: 'https://source.test/same.html'),
         ],
         anchorIndex: 0,
-        bodies: <String, String>{'https://other.test/1.html': '新正文一'},
+        bodies: <int, String>{0: '正文一', 1: '正文一'},
+        includePrevious: false,
       );
 
-      expect(visible, hasLength(1));
-      expect(visible.single.url, 'https://other.test/1.html');
-    });
-
-    test('sync_givenABodyThatLeftThePageWindow_keepsTheRenderedChapter', () {
-      // 预取窗口跟着会话滑走时，屏幕上已经渲染的章不能跟着消失（否则读者眼前会跳一下）。
-      final ReaderChapterWindow window = ReaderChapterWindow();
-      window.sync(
-        chapters: _chapters,
-        anchorIndex: 1,
-        bodies: <String, String>{
-          'https://source.test/1.html': '正文一',
-          'https://source.test/2.html': '正文二',
-        },
-      );
-
-      final List<ReaderFlowChapter> visible = window.sync(
-        chapters: _chapters,
-        anchorIndex: 1,
-        bodies: <String, String>{'https://source.test/2.html': '正文二'},
-      );
-
-      expect(visible.map((ReaderFlowChapter chapter) => chapter.index), <int>[
-        0,
-        1,
+      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[0, 1]);
+      expect(slots.map((ReaderFlowChapter slot) => slot.title), <String>[
+        '第1章',
+        '第2章',
       ]);
     });
 
-    test('retain_givenChaptersWithinTheRadius_keepsThem', () {
-      final ReaderChapterWindow window = ReaderChapterWindow()
-        ..sync(
-          chapters: _chapters,
-          anchorIndex: 1,
-          bodies: <String, String>{
-            'https://source.test/1.html': '正文一',
-            'https://source.test/2.html': '正文二',
-            'https://source.test/3.html': '正文三',
-          },
-        );
-
-      final List<ReaderFlowChapter> dropped = window.retain(anchorIndex: 1);
-
-      expect(dropped, isEmpty);
+    test('of_givenAnAnchorOutsideTheToc_answersNothing', () {
       expect(
-        window.sync(
+        ReaderChapterSlots.of(
           chapters: _chapters,
-          anchorIndex: 1,
-          bodies: const <String, String>{},
+          anchorIndex: 5,
+          bodies: const <int, String>{},
+          includePrevious: true,
         ),
-        hasLength(3),
-      );
-    });
-
-    test('retain_givenAChapterTwoAway_dropsItForGood', () {
-      final ReaderChapterWindow window = ReaderChapterWindow()
-        ..sync(
-          chapters: _chapters,
-          anchorIndex: 0,
-          bodies: <String, String>{
-            'https://source.test/1.html': '正文一',
-            'https://source.test/2.html': '正文二',
-            'https://source.test/3.html': '正文三',
-          },
-        );
-
-      final List<ReaderFlowChapter> dropped = window.retain(anchorIndex: 0);
-
-      expect(dropped.map((ReaderFlowChapter chapter) => chapter.index), <int>[
-        2,
-      ]);
-      // 落下的章不再回来：内存里只留相邻的一章（ADR-0085 §决策 3）。
-      expect(
-        window
-            .sync(
-              chapters: _chapters,
-              anchorIndex: 0,
-              bodies: const <String, String>{},
-            )
-            .map((ReaderFlowChapter chapter) => chapter.index),
-        <int>[0, 1],
+        isEmpty,
       );
     });
   });
@@ -216,7 +122,7 @@ void main() {
       );
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.text('Loading the neighbouring chapter…'), findsOneWidget);
+      expect(find.text('Loading…'), findsOneWidget);
       expect(find.byType(TextButton), findsNothing);
     });
 
@@ -226,7 +132,10 @@ void main() {
       var retried = 0;
       await _pumpStrip(
         tester,
-        ReaderChapterPendingStrip(isFailed: true, onRetry: () => retried++),
+        ReaderChapterPendingStrip(
+          isFailed: true,
+          onRetry: () => retried++,
+        ),
       );
 
       // 读失败的章不能一直画成「还在加载」。
