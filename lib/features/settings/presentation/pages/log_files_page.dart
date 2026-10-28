@@ -207,8 +207,13 @@ class _LogFilesPageState extends ConsumerState<LogFilesPage> {
     }
   }
 
-  static String _nameOf(File file) =>
-      file.path.split(Platform.pathSeparator).last;
+  /// The file's own name, whichever separator the path was written with.
+  ///
+  /// `Platform.pathSeparator` is **not** enough: the separator of the path a caller recorded need
+  /// not be this build's (a test fixture, or a path that arrived through a share/import), and
+  /// `File.path` never normalises what it was handed — on Windows a `/`-separated path then showed
+  /// up in full instead of as a file name.
+  static String _nameOf(File file) => file.path.split(RegExp(r'[\\/]')).last;
 
   /// `123 B` / `12.3 KB` / `4.5 MB` — 日志页只需要量级。
   static String _formatBytes(int bytes) {
