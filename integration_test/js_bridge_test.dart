@@ -935,10 +935,11 @@ void main() {
     // `Packages.*` 是 Rhino 的另一条互操作入口（`Packages.java.lang.…`），同样具名拒绝——
     // 不然它是 `Packages is not defined` 这种更难懂的错误。
     for (final String script in <String>[
-      // `java.ajax` / `getCookie` / `toast` 已随重放层落地（ADR-0076 §决策 1），这里改用仍然
-      // 具名拒绝的两个：一个是零散成员，一个是 Rhino 互操作入口。
+      // `java.ajax` / `getCookie` / `toast` 已随重放层落地（ADR-0076 §决策 1），`Packages.java.lang.String`
+      // 已随最小垫片放行（ADR-0081）——这里改用仍然具名拒绝的两个：一个是零散成员，
+      // 一个是 `Packages.*` 里白名单**之外**的包（`javax.crypto` 登记为不做）。
       "java.refreshBookUrl('https://a.test')",
-      "Packages.java.lang.String('x')",
+      "Packages.javax.crypto.Cipher.getInstance('AES')",
     ]) {
       final ParseResult<Object?> result = await bridge.evaluate(
         _job(script: script),
@@ -1107,7 +1108,9 @@ void main() {
         ),
       );
 
-      expect(_value(result), 'token=abc|');
+      // `source.putVariable` 是上游的 `void`（`book-source.md` §6：整份变量形状），
+      // 所以它在字符串拼接里是 `undefined`，不是空串——这条断言钉的就是这个可观察值。
+      expect(_value(result), 'token=abc|undefined');
       expect(
         sourceVariables.snapshot('https://example-novel.test'),
         <String, String>{sourceVariableBlobName: 'second'},

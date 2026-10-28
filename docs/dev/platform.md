@@ -188,6 +188,7 @@ pageTransitionsTheme: const PageTransitionsTheme(
 |---|---|---|
 | `android/gradle.properties` | `kotlin.incremental=false` | Kotlin 2.4 的增量编译缓存在 Windows 上偶发文件锁定，报 `Could not close incremental caches` 并中断构建（最近复现于 `dynamic_color` 模块）。**这是工具链问题，与任何插件无关，不要因更换插件而删除。** |
 | `windows/CMakeLists.txt` | `add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)`（在 `include(flutter/generated_plugins.cmake)` 之前） | Windows CI 的 `windows-latest` 已是 **Visual Studio 2026（MSVC 14.5x）**，它把 `<experimental/coroutine>` 的弃用升级为硬错误（`error C2338` / `STL1011`），而 `just_audio_windows` 用 C++/WinRT 的 experimental 协程 → 整个 Windows 构建失败。插件的 `vcxproj` 在 pub cache 里不能改；这个宏是 MSVC 给出的逃生口。**移除触发条件**：`just_audio_windows` 迁到 C++20 `<coroutine>`，或我们不再依赖它 |
+| `windows/runner/ax_log_filter.{h,cpp}` + `main.cpp`（`InstallAccessibilityLogFilter()`） | 把引擎那条 `Failed to update ui::AXTree` 噪声从**控制台**里过滤掉（进程 stderr → 管道 → 逐行转发，只丢这一条）。上游缺陷仍 open（flutter/flutter#182444），不影响功能。**这是模板外文件**：`flutter create` 重新生成 runner 时要连同 `CMakeLists.txt` 里的源文件行一起保留（ADR-0084） |
 | `android/gradle.properties` | `android.r8.proguardAndroidTxt.disallowed=false` | `flutter_inappwebview_android 1.1.3` 仍调用 `getDefaultProguardFile('proguard-android.txt')`，AGP 9 默认拒绝（`-dontoptimize`）。插件改用 `proguard-android-optimize.txt` 后删除该行（ADR-0061）。 |
 
 > 另一条曾经的变通 `kotlin.jvm.target.validation.mode=warning` **已删除**：它只为已移除的

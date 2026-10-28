@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_reader/core/logging/app_logger.dart';
+import 'package:flutter_reader/core/logging/crash_handlers.dart';
 import 'package:flutter_reader/core/logging/log_file.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
@@ -148,6 +149,49 @@ void main() {
       // `_FileOutput` 的写入是排队的：等队列跑完再读。
       await log.flush();
       expect(read(log.currentFile), contains('hello 日志'));
+    });
+
+    test('info_givenTheDefaultPrinter_writesOnePlainLineWithoutAnsi', () async {
+      // ADR-0084：文件日志是**一行一条记录**的可 grep 文本。默认打印器（不再用 `logger` 的
+      // PrettyPrinter）因此不能带 ANSI 转义，也不能把一条记录拆成盒线多行。
+      final LogFile log = buildLog();
+      final AppLogger logger = AppLogger(level: LogLevel.info, file: log);
+
+      logger.info('app start: platform=windows');
+      logger.error('content failed', '<FormatException: bad body>');
+
+      await log.flush();
+      final List<String> lines = read(log.currentFile).trim().split('\n');
+      expect(lines, hasLength(2));
+      for (final String line in lines) {
+        expect(line, isNot(contains('\u001b')), reason: line);
+        expect(line, isNot(contains('┌')), reason: line);
+        expect(line, isNot(contains('│')), reason: line);
+      }
+      expect(lines.first, matches(RegExp(r'^\d{4}-\d{2}-\d{2} ')));
+      expect(lines.first, contains('INFO  app start: platform=windows'));
+      expect(lines.last, contains('ERROR content failed'));
+      expect(lines.last, contains('error=<FormatException: bad body>'));
+    });
+
+    test('error_givenACrashRecord_writesTheWholeTraceSynchronously', () async {
+      // 崩溃行同步落盘，它的栈续行必须跟着同步：崩溃路径上没有下一次事件循环（ADR-0082）。
+      final LogFile log = buildLog();
+      final AppLogger logger = AppLogger(level: LogLevel.info, file: log);
+
+      logger.error(
+        '$crashMarker platform: boom',
+        '<StateError: boom>',
+        StackTrace.fromString(
+          '#0 main (package:flutter_reader/main.dart:49:10)',
+        ),
+      );
+
+      // 不 flush：同步路径应当已经把整条记录写完了。
+      final List<String> lines = read(log.currentFile).trim().split('\n');
+      expect(lines, hasLength(2));
+      expect(lines.first, contains('$crashMarker platform: boom'));
+      expect(lines.last, contains('#0 main'));
     });
 
     test('setLevel_givenWarning_dropsLowerRecordsAtRuntime', () {

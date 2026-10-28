@@ -65,7 +65,7 @@ class BookSourceList extends _$BookSourceList {
 | C-ERR-2 | 禁止裸 `catch`；必须 `on <具体异常类型>`，并转换为 `ParseFailure`。由 lint `avoid_catches_without_on_clauses` 强制。**边界补充（放宽点的依据见 ADR-0002 的 2026-10-11 修订注记）：** 只有 `presentation/` 的 Notifier 兜底允许 `on Exception`（不给更具体的类型），且必须立即转为失败状态并记录日志，不得吞掉；`domain/` 的引擎与 UseCase 仍必须捕获具体类型；`Error` 在任何位置都不得捕获（ADR-0022）。**扩展规则：** 本边界只覆盖 `presentation/` 的 Notifier；将来 `data/` 层若也需兜底，必须新增 ADR，不得就地放宽。**已批准的例外（唯一一处）：** `CacheDaoCharsetCache._absorb` 可在具名 catch 后追加 `on Exception`，吸收 drift **未导出**的 `ConnectionClosedException`（端口契约为 total）——理由、约束与日落条件见 **ADR-0033**；其他位置照抄即违规。 |
 | C-ERR-3 | 禁止空 catch 块；异常必须被处理或向上传递。 |
 | C-ERR-4 | 跨 `await` 使用 `BuildContext` 前必须检查 `mounted`（`use_build_context_synchronously`）。 |
-| C-ERR-5 | 禁止 `print()`；统一使用 `core/logging` 暴露的 Logger（`logger` 包封装，见 ADR-0006）。 |
+| C-ERR-5 | 禁止 `print()`；统一使用 `core/logging` 暴露的 Logger（`logger` 包封装，见 ADR-0006）。日志**行格式**由 `LineLogPrinter` 固定为「一条记录一行、无 ANSI / 无盒线」，改格式属于改规范（ADR-0084）。 |
 | C-ERR-6 | 所有 `Future` 必须被 `await`、`.then`、或 `unawaited()` 显式处理（`unawaited_futures`）。 |
 | C-ERR-7 | `ParseFailure` 必须携带 `ParseFailureKind` 与结构化参数；**禁止在失败对象中存放用户可见中文文案**，文案由 UI 层经 l10n 映射。 |
 | C-ERR-8 | 失败日志必须包含书源 ID 与目标 URL/参数摘要；**禁止**记录页面正文、Cookie 与 Token。 |

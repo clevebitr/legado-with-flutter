@@ -2,6 +2,7 @@
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
+#include "ax_log_filter.h"
 #include "flutter_window.h"
 #include "utils.h"
 
@@ -12,6 +13,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
     CreateAndAttachConsole();
   }
+
+  // 控制台存在时，把引擎那条已知的 AXTree 噪声过滤掉（见 ax_log_filter.h 的说明与
+  // docs/dev/adr/0084）。没有控制台时它自己什么都不做。
+  InstallAccessibilityLogFilter();
 
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.

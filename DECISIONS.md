@@ -1092,3 +1092,19 @@ P5 分段量完成（`tool/bench` 的 `--only=p5` 多出四段 + 一条机器底
 工具侧的坑（同批记下）：体积灵敏度的外推会算出「前奏 4.75 ms > 空 job 2.87 ms」这种自相矛盾的数——填充语句与前奏代码形状不同，斜率只能定性、不能外推；打印里已改成只报斜率与性质。
 
 门禁：format 0 / analyze 0 / **2681 例全过** / coverage exit 0（core 98.05、domain 97.09、data 95.69）/ build_runner 无生成物漂移。文档：`tool/bench/README.md` §5.4、`engine-parity.md` §11、ADR-0078 R5 前置注记。
+
+## 2026-10-28 — 日志行格式 + Windows 控制台 AXTree 噪声过滤（ADR-0084）
+
+用户报障两处日志噪声，落地为 ADR-0084（M26 性能工作按用户要求先搁置）。
+
+**1. 文件日志不是一行一条记录。** `logger` 包默认的 `PrettyPrinter` 画 ANSI 盒子（`␛[38;5;12m┌───…`），一条记录五个物理行，文件里全是转义序列；它还**给每条记录补假栈**：`event.stackTrace == null` 时用 `StackTrace.current` 打 5 帧（`methodCount` 默认），于是 `INFO app start` 后面跟着 `#0 AppLogger.info …`。
+修法：新增 `core/logging/log_line_printer.dart` 的 `LineLogPrinter` 并成为门面默认打印机。格式 `时间 级别  消息`，级别定宽 5 字符；**不写 ANSI**（同一批行既进控制台又落盘，着色只会破坏 grep）；消息里的换行折成 ` | `（行内空格不动）；异常以 `error=<原文>` 接在同一行；**栈只在真有时打**，作为 `  #0 …` 缩进续行。崩溃的同步落盘按**整条事件**判定（头行带 `CRASH` 时续行一起 `appendSync`），否则崩溃现场只留半条。
+
+**2. Windows 控制台被 `Failed to update ui::AXTree` 刷屏。** 那是 Flutter 引擎无障碍桥的已知缺陷（flutter/flutter#182444，open，`platform-windows`/`a: accessibility`），由 C++ 直接写 stderr，Dart 拿不到。
+修法：`windows/runner/ax_log_filter.{h,cpp}` + `main.cpp` 在 `AttachConsole` 后安装过滤器——stderr → 管道 → detached 线程逐行转发回原 stderr（副本 fd）+ `setvbuf` 无缓冲；**只丢包含该子串的行**，其余引擎/插件/Dart 输出一条不动；任一步失败就原样返回（不制造「stderr 指着无读者管道」）；不关无障碍、不碰语义树。
+
+验证：文件日志与 stdout 都是 `2026-10-28 13:04:18.943 INFO  app start: …`；用临时标记实跑证明 stderr 转发与丢行都对（普通行出现、含关键字行消失、进程不挂）；**AXTree 行本身未复现**（上游描述需要挂读屏，本机没有）；五个 Windows 设备级用例文件全绿（`js_bridge` 81 例）。
+
+顺手修掉两条**只在设备上跑**的陈旧断言（主机侧 `flutter test` 跑不到，一直没人发现）：`source.putVariable` 是上游 `void`，拼进字符串是 `undefined` 而非 `''`；`Packages.java.lang.String` 已被 ADR-0081 放行，改成仍被拒的 `Packages.javax.crypto.Cipher`。另修 `test-environment.md` 里不存在的 `-TestFile` 参数名（实际是 `-FileFilter`，按旧文档调用会白等）。
+
+门禁：format 0 / analyze 0 / **2689 例全过** / coverage exit 0（core 98.07、domain 97.09、data 95.69）/ build_runner 无漂移；Windows 原生构建 `/W4 /WX` 干净；设备级：`app_boot` 1、`on_disk_database` 6、`audio_playback` 5、`web_view` 3、`js_bridge` 81 全通过。

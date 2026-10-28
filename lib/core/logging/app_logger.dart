@@ -2,6 +2,7 @@ import 'package:flutter_reader/core/logging/crash_handlers.dart';
 import 'package:flutter_reader/core/logging/error_text.dart';
 import 'package:flutter_reader/core/logging/log_file.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/logging/log_line_printer.dart';
 import 'package:logger/logger.dart';
 
 /// Application logging facade: the only log entry point for business code.
@@ -13,9 +14,10 @@ import 'package:logger/logger.dart';
 final class AppLogger {
   /// Creates a logger that drops records below [level].
   ///
-  /// [printer] and [output] default to the `logger` defaults; passing [file] appends the same
-  /// formatted lines to disk (`ADR-0082`). The effective level can be changed at runtime with
-  /// [setLevel], which is what the settings page does.
+  /// [printer] defaults to [LineLogPrinter] — one plain line per record, no ANSI box — because the
+  /// same lines also go to disk (`ADR-0084`). Passing [file] appends those lines to it
+  /// (`ADR-0082`). The effective level can be changed at runtime with [setLevel], which is what the
+  /// settings page does.
   AppLogger({
     this.level = LogLevel.info,
     LogPrinter? printer,
@@ -26,7 +28,7 @@ final class AppLogger {
          level: Level.all,
          // logger 默认的 DevelopmentFilter 在 release 下不输出，必须显式用 ProductionFilter。
          filter: ProductionFilter(),
-         printer: printer,
+         printer: printer ?? LineLogPrinter(),
          output: output ?? (file == null ? null : _FileOutput(file)),
        );
 
@@ -81,13 +83,18 @@ final class _FileOutput extends LogOutput {
 
   @override
   void output(OutputEvent event) {
-    // 一行一个事件：`logger` 的 printer 已经把时间 / 级别 / 调用点拼好。
+    // 一行一个事件：`LineLogPrinter` 已经把时间 / 级别 / 消息拼成一行，栈是它后面的缩进续行。
+    //
+    // 同步与否按**整条事件**判定，而不是按行：一条崩溃记录的头一行带 `CRASH`，它的栈续行
+    // 必须跟着同步落盘，否则崩溃现场只留下半条（ADR-0082 的同一条理由）。
+    final bool isCrash = event.lines.any(
+      (String line) => line.contains('$crashMarker '),
+    );
     for (final String line in event.lines) {
       // 控制台照旧（`flutter logs` / `adb logcat` 仍然好用）。
       // ignore: avoid_print
       print(line);
-      // 崩溃那几行同步写：崩溃路径上不一定还有下一次事件循环（ADR-0082）。
-      if (line.contains('$crashMarker ')) {
+      if (isCrash) {
         _file.appendSync(line);
       } else {
         _file.append(line);
