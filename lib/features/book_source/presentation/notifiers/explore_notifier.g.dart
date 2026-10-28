@@ -44,7 +44,7 @@ final class ExploreNotifierProvider
   }
 }
 
-String _$exploreNotifierHash() => r'd8b5aaa1b528fff05b0c2cd1ea1ffcf4564b3a08';
+String _$exploreNotifierHash() => r'1097f3fe407fcf1483bcdf518bcedeccb15568a7';
 
 /// Drives the discover page: reads the categories once, then one category at a time.
 

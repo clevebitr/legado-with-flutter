@@ -66,6 +66,11 @@ class ExploreNotifier extends _$ExploreNotifier {
       final ParseResult<List<ExploreCategory>> result = await ref
           .read(fetchExploreCategoriesProvider)
           .execute(source);
+      // 取分类是一次真实请求；用户可能在它返回前离开发现页（provider 被回收）。
+      // 那之后的 `ref.read` / `state =` 都会抛 UnmountedRefException（真机日志里的 CRASH）。
+      if (!ref.mounted) {
+        return;
+      }
 
       state = switch (result) {
         ParseSuccess<List<ExploreCategory>>(
@@ -76,6 +81,9 @@ class ExploreNotifier extends _$ExploreNotifier {
           ExploreState.failedCategories(kind),
       };
     } on Exception catch (error, stackTrace) {
+      if (!ref.mounted) {
+        return;
+      }
       ref
           .read(appLoggerProvider)
           .error(
@@ -106,6 +114,10 @@ class ExploreNotifier extends _$ExploreNotifier {
       final ParseResult<List<Book>> result = await ref
           .read(exploreBooksProvider)
           .execute(source, category, page: page);
+      // 与 [loadCategories] 同因：请求返回时页面可能已经被回收。
+      if (!ref.mounted) {
+        return;
+      }
 
       state = switch (result) {
         ParseSuccess<List<Book>>(:final List<Book> data) => ExploreState.books(
@@ -117,6 +129,9 @@ class ExploreNotifier extends _$ExploreNotifier {
           ExploreState.failedBooks(_categories, category, kind),
       };
     } on Exception catch (error, stackTrace) {
+      if (!ref.mounted) {
+        return;
+      }
       ref
           .read(appLoggerProvider)
           .error(
