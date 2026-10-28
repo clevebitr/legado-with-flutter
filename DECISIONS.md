@@ -1108,3 +1108,88 @@ P5 分段量完成（`tool/bench` 的 `--only=p5` 多出四段 + 一条机器底
 顺手修掉两条**只在设备上跑**的陈旧断言（主机侧 `flutter test` 跑不到，一直没人发现）：`source.putVariable` 是上游 `void`，拼进字符串是 `undefined` 而非 `''`；`Packages.java.lang.String` 已被 ADR-0081 放行，改成仍被拒的 `Packages.javax.crypto.Cipher`。另修 `test-environment.md` 里不存在的 `-TestFile` 参数名（实际是 `-FileFilter`，按旧文档调用会白等）。
 
 门禁：format 0 / analyze 0 / **2689 例全过** / coverage exit 0（core 98.07、domain 97.09、data 95.69）/ build_runner 无漂移；Windows 原生构建 `/W4 /WX` 干净；设备级：`app_boot` 1、`on_disk_database` 6、`audio_playback` 5、`web_view` 3、`js_bridge` 81 全通过。
+
+## 2026-10-28 — 真实日志取证：7 处未登记语义缺口（M27 取材）
+
+来源：本机 2026-10-28 全量书源校验日志（54 源）+ 同库静态扫（`reader.db` 的 book_sources）+ 引擎探针复现。27/34 条 `Book source check failed` 是网络（`groups=网站失效`），下列只记语义。
+
+已确认并本轮修复：
+1. **G1 默认规则里的 `[attr]`**：`_readName` / `_splitDegradedSuffix` 见 `[` 就当索引，`[property$=image]`、`meta[property=…]`、`a[href*="_"]` 全 parseFailed（日志 21 条降级；静态 10 源 / 31 处；上游 `AnalyzeByJSoup.kt:406` 的 `findIndexSet` 解析不出索引就 `break`，整段留给 jsoup 当 CSS；ADR-0032 早已承诺「属性选择器」可退化）。
+2. **G2 位置列表 `.N:M`**：上游 `ElementsSingle` 注释明确 `tag.div.-1:10:2` / `!0:3` 是两种筛选方式（`AnalyzeByJSoup.kt:280-288`、`:406`），本仓只实现了 `!N:N` 与 `[N:M]`（日志 23 条；静态 10 源 / 15 处，如 `span.1:2`、`li.4:6`、`p.3:4:5:6:7`）。
+3. **G3 JSON 条目裸键**：`$.pic@put:{img:pic}` 的 `pic` 在 JsonScope 上 parseFailed → 520diandu 的 1022 条 `tocRule.chapterUrl` 拒绝 + 511 条降级 + 511 章回落目录页；上游 `AnalyzeRule.kt:331` 对 GSON `LinkedTreeMap` 直接按 key 取值。台账 §4 把「JSON 自动模式」记为「实测无增益」，本日志是反证（应改为「JSON 条目上的裸键」这一条窄口径）。
+4. **G5 URL 段链未绑 `key`**：`_expandUrlSegments` → `evaluateJs` 没有 `key`，qushu123 的 `searchUrl …@js: … result.replace('{{key}}', key)` 报 `'key' is not defined`（日志 line 3697），整条搜索废；上游 `AnalyzeUrl.kt:377` 在 `evalJS` 里绑 `key`，ADR-0034 §决策 3 与本仓 `renderUrl` docstring 也都声称支持。
+5. **G6 `cookie.removeCookie(url)` 单参**：上游绑定 `CookieStore`（`CookieStore.kt:79` 只有一个参数），八零电子书 `cookie.removeCookie(source.getKey())` 因此 `unsupportedRule`（日志 line 1462）；本仓前奏要求 `(url,key)`，`book-source.md` §6 也跟着写错。
+6. **G8 空候选**：`A||##replace` 在 `_candidatesOf` 里产生一个空分支 → parseFailed，把整条规则炸掉；上游对空段直接跳过（`AnalyzeByJSoup.getString` 的 `temp.isNullOrEmpty()`），`##` 替换仍作用于整条规则（`AnalyzeRule.kt:339`）。日志：tiandizw 的 `wordCount` 40 条。
+7. 顺带修正台账：`ehp`/`getElements`/`connect` 被记成「已对齐」，与 G6/G9/G10 矛盾。
+
+登记为有意差异（不改行为，补台账行 + 触发条件）：
+- **G4** `@put` 值失败仍硬失败（上游 `getString(value)` 给空串）：保留 C-SRC-4 的响亮失败；语料命中 0（除 G3 外）。
+- **G7** 列表条目缺 URL 时跳过而非回落当前页（上游 `BookList.kt:282`）：23uswx 的 11 条是推荐块，回落会造 11 本指向分类页的垃圾书；触发 = 出现依赖该回落的单书站。
+- **G9** `java.getElements` 只给 outerHtml 字符串（freexiaoshuo 的 `.text()/.attr()` 失败）：要真 DOM 句柄；触发 = 语料命中 ≥3 源。
+- **G10** 响应对象没有 `.raw()`（qushu123 的 `connect(...).raw().request().url()`）：等价能力是 `url()`；触发 = 出现只差 `.raw()` 的源。
+- **G11** exploreUrl 的空标题占位项 / 传统格式无 `::` 的分隔行（3 源 + qushu123）：只影响布局标签，G11 只修了空 url。
+- **G12** 正文分页缺「下一页 == 下一章」：台账已有「提前停止（低）」，mxjtedu 触发 50 页上限。
+
+另记两个非引擎 Bug（本轮不修）：`in_app_web_view_page_fetcher.dart:55` 把 `getUrl()` 的 Future 当字符串（日志 line 3812 可见 `Instance of 'Future<WebUri?>'`）；`explore_notifier.dart:80` 在 provider dispose 后 `ref.read`（日志第 10 行 CRASH）。
+
+## 2026-10-28 — M27 交付：日志取证六项已修 + 两处未登记 Bug
+
+按 #63 的取材实施，全部改动有单测/文档同步，门禁全绿（format / analyze / 2703 tests / coverage 98.05/96.98/95.69 / build_runner 无源码漂移）。
+
+已修（引擎）：
+1. **G1 属性选择器**（矩阵 #32）：`_childrenIndexExpression` / `_splitDegradedSuffix` 只在 `[` 后是数字 / `-` / `!` / 空串时当索引；字母 / `_` 整段给 cascadia。并补 **jsoup 方言的不加引号值**：`[property=og:novel:book_name]` 的 `:` / `|` 会被 RFC 9535 的解析器拒绝，`_readCss` 在编译前把这类值包成双引号（`_quoteAttributeValues`，已加引号 / 纯标识符不动）。没有这一步，修复对真实源无效（实测 `tiandizw` 的 5 个字段仍全失败）。
+2. **G2 位置列表 `.N:M`**（矩阵 #33）：`_dotIndexList` + 复用 `_readIndices`；变体顺序按写法保留。
+3. **G3 JSON 条目裸键**（矩阵 #13 注记）：`_values` 的 DomBranch 改为 `_domValues`，JsonScope + Map + 无选择器 → `map[key]`，值走 `_jsonValues`；列表/标量条目仍 parseFailed。
+4. **G5 URL 段链绑 `key`**：`evaluateJs` 增加可选 `key`，`_expandUrlSegments` 传 `params['key']`（上游 `AnalyzeUrl.kt:377`）。
+5. **G6 `cookie.removeCookie(url)` 单参**：无 key → `removeCookiesFor`（清整域），带 key 仍是按名删除；文档 §6 与测试同步。
+6. **G8 空候选**（矩阵 #10 注记）：`_candidatesOf` 丢掉空候选/空分支，但**整条规则都空时仍报畸形**（`-` / `&&` 保持响亮失败）。`A||##replace` 因此走替换而不是 parseFailed。
+
+顺带修（日志里的非引擎 Bug，原 #63 记为“本轮不修”）：
+- `in_app_web_view_page_fetcher.dart` 的 `getUrl()` 是 `Future`，原来直接 `.toString()` → `baseUrl` 变成 `Instance of 'Future<WebUri?>'`（日志 line 3812）；已 await。
+- `explore_notifier.dart` 的 `loadCategories` / `openCategory` 在 await 后未查 `ref.mounted` → 真机 CRASH（日志第 10 行）；三处 catch/赋值前补守卫。
+
+登记为有意差异（未改行为，台账已加行 + 触发条件）：G4 put 值失败响亮失败、G7 列表条目缺 URL 跳过、G9 `java.getElements` 无 DOM 句柄、G10 `.raw()`、G11 explore 占位项、G12 正文分页、jsoup `[attr~=regex]` 的正则子串语义（CSS `~=` 是整词 → 3 源仅影响 `kind`）、`tag.li[x]` 比上游更严。
+
+矩阵新增 #32 / #33（G2 文档门禁要求每行有 `matrix #N` 用例，已补）。
+
+## 2026-10-28 — 第二轮日志取证：6 个引擎缺口 + 通知 + 日志节流（M27 续）
+
+第二轮日志（15023 行，254 源）暴露的问题与处置（用户已裁决：Android 前台通知、翻页/非 URL fail-fast、首条 WARN + 窗口聚合、元素句柄做最小子集）。
+
+**日志量来源**（本段约 10400 行）：`Field rule degraded` 4351 / `Rejected rule` 3454 / `JS rule failed` 998 / `Search hit without URL` 287。按源：Dragon isVip 1363（行首 `//` 注释行是作者故意写的“停用”，上游静默）、re0zero isVolume 920（`result.attr` 元素句柄）、fushuw chapterUrl+chapterName 436×2（章列表 JS 返回 `JSON.stringify` 字符串，`$.title` 应解码）、bequ6 kind 300（只读 `##` 规则）、sanjiusk 4 字段×100（行首 `@tag…`）、weilaitianwang 12 条只读 `##`、qidian 2 条只读 `##`、janpn bookUrl JS 自己返回 undefined。
+
+**新确认缺口**：
+1. 行首 `@` 未按上游 `RuleAnalyzer.trim()` 修剪（`@tag.td.2@text` / `@href` / `@onclick@js:…`）→ 8 源。
+2. 只读 `##pattern##replace###` 字段规则（正文为空）应作用于 scope 内容（页面 body / 条目 outerHtml），本仓 parseFailed → 10+ 源。
+3. JS 列表条目是 JSON 字符串时应解码成 JSON scope（上游 `isJson()` = `{…}`/`[…]`）→ fushuw 872 次。
+4. 裸 `@js:` 条目字段的 `result` 应是元素（可 `attr`/`text`/`select`），不是 outerHtml 字符串 → 964 次 `not a function`。
+5. 正文翻页缺「下一页 == 下一章」：检查阶段没传 nextChapterUrl（上游传目录第 2 章）→ 14 源各跑满 50 页。
+6. `option=js` 被忽略、`javascript:`/`undefined` 落到请求层才拒 → 按用户决定在取值处 fail-fast。
+7. 日志按条目/章节重复，同一 (源,字段) 刷上千行 → 首条 WARN + 60s 窗口聚合 + suppressed 计数，引擎 Rejected rule 降 debug。
+8. 缺上游的校验状态通知（`BookSourceCheckService` 的常驻进度通知 + 完成通知）→ 复用 MainActivity 现有通知权限通道加一个 MethodChannel 端口（无新依赖）。
+
+**不改**：上游检查两条链（搜索+发现）都跑，我们保持；HTTP 重试保持（只对可重试 kind，有上限）；janpn 的 bookUrl JS 自身 bug 不猜。
+
+## 2026-10-28 — M27 第二轮交付：6 个引擎缺口 + 日志节流 + Android 校验通知
+
+对应 #65 的取材，全部落地；门禁全绿（format / analyze / 2729 tests / coverage 98.05·96.60·95.69 / build_runner 无漂移 / `:app:compileDebugKotlin` 通过）。
+
+引擎（`rule_engine.dart`）：
+- **行首 `@`**：`_segmentsOf` 先按上游 `RuleAnalyzer.trim()` 剥单个 `@`（`@@` 除外），`_flagOf` 把标志头的 `@` 补回。修复三九小说 4 字段×100、金銀 6 条、阅友 2 条、5 个单条源。
+- **只读 `##` 字段规则**：body 为空且 `replacementParts>1` 时对 `_replacementContentOf(scope)`（页面 body / 条目 outerHtml / JSON 文本）应用替换；模式不命中给空串。修复千寻、未来天王、肉文屋、破万卷等 10+ 源的 bookUrl/coverUrl/bookInfo 字段。
+- **JSON 字符串条目**：脚本列表返回的字符串若形如 `{…}`/`[…]` 解码成 `JsonScope`（上游 `isJson()`），否则当 HTML。修复福书网章列表 872 次。
+- **`result` 元素垫片（最小子集）**：裸 `@js:` / 首个 `<js>` 段（`elementResult`）上，把**字面量参数**的 `result.<op>(…)` 链在宿主求值后内联（attr/text/ownText/html/outerHtml/select/children/parent/first/last/get/size/elementSiblingIndex）；变量参数或未覆盖方法整条不内联；选择器之后的 `@js:` 明确保持字符串 `result`（防静默错值）。修复 re0zero isVolume 920 次、福书网 explore.author、金銀 11 条。
+- **翻页 stop-at-next-chapter**：`walk` 比较下一页与 `nextChapterUrl`（两边绝对化）；`CheckBookSource` 按上游把目录第 2 章作为 `nextChapterUrl` 传入（卷标题排除）。14 个跑满 50 页的源不再整本连读。
+
+日志（新增 `core/logging/log_throttle.dart`，60s 窗口 + `suppressed=N`）：
+- `PageFetchService.warnThrottled` 用于字段降级 / 无下一页 / 无替换 / 列表条目缺 URL / 目录条目缺 URL / 封面选项 / 副文页 / 音频非 URL；桥的 `JS rule failed` 与 `Synchronous JS fetch failed` 也聚合；引擎 `Rejected rule` 降 debug（字段级 WARN 仍保留）。同一 (源,字段,原因) 从 1363/920/436 行降到每窗口 1 行。
+
+Fail-fast（用户裁决）：
+- 未建模 URL 选项（`origin`/`js`/…）从「warning 后照发」改为取值处 `unsupportedRule`（`rulePath=unsupported:url-options:<名字>`），ADR-0068 记增补（含重开条件）。
+- 非 http(s) 目标（`javascript:;` / `undefined` / 拼错的相对值）在 `fetchRule` / `fetch` 发请求之前判 `parseFailed` 并只记一条（HttpClient 不再背这个锅）。
+
+Android 校验通知（用户裁决）：
+- 新增 `SourceCheckNotification` 端口（Noop + MethodChannel）、`sourceCheckNotificationProvider`；`SourceCheck.start` 每次结论后推进度、收尾发结果通知；文案由页面从 ARB 传入（4 个新 key，中英）。
+- `MainActivity.kt` 用框架 `Notification`/`NotificationChannel`（minSdk 26，无新依赖）建通道、发进度/结果、支持 cancel；复用已有的 POST_NOTIFICATIONS 权限请求。**不是前台服务**：校验仍在主 isolate，通知只是后台可见的状态面（platform.md 已登记与上游的差异）。
+
+登记/未做：`result` 垫片只覆盖字面量参数（变量索引不内联）；G4（`@put` 值失败仍响亮失败）、G7（条目缺 URL 跳过）、G11（explore 占位项）、`[attr~=regex]` 正则子串语义仍为有意差异；janpn 的 bookUrl JS 自身 bug 不猜。
