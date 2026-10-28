@@ -524,7 +524,9 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(ReaderStatusBar),
-          matching: find.textContaining('本章'),
+          matching: find.textContaining(
+            _l10n(tester).readerChapterProgress(1, 2),
+          ),
         ),
         findsOneWidget,
       );
