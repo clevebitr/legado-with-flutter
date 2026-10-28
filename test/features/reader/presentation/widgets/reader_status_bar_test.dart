@@ -73,6 +73,8 @@ void main() {
     testWidgets('build_givenTheLine_isNotInteractive', (
       WidgetTester tester,
     ) async {
+      await _pump(tester, battery: FakeBatteryLevel());
+
       // 状态栏盖在正文上：它必须让点击穿过去，否则三区点击会少一条边。
       expect(
         find.descendant(

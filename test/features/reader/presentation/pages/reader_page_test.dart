@@ -21,6 +21,7 @@ import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_scroll_flow.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_status_bar.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -502,7 +503,14 @@ void main() {
 
       await _pump(tester, fixture);
 
-      expect(find.text('第1章 开端'), findsOneWidget);
+      // 章标题这时候出现两次：正文里的章头（ADR-0086 §决策 7）与状态栏的那一份。
+      expect(
+        find.descendant(
+          of: find.byType(ReaderStatusBar),
+          matching: find.text('第1章 开端'),
+        ),
+        findsOneWidget,
+      );
       expect(find.textContaining('80% battery'), findsOneWidget);
     });
 
