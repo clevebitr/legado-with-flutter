@@ -421,6 +421,62 @@ void main() {
       expect(fixture.content.maxInFlight, lessThanOrEqualTo(2));
     });
 
+    testWidgets('build_whenTheBookGainsChapters_keepsTheReaderWhereItIs', (
+      WidgetTester tester,
+    ) async {
+      final FakeReadingProgressStore store = FakeReadingProgressStore()
+        ..positions['${_book.sourceUrl}|${_book.bookUrl}'] =
+            const ReadingPosition(
+              chapterUrl: 'https://source.test/8.html',
+              charOffset: 120,
+            );
+      final _Fixture fixture = _fixture(
+        chapters: FakeChapterListProvider()
+          ..chapters = _manyChapters.take(12).toList(),
+        progress: store,
+      );
+      // 每一章都有正文（否则锚点章是一页加载页，转圈永远不停）。
+      for (final ReadingChapter chapter in _manyChapters) {
+        fixture.content.bodies[chapter.url] = _longBody;
+      }
+
+      await _pump(tester, fixture);
+      // 读到第 8 章（下标 7）的中间：把进度写进会话，模拟「读到一半」。
+      await fixture.container
+          .read(readerSessionProvider(_book).notifier)
+          .selectChapter(7, charOffset: 300);
+      await tester.pump();
+      final ScrollPosition before = tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position;
+      final double offsetBefore = before.pixels;
+
+      // 书更了 8 章：目录刷新（`AsyncValue` 会先进 loading，再带新列表回来）。
+      fixture.chapters.chapters = _manyChapters;
+      fixture.container.invalidate(readerChaptersProvider(_book));
+      await tester.pump();
+
+      // ① 不闪屏：刷新期间读者眼前还是正文，没有整块的转圈。
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      await tester.pumpAndSettle();
+
+      // ② 不错位：会话仍停在同一章、同一偏移，滚动位置没有被"重新恢复"到存档那一次。
+      final ReaderSessionState? session = fixture.container
+          .read(readerSessionProvider(_book))
+          .value;
+      expect(session?.chapterIndex, 7);
+      // 偏移是**当前这一屏**的（300 附近），不是存档里那一次的 120——刷新没有把位置倒回去。
+      expect(session?.charOffset, greaterThan(200));
+      expect(
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position
+            .pixels,
+        closeTo(offsetBefore, 1),
+      );
+    });
+
     testWidgets('build_givenAFailingChapterList_showsTheFailure', (
       WidgetTester tester,
     ) async {

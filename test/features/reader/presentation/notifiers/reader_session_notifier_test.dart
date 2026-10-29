@@ -260,6 +260,62 @@ void main() {
       expect(restored.charOffset, 88);
     });
 
+    test(
+      'build_whenTheChapterListGainsChapters_keepsTheLivePosition',
+      () async {
+        final _Fixture fixture = _fixture();
+        final ReaderSession session = fixture.container.read(
+          readerSessionProvider(_book).notifier,
+        );
+        await fixture.container.read(readerSessionProvider(_book).future);
+        await session.selectChapter(1);
+        // 只在内存里前进（`updateOffset` 不落盘，落盘发生在停手时）：目录刷新不能把它丢掉。
+        session.updateOffset(432);
+
+        // 书更了章节：目录重新发出（末尾多了两章）。
+        fixture.chapters.chapters = <ReadingChapter>[
+          ..._chapters,
+          const ReadingChapter(title: '第4章', url: 'https://source.test/4.html'),
+          const ReadingChapter(title: '第5章', url: 'https://source.test/5.html'),
+        ];
+        fixture.container.invalidate(readerChaptersProvider(_book));
+        final ReaderSessionState rebuilt = await fixture.container.read(
+          readerSessionProvider(_book).future,
+        );
+
+        // 位置来自**内存里的当前屏**，不是磁盘里那一次（ADR-0089）。
+        expect(rebuilt.chapterIndex, 1);
+        expect(rebuilt.charOffset, 432);
+      },
+    );
+
+    test(
+      'build_whenChaptersAreInsertedBeforeTheCurrentOne_remapsTheIndex',
+      () async {
+        final _Fixture fixture = _fixture();
+        final ReaderSession session = fixture.container.read(
+          readerSessionProvider(_book).notifier,
+        );
+        await fixture.container.read(readerSessionProvider(_book).future);
+        await session.selectChapter(1);
+        session.updateOffset(90);
+
+        // 源在**前面**插进了两章：下标全变了，但读者读的还是同一章。
+        fixture.chapters.chapters = <ReadingChapter>[
+          const ReadingChapter(title: '楔子一', url: 'https://source.test/a.html'),
+          const ReadingChapter(title: '楔子二', url: 'https://source.test/b.html'),
+          ..._chapters,
+        ];
+        fixture.container.invalidate(readerChaptersProvider(_book));
+        final ReaderSessionState rebuilt = await fixture.container.read(
+          readerSessionProvider(_book).future,
+        );
+
+        expect(rebuilt.chapterIndex, 3);
+        expect(rebuilt.charOffset, 90);
+      },
+    );
+
     test('saveProgress_givenAFailingStore_keepsTheSessionAndWarns', () async {
       final FakeReadingProgressStore store = FakeReadingProgressStore()
         ..failWrites = true;

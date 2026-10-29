@@ -128,6 +128,14 @@ class ReaderSession extends _$ReaderSession {
   /// The book this session was built for; `build` may run more than once, so it is re-assigned.
   late ReaderBook _book;
 
+  /// The chapter list the live [ReaderSessionState] indexes into.
+  ///
+  /// Kept so a **rebuilt** session can carry its position across: the chapter list is a watched
+  /// dependency, so a book that gains chapters rebuilds this notifier — and the position must be
+  /// translated (by chapter URL) from the old list to the new one, not re-read from the store
+  /// (`docs/dev/adr/0089-chapter-list-updates-must-not-move-the-reader.md`).
+  List<ReadingChapter> _known = const <ReadingChapter>[];
+
   @override
   Future<ReaderSessionState> build(ReaderBook book) async {
     _book = book;
@@ -143,10 +151,20 @@ class ReaderSession extends _$ReaderSession {
         data,
       ParseFailure<List<ReadingChapter>>() => const <ReadingChapter>[],
     };
+    // 重建（目录更新）时位置由**当前章的 URL** 决定，且字符偏移一个都不动：读者眼前那段字
+    // 还在原地。上游 `ReadBook.upToc()` 也是只把新章节接到末尾、不碰 durChapterIndex。
+    final ReaderSessionState? previous = _position;
+    if (previous != null) {
+      final int moved = _indexOf(loaded, _urlAt(_known, previous.chapterIndex));
+      _known = loaded;
+      // 当前章不在新目录里（源真的重排/删章了）才退回原下标。
+      return moved < 0 ? previous : previous.copyWith(chapterIndex: moved);
+    }
     final ReadingPosition? stored = await ref
         .read(readerProgressStoreProvider)
         .read(sourceUrl: book.sourceUrl, bookUrl: book.bookUrl);
     final int restored = _indexOf(loaded, stored?.chapterUrl);
+    _known = loaded;
     if (restored < 0) {
       // 存的章节已经不在目录里（源重排了章节）：从第一章开始，而不是把读者挡在门外。
       return const ReaderSessionState(chapterIndex: 0);
@@ -157,6 +175,16 @@ class ReaderSession extends _$ReaderSession {
       charOffset: stored?.charOffset ?? 0,
     );
   }
+
+  /// The position the session is at, kept beside `state` so a rebuild can carry it over.
+  ///
+  /// `build` returns a new state and the notifier's lifetime spans several builds (the chapter list is
+  /// a dependency), so the live position cannot live only in `state`.
+  ReaderSessionState? _position;
+
+  /// The URL of the chapter at [index] in [chapters], or `null` when it is not there.
+  String? _urlAt(List<ReadingChapter> chapters, int index) =>
+      index >= 0 && index < chapters.length ? chapters[index].url : null;
 
   /// Finds the index of [chapterUrl] in [chapters], or `-1` when it is gone.
   int _indexOf(List<ReadingChapter> chapters, String? chapterUrl) {
@@ -188,6 +216,7 @@ class ReaderSession extends _$ReaderSession {
         charOffset: charOffset < 0 ? 0 : charOffset,
       ),
     );
+    _position = state.value;
     await saveProgress();
   }
 
@@ -208,6 +237,7 @@ class ReaderSession extends _$ReaderSession {
       return;
     }
     state = AsyncData<ReaderSessionState>(current.copyWith(charOffset: offset));
+    _position = state.value;
   }
 
   /// Writes the current position through the progress port.

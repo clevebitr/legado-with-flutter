@@ -200,6 +200,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// The anchor chapter the queue was built for, so a rebuild does not reshuffle it per frame.
   int _prefetchAnchor = -1;
 
+  /// The chapter count the queue was built for: a book that gained chapters needs a new queue.
+  int _prefetchCount = -1;
+
   /// The session the last build saw, so the tool bar can show the chapter position.
   ReaderSessionState? _lastSession;
 
@@ -456,27 +459,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ReaderSettings settings,
     ({Color background, Color foreground}) palette,
     AppLocalizations l10n,
-  ) => switch (chapters) {
-    AsyncData<ParseResult<List<ReadingChapter>>>(
-      :final ParseResult<List<ReadingChapter>> value,
-    ) =>
-      switch (value) {
-        ParseSuccess<List<ReadingChapter>>(:final List<ReadingChapter> data) =>
-          data.isEmpty
-              ? StateMessage(message: l10n.readerNoChapter)
-              : _sessionBody(data, settings, palette),
-        ParseFailure<List<ReadingChapter>>(:final ParseFailureKind kind) =>
-          FailureMessage(
-            kind: kind,
-            onRetry: () => ref.invalidate(readerChaptersProvider(_book)),
-          ),
-      },
-    AsyncError<ParseResult<List<ReadingChapter>>>() => FailureMessage(
-      kind: ParseFailureKind.parseFailed,
-      onRetry: () => ref.invalidate(readerChaptersProvider(_book)),
-    ),
-    _ => const Center(child: CircularProgressIndicator()),
-  };
+  ) {
+    // 目录被刷新（书更了新章节）时 `AsyncValue` 是 loading，但它带着上一次的值：读者眼前的东西
+    // **不能**因此换成转圈——那就是「闪屏」，而且正文流程会被销毁重建，滚动位置跟着丢
+    // （ADR-0089）。只有从来没有拿到过目录时才画转圈。
+    final ParseResult<List<ReadingChapter>>? loaded = chapters.value;
+    if (loaded == null) {
+      if (chapters.hasError) {
+        return FailureMessage(
+          kind: ParseFailureKind.parseFailed,
+          onRetry: () => ref.invalidate(readerChaptersProvider(_book)),
+        );
+      }
+
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return switch (loaded) {
+      ParseSuccess<List<ReadingChapter>>(:final List<ReadingChapter> data) =>
+        data.isEmpty
+            ? StateMessage(message: l10n.readerNoChapter)
+            : _sessionBody(data, settings, palette),
+      ParseFailure<List<ReadingChapter>>(:final ParseFailureKind kind) =>
+        FailureMessage(
+          kind: kind,
+          onRetry: () => ref.invalidate(readerChaptersProvider(_book)),
+        ),
+    };
+  }
 
   /// The reader's status line, or nothing when the reader turned it off.
   Widget _statusLine(
@@ -894,16 +904,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       readerSessionProvider(_book),
     );
     _applyStartChapter(chapters, session.value);
+    // 与 [_bodyOf] 同一条规矩：会话重建（目录更新会让它重建）期间继续画上一次的位置。
+    final ReaderSessionState? state = session.value;
+    if (state == null) {
+      if (session.hasError) {
+        return FailureMessage(
+          kind: ParseFailureKind.parseFailed,
+          onRetry: () => ref.invalidate(readerSessionProvider(_book)),
+        );
+      }
 
-    return switch (session) {
-      AsyncData<ReaderSessionState>(:final ReaderSessionState value) =>
-        _chapterBody(chapters, value, settings, palette),
-      AsyncError<ReaderSessionState>() => FailureMessage(
-        kind: ParseFailureKind.parseFailed,
-        onRetry: () => ref.invalidate(readerSessionProvider(_book)),
-      ),
-      _ => const Center(child: CircularProgressIndicator()),
-    };
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return _chapterBody(chapters, state, settings, palette);
   }
 
   /// Opens the chapter the route named, once, when it differs from the restored one.
@@ -1301,10 +1315,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// anchor chapter actually changed: the page rebuilds on every progress write, and reshuffling
   /// thirty entries per frame would restart the reader's own next chapter for no reason.
   void _queuePrefetches(int anchorIndex, int chapterCount) {
-    if (_prefetchAnchor == anchorIndex) {
+    if (_prefetchAnchor == anchorIndex && _prefetchCount == chapterCount) {
       return;
     }
     _prefetchAnchor = anchorIndex;
+    _prefetchCount = chapterCount;
     _prefetchQueue.clear();
     for (var distance = 1; distance <= _prefetchRadius; distance++) {
       final int after = anchorIndex + distance;
