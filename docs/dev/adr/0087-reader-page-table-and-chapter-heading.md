@@ -127,6 +127,25 @@ ReaderPageEntry = { id, url, title, text, start, end, titleExtent, bodyExtent, i
 同理，锚点章的正文（走 provider 拿到的）会记进正文表：不记的话，读者换到下一章后这一章立刻退回
 占位页——上一章整章变矮，正是会跳字的那种结构变化。
 
+### 决策 8 量高用的样式必须**已定型**：`inherit: false` + 明确字号 + 定死排版输入
+
+页表按「量到的高度」给每一项定高，而 `Text` 默认会把传入的样式**并到环境的
+`DefaultTextStyle` 上**：样式里没写的字段（行高、行高分布、字距、装饰…）由环境补齐，量的时候
+却只有样式本身。两者一有差，画出来就比量出来的高，页表给的高度不够——真机上表现为
+`A RenderFlex overflowed by 31 pixels on the bottom` 刷满日志（15 条一模一样的栈，没有任何线索
+说明是哪个 widget），debug 包里还会在读者眼前盖一条黄黑斜纹。
+
+所以正文样式与章头样式都**定型**后再交给 `Text`：
+
+- `TextStyle.inherit = false`：`Text` 直接用这个样式，不再并环境；
+- 章头一定要带 `fontSize`：主题的 `titleMedium` 可能只给字族不给字号（`m3e_design` 就是如此），
+  那样 `TextPainter` 用默认 14 而 `Text` 从环境继承一个，量出来与画出来直接差一行；
+- `Text` 显式传 `textWidthBasis: parent` 与 `textHeightBehavior: TextHeightBehavior()`，
+  和 `TextPainter` 的默认值对齐（这两项 `Text` 也会从环境补）。
+
+`reader_style_test.dart` 用一份**故意完全不同**的环境样式把这条钉住：量到 576 就必画 576，
+差一点都不行。
+
 ## 后果
 
 - 新增 `presentation/widgets/reader_page_table.dart`（页表 + 条目 + 测量缓存）；
@@ -144,6 +163,8 @@ ReaderPageEntry = { id, url, title, text, start, end, titleExtent, bodyExtent, i
 - 未变：预取仍是相邻各一章、携带完整章节上下文；`ReaderSettings` 不动；ARB 不动。
 - 滚动模式改成懒加载（`ListView.builder` + `itemExtentBuilder`）：视口外的页不再构建，正文请求与
   章节接力由**页表**驱动而不是由「被构建出来的 widget」驱动，所以接力不受影响；
+- 崩溃日志多一段 `where=`（首个短信息节点的 creator 链），widget 类错误因此能指名到 widget
+  （ADR-0082 的记录形状不变，仍是一条记录一行）；
 - 测试侧新增 `test/support/reader_page_table_fixture.dart`（与阅读页同一套量法）与
   `reader_page_table_test.dart`；两个流程的用例改为「给一份页表」，并新增三条不变量：
   量到的高度等于画出来的高度、上一章变高时视口里的那行字不动、末页能停在视口顶。
@@ -156,6 +177,11 @@ ReaderPageEntry = { id, url, title, text, start, end, titleExtent, bodyExtent, i
 - **2026-10-29（落地时补的两条）**：§决策 6（末页尾部留白）与 §决策 7（跳转以目标为准、锚点章正文
   进正文表）都是实现过程中真机形状的推理结论——不是新方向，而是「零跳」这条不变量在末页与异步
   会话两个边界上的必要补丁。
+- **2026-10-29（真机日志后补的第三条）**：§决策 8（量高的样式必须已定型）来自用户 Windows 真机日志
+  ——15 条 `RenderFlex overflowed by 31 pixels`，全是同一个原因。复现方法：用真实中文字体
+  （`simhei.ttf`）在测试里跑同一条链路，环境样式一换就能稳定重现 24/31 px 的溢出。
+  同批还补了崩溃日志：widget 错误现在带 `where=<creator 链>`，一条记录一行，长转储跳过
+  （ADR-0084 的行格式不变）。
 
 ## 备选方案
 

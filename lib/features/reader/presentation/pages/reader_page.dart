@@ -1001,6 +1001,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final TextStyle titleStyle = readerChapterTitleStyle(
       tokens: tokens,
       foreground: palette.foreground,
+      bodyFontSize: style.fontSize ?? 16,
     );
 
     // ADR-0062 §决策 5：读出声时把那句话画出来。这个 provider 只在读声时才有值，

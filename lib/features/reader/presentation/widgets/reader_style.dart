@@ -111,6 +111,11 @@ TextStyle readerTextStyle({
     color: foreground,
     // 平台通用族名（ADR-0051 §决策 4）：缺字体时 Flutter 回落到系统字体，不会出现豆腐块。
     fontFamily: readerFontFamilyName(family),
+    // 正文的行高是**按这个样式量出来的**（`readerPageStarts` / `readerTextHeight`）。`Text` 默认会
+    // 把 `style` 合到环境的 `DefaultTextStyle` 上，环境给了这个样式没写的字段（字距、行高分布…）时，
+    // 量出来的高度与画出来的高度就对不上；页表按量到的高度给每一项定高，差一行就是 RenderFlex 溢出。
+    // `inherit: false` 让「量的」与「画的」是同一个样式。
+    inherit: false,
   );
 }
 
@@ -124,11 +129,27 @@ final RegExp _titleNoise = RegExp(r'[\s\p{P}\p{S}]', unicode: true);
 ///
 /// It is painted **inside** the chapter's first page, so it only takes the body's colour: size and
 /// weight come from the theme, and the page is measured with this very style.
+///
+/// The result is **fully resolved** ([TextStyle.inherit] off, font size never null) on purpose: the
+/// theme's `titleMedium` may carry a font family but no font size, and in that case `Text` inherits a
+/// size from the ambient `DefaultTextStyle` while `TextPainter` falls back to 14 — measured and
+/// painted heights then differ by a line and the page overflows the height the table gave it.
 TextStyle readerChapterTitleStyle({
   required M3ETheme tokens,
   required Color foreground,
-}) => (tokens.typography.base.titleMedium ?? const TextStyle(fontSize: 16))
-    .copyWith(color: foreground);
+  required double bodyFontSize,
+}) {
+  final TextStyle? themed = tokens.typography.base.titleMedium;
+
+  return (themed ?? const TextStyle(fontSize: 16)).copyWith(
+    fontSize: themed?.fontSize ?? bodyFontSize * _chapterTitleScale,
+    color: foreground,
+    inherit: false,
+  );
+}
+
+/// How much larger than the body a chapter heading is when the theme does not say.
+const double _chapterTitleScale = 1.2;
 
 /// The space between the chapter heading and the body below it (ADR-0087 §决策 3).
 double readerChapterTitleGap(M3ETheme tokens) => tokens.spacing.xl;
@@ -270,7 +291,19 @@ Widget readingText({
     end: end,
   );
 
+  // `textWidthBasis` / `textHeightBehavior` 也定死：`Text` 会从环境补齐这两项，而量高用的是
+  // `TextPainter` 的默认值——环境一旦不同，页高就差一截（见 [readerTextStyle]）。
   return span.children == null
-      ? Text(span.text ?? '', style: style)
-      : Text.rich(span);
+      ? Text(
+          span.text ?? '',
+          style: style,
+          textWidthBasis: TextWidthBasis.parent,
+          textHeightBehavior: const TextHeightBehavior(),
+        )
+      : Text.rich(
+          span,
+          style: style,
+          textWidthBasis: TextWidthBasis.parent,
+          textHeightBehavior: const TextHeightBehavior(),
+        );
 }

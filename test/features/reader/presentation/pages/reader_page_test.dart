@@ -290,6 +290,24 @@ void main() {
       expect(_bodyFinder(), findsOneWidget);
     });
 
+    testWidgets('build_givenARealChapterBody_laysItOutWithoutOverflow', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+      // 真机的形状：长中文正文（全角缩进 + 段距空行）、带书名与标点的章节标题。
+      // 页表按**量到**的高度给每一项定高，量的样式与画的样式只要差一行，这里就会溢出。
+      fixture.content.bodies['https://source.test/1.html'] = <String>[
+        for (var index = 0; index < 60; index++)
+          '　　“这世道，人心不古。”老人叹了口气，抬起袖子擦了擦脸上的雨水，'
+              '又低头看了看脚边那只破碗，碗里空荡荡的，只剩下一层浅浅的水光。',
+      ].join(_newline);
+
+      await _pump(tester, fixture);
+
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('这世道，人心不古'), findsWidgets);
+    });
+
     testWidgets('build_givenAFailingChapterList_showsTheFailure', (
       WidgetTester tester,
     ) async {

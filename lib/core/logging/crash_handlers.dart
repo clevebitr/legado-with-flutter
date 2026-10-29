@@ -28,7 +28,7 @@ void installCrashHandlers(
     final StackTrace stack = details.stack ?? StackTrace.current;
     _record(
       logger,
-      'flutter: ${details.exceptionAsString()}',
+      'flutter: ${details.exceptionAsString()}${_whereOf(details)}',
       details.exception,
       stack,
       onCrash,
@@ -67,6 +67,37 @@ void installCrashHandlers(
 }
 
 final List<RawReceivePort> _ports = <RawReceivePort>[];
+
+/// The widget a widget error came from, as a ` — ` suffix on the record.
+///
+/// A `RenderFlex overflowed by 31 pixels` with fourteen identical `paint` stack traces says nothing
+/// about *which* widget was too tall; Flutter puts that in its first information node (the creator
+/// chain). Only the **first node shorter than [_maxWhereLength]** is taken — the rest of the list is
+/// the render-tree dump, and a record stays one line (ADR-0084). `''` when there is nothing to add.
+String _whereOf(FlutterErrorDetails details) {
+  final Iterable<DiagnosticsNode>? information = details.informationCollector
+      ?.call();
+  if (information == null) {
+    return '';
+  }
+  for (final DiagnosticsNode node in information) {
+    final String text = node.toString().replaceAll('\n', ' ').trim();
+    if (text.isEmpty) {
+      continue;
+    }
+    if (text.length > _maxWhereLength) {
+      // 渲染树转储：几 KB 一条，跳过它去找下一条短的（通常就是 creator 链）。
+      continue;
+    }
+
+    return '  where=$text';
+  }
+
+  return '';
+}
+
+/// How long the `where=` part of a widget-error record may get.
+const int _maxWhereLength = 400;
 
 /// Closes the isolate listeners (tests and hot restart; a release app keeps them for its lifetime).
 void uninstallCrashHandlerPorts() {

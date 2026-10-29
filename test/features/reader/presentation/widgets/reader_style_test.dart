@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reader_settings.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_pagination.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -229,6 +230,82 @@ void main() {
     });
   });
 
+  group('readerTextStyle', () {
+    testWidgets(
+      'readerTextStyle_givenAHostileAmbient_paintsTheHeightItMeasured',
+      (WidgetTester tester) async {
+        // 页表按**量到**的高度给每一页定高，而 `Text` 默认会把样式并到环境的
+        // `DefaultTextStyle` 上：环境给的字距会改变换行，量出来与画出来的行数就不一样了。
+        // 真机上正是这样整页溢出（日志里 15 条 `RenderFlex overflowed by 31 pixels`）。
+        late TextStyle style;
+        late TextScaler scaler;
+        await _pumpThemed(
+          tester,
+          Builder(
+            builder: (BuildContext context) {
+              style = readerTextStyle(
+                tokens: context.m3e,
+                fontScale: 1,
+                lineHeight: 1.5,
+                foreground: const Color(0xFF000000),
+              );
+              scaler = MediaQuery.textScalerOf(context);
+
+              return const SizedBox.shrink();
+            },
+          ),
+        );
+
+        final String body = <String>[
+          for (var index = 0; index < 12; index++)
+            '　　“这世道，人心不古。”老人叹了口气，抬起袖子擦了擦脸上的雨水。',
+        ].join('\n');
+        const double width = 320;
+        final double measured = readerTextHeight(
+          text: body,
+          style: style,
+          width: width,
+          textScaler: scaler,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: width,
+                  // 环境样式故意与量高的样式完全不同；`Text` 不该从它那里继承任何东西。
+                  child: DefaultTextStyle(
+                    style: const TextStyle(
+                      fontSize: 30,
+                      height: 3,
+                      letterSpacing: 8,
+                    ),
+                    child: OverflowBox(
+                      alignment: Alignment.topLeft,
+                      minHeight: 0,
+                      maxHeight: double.infinity,
+                      child: Text(body, style: style),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        // 画出来的高度必须就是量出来的高度（页表用的就是这个数）。
+        expect(
+          tester.getSize(find.byType(Text)).height,
+          closeTo(measured, 0.5),
+        );
+        expect(style.inherit, isFalse);
+      },
+    );
+  });
+
   group('readerStripDuplicateTitle', () {
     test('readerStripDuplicateTitle_givenTheTitleOnTheFirstLine_dropsIt', () {
       // 源站常见形状：正文第一行就是章节名（上游 `ContentProcessor` 也删这一行）。
@@ -326,6 +403,7 @@ void main() {
             style = readerChapterTitleStyle(
               tokens: tokens,
               foreground: foreground,
+              bodyFontSize: 16,
             );
             gap = readerChapterTitleGap(tokens);
 
@@ -338,6 +416,10 @@ void main() {
       expect(style.color, foreground);
       expect(style.fontWeight, tokensTitleWeight(tester));
       expect(gap, greaterThan(0));
+      // 样式必须是**已定型**的：`Text` 不再去并环境里的 `DefaultTextStyle`，否则量到的高度与
+      // 画出来的高度会差一行（真机上就是整页 RenderFlex 溢出）。
+      expect(style.inherit, isFalse);
+      expect(style.fontSize, isNotNull);
     });
   });
 }
