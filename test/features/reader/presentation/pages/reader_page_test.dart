@@ -20,6 +20,7 @@ import 'package:flutter_reader/features/reader/presentation/notifiers/reader_ses
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_table.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_scroll_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_status_bar.dart';
@@ -56,6 +57,9 @@ const List<ReadingChapter> _chapters = <ReadingChapter>[
   ReadingChapter(title: '第1章 开端', url: 'https://source.test/1.html'),
   ReadingChapter(title: '第2章 继续', url: 'https://source.test/2.html'),
 ];
+
+/// The line break the chapter bodies in these cases are joined with.
+final String _newline = String.fromCharCode(10);
 
 /// The collaborators one case wires together.
 typedef _Fixture = ({
@@ -269,6 +273,23 @@ void main() {
       expect(find.textContaining('第二章正文'), findsOneWidget);
     });
 
+    testWidgets('build_givenABodyRepeatingTheChapterTitle_printsTheTitleOnce', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture();
+      // 源站常见形状：正文第一行就是本章标题。阅读器自己也印章头，不删掉就是两次
+      // （上游 `ContentProcessor` 的「去除重复标题」同一件事，ADR-0087 §决策 4）。
+      fixture.content.bodies['https://source.test/1.html'] =
+          '第1章 开端$_newline$_longBody';
+
+      await _pump(tester, fixture);
+
+      expect(find.text('第1章 开端'), findsOneWidget);
+      expect(find.textContaining('第1章 开端'), findsOneWidget);
+      // 正文本身还在（只删了重复的那一行）。
+      expect(_bodyFinder(), findsOneWidget);
+    });
+
     testWidgets('build_givenAFailingChapterList_showsTheFailure', (
       WidgetTester tester,
     ) async {
@@ -444,10 +465,18 @@ void main() {
 
       await _pump(tester, fixture);
 
-      // 下一章正文是预取来的（`pumpAndSettle` 等它落地），已经接在同一份滚动正文里：
-      // 章末不再是一个需要点一下的页（ADR-0085 §决策 2）。
+      // 下一章正文是预取来的（`pumpAndSettle` 等它落地），已经排进同一份滚动页表里：
+      // 章末不再是一个需要点一下的页（ADR-0085 §决策 2、ADR-0087 §决策 1）。
       expect(fixture.content.requests, contains('https://source.test/2.html'));
-      expect(find.textContaining('第二章正文'), findsOneWidget);
+      final ReaderScrollFlow flow = tester.widget<ReaderScrollFlow>(
+        find.byType(ReaderScrollFlow),
+      );
+      expect(
+        flow.table.pages.map((ReaderPageEntry page) => page.id.chapterIndex),
+        containsAll(<int>[0, 1]),
+      );
+      // 页表已经到全书末尾（滚动列表是懒加载的，「已是最后一章」在末尾一屏之外，不当场断言）。
+      expect(flow.table.hasNextChapter, isFalse);
     });
 
     testWidgets('scrollMode_whenScrolledToTheEnd_opensTheNextChapter', (

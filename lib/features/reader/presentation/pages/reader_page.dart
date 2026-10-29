@@ -31,6 +31,7 @@ import 'package:flutter_reader/features/reader/presentation/pages/manga_reader_p
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_book_scope.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_chapter_flow.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_table.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_paged_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_scroll_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_search_sheet.dart';
@@ -103,12 +104,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ScreenAwake? _screenAwake;
   BatteryLevel? _battery;
 
-  /// Bumped when a jump must restore again inside the **same** chapter.
-  ///
-  /// The flows restore once per widget instance, so a bookmark jump that stays in the same
-  /// chapter would otherwise be ignored; a new key gives them a fresh instance that restores at
-  /// the requested offset (ADR-0066 §决策 7).
+  /// Bumped when the flows must restore to an explicit position (ADR-0087 §决策 2).
   int _restoreNonce = 0;
+
+  /// The explicit jump the flows have not applied yet, or `null`.
+  ///
+  /// It is also what the flows are told to restore to — **not** the session: the session is only
+  /// moved a frame later (it is an async notifier), so building the restore from it would restore to
+  /// the chapter the reader is *leaving*, and the position the flow reports back would then undo the
+  /// jump. While a jump is pending, a report naming another chapter is stale by definition and is
+  /// dropped (see [_followFlow]).
+  ({int chapterIndex, int charOffset})? _pendingJump;
 
   /// Whether the chapter the route asked for was already opened.
   bool _appliedStartChapter = false;
@@ -147,18 +153,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// override before that write lands.
   bool _brightnessSaving = false;
 
-  /// Chapter bodies fetched ahead through the real content port, keyed by chapter URL.
+  /// Chapter bodies in hand, keyed by chapter URL — both the ones fetched ahead and the one the
+  /// open chapter's own provider returned.
   ///
-  /// The map is pruned to the current and the next chapter on every build, so reading a thousand
-  /// chapters does not keep a thousand bodies alive.
+  /// Pruned to the rendered window on every build (see [_pruneBodies]), so reading a thousand
+  /// chapters does not keep a thousand bodies alive. Keyed by URL and not by index because the body
+  /// text itself is the same document for two chapters that share an address; the *laid-out* text
+  /// is keyed by index (see [_laidOut]), which is where the two chapters differ.
   final Map<String, String> _prefetchedBodies = <String, String>{};
 
-  /// Bodies already laid out for the current paragraph settings, keyed by chapter URL.
+  /// Bodies already laid out, keyed by chapter **index**: two chapters may share an address, and
+  /// they still get their own heading and their own duplicate-title strip (ADR-0087 §决策 1/4).
+  final Map<int, ({int signature, String text})> _laidOut =
+      <int, ({int signature, String text})>{};
+
+  /// Page heights already measured, shared by both reading modes.
+  final ReaderPageMeasureCache _measures = ReaderPageMeasureCache();
+
+  /// The first chapter the page table renders; `-1` means "not placed yet".
   ///
-  /// The flows are rebuilt on every progress write, so the paragraph transform has to run once per
-  /// body rather than once per frame (C-PERF-1).
-  final Map<String, ({int signature, String text})> _laidOut =
-      <String, ({int signature, String text})>{};
+  /// It only ever moves backwards while the reader reads (see [_applyWindow]).
+  int _windowFirst = -1;
 
   /// Chapter URLs whose prefetch is in flight (a rebuild must not start it twice).
   final Set<String> _prefetching = <String>{};
@@ -700,7 +715,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     final int target = index.clamp(0, _chapters.length - 1);
-    setState(() => _restoreNonce++);
+    // 显式跳转重置窗口：跳过去以后，锚点上方的章不再是读者刚读过的那些（ADR-0087 §决策 2）。
+    setState(() {
+      _restoreNonce++;
+      _windowFirst = -1;
+      _pendingJump = (chapterIndex: target, charOffset: charOffset);
+    });
     unawaited(
       ref
           .read(readerSessionProvider(_book).notifier)
@@ -748,12 +768,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           _book = data.book;
           // 换源就是换一份目录：正文流程必须按新身份的章节重新定位（ADR-0085 §决策 4）。
           _restoreNonce++;
+          _pendingJump = (chapterIndex: data.chapterIndex, charOffset: 0);
           _lastBody = null;
           // 旧源的正文不能带到新源：换源后重新预取相邻章。
           _prefetchedBodies.clear();
           _prefetching.clear();
           _prefetchFailed.clear();
           _laidOut.clear();
+          _measures.clear();
+          _windowFirst = -1;
           _prefetchGeneration++;
         });
         // 退出守护要按换源后的身份判断「在不在书架」，否则会拿旧 URL 再问一次。
@@ -902,9 +925,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       if (!mounted) {
         return;
       }
-      // 同一章内的跳转必须让正文重新恢复一次：两个流程每个实例只恢复一次，所以这里换一个实例
-      // （见 [_restoreNonce]）。
+      // 同一章内的跳转必须让正文重新恢复一次：流程每个实例只应用一次显式跳转，所以这里换一个
+      // 编号（见 [_restoreNonce]）。
       _restoreNonce++;
+      _windowFirst = -1;
+      _pendingJump = (chapterIndex: index, charOffset: offset);
       unawaited(
         ref
             .read(readerSessionProvider(_book).notifier)
@@ -932,6 +957,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _lastChapterUrl = chapter.url;
     _lastChapterName = chapter.title.isEmpty ? null : chapter.title;
 
+    // 窗口只向前长（ADR-0087 §决策 2）：锚点前进时只往下补章，不回收上方的章，
+    // 于是「视口顶以上的高度」在阅读过程中不会变——这是滚动不跳的前提。
+    _applyWindow(session.chapterIndex, chapters.length);
+    final int last = (session.chapterIndex + 1).clamp(0, chapters.length - 1);
+    final Set<int> window = <int>{
+      for (var index = _windowFirst; index <= last; index++) index,
+    };
+    _pruneBodies(window);
+    // 预取仍只做相邻各一章（ADR-0085 §决策 3）；窗口里更远的章靠已经到手的正文。
     final ReadingChapter? previousChapter = session.chapterIndex > 0
         ? chapters[session.chapterIndex - 1]
         : null;
@@ -939,20 +973,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         session.chapterIndex + 1 < chapters.length
         ? chapters[session.chapterIndex + 1]
         : null;
-    // 只保留相邻三章（上一章 / 本章 / 下一章）的预取正文：读一本书不该把整本的正文都留在
-    // 内存里（ADR-0085 §决策 3）。
-    _prunePrefetch(<String>{
-      if (previousChapter != null) previousChapter.url,
-      chapter.url,
-      if (nextChapter != null) nextChapter.url,
-    });
     if (previousChapter != null) {
       _schedulePrefetch(previousChapter);
     }
     if (nextChapter != null) {
       _schedulePrefetch(nextChapter);
     }
-    // 本章的正文也走同一条读路径：正文还没到手时流程会先画「标题 + 正在加载」，
+    // 本章的正文也走同一条读路径：正文还没到手时页表给出一页「章头 + 正在加载」，
     // 页面自己不再另画一个转圈（那会让正文在加载前后各画一次）。
     final ParseResult<String>? content = ref
         .watch(readerContentProvider((_book, chapter.url)))
@@ -971,6 +998,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       foreground: palette.foreground,
       family: settings.fontFamily,
     );
+    final TextStyle titleStyle = readerChapterTitleStyle(
+      tokens: tokens,
+      foreground: palette.foreground,
+    );
 
     // ADR-0062 §决策 5：读出声时把那句话画出来。这个 provider 只在读声时才有值，
     // 所以没开 TTS 的读者只多一次空读，不会因此拉起语音引擎。
@@ -979,20 +1010,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ? null
         : (url: spoken.chapterUrl, start: spoken.start, end: spoken.end);
 
-    // 段距与首行缩进是**排版**（ADR-0051 §决策 4）：在渲染前套一次，正文数据不动。
+    // 段距、首行缩进与「删掉正文首行重复的章节名」都是**排版**（ADR-0087 §决策 4）：
+    // 在渲染前套一次，正文数据与缓存都不动。
     //
-    // 正文按**章节下标**交给流程（不是按 URL）：目录里两章指向同一个地址是抓取站点的常见形状，
+    // 正文按**章节下标**交给页表（不是按 URL）：目录里两章指向同一个地址是抓取站点的常见形状，
     // 按 URL 归并会把它们压成一份正文，看起来就是同一章被打印了两遍（ADR-0087 §决策 1）。
+    // 锚点章的正文是从 provider 拿的，预取表里没有它；记下来，否则读者换到下一章后
+    // 这一章就退回占位页（上一章整章变矮 = 正是会跳字的那种结构变化）。
+    if (currentData != null && currentData.isNotEmpty) {
+      _prefetchedBodies[chapter.url] = currentData;
+    }
     final Map<int, String> bodies = <int, String>{};
     final Set<int> failed = <int>{};
-    for (
-      var index = session.chapterIndex - 1;
-      index <= session.chapterIndex + 1;
-      index++
-    ) {
-      if (index < 0 || index >= chapters.length) {
-        continue;
-      }
+    for (final int index in window) {
       final ReadingChapter candidate = chapters[index];
       if (_prefetchFailed.contains(candidate.url) ||
           (candidate.url == chapter.url && content is ParseFailure<String>)) {
@@ -1001,58 +1031,78 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       final String? raw = candidate.url == chapter.url
           ? currentData
           : _prefetchedBodies[candidate.url];
-      if (raw != null) {
-        bodies[index] = _laidOutBody(candidate.url, raw, settings);
+      if (raw != null && raw.isNotEmpty) {
+        bodies[index] = _laidOutBody(index, candidate, raw, settings);
       }
     }
-    _remembered(bodies[session.chapterIndex] ?? currentData ?? '');
+    _remembered(bodies[session.chapterIndex] ?? '');
+    final ({int chapterIndex, int charOffset}) target =
+        _pendingJump ??
+        (chapterIndex: session.chapterIndex, charOffset: session.charOffset);
     final ReaderFlowRestore restore = (
-      index: session.chapterIndex,
-      charOffset: session.charOffset,
+      chapterIndex: target.chapterIndex,
+      charOffset: target.charOffset,
       nonce: _restoreNonce,
-    );
-    // 排版一变（字号 / 行距 / 字体）或读者显式跳转，正文按新位置重建一次；普通滚动与跨章
-    // 接力不换实例，否则「接着往下滑」就要先重建再定位（ADR-0085 §决策 4）。
-    final ValueKey<String> key = ValueKey<String>(
-      '${settings.pageMode}|${style.fontSize}|${style.height}|'
-      '${settings.fontFamily}|$_restoreNonce',
     );
     final double padding = _paddingOf(settings);
     final TextStyle highlightStyle = spokenSentenceStyle(context, style);
+    final TextScaler textScaler = MediaQuery.textScalerOf(context);
 
-    // 三区点击（ADR-0051 §决策 1）：中间 ⅓ 唤出菜单，左右各 ⅓ 收起它。
-    return _tapZones(
-      child: settings.pageMode == ReaderPageMode.scroll
-          ? ReaderScrollFlow(
-              key: key,
-              chapters: chapters,
-              anchorIndex: session.chapterIndex,
-              bodies: bodies,
-              failed: failed,
+    // 页表在 build 里算好再交给流程：流程只画、不度量，所以任何结构变化都能在同一帧里补偿
+    // （ADR-0087 §决策 1/2）。尺寸取正文盒子——扣掉两侧与上下的页边距。
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final Size box = Size(
+          (constraints.maxWidth - 2 * padding).clamp(0.0, double.infinity),
+          (constraints.maxHeight - 2 * padding).clamp(0.0, double.infinity),
+        );
+        final ReaderPageTable table = buildReaderPageTable(
+          chapters: chapters,
+          firstChapter: _windowFirst,
+          lastChapter: last,
+          bodies: bodies,
+          failed: failed,
+          size: box,
+          bodyStyle: style,
+          titleStyle: titleStyle,
+          titleGap: readerChapterTitleGap(tokens),
+          loadingExtent: tokens.spacing.xxl + tokens.spacing.lg,
+          textScaler: textScaler,
+          cache: _measures,
+        );
+
+        // 三区点击（ADR-0051 §决策 1）：中间 ⅓ 唤出菜单，左右各 ⅓ 收起它。
+        return _tapZones(
+          child: switch (settings.pageMode) {
+            ReaderPageMode.scroll => ReaderScrollFlow(
+              key: const ValueKey<String>('reader-scroll'),
+              table: table,
               restore: restore,
               highlight: highlight,
               style: style,
               highlightStyle: highlightStyle,
-              padding: padding,
-              onProgress: _followFlow,
-              onSettled: _settleFlow,
-              onNeedChapter: _needChapter,
-            )
-          : ReaderPagedFlow(
-              key: key,
-              chapters: chapters,
-              anchorIndex: session.chapterIndex,
-              bodies: bodies,
-              failed: failed,
-              restore: restore,
-              highlight: highlight,
-              style: style,
-              highlightStyle: highlightStyle,
+              titleStyle: titleStyle,
               padding: padding,
               onProgress: _followFlow,
               onSettled: _settleFlow,
               onNeedChapter: _needChapter,
             ),
+            ReaderPageMode.paged => ReaderPagedFlow(
+              key: const ValueKey<String>('reader-paged'),
+              table: table,
+              restore: restore,
+              highlight: highlight,
+              style: style,
+              highlightStyle: highlightStyle,
+              titleStyle: titleStyle,
+              padding: padding,
+              onProgress: _followFlow,
+              onSettled: _settleFlow,
+              onNeedChapter: _needChapter,
+            ),
+          },
+        );
+      },
     );
   }
 
@@ -1062,6 +1112,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// page only moves the session, which is what the tool bar, the read-aloud engine and the saved
   /// position follow (ADR-0085 §决策 2).
   void _followFlow(int index, int charOffset) {
+    final ({int chapterIndex, int charOffset})? pending = _pendingJump;
+    if (pending != null) {
+      if (index != pending.chapterIndex) {
+        // 显式跳转还没落地：这一刻流程报上来的是读者原来那一章，写回会话就把跳转撤销了。
+        return;
+      }
+      _pendingJump = null;
+    }
     final ReaderSession session = ref.read(
       readerSessionProvider(_book).notifier,
     );
@@ -1083,6 +1141,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void _settleFlow(int index, int charOffset) {
     _followFlow(index, charOffset);
     unawaited(ref.read(readerSessionProvider(_book).notifier).saveProgress());
+    _trimWindow(index);
+  }
+
+  /// Drops the chapters the reader has left far behind, once the scroll has come to rest.
+  ///
+  /// The window only grows while the reader moves forward (ADR-0087 §决策 2), so without this a
+  /// long read would keep every chapter's body alive. Trimming is exact — the pages above the
+  /// viewport come off, and the flow puts the reader's own sentence back — so it is only done when
+  /// nothing is in motion, and only when at least three chapters are behind.
+  void _trimWindow(int index) {
+    final int wanted = (index - 1).clamp(0, _chapters.length - 1);
+    if (_windowFirst < 0 || wanted - _windowFirst < 3 || !mounted) {
+      return;
+    }
+    setState(() => _windowFirst = wanted);
   }
 
   /// Reads the body of chapter [index] on the flow's behalf, retrying a failed read.
@@ -1098,32 +1171,68 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _schedulePrefetch(chapter);
   }
 
-  /// [body] with the paragraph transform of [settings] applied, computed once per body.
-  String _laidOutBody(String url, String body, ReaderSettings settings) {
+  /// [body] as the page table wants it: the duplicate title removed, then the paragraph transform.
+  ///
+  /// Keyed by **chapter index** and cached, because the reader rebuilds on every progress write: the
+  /// transform has to run once per body, not once per frame (C-PERF-1). The signature carries the
+  /// chapter's title and the book's name because the duplicate-title strip compares against them
+  /// (ADR-0087 §决策 4) — a renamed source would otherwise keep the stale text.
+  String _laidOutBody(
+    int index,
+    ReadingChapter chapter,
+    String body,
+    ReaderSettings settings,
+  ) {
     final int signature = Object.hash(
       settings.paragraphSpacing,
       settings.firstLineIndent,
       body.length,
+      chapter.title,
+      _book.name,
     );
-    final ({int signature, String text})? cached = _laidOut[url];
+    final ({int signature, String text})? cached = _laidOut[index];
     if (cached != null && cached.signature == signature) {
       return cached.text;
     }
-    final String text = readerBodyText(body, settings);
-    _laidOut[url] = (signature: signature, text: text);
+    final String text = readerBodyText(
+      readerStripDuplicateTitle(
+        body,
+        title: chapter.title,
+        bookName: _book.name,
+      ),
+      settings,
+    );
+    _laidOut[index] = (signature: signature, text: text);
 
     return text;
   }
 
-  /// Keeps the prefetched bodies down to [keep] (the neighbour window of the current chapter).
-  void _prunePrefetch(Set<String> keep) {
+  /// Keeps the bodies and measurements down to the chapters in [keep] (the rendered window).
+  void _pruneBodies(Set<int> keep) {
+    final Set<String> urls = <String>{
+      for (final int index in keep)
+        if (index >= 0 && index < _chapters.length) _chapters[index].url,
+    };
     _prefetchedBodies.removeWhere(
-      (String url, String _) => !keep.contains(url),
+      (String url, String _) => !urls.contains(url),
     );
-    _prefetchFailed.removeWhere((String url) => !keep.contains(url));
+    _prefetchFailed.removeWhere((String url) => !urls.contains(url));
     _laidOut.removeWhere(
-      (String url, ({int signature, String text}) _) => !keep.contains(url),
+      (int index, ({int signature, String text}) _) => !keep.contains(index),
     );
+    _measures.retain(keep);
+  }
+
+  /// Places the window's first chapter, which may only ever move **back** while reading.
+  ///
+  /// A chapter is kept once it has been rendered: letting it go while the reader is below it would
+  /// change the height above the viewport top, which is exactly what makes text jump
+  /// (ADR-0087 §决策 2). An explicit jump resets the window to the anchor's neighbours.
+  void _applyWindow(int anchorIndex, int chapterCount) {
+    final int wanted = (anchorIndex - 1).clamp(0, chapterCount - 1);
+    if (_windowFirst < 0 || wanted < _windowFirst) {
+      _windowFirst = wanted;
+    }
   }
 
   /// Starts one real prefetch for [chapter], once per chapter URL.

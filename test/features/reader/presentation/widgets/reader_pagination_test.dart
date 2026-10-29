@@ -40,6 +40,46 @@ void main() {
       );
     });
 
+    test('readerPageStarts_givenAHeadingInset_fitsLessOnTheFirstPage', () {
+      final String text = _longText();
+      final List<int> plain = readerPageStarts(
+        text: text,
+        style: _style,
+        size: _size,
+        textScaler: TextScaler.noScaling,
+      );
+      final List<int> withHeading = readerPageStarts(
+        text: text,
+        style: _style,
+        size: _size,
+        textScaler: TextScaler.noScaling,
+        firstPageInset: 120,
+      );
+
+      // 章头占掉首页的一部分高度：首页装得少，所以第二页起点更靠前（ADR-0087 §决策 3）。
+      expect(withHeading.length, greaterThan(1));
+      expect(withHeading[1], lessThan(plain[1]));
+      // 后面的页仍然按整页高度切，不受章头影响。
+      expect(withHeading[1], greaterThan(0));
+    });
+
+    test('readerPageStarts_givenAnInsetTallerThanThePage_ignoresIt', () {
+      final String text = _longText();
+      final List<int> starts = readerPageStarts(
+        text: text,
+        style: _style,
+        size: _size,
+        textScaler: TextScaler.noScaling,
+        // 章头高过整页（字号被放到极大时的病态输入）：宁可忽略章头，也不能产出空页。
+        firstPageInset: _size.height * 2,
+      );
+
+      expect(starts.length, greaterThan(1));
+      for (var index = 1; index < starts.length; index++) {
+        expect(starts[index], greaterThan(starts[index - 1]));
+      }
+    });
+
     test('readerPageStarts_givenALongText_splitsItIntoIncreasingPages', () {
       final String text = _longText();
       final List<int> starts = readerPageStarts(

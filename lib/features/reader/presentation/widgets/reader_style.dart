@@ -117,6 +117,66 @@ TextStyle readerTextStyle({
 /// The newline character the body layout joins paragraphs with.
 final String _newline = String.fromCharCode(10);
 
+/// Everything a chapter title may be padded with in a body: whitespace, punctuation, symbols.
+final RegExp _titleNoise = RegExp(r'[\s\p{P}\p{S}]', unicode: true);
+
+/// The style the chapter heading is painted with (`docs/dev/adr/0087` §决策 3).
+///
+/// It is painted **inside** the chapter's first page, so it only takes the body's colour: size and
+/// weight come from the theme, and the page is measured with this very style.
+TextStyle readerChapterTitleStyle({
+  required M3ETheme tokens,
+  required Color foreground,
+}) => (tokens.typography.base.titleMedium ?? const TextStyle(fontSize: 16))
+    .copyWith(color: foreground);
+
+/// The space between the chapter heading and the body below it (ADR-0087 §决策 3).
+double readerChapterTitleGap(M3ETheme tokens) => tokens.spacing.xl;
+
+/// [body] with a leading copy of the chapter's own title removed.
+///
+/// Sources routinely put the chapter title on the first line of the body, and the reader prints the
+/// title itself as the chapter heading — so without this the title appears twice
+/// (`docs/dev/adr/0087-reader-page-table-and-chapter-heading.md` §决策 4). Upstream removes the same
+/// line while processing a chapter's content (`ContentProcessor.kt` `//去除重复标题`).
+///
+/// The comparison ignores whitespace, punctuation and symbols, and tolerates the book's name in
+/// front of the title; only the **first non-empty line** is ever considered, and only when it is the
+/// title and nothing else. A line that merely starts with the title is left alone: keeping a line
+/// that should have gone is recoverable, eating a line of the story is not.
+String readerStripDuplicateTitle(
+  String body, {
+  required String title,
+  required String bookName,
+}) {
+  final String wanted = _titleKey(title);
+  if (wanted.isEmpty || body.isEmpty) {
+    return body;
+  }
+  final String book = _titleKey(bookName);
+  final List<String> lines = body.split(_newline);
+  for (var index = 0; index < lines.length; index++) {
+    final String line = lines[index];
+    if (line.trim().isEmpty) {
+      continue;
+    }
+    if (!_isChapterTitle(_titleKey(line), wanted, book)) {
+      break;
+    }
+
+    return lines.sublist(index + 1).join(_newline);
+  }
+
+  return body;
+}
+
+/// Whether [line] (already stripped of noise) is the chapter title [wanted], optionally led by [book].
+bool _isChapterTitle(String line, String wanted, String book) =>
+    line == wanted || (book.isNotEmpty && line == '$book$wanted');
+
+/// [value] without whitespace, punctuation or symbols — the form titles are compared in.
+String _titleKey(String value) => value.replaceAll(_titleNoise, '');
+
 /// The body text as it should be **laid out**: paragraph spacing and first-line indent applied.
 ///
 /// The transform happens here rather than in the parser because it is presentation: the same

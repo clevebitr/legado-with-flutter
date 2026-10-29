@@ -228,4 +228,123 @@ void main() {
       expect(readerEyeProtectionFilter(50), isNotNull);
     });
   });
+
+  group('readerStripDuplicateTitle', () {
+    test('readerStripDuplicateTitle_givenTheTitleOnTheFirstLine_dropsIt', () {
+      // 源站常见形状：正文第一行就是章节名（上游 `ContentProcessor` 也删这一行）。
+      final String body = readerStripDuplicateTitle(
+        '第1章 开端\n第一段正文\n第二段正文',
+        title: '第1章 开端',
+        bookName: '剑来',
+      );
+
+      expect(body, '第一段正文\n第二段正文');
+    });
+
+    test(
+      'readerStripDuplicateTitle_givenPunctuationAndSpaces_stillDropsIt',
+      () {
+        final String body = readerStripDuplicateTitle(
+          '  【第1章 开端】  \n第一段正文',
+          title: '第 1 章 开端',
+          bookName: '剑来',
+        );
+
+        expect(body, '第一段正文');
+      },
+    );
+
+    test('readerStripDuplicateTitle_givenTheBookNameInFront_dropsIt', () {
+      final String body = readerStripDuplicateTitle(
+        '剑来 第1章 开端\n第一段正文',
+        title: '第1章 开端',
+        bookName: '剑来',
+      );
+
+      expect(body, '第一段正文');
+    });
+
+    test('readerStripDuplicateTitle_givenBlankLinesFirst_dropsTheTitleToo', () {
+      final String body = readerStripDuplicateTitle(
+        '\n\n第1章 开端\n第一段正文',
+        title: '第1章 开端',
+        bookName: '剑来',
+      );
+
+      expect(body.trim(), '第一段正文');
+    });
+
+    test('readerStripDuplicateTitle_givenADifferentFirstLine_keepsTheBody', () {
+      const String body = '第一段正文\n第1章 开端';
+      expect(
+        readerStripDuplicateTitle(body, title: '第1章 开端', bookName: '剑来'),
+        body,
+      );
+    });
+
+    test(
+      'readerStripDuplicateTitle_givenALineStartingWithTheTitle_keepsIt',
+      () {
+        // 只是以标题开头的一行正文：留着比吃掉安全。
+        const String body = '第1章 开端那一天下着雨\n第一段正文';
+        expect(
+          readerStripDuplicateTitle(body, title: '第1章 开端', bookName: '剑来'),
+          body,
+        );
+      },
+    );
+
+    test('readerStripDuplicateTitle_givenNoTitle_keepsTheBody', () {
+      const String body = '第一段正文';
+      expect(
+        readerStripDuplicateTitle(body, title: '   ', bookName: '剑来'),
+        body,
+      );
+      expect(
+        readerStripDuplicateTitle(body, title: '第1章', bookName: '剑来'),
+        body,
+      );
+    });
+
+    test('readerStripDuplicateTitle_givenAnEmptyBody_keepsIt', () {
+      expect(readerStripDuplicateTitle('', title: '第1章', bookName: '剑来'), '');
+    });
+  });
+
+  group('readerChapterTitleStyle', () {
+    testWidgets('readerChapterTitleStyle_givenTheTheme_takesItsColourOnly', (
+      WidgetTester tester,
+    ) async {
+      const Color foreground = Color(0xFF112233);
+      late TextStyle style;
+      late double gap;
+      await _pumpThemed(
+        tester,
+        Builder(
+          builder: (BuildContext context) {
+            final M3ETheme tokens = context.m3e;
+            style = readerChapterTitleStyle(
+              tokens: tokens,
+              foreground: foreground,
+            );
+            gap = readerChapterTitleGap(tokens);
+
+            return const SizedBox.shrink();
+          },
+        ),
+      );
+
+      // 章头只换色：字号/字重仍由主题给，页表也是按这个样式量的（ADR-0087 §决策 3）。
+      expect(style.color, foreground);
+      expect(style.fontWeight, tokensTitleWeight(tester));
+      expect(gap, greaterThan(0));
+    });
+  });
+}
+
+/// The weight the theme gives the chapter heading.
+FontWeight? tokensTitleWeight(WidgetTester tester) {
+  final BuildContext context = tester.element(find.byType(Scaffold));
+
+  return context.m3e.typography.base.titleMedium?.fontWeight;
 }

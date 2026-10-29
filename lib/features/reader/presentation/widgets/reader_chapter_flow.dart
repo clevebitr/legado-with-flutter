@@ -1,96 +1,26 @@
-/// The pieces the two continuous reading flows share (`docs/dev/adr/0085-continuous-chapter-reading.md`).
+/// The pieces both reading flows share
+/// (`docs/dev/adr/0087-reader-page-table-and-chapter-heading.md`).
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_table.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:m3e_design/m3e_design.dart';
-
-/// One chapter as a continuous flow renders it, with the body when it is in hand.
-///
-/// A `null` body means **it is not here yet**: the flow then prints the chapter's title and a
-/// loading block in its place (ADR-0086 §决策 7), which is what keeps a chapter boundary readable
-/// while the next chapter is still being fetched.
-///
-/// The body is the one **after** the presentation transform of `readerBodyText` — the flows render
-/// what they are given and never look at the source's own text.
-typedef ReaderFlowChapter = ({
-  int index,
-  String url,
-  String title,
-  String? text,
-});
 
 /// Where an explicit jump lands: a chapter, a character offset inside it, and a nonce.
 ///
 /// The nonce is what makes a second jump to the same position work: the flows only honour a restore
 /// they have not seen yet, so the reader's own progress updates (which move the character offset
-/// continuously) can never be mistaken for a jump it must apply.
-typedef ReaderFlowRestore = ({int index, int charOffset, int nonce});
+/// continuously) can never be mistaken for a jump the flow must apply.
+typedef ReaderFlowRestore = ({int chapterIndex, int charOffset, int nonce});
 
 /// The sentence being read aloud, as a range inside the chapter at its URL (ADR-0062 §决策 5).
 typedef ReaderFlowHighlight = ({String url, int start, int end});
 
-/// The chapters a continuous flow renders: the anchor and its immediate neighbours.
-///
-/// The flow is a **pure function of the session chapter**: slots are `anchor - 1`, `anchor` and
-/// `anchor + 1`, each with the body the page has in hand (or `null` while it is missing). Nothing is
-/// retained between builds.
-///
-/// That is deliberate. An earlier version kept a "rendered window" of its own and derived the
-/// visible chapters from a URL-keyed body map; two chapters sharing a URL (a real shape in scraped
-/// tables of contents) then collapsed onto one body and the same text was printed twice, and a
-/// window that had to be reconciled by hand grew a stack of gates (geometry, retention, prepend)
-/// that could disagree with each other. Two rules replace all of it:
-///
-/// * **bodies are keyed by chapter index**, never by URL, so every TOC row is its own chapter;
-/// * **the slots are derived, not accumulated**, so a chapter can never appear twice.
-class ReaderChapterSlots {
-  /// Builds the slots for [anchorIndex] from [chapters] and the bodies in hand.
-  ///
-  /// The chapter before the anchor is only included when [includePrevious] — a short chapter would
-  /// otherwise have the previous chapter's text sitting where its own body should start, because
-  /// there is no scroll range left to compensate that shift.
-  static List<ReaderFlowChapter> of({
-    required List<ReadingChapter> chapters,
-    required int anchorIndex,
-    required Map<int, String> bodies,
-    required bool includePrevious,
-  }) {
-    if (chapters.isEmpty || anchorIndex < 0 || anchorIndex >= chapters.length) {
-      return const <ReaderFlowChapter>[];
-    }
-    final List<ReaderFlowChapter> slots = <ReaderFlowChapter>[
-      if (includePrevious && anchorIndex > 0)
-        _slot(chapters, bodies, anchorIndex - 1),
-      _slot(chapters, bodies, anchorIndex),
-      if (anchorIndex + 1 < chapters.length)
-        _slot(chapters, bodies, anchorIndex + 1),
-    ];
-
-    return slots;
-  }
-
-  /// One slot: the TOC row plus its body when [bodies] has it.
-  static ReaderFlowChapter _slot(
-    List<ReadingChapter> chapters,
-    Map<int, String> bodies,
-    int index,
-  ) {
-    final ReadingChapter chapter = chapters[index];
-
-    return (
-      index: index,
-      url: chapter.url,
-      title: chapter.title,
-      text: bodies[index],
-    );
-  }
-}
-
 /// The block that stands in for a chapter body that is not in hand yet.
 ///
-/// It sits **under the chapter's own title**, so a reader who scrolls into a boundary sees which
+/// It sits **under the chapter's own heading**, so a reader who scrolls into a boundary sees which
 /// chapter is coming and that it is on its way — the upstream reading view shows the same thing
 /// (the chapter heading with pages still loading). A failed read keeps the block but offers a retry
 /// instead of a spinner: a chapter that could not be read must not look like one that is still
@@ -143,6 +73,85 @@ class ReaderChapterPendingStrip extends StatelessWidget {
             style: tokens.typography.base.labelSmall,
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// One page of the table, painted: the chapter heading (first page only) and the body slice.
+///
+/// Both flows render pages through this widget, so "what a page looks like" has one definition and
+/// its height is the height the table measured (ADR-0087 §决策 1/3). Nothing here measures anything.
+class ReaderPageView extends StatelessWidget {
+  /// Creates the page; [highlight] is the sentence being read aloud, when it belongs here.
+  const ReaderPageView({
+    required this.page,
+    required this.style,
+    required this.highlightStyle,
+    required this.titleStyle,
+    required this.highlight,
+    required this.onNeedChapter,
+    super.key,
+  });
+
+  /// The page to paint.
+  final ReaderPageEntry page;
+
+  /// The body text style (the very value the page was measured with).
+  final TextStyle style;
+
+  /// The style of the sentence being read aloud (ADR-0062 §决策 5).
+  final TextStyle highlightStyle;
+
+  /// The chapter heading's style.
+  final TextStyle titleStyle;
+
+  /// The sentence being read aloud, when it belongs to this page's chapter.
+  final ReaderFlowHighlight? highlight;
+
+  /// Called when the reader asks for a chapter that could not be read to be tried again.
+  final void Function(int chapterIndex) onNeedChapter;
+
+  @override
+  Widget build(BuildContext context) {
+    final ReaderFlowHighlight? spoken = highlight;
+    final String? body = page.text;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        // 章头的高度就是页表量出来的那一段（标题 + 与正文的间距）：标题顶对齐，留白落在下方，
+        // 于是「量到的」与「画出的」是同一件事（ADR-0087 §决策 3）。
+        if (page.hasTitle)
+          SizedBox(
+            height: page.titleExtent,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Text(page.title, style: titleStyle),
+            ),
+          ),
+        if (body == null)
+          SizedBox(
+            height: page.bodyExtent,
+            child: Center(
+              child: ReaderChapterPendingStrip(
+                isFailed: page.isFailed,
+                onRetry: () => onNeedChapter(page.id.chapterIndex),
+              ),
+            ),
+          )
+        else
+          readingText(
+            body: body,
+            start: page.start,
+            end: page.end,
+            style: style,
+            highlightStyle: highlightStyle,
+            highlight: spoken != null && spoken.url == page.url
+                ? (start: spoken.start, end: spoken.end)
+                : null,
+          ),
       ],
     );
   }

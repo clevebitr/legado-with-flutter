@@ -1,141 +1,223 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_chapter_flow.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_table.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// The chapters every case works with: three chapters, addresses `…/1.html` and so on.
-const List<ReadingChapter> _chapters = <ReadingChapter>[
-  ReadingChapter(title: '第1章', url: 'https://source.test/1.html'),
-  ReadingChapter(title: '第2章', url: 'https://source.test/2.html'),
-  ReadingChapter(title: '第3章', url: 'https://source.test/3.html'),
-];
+import '../../../../support/reader_page_table_fixture.dart';
 
-/// Pumps [strip] inside a localized app.
-Future<void> _pumpStrip(
+/// The style of the sentence being read aloud.
+const TextStyle _highlightStyle = TextStyle(backgroundColor: Color(0xFF00FF00));
+
+/// One page of chapter 0, as the table would hand it over.
+ReaderPageEntry _page({
+  String title = '',
+  String? text = '正文内容',
+  int start = 0,
+  int? end,
+  double titleExtent = 0,
+  double bodyExtent = 100,
+  bool isFailed = false,
+  int chapterIndex = 0,
+  int pageIndex = 0,
+}) => ReaderPageEntry(
+  id: (chapterIndex: chapterIndex, pageIndex: pageIndex),
+  url: 'https://source.test/$chapterIndex.html',
+  title: title,
+  text: text,
+  start: start,
+  end: end ?? (text?.length ?? 0),
+  titleExtent: titleExtent,
+  bodyExtent: bodyExtent,
+  isFailed: isFailed,
+);
+
+/// Pumps one page view and records the retries it asked for.
+Future<List<int>> _pumpPage(
   WidgetTester tester,
-  ReaderChapterPendingStrip strip,
-) async {
+  ReaderPageEntry page, {
+  ReaderFlowHighlight? highlight,
+}) async {
+  final List<int> retried = <int>[];
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('en'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(body: strip),
+      home: Scaffold(
+        body: ReaderPageView(
+          page: page,
+          style: testReaderBodyStyle,
+          highlightStyle: _highlightStyle,
+          titleStyle: testReaderTitleStyle,
+          highlight: highlight,
+          onNeedChapter: retried.add,
+        ),
+      ),
     ),
   );
+  await tester.pump();
+
+  return retried;
 }
 
+/// The text of every painted span that carries a background (the read-aloud highlight).
+Iterable<String> _highlightedText() => find
+    .byType(Text)
+    .evaluate()
+    .map((Element element) => element.widget)
+    .whereType<Text>()
+    .expand((Text text) {
+      final InlineSpan? span = text.textSpan;
+      if (span is TextSpan) {
+        return span.children ?? const <InlineSpan>[];
+      }
+
+      return const <InlineSpan>[];
+    })
+    .whereType<TextSpan>()
+    .where((TextSpan span) => span.style?.backgroundColor != null)
+    .map((TextSpan span) => span.text ?? '');
+
 void main() {
-  group('ReaderChapterSlots', () {
-    test('of_givenOnlyTheAnchorBody_answersTheAnchorAndTheNextSlot', () {
-      // 下一章没有正文也占一个槽：它要印标题 + 「正在加载」，而不是凭空消失。
-      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
-        chapters: _chapters,
-        anchorIndex: 1,
-        bodies: <int, String>{1: '正文二'},
-        includePrevious: false,
+  group('ReaderPageView', () {
+    testWidgets('build_givenAChapterHeading_printsItAboveTheBody', (
+      WidgetTester tester,
+    ) async {
+      await _pumpPage(
+        tester,
+        _page(title: '第1章 开端', titleExtent: 48, text: '正文内容'),
       );
 
-      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[1, 2]);
-      expect(slots.first.text, '正文二');
-      expect(slots.last.text, isNull);
-      expect(slots.last.title, '第3章');
-    });
-
-    test('of_givenIncludePrevious_startsWithTheNeighbour', () {
-      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
-        chapters: _chapters,
-        anchorIndex: 1,
-        bodies: <int, String>{0: '正文一', 1: '正文二', 2: '正文三'},
-        includePrevious: true,
-      );
-
-      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[0, 1, 2]);
-    });
-
-    test('of_givenTheFirstChapter_hasNoPreviousSlot', () {
-      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
-        chapters: _chapters,
-        anchorIndex: 0,
-        bodies: <int, String>{0: '正文一'},
-        includePrevious: true,
-      );
-
-      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[0, 1]);
-    });
-
-    test('of_givenTheLastChapter_hasNoNextSlot', () {
-      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
-        chapters: _chapters,
-        anchorIndex: 2,
-        bodies: <int, String>{2: '正文三'},
-        includePrevious: false,
-      );
-
-      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[2]);
-    });
-
-    test('of_givenTwoChaptersWithTheSameUrl_keepsOneSlotPerChapter', () {
-      // 抓下来的目录里两章指向同一个地址是常见形状：按 URL 归并会把它们压成一份正文，
-      // 看起来就是同一章打印了两遍（ADR-0087 §决策 1）。
-      final List<ReaderFlowChapter> slots = ReaderChapterSlots.of(
-        chapters: const <ReadingChapter>[
-          ReadingChapter(title: '第1章', url: 'https://source.test/same.html'),
-          ReadingChapter(title: '第2章', url: 'https://source.test/same.html'),
-        ],
-        anchorIndex: 0,
-        bodies: <int, String>{0: '正文一', 1: '正文一'},
-        includePrevious: false,
-      );
-
-      expect(slots.map((ReaderFlowChapter slot) => slot.index), <int>[0, 1]);
-      expect(slots.map((ReaderFlowChapter slot) => slot.title), <String>[
-        '第1章',
-        '第2章',
-      ]);
-    });
-
-    test('of_givenAnAnchorOutsideTheToc_answersNothing', () {
+      // 章头与正文都在，且章头在上（ADR-0087 §决策 3）：这就是「每章只印一次标题」的位置。
+      expect(find.text('第1章 开端'), findsOneWidget);
+      expect(find.text('正文内容'), findsOneWidget);
       expect(
-        ReaderChapterSlots.of(
-          chapters: _chapters,
-          anchorIndex: 5,
-          bodies: const <int, String>{},
-          includePrevious: true,
-        ),
-        isEmpty,
+        tester.getTopLeft(find.text('第1章 开端')).dy,
+        lessThan(tester.getTopLeft(find.text('正文内容')).dy),
       );
+    });
+
+    testWidgets('build_givenAPageWithoutAHeading_printsTheBodyOnly', (
+      WidgetTester tester,
+    ) async {
+      await _pumpPage(tester, _page(text: '第二页正文'));
+
+      expect(find.text('第二页正文'), findsOneWidget);
+      expect(find.byType(ReaderChapterPendingStrip), findsNothing);
+    });
+
+    testWidgets('build_givenASliceOfTheBody_printsOnlyThatSlice', (
+      WidgetTester tester,
+    ) async {
+      await _pumpPage(tester, _page(text: '0123456789', start: 2, end: 6));
+
+      // 页画的是切片：前后的字属于相邻页，不能在上一页的末尾多印一遍。
+      expect(find.text('2345'), findsOneWidget);
+      expect(find.textContaining('01'), findsNothing);
+      expect(find.textContaining('67'), findsNothing);
+    });
+
+    testWidgets('build_givenAPlaceholderPage_printsItsHeadingAndLoading', (
+      WidgetTester tester,
+    ) async {
+      await _pumpPage(
+        tester,
+        _page(title: '第2章', text: null, titleExtent: 48, bodyExtent: 72),
+      );
+
+      expect(find.text('第2章'), findsOneWidget);
+      expect(find.byType(ReaderChapterPendingStrip), findsOneWidget);
+      expect(find.text('Loading…'), findsOneWidget);
+    });
+
+    testWidgets('build_givenAFailedChapter_retriesThatChapter', (
+      WidgetTester tester,
+    ) async {
+      final List<int> retried = await _pumpPage(
+        tester,
+        _page(
+          title: '第2章',
+          text: null,
+          titleExtent: 48,
+          bodyExtent: 72,
+          isFailed: true,
+          chapterIndex: 2,
+        ),
+      );
+
+      await tester.tap(find.text('Reload this chapter'));
+      await tester.pump();
+
+      // 读失败给的是重试按钮，重试问的是这一章（不是「当前章」）。
+      expect(find.text('Loading…'), findsNothing);
+      expect(retried, <int>[2]);
+    });
+
+    testWidgets('build_givenTheSpokenSentenceOfThisChapter_paintsThatRange', (
+      WidgetTester tester,
+    ) async {
+      await _pumpPage(
+        tester,
+        _page(text: '一二三四五六'),
+        highlight: (url: 'https://source.test/0.html', start: 1, end: 3),
+      );
+
+      expect(_highlightedText(), <String>['二三']);
+
+      await _pumpPage(
+        tester,
+        _page(text: '一二三四五六', end: 6),
+        highlight: (url: 'https://source.test/0.html', start: 0, end: 2),
+      );
+
+      expect(_highlightedText(), <String>['一二']);
+    });
+
+    testWidgets('build_givenTheSpokenSentenceOfAnotherChapter_paintsNothing', (
+      WidgetTester tester,
+    ) async {
+      await _pumpPage(
+        tester,
+        _page(text: '一二三四五六'),
+        highlight: (url: 'https://source.test/9.html', start: 0, end: 2),
+      );
+
+      expect(_highlightedText(), isEmpty);
+    });
+
+    testWidgets('build_givenAHighlightAcrossTheSlice_clipsIt', (
+      WidgetTester tester,
+    ) async {
+      await _pumpPage(
+        tester,
+        _page(text: '0123456789', start: 4, end: 8),
+        // 引擎里的句子跨页：只画落在这一页上的部分，不跳过也不越界。
+        highlight: (url: 'https://source.test/0.html', start: 2, end: 10),
+      );
+
+      expect(_highlightedText(), <String>['4567']);
     });
   });
 
   group('ReaderChapterPendingStrip', () {
-    testWidgets('build_givenAReadInFlight_showsTheLoadingLabel', (
+    testWidgets('build_givenLoading_showsTheSpinnerNotTheRetry', (
       WidgetTester tester,
     ) async {
-      await _pumpStrip(
-        tester,
-        ReaderChapterPendingStrip(isFailed: false, onRetry: () {}),
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: ReaderChapterPendingStrip(isFailed: false, onRetry: () {}),
+          ),
+        ),
       );
+      await tester.pump();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.text('Loading…'), findsOneWidget);
-      expect(find.byType(TextButton), findsNothing);
-    });
-
-    testWidgets('build_givenAFailedRead_offersTheRetry', (
-      WidgetTester tester,
-    ) async {
-      var retried = 0;
-      await _pumpStrip(
-        tester,
-        ReaderChapterPendingStrip(isFailed: true, onRetry: () => retried++),
-      );
-
-      // 读失败的章不能一直画成「还在加载」。
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-      await tester.tap(find.text('Reload this chapter'));
-      expect(retried, 1);
+      expect(find.text('Reload this chapter'), findsNothing);
     });
   });
 }
