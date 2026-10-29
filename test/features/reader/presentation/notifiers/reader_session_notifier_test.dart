@@ -290,6 +290,84 @@ void main() {
     );
 
     test(
+      'build_whenTheRestoredPositionWasNeverScrolled_keepsItAcrossARefresh',
+      () async {
+        // 恢复出来的位置也必须记住：读者打开后一屏都没滑（偏移 0），`updateOffset` 会把它当成
+        // 没变化。重读磁盘就会落到别处 —— 真机上「跳到第一章」就是这么来的。
+        final FakeReadingProgressStore store = FakeReadingProgressStore()
+          ..positions['${_book.sourceUrl}|${_book.bookUrl}'] =
+              const ReadingPosition(chapterUrl: 'https://source.test/3.html');
+        final _Fixture fixture = _fixture(progress: store);
+
+        final ReaderSessionState first = await fixture.container.read(
+          readerSessionProvider(_book).future,
+        );
+        expect(first.chapterIndex, 2);
+
+        // 别处把进度改写成了第一章。
+        store.positions['${_book.sourceUrl}|${_book.bookUrl}'] =
+            const ReadingPosition(chapterUrl: 'https://source.test/1.html');
+
+        fixture.container.invalidate(readerChaptersProvider(_book));
+        final ReaderSessionState rebuilt = await fixture.container.read(
+          readerSessionProvider(_book).future,
+        );
+
+        expect(rebuilt.chapterIndex, 2);
+      },
+    );
+
+    test('build_whenTheStoreChangedElsewhere_keepsTheLivePosition', () async {
+      // 磁盘里那一份**不是**权威：读者刚打开就停在第一章第一屏（一次偏移都没动过），
+      // 此时目录刷新若重读磁盘，就会落到别处——真机上看到的就是「跳到第一章 / 乱跳」。
+      final FakeReadingProgressStore store = FakeReadingProgressStore();
+      final _Fixture fixture = _fixture(progress: store);
+      final ReaderSession session = fixture.container.read(
+        readerSessionProvider(_book).notifier,
+      );
+      final ReaderSessionState first = await fixture.container.read(
+        readerSessionProvider(_book).future,
+      );
+      expect(first.chapterIndex, 0);
+      await session.selectChapter(2);
+      session.updateOffset(0);
+      // 别处（另一台设备 / 上一次退出）把进度写成了第一章。
+      store.positions['${_book.sourceUrl}|${_book.bookUrl}'] =
+          const ReadingPosition(chapterUrl: 'https://source.test/1.html');
+
+      fixture.container.invalidate(readerChaptersProvider(_book));
+      final ReaderSessionState rebuilt = await fixture.container.read(
+        readerSessionProvider(_book).future,
+      );
+
+      expect(rebuilt.chapterIndex, 2);
+    });
+
+    test(
+      'build_givenNoStoredPositionAndNoScroll_staysOnTheChapterItOpened',
+      () async {
+        // 打开后一次都没滚动（偏移 0，`updateOffset` 会当成没变化）：位置也必须记住，
+        // 否则下一次重建会重新走「首次打开」那条路。
+        final _Fixture fixture = _fixture();
+        final ReaderSession session = fixture.container.read(
+          readerSessionProvider(_book).notifier,
+        );
+        await fixture.container.read(readerSessionProvider(_book).future);
+        await session.selectChapter(2);
+        session.updateOffset(0);
+        // 让存档里根本没有这本书（首次打开、还没落盘）。
+        fixture.progress.positions.clear();
+
+        fixture.container.invalidate(readerChaptersProvider(_book));
+        final ReaderSessionState rebuilt = await fixture.container.read(
+          readerSessionProvider(_book).future,
+        );
+
+        expect(rebuilt.chapterIndex, 2);
+      },
+    );
+
+    test(
       'build_whenChaptersAreInsertedBeforeTheCurrentOne_remapsTheIndex',
       () async {
         final _Fixture fixture = _fixture();

@@ -158,7 +158,9 @@ class ReaderSession extends _$ReaderSession {
       final int moved = _indexOf(loaded, _urlAt(_known, previous.chapterIndex));
       _known = loaded;
       // 当前章不在新目录里（源真的重排/删章了）才退回原下标。
-      return moved < 0 ? previous : previous.copyWith(chapterIndex: moved);
+      return _remember(
+        moved < 0 ? previous : previous.copyWith(chapterIndex: moved),
+      );
     }
     final ReadingPosition? stored = await ref
         .read(readerProgressStoreProvider)
@@ -167,13 +169,28 @@ class ReaderSession extends _$ReaderSession {
     _known = loaded;
     if (restored < 0) {
       // 存的章节已经不在目录里（源重排了章节）：从第一章开始，而不是把读者挡在门外。
-      return const ReaderSessionState(chapterIndex: 0);
+      return _remember(const ReaderSessionState(chapterIndex: 0));
     }
 
-    return ReaderSessionState(
-      chapterIndex: restored,
-      charOffset: stored?.charOffset ?? 0,
+    return _remember(
+      ReaderSessionState(
+        chapterIndex: restored,
+        charOffset: stored?.charOffset ?? 0,
+      ),
     );
+  }
+
+  /// Remembers [state] as the live position and answers it, so the **next** build can carry it over
+  /// instead of going back to the store (`docs/dev/adr/0089-…`).
+  ///
+  /// Forgetting this was a real bug: a book opened at chapter 8 and never scrolled past offset 0 kept
+  /// `_position == null` (the flow's first progress report is 0, which [updateOffset] drops as a
+  /// no-op), so the next rebuild took the "first open" path, re-read the store — and a store without
+  /// this book sent the reader back to **chapter one**.
+  ReaderSessionState _remember(ReaderSessionState state) {
+    _position = state;
+
+    return state;
   }
 
   /// The position the session is at, kept beside `state` so a rebuild can carry it over.
