@@ -1334,4 +1334,4 @@ Android 校验通知（用户裁决）：
 - `scroll_backAcrossChapters_keepsTheFlingRunning`：第 13 章一次上滑跨过至少两章、位移单调不增。lead 改回 1 即失败（第 43 帧 `+2047`）。
 - `scroll_acrossAChapterBoundary_movesSmoothly` 改写：原用例在循环外抓一次 `ScrollPosition`，而重设位置会换掉这个对象（断言其实在读已脱离的对象）；现在每步读活的位置，容差从 ±120 收紧到「一步不超过拖动量」。
 
-门禁：format / analyze 零警告 / 2837 用例全绿 / coverage 98.52% · 96.55% · 95.71% / build_runner 生成物无 diff。
+门禁：format / analyze 零警告 / 2837 用例全绿 / coverage 98.52% · 96.55% · 95.71% / build_runner 生成物无 diff。提交 cc7754f。
