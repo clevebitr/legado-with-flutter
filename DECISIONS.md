@@ -1269,3 +1269,24 @@ Android 校验通知（用户裁决）：
 测试（先证明有牙）：页面用例「目录刷新期间没有转圈 + 会话与滚动位置都不动」——把 `.value` 分支改回形状分支即失败（找到 1 个 CircularProgressIndicator）；会话用例「末尾变长保留内存位置」——把 `_position` 改成 `null` 即失败（432 → 0），「前面插入搬到下标 3」同理。
 
 门禁：format / analyze 零警告 / 2829 用例全绿 / coverage 98.52% · 96.55% · 95.71% / 生成物已重新生成并与源码同步。提交 721d0a8。
+
+## 2026-10-29 — M28 追修：build 恢复出来的位置也必须记住（否则刷新跳第一章）
+
+用户追报：721d0a8 之后「还是连续加载，滚动进度在加载时乱跳，跳到第一章」。查到一个真 bug，同时解释了「乱跳」与「跳到第一章」。
+
+漏的那一半（ADR-0089 §决策 2 实现不完整）：`_position` 只在 `selectChapter` / `updateOffset` 里赋值，**`build` 自己算出来的那个位置从来没记住**。
+
+复现链：
+1. 打开一本书，恢复出「第 3 章」（`build` 返回 + 不记 `_position`）。
+2. 读者一屏都没滑 → 流程第一次上报的偏移就是 0 → `updateOffset(0)` 因为「没变化」直接 return → `_position` 永远是 null。
+3. 目录刷新（书更了章节）→ 会话重建 → `_position == null` → 走「首次打开」那条路 → **重读磁盘**。
+4. 磁盘里没有这本书（首次打开还没落盘）或写着别的章 → `restored < 0` → **chapterIndex 0 = 第一章**。
+5. 每次都跳一次 → 用户看到「加载时乱跳」。
+
+修法：`build` 的每条**成功**返回都经 `_remember` 记下位置；`ParseFailure` 那条**故意不记**（目录没读到不算位置，否则下次读到了会带着错的位置走）。
+
+牙：`build_whenTheRestoredPositionWasNeverScrolled_keepsItAcrossARefresh` —— 把 `_remember` 改成不赋值，用例立刻红（期望 2、实际 0），与真机现象一致。
+
+排查过但**不是**原因（记下来免得下次重查）：`readerContentProvider` 内部用 `ref.read` 读目录，所以目录刷新不会连带重取正文；`_requestMissingBodies` 每章只问一次且失败即停；预取队列在锚点/章数不变时不重排。
+
+门禁：format / analyze 零警告 / 2832 用例全绿 / coverage 98.52% · 96.55% · 95.71% / 生成物无 diff。提交 fe1d2f0。

@@ -361,6 +361,48 @@ void main() {
       expect(tester.getTopLeft(firstLine).dy, closeTo(before, 1));
     });
 
+    testWidgets('update_whenTheTopIsInsideAChapterHeading_doesNotJump', (
+      WidgetTester tester,
+    ) async {
+      // 视口顶落在**章头那几十像素**里，正是「刚滑进下一章」的那一刻：此时页内位置换算成字符
+      // 偏移会夹到 0，再换算回来就落到正文首行——章头被顶出屏幕，真机上就是「滑进下一章被强制
+      // 回顶部」。
+      final _Harness harness = _Harness(
+        buildTestPageTable(
+          chapters: _chapters,
+          bodies: <int, String>{
+            0: testReaderBody('第一章'),
+            1: testReaderBody('第二章'),
+          },
+          anchorIndex: 1,
+        ),
+      );
+
+      await harness.pump(tester);
+      final int anchorPage = harness.table.indexOfId((
+        chapterIndex: 1,
+        pageIndex: 0,
+      ));
+      expect(anchorPage, greaterThanOrEqualTo(0));
+      _position(tester).jumpTo(harness.table.tops[anchorPage] + 3 + _padding);
+      await _advance(tester);
+      final double before = _position(tester).pixels;
+
+      // 第三章的正文到手：页表在视口**下方**长出来，视口顶那几十像素必须原地不动。
+      harness.table = buildTestPageTable(
+        chapters: _chapters,
+        bodies: <int, String>{
+          0: testReaderBody('第一章'),
+          1: testReaderBody('第二章'),
+          2: testReaderBody('第三章'),
+        },
+        anchorIndex: 1,
+      );
+      await harness.pump(tester);
+
+      expect(_position(tester).pixels, closeTo(before, 1));
+    });
+
     testWidgets('update_whenAChapterJoinsBelow_doesNotMoveTheReader', (
       WidgetTester tester,
     ) async {

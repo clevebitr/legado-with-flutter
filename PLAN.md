@@ -43,4 +43,4 @@ auto-breakpoint: false
 ## Current: M28 — M28 — 阅读页对齐上游：单一页表 + 章首章头 + 重复标题剥离（ADR-0087 / #88）
 
 goal: 真机地平线：无 error、双重标题、滚动不跳
-breakpoint: 721d0a8 目录刷新不再闪屏/错位；待真机复跑
+breakpoint: fe1d2f0 修「刷新跳第一章」；待真机复跑

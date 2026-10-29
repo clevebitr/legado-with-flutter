@@ -186,8 +186,9 @@ Future<void> _pump(
   String? chapterUrl,
   // 加载页上的转圈是无限动画，`pumpAndSettle` 在它可见时永远不会返回。
   bool settle = true,
+  Size size = const Size(1200, 2000),
 }) async {
-  tester.view.physicalSize = const Size(1200, 2000);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 
@@ -475,6 +476,76 @@ void main() {
             .pixels,
         closeTo(offsetBefore, 1),
       );
+    });
+
+    testWidgets('scroll_acrossAChapterBoundary_movesSmoothly', (
+      WidgetTester tester,
+    ) async {
+      // 4 章、每章 40 行：跨章会发生在真实阅读过程中，而不是刚好一屏一章。
+      final List<ReadingChapter> chapters = <ReadingChapter>[
+        for (var index = 0; index < 4; index++)
+          ReadingChapter(
+            title: '第${index + 1}章',
+            url: 'https://source.test/${index + 1}.html',
+          ),
+      ];
+      final _Fixture fixture = _fixture(
+        chapters: FakeChapterListProvider()..chapters = chapters,
+      );
+      for (final ReadingChapter chapter in chapters) {
+        fixture.content.bodies[chapter.url] = <String>[
+          for (var line = 0; line < 40; line++)
+            '${chapter.title} 第${line + 1}行：正文内容。',
+        ].join(_newline);
+      }
+
+      await _pump(tester, fixture, size: const Size(1200, 1200));
+      final ScrollPosition position = tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position;
+      int chapterOf(WidgetTester tester) =>
+          fixture.container
+              .read(readerSessionProvider(_book))
+              .value
+              ?.chapterIndex ??
+          0;
+
+      /// 拖一小段，返回 (位移, 章号是否变了)。
+      Future<double> step(double dy) async {
+        final double before = position.pixels;
+        await tester.drag(find.byType(ReaderPage), Offset(0, dy));
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.pump(const Duration(milliseconds: 200));
+
+        return position.pixels - before;
+      }
+
+      // 向下：每一步的位移都必须与拖动同向、同量级——跨章那一步也不例外。
+      // 真机的症状是跨章时被「强制回到顶部」，也就是某一步的位移突然变大或反向。
+      final Set<int> crossed = <int>{};
+      var previousChapter = chapterOf(tester);
+      for (var index = 0; index < 60; index++) {
+        final double delta = await step(-60);
+        expect(delta, greaterThanOrEqualTo(0), reason: '第 $index 步往回跳了');
+        expect(delta, lessThanOrEqualTo(70), reason: '第 $index 步跳了 $delta');
+        final int chapter = chapterOf(tester);
+        if (chapter != previousChapter) {
+          crossed.add(chapter);
+          previousChapter = chapter;
+        }
+      }
+      expect(crossed, isNotEmpty, reason: '这轮滑动没有跨章，用例就白跑了');
+
+      // 向上：同样要平滑——「在下一章上滑回上一章」是最容易跳的那一下。
+      for (var index = 0; index < 60; index++) {
+        final double delta = await step(60);
+        expect(delta, lessThanOrEqualTo(0), reason: '上行第 $index 步往回跳了');
+        expect(
+          delta,
+          greaterThanOrEqualTo(-120),
+          reason: '上行第 $index 步跳了 $delta',
+        );
+      }
     });
 
     testWidgets('build_givenAFailingChapterList_showsTheFailure', (

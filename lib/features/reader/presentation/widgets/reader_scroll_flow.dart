@@ -206,6 +206,29 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
       return;
     }
 
+    // 结构变化先按**页**补偿：只要锚点这一页自己没变高变矮，读者在这一页里的像素位置就原样
+    // 保留（下面接了新章、上面收了旧章都属于这一类）。
+    //
+    // 以前这里一律走「字符偏移往返」，而往返是有损的：视口顶落在章头那几十像素里时，
+    // `charOffsetAt` 夹到 0、`offsetOf(0)` 又回到正文首行 —— 于是每跨一次章，章头就被顶出屏幕。
+    // 真机上看到的就是「滑进下一章被强制回顶部」「上滑回上一章跳到上一章顶部」。
+    final int oldIndex = previous.indexAt(_offset);
+    final ReaderPageEntry? oldPage = previous.pageAt(oldIndex);
+    final int newIndex = oldPage == null ? -1 : table.indexOfId(oldPage.id);
+    if (oldPage != null &&
+        newIndex >= 0 &&
+        (table.pages[newIndex].extent - oldPage.extent).abs() < 0.5) {
+      final double target =
+          table.tops[newIndex] + (_offset - previous.tops[oldIndex]);
+      if ((target - _offset).abs() > 0.5) {
+        _land(target);
+      }
+
+      return;
+    }
+
+    // 这一页本身被重排了（换字号 / 换视口，或占位页换成真实正文）：只能按字符偏移去找，
+    // 「同一段字」比「同一个像素」更接近读者原来的位置。
     final ({int chapterIndex, int charOffset})? anchor = _anchor;
     if (anchor == null) {
       return;

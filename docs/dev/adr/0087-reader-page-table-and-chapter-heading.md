@@ -60,10 +60,13 @@ ReaderPageEntry = { id, url, title, text, start, end, titleExtent, bodyExtent, i
 
 > 视口顶那一段字，在页表变化前后必须是同一段字。
 
-实现：状态里记住 `anchor = (chapterIndex, charOffset)`（视口顶由页表反解得出）。页表换了以后重算
-`newOffset = table.offsetOf(anchor)`；只有 `|newOffset - offset| > 0.5` 时才重设滚动位置，
-重设方式是**换一个 `ScrollController(initialScrollOffset: newOffset)` 并给 `Scrollable` 一个新
-`key`**（帧内生效，不再有一帧错位）。差值小于半像素时保持原像素偏移，避免每次重建都抖一下。
+实现：状态里记住 `anchor = (chapterIndex, charOffset)`（视口顶由页表反解得出）。页表换了以后按
+**页**补偿：找到旧表里视口顶所在的那一页，在新表里按页身份 `(chapterIndex, pageIndex)` 找回来，
+保留**页内像素**位置（`newOffset = 新页顶 + (旧 offset - 旧页顶)`）；只有那一页自己的高度也变了
+（换字号 / 换视口 / 占位页换真实正文）才退回 `table.offsetOf(anchor)` 按字符去找。只有
+`|新 offset - 当前 offset| > 0.5` 时才重设滚动位置，方式是**换一个
+`ScrollController(initialScrollOffset: newOffset)` 并给 `Scrollable` 一个新 `key`**（帧内生效，
+不再有一帧错位）。差值小于半像素时保持原像素偏移，避免每次重建都抖一下。
 
 配套的两条窗口规则让「当帧重建」在常见路径上**根本不需要触发**：
 
@@ -177,6 +180,13 @@ ReaderPageEntry = { id, url, title, text, start, end, titleExtent, bodyExtent, i
 - **2026-10-29（落地时补的两条）**：§决策 6（末页尾部留白）与 §决策 7（跳转以目标为准、锚点章正文
   进正文表）都是实现过程中真机形状的推理结论——不是新方向，而是「零跳」这条不变量在末页与异步
   会话两个边界上的必要补丁。
+- **2026-10-29（用户报「章界跳变」）**：§决策 2 的补偿方式改了一半——结构变化现在先按**页内像素**
+  补，只有「这一页自己变高变矮」（换字号 / 换视口 / 占位页换成真实正文）才退回字符偏移。原因：
+  字符偏移往返是**有损**的。视口顶落在章头那几十像素里时 `charOffsetAt` 夹到 0，`offsetOf(0)` 又
+  回到正文首行——每跨一次章，章头就被顶出屏幕，真机上就是「滑进下一章被强制回顶部 / 上滑回上一章
+  跳到上一章顶部」。像素不往返，就不会丢。上游同一个道理：`ReaderScrollPolicy.apply` 跨界时把
+  offset 按**页高差**搬过去（`next - previousExtent`），从不回到 0 重算。
+  牙：`update_whenTheTopIsInsideAChapterHeading_doesNotJump`（去掉这一段即差 45 px，正好是一行章头）。
 - **2026-10-29（真机日志后补的第三条）**：§决策 8（量高的样式必须已定型）来自用户 Windows 真机日志
   ——15 条 `RenderFlex overflowed by 31 pixels`，全是同一个原因。复现方法：用真实中文字体
   （`simhei.ttf`）在测试里跑同一条链路，环境样式一换就能稳定重现 24/31 px 的溢出。
