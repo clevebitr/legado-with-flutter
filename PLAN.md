@@ -42,5 +42,5 @@ auto-breakpoint: false
 
 ## Current: M28 — M28 — 阅读页对齐上游：单一页表 + 章首章头 + 重复标题剥离（ADR-0087 / #88）
 
-goal: 重构落地 + 双 bug 修复；待真机验收
-breakpoint: 代码与门禁已过（44d6134）；待实机复跑：双重标题 / 滚动跳字
+goal: 真机地平线：无 error、双重标题、滚动不跳
+breakpoint: 81f05b4 已修 overflow；新日志若再溢出会带 where=

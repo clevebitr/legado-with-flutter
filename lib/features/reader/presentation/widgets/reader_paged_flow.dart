@@ -58,7 +58,7 @@ class ReaderPagedFlow extends StatefulWidget {
   final void Function(int chapterIndex, int charOffset) onSettled;
 
   /// Called with a chapter index whose body the flow needs (a loading page, or a retry).
-  final void Function(int chapterIndex) onNeedChapter;
+  final void Function(int chapterIndex, {bool explicit}) onNeedChapter;
 
   @override
   State<ReaderPagedFlow> createState() => _ReaderPagedFlowState();
@@ -284,7 +284,7 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
       if (!page.isPlaceholder || !_requested.add(page.id.chapterIndex)) {
         continue;
       }
-      widget.onNeedChapter(page.id.chapterIndex);
+      widget.onNeedChapter(page.id.chapterIndex, explicit: false);
     }
     _requested.removeWhere((int index) => !rendered.contains(index));
   }

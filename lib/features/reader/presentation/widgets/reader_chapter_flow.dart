@@ -109,8 +109,13 @@ class ReaderPageView extends StatelessWidget {
   /// The sentence being read aloud, when it belongs to this page's chapter.
   final ReaderFlowHighlight? highlight;
 
-  /// Called when the reader asks for a chapter that could not be read to be tried again.
-  final void Function(int chapterIndex) onNeedChapter;
+  /// Called when a chapter's body is needed: a page that has none, or the reader's own retry.
+  ///
+  /// [ReaderPageView] passes `explicit: true` only for the retry button. A relay request (a page that
+  /// is merely waiting) must **not** undo the "this chapter failed" mark, or the screen and the
+  /// prefetch queue would take turns asking for a chapter that is not coming
+  /// (`docs/dev/adr/0088-crossing-limit-and-prefetch-window.md`).
+  final void Function(int chapterIndex, {bool explicit}) onNeedChapter;
 
   @override
   Widget build(BuildContext context) {
@@ -137,7 +142,8 @@ class ReaderPageView extends StatelessWidget {
             child: Center(
               child: ReaderChapterPendingStrip(
                 isFailed: page.isFailed,
-                onRetry: () => onNeedChapter(page.id.chapterIndex),
+                onRetry: () =>
+                    onNeedChapter(page.id.chapterIndex, explicit: true),
               ),
             ),
           )

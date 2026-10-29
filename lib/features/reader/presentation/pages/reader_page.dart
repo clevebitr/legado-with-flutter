@@ -156,10 +156,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// Chapter bodies in hand, keyed by chapter URL — both the ones fetched ahead and the one the
   /// open chapter's own provider returned.
   ///
-  /// Pruned to the rendered window on every build (see [_pruneBodies]), so reading a thousand
-  /// chapters does not keep a thousand bodies alive. Keyed by URL and not by index because the body
-  /// text itself is the same document for two chapters that share an address; the *laid-out* text
-  /// is keyed by index (see [_laidOut]), which is where the two chapters differ.
+  /// Pruned to the ±[_prefetchRadius] window on every build (see [_retainBodies]), so reading a
+  /// thousand chapters does not keep a thousand bodies alive. Keyed by URL and not by index because
+  /// the body text itself is the same document for two chapters that share an address; the
+  /// *laid-out* text is keyed by index (see [_laidOut]), which is where the two chapters differ.
   final Map<String, String> _prefetchedBodies = <String, String>{};
 
   /// Bodies already laid out, keyed by chapter **index**: two chapters may share an address, and
@@ -175,7 +175,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// It only ever moves backwards while the reader reads (see [_applyWindow]).
   int _windowFirst = -1;
 
-  /// Chapter URLs whose prefetch is in flight (a rebuild must not start it twice).
+  /// Chapters whose body is being fetched right now.
+  ///
+  /// A rebuild must not queue the same chapter twice, and the runs are **serialised**
+  /// (ADR-0088 §决策 2): one chapter in flight, nearest first, so the reader's own next chapter is
+  /// never behind twenty others in the source's rate queue.
   final Set<String> _prefetching = <String>{};
 
   /// Chapters whose prefetch failed; not retried while they remain in the window.
@@ -183,6 +187,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// Bumped on a source switch so an in-flight prefetch of the old source is dropped.
   int _prefetchGeneration = 0;
+
+  /// How many chapters on **each** side the reader keeps ahead of itself (ADR-0088 §决策 2).
+  ///
+  /// A fixed 15 — the number the user asked for. The setting surface upstream has
+  /// (`preDownloadNum` / `preDownloadNumPrev`) is still registered in `docs/dev/roadmap.md` §3.7.
+  static const int _prefetchRadius = 15;
+
+  /// Chapters still to fetch, nearest first; rebuilt when the anchor chapter changes.
+  final List<int> _prefetchQueue = <int>[];
+
+  /// The anchor chapter the queue was built for, so a rebuild does not reshuffle it per frame.
+  int _prefetchAnchor = -1;
 
   /// The session the last build saw, so the tool bar can show the chapter position.
   ReaderSessionState? _lastSession;
@@ -957,28 +973,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _lastChapterUrl = chapter.url;
     _lastChapterName = chapter.title.isEmpty ? null : chapter.title;
 
-    // 窗口只向前长（ADR-0087 §决策 2）：锚点前进时只往下补章，不回收上方的章，
-    // 于是「视口顶以上的高度」在阅读过程中不会变——这是滚动不跳的前提。
-    _applyWindow(session.chapterIndex, chapters.length);
-    final int last = (session.chapterIndex + 1).clamp(0, chapters.length - 1);
-    final Set<int> window = <int>{
-      for (var index = _windowFirst; index <= last; index++) index,
-    };
-    _pruneBodies(window);
-    // 预取仍只做相邻各一章（ADR-0085 §决策 3）；窗口里更远的章靠已经到手的正文。
-    final ReadingChapter? previousChapter = session.chapterIndex > 0
-        ? chapters[session.chapterIndex - 1]
-        : null;
-    final ReadingChapter? nextChapter =
-        session.chapterIndex + 1 < chapters.length
-        ? chapters[session.chapterIndex + 1]
-        : null;
-    if (previousChapter != null) {
-      _schedulePrefetch(previousChapter);
-    }
-    if (nextChapter != null) {
-      _schedulePrefetch(nextChapter);
-    }
     // 本章的正文也走同一条读路径：正文还没到手时页表给出一页「章头 + 正在加载」，
     // 页面自己不再另画一个转圈（那会让正文在加载前后各画一次）。
     final ParseResult<String>? content = ref
@@ -989,6 +983,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       ParseFailure<String>() => null,
       null => null,
     };
+
+    // 阅读位置最多跨进**一章**未加载的章（ADR-0088 §决策 1）：锚点章的正文没到手，页表就只排到它
+    // 自己，快速滑动会在这一页加载页上停住；正文到手才允许再往下接一章。这样「一次滑动跨过好几章
+    // 空白、把它们同时拉起来」不会发生——能被跨过去的章一律是已经抓好的章。
+    final bool anchorReady = currentData != null && currentData.isNotEmpty;
+    // 窗口只向前长（ADR-0087 §决策 2）：锚点前进时只往下补章，不回收上方的章，
+    // 于是「视口顶以上的高度」在阅读过程中不会变——这是滚动不跳的前提。
+    _applyWindow(session.chapterIndex, chapters.length);
+    final int last = anchorReady
+        ? (session.chapterIndex + 1).clamp(0, chapters.length - 1)
+        : session.chapterIndex;
+    final Set<int> window = <int>{
+      for (var index = _windowFirst; index <= last; index++) index,
+    };
+    // 正文原文留 ±15 章（提前缓存），排版结果与测量只留渲染窗口（ADR-0088 §决策 3）。
+    _retainBodies(session.chapterIndex, window);
+    _queuePrefetches(session.chapterIndex, chapters.length);
 
     final M3ETheme tokens = context.m3e;
     final TextStyle style = readerTextStyle(
@@ -1159,17 +1170,44 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     setState(() => _windowFirst = wanted);
   }
 
-  /// Reads the body of chapter [index] on the flow's behalf, retrying a failed read.
-  void _needChapter(int index) {
+  /// Reads the body of chapter [index] on the flow's behalf.
+  ///
+  /// [explicit] separates the two callers ADR-0085 §决策 5 merged: a page that is merely waiting
+  /// (relay) and the reader pressing «reload» (retry). Only the retry may clear the "already failed"
+  /// mark and only the retry may re-ask for the anchor chapter — a relay that did either would let the
+  /// screen and the prefetch queue take turns asking for the same chapter, one request per frame
+  /// (`docs/dev/adr/0088-crossing-limit-and-prefetch-window.md`).
+  void _needChapter(int index, {bool explicit = false}) {
     if (index < 0 || index >= _chapters.length) {
       return;
     }
     final ReadingChapter chapter = _chapters[index];
-    // 接力加载与「重试」走同一条路：先清掉失败标记，否则预取会认为这一章不值得再试。
-    _prefetchFailed.remove(chapter.url);
-    // 本章的正文是页面自己 watch 的 provider：不重取它，重试仍然拿旧结果。
-    ref.invalidate(readerContentProvider((_book, chapter.url)));
-    _schedulePrefetch(chapter);
+    if (index == _lastSession?.chapterIndex) {
+      // 锚点章由页面自己 watch 的 provider 负责：接力加载什么都不用做（**不要** read 它，
+      // `ref.read` 会把一个没人看的 provider 现造出来，等于凭空多发一个请求）。
+      _prefetchFailed.remove(chapter.url);
+      if (explicit) {
+        ref.invalidate(readerContentProvider((_book, chapter.url)));
+      }
+
+      return;
+    }
+    if (!explicit &&
+        (_prefetchFailed.contains(chapter.url) ||
+            _prefetching.contains(chapter.url))) {
+      // 已经失败过、或正在取：接力加载不再另发一个请求。
+      return;
+    }
+    if (explicit) {
+      _prefetchFailed.remove(chapter.url);
+      ref.invalidate(readerContentProvider((_book, chapter.url)));
+    }
+    // 队列里本来就有它（半径内最近的那些）时不动顺序——顺序就是「最近优先」；
+    // 只有它不在队列里（失败后掉队、或超出半径）才插到队首。
+    if (!_prefetchQueue.contains(index)) {
+      _prefetchQueue.insert(0, index);
+    }
+    _pumpPrefetch();
   }
 
   /// [body] as the page table wants it: the duplicate title removed, then the paragraph transform.
@@ -1208,10 +1246,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return text;
   }
 
-  /// Keeps the bodies and measurements down to the chapters in [keep] (the rendered window).
-  void _pruneBodies(Set<int> keep) {
+  /// Drops what the reader no longer needs, in two layers (ADR-0088 §决策 3).
+  ///
+  /// The raw bodies stay for the whole ±[_prefetchRadius] window — that is the point of fetching them
+  /// ahead. The laid-out text and the measurements only stay for the **rendered** window: they are
+  /// derived (a font-size change throws them away anyway), and keeping thirty chapters of typeset
+  /// text around buys nothing.
+  void _retainBodies(int anchorIndex, Set<int> window) {
     final Set<String> urls = <String>{
-      for (final int index in keep)
+      for (
+        var index = anchorIndex - _prefetchRadius;
+        index <= anchorIndex + _prefetchRadius;
+        index++
+      )
         if (index >= 0 && index < _chapters.length) _chapters[index].url,
     };
     _prefetchedBodies.removeWhere(
@@ -1219,9 +1266,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
     _prefetchFailed.removeWhere((String url) => !urls.contains(url));
     _laidOut.removeWhere(
-      (int index, ({int signature, String text}) _) => !keep.contains(index),
+      (int index, ({int signature, String text}) _) => !window.contains(index),
     );
-    _measures.retain(keep);
+    _measures.retain(window);
   }
 
   /// Places the window's first chapter, which may only ever move **back** while reading.
@@ -1236,27 +1283,77 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
-  /// Starts one real prefetch for [chapter], once per chapter URL.
-  void _schedulePrefetch(ReadingChapter chapter) {
-    final String url = chapter.url;
-    if (_prefetchedBodies.containsKey(url) ||
-        _prefetchFailed.contains(url) ||
-        !_prefetching.add(url)) {
+  /// Runs [action] once the frame that is being built has been laid out.
+  ///
+  /// The serial prefetch chain hops from one frame to the next, and `addPostFrameCallback` does **not**
+  /// schedule a frame: without the explicit `scheduleFrame` the chain stalls the first time nothing
+  /// else asks for a repaint (a reader sitting still would stop prefetching).
+  void _afterFrame(VoidCallback action) {
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) => action())
+      ..scheduleFrame();
+  }
+
+  /// Rebuilds the prefetch queue around [anchorIndex] and starts the first fetch.
+  ///
+  /// Nearest first (`+1, -1, +2, -2, …`) inside the ±[_prefetchRadius] window, skipping what is
+  /// already in hand, already failed, or already in flight. The queue is only rebuilt when the
+  /// anchor chapter actually changed: the page rebuilds on every progress write, and reshuffling
+  /// thirty entries per frame would restart the reader's own next chapter for no reason.
+  void _queuePrefetches(int anchorIndex, int chapterCount) {
+    if (_prefetchAnchor == anchorIndex) {
       return;
     }
-    final int generation = _prefetchGeneration;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        _prefetching.remove(url);
+    _prefetchAnchor = anchorIndex;
+    _prefetchQueue.clear();
+    for (var distance = 1; distance <= _prefetchRadius; distance++) {
+      final int after = anchorIndex + distance;
+      final int before = anchorIndex - distance;
+      if (after < chapterCount) {
+        _prefetchQueue.add(after);
+      }
+      if (before >= 0) {
+        _prefetchQueue.add(before);
+      }
+    }
+    _pumpPrefetch();
+  }
 
-        return;
+  /// Starts the next queued fetch, once the previous one has finished.
+  void _pumpPrefetch() {
+    if (_prefetching.isNotEmpty ||
+        _prefetchQueue.isEmpty ||
+        _chapters.isEmpty) {
+      return;
+    }
+    // 队列里的下标可能已经过期（目录变了、换源了）：跳过不可用的那些。
+    while (_prefetchQueue.isNotEmpty) {
+      final int index = _prefetchQueue.removeAt(0);
+      if (index < 0 || index >= _chapters.length) {
+        continue;
       }
-      if (generation != _prefetchGeneration) {
-        // 换源已经把旧 generation 的预取全部作废；新 generation 的标记不能在这里删。
-        return;
+      final ReadingChapter chapter = _chapters[index];
+      if (_prefetchedBodies.containsKey(chapter.url) ||
+          _prefetchFailed.contains(chapter.url) ||
+          _prefetching.contains(chapter.url)) {
+        continue;
       }
-      unawaited(_prefetch(chapter, generation));
-    });
+      _prefetching.add(chapter.url);
+      final int generation = _prefetchGeneration;
+      _afterFrame(() {
+        if (!mounted || generation != _prefetchGeneration) {
+          // 换源已经把旧 generation 的预取全部作废；新 generation 的标记不能在这里删。
+          if (generation == _prefetchGeneration) {
+            _prefetching.remove(chapter.url);
+          }
+
+          return;
+        }
+        unawaited(_prefetch(chapter, generation));
+      });
+
+      return;
+    }
   }
 
   /// Fetches [chapter] through the production content port and keeps the body for the next turn.
@@ -1309,6 +1406,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     } finally {
       if (generation == _prefetchGeneration) {
         _prefetching.remove(chapter.url);
+        // 串行的下一章；帧后调用，免得在 paint/build 期间 setState（C-ERR / C-STATE）。
+        if (mounted) {
+          _afterFrame(() {
+            if (mounted) {
+              _pumpPrefetch();
+            }
+          });
+        }
       }
     }
   }

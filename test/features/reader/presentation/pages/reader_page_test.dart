@@ -61,6 +61,30 @@ const List<ReadingChapter> _chapters = <ReadingChapter>[
 /// The line break the chapter bodies in these cases are joined with.
 final String _newline = String.fromCharCode(10);
 
+/// A table of contents long enough for the prefetch window (±15) to be visible.
+final List<ReadingChapter> _manyChapters = <ReadingChapter>[
+  for (var index = 0; index < 20; index++)
+    ReadingChapter(
+      title: '第${index + 1}章',
+      url: 'https://source.test/${index + 1}.html',
+    ),
+];
+
+/// The chapters the page table currently renders, in reading order and without repeats.
+List<int> _tableChapters(WidgetTester tester) =>
+    _tableOf(tester).pages
+        .map((ReaderPageEntry page) => page.id.chapterIndex)
+        .toSet()
+        .toList();
+
+/// Where [url] sits in [_manyChapters].
+int _chapterIndexOf(String url) =>
+    _manyChapters.indexWhere((ReadingChapter chapter) => chapter.url == url);
+
+/// The page table the reader is rendering right now.
+ReaderPageTable _tableOf(WidgetTester tester) =>
+    tester.widget<ReaderScrollFlow>(find.byType(ReaderScrollFlow)).table;
+
 /// The collaborators one case wires together.
 typedef _Fixture = ({
   ProviderContainer container,
@@ -160,6 +184,8 @@ Future<void> _pump(
   WidgetTester tester,
   _Fixture fixture, {
   String? chapterUrl,
+  // 加载页上的转圈是无限动画，`pumpAndSettle` 在它可见时永远不会返回。
+  bool settle = true,
 }) async {
   tester.view.physicalSize = const Size(1200, 2000);
   tester.view.devicePixelRatio = 1;
@@ -177,7 +203,14 @@ Future<void> _pump(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    // 加载页上的转圈是无限动画：`pumpAndSettle` 在它可见时永远不会返回。
+    for (var frame = 0; frame < 8; frame++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
 }
 
 /// The strings the page renders, taken from the page's own localization.
@@ -306,6 +339,86 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.textContaining('这世道，人心不古'), findsWidgets);
+    });
+
+    testWidgets('build_whenTheAnchorBodyIsMissing_stopsAtThatChapter', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture(
+        chapters: FakeChapterListProvider()..chapters = _manyChapters,
+      );
+      // 第一章（锚点）的正文一直没到：页表只能排到它自己，读者滑不进第二章。
+      fixture.content.bodies.remove('https://source.test/1.html');
+
+      await _pump(tester, fixture, settle: false);
+
+      // ADR-0088 §决策 1：阅读位置不许跑到已加载内容前面。
+      expect(_tableChapters(tester), <int>[0]);
+    });
+
+    testWidgets('build_whenTheNextBodyIsMissing_opensOneLoadingPageOnly', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture(
+        chapters: FakeChapterListProvider()..chapters = _manyChapters,
+      );
+      // 第二章没有正文，第三章有：只能跨进第二章的加载页，第三章不得预先排进来。
+      fixture.content.bodies.remove('https://source.test/2.html');
+
+      await _pump(tester, fixture);
+
+      final ReaderPageTable table = _tableOf(tester);
+      expect(table.pages.last.id.chapterIndex, 1);
+      expect(table.pages.last.isPlaceholder, isTrue);
+      expect(_tableChapters(tester), isNot(contains(2)));
+    });
+
+    testWidgets('build_givenABigToc_prefetchesNearestFirstOneAtATime', (
+      WidgetTester tester,
+    ) async {
+      final FakeReadingProgressStore store = FakeReadingProgressStore()
+        ..positions['${_book.sourceUrl}|${_book.bookUrl}'] =
+            const ReadingPosition(chapterUrl: 'https://source.test/8.html');
+      final _Fixture fixture = _fixture(
+        chapters: FakeChapterListProvider()..chapters = _manyChapters,
+        progress: store,
+      );
+      // 只留下锚点与它两侧那一章：窗口里没有占位页，请求顺序就全是预取队列的顺序。
+      fixture.content.bodies
+        ..clear()
+        ..['https://source.test/8.html'] = '第八章正文';
+      // 一次只发一个请求：有延迟才看得出并发（ADR-0088 §决策 2）。
+      fixture.content.delay = const Duration(milliseconds: 20);
+
+      await _pump(tester, fixture);
+      // 串行队列在假时钟上推进：每 30 ms 推一帧，直到队列走完（`pumpAndSettle` 不推进
+      // 只挂着定时器的那些帧）。
+      for (var frame = 0; frame < 400; frame++) {
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+
+      final List<String> requests = fixture.content.requests;
+      // 锚点自己那一章先取（它走 provider），然后队列「后 1、前 1、后 2、前 2、…」。
+      expect(requests.first, 'https://source.test/8.html');
+      expect(requests.skip(1).take(6), <String>[
+        'https://source.test/9.html',
+        'https://source.test/7.html',
+        'https://source.test/10.html',
+        'https://source.test/6.html',
+        'https://source.test/11.html',
+        'https://source.test/5.html',
+      ]);
+      // 最近优先：与锚点的距离只增不减。
+      final List<int> distances = <int>[
+        for (final String url in requests.skip(1)) _chapterIndexOf(url) - 7,
+      ].map((int distance) => distance.abs()).toList();
+      for (var index = 1; index < distances.length; index++) {
+        expect(distances[index], greaterThanOrEqualTo(distances[index - 1]));
+        expect(distances[index], lessThanOrEqualTo(15));
+      }
+      // 每章只问一次；队列是串行的——同时在飞的除了队列那一个，只有页面自己 watch 的锚点章。
+      expect(requests, hasLength(requests.toSet().length));
+      expect(fixture.content.maxInFlight, lessThanOrEqualTo(2));
     });
 
     testWidgets('build_givenAFailingChapterList_showsTheFailure', (

@@ -67,7 +67,7 @@ class ReaderScrollFlow extends StatefulWidget {
   final void Function(int chapterIndex, int charOffset) onSettled;
 
   /// Called with a chapter index whose body the flow needs (a loading page, or a retry).
-  final void Function(int chapterIndex) onNeedChapter;
+  final void Function(int chapterIndex, {bool explicit}) onNeedChapter;
 
   @override
   State<ReaderScrollFlow> createState() => _ReaderScrollFlowState();
@@ -342,7 +342,7 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
       if (!page.isPlaceholder || !_requested.add(page.id.chapterIndex)) {
         continue;
       }
-      widget.onNeedChapter(page.id.chapterIndex);
+      widget.onNeedChapter(page.id.chapterIndex, explicit: false);
     }
     // 离开窗口的章要允许下次再问一次（读者可能往回翻），保留已问过的标记只对仍在窗口里的章有效。
     _requested.removeWhere((int index) => !rendered.contains(index));

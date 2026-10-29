@@ -88,7 +88,8 @@ class _Harness {
               chapterIndex: chapterIndex,
               charOffset: charOffset,
             )),
-            onNeedChapter: probe.requested.add,
+            onNeedChapter: (int index, {bool explicit = false}) =>
+                probe.requested.add(index),
           ),
         ),
       ),

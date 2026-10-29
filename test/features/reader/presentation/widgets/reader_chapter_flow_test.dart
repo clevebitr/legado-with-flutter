@@ -51,7 +51,8 @@ Future<List<int>> _pumpPage(
           highlightStyle: _highlightStyle,
           titleStyle: testReaderTitleStyle,
           highlight: highlight,
-          onNeedChapter: retried.add,
+          onNeedChapter: (int index, {bool explicit = false}) =>
+              retried.add(index),
         ),
       ),
     ),

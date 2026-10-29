@@ -1213,3 +1213,18 @@ Android 校验通知（用户裁决）：
 门禁：format / analyze 零警告 / 2817 用例全绿 / coverage core 98.02% · domain 96.55% · data 95.71% / build_runner 后生成物无 diff。
 
 未做（已登记 roadmap §3.7）：会话与书签的偏移在「排版后」空间而书内搜索命中在「源站原文」空间，跳转落点会偏几行；滚动模式的上一章占位条不再出现（有意差异）。
+
+## 2026-10-29 — M28 真机日志 15 条 overflow：量的样式与画的样式不一致（ADR-0087 §决策 8）
+
+用户报障：Windows 真机日志 `app-2026-10-29.log` 「全是 error」。日志实为 15 条同一条记录（10:06:28–10:06:35，一帧一条），其余 1500 行是它的栈：`A RenderFlex overflowed by 31 pixels on the bottom`。对比 10-28 的日志（1.7 MB）没有任何溢出 → 是 44d6134 引入的。
+
+根因（复现出来的，不是猜的）：页表按 `TextPainter` 量到的高度给每一项定高，而 `Text` 会把传入样式**并到环境的 `DefaultTextStyle`** 上——样式里没写的字段（行高、行高分布、字距…）由环境补，量的时候看不见。于是「画的」比「量的」高一整行，Column 溢出。用真实中文字体（`C:\Windows\Fonts\simhei.ttf`，`FontLoader` 注册成 Roboto）在 1440×900 上稳定复现：旧样式溢出 24 px，新样式 0。
+另有一处同类：`m3e_design` 的 `titleMedium` **只给字族不给字号**，`TextPainter` 用默认 14、`Text` 从环境继承别的字号 → 章头量高也算错。
+
+修复（ADR-0087 §决策 8）：两个阅读样式都**定型**后再生效——`inherit: false`、章头显式 `fontSize`（无主题字号时按正文 ×1.2）、`Text` 显式传 `textWidthBasis: parent` + `textHeightBehavior: TextHeightBehavior()`（与 `TextPainter` 默认对齐）。回归测试用一份**故意完全不同**的环境样式（`height: 3, letterSpacing: 8`）钉住「量到 576 就必画 576」；去掉修复这条用例红（576 vs 864）。
+
+顺手补的观测能力：widget 类错误的崩溃记录多一段 `where=<creator 链>`（只取首个 ≤400 字符的信息节点，渲染树转储跳过），一条记录一行（ADR-0084 不变）。下次再溢出，日志能指名到 widget，而不是十五份一模一样的 `paint` 栈。新增 `test/core/logging/crash_handlers_test.dart`（该文件此前 0 覆盖，只靠 main 装配）。
+
+门禁：format / analyze 零警告 / 2823 用例全绿 / coverage core 98.52% · domain 96.55% · data 95.71% / build_runner 后生成物无 diff。提交 81f05b4。
+
+未解释的一点（如实记账）：31 px 与复现出的 24 px 不是同一个数，说明真机那台的字号/行高与复现环境略有差别；但「画的比量的高」这一机制与修复是同一条。

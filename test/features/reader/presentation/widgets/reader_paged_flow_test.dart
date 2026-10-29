@@ -76,7 +76,8 @@ class _Harness {
               charOffset: charOffset,
             )),
             onSettled: (int chapterIndex, int charOffset) {},
-            onNeedChapter: requests.add,
+            onNeedChapter: (int index, {bool explicit = false}) =>
+                requests.add(index),
           ),
         ),
       ),
