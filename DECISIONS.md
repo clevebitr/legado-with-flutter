@@ -1290,3 +1290,48 @@ Android 校验通知（用户裁决）：
 排查过但**不是**原因（记下来免得下次重查）：`readerContentProvider` 内部用 `ref.read` 读目录，所以目录刷新不会连带重取正文；`_requestMissingBodies` 每章只问一次且失败即停；预取队列在锚点/章数不变时不重排。
 
 门禁：format / analyze 零警告 / 2832 用例全绿 / coverage 98.52% · 96.55% · 95.71% / 生成物无 diff。提交 fe1d2f0。
+
+## 2026-10-29 — M28 跨章不再回顶部：补偿改用页内像素（ADR-0087 §决策 2 修订）
+
+用户报障：两章间隙处 ①向下滑进下一章会被「强制回到顶部」（进度跳变）②在下一章上滑回上一章会跳到上一章顶部；要求参考上游。
+
+复现（页面级 scratch，打印每步 offset + session）：4 章 × 40 行、1200×1200，向下每步拖 60（有效 40）。跨章那一步日志里出现 `LAND 2166.0 (was 2123.0)` —— **正好 +43 px**，而 titleExtent 约 45，即「一行章头的高度」。
+
+根因：`ReaderScrollFlow._sync` 在页表变了以后用**字符偏移往返**做补偿：`positionAt(offset)` 反解出 `(chapter, charOffset)`，再 `offsetOf(chapter, charOffset)` 落位。这个往返在章头那几十像素里**有损**：视口顶落在标题里时 `charOffsetAt` 夹到 0，而 `offsetOf(0)` 回到**正文首行**（章头之下）。于是每跨一次章，章头就被顶出屏幕；向上跨同理（落到上一章正文首行）。
+
+上游同一个道理：`ReaderScrollPolicy.apply(offsetPx, deltaPx, previousExtentPx, currentExtentPx, …)` 跨界时把 offset 按**页高差**搬过去（`next - previousExtent` / `next + currentExtent`），从不回 0 重算；`ReaderPartialPagePolicy` 还额外拒绝翻进「还没排完」的章（与本仓 ADR-0088 的跨章上限同形）。
+
+修复（ADR-0087 §决策 2 修订）：结构变化**先按页内像素补**——在旧表里找到视口顶所在的那一页，按页身份 `(chapterIndex, pageIndex)` 在新表里找回来，`newOffset = 新页顶 + (旧 offset - 旧页顶)`；只有这一页**自己的高度也变了**（换字号 / 换视口 / 占位页换成真实正文）才退回 `offsetOf(anchor)` 按字符找，因为那时「同一段字」比「同一个像素」更接近读者位置。
+
+牙：
+- `update_whenTheTopIsInsideAChapterHeading_doesNotJump`（flow 级）：视口顶放在章头里 3 px，第三章正文到手后位置必须不动。去掉修复 → 偏移 1051 → 1096，**差 45 px = 一行章头**，与真机一致。
+- `scroll_acrossAChapterBoundary_movesSmoothly`（页面级）：4 章 × 40 行，向下 60 步再向上 60 步，逐步断言位移与拖动同向、且不超过拖动量；必须至少跨过一次章。
+
+门禁：format / analyze 零警告 / 2834 用例全绿 / coverage 98.52% · 96.55% · 95.71% / 生成物无 diff。提交 90f101a。
+
+## 2026-10-29 — M28 跨章不再换屏：页表正文在手就按在手算 + 窗口留 lead（ADR-0090）
+
+用户再次报障（滚动模式）①滚到章末切下一章会「跳到下一章顶部」并且闪一下 ②在新章顶部往上滚回上一章会「跳到上一章顶部而不是末尾」；要求参考上游。
+
+复现（页面级 scratch，每步打印 offset + 会话 + 页表形状）：4 章 × 40 行、1200×1200、每步拖 60（有效 40）。
+- `DOWN 51 ch 0->1 TABLE 0:[1161,962] 1:[P]` —— 跨章那一帧第二章整章缩成一页占位页，下一帧又长回 3 页。
+- `UP 8 ch 1->0 TABLE 0:[P]` + `d=-2126.0` —— 一步上滑被扔出两章远，落点是第一章开头。
+
+根因一（主因）：「正文只认 provider」。页表给锚点章的正文只取 `readerContentProvider` 这一帧的值，而 `readerContent` 是 autoDispose 的家族 provider：锚点一换就是另一次请求、先是 loading。哪怕这一章正文早在 `_prefetchedBodies`（预取 ±15 章，读到章末时必在）里，那一帧也整章退回一页占位页（高度 = spacing.xxl + lg），页表上方/当前页高度骤变 → `_sync` 退回字符偏移往返 → 占位页的 `charOffsetAt`/`distanceOf` 都是 0 → 落点就是章首；`anchorReady == false` 还把右边界收回锚点章，屏幕上换成加载条 = 闪一下。
+
+根因二：「往回读时窗口里没有上一章」。`_applyWindow` 只维持锚点上方 1 章、`_trimWindow` 停手后把水位提到 `anchor - 1`；读者上滑过这个边界时必须在视口上方插一整章，`_sync` 的补偿是换 `ScrollController` + 换 key（帧内生效），惯性活动连同手势一起丢。8 章读到第 6 章再上滑：`offset 2072.8 → 4090.2 (LAND)`，位移差 2017 px = 一整章。
+
+上游不会：章节正文挂在章对象上（`TextChapter.content`/`isLoad`），换章不丢已读回的正文；跨章是页表运算（`ReaderScrollPolicy.apply` 用 `next - previousExtent` / `next + currentExtent` 搬 offset），没有「插内容后重建滚动位置」这一步。
+
+修复（ADR-0090）：
+- §决策 1 正文在手就按在手算：`currentData = provider 值 ?? _prefetchedBodies[url]`，`anchorReady` 与「失败」标记都只看正文是否在手（有字就不是失败态）。仍保留锚点章 watch provider 的那条通道：首次取正文、重试 `invalidate`、进章时重取（源更新章节能拿到新正文），多出的一次请求由 5.2 缓存吸收。跨章那一帧页表因此**什么都不变**，只按窗口往下追加一章，`_sync` 的位移差为 0 —— 不换控制器、不打断惯性。
+- §决策 2 窗口在锚点上方留 `_windowLead = 3` 章，且只由**前进**维持（`_windowAnchor` 记录已读到的最大章）：后退不动水位（要回看的章本来就在表里），只有退到表的上沿才补章；`_trimWindow` 也停在 `anchor - lead`。渲染窗口宽 2 章，代价是几趟 `TextPainter`。
+- §决策 3 登记未解决：往回超过 lead 仍要在视口上方插章，只能重设位置（位置精确、那一次手势结束）。彻底解决要 `center` 键的 `CustomScrollView` 或自绘 sliver 上报 `scrollOffsetCorrection`，属滚动模型级重构。
+
+牙（四条都在修复前失败）：
+- `scroll_whenTheBoundaryIsCrossed_keepsTheNewChapterInHand`：跨章后新章每页都是真正文、无占位条/转圈、窗口往下接一章；再上滑回上一章同样不掉正文且不是被扔回章首。修复前 `isPlaceholder` 命中。
+- `scroll_acrossAChapterBoundary_doesNotStopTheFling`：惯性里跨章，逐帧位移单调不减且跨章后仍在前进。修复前跨章那一帧 `2179 → 2147` 并当场停住。
+- `scroll_backAcrossChapters_keepsTheFlingRunning`：第 13 章一次上滑跨过至少两章、位移单调不增。lead 改回 1 即失败（第 43 帧 `+2047`）。
+- `scroll_acrossAChapterBoundary_movesSmoothly` 改写：原用例在循环外抓一次 `ScrollPosition`，而重设位置会换掉这个对象（断言其实在读已脱离的对象）；现在每步读活的位置，容差从 ±120 收紧到「一步不超过拖动量」。
+
+门禁：format / analyze 零警告 / 2837 用例全绿 / coverage 98.52% · 96.55% · 95.71% / build_runner 生成物无 diff。

@@ -20,6 +20,7 @@ import 'package:flutter_reader/features/reader/presentation/notifiers/reader_ses
 import 'package:flutter_reader/features/reader/presentation/notifiers/reader_tts_highlight.dart';
 import 'package:flutter_reader/features/reader/presentation/pages/reader_page.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_chapter_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_table.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_scroll_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
@@ -233,6 +234,56 @@ Future<void> _openSettings(WidgetTester tester) async {
   await _showChrome(tester);
   await tester.tap(find.byTooltip(_l10n(tester).readerSettingsAction));
   await tester.pumpAndSettle();
+}
+
+/// Opens the reader on four long chapters — long enough that a chapter boundary falls inside a
+/// real scroll, not at a page break.
+///
+/// The neighbouring bodies are in the fixture's port from the start, so the prefetch queue has them
+/// in hand before the reader ever reaches the boundary — which is what a real device looks like after
+/// the first second of reading, and the only state in which "crossing must not jump" can hold.
+Future<_Fixture> _pumpFourLongChapters(
+  WidgetTester tester, {
+  Size size = const Size(1200, 1200),
+}) async {
+  final _Fixture fixture = _fixture(
+    chapters: FakeChapterListProvider()
+      ..chapters = _manyChapters.take(4).toList(),
+  );
+  for (final ReadingChapter chapter in _manyChapters.take(4)) {
+    fixture.content.bodies[chapter.url] = <String>[
+      for (var line = 0; line < 40; line++)
+        '${chapter.title} 第${line + 1}行：正文内容。',
+    ].join(_newline);
+  }
+  await _pump(tester, fixture, size: size);
+
+  return fixture;
+}
+
+/// Builds a fixture with every chapter's body in hand, opened at [anchorUrl].
+///
+/// Written out rather than built on top of [_fixture] because a store position has to be in the
+/// fixture before the page is pumped — the session reads it once, in `build`.
+_Fixture _pumpWithBodies({
+  required List<ReadingChapter> chapters,
+  required String anchorUrl,
+}) {
+  final _Fixture fixture = _fixture(
+    chapters: FakeChapterListProvider()..chapters = chapters,
+    progress: FakeReadingProgressStore()
+      ..positions['${_book.sourceUrl}|${_book.bookUrl}'] = ReadingPosition(
+        chapterUrl: anchorUrl,
+      ),
+  );
+  for (final ReadingChapter chapter in chapters) {
+    fixture.content.bodies[chapter.url] = <String>[
+      for (var line = 0; line < 40; line++)
+        '${chapter.title} 第${line + 1}行：正文内容。',
+    ].join(_newline);
+  }
+
+  return fixture;
 }
 
 void main() {
@@ -478,57 +529,95 @@ void main() {
       );
     });
 
-    testWidgets('scroll_acrossAChapterBoundary_movesSmoothly', (
+    testWidgets('scroll_backAcrossChapters_keepsTheFlingRunning', (
       WidgetTester tester,
     ) async {
-      // 4 章、每章 40 行：跨章会发生在真实阅读过程中，而不是刚好一屏一章。
-      final List<ReadingChapter> chapters = <ReadingChapter>[
-        for (var index = 0; index < 4; index++)
-          ReadingChapter(
-            title: '第${index + 1}章',
-            url: 'https://source.test/${index + 1}.html',
-          ),
-      ];
-      final _Fixture fixture = _fixture(
-        chapters: FakeChapterListProvider()..chapters = chapters,
+      // 回翻：读者滑回上一章时，那张表必须**已经**包含它（窗口在锚点上方留了 lead）。
+      // 否则往回跨一章就要在视口上方插页、重设滚动位置 —— 位置是准的，但手势当场被丢掉，
+      // 真机上就是「上滑回上一章被停住」。
+      final _Fixture fixture = _pumpWithBodies(
+        chapters: _manyChapters,
+        anchorUrl: 'https://source.test/11.html',
       );
-      for (final ReadingChapter chapter in chapters) {
-        fixture.content.bodies[chapter.url] = <String>[
-          for (var line = 0; line < 40; line++)
-            '${chapter.title} 第${line + 1}行：正文内容。',
-        ].join(_newline);
-      }
-
       await _pump(tester, fixture, size: const Size(1200, 1200));
-      final ScrollPosition position = tester
-          .state<ScrollableState>(find.byType(Scrollable).first)
-          .position;
-      int chapterOf(WidgetTester tester) =>
+      ScrollPosition position() =>
+          tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+      int chapterOf() =>
           fixture.container
               .read(readerSessionProvider(_book))
               .value
               ?.chapterIndex ??
           0;
 
-      /// 拖一小段，返回 (位移, 章号是否变了)。
+      // 往前读到第 13 章（下标 12），让窗口也经历一次回收。
+      var guard = 0;
+      while (chapterOf() < 12 && guard++ < 400) {
+        await tester.drag(find.byType(ReaderPage), const Offset(0, -300));
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(chapterOf(), 12);
+      final double start = position().pixels;
+
+      // 一次上滑：惯性里跨过好几章也不该被停住。
+      await tester.fling(find.byType(ReaderPage), const Offset(0, 300), 12000);
+      final List<double> offsets = <double>[];
+      final Set<int> chapters = <int>{};
+      for (var frame = 0; frame < 60; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        offsets.add(position().pixels);
+        chapters.add(chapterOf());
+      }
+
+      // 位移单调不增：没有一步往前跳。
+      for (var index = 1; index < offsets.length; index++) {
+        expect(
+          offsets[index],
+          lessThanOrEqualTo(offsets[index - 1]),
+          reason: '第 $index 帧往前跳了 ${offsets[index] - offsets[index - 1]}',
+        );
+      }
+      // 真的往上跨了至少两章，而且跨完还能接着滑（惯性没被停住）。
+      expect(
+        chapters.reduce((int a, int b) => a < b ? a : b),
+        lessThanOrEqualTo(10),
+      );
+      expect(start - offsets.last, greaterThan(3000));
+    });
+
+    testWidgets('scroll_acrossAChapterBoundary_movesSmoothly', (
+      WidgetTester tester,
+    ) async {
+      // 4 章、每章 40 行：跨章会发生在真实阅读过程中，而不是刚好一屏一章。
+      final _Fixture fixture = await _pumpFourLongChapters(tester);
+      ScrollPosition position() =>
+          tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+      int chapterOf() =>
+          fixture.container
+              .read(readerSessionProvider(_book))
+              .value
+              ?.chapterIndex ??
+          0;
+
+      /// 拖一小段，返回视口位移。
       Future<double> step(double dy) async {
-        final double before = position.pixels;
+        final double before = position().pixels;
         await tester.drag(find.byType(ReaderPage), Offset(0, dy));
         await tester.pump(const Duration(milliseconds: 200));
         await tester.pump(const Duration(milliseconds: 200));
 
-        return position.pixels - before;
+        return position().pixels - before;
       }
 
       // 向下：每一步的位移都必须与拖动同向、同量级——跨章那一步也不例外。
-      // 真机的症状是跨章时被「强制回到顶部」，也就是某一步的位移突然变大或反向。
+      // 真机的症状是跨章时被「强制回到顶部」，也就是某一步的位移突然反向或变大。
       final Set<int> crossed = <int>{};
-      var previousChapter = chapterOf(tester);
+      var previousChapter = chapterOf();
       for (var index = 0; index < 60; index++) {
         final double delta = await step(-60);
         expect(delta, greaterThanOrEqualTo(0), reason: '第 $index 步往回跳了');
         expect(delta, lessThanOrEqualTo(70), reason: '第 $index 步跳了 $delta');
-        final int chapter = chapterOf(tester);
+        final int chapter = chapterOf();
         if (chapter != previousChapter) {
           crossed.add(chapter);
           previousChapter = chapter;
@@ -542,10 +631,123 @@ void main() {
         expect(delta, lessThanOrEqualTo(0), reason: '上行第 $index 步往回跳了');
         expect(
           delta,
-          greaterThanOrEqualTo(-120),
+          greaterThanOrEqualTo(-70),
           reason: '上行第 $index 步跳了 $delta',
         );
       }
+    });
+
+    testWidgets('scroll_whenTheBoundaryIsCrossed_keepsTheNewChapterInHand', (
+      WidgetTester tester,
+    ) async {
+      // 「跨章闪一下再跳章首」的根因是页表：会话换了章，`readerContent` 是新的一次请求、先是
+      // loading，若正文只看 provider，整章会在那一帧退回**一页加载页**（章高从一屏缩成一行），
+      // 上方高度骤变、位置只能按字符重算 —— 落点就是章首。正文在手就该按在手算。
+      final _Fixture fixture = await _pumpFourLongChapters(tester);
+      ScrollPosition position() =>
+          tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+      int chapterOf() =>
+          fixture.container
+              .read(readerSessionProvider(_book))
+              .value
+              ?.chapterIndex ??
+          0;
+
+      // 往下滑到会话换章的那一步为止。
+      var guard = 0;
+      while (chapterOf() == 0 && guard++ < 60) {
+        await tester.drag(find.byType(ReaderPage), const Offset(0, -60));
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(chapterOf(), 1, reason: '这轮滑动没有跨到第二章');
+
+      // ① 新章没有变成加载页：它的每一页都排着真正文。
+      final ReaderPageTable table = _tableOf(tester);
+      final List<ReaderPageEntry> second = table.pages
+          .where((ReaderPageEntry page) => page.id.chapterIndex == 1)
+          .toList();
+      expect(second, isNotEmpty);
+      expect(second.any((ReaderPageEntry page) => page.isPlaceholder), isFalse);
+      expect(second, hasLength(greaterThan(1)), reason: '第二章是长章，不是一页');
+      // ② 屏幕上没有加载条 / 转圈。
+      expect(find.byType(ReaderChapterPendingStrip), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      // ③ 窗口往下一章接着排（跨章那一步只往下追加，不动上方高度）。
+      expect(
+        table.pages.map((ReaderPageEntry page) => page.id.chapterIndex),
+        contains(2),
+      );
+      // ④ 位置是连续的。
+      expect(position().pixels, greaterThan(0));
+
+      // 上滑回上一章同样不能掉正文：这是用户报的「回到上一章顶部」。
+      final double beforeUp = position().pixels;
+      var upGuard = 0;
+      while (chapterOf() == 1 && upGuard++ < 60) {
+        await tester.drag(find.byType(ReaderPage), const Offset(0, 60));
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(chapterOf(), 0);
+      final ReaderPageTable afterUp = _tableOf(tester);
+      expect(
+        afterUp.pages
+            .where((ReaderPageEntry page) => page.id.chapterIndex == 0)
+            .any((ReaderPageEntry page) => page.isPlaceholder),
+        isFalse,
+      );
+      // 回到上一章是「接着上一章的末尾往上滑」，不是被扔回它的开头。
+      expect(position().pixels, greaterThan(beforeUp - 200));
+      expect(find.byType(ReaderChapterPendingStrip), findsNothing);
+    });
+
+    testWidgets('scroll_acrossAChapterBoundary_doesNotStopTheFling', (
+      WidgetTester tester,
+    ) async {
+      // 惯性里跨章：页表只是往下追加，滚动位置一点不用重设，于是 `Scrollable` 不被换掉、
+      // 惯性照旧。以前跨章那一帧会新建控制器（换 key），惯性当场被丢掉 —— 读者看到的就是
+      // 「跨章被强制停下、还闪了一下」。
+      final _Fixture fixture = await _pumpFourLongChapters(tester);
+      ScrollPosition position() =>
+          tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+      int chapterOf() =>
+          fixture.container
+              .read(readerSessionProvider(_book))
+              .value
+              ?.chapterIndex ??
+          0;
+
+      // 停在跨章前一点，再一次 fling 越过去。
+      await tester.drag(find.byType(ReaderPage), const Offset(0, -1800));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(chapterOf(), 0);
+
+      await tester.fling(find.byType(ReaderPage), const Offset(0, -200), 2500);
+      final List<double> offsets = <double>[];
+      final Set<int> chapters = <int>{};
+      for (var frame = 0; frame < 40; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        offsets.add(position().pixels);
+        chapters.add(chapterOf());
+      }
+
+      // 这一轮 fling 真的跨了章，用例才有意义。
+      expect(chapters, contains(1));
+      // 位移单调不减：没有一步往回跳。
+      for (var index = 1; index < offsets.length; index++) {
+        expect(
+          offsets[index],
+          greaterThanOrEqualTo(offsets[index - 1]),
+          reason: '第 $index 帧往回跳了 ${offsets[index] - offsets[index - 1]}',
+        );
+      }
+      // 惯性还在：跨章之后仍在往前走（不是被「落地」那一下停住）。
+      final int crossing = offsets.indexWhere(
+        (double offset) => offset > offsets.first + 1,
+      );
+      expect(crossing, greaterThanOrEqualTo(0));
+      expect(offsets.last, greaterThan(offsets[crossing] + 100));
     });
 
     testWidgets('build_givenAFailingChapterList_showsTheFailure', (

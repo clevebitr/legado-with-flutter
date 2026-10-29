@@ -175,6 +175,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// It only ever moves backwards while the reader reads (see [_applyWindow]).
   int _windowFirst = -1;
 
+  /// How many chapters the table keeps **above** the anchor (`_applyWindow` / `_trimWindow`).
+  ///
+  /// One is the minimum a step back needs; three lets a flick run over two boundaries without the
+  /// table having to grow under it — a growth re-seats the scroll position, which is exact but costs
+  /// the gesture in flight (`docs/dev/adr/0090-crossing-a-chapter-keeps-the-body-in-hand.md` §决策 2).
+  static const int _windowLead = 3;
+
+  /// The furthest chapter the reader has read to since the window was last placed.
+  ///
+  /// The lead is kept by **forward** progress only: a reader who scrolls back must find the chapters
+  /// already in the table, so a step back never lowers `_windowFirst` (that would insert pages above
+  /// the viewport top and stop the gesture). Reset with `_windowFirst` on an explicit jump.
+  int _windowAnchor = -1;
+
   /// Chapters whose body is being fetched right now.
   ///
   /// A rebuild must not queue the same chapter twice, and the runs are **serialised**
@@ -744,7 +758,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // 显式跳转重置窗口：跳过去以后，锚点上方的章不再是读者刚读过的那些（ADR-0087 §决策 2）。
     setState(() {
       _restoreNonce++;
-      _windowFirst = -1;
+      _resetWindow();
       _pendingJump = (chapterIndex: target, charOffset: charOffset);
     });
     unawaited(
@@ -802,7 +816,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           _prefetchFailed.clear();
           _laidOut.clear();
           _measures.clear();
-          _windowFirst = -1;
+          _resetWindow();
           _prefetchGeneration++;
         });
         // 退出守护要按换源后的身份判断「在不在书架」，否则会拿旧 URL 再问一次。
@@ -958,7 +972,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       // 同一章内的跳转必须让正文重新恢复一次：流程每个实例只应用一次显式跳转，所以这里换一个
       // 编号（见 [_restoreNonce]）。
       _restoreNonce++;
-      _windowFirst = -1;
+      _resetWindow();
       _pendingJump = (chapterIndex: index, charOffset: offset);
       unawaited(
         ref
@@ -992,16 +1006,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final ParseResult<String>? content = ref
         .watch(readerContentProvider((_book, chapter.url)))
         .value;
-    final String? currentData = switch (content) {
+    final String? fetched = switch (content) {
       ParseSuccess<String>(:final String data) => data,
       ParseFailure<String>() => null,
       null => null,
     };
+    // **正文在手就按在手算**，不管它是这一帧的 provider 给的，还是预取缓存里的。
+    //
+    // 跨章那一帧恰好是最需要这条规矩的地方：会话刚换到新章，`readerContent`（autoDispose）就是
+    // 一次新请求、先是 `loading`，而这一章的正文早就在预取缓存里。只看 provider 的话，整章会在
+    // 那一帧退回**一页加载页**——章高从一屏缩成一行、窗口也退回只排到它自己，页表上方的高度
+    // 骤变，滚动位置只能按字符偏移重算，落点就是章首。真机上看到的就是「跨章闪一下 + 跳章首」
+    // （`docs/dev/adr/0090-crossing-a-chapter-keeps-the-body-in-hand.md`）。
+    final String? currentData = fetched != null && fetched.isNotEmpty
+        ? fetched
+        : _prefetchedBodies[chapter.url];
 
     // 阅读位置最多跨进**一章**未加载的章（ADR-0088 §决策 1）：锚点章的正文没到手，页表就只排到它
     // 自己，快速滑动会在这一页加载页上停住；正文到手才允许再往下接一章。这样「一次滑动跨过好几章
     // 空白、把它们同时拉起来」不会发生——能被跨过去的章一律是已经抓好的章。
-    final bool anchorReady = currentData != null && currentData.isNotEmpty;
+    final bool anchorReady = currentData != null;
     // 窗口只向前长（ADR-0087 §决策 2）：锚点前进时只往下补章，不回收上方的章，
     // 于是「视口顶以上的高度」在阅读过程中不会变——这是滚动不跳的前提。
     _applyWindow(session.chapterIndex, chapters.length);
@@ -1041,23 +1065,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     //
     // 正文按**章节下标**交给页表（不是按 URL）：目录里两章指向同一个地址是抓取站点的常见形状，
     // 按 URL 归并会把它们压成一份正文，看起来就是同一章被打印了两遍（ADR-0087 §决策 1）。
-    // 锚点章的正文是从 provider 拿的，预取表里没有它；记下来，否则读者换到下一章后
-    // 这一章就退回占位页（上一章整章变矮 = 正是会跳字的那种结构变化）。
-    if (currentData != null && currentData.isNotEmpty) {
+    // 锚点章的正文进来时也要落到这张表上，否则读者换到下一章后这一章就退回占位页
+    // （上一章整章变矮 = 正是会跳字的那种结构变化）。
+    if (currentData != null) {
       _prefetchedBodies[chapter.url] = currentData;
     }
     final Map<int, String> bodies = <int, String>{};
     final Set<int> failed = <int>{};
     for (final int index in window) {
       final ReadingChapter candidate = chapters[index];
-      if (_prefetchFailed.contains(candidate.url) ||
-          (candidate.url == chapter.url && content is ParseFailure<String>)) {
-        failed.add(index);
-      }
       final String? raw = candidate.url == chapter.url
           ? currentData
           : _prefetchedBodies[candidate.url];
-      if (raw != null && raw.isNotEmpty) {
+      final bool hasBody = raw != null && raw.isNotEmpty;
+      // 有正文就**不是**失败：重取那次失败了也照样有字可读（缓存里是同一份文档）。
+      if (!hasBody &&
+          (_prefetchFailed.contains(candidate.url) ||
+              (candidate.url == chapter.url &&
+                  content is ParseFailure<String>))) {
+        failed.add(index);
+      }
+      if (hasBody) {
         bodies[index] = _laidOutBody(index, candidate, raw, settings);
       }
     }
@@ -1175,9 +1203,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// The window only grows while the reader moves forward (ADR-0087 §决策 2), so without this a
   /// long read would keep every chapter's body alive. Trimming is exact — the pages above the
   /// viewport come off, and the flow puts the reader's own sentence back — so it is only done when
-  /// nothing is in motion, and only when at least three chapters are behind.
+  /// nothing is in motion, and it stops [_windowLead] chapters before the anchor: what it removes must
+  /// not be what the reader's next step back up needs.
   void _trimWindow(int index) {
-    final int wanted = (index - 1).clamp(0, _chapters.length - 1);
+    final int wanted = (index - _windowLead).clamp(0, _chapters.length - 1);
     if (_windowFirst < 0 || wanted - _windowFirst < 3 || !mounted) {
       return;
     }
@@ -1285,15 +1314,47 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _measures.retain(window);
   }
 
+  /// Forgets where the window starts, so the next build places it around the anchor.
+  ///
+  /// Both the water mark and the lead have to go: they are what the window was placed against, and a
+  /// jump moves the reader somewhere else entirely (`_applyWindow`).
+  void _resetWindow() {
+    _windowFirst = -1;
+    _windowAnchor = -1;
+  }
+
   /// Places the window's first chapter, which may only ever move **back** while reading.
   ///
   /// A chapter is kept once it has been rendered: letting it go while the reader is below it would
   /// change the height above the viewport top, which is exactly what makes text jump
   /// (ADR-0087 §决策 2). An explicit jump resets the window to the anchor's neighbours.
+  ///
+  /// Two rules keep a step back cheap (_windowLead): forward progress lowers the window early enough
+  /// that [_windowLead] chapters stay above the reader, and a step back never lowers it again — the
+  /// chapter the reader is going back to is already in the table. Only reaching past that lead has to
+  /// insert pages above the viewport, and that is exactly the one structural change the flow can only
+  /// answer by re-seating the scroll position.
   void _applyWindow(int anchorIndex, int chapterCount) {
-    final int wanted = (anchorIndex - 1).clamp(0, chapterCount - 1);
-    if (_windowFirst < 0 || wanted < _windowFirst) {
-      _windowFirst = wanted;
+    final int last = chapterCount - 1;
+    if (_windowFirst < 0) {
+      _windowFirst = (anchorIndex - _windowLead).clamp(0, last);
+      _windowAnchor = anchorIndex;
+
+      return;
+    }
+    if (anchorIndex > _windowAnchor) {
+      _windowAnchor = anchorIndex;
+      final int wanted = (anchorIndex - _windowLead).clamp(0, last);
+      if (wanted < _windowFirst) {
+        _windowFirst = wanted;
+      }
+
+      return;
+    }
+    // 读者退到窗口上沿：必须往上补一章，否则回翻就到此为止（这一次一定要重设滚动位置）。
+    // 锚点只能从表里算出来，所以 `anchorIndex` 不会小于 `_windowFirst`；等于就是「顶到了」。
+    if (anchorIndex <= _windowFirst) {
+      _windowFirst = (anchorIndex - 1).clamp(0, last);
     }
   }
 

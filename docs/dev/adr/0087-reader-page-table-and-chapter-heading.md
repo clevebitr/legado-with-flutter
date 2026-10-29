@@ -187,6 +187,10 @@ ReaderPageEntry = { id, url, title, text, start, end, titleExtent, bodyExtent, i
   跳到上一章顶部」。像素不往返，就不会丢。上游同一个道理：`ReaderScrollPolicy.apply` 跨界时把
   offset 按**页高差**搬过去（`next - previousExtent`），从不回到 0 重算。
   牙：`update_whenTheTopIsInsideAChapterHeading_doesNotJump`（去掉这一段即差 45 px，正好是一行章头）。
+- **2026-10-29（报障未闭环后）**：§决策 2 的补偿不是跨章跳变的唯一来源——页表在跨章那一帧会**整章
+  退回一页占位页**（锚点章换人 → `readerContent`（autoDispose）重新 loading → 正文只认 provider），
+  补偿只能按字符偏移落到章首；往回读时窗口里没有上一章，还得在视口上方插章、重设位置（惯性随之丢）。
+  修法与窗口 lead 见 ADR-0090。§决策 2 的像素补偿仍然成立，只是它现在是**兜底**而不是主路径。
 - **2026-10-29（真机日志后补的第三条）**：§决策 8（量高的样式必须已定型）来自用户 Windows 真机日志
   ——15 条 `RenderFlex overflowed by 31 pixels`，全是同一个原因。复现方法：用真实中文字体
   （`simhei.ttf`）在测试里跑同一条链路，环境样式一换就能稳定重现 24/31 px 的溢出。
