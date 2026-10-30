@@ -93,7 +93,10 @@ class _BookSourceLoginPageState extends ConsumerState<BookSourceLoginPage> {
 
     if (form.isEmpty) {
       // 只有 `loginUrl`（没有 `loginUi`）的源不该走到这里：列表那边直接开浏览器。
-      return StateMessage(message: l10n.bookSourceLoginNoForm);
+      return StateMessage(
+        message: l10n.bookSourceLoginNoForm,
+        icon: Icons.login_outlined,
+      );
     }
 
     return ListView(

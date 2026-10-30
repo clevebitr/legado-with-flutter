@@ -62,7 +62,10 @@ class CookieManagePage extends ConsumerWidget {
           :final List<CookieDomainGroup> value,
         ) =>
           value.isEmpty
-              ? StateMessage(message: l10n.cookieManageEmpty)
+              ? StateMessage(
+                  message: l10n.cookieManageEmpty,
+                  icon: Icons.cookie_outlined,
+                )
               : _list(ref, value, l10n, tokens),
         AsyncError<List<CookieDomainGroup>>() => StateMessage(
           message: l10n.cookieManageLoadFailed,
@@ -117,7 +120,7 @@ class CookieManagePage extends ConsumerWidget {
             ListTile(
               title: Text(cookie.name),
               // 只显示「什么时候过期」：值本身是凭据，不往屏幕上印（ADR-0072 §决策 2）。
-              subtitle: Text(_expiryOf(cookie, l10n)),
+              subtitle: Text(_expiryOf(context, cookie, l10n)),
               trailing: IconButton(
                 icon: const Icon(Icons.delete_outline),
                 tooltip: l10n.cookieManageDelete,
@@ -132,13 +135,25 @@ class CookieManagePage extends ConsumerWidget {
   );
 
   /// The row's second line: a session cookie, or when this one stops being valid.
-  String _expiryOf(StoredCookie cookie, AppLocalizations l10n) {
+  ///
+  /// 时间的写法跟平台一致（先短日期再时间），而不是 `DateTime.toString()`：后者会带毫秒，
+  /// 既长又不是用户熟悉的格式。
+  String _expiryOf(
+    BuildContext context,
+    StoredCookie cookie,
+    AppLocalizations l10n,
+  ) {
     final DateTime? expiresAt = cookie.expiresAt;
     if (expiresAt == null) {
       return l10n.cookieManageSession;
     }
+    final DateTime local = expiresAt.toLocal();
+    final MaterialLocalizations material = MaterialLocalizations.of(context);
+    final String moment =
+        '${material.formatShortDate(local)} '
+        '${material.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
 
-    return l10n.cookieManageExpiresAt(expiresAt.toLocal().toString());
+    return l10n.cookieManageExpiresAt(moment);
   }
 
   /// Asks before emptying the jar: it logs the user out of every source.

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:flutter_reader/core/router/change_source_contract.dart';
+
 /// The app-level destinations any page may open.
 ///
 /// Features never import each other's routes; the composition root binds this
@@ -67,6 +69,23 @@ abstract interface class AppNavigation {
     required String tocUrl,
     String? chapterUrl,
   });
+
+  /// Opens the shelf's book editor for the row with [bookId] (M33, ADR-0092).
+  ///
+  /// The editor belongs to `bookshelf`, which owns the row; a caller that only knows
+  /// `(sourceUrl, bookUrl)` asks that feature for the id (the detail page gets it from
+  /// `ShelfMembership`).
+  void openShelfBookEdit(BuildContext context, int bookId);
+
+  /// Opens the change-source flow and answers where the caller continues.
+  ///
+  /// Answers `null` when the user backs out. The flow itself (candidate search, progress, chapter
+  /// pick, shelf-identity migration) belongs to `book_source`; the caller only learns the new
+  /// identity and the aligned chapter (ADR-0091, ADR-0042 §决策 2).
+  Future<ChangeSourceOutcome?> openChangeSource(
+    BuildContext context,
+    ChangeSourceLaunch launch,
+  );
 }
 
 /// The answer when nothing bound [AppNavigation]: log and do nothing.
@@ -111,6 +130,20 @@ final class UnboundAppNavigation implements AppNavigation {
   }) => _warn(
     'No AppNavigation is bound: the book reading-record entry does nothing.',
   );
+
+  @override
+  void openShelfBookEdit(BuildContext context, int bookId) =>
+      _warn('No AppNavigation is bound: the book editor does nothing.');
+
+  @override
+  Future<ChangeSourceOutcome?> openChangeSource(
+    BuildContext context,
+    ChangeSourceLaunch launch,
+  ) async {
+    _warn('No AppNavigation is bound: the change-source entry does nothing.');
+
+    return null;
+  }
 
   @override
   void openReplaceRules(BuildContext context) =>

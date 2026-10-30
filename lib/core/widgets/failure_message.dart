@@ -25,6 +25,12 @@ class FailureMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
+            Icon(
+              Icons.error_outline,
+              size: tokens.spacing.xxl,
+              color: tokens.colors.error,
+            ),
+            SizedBox(height: tokens.spacing.md),
             Text(
               resolveFailureMessage(l10n, kind),
               textAlign: TextAlign.center,

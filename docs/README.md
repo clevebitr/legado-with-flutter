@@ -35,6 +35,7 @@
 | `docs/dev/test-environment.md` | 本机（Windows/Android）测试环境：一键脚本、设备级用例、排错与实测证据 | —（门禁与分层仍归 `testing.md`） |
 | `docs/dev/platform.md` | Android / iOS / Windows 平台基线与降级策略 | `C-PLT-*` |
 | `docs/dev/ui-gap.md` | 上游 UI 结构对照与本仓缺失的关键 UI 清单（P0/P1/P2）、里程碑切分 | —（UI 约束仍归 `constraints.md` §6） |
+| `docs/dev/engine-parity.md` | 引擎与上游 `legado` 的差距清单（唯一）：上游证据行号、本仓现状、语料命中、去向（切片 / 有意差异 / 已知热点） | —（规则语义仍归 `book-source.md`；验收口径归 ADR-0078） |
 
 ### 2.1 事实级归属矩阵（每个事实只有一处定义）
 
@@ -73,6 +74,8 @@ ADR-0027 确立：**一个事实只允许在一处定义**，其他位置一律�
 | 缓存失败吸收的唯一豁免点（`on Exception`） | `docs/dev/adr/0033-*.md` | C-ERR-2 回链；行为归 `book-source.md` §5 |
 | 默认规则的未知类型退化语义（矩阵 #1/#2） | `docs/dev/book-source.md` §3 的 #1/#2 注记 | C-SRC-4 回链；决策理由归 `docs/dev/adr/0032-*.md` |
 | 书源字段模型、语法矩阵、分期、JS 白名单与配额 | `docs/dev/book-source.md` | C-SRC-* 回链 |
+| 引擎与上游的差距清单、每项的去向、语料命中数 | `docs/dev/engine-parity.md`（ADR-0078） | `book-source.md` §2/§3/§11 与 `roadmap.md` §3.7 只回链 |
+| 引擎性能指标 P1–P6 与基准口径 | ADR-0078 决策 4（脚本与实测数字在 `tool/bench/README.md`） | 阈值只在 ADR 里改；`testing.md` 与 `engine-parity.md` §11 只回链 |
 | 实现顺序、验收、检查点（Gate）、返工陷阱、快速索引 | `docs/dev/roadmap.md` | — |
 | 里程碑级状态（当前里程碑 / goal / 断点） | `PLAN.md`（`plan` 插件写入，不得手改） | `docs/dev/roadmap.md` §3.1 回链 |
 | 执行期决策与踩坑日志（`#N`） | `DECISIONS.md` | 正式决策仍归 `docs/dev/adr/` |
@@ -107,6 +110,7 @@ ADR-0027 确立：**一个事实只允许在一处定义**，其他位置一律�
 | `tool/spike/` | JS 引擎架构可行性探针与已知坑（ADR-0015；**不进入** `flutter test` 默认发现路径） |
 | `tool/test/` | 本机测试脚本：`run_all` / `run_unit` / `run_windows` / `run_android` 与共享 `common.ps1`（见 `docs/dev/test-environment.md`） |
 | `tool/spot_check/` | G2b 真实站点链路验证入口与实测记录（`docs/dev/roadmap.md` §3.4 步骤 3 / §3.7；可复现，**不进 CI**） |
+| `tool/bench/` | P1–P6 引擎性能基准入口与改前/改后数字（ADR-0078 决策 4；**不进 CI**，必须 `--release`） |
 | `integration_test/` | 设备级用例（Windows 桌面 / Android 模拟器）；不参与覆盖率统计（见 `docs/dev/test-environment.md` §4） |
 | `l10n.yaml` | 国际化生成配置 |
 | `lib/l10n/app_en.arb` | 英文文案模板（新增字符串的入口） |

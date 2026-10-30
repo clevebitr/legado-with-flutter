@@ -7,10 +7,17 @@ import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/js/quickjs_worker.dart';
 import 'package:flutter_reader/core/js/quickjs_worker_bridge.dart';
+import 'package:flutter_reader/core/js/source_info_map.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
+import 'package:flutter_reader/core/js/source_login_info.dart';
+import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
+import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/platform/external_url_opener.dart';
+import 'package:flutter_reader/core/platform/user_messages.dart';
 import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
 import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
@@ -40,15 +47,42 @@ void main() {
   late _ProbeHttpClient http;
   // 变量表由桥与引擎共用：脚本 `java.put` 写进去的，`@get:` 与 `{{…}}` 要能读到（ADR-0034）。
   final JsVariableStore variables = JsVariableStore();
+  // 同步族（ADR-0076 §决策 1）要的三件东西：Cookie 宗、每源变量、提示通道。
+  late InMemoryCookieManager cookies;
+  late SourceVariableStore sourceVariables;
+  // 登录头（`source.putLoginHeader`，M25/S3b）：也走「快照下发 + 写回写穿」这条路。
+  late SourceLoginHeaderStore loginHeaders;
+  // 登录信息（`source.putLoginInfo`，M25/S5a）：写入口是内存替身，探针断言「写到了什么」。
+  late InMemorySourceLoginInfoWriter loginInfos;
+  // `infoMap`（M25/S3b）与 `java.openUrl` 的端口。
+  late SourceInfoMapStore infoMaps;
+  late _ProbeExternalUrlOpener opener;
+  late _CollectingMessages messages;
 
   setUp(() {
     printer = _CollectingPrinter();
     http = _ProbeHttpClient();
+    cookies = InMemoryCookieManager();
+    // 真实存储的读写在 `source_variable_dao_test` 里；探针只需要「值能存、能取回」。
+    sourceVariables = SourceVariableStore();
+    loginHeaders = SourceLoginHeaderStore();
+    loginInfos = InMemorySourceLoginInfoWriter();
+    infoMaps = SourceInfoMapStore();
+    opener = _ProbeExternalUrlOpener();
+    messages = _CollectingMessages();
     bridge = QuickJsWorkerBridge(
       logger: AppLogger(level: LogLevel.debug, printer: printer),
       launch: launchQuickJsWorker,
       http: http,
       variables: variables,
+      cookies: cookies,
+      sourceVariables: sourceVariables,
+      loginHeaders: loginHeaders,
+      loginInfos: loginInfos,
+      infoMaps: infoMaps,
+      externalUrlOpener: opener,
+      androidId: 'probe-install-id',
+      userMessages: messages,
     );
   });
 
@@ -901,8 +935,11 @@ void main() {
     // `Packages.*` 是 Rhino 的另一条互操作入口（`Packages.java.lang.…`），同样具名拒绝——
     // 不然它是 `Packages is not defined` 这种更难懂的错误。
     for (final String script in <String>[
-      "java.ajax('https://a.test')",
-      "Packages.java.lang.String('x')",
+      // `java.ajax` / `getCookie` / `toast` 已随重放层落地（ADR-0076 §决策 1），`Packages.java.lang.String`
+      // 已随最小垫片放行（ADR-0081）——这里改用仍然具名拒绝的两个：一个是零散成员，
+      // 一个是 `Packages.*` 里白名单**之外**的包（`javax.crypto` 登记为不做）。
+      "java.refreshBookUrl('https://a.test')",
+      "Packages.javax.crypto.Cipher.getInstance('AES')",
     ]) {
       final ParseResult<Object?> result = await bridge.evaluate(
         _job(script: script),
@@ -950,6 +987,917 @@ void main() {
 
     expect(_value(result), 'One|1');
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets(
+    'jsBridge_whenARuleReadsSyncPages_answersEveryValueAfterReplays',
+    (WidgetTester tester) async {
+      http.body = '<p>第一页</p>';
+
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script:
+              "var a = java.ajax('https://js.test/1');"
+              "var b = java.ajax('https://js.test/2');"
+              "a + '|' + b + '|' + java.ajax('https://js.test/1')",
+        ),
+      );
+
+      expect(_value(result), '<p>第一页</p>|<p>第一页</p>|<p>第一页</p>');
+      // 三个调用、两个不同地址：每次都从头重跑，但每趟只新取一页。
+      expect(http.requestedUrls, <String>[
+        'https://js.test/1',
+        'https://js.test/2',
+      ]);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets(
+    'jsBridge_whenARulePostsAndReadsTheLocation_seesTheResponseObject',
+    (WidgetTester tester) async {
+      // 触发源的核心写法：POST 之后读 302 的目标地址，再按它重发（ADR-0076 §背景）。
+      http.responseHeaders = <String, List<String>>{
+        'location': <String>['?9bdb14'],
+      };
+
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script:
+              "var res = java.post('https://js.test/sscc/', 'kw=x', "
+              "{'Content-Type': 'application/x-www-form-urlencoded'});"
+              "res.header('Location') + '|' + res.code() + '|' + res.url()",
+        ),
+      );
+
+      expect(_value(result), '?9bdb14|200|https://js.test/');
+      expect(http.requestedMethods.last, 'POST');
+      expect(http.lastBody, 'kw=x');
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets('jsBridge_whenARuleKeepsCallingJavaAjax_stopsAtTheReplayLimit', (
+    WidgetTester tester,
+  ) async {
+    // 超过 16 趟就报 `js:replay`：这是「这条规则重放不了」，不是超时。
+    http.body = 'x';
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var all = '';"
+            "for (var i = 0; i < 20; i++) { all += java.ajax('https://js.test/' + i); }"
+            'all',
+      ),
+    );
+
+    final ParseFailure<Object?> failure = result as ParseFailure<Object?>;
+    expect(failure.kind, ParseFailureKind.parseFailed);
+    expect(failure.rulePath, endsWith(':js:replay'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleUsesCookies_readsAndWritesTheJar', (
+    WidgetTester tester,
+  ) async {
+    cookies.storeFromResponse(Uri.parse('https://js.test/'), <String>[
+      'token=abc123; Path=/',
+    ]);
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var token = java.getCookie('https://js.test/', 'token');"
+            "cookie.setCookie('https://js.test/', 'added=1');"
+            "token + '|' + cookie.getCookie('https://js.test/', 'added')",
+      ),
+    );
+
+    expect(_value(result), 'abc123|1');
+    expect(
+      cookies.cookieHeaderFor(Uri.parse('https://js.test/')),
+      contains('added=1'),
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets(
+    'jsBridge_whenARuleStoresASourceVariable_persistsItForTheNextJob',
+    (WidgetTester tester) async {
+      // 整份变量是**持久**的，且形状照上游：`getVariable()` 无参、`setVariable(v)` 写一份
+      // （M25/S5a 改正；ADR-0076 §决策 1）。
+      await bridge.evaluate(
+        _job(
+          script: "source.setVariable('token=abc'); 'written'",
+          source: const JsSourceInfo(
+            name: '示例书源',
+            url: 'https://example-novel.test',
+          ),
+        ),
+      );
+
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script: "source.getVariable() + '|' + source.putVariable('second')",
+          source: const JsSourceInfo(
+            name: '示例书源',
+            url: 'https://example-novel.test',
+          ),
+          // 生产链上这张快照由规则引擎下发（`RuleEngine._runScript`）；这里直接喂给 job。
+          sourceVariables: sourceVariables.snapshot(
+            'https://example-novel.test',
+          ),
+        ),
+      );
+
+      // `source.putVariable` 是上游的 `void`（`book-source.md` §6：整份变量形状），
+      // 所以它在字符串拼接里是 `undefined`，不是空串——这条断言钉的就是这个可观察值。
+      expect(_value(result), 'token=abc|undefined');
+      expect(
+        sourceVariables.snapshot('https://example-novel.test'),
+        <String, String>{sourceVariableBlobName: 'second'},
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets('jsBridge_whenARuleKeepsKeyedSourceValues_readsThemBack', (
+    WidgetTester tester,
+  ) async {
+    // `source.put` / `get` 是**按名键值**（上游 `v_<url>_<name>`），`put` 把值答回去：真实源里
+    // 就有 `return base + source.put('surl', …)` 这种拿返回值拼 URL 的写法（M25/S5a）。
+    await bridge.evaluate(
+      _job(
+        script:
+            "source.put('surl', 'https://a.test/?p=1') + '|' + "
+            "source.get('surl') + '|' + source.get('missing')",
+      ),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "source.get('surl')",
+        sourceVariables: sourceVariables.snapshot('https://example-novel.test'),
+      ),
+    );
+
+    expect(_value(result), 'https://a.test/?p=1');
+    expect(
+      sourceVariables.snapshot('https://example-novel.test'),
+      containsPair('surl', 'https://a.test/?p=1'),
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleReadsTheSourceFields_seesTheWhitelist', (
+    WidgetTester tester,
+  ) async {
+    // 语料写法的直接证据（M25/S5a）：`source.key` / `bookSourceUrl` 拼 URL、
+    // `eval(String(source.bookSourceComment))` 当脚本库、`JSON.parse(source.header)` 读头。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            'var comment = String(source.bookSourceComment);'
+            'eval(comment);'
+            "source.key + '|' + source.bookSourceUrl + '|' +"
+            " source.bookSourceName + '|' +"
+            " JSON.parse(source.header)['User-Agent'] + '|' + helper + '|' +"
+            ' String(source.loginUrl)',
+        source: const JsSourceInfo(
+          name: '示例书源',
+          url: 'https://example-novel.test',
+          comment: 'var helper = "fromComment";',
+          header: '{"User-Agent":"ua"}',
+          loginUrl: '@js:function login(){}',
+        ),
+      ),
+    );
+
+    expect(
+      _value(result),
+      'https://example-novel.test|https://example-novel.test|示例书源|ua|'
+      'fromComment|@js:function login(){}',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheLoginInfoIsWrittenInTheJob_readsItBack', (
+    WidgetTester tester,
+  ) async {
+    // `source.getLoginInfoMap()` 答的是 Java-`Map` 的读法（语料 9 个源写 `.get("账号")`）；
+    // `putLoginInfo` 同一个 job 内立刻可见，job 结束后由桥写穿（M25/S5a）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var ok = source.putLoginInfo(JSON.stringify({账号: 'alice'}));"
+            "String(ok) + '|' + String(source.getLoginInfoMap().get('账号')) + '|'"
+            " + String(source.putLoginInfo('not json'))",
+        source: const JsSourceInfo(
+          name: '示例书源',
+          url: 'https://example-novel.test',
+        ),
+      ),
+    );
+
+    expect(_value(result), 'true|alice|false');
+    expect(loginInfos.written['https://example-novel.test'], <String, String>{
+      '账号': 'alice',
+    });
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheSourceLogsOut_dropsTheHeaderAndTheCookie', (
+    WidgetTester tester,
+  ) async {
+    // `source.removeLoginHeader()`（M25/S5a）= 删登录头 + 清这个源 URL 会发的 Cookie。
+    await bridge.evaluate(
+      _job(
+        script:
+            "source.putLoginHeader(JSON.stringify({Token: 't', Cookie: 'sid=1'}));"
+            " 'signed in'",
+      ),
+    );
+    expect(
+      cookies.cookieHeaderFor(Uri.parse('https://example-novel.test/')),
+      'sid=1',
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            'source.removeLoginHeader();'
+            "String(source.getLoginHeader()) + '|' +"
+            ' String(source.getLoginHeaderMap())',
+      ),
+    );
+
+    expect(_value(result), 'null|null');
+    expect(loginHeaders.snapshot('https://example-novel.test'), isNull);
+    expect(
+      cookies.cookieHeaderFor(Uri.parse('https://example-novel.test/')),
+      isNull,
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleToasts_reachesTheUserMessagesPortOnce', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "java.toast('请先登录'); java.longToast('请先登录'); 'done'"),
+    );
+
+    expect(_value(result), 'done');
+    // 重放会把同一行再走一遍，但同一句在一个 job 里只贴一次。
+    expect(messages.shown, <String>['请先登录']);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheSourceHasAJsLib_runsItBeforeTheRule', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0078 S1：上游把 `jsLib` 当每个脚本的原型作用域，所以库里的 `function` 对规则可见。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "sign('abc') + '|' + libVersion",
+        jsLib:
+            'var libVersion = "v1";'
+            'function sign(value) { return crypto.md5(String(value)); }',
+      ),
+    );
+
+    expect(_value(result), '900150983cd24fb0d6963f7d28e17f72|v1');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheJsLibThrows_failsAsJsLibNotJsError', (
+    WidgetTester tester,
+  ) async {
+    // 库坏了要与规则自己报错区分开：修法完全不同（换库 vs 改规则）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: '1 + 1', jsLib: 'function broken( {'),
+    );
+
+    final ParseFailure<Object?> failure = result as ParseFailure<Object?>;
+    expect(failure.kind, ParseFailureKind.parseFailed);
+    expect(failure.rulePath, endsWith(':js:lib'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheJsLibUsesSyncFetch_replaysTheWholeJob', (
+    WidgetTester tester,
+  ) async {
+    // 库脚本与规则在同一趟里重跑：库里的 `java.ajax` 也走重放（ADR-0076 §决策 1）。
+    http.body = '<p>lib page</p>';
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "fetchPage('https://js.test/lib') + '|' + libReady",
+        jsLib:
+            'var libReady = "yes";'
+            'function fetchPage(url) { return java.ajax(url); }',
+      ),
+    );
+
+    expect(_value(result), '<p>lib page</p>|yes');
+    expect(http.requestedUrls, <String>['https://js.test/lib']);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheJsLibIsAbsent_leavesTheGlobalsAlone', (
+    WidgetTester tester,
+  ) async {
+    // 没有库的源不能被上一个 job 的库污染：每次 job 都是新的函数作用域。
+    await bridge.evaluate(
+      _job(script: 'libOnly', jsLib: 'var libOnly = "leaked";'),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'typeof libOnly'),
+    );
+
+    expect(_value(result), 'undefined');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheRuleDecryptsWithAes_answersWithTheHandle', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3a：`createSymmetricCrypto` 在沙箱里是**不透明句柄**，密码器本体留在宿主。这条探针验证
+    // 真引擎上「句柄 → 宿主加密 → 字符串回来」这一圈成立，并且同一条规则里还能再解密。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var aes = java.createSymmetricCrypto('AES/CBC/PKCS5Padding', "
+            "'D2o4XyQeIFobJ4tS', 'sciCuBC7orQtDhTO');"
+            "var cipher = aes.encryptBase64('hello');"
+            "cipher + '|' + aes.decryptStr(cipher) + '|' "
+            "+ aes.decryptStr('72D9l7h5ia1n6LhEDc4fEg==')",
+      ),
+    );
+
+    expect(_value(result), '72D9l7h5ia1n6LhEDc4fEg==|hello|hello');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheRuleHandlesBytes_seesAUint8Array', (
+    WidgetTester tester,
+  ) async {
+    // `byte[]` 在沙箱里是 `Uint8Array`：语料用它做 `length` / `Array.from(...)` / `slice(...)`，
+    // 所以这三件事都必须在真引擎上成立，且能原样交回字节族。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var bytes = java.hexDecodeToByteArray('e99885e8afbb');"
+            "bytes.length + '|' + Array.from(bytes).join(',') + '|' "
+            "+ java.hexEncodeToString('阅读') + '|' + java.bytesToStr(bytes)",
+      ),
+    );
+
+    expect(_value(result), '6|233,152,133,232,175,187|e99885e8afbb|阅读');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheSourceDecodesItsKeyLikeTheCorpus_roundTrips', (
+    WidgetTester tester,
+  ) async {
+    // 真实语料（独阅读网）的写法：密钥是摘要的 hex，IV 是 32 个 0；解密走 `decryptStr`。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var key = java.hexDecodeToByteArray(java.digestHex('secret', 'SHA-256'));"
+            "var iv = java.hexDecodeToByteArray('0'.repeat(32));"
+            "var cipher = java.createSymmetricCrypto('AES/CBC/PKCS5Padding', key, iv);"
+            'var encrypted = cipher.encryptBase64(JSON.stringify({a: 1}));'
+            'JSON.parse(cipher.decryptStr(encrypted)).a',
+      ),
+    );
+
+    expect(_value(result), 1);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheJsLibDecryptsWithBase64Keys_runsLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    // 真实语料（书耽）的写法：密钥与 IV 都是 base64，库里的 `function` 对规则可见（S1 + S3a 合流）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "decode('EbiJK0+BOpPGKLxuEACm8A==')",
+        jsLib:
+            'function decode(word) {'
+            '  return java.createSymmetricCrypto('
+            '    "AES/CBC/PKCS5Padding",'
+            '    java.base64DecodeToByteArray('
+            '      "L6alxSR4ttjXvcGpZozYtdcJtG4l0tSnQplRUONIRsw="),'
+            '    java.base64DecodeToByteArray('
+            '      "AAAAAAAAAAAAAAAAAAAAAA==")'
+            '  ).decryptStr(word);'
+            '}',
+      ),
+    );
+
+    expect(_value(result), 'hello');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheDeprecatedAesFamilyIsUsed_answersLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    // 上游 `aes*` / `des*` 一族都已 @Deprecated，但真实语料仍在用；它们全部是「组密码器 + 调方法」。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "java.aesEncodeToBase64String('hello', 'D2o4XyQeIFobJ4tS', "
+            "'AES/CBC/PKCS5Padding', 'sciCuBC7orQtDhTO') + '|' "
+            "+ java.aesDecodeToString('72D9l7h5ia1n6LhEDc4fEg==', 'D2o4XyQeIFobJ4tS', "
+            "'AES/CBC/PKCS5Padding', 'sciCuBC7orQtDhTO')",
+      ),
+    );
+
+    expect(_value(result), '72D9l7h5ia1n6LhEDc4fEg==|hello');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenADigestOrHmacIsMissing_answersTheReadableError', (
+    WidgetTester tester,
+  ) async {
+    // 失败必须是可读的：字典里没有的算法不能退化成 `undefined is not a function`。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "var message = '';"
+            "try { java.digestHex('abc', 'ROT13'); } catch (error) { message = error.message; }"
+            "message.indexOf('unsupported digest algorithm') >= 0 ? 'reported' : message",
+      ),
+    );
+
+    expect(_value(result), 'reported');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheBytesFamilyIsUsed_answersLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "java.HMacBase64('The quick brown fox', 'HmacSHA256', 'key') + '|' "
+            "+ java.digestHex('abc', 'SHA-256') + '|' + java.md5Encode16('abc')",
+      ),
+    );
+
+    expect(
+      _value(result),
+      'ID0eXO3S0Y+MWjvv8L2cHry5cJffyyiMRrAMkif94sA=|'
+      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad|'
+      '3cd24fb0d6963f7d',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenThePureHelpersAreUsed_answersLikeUpstream', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3b：UUID / 章节号 / URL 拆解 / HTML 格式化都在 worker 内同步完成（不联网、不占额度）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            'var u = java.randomUUID();'
+            "u.length + '|' + u.charAt(14) + '|' "
+            "+ java.toNumChapter('第一百二十三章 风起') + '|' "
+            "+ java.toURL('https://a.test:8443/p?k=v').origin + '|' "
+            "+ java.toURL('https://a.test/p?k=v').searchParams['k'] + '|' "
+            "+ java.htmlFormat('<p>正文</p><img src=\"https://a.test/1.jpg\">')",
+      ),
+    );
+
+    expect(
+      _value(result),
+      '36|4|第123章 风起|https://a.test:8443|v|'
+      '　　正文\n　　<img src="https://a.test/1.jpg">',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenT2sIsUsed_readsTheOpenCcTable', (
+    WidgetTester tester,
+  ) async {
+    // 码表是 Flutter 资产，随 worker 的 bootstrap 过来；这条探针验证整条资产链 + 最长匹配。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "java.t2s('漢字簡體測試')"),
+    );
+
+    expect(_value(result), '汉字简体测试');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenS2tIsUsed_readsTheOpenCcTable', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "java.s2t('汉字简体测试')"),
+    );
+
+    expect(_value(result), '漢字簡體測試');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheCacheIsUsed_survivesTheNextJob', (
+    WidgetTester tester,
+  ) async {
+    // 上游的 `cache` 是持久表；本仓只有内存 LRU，但至少跨 job（同一会话）要能读回。
+    await bridge.evaluate(
+      _job(script: "cache.put('token', 'abc'); cache.put('n', 7); 'ok'"),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "cache.get('token') + '|' + cache.getInt('n')"),
+    );
+
+    expect(_value(result), 'abc|7');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenWebViewUaIsRead_answersTheDesktopUserAgent', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'java.getWebViewUA()'),
+    );
+
+    expect(_value(result), contains('Mozilla/5.0'));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  group('Rhino interop shim (M25/S5d)', () {
+    testWidgets('jsBridge_whenPackagesStringIsUsed_encodesAndDecodes', (
+      WidgetTester tester,
+    ) async {
+      // 语料两种写法（七猫：编码；Hi歌曲：解码）：`new java.lang.String(字节,'UTF-8')` 与
+      // `String(x).getBytes('UTF-8')`。
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script: r"""
+var bytes = new Packages.java.lang.String('七猫').getBytes('UTF-8');
+var text = String(new Packages.java.lang.String(bytes, 'UTF-8'));
+text + '|' + bytes.length
+""",
+        ),
+      );
+
+      expect(_value(result), '七猫|6');
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    testWidgets('jsBridge_whenTheAndroidBase64IsUsed_answersStandardBase64', (
+      WidgetTester tester,
+    ) async {
+      // 七猫：`Packages.android.util.Base64.encodeToString(bytes, 2)`（2 = NO_WRAP）。
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script: r"""
+var bytes = new Packages.java.lang.String('abc').getBytes('UTF-8');
+var encoded = Packages.android.util.Base64.encodeToString(bytes, 2);
+var back = new Packages.android.util.Base64.decode('YWJj', 0);
+encoded + '|' + String(new Packages.java.lang.String(back, 'UTF-8'))
+""",
+        ),
+      );
+
+      expect(_value(result), 'YWJj|abc');
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    testWidgets(
+      'jsBridge_whenHutoolDigestAndTextUtilsAreUsed_answersLikeJava',
+      (WidgetTester tester) async {
+        // 阅文：`DigestUtil.md5` 答 16 字节、`md5Hex` 答 32 位 hex；`TextUtils.isEmpty` 是空判。
+        final ParseResult<Object?> result = await bridge.evaluate(
+          _job(
+            script: r"""
+var digest = Packages.cn.hutool.crypto.digest.DigestUtil;
+digest.md5Hex('abc') + '|' + digest.md5('abc').length + '|' +
+  String(Packages.android.text.TextUtils.isEmpty('')) + '|' +
+  String(Packages.android.text.TextUtils.isEmpty('x'))
+""",
+          ),
+        );
+
+        expect(
+          _value(result),
+          '900150983cd24fb0d6963f7d28e17f72|16|true|false',
+        );
+      },
+      timeout: const Timeout(Duration(minutes: 2)),
+    );
+
+    testWidgets('jsBridge_whenJavaUtilCollectionsAreUsed_answersListsAndMaps', (
+      WidgetTester tester,
+    ) async {
+      // 语料：`UUID.randomUUID().toString()`（七猫）、`Arrays.copyOfRange`（七猫）、
+      // `ArrayList.add` / `size()`（海棠）、`HashMap.put` + `get`（书旗）。
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(
+          script: r"""
+var id = String(Packages.java.util.UUID.randomUUID().toString());
+var list = new Packages.java.util.ArrayList();
+list.add('a');
+list.add('b');
+var bytes = new Packages.java.lang.String('abcdef').getBytes('UTF-8');
+var head = Packages.java.util.Arrays.copyOfRange(bytes, 0, 3);
+var map = new Packages.java.util.HashMap();
+map.put('k', 'v');
+id.length + '|' + list.size() + '|' +
+  String(new Packages.java.lang.String(head, 'UTF-8')) + '|' +
+  map.get('k') + '|' +
+  String(Packages.java.lang.System.currentTimeMillis() > 0)
+""",
+        ),
+      );
+
+      expect(_value(result), '36|2|abc|v|true');
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    testWidgets(
+      'jsBridge_whenPackagesStrResponseIsBuilt_answersTheResponseView',
+      (WidgetTester tester) async {
+        // 语料：`result = Packages.io.legado.app.help.http.StrResponse(url, body)`（两个源的
+        // `loginCheckJs` 用它替换页面），所以形状与 `result` 一致：`body` 属性 + `url()`。
+        final ParseResult<Object?> result = await bridge.evaluate(
+          _job(
+            script: r"""
+var response = Packages.io.legado.app.help.http.StrResponse('https://a.test/x', 'hello');
+response.body + '|' + response.url() + '|' + String(response.isSuccessful())
+""",
+          ),
+        );
+
+        expect(_value(result), 'hello|https://a.test/x|true');
+      },
+      timeout: const Timeout(Duration(minutes: 2)),
+    );
+
+    testWidgets('jsBridge_whenAnUnknownPackageMemberIsRead_failsReadably', (
+      WidgetTester tester,
+    ) async {
+      // 白名单之外仍然**具名拒绝**：错误里带完整包路径，而不是 `undefined is not a function`。
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(script: r"Packages.javax.crypto.Cipher.getInstance('AES')"),
+      );
+
+      expect(switch (result) {
+        ParseFailure<Object?>(:final String rulePath) => rulePath,
+        ParseSuccess<Object?>() => 'unexpected success',
+      }, 'searchRule.name:js:error');
+      expect(
+        printer.lines,
+        contains(contains('JS rule failed: field=searchRule.name')),
+      );
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    testWidgets('jsBridge_whenJavaImporterIsUsed_failsReadably', (
+      WidgetTester tester,
+    ) async {
+      // `JavaImporter` + `with(importer)` 是 Java 对象模型的完整仿真，不在最小垫片里。
+      final ParseResult<Object?> result = await bridge.evaluate(
+        _job(script: 'new JavaImporter(Packages.java.util)'),
+      );
+
+      expect(switch (result) {
+        ParseFailure<Object?>(:final String rulePath) => rulePath,
+        ParseSuccess<Object?>() => 'unexpected success',
+      }, 'searchRule.name:js:error');
+      expect(
+        printer.lines,
+        contains(contains('JS rule failed: field=searchRule.name')),
+      );
+    }, timeout: const Timeout(Duration(minutes: 2)));
+  });
+
+  testWidgets('jsBridge_whenTheSourceIdentityIsRead_answersKeyAndTag', (
+    WidgetTester tester,
+  ) async {
+    // 上游 `BaseSource.getKey()` / `getTag()` 分别答 `bookSourceUrl` / `bookSourceName`。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: "source.getKey() + '|' + source.getTag()"),
+    );
+
+    expect(_value(result), 'https://example-novel.test|示例书源');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenNoLoginHeaderIsStored_answersNull', (
+    WidgetTester tester,
+  ) async {
+    // 上游 `getLoginHeader()` 没有值是 null（`getVariable` 才是空串）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'source.getLoginHeader() === null'),
+    );
+
+    expect(_value(result), isTrue);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenALoginHeaderIsWritten_persistsItAndItsCookie', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3b：登录脚本写下的头要写穿（下一个 job 还读得到），其中的 Cookie 还要并进 Cookie 宗，
+    // 否则下一次请求会被宗里的旧 Cookie 盖掉（上游 `BaseSource.putLoginHeader`）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            'source.putLoginHeader(JSON.stringify({Token: "t", Cookie: "sid=1"})); '
+            'JSON.parse(source.getLoginHeader()).Token',
+      ),
+    );
+
+    expect(_value(result), 't');
+    expect(
+      loginHeaders.snapshot('https://example-novel.test'),
+      contains('"Token":"t"'),
+    );
+    expect(
+      cookies.cookieHeaderFor(Uri.parse('https://example-novel.test/')),
+      'sid=1',
+    );
+
+    // 下一个 job 从存储里拿到同一份值（快照下发）。
+    final ParseResult<Object?> next = await bridge.evaluate(
+      _job(script: 'JSON.parse(source.getLoginHeader()).Token'),
+    );
+    expect(_value(next), 't');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleCallsSourceLogin_failsReadably', (
+    WidgetTester tester,
+  ) async {
+    // 规则内登录具名拒绝（book-source.md §11）：报错要落到 js:error，而不是一个
+    // `undefined is not a function`。日志里的 message 是脱敏的，所以这里断言形状。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'source.login()'),
+    );
+
+    expect(switch (result) {
+      ParseFailure<Object?>(:final String rulePath) => rulePath,
+      ParseSuccess<Object?>() => 'unexpected success',
+    }, 'searchRule.name:js:error');
+    expect(
+      printer.lines,
+      contains(contains('JS rule failed: field=searchRule.name')),
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheStageBindsAPage_seesSrcChapterAndNeighbours', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3b：`src` / `chapter` / `nextChapterUrl` / `fromBookInfo` 都随 job 下来。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            "src + '|' + chapter.title + '|' + chapter.url + '|' + "
+            "chapter.isVip + '|' + nextChapterUrl + '|' + fromBookInfo + '|' + "
+            "chapter.getVariable('stage')",
+        src: '<html>page</html>',
+        chapter: const JsChapterInfo(
+          title: '第一章',
+          url: 'https://js.test/1',
+          isVip: true,
+        ),
+        nextChapterUrl: 'https://js.test/2',
+        fromBookInfo: true,
+        variables: const <String, String>{'stage': 'detail'},
+      ),
+    );
+
+    expect(
+      _value(result),
+      '<html>page</html>|第一章|https://js.test/1|true|https://js.test/2|'
+      'true|detail',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenTheInfoMapIsWritten_isThereForTheNextJob', (
+    WidgetTester tester,
+  ) async {
+    // 上游给每条规则的是**同一个** `infoMap` 对象：写进去的值下一次探索还看得见。
+    await bridge.evaluate(
+      _job(script: 'infoMap.kind = "玄幻"; infoMap["page"] = 2; "ok"'),
+    );
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script: "infoMap.kind + '|' + infoMap.page + '|' + typeof infoMap.save",
+      ),
+    );
+
+    expect(_value(result), '玄幻|2|function');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenConnectAndAjaxAllAreUsed_answersResponses', (
+    WidgetTester tester,
+  ) async {
+    // M25/S3b：`connect` 答响应对象（失败也答），`ajaxAll` 答响应数组（一页失败整次抛错）。
+    http.body = '<html>page</html>';
+
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(
+        script:
+            'var one = java.connect("https://js.test/1"); '
+            'var many = java.ajaxAll(["https://js.test/2", "https://js.test/3"]); '
+            "one.body + '|' + one.code() + '|' + many.length + '|' + "
+            'many[0].body',
+      ),
+    );
+
+    expect(_value(result), '<html>page</html>|200|2|<html>page</html>');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenOpenUrlIsCalled_reachesThePort', (
+    WidgetTester tester,
+  ) async {
+    // `java.openUrl` 是单向事件：宿主弹确认框、开浏览器，规则不等它。
+    await bridge.evaluate(
+      _job(script: "java.openUrl('https://js.test/book/1'); 'ok'"),
+    );
+    await pumpEventQueue();
+
+    expect(opener.opened.single.$1, 'https://js.test/book/1');
+    expect(opener.opened.single.$2, '示例书源');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenAndroidIdIsRead_answersTheHostValue', (
+    WidgetTester tester,
+  ) async {
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _job(script: 'java.androidId()'),
+    );
+
+    expect(_value(result), 'probe-install-id');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenFormattingTitles_runsOncePerChapterInOneScope', (
+    WidgetTester tester,
+  ) async {
+    // ADR-0078 S2：`tocRule.formatJs` 是「一条脚本跑 N 章、一个作用域」——`index` 逐章重绑，
+    // `gInt` 跨章累积（上游 BookChapterList.kt:141-163）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _jobFormat(
+        script:
+            'gInt = gInt + 1; index + "|" + title + "|" + chapter.url + '
+            '"|" + gInt + "|" + chapter.isVolume',
+        chapters: const <JsChapterInfo>[
+          JsChapterInfo(title: '第一章', url: 'https://js.test/1'),
+          JsChapterInfo(title: '第二卷', url: '第二卷1', isVolume: true),
+        ],
+      ),
+    );
+
+    expect(_value(result), <Object?>[
+      '1|第一章|https://js.test/1|1|false',
+      '2|第二卷|第二卷1|2|true',
+    ]);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenFormattingTitlesThrows_keepsThatTitle', (
+    WidgetTester tester,
+  ) async {
+    // 上游 `runCatching(...).onFailure`：某一章格式化失败只保留原标题，不影响其它章。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _jobFormat(
+        script: 'if (index === 2) { throw new Error("boom"); } "新" + index',
+        chapters: const <JsChapterInfo>[
+          JsChapterInfo(title: '第一章', url: 'https://js.test/1'),
+          JsChapterInfo(title: '第二章', url: 'https://js.test/2'),
+          JsChapterInfo(title: '第三章', url: 'https://js.test/3'),
+        ],
+      ),
+    );
+
+    expect(_value(result), <Object?>['新1', null, '新3']);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenFormattingTitlesWithAJsLib_seesTheLibrary', (
+    WidgetTester tester,
+  ) async {
+    // 库脚本对 formatJs 同样可见（同一个函数作用域）。
+    final ParseResult<Object?> result = await bridge.evaluate(
+      _jobFormat(
+        script: 'decorate(title)',
+        jsLib: 'function decorate(text) { return "【" + text + "】"; }',
+        chapters: const <JsChapterInfo>[
+          JsChapterInfo(title: '第一章', url: 'https://js.test/1'),
+        ],
+      ),
+    );
+
+    expect(_value(result), <Object?>['【第一章】']);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('jsBridge_whenARuleSetsContent_readsTheReplacedPage', (
+    WidgetTester tester,
+  ) async {
+    // `java.setContent(html)` 换掉页级 scope：同一 job 内后面的 `java.getString` 读新页面
+    // （ADR-0076 §决策 1）。上游常写成「先取页，再 setContent，再抽字段」。
+    const String pageHtml = '<ul class="list"><li class="odd">旧</li></ul>';
+    final RuleEngine engine = RuleEngine(
+      logger: AppLogger(level: LogLevel.debug, printer: printer),
+      jsBridge: bridge,
+      variables: variables,
+    );
+    final RuleScope scope = RuleScope.dom(
+      parser.parse(pageHtml),
+      body: pageHtml,
+      jsContext: const JsPageContext(
+        baseUrl: 'https://example-novel.test/search',
+      ),
+    );
+
+    // 规则参数写成变量，才走**运行时**的 `parse.*` 通道：字面量首参会被引擎在 job 之前内联
+    // （ADR-0037 §决策 3①），那样就绕过了 setContent。
+    final ParseResult<String?> result = await engine.extractFirst(
+      "@js:java.setContent('<ul class=\"list\"><li class=\"odd\">新</li></ul>');"
+      "var selector = 'class' + '.odd.0@text';"
+      'java.getString(selector)',
+      scope,
+      rulePath: 'contentRule.content',
+    );
+
+    expect(_value(result), '新');
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }
 
 /// A job whose script decides the behaviour; the variables are the §6 bindings.
@@ -962,6 +1910,12 @@ JsJob _job({
   required String script,
   Map<String, String>? sourceHeaders,
   Map<String, String> variables = const <String, String>{},
+  String? src,
+  JsChapterInfo? chapter,
+  String? nextChapterUrl,
+  bool fromBookInfo = false,
+  Map<String, String> sourceVariables = const <String, String>{},
+  String? jsLib,
   JsSourceInfo source = const JsSourceInfo(
     name: '示例书源',
     url: 'https://example-novel.test',
@@ -980,9 +1934,30 @@ JsJob _job({
   response: response,
   sourceHeaders: sourceHeaders,
   variables: variables,
+  sourceVariables: sourceVariables,
+  jsLib: jsLib,
   bookName: bookName,
   chapterTitle: chapterTitle,
   book: book,
+  src: src,
+  chapter: chapter,
+  nextChapterUrl: nextChapterUrl,
+  fromBookInfo: fromBookInfo,
+);
+
+/// A `tocRule.formatJs` job: one script, one chapter list, one scope (ADR-0078 S2).
+JsJob _jobFormat({
+  required String script,
+  required List<JsChapterInfo> chapters,
+  String? jsLib,
+}) => JsJob(
+  script: script,
+  rulePath: 'tocRule.formatJs',
+  baseUrl: 'https://example-novel.test/book/1/',
+  page: 1,
+  source: const JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+  titleFormatChapters: chapters,
+  jsLib: jsLib,
 );
 
 /// The value of a successful evaluation, failing the test otherwise.
@@ -1024,6 +1999,9 @@ final class _ProbeHttpClient implements HttpClient {
 
   /// The body served for every request.
   String body = '';
+
+  /// The response headers served with every request.
+  Map<String, List<String>> responseHeaders = const <String, List<String>>{};
 
   /// The bytes served to `getBytes` (the font byte door); falls back to [body] when unset.
   Uint8List? bytes;
@@ -1109,15 +2087,63 @@ final class _ProbeHttpClient implements HttpClient {
     return _answer();
   }
 
-  /// The canned 200 with [body].
+  @override
+  Future<ParseResult<HttpResponse>> head(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxRetries,
+    Duration? receiveTimeout,
+  }) async {
+    requestedUrls.add(url);
+    requestedMethods.add('HEAD');
+    lastHeaders = headers;
+    lastSourceId = sourceId;
+
+    // HEAD 没有正文：上游 `java.head` 就只要响应头（ADR-0076 §决策 1）。
+    return ParseSuccess<HttpResponse>(
+      HttpResponse(
+        statusCode: 200,
+        headers: responseHeaders,
+        body: '',
+        url: 'https://js.test/',
+      ),
+    );
+  }
+
+  /// The canned 200 with [body] and [responseHeaders].
   ParseResult<HttpResponse> _answer() => ParseSuccess<HttpResponse>(
     HttpResponse(
       statusCode: 200,
-      headers: const <String, List<String>>{},
+      headers: responseHeaders,
       body: body,
       url: 'https://js.test/',
     ),
   );
+}
+
+/// Records what `java.openUrl` asked to open (the real port shows a dialog + the browser).
+final class _ProbeExternalUrlOpener implements ExternalUrlOpener {
+  /// Every `(url, sourceName)` the bridge handed over, in order.
+  final List<(String, String)> opened = <(String, String)>[];
+
+  @override
+  Future<bool> open(String url, {String sourceName = ''}) async {
+    opened.add((url, sourceName));
+
+    return true;
+  }
+}
+
+/// Collects `java.toast` messages; the real port shows a snack bar.
+final class _CollectingMessages implements UserMessages {
+  /// Every message, in order.
+  final List<String> shown = <String>[];
+
+  @override
+  void show(String message) => shown.add(message);
 }
 
 /// A [PurgeRuleSource] answering a fixed list (the device test's rules are written inline).

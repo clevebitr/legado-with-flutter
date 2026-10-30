@@ -122,9 +122,6 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
               title: Text(l10n.bookSourceListTitle),
               backgroundColor: tokens.colors.surface,
               actions: <Widget>[
-                _sortMenu(context, ref, l10n, loaded),
-                _directionToggle(context, ref, l10n, loaded),
-                _viewMenu(context, ref, l10n, loaded),
                 IconButton(
                   icon: const Icon(Icons.checklist),
                   tooltip: l10n.bookSourceListSelectMode,
@@ -703,6 +700,12 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
+            Icon(
+              Icons.error_outline,
+              size: tokens.spacing.xxl,
+              color: tokens.colors.error,
+            ),
+            SizedBox(height: tokens.spacing.md),
             Text(
               l10n.bookSourceListLoadFailed,
               textAlign: TextAlign.center,
@@ -729,6 +732,12 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
+            Icon(
+              Icons.library_books_outlined,
+              size: tokens.spacing.xxl,
+              color: tokens.colors.outline,
+            ),
+            SizedBox(height: tokens.spacing.md),
             Text(
               l10n.bookSourceListEmpty,
               textAlign: TextAlign.center,
@@ -770,24 +779,35 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
           padding: EdgeInsets.fromLTRB(
             tokens.spacing.lg,
             tokens.spacing.sm,
-            tokens.spacing.lg,
+            tokens.spacing.sm,
             0,
           ),
-          child: TextField(
-            controller: _search,
-            decoration: InputDecoration(
-              hintText: l10n.bookSourceListSearchHint,
-              isDense: true,
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _search.text.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear),
-                      tooltip: l10n.actionCancel,
-                      onPressed: () => setState(_search.clear),
-                    ),
-            ),
-            onChanged: (_) => setState(() {}),
+          // 排序 / 方向 / 视图跟着列表走：放在 AppBar 里会和返回键、多选、校验、导入
+          // 挤成一排，窄屏上标题只剩几个像素。
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: _search,
+                  decoration: InputDecoration(
+                    hintText: l10n.bookSourceListSearchHint,
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            tooltip: l10n.actionCancel,
+                            onPressed: () => setState(_search.clear),
+                          ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              _sortMenu(context, ref, l10n, data),
+              _directionToggle(context, ref, l10n, data),
+              _viewMenu(context, ref, l10n, data),
+            ],
           ),
         ),
         _groupFilter(context, ref, l10n, data),
@@ -1128,7 +1148,13 @@ class _BookSourceListPageState extends ConsumerState<BookSourceListPage> {
           // 状态灯：颜色不单独承载信息，tooltip + Semantics 给出四态标签（C-UI-7）。
           : _StatusLight(light: sourceCheckLightOf(source), l10n: l10n),
       title: Text(source.source.name),
-      subtitle: Text(lines.join('\n')),
+      // `isThreeLine` 只允许两行副标题；源可能同时有分组、校验、发现、更新时间、响应与注释，
+      // 不限制行数会与下一行重叠。
+      subtitle: Text(
+        lines.join('\n'),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
       isThreeLine: lines.length > 1,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1823,10 +1849,10 @@ String _lastCheckWhen(
 }
 
 /// The dialog answer that means “put the selection into no group”.
-const String _noGroupToken = ' none';
+const String _noGroupToken = '\u0000none';
 
 /// The dialog answer that means “ask for a new group name”.
-const String _newGroupToken = ' new';
+const String _newGroupToken = '\u0000new';
 
 /// Formats a stored millisecond timestamp the way the platform writes a short date.
 ///

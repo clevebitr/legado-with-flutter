@@ -352,7 +352,7 @@ final class RuleEngineProvider
   }
 }
 
-String _$ruleEngineHash() => r'efef60215a5a91151b038adb01a6dfcab6ba7f60';
+String _$ruleEngineHash() => r'372a2e38a500b660e04e8eb6ecf4ea4b1272ee7c';
 
 /// Provides the page fetch + rule reading service the use cases are built on.
 
@@ -403,7 +403,7 @@ final class PageFetchServiceProvider
   }
 }
 
-String _$pageFetchServiceHash() => r'468d712869d464c9328f014cebea12126c981668';
+String _$pageFetchServiceHash() => r'684f410a0e1ef014a56de8bf97dca4347ab5ffc1';
 
 /// Provides the search use case.
 
@@ -1037,12 +1037,77 @@ final class RunSourceDebugProvider
 
 String _$runSourceDebugHash() => r'f8316970316911069d632a7f15cae460d02865ed';
 
-/// Provides the source switch of the reader.
+/// Provides the candidate search of a source switch (ADR-0091).
+///
+/// It is its own provider because the switch page (M30) drives it directly: the progress
+/// callbacks, the pause latch and the cancellation belong to that page, while the one-shot
+/// [switchBookSourceProvider] keeps answering the reader's port.
+
+@ProviderFor(changeSourceSearch)
+final changeSourceSearchProvider = ChangeSourceSearchProvider._();
+
+/// Provides the candidate search of a source switch (ADR-0091).
+///
+/// It is its own provider because the switch page (M30) drives it directly: the progress
+/// callbacks, the pause latch and the cancellation belong to that page, while the one-shot
+/// [switchBookSourceProvider] keeps answering the reader's port.
+
+final class ChangeSourceSearchProvider
+    extends
+        $FunctionalProvider<
+          ChangeSourceSearch,
+          ChangeSourceSearch,
+          ChangeSourceSearch
+        >
+    with $Provider<ChangeSourceSearch> {
+  /// Provides the candidate search of a source switch (ADR-0091).
+  ///
+  /// It is its own provider because the switch page (M30) drives it directly: the progress
+  /// callbacks, the pause latch and the cancellation belong to that page, while the one-shot
+  /// [switchBookSourceProvider] keeps answering the reader's port.
+  ChangeSourceSearchProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'changeSourceSearchProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$changeSourceSearchHash();
+
+  @$internal
+  @override
+  $ProviderElement<ChangeSourceSearch> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  ChangeSourceSearch create(Ref ref) {
+    return changeSourceSearch(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ChangeSourceSearch value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ChangeSourceSearch>(value),
+    );
+  }
+}
+
+String _$changeSourceSearchHash() =>
+    r'37d069ea1ad494f0f43856c54547064c6bdc0135';
+
+/// Provides the source switch: the last, pure step of the change-source flow (ADR-0091).
 
 @ProviderFor(switchBookSource)
 final switchBookSourceProvider = SwitchBookSourceProvider._();
 
-/// Provides the source switch of the reader.
+/// Provides the source switch: the last, pure step of the change-source flow (ADR-0091).
 
 final class SwitchBookSourceProvider
     extends
@@ -1052,7 +1117,7 @@ final class SwitchBookSourceProvider
           SwitchBookSource
         >
     with $Provider<SwitchBookSource> {
-  /// Provides the source switch of the reader.
+  /// Provides the source switch: the last, pure step of the change-source flow (ADR-0091).
   SwitchBookSourceProvider._()
     : super(
         from: null,
@@ -1086,7 +1151,7 @@ final class SwitchBookSourceProvider
   }
 }
 
-String _$switchBookSourceHash() => r'bebcfcdb713f5f02695867ce8f9b4547ae7a1058';
+String _$switchBookSourceHash() => r'852843b90b10c8a41cc57e55be93e18a05a72aa7';
 
 /// Provides the list's view state store (sort key and group filter).
 
@@ -1231,3 +1296,101 @@ final class SearchScopeStoreProvider
 }
 
 String _$searchScopeStoreHash() => r'40f0f99208f634a20ee3ee7b02b540e4c5fbf18e';
+
+/// Provides the stored discover layout (`DECISIONS.md` #77).
+
+@ProviderFor(exploreLayoutStore)
+final exploreLayoutStoreProvider = ExploreLayoutStoreProvider._();
+
+/// Provides the stored discover layout (`DECISIONS.md` #77).
+
+final class ExploreLayoutStoreProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<ExploreLayoutStore>,
+          ExploreLayoutStore,
+          FutureOr<ExploreLayoutStore>
+        >
+    with
+        $FutureModifier<ExploreLayoutStore>,
+        $FutureProvider<ExploreLayoutStore> {
+  /// Provides the stored discover layout (`DECISIONS.md` #77).
+  ExploreLayoutStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'exploreLayoutStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$exploreLayoutStoreHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<ExploreLayoutStore> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<ExploreLayoutStore> create(Ref ref) {
+    return exploreLayoutStore(ref);
+  }
+}
+
+String _$exploreLayoutStoreHash() =>
+    r'519eaefeaba4c2e87fabd6e0174c43527191ba9f';
+
+/// Provides the stored change-source scope (ADR-0091 §决策 5).
+///
+/// Same codec, different key: switching a book and searching the library are separate intents.
+
+@ProviderFor(changeSourceScopeStore)
+final changeSourceScopeStoreProvider = ChangeSourceScopeStoreProvider._();
+
+/// Provides the stored change-source scope (ADR-0091 §决策 5).
+///
+/// Same codec, different key: switching a book and searching the library are separate intents.
+
+final class ChangeSourceScopeStoreProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<SearchScopeStore>,
+          SearchScopeStore,
+          FutureOr<SearchScopeStore>
+        >
+    with $FutureModifier<SearchScopeStore>, $FutureProvider<SearchScopeStore> {
+  /// Provides the stored change-source scope (ADR-0091 §决策 5).
+  ///
+  /// Same codec, different key: switching a book and searching the library are separate intents.
+  ChangeSourceScopeStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'changeSourceScopeStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$changeSourceScopeStoreHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<SearchScopeStore> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<SearchScopeStore> create(Ref ref) {
+    return changeSourceScopeStore(ref);
+  }
+}
+
+String _$changeSourceScopeStoreHash() =>
+    r'b397ec5911bc64bee2a170a2237534f922de60cf';

@@ -16,6 +16,30 @@ const double maxReaderLineHeight = 2.4;
 /// The line spacing multiplier a reader starts with.
 const double defaultReaderLineHeight = 1.6;
 
+/// The darkest the in-page dimming overlay may go (`ADR-0075 §决策 2`).
+const double minReaderBrightness = 0.4;
+
+/// The brightest the in-page dimming overlay may go (no dimming).
+const double maxReaderBrightness = 1;
+
+/// The brightness a reader starts with (no dimming).
+const double defaultReaderBrightness = 1;
+
+/// The strongest warm (blue-light reducing) filter the reader offers.
+const int maxReaderEyeProtection = 100;
+
+/// The warm filter a reader starts with (off).
+const int defaultReaderEyeProtection = 0;
+
+/// The shortest auto-page interval, in seconds (ADR-0093 §决策 1).
+const int minReaderAutoPageSeconds = 3;
+
+/// The longest auto-page interval, in seconds.
+const int maxReaderAutoPageSeconds = 60;
+
+/// The auto-page interval a reader starts with (ADR-0093 §决策 1).
+const int defaultReaderAutoPageSeconds = 15;
+
 /// How the reader turns pages (`docs/dev/roadmap.md` 5.3, ADR-0044 §决策 4).
 enum ReaderPageMode {
   /// One vertically scrolling body.
@@ -105,6 +129,7 @@ final class ReaderSettings {
   const ReaderSettings._({
     required this.fontScale,
     required this.lineHeight,
+    required this.brightness,
     required this.background,
     required this.pageMode,
     required this.fontFamily,
@@ -116,12 +141,17 @@ final class ReaderSettings {
     required this.ttsVoiceName,
     required this.ttsVoiceLocale,
     required this.stopTtsOnExit,
+    required this.keepScreenAwake,
+    required this.eyeProtection,
+    required this.showReaderStatus,
+    required this.autoPageSeconds,
   });
 
   /// Creates reader settings, clamping both numeric values into their documented ranges.
   factory ReaderSettings({
     double fontScale = defaultReaderFontScale,
     double lineHeight = defaultReaderLineHeight,
+    double brightness = defaultReaderBrightness,
     ReaderBackground background = ReaderBackground.system,
     ReaderPageMode pageMode = ReaderPageMode.scroll,
     ReaderFontFamily fontFamily = ReaderFontFamily.theme,
@@ -133,9 +163,14 @@ final class ReaderSettings {
     String? ttsVoiceName,
     String? ttsVoiceLocale,
     bool stopTtsOnExit = true,
+    bool keepScreenAwake = true,
+    int eyeProtection = defaultReaderEyeProtection,
+    bool showReaderStatus = true,
+    int autoPageSeconds = defaultReaderAutoPageSeconds,
   }) => ReaderSettings._(
     fontScale: fontScale.clamp(minReaderFontScale, maxReaderFontScale),
     lineHeight: lineHeight.clamp(minReaderLineHeight, maxReaderLineHeight),
+    brightness: brightness.clamp(minReaderBrightness, maxReaderBrightness),
     background: background,
     pageMode: pageMode,
     fontFamily: fontFamily,
@@ -148,12 +183,20 @@ final class ReaderSettings {
     ttsVoiceName: ttsVoiceName,
     ttsVoiceLocale: ttsVoiceLocale,
     stopTtsOnExit: stopTtsOnExit,
+    keepScreenAwake: keepScreenAwake,
+    eyeProtection: eyeProtection.clamp(0, maxReaderEyeProtection),
+    showReaderStatus: showReaderStatus,
+    autoPageSeconds: autoPageSeconds.clamp(
+      minReaderAutoPageSeconds,
+      maxReaderAutoPageSeconds,
+    ),
   );
 
   /// What a reader that has stored nothing yet uses.
   static const ReaderSettings defaults = ReaderSettings._(
     fontScale: defaultReaderFontScale,
     lineHeight: defaultReaderLineHeight,
+    brightness: defaultReaderBrightness,
     background: ReaderBackground.system,
     pageMode: ReaderPageMode.scroll,
     fontFamily: ReaderFontFamily.theme,
@@ -165,6 +208,10 @@ final class ReaderSettings {
     ttsVoiceName: null,
     ttsVoiceLocale: null,
     stopTtsOnExit: true,
+    keepScreenAwake: true,
+    eyeProtection: defaultReaderEyeProtection,
+    showReaderStatus: true,
+    autoPageSeconds: defaultReaderAutoPageSeconds,
   );
 
   /// Body text multiplier, on top of the app's accessibility scale.
@@ -172,6 +219,12 @@ final class ReaderSettings {
 
   /// Line height multiplier for the body text.
   final double lineHeight;
+
+  /// The opacity of the in-page dimming overlay (`ADR-0075 §决策 2`), 0.4–1.
+  ///
+  /// It is an **app-level mask**, not the system brightness: the reader can only dim, and leaving
+  /// the page restores the system untouched.
+  final double brightness;
 
   /// Which derived surface the page paints.
   final ReaderBackground background;
@@ -206,10 +259,24 @@ final class ReaderSettings {
   /// Whether leaving the reader stops speech (ADR-0054 §决策 5).
   final bool stopTtsOnExit;
 
+  /// Whether the display stays on while the reader is open (ADR-0086 §决策 1).
+  final bool keepScreenAwake;
+
+  /// How strong the warm (blue-light reducing) filter is, 0–100 (ADR-0086 §决策 2).
+  final int eyeProtection;
+
+  /// Whether the reading view shows the status line: chapter, progress, time, charge
+  /// (ADR-0086 §决策 6).
+  final bool showReaderStatus;
+
+  /// Seconds between two automatic page turns (ADR-0093 §决策 1).
+  final int autoPageSeconds;
+
   /// Returns a copy with the given values, clamped the same way the factory does.
   ReaderSettings copyWith({
     double? fontScale,
     double? lineHeight,
+    double? brightness,
     ReaderBackground? background,
     ReaderPageMode? pageMode,
     ReaderFontFamily? fontFamily,
@@ -221,10 +288,15 @@ final class ReaderSettings {
     String? ttsVoiceName,
     String? ttsVoiceLocale,
     bool? stopTtsOnExit,
+    bool? keepScreenAwake,
+    int? eyeProtection,
+    bool? showReaderStatus,
+    int? autoPageSeconds,
     bool clearTtsVoice = false,
   }) => ReaderSettings(
     fontScale: fontScale ?? this.fontScale,
     lineHeight: lineHeight ?? this.lineHeight,
+    brightness: brightness ?? this.brightness,
     background: background ?? this.background,
     pageMode: pageMode ?? this.pageMode,
     fontFamily: fontFamily ?? this.fontFamily,
@@ -238,6 +310,10 @@ final class ReaderSettings {
         ? null
         : ttsVoiceLocale ?? this.ttsVoiceLocale,
     stopTtsOnExit: stopTtsOnExit ?? this.stopTtsOnExit,
+    keepScreenAwake: keepScreenAwake ?? this.keepScreenAwake,
+    eyeProtection: eyeProtection ?? this.eyeProtection,
+    showReaderStatus: showReaderStatus ?? this.showReaderStatus,
+    autoPageSeconds: autoPageSeconds ?? this.autoPageSeconds,
   );
 
   @override
@@ -245,6 +321,7 @@ final class ReaderSettings {
       other is ReaderSettings &&
       other.fontScale == fontScale &&
       other.lineHeight == lineHeight &&
+      other.brightness == brightness &&
       other.background == background &&
       other.pageMode == pageMode &&
       other.fontFamily == fontFamily &&
@@ -255,12 +332,16 @@ final class ReaderSettings {
       other.ttsPitch == ttsPitch &&
       other.ttsVoiceName == ttsVoiceName &&
       other.ttsVoiceLocale == ttsVoiceLocale &&
-      other.stopTtsOnExit == stopTtsOnExit;
+      other.stopTtsOnExit == stopTtsOnExit &&
+      other.keepScreenAwake == keepScreenAwake &&
+      other.eyeProtection == eyeProtection &&
+      other.showReaderStatus == showReaderStatus;
 
   @override
   int get hashCode => Object.hash(
     fontScale,
     lineHeight,
+    brightness,
     background,
     pageMode,
     fontFamily,
@@ -272,6 +353,9 @@ final class ReaderSettings {
     ttsVoiceName,
     ttsVoiceLocale,
     stopTtsOnExit,
+    keepScreenAwake,
+    eyeProtection,
+    showReaderStatus,
   );
 }
 

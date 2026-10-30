@@ -50,7 +50,7 @@ final class SourceCheckProvider
   }
 }
 
-String _$sourceCheckHash() => r'39821ecb534234831c7535eae1ad85fc86d81bfe';
+String _$sourceCheckHash() => r'9ccd5f8e64830b304a627d3bc7ba8bc9b062a0eb';
 
 /// Runs the batch check and writes each verdict back.
 ///

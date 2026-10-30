@@ -1,0 +1,143 @@
+name: Debug build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit / branch / tag to build (empty = the dispatched ref)'
+        required: false
+        type: string
+      targets:
+        description: 'What to build'
+        required: true
+        default: android
+        type: choice
+        options:
+          - android
+          - windows
+          - both
+  push:
+    branches: [dev]
+
+concurrency:
+  group: debug-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.47.7'
+
+jobs:
+  android:
+    if: ${{ github.event_name == 'push' || inputs.targets == 'android' || inputs.targets == 'both' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Compose the label
+        id: label
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=$(grep -m1 '^version:' pubspec.yaml | sed 's/^version: *//; s/+.*//')
+          sha=$(git rev-parse --short=7 HEAD)
+          stamp=$(date -u +%Y%m%d%H%M)
+          echo "version=${manifest}-debug.${sha}.${stamp}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the APK
+        env:
+          VERSION: ${{ steps.label.outputs.version }}
+        run: |
+          flutter build apk --debug \
+            --build-name="$VERSION" \
+            --build-number="$GITHUB_RUN_NUMBER" \
+            --dart-define=APP_VERSION="$VERSION"
+
+      - name: Package
+        env:
+          VERSION: ${{ steps.label.outputs.version }}
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-debug.apk \
+            "dist/flutter-reader-${VERSION}-android-debug.apk"
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk-${{ steps.label.outputs.version }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    if: ${{ inputs.targets == 'windows' || inputs.targets == 'both' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Compose the label
+        id: label
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=$(grep -m1 '^version:' pubspec.yaml | sed 's/^version: *//; s/+.*//')
+          sha=$(git rev-parse --short=7 HEAD)
+          stamp=$(date -u +%Y%m%d%H%M)
+          echo "version=${manifest}-debug.${sha}.${stamp}" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          VERSION: ${{ steps.label.outputs.version }}
+        run: |
+          flutter build windows --debug `
+            --build-name="$env:VERSION" `
+            --build-number="$env:GITHUB_RUN_NUMBER" `
+            --dart-define=APP_VERSION="$env:VERSION"
+
+      - name: Package
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.label.outputs.version }}
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path build\windows\x64\runner\Debug\* `
+            -DestinationPath "dist/flutter-reader-$env:VERSION-windows-x64-debug.zip"
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-windows-${{ steps.label.outputs.version }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14

@@ -186,6 +186,50 @@ GPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_c
 > 构建）。它们与 GPL-3.0 兼容（FSF 认定，动态链接），本项目只允许这一处 LGPL（ADR-0061
 > §决策 2）；用户可用同版本动态库替换，符合 LGPL-2.1 §6 的可替换要求。
 
+**2026-10-26 增量（引擎对齐 S3a：密钥类 crypto）：** `dependencies` 新增 `pointycastle ^4.0.0`
+（Bouncy Castle 风格的 **MIT**，纯 Dart；传递依赖 `collection` 与 `convert` 均已在基线内）。
+`dart run tool/scan_licenses.dart` 复算：**202 包 / BSD-3 113 / MIT 56 / Apache 18 / BSD-2 6 /
+MPL 1 / SDK 8，Risky items: none**。GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有
+`enough_convert`。
+
+> **为什么改了 §5 前面的结论：** 2026-10-25 那条「评估后未采用 `pointycastle`」说的是**备份加密**
+> （那里整包用 `archive` 自带的 WinZip AES 就够，不该为它拉一个密码学库）。S3a 不同：
+> `java.createSymmetricCrypto` 要支持 AES / DES / DESede × ECB / CBC × PKCS5 / NoPadding，
+> 手写实现的正确性风险远大于一个 MIT 纯 Dart 依赖；`book-source.md` §6 与 ADR-0078 记录了这一族的
+> 语义。两条结论并存：**备份不引入密码学依赖，`@js:` 沙箱引入 `pointycastle`。**
+
+**2026-10-26 增量（M25/S3b：简繁码表资产）：** 新增 `assets/zh/t2s.txt` 与 `assets/zh/s2t.txt`，
+由 **OpenCC**（https://github.com/BYVoid/OpenCC，**Apache-2.0**，`LICENSE` 已核实）的
+`TSCharacters/TSPhrases` 与 `STCharacters/STPhrases` 生成（来源、生成规则与输入/输出 sha256 见
+`assets/zh/README.md`）。这是**数据资产、不是 pub 依赖**，所以包计数不变（仍是 202 包 / BSD-3 113 /
+MIT 56 / Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none）。
+
+> **为什么不搬上游那份表：** 上游 legado 用 `com.github.liuyueyi.quick-chinese-transfer`，
+> 其 pom 没有 `<licenses>` 段、仓库也没有 LICENSE 文件 → 按 C-DEP-7（无许可一律禁止引入）不能复制。
+> 代价是行为与上游不完全相同（没有 `fixT2sDict()` 的港台排除词表），差异登记在
+> `docs/dev/book-source.md` §6。
+
+**2026-10-26 增量（M25/S3b：`java.openUrl`）：** `dependencies` 新增 `url_launcher ^6.3.2`
+（**BSD-3-Clause**，Flutter 官方维护；Android / iOS / Windows / macOS / Linux / Web 六个平台实现
+同为 BSD-3-Clause）。只有装配根的确认弹窗实现用它，其余层只见 `core/platform/` 的
+`ExternalUrlOpener` 端口。`dart run tool/scan_licenses.dart` 复算：**210 包 / BSD-3 121 / MIT 56 /
+Apache 18 / BSD-2 6 / MPL 1 / SDK 8，Risky items: none**；GPL / LGPL / AGPL / 无许可证 / 未识别
+仍为 0，MPL 白名单仍只有 `enough_convert`。
+
+> **为什么这次接受一个浏览器插件：** 2026-10-14 的 ADR-0055 §决策 4 为了「关于页显示源码地址」
+> 特意不引 `url_launcher`（可复制文本就够了）。`java.openUrl` 不同：它是**书源规则**要真的把用户
+> 带到站外（上游 `JsExtensions.kt:1162-1185` 先弹确认页再开浏览器），可复制文本不构成实现；
+> 拒绝它意味着这类源只能靠用户手动抄地址。确认弹窗由本仓自己画，`url_launcher` 只负责最后一步。
+
+**2026-10-27 增量（移动端导出与日志分享，ADR-0083）：** `dependencies` 新增
+`share_plus ^13.3.1`（**BSD-3-Clause**，Flutter Community 维护；Android `ACTION_SEND` /
+iOS `UIActivityViewController`），带入 `share_plus_platform_interface ^7.2.0`（同许可）与
+`mime` / `cross_file` / `file` / `url_launcher_*` / `ffi` / `web` / `win32` 等已在基线内的
+传递依赖。`dart run tool/scan_licenses.dart` 复算：**212 包 / BSD-3 123 / MIT 56 / Apache 18 /
+BSD-2 6 / MPL 1 / SDK 8，Risky items: none**。GPL / LGPL / AGPL / 无许可证 / 未识别仍为 0；
+MPL 白名单仍只有 `enough_convert`。它只在 `core/platform/` 的 `FileSharer` 适配器里引用，
+不申请任何存储权限，也不改变日志仍留在应用私有目录这一事实。
+
 **直接依赖明细：**
 
 | 依赖 | 版本 | 许可证 |
@@ -226,6 +270,9 @@ GPL / AGPL / 无许可证 / 未识别仍为 0；MPL 白名单仍只有 `enough_c
 | `flutter_tts` | 4.2.5 | MIT |
 | `media_kit` | 1.2.6 | MIT |
 | `media_kit_libs_windows_audio` | 1.0.9 | MIT（随包 libmpv / FFmpeg 动态库：LGPL-2.1+，手工登记） |
+| `pointycastle` | 4.0.0 | MIT |
+| `url_launcher`（+ 6 个平台实现） | 6.3.2 | BSD-3-Clause |
+| `share_plus`（+ 1 个平台接口包） | 13.3.1 | BSD-3-Clause |
 | `flutter_inappwebview` | 6.1.5 | Apache-2.0 |
 | `mocktail`（dev） | 1.0.5 | MIT |
 | `flutter` / `flutter_localizations` / `flutter_test` / `integration_test`（SDK） | 3.47.7 | BSD-3-Clause（Flutter SDK） |
@@ -260,9 +307,9 @@ dart run tool/scan_licenses.dart --list     # 额外逐包打印分类，便于�
    > **禁止把 `3. Neither the name` 当作特征串。** Dart 官方包把 BSD 第三条写成项目符号
    > `* Neither the name`；用带序号的形式只能匹配到极少数包。2026-10-11 实测：101 个包含
    > BSD 特征串，其中 95 个含第三条（仅 `cascadia` 用带序号写法），6 个不含（`sqflite*` 系列）。
-4. **计数校验：** 各许可证数量之和必须等于 `pubspec.lock` 的包数（当前 95 + 37 + 10 + 6 = 148，
-   加 8 个 Flutter SDK 自带包 = 156）。重扫后与 §5 的基线**逐项 diff**：有差异时先判断是
-   “新增/升级依赖”还是“分类规则变了”，后者必须先修规则再回写基线。
+4. **计数校验：** 各许可证数量之和必须等于 `pubspec.lock` 的包数（当前基线以 §5 最后一条增量为准）。
+   重扫后与 §5 的基线**逐项 diff**：有差异时先判断是“新增/升级依赖”还是“分类规则变了”，
+   后者必须先修规则再回写基线。
 5. 出现 GPL 系 / 无许可证文件 / 无法识别任一情况时，**先开 ADR 再决定**是否引入；
    MPL 系先查 `tool/scan_licenses.dart` 的 `_mplAllowList`：不在名单里就是风险项（退出码非 0），
    加入名单必须同时写 ADR（首例 ADR-0048）并更新本节基线。
@@ -271,4 +318,4 @@ dart run tool/scan_licenses.dart --list     # 额外逐包打印分类，便于�
 
 ---
 
-**最后更新：** 2026-10-21
+**最后更新：** 2026-10-27

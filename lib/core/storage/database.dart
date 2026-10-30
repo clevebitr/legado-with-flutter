@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/storage/cookies.dart';
 import 'package:flutter_reader/core/storage/read_records.dart';
 import 'package:flutter_reader/core/storage/rules.dart';
 import 'package:flutter_reader/core/storage/source_checks.dart';
+import 'package:flutter_reader/core/storage/source_variables.dart';
 
 part 'database.g.dart';
 
@@ -24,6 +25,7 @@ part 'database.g.dart';
     ReadRecords,
     Cookies,
     Rules,
+    SourceVariables,
   ],
 )
 class ReaderDatabase extends _$ReaderDatabase {
@@ -31,7 +33,7 @@ class ReaderDatabase extends _$ReaderDatabase {
   ReaderDatabase(super.e);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -116,6 +118,24 @@ class ReaderDatabase extends _$ReaderDatabase {
           await m.create(cacheEntriesSource);
         }
         await delete(cacheEntries).go();
+      }
+      // v12 新增每源变量表（ADR-0076 §决策 1）：只建表与索引，既有行不动。
+      if (from < 12) {
+        await m.createTable(sourceVariables);
+        if (!await _hasSchemaObject(sourceVariablesSource.entityName)) {
+          await m.create(sourceVariablesSource);
+        }
+      }
+      // v13 给书源加「登录头」列（M25/S3b）：`source.putLoginHeader` 写下的请求头，按源存一份。
+      // 迁移测试会以「目标版本」为参数跑到中间版本，所以这里必须两头都判：只判 `from` 会把
+      // 新列加进 v12 及更早的库，与对应 schema 比对时多出一列。
+      if (from < 13 && to >= 13) {
+        await _addColumnIfMissing(m, bookSources, bookSources.loginHeader);
+      }
+      // v14 给书架加「用户写的简介」列（M33，ADR-0092）：`intro` 仍是书源快照，用户编辑过的简介
+      // 单独存，重新加入书架时不会被刷新掉。
+      if (from < 14 && to >= 14) {
+        await _addColumnIfMissing(m, books, books.customIntro);
       }
     },
   );

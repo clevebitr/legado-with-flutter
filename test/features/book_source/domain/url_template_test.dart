@@ -19,13 +19,15 @@ import '../../../support/fake_log_printer.dart';
 /// Renders [template] with [params] and returns both the result and the records.
 ({String url, List<String> warnings}) _render(
   String template,
-  Map<String, String> params,
-) {
+  Map<String, String> params, {
+  int? page,
+}) {
   final ({AppLogger logger, FakeLogPrinter printer}) captured = _logger();
   final String url = renderUrlTemplate(
     template,
     params,
     logger: captured.logger,
+    page: page,
   );
 
   return (
@@ -169,6 +171,96 @@ void main() {
       expect(result.warnings, hasLength(1));
       expect(result.warnings.single, contains('one'));
       expect(result.warnings.single, contains('two'));
+    });
+  });
+
+  group('renderPageList', () {
+    test('renderPageList_givenAPageInsideTheList_answersThatEntry', () {
+      // 上游 `pagePattern`：`<1,2,3>` 按页码取第 n 个（AnalyzeUrl.kt:203-213）。
+      expect(
+        renderPageList('https://a.test/<1,2,3>.html', 2),
+        'https://a.test/2.html',
+      );
+      expect(
+        renderPageList('https://a.test/<1,2,3>.html', 1),
+        'https://a.test/1.html',
+      );
+    });
+
+    test('renderPageList_givenAPagePastTheEnd_answersTheLastEntry', () {
+      expect(
+        renderPageList('https://a.test/<1,2,3>.html', 9),
+        'https://a.test/3.html',
+      );
+      // `page < size` 的上游判据让「正好等于长度」也落到末项。
+      expect(
+        renderPageList('https://a.test/<1,2,3>.html', 3),
+        'https://a.test/3.html',
+      );
+    });
+
+    test('renderPageList_givenNoPageOrNoList_leavesTheUrlAlone', () {
+      expect(
+        renderPageList('https://a.test/<1,2,3>.html', null),
+        'https://a.test/<1,2,3>.html',
+      );
+      expect(
+        renderPageList('https://a.test/list.html', 2),
+        'https://a.test/list.html',
+      );
+    });
+
+    test('renderUrlTemplate_givenAPageList_rendersThePageEntry', () {
+      // `{{}}` 先展开、页码列表后展开（上游 replaceKeyPageJs 的同一顺序）。
+      final ({String url, List<String> warnings}) rendered = _render(
+        'https://a.test/<1,2,3>/s?q={{key}}&p={{page}}',
+        <String, String>{'key': 'x', 'page': '7'},
+        page: 2,
+      );
+
+      expect(rendered.url, 'https://a.test/2/s?q=x&p=7');
+    });
+  });
+
+  group('encodeUrlQuery', () {
+    test('encodeUrlQuery_givenADeclaredCharset_escapesTheWholeQuery', () {
+      // 上游 `analyzeQuery`：声明 charset 的 GET 把**整条 query** 按该编码转义，而不只是 `{{key}}`。
+      expect(
+        encodeUrlQuery('https://a.test/s?q=剑来&p=2', 'gbk'),
+        'https://a.test/s?q=%BD%A3%C0%B4&p=2',
+      );
+    });
+
+    test('encodeUrlQuery_givenASpace_escapesItAsAPercentEscape', () {
+      // query 编码走 `encodeQueryParams`：空格是 `%20`，不是表单的 `+`。
+      expect(
+        encodeUrlQuery('https://a.test/s?q=a b', 'utf-8'),
+        'https://a.test/s?q=a%20b',
+      );
+    });
+
+    test('encodeUrlQuery_givenAnAlreadyEncodedQuery_keepsIt', () {
+      expect(
+        encodeUrlQuery('https://a.test/s?q=%E5%89%91%E6%9D%A5', 'gbk'),
+        'https://a.test/s?q=%E5%89%91%E6%9D%A5',
+      );
+    });
+
+    test('encodeUrlQuery_withoutACharsetOrQuery_leavesTheUrlAlone', () {
+      expect(
+        encodeUrlQuery('https://a.test/s?q=剑来', null),
+        'https://a.test/s?q=剑来',
+      );
+      expect(encodeUrlQuery('https://a.test/s', 'gbk'), 'https://a.test/s');
+      expect(encodeUrlQuery('https://a.test/s?', 'gbk'), 'https://a.test/s?');
+    });
+
+    test('encodeUrlQuery_givenTheEscapeDialect_keepsTheUrl', () {
+      // `escape` 是上游另一套方言（`EncoderUtils.escape`），本仓没建模：原样返回并只编码 `{{key}}`。
+      expect(
+        encodeUrlQuery('https://a.test/s?q=剑来', 'escape'),
+        'https://a.test/s?q=剑来',
+      );
     });
   });
 

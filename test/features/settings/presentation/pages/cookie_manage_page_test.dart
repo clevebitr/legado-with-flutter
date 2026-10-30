@@ -150,10 +150,17 @@ void main() {
         _FakeStore(<StoredCookie>[_cookie('a.test', 't', expiresAt: expiry)]),
       );
 
+      // 页面用平台短日期 + 时间格式化（不带毫秒），测试按同一套本地化算期望值。
+      final DateTime local = expiry.toLocal();
+      final MaterialLocalizations material = MaterialLocalizations.of(
+        tester.element(find.byType(CookieManagePage)),
+      );
+      final String moment =
+          '${material.formatShortDate(local)} '
+          '${material.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
+
       expect(
-        find.textContaining(
-          _l10n(tester).cookieManageExpiresAt(expiry.toLocal().toString()),
-        ),
+        find.textContaining(_l10n(tester).cookieManageExpiresAt(moment)),
         findsOneWidget,
       );
     });

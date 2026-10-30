@@ -4,6 +4,7 @@ import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/platform/source_check_notification.dart';
 import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_check_settings.dart';
@@ -97,7 +98,14 @@ class SourceCheck extends _$SourceCheck {
   void cancel() => _cancellation?.cancel();
 
   /// Checks [sources] and writes every verdict back; an empty list does nothing.
-  Future<void> start(List<StoredBookSource> sources) async {
+  ///
+  /// [notification] is the localized text of the system notification (Android); without it the run
+  /// stays in-app only. The port is fire-and-forget: a notification that cannot be shown must never
+  /// slow the check down or fail it.
+  Future<void> start(
+    List<StoredBookSource> sources, {
+    SourceCheckNotificationText? notification,
+  }) async {
     if (state.isRunning || sources.isEmpty) {
       return;
     }
@@ -122,6 +130,11 @@ class SourceCheck extends _$SourceCheck {
     );
     final int workers = budget < 1 ? 1 : budget;
 
+    final SourceCheckNotification port = ref.read(
+      sourceCheckNotificationProvider,
+    );
+    final int total = sources.length;
+
     await ref.read(longRunningTaskProvider).acquire();
     try {
       var next = 0;
@@ -132,6 +145,7 @@ class SourceCheck extends _$SourceCheck {
             return;
           }
           await _check(index, sources[index], state.settings, cancellation);
+          _reportProgress(port, notification, total);
         }
       }
 
@@ -143,7 +157,46 @@ class SourceCheck extends _$SourceCheck {
       await ref.read(longRunningTaskProvider).release();
       _cancellation = null;
       state = state.copyWith(isRunning: false);
+      if (notification != null) {
+        final int succeeded = state.entries
+            .where(
+              (SourceCheckEntry entry) =>
+                  entry.status == SourceCheckStatus.succeeded,
+            )
+            .length;
+        unawaited(
+          port.showFinished(
+            text: notification,
+            succeeded: succeeded,
+            failed: state.entries.length - succeeded,
+          ),
+        );
+      }
     }
+  }
+
+  /// Pushes the batch's current position to the system notification, if one is asked for.
+  void _reportProgress(
+    SourceCheckNotification port,
+    SourceCheckNotificationText? notification,
+    int total,
+  ) {
+    if (notification == null) {
+      return;
+    }
+    final SourceCheckEntry? current = state.entries
+        .where(
+          (SourceCheckEntry entry) => entry.status == SourceCheckStatus.running,
+        )
+        .firstOrNull;
+    unawaited(
+      port.showProgress(
+        text: notification,
+        sourceName: current?.name ?? '',
+        completed: state.completed,
+        total: total,
+      ),
+    );
   }
 
   Future<void> _check(

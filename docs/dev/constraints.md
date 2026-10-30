@@ -65,7 +65,7 @@ class BookSourceList extends _$BookSourceList {
 | C-ERR-2 | 禁止裸 `catch`；必须 `on <具体异常类型>`，并转换为 `ParseFailure`。由 lint `avoid_catches_without_on_clauses` 强制。**边界补充（放宽点的依据见 ADR-0002 的 2026-10-11 修订注记）：** 只有 `presentation/` 的 Notifier 兜底允许 `on Exception`（不给更具体的类型），且必须立即转为失败状态并记录日志，不得吞掉；`domain/` 的引擎与 UseCase 仍必须捕获具体类型；`Error` 在任何位置都不得捕获（ADR-0022）。**扩展规则：** 本边界只覆盖 `presentation/` 的 Notifier；将来 `data/` 层若也需兜底，必须新增 ADR，不得就地放宽。**已批准的例外（唯一一处）：** `CacheDaoCharsetCache._absorb` 可在具名 catch 后追加 `on Exception`，吸收 drift **未导出**的 `ConnectionClosedException`（端口契约为 total）——理由、约束与日落条件见 **ADR-0033**；其他位置照抄即违规。 |
 | C-ERR-3 | 禁止空 catch 块；异常必须被处理或向上传递。 |
 | C-ERR-4 | 跨 `await` 使用 `BuildContext` 前必须检查 `mounted`（`use_build_context_synchronously`）。 |
-| C-ERR-5 | 禁止 `print()`；统一使用 `core/logging` 暴露的 Logger（`logger` 包封装，见 ADR-0006）。 |
+| C-ERR-5 | 禁止 `print()`；统一使用 `core/logging` 暴露的 Logger（`logger` 包封装，见 ADR-0006）。日志**行格式**由 `LineLogPrinter` 固定为「一条记录一行、无 ANSI / 无盒线」，改格式属于改规范（ADR-0084）。 |
 | C-ERR-6 | 所有 `Future` 必须被 `await`、`.then`、或 `unawaited()` 显式处理（`unawaited_futures`）。 |
 | C-ERR-7 | `ParseFailure` 必须携带 `ParseFailureKind` 与结构化参数；**禁止在失败对象中存放用户可见中文文案**，文案由 UI 层经 l10n 映射。 |
 | C-ERR-8 | 失败日志必须包含书源 ID 与目标 URL/参数摘要；**禁止**记录页面正文、Cookie 与 Token。 |
@@ -205,7 +205,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 | C-SEC-1 | 禁止硬编码 API Key、Token、密码；必须经安全存储或 `--dart-define` 注入。 |
 | C-SEC-2 | 所有网络请求必须使用 HTTPS；明文 HTTP 仅在用户显式允许时可用，且必须隔离为独立设置项。 |
 | C-SEC-3 | 书源 JS 必须在沙箱中执行，仅暴露白名单 API（C-SRC-3）。 |
-| C-SEC-4 | 日志与崩溃上报禁止包含 Cookie、Token、请求头与页面正文。 |
+| C-SEC-4 | 日志与崩溃上报**不记录**请求头（`Cookie` / `Authorization`）与页面正文（调用方不得把它们交给日志）；其余内容（URL、搜索关键词、异常原文）**原样记录、不脱敏**（ADR-0082）。 |
 | C-SEC-5 | 导入外部书源 JSON 必须校验结构并限制文件体积；禁止一次性读入超大文件。 |
 
 ---
@@ -278,7 +278,7 @@ Future<ParseResult<BookInfo>> fetchBookInfo(String url) async {
 - [ ] 通用能力放入 `core/`，未跨 feature import 内部文件（C-ARCH-2）？
 - [ ] 状态管理为 Riverpod 且 Provider 全部由 `@riverpod` 生成（C-STATE-1/2）？
 - [ ] 失败路径返回 `ParseResult`，未裸 `catch`，未吞异常（C-ERR-1/2/3）？
-- [ ] 未使用 `print`；日志未泄露 Cookie / Token / 正文（C-ERR-5、C-SEC-4）？
+- [ ] 未使用 `print`；日志没有把请求头（`Cookie` / `Authorization`）或页面正文交出去（C-ERR-5、C-SEC-4、ADR-0082）？
 - [ ] 跨 `await` 使用 `context` 前检查了 `mounted`（C-ERR-4）？
 - [ ] 网络请求经 `core/network/HttpClient`，未直接 import `dio`/`http`（C-NET-1）？
 - [ ] 编码经 `betto_charset_detector` 检测；缓存带 TTL 与稳定缓存键（C-NET-3/6）？

@@ -29,6 +29,7 @@
 | `docs/dev/tech-stack.md` | 新增依赖、改 lint、改国际化配置时 |
 | `docs/dev/architecture.md` | 新增文件、feature、Provider、路由时 |
 | `docs/dev/book-source.md` | 任何书源解析、规则引擎、JS 桥接改动 |
+| `docs/dev/engine-parity.md` | 改引擎前：这一项与上游差在哪、去哪个切片、是否已有意登记（ADR-0078） |
 | `docs/dev/testing.md` | 写测试、改 CI、修门禁失败时 |
 | `docs/dev/test-environment.md` | 在本机跑设备级测试、搭建 Windows/Android 测试环境、排查模拟器与设备问题时 |
 | `docs/dev/platform.md` | 涉及 Android / iOS / Windows 差异的代码 |
@@ -39,8 +40,10 @@
 
 ---
 
-## 3. 工作流（每次任务都走完五步）
+## 3. 工作流（先定位，再走五步）
 
+0. **定位** — 只在唯一的 `dev` 工作树（本机路径见 ADR-0079 §本机现状）上开发，提交落在 `dev`
+   分支；不新开 `git worktree`。规则只有一处：`CONTRIBUTING.md` §4.1（ADR-0079）。
 1. **读** — 按上表读取相关文档；不确定归属时先通读 `docs/dev/constraints.md`。
 2. **判** — 确定改动落在哪一层（`presentation` / `domain` / `data` / `core`），
    是否需要新依赖、新生成物、跨平台适配，是否需要新增 ADR。

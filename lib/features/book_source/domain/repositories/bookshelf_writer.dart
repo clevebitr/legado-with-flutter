@@ -76,8 +76,11 @@ final class ShelfMembership {
   /// Creates a membership snapshot.
   const ShelfMembership({
     required this.onShelf,
+    this.id,
     this.groupId,
     this.customCoverPath,
+    this.customIntro,
+    this.progressChapterName,
     this.groups = const <ShelfGroupOption>[],
   });
 
@@ -87,11 +90,23 @@ final class ShelfMembership {
   /// Whether the book has a shelf row at all.
   final bool onShelf;
 
+  /// The shelf row's id, or `null` when [onShelf] is false; editing the details needs it.
+  final int? id;
+
   /// The group the row is in, or `null` for 「未分组」.
   final int? groupId;
 
   /// Absolute path of the user's own cover, or `null` when the source's cover is shown.
   final String? customCoverPath;
+
+  /// The introduction the user wrote, or `null` to show the source's (M33, ADR-0092).
+  final String? customIntro;
+
+  /// The chapter the user stopped at, or `null` when the row has no progress yet.
+  ///
+  /// A source switch from the detail page aligns to this chapter name so the reader continues where
+  /// the user left off instead of jumping back to chapter one.
+  final String? progressChapterName;
 
   /// Every group the book could be moved into.
   final List<ShelfGroupOption> groups;
@@ -127,6 +142,22 @@ abstract interface class BookshelfWriter {
   Future<ParseResult<void>> resetCustomCover({
     required String sourceUrl,
     required String bookUrl,
+  });
+
+  /// Rewrites the identity of the shelf row `(sourceUrl, bookUrl)` after a source switch.
+  ///
+  /// A no-op (still a success) when the book is not on the shelf. The row's id is kept, so its
+  /// reading progress and user state follow the switched book (ADR-0051 §决策 3).
+  Future<ParseResult<void>> migrateIdentity({
+    required String sourceUrl,
+    required String bookUrl,
+    required String newSourceUrl,
+    required String newBookUrl,
+    required String newTocUrl,
+    required String newName,
+    String? newAuthor,
+    String? newCoverUrl,
+    String? newLastChapter,
   });
 }
 
@@ -204,6 +235,30 @@ final class UnboundBookshelfWriter implements BookshelfWriter {
       const ParseFailure<void>(
         kind: ParseFailureKind.unsupportedRule,
         rulePath: 'shelf.writer.cover',
+      ),
+    );
+  }
+
+  @override
+  Future<ParseResult<void>> migrateIdentity({
+    required String sourceUrl,
+    required String bookUrl,
+    required String newSourceUrl,
+    required String newBookUrl,
+    required String newTocUrl,
+    required String newName,
+    String? newAuthor,
+    String? newCoverUrl,
+    String? newLastChapter,
+  }) {
+    _logger.warning(
+      'No BookshelfWriter is bound: migrating the shelf identity did nothing.',
+    );
+
+    return Future<ParseResult<void>>.value(
+      const ParseFailure<void>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: 'shelf.writer.migrateIdentity',
       ),
     );
   }

@@ -89,6 +89,7 @@ final class _Harness {
       isPinned: true,
       groupId: groupId,
       customCoverPath: '/covers/jianlai.jpg',
+      customIntro: '我改过的简介',
     );
     await books.upsertProgress(
       sourceUrl: 'https://a.example',
@@ -259,7 +260,19 @@ void main() {
       },
     );
 
-    test('restore_givenLocalEdits_keepsThemAndNeverDeletesRows', () async {
+    test('roundTrip_carriesTheUsersOwnIntro', () async {
+      // `custom_intro` 是用户态（M33，ADR-0092）：导出→清库→恢复必须把它带回来，否则
+      // 「我刚改好的简介」会在换机时消失。
+      final BackupContents before = await source.repository.collect();
+      expect(before.tables[BackupTable.books]!.single['customIntro'], '我改过的简介');
+
+      await target.repository.restore(before);
+
+      final BackupContents after = await target.repository.collect();
+      expect(after.tables[BackupTable.books]!.single['customIntro'], '我改过的简介');
+    });
+
+    test('restore_givenALocalEdits_keepsThemAndNeverDeletesRows', () async {
       final BackupContents before = await source.repository.collect();
       await target.repository.restore(before);
 

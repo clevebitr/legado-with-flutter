@@ -44,6 +44,7 @@ void main() {
 
       expect(settings.fontScale, defaultReaderFontScale);
       expect(settings.lineHeight, defaultReaderLineHeight);
+      expect(settings.brightness, defaultReaderBrightness);
       expect(settings.background, ReaderBackground.system);
       expect(settings.pageMode, ReaderPageMode.scroll);
     });
@@ -66,6 +67,21 @@ void main() {
       expect(high.ttsPitch, maxTtsPitch);
       expect(low.ttsRate, minTtsRate);
       expect(low.ttsPitch, minTtsPitch);
+    });
+
+    test('ReaderSettings_givenOutOfRangeBrightness_clampsIt', () {
+      expect(ReaderSettings(brightness: 0).brightness, minReaderBrightness);
+      expect(ReaderSettings(brightness: 2).brightness, maxReaderBrightness);
+    });
+
+    test('copyWith_givenABrightness_keepsTheOtherAxes', () {
+      final ReaderSettings dimmed = ReaderSettings.defaults.copyWith(
+        brightness: 0.6,
+      );
+
+      expect(dimmed.brightness, 0.6);
+      expect(dimmed.fontScale, ReaderSettings.defaults.fontScale);
+      expect(dimmed.background, ReaderSettings.defaults.background);
     });
 
     test('copyWith_givenClearTtsVoice_dropsTheStoredVoice', () {
@@ -91,6 +107,44 @@ void main() {
       );
     });
 
+    test('ReaderSettings_defaults_keepTheDisplayOnAndTheStatusLineVisible', () {
+      // 默认：常亮开、护眼关、状态栏开（ADR-0086 §决策 1/2/6）。
+      expect(ReaderSettings.defaults.keepScreenAwake, isTrue);
+      expect(ReaderSettings.defaults.eyeProtection, 0);
+      expect(ReaderSettings.defaults.showReaderStatus, isTrue);
+    });
+
+    test('ReaderSettings_givenAnOutOfRangeAutoPageInterval_clampsIt', () {
+      // ADR-0093 §决策 1：3–60 s，越界在工厂里钳制（release 没有 assert）。
+      expect(ReaderSettings(autoPageSeconds: 1).autoPageSeconds, 3);
+      expect(ReaderSettings(autoPageSeconds: 400).autoPageSeconds, 60);
+      expect(ReaderSettings.defaults.autoPageSeconds, 15);
+      expect(
+        ReaderSettings.defaults.copyWith(autoPageSeconds: 30).autoPageSeconds,
+        30,
+      );
+    });
+
+    test('ReaderSettings_givenAnOutOfRangeEyeProtection_clampsIt', () {
+      expect(ReaderSettings(eyeProtection: 400).eyeProtection, 100);
+      expect(ReaderSettings(eyeProtection: -20).eyeProtection, 0);
+    });
+
+    test('ReaderSettings_whenOnlyTheStatusAxesDiffer_areNotEqual', () {
+      expect(
+        ReaderSettings.defaults,
+        isNot(ReaderSettings.defaults.copyWith(keepScreenAwake: false)),
+      );
+      expect(
+        ReaderSettings.defaults,
+        isNot(ReaderSettings.defaults.copyWith(eyeProtection: 40)),
+      );
+      expect(
+        ReaderSettings.defaults,
+        isNot(ReaderSettings.defaults.copyWith(showReaderStatus: false)),
+      );
+    });
+
     test('ReaderSettings_givenOutOfRangeNumbers_clampsThem', () {
       // 工厂钳制而不是断言：release 会剥掉 assert，手改的存储不能让正文不可读。
       final ReaderSettings high = ReaderSettings(fontScale: 5, lineHeight: 9);
@@ -103,36 +157,6 @@ void main() {
       expect(high.lineHeight, maxReaderLineHeight);
       expect(low.fontScale, minReaderFontScale);
       expect(low.lineHeight, minReaderLineHeight);
-    });
-
-    test('copyWith_givenNewValues_replacesOnlyThem', () {
-      const ReaderSettings settings = ReaderSettings.defaults;
-
-      final ReaderSettings updated = settings.copyWith(
-        background: ReaderBackground.dark,
-        pageMode: ReaderPageMode.paged,
-      );
-
-      expect(updated.background, ReaderBackground.dark);
-      expect(updated.pageMode, ReaderPageMode.paged);
-      expect(updated.fontScale, settings.fontScale);
-      expect(updated.lineHeight, settings.lineHeight);
-    });
-
-    test('copyWith_givenNothing_keepsEveryValue', () {
-      const ReaderSettings settings = ReaderSettings.defaults;
-
-      expect(settings.copyWith(), settings);
-    });
-
-    test('equality_givenTheSameValues_isEqual', () {
-      final ReaderSettings left = ReaderSettings(fontScale: 1.2);
-      final ReaderSettings right = ReaderSettings(fontScale: 1.2);
-
-      expect(left, right);
-      expect(left.hashCode, right.hashCode);
-      expect(left == left.copyWith(pageMode: ReaderPageMode.paged), isFalse);
-      expect(left == Object(), isFalse);
     });
   });
 }

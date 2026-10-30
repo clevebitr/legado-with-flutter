@@ -2,6 +2,7 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/chapter_content.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/chapter_request.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/explore_category.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/source_debug.dart';
@@ -255,7 +256,7 @@ final class RunSourceDebug {
 
     run.source(chapterUrl);
     // 控制台只给一个 URL：书名 / 章节名留空，规则会回落到书源变量。
-    final ParseResult<String> result = await _content.execute(
+    final ParseResult<ChapterContent> result = await _content.execute(
       source,
       ChapterRequest(url: chapterUrl),
     );
@@ -264,13 +265,15 @@ final class RunSourceDebug {
     }
 
     return switch (result) {
-      ParseFailure<String>(
+      ParseFailure<ChapterContent>(
         :final ParseFailureKind kind,
         :final String rulePath,
       ) =>
         run.fail(kind, rulePath: rulePath),
-      ParseSuccess<String>(:final String data) => run.finish(
-        'content: chars=${data.length}',
+      ParseSuccess<ChapterContent>(:final ChapterContent data) => run.finish(
+        'content: chars=${data.body.length}'
+        '${data.title == null ? '' : ' title=${data.title}'}'
+        '${data.lyric == null ? '' : ' lyric=${data.lyric!.length}'}',
       ),
     };
   }

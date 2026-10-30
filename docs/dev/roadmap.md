@@ -55,6 +55,7 @@ Phase 6    发布前                          清单见 §5
 | M16 — 漫画引擎 | 🚧 落地中：M-1–M-3 ✅；设备级实跑与真源抽查未闭环（见 §3.10） |
 | M18–M21 — UI 对齐（外壳/书架/规则/数据） | 🚧 M18 已落地（U1–U3）；M19–M21 未开工（见 `docs/dev/ui-gap.md` 与 §3.11） |
 | M17 — 听书与音频 | ⏳ 未开工（已交给另一个代理；判断归 ADR-0054） |
+| M25–M27 — 引擎对齐上游 + 高性能 | 🚧 M25 进行中：S1 `jsLib` ✅、S2 阶段字段族（目录四字段 + `bookUrlPattern` + `subContent`/`title`）✅；缺口清单唯一出处 `docs/dev/engine-parity.md`，切片进度只看 `todo` |
 | Phase 6 — 发布前 | ⏳ 未开始（清单见 §5） |
 
 > 步骤级「下一步」不写在此处，由 `todo` 工具决定。
@@ -106,7 +107,7 @@ Phase 6    发布前                          清单见 §5
 #### 5.2 正文缓存（✅ 已完成，2026-10-14）
 
 > `ContentCache` 端口（`domain/`）+ `CacheDao` 适配器（复用其键形状与
-> 过期列：`ruleField=content`、`page=1`、TTL = `chapterCacheTtl` 半天）；`FetchContent` 命中即跳过整个
+> 过期列：`ruleField=content`、`page=1`、TTL = `chapterCacheTtl`（M38 起因用户在架永久 / 非在架 3 天，ADR-0097））；`FetchContent` 命中即跳过整个
 > 引擎（**一个请求都不发**）、只缓存成功结果；缓存失败由**唯一**豁免点 `absorbCacheFailure` 吸收
 > （ADR-0033 的修订注记），端口保持 total。
 > 验收：命中 / 过期 / 另一书源同 URL / 读失败 / 写失败各 ≥1 条单测，另有「同一章节两次只请求一次」。
@@ -428,7 +429,152 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 > 恢复完成后经 `RestoreCompletionHook` 让 `Settings` 与阅读设置重新读盘。
 > **未做（登记在 §3.7）：** WebDAV、自动备份与保留份数、覆盖式恢复、备份加密、读上游 zip。
 
+> **M25–M27 立项（2026-10-26，ADR-0078，`DECISIONS.md` #35–#37）：** 引擎目标从「真实语料可用」升级为
+> 「与上游几乎一致 + 高性能」，允许重构内核。**本仓不在这里维护缺口清单**：逐项证据、本仓现状、语料命中与去向
+> 全部在 `docs/dev/engine-parity.md`（唯一）；本节只留里程碑口径：
+>
+> - **M25 对齐（`#35`）**：切片 S1 `jsLib` → S2 阶段字段族（`subContent`/`title`/`payAction`/`callBackJs`/
+>   `formatJs`/`isVolume`/`isPay`/`preUpdateJs`/`downloadUrls`/`bookUrlPattern`/目录去重）→ S3a 密钥类 crypto 与字节族（已落地）/ S3b 绑注入面
+>   → S4 URL 方言五条 + 列表尾部 `@js:` → S5 矩阵 #20/#21/#22/#30 → S6 非文本链路与正文 HTML → S7 文档收敛。
+> - **M26 性能（`#36`）**：P1–P6 指标 + `tool/bench` 基准；重构面 R1–R5（规则编译缓存、共享 `RuleScope`、
+>   批量提取、翻页并发、JS 编译缓存）；红线与 JS 配额不动。
+> - **M27 收口（`#37`）**：L1/L2 语料普查填「语料命中」列、L1 逐源四段归因、差异三选一登记、
+>   新增门禁 G1（§11 拒绝名单 ↔ `__javaRejectedNames`）与 G2（矩阵「已确认」行表驱动查漏）。
+>
+> 出口判据（不许放宽）：`engine-parity.md` 无未标注去向的行 + 文档三处（`book-source.md` §2 未建模字段、
+> §3 矩阵状态列、§11 拒绝清单）与代码逐条一致。
+
+> **M26-R1 基线记录（2026-10-28）：** 基准脚本 `tool/bench/bench.dart` + `tool/bench/README.md`（口径、
+> 复现、P4/P5/P6 的接法），改前数字写进 `engine-parity.md` §11。P1 p50 **6.31 ms**（初值 40）、
+> P2 千章 CSS 形态 **17.76 ms**（初值 300）、线性度每章 16.6→18.6 µs、P3 **0%**（无编译缓存）。
+> 为让 P3 可测，`RuleEngine` 加了只读的 `compileStats`（计数落在 `_parseForEvaluation` 接缝上，
+> R1 的缓存就插在那里），单测把「改前 lookups == compilations」钉住。**用户裁决：阈值维持初值，
+> M26 的验收改用「同一命令的改前/改后差值」**——原因与两条读数（提取占 P1 的 57%、条目字段占 P2 的 69%）
+> 记在 ADR-0078 的实现注记里。
+
+> **M26-R1 落地记录（2026-10-28）：** 规则编译缓存（`_parse` 按规则文本、`_check` 按
+> `(文本, hasExtraction, field)`，LRU 256 / 512）。**P3 0.0% → 99.7%**（lookups 1200 / compilations 4）；
+> **P2 千章目录 17.76 → 12.76 ms（−28%）**，其中条目字段 −39%；P1 6.31 → 6.17 ms（−2.2%，符合预期）。
+> 结论：P2 剩下的空间在**选择器求值**本身 → R3；`field` 进键是 C-SRC-8 的要求，不是实现细节。
+> 同批记下 `--release` 产物 `exit()` 卡死（`tool/bench` 改成「构建 + 直接跑产物」，退出码不作判据）。
+
+> **M26 量出 P5/P6（2026-10-28，未优化）：** `RuleEngine.inlineStats` + bench 的 `--only=p5/p6`；
+> `tool/spot_check` 结束打印 `rules:` / `nested:` 两行（语料侧 P3 命中率与 P5 内联覆盖率在 M27/L1 取）。
+> **P5 job 往返 p50 2.83–3.03 ms**（目标 ≤3，**唯一压线项**）、内联覆盖字面量写法 100%；**P6 单章 1.06 MB /
+> 千章 1.55 MB 首次**（目标 8 / 32，一个量级余量）。判断：R5 省的是 job 固定成本的一段，**先分段量再动手**。
+
+### 3.12 M29–M33 — 换源重构与浏览体验（2026-10-29 立项）
+
+> **起因（用户报障，2026-10-29）：** ①换源经常提示「其他书源没有这本书」，实测有的源书名规则取不到标题；
+> ②换源搜完才给结果、过程中没有任何进度，像死锁；③换源不能选章节；④不能选书源分组/范围；
+> ⑤搜索结果里「朝花夕拾 / 4 个来源」只能打开第一个来源；⑥发现页只有列表；⑦书架不能编辑书名/作者等详情。
+>
+> **决策摘要：** `DECISIONS.md` #74–#78（用户已裁决 UI 形态与字段范围）。**UI 缺口编号：** `ui-gap.md` §3 的 P1.5（U20–U23）。
+> 本节只放批次、契约与出口；规则语义仍归 `book-source.md`，UI 约束仍归 `constraints.md` §6。
+
+| 里程碑 | 范围 | 新增契约 / 数据 | 出口（验收） |
+|---|---|---|---|
+| **M29 — 换源内核** | 渐进式候选搜索：按范围并发、进度事件、暂停/停止、`校验作者`/`加载详情`/`加载目录`/`字数` 四个开关；无名命中修复（#75） | 规格 **ADR-0091**（换源契约）；`readBooks` 无名警告；`searchBookKeyOf` 空名回落 URL；新用例 `ChangeSourceSearch` | 单测：进度事件序列单调、范围解析（all/groups/sources）、空书名回落作者、作者过滤、取消后保留已得结果、每源结果流式产出 |
+| **M30 — 换源 UI** | 全屏两步页：源列表（关键词/范围/进度/选项/开始-暂停-停止）→ 章节列表（自动对齐 + 改选 + 确认换源 + 提交中进度）；详情页与阅读器两个入口 | `AppNavigation.openChangeSource` 新端口方法 + primitive 结果 DTO；`book_source` 的 `ChangeSourcePage`；旧 `ChangeBookSourceSheet`/`ReaderSourceSheet` 退役 | Widget 测试：未点「开始搜索」不发请求、进度条与计数可见、点源后才出章节、确认后落盘迁移（进度/分组/置顶/状态/自定义封面）；双端实跑 |
+| **M31 — 搜索选源** | 合并条目保留每源快照；点条目弹「来源选择」sheet，按所选源打开详情（#76） | `SearchBook.hits`（每源快照）；merger 保留；`search_books_page` 选源 sheet | Widget：4 来源条目弹出 4 行、选中第 3 个源打开的是该源的书、来源已删除给提示而不是打开错书 |
+| **M32 — 发现页布局** | 列表 / 网格切换 + 网格列数 1–10 + 横竖屏分别记忆（#77） | preferences 两键（layoutState / gridCount），无 DB 变化 | Widget：切换生效、列数记忆、横竖屏各记各的；双端实跑 |
+| **M33 — 书架编辑** | 编辑书名 / 作者 / 封面 / 简介（#78） | `books.custom_intro`（schemaVersion 13 → 14）+ 备份 `books` 表新字段，规格 **ADR-0092** | 迁移测试 + dump；Widget：保存后书架与打开的阅读器都换用新标题；备份导出→恢复往返含 `custom_intro` |
+
+**顺序：** M29 → M30 同属一个特性的两个检查点（先契约后 UI，陷阱 §6 #4）；M31 / M32 / M33 相互独立，
+可按用户反馈换序。M33 是唯一带 DB 迁移的一批，若与 M22 系列（备份/主题）同时改 `books` 表需先合并计划。
+
+**开工前置：** 先 `ls docs/dev/adr/` 核对编号（陷阱 §6 #11）再写 ADR-0091 / 0092；M31/M32 无新表，契约写进
+ADR-0091 的「候选与合并快照」一节，不单独开 ADR。
+
+**出口门禁：** `AGENTS.md` §4 全绿 + 双端 `integration_test`（G7）+ 双语 ARB + 三条真机复跑：换源能出候选、
+无名书仍能换源、搜索到确认的全过程都有进度可见。
+
+> **M29 落地记录（2026-10-29，ADR-0091，`DECISIONS.md` #79）：** 新增 `book_source/domain/usecases/change_source_search.dart`
+> （渐进候选：每源一份快照进度、沿用并发与单源预算、暂停/取消保留已得、匹配分档 exact/partial/authorOnly）；
+> `readBooks` 书名缺失改为节流告警（`rulePath=<规则集>.name`）且命中仍保留；`SearchBookKey` 空名回落 URL，
+> `SearchBook.hits` 保留每源快照（M31 的数据面就位）；`SwitchBookSource.candidates` 改为它的薄封装，
+> 详情页把 `author` 一并传入（无标题时按作者搜）。**口径：选项收敛为三个**（校验作者/加载详情/加载目录），
+> 上游的「字数」登记为有意不做（触发 = 用户要求候选显示字数）。
+> **未做（移交 M30）：** 换源页/进度 UI、章节选择、范围偏好独立存储、阅读器端口扩展（`authorOf`）。
+
+> **M30 落地记录（2026-10-29，ADR-0091 §决策 1/1b）：** 新增 `book_source/presentation/pages/change_source_page.dart`
+> （全屏两步：关键词 / 范围 chip / 三个开关 / 进度条 + 「已处理·已找到·失败」/ 开始·暂停·停止 → 点源后同页切章节，
+> 自动对齐高亮 + 改选 + 「确认换源」）；状态在 `ChangeSourceController`（`@riverpod` 家族，按 `ChangeSourceTarget`
+> 做 key，离开即销毁）；范围换成**独立 store**（`bookSource.changeSourceScope`）并把范围选择器抽成共享组件
+> `source_scope_sheet.dart`（搜索页与换源页同一份，`sourceScopeLabel` 也只此一处）。入口两条：详情页直接
+> `MaterialPageRoute` push，阅读器经新增端口 `AppNavigation.openChangeSource`（`ChangeSourceLaunch` →
+> `ChangeSourceOutcome`，都是 `core/router/change_source_contract.dart` 里的原语），身份迁移与选中书源在装配根完成，
+> 阅读器就地重定位。**删除**：`ChangeBookSourceSheet` / `ReaderSourceSheet` / `BookSourceSwitcher` 端口及两个测试；
+> `SwitchBookSource` 收敛为纯映射（`withChapters` / `alignChapterIndex`）。
+> 牙：换源页四条 Widget 用例（首帧零请求、开始后进度与候选、点源后章节 + 选中章作为结果返回、范围里没有可搜源）。
+> **M30 形态修订（2026-10-30，ADR-0091 §决策 1b）：** 用户要求「阅读页里弹出 box 换源，而不是单独一页，功能不变」。
+> 全屏页 `ChangeSourcePage` 删除，改成 `ChangeSourceSheet`（`showChangeSourceSheet`，0.92 屏高、两步同层切换），
+> 详情页与阅读器**同一个弹层**；路由登记与 `architecture.md` §6 的那条例外一并撤回。
+> 同时修真机日志里的崩溃：`ChangeSourceController` 关掉后 `await` 回来仍写已被销毁的 provider
+> （`UnmountedRefException` / ERROR CRASH）→ `ref.onDispose` 取消 + 每个 `await` 后判 `ref.mounted`，
+> 回归用例把请求按在闸门上再关 sheet。
+
+> **M31 落地记录（2026-10-29，ADR-0091 §决策 6）：** 新增 `widgets/search_source_sheet.dart`：合并行点开后列出
+> **每个来源自己的快照**（源名 + 作者 · 最新章 + 封面），被删除的源保留但禁用并标注「该书源在此期间被删除了」。
+> 只有 1 个来源时不弹 sheet（多一次点击没有意义），仍是原来的直达路径；选中哪个源就切到哪个源再推详情页，
+> 地址与作者/封面/最新章都取该源的快照（`SearchBook.hits`），**不重新发请求**。
+> 牙：搜索页 Widget 用例「两个源命中同一本书 → 来源数 2 → 点开弹 sheet → 选第二个源 → 详情页按 b.test 请求」。
+
+> **M32 落地记录（2026-10-29，`DECISIONS.md` #77）：** 发现页支持**列表 / 网格**两种布局（AppBar 切换按钮），
+> 网格列数 1–10 由底部滑块调整、**横竖屏分别记忆**；偏好走新端口 `ExploreLayoutStore`（键
+> `bookSource.exploreIsGrid` / `explorePortraitColumns` / `exploreLandscapeColumns`，缺省 3 / 7），
+> 实体 `ExploreLayout` 在构造处做 1–10 钳制（release 无 assert，存坏值不能让 `GridView` 抛）。
+> 网格项 = 封面（`LayoutBuilder` 取格子尺寸，不写死像素）+ 标题两行 + 作者，点击与列表同一路径（推详情页）。
+> 牙：发现页 Widget 三条（切到网格并落盘、偏好为网格时打开即网格、拖到 10 列只改竖屏那一份）。
+
+> **M33 落地记录（2026-10-29，ADR-0092，`DECISIONS.md` #78）：** `books.custom_intro`（schemaVersion 13→14，
+> `_addColumnIfMissing` 可重入 + `drift_schema_v14.json` + `generated_migrations/schema_v14.dart` + v13→v14 迁移用例）；
+> 仓储新增一次写入 `updateDetails(id, name, author, customIntro)`；备份 `books` 表多一个 `customIntro` 键（旧备份缺键按 null，
+> 合并语义不回滚）；`ShelfMembership` 增 `id` / `customIntro`，详情页简介改成「用户写的优先」并多一个「编辑」按钮
+> （经新端口 `AppNavigation.openShelfBookEdit` 进 `bookshelf` 的编辑页）；书架行菜单多一项「编辑书籍」。
+> 编辑页 = 封面（换/清除，各自立即落盘）+ 书名（空值拒绝保存）+ 作者 + 简介（留空 = 回到书源简介）。
+> 牙：迁移 15 条全绿、仓储 `updateDetails` 两条、备份 `roundTrip_carriesTheUsersOwnIntro`、编辑页 Widget 三条
+> （空书名拦下 / 三个字段写入 / 留空存 null）。
+
+### 3.13 M34–M35 — 补齐阅读面（自动翻页、阅读内净化开关）
+
+> 起因：2026-10-30 与上游阅读面逐项对照，登记为缺口的两项；规格 ADR-0093 / ADR-0094。
+> 两项都不动数据库：M34 是阅读轴 + 命令对象，M35 是一个端口 + 一张面板。
+
+| 里程碑 | 范围 | 契约 / 数据 | 出口（验收） |
+|---|---|---|---|
+| **M34 — 自动翻页** | 间隔轴（3–60 s，默认 15）+ 工具条开关 + 六条停止条件；分页翻一页 / 滚动翻一屏 | ADR-0093；`ReaderSettings.autoPageSeconds` + prefs 键；`ReaderPageTurn` 命令对象 | 单测：轴 clamp 与往返；页面级三条（一拍翻页、点正文停止、滚动模式滚一屏） |
+| **M35 — 阅读内净化开关** | 工具条入口 → 净化面板：列出替换规则并逐条开关；切换后重读本书已缓存的正文 | ADR-0094；`PurgeRuleSwitches` 端口（list / setEnabled），装配根绑到 `rules` 仓储 + `contentCache.clearForBook` | 面板四条 Widget（列表状态、写这本、端口拒绝、空态）；阅读页「点按钮开面板」 |
+
+**登记未做（本轮不动）：** 音量键/自定义翻页键位、日夜自动切换、目录按卷折叠、字体导入、进度实时云同步、
+换源「作为新书添加 / 冲突处理」、翻译与 AI（后者按 ADR-0086 裁决不做）。
+
+### 3.14 M36–M37 — 目录按卷折叠与键盘翻页
+
+> 起因：`roadmap.md` §3.13 末尾登记的未做清单里，这两项不需要平台通道、也不动数据；规格 ADR-0095 / ADR-0096。
+
+| 里程碑 | 范围 | 契约 / 数据 | 出口（验收） |
+|---|---|---|---|
+| **M36 — 目录按卷折叠** | `isVolume` 章节渲染为可折叠组头（点击只折叠、不跳转），搜索忽略折叠，倒序仍整表反转 | ADR-0095；无新数据 | 目录 sheet 三条（组头分组且不回调、折叠只隐藏本卷、搜索忽略折叠） |
+| **M37 — 键盘翻页** | 桌面端 →/↓/PageDown/Space 翻页、←/↑/PageUp 回页；按键先停自动翻页 | ADR-0096；`ReaderPageTurn` 带方向；**Android 音量键登记未做** | 页面级两条（右箭头翻一页、左箭头回一页） |
+
+**登记未做（继续留在清单里）：** Android 音量键与自定义键位（要平台通道与冲突处理）、日夜自动切换、
+字体导入、进度实时云同步、换源「作为新书添加 / 冲突处理」、翻译与 AI（后者按 ADR-0086 裁决不做）。
+
+### 3.15 M38 — 正文缓存寿命与预取顺序（ADR-0097）
+
+> 起因：用户要求「进入阅读页就缓存后面 15 章；默认 3 天清；加入书架后一直保留到用户清这本书的缓存」。
+
+| 范围 | 决策 | 出口（验收） |
+|---|---|---|
+| 缓存寿命 | `chapterCacheTtl` 12 h → **3 天**；**在架书**写入 `persistent`（哨兵过期时间），判定在装配根的正文端口查一次书架行并经 `ChapterRequest.persistCache` 透传；查询每次做，避免一条错判成永久的条目赖着不走；清除仍只有「本书缓存 / 全量清理」两条路 | 缓存适配器两条（永久条目跨 10 天仍命中且不被 `clearExpired` 清掉 / 普通条目 3 天后未命中）+ `FetchContent` 透传一条 |
+| 预取顺序 | 「最近优先」改为**后 15 章优先**（`+1…+15`，再 `−1…−15`）；半径 ±15 与串行不变（修订 ADR-0088 §决策 2 的顺序） | 阅读页预取用例改成前向优先（前向递增、回翻整段排在前向之后） |
+
 ### 3.7 未闭环交接登记（不得静默丢弃）
+
+> **范围分界（ADR-0078 §决策 2）：** 「引擎与上游 Legado 的行为差距」这一族（规则语法、书源/阶段字段、
+> JS 绑定、URL 方言、非文本书源）的唯一清单是 `docs/dev/engine-parity.md`；本节保留其余跨 feature 的
+> 未闭环节点，并对已迁走的引擎项只留一行回链（如 `downloadUrls` / `isVolume` 那一条）。
 
 > 已闭环 / 已否决的登记项（并发上限 3、M1 #15–#19、规则变量不落盘、`ruleBookInfo.init` 未应用、b1b 首版
 > 返工与真源回归、`{{…}}` 内 `##`、JSONPath `]name`、charset 结果缓存、`bookSourceType=4`、`java.*` 兼容面…）
@@ -441,12 +587,15 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | `updateTime` 的展示（列表 / 详情 / 目录） | ✅ **已闭环（5.3，2026-10-21）**：三处都显示规则原文，空值不显示（`bookSourceUpdateTimeLine`） |
 | 阅读进度的字符偏移是**按比例估算**（滚动或分页比例 × 正文长度），不是字符级锚点 | **未做（5.3 登记，ADR-0044 §决策 4）**：精确锚点要把锚点写进章节模型并版本化。触发 = 用户反馈「同一章重进后位置偏很多」 |
 | 分页模式的**断点**取 `TextPainter` 右下角文本位置，落点不是行首时整页会少排半行 | **同上**（同一触发条件） |
-| 分页模式**不跨章连续翻页**：章末给显式的「下一章」页 | **未做（5.3 登记，ADR-0044 §决策 4）**：跨章翻页要预取全部正文。触发 = 用户反馈「翻到章末还得点一下」 |
+| 阅读器**不跨章连续**：滚动模式滑到章末就是结尾，分页模式未预取时章末给「下一章」按钮页 | ✅ **已闭环（2026-10-28，ADR-0085）**：两种模式都改成跨章接流（相邻章正文在同一份阅读流里，缺正文的邻章给占位并自动接力，失败可重试），章末不再需要点「下一章」 |
+| 相邻章的**预加载章数可配**（上游 `preDownloadNum` / `preDownloadNumPrev`，`0` = 该方向不预取） | 数值已定：**两侧各 15 章**（ADR-0088，用户裁决），队列化串行预取；**设置面仍未做**（没有开关、没有滑块）。触发 = 有人要改这个数或想关掉预取 |
 | 阅读器 UI 的 **Golden 基线**（`testing.md` §5） | **单独 PR**（5.3 验收明写；本轮不做，避免把 Golden 资产塞进功能 PR） |
+| 阅读器的**偏移坐标空间**：会话 / 书签存的是**排版后**正文（加了首行缩进与段距空行、删了重复标题）的偏移，书内搜索命中给的是**源站原文**的偏移，两者相差一个排版变换的量 | **未做（ADR-0087 §后果）**：跳过去时落点会偏几行（比例估算，ADR-0044 §决策 4）。触发 = 用户反馈「书内搜索 / 书签跳过去位置不对」——正解是把偏移统一到源站原文空间，在页表里做一次映射 |
+| 滚动模式的**章节占位条**只出现在锚点章之后（上一章要正文到手才进窗口） | **有意差异（ADR-0087 §决策 2）**：上一章的会长高的占位条正是「滚动时字在跳」的来源。触发 = 用户要求「往上滑也能看到上一章正在加载」——届时占位页要预置固定高度，不能靠「排完再换」 |
 | 聚合搜索的结果**不落库**（上游把 `SearchBook` 写进数据库以复用搜索历史） | **未做（3.8 登记，ADR-0046 §后果）**：M11 只做内存合并。触发 = 用户要求「搜索历史 / 收藏搜索结果」，届时加表 + 迁移 |
 | 音频 / 图片 / 视频 / 文件源**只能被搜索的类型过滤排除**，本仓没有它们的链路（阅读器只读文本） | **未做（ADR-0046 §决策 2 的有意差异）**：类型筛选默认只选文本，界面上可以把它们打开但打开后没有可读页面。触发 = 真的要支持非文本书源 |
 | `java.get('bookName' / 'title')` 的上游特例（`AnalyzeRule.kt:812-821`） | ✅ **已闭环（M12，2026-10-21）**：`ChapterRequest` 替代裸 URL，`JsJob` 携带两个内置键且**先于**变量表（ADR-0049 §决策 1/2）；阅读器 / 校验 / 目录都接线并有测试 |
-| `downloadUrls` / `relatedBooks`；`isVolume` / `formatJs` / `preUpdateJs` | **均未做**：`isVolume` 一族已裁决本阶段不做（ADR-0041 §决策 6）；`downloadUrls` 属批量下载面、`relatedBooks` 无语料证据。触发 = 5.10 校验或入库工具普查出真实需求；未建模期间**不得**声称支持（清单归 `book-source.md` §2 注记） |
+| `downloadUrls` / `relatedBooks`；`isVolume` / `formatJs` / `preUpdateJs` | **已并入 M25 切片 S2/S6（ADR-0078，`DECISIONS.md` #35）**：清单与现状归 `docs/dev/engine-parity.md` §2/§3；本节不再重复。触发 = 用户裁决引擎对齐（已触发） |
 | `checkKeyWord`（书源校验 / 调试的默认关键词） | ✅ **已闭环（5.10，2026-10-21）**：`SearchRule.checkKeyWord` 已建模，「像规则」判据 = `resolveCheckKeyword` / `looksLikeRule`（ADR-0043 §决策 2） |
 | 并发上限接入用户设置时必须**显式校验 / 钳制 `> 0`**（今天只有 `assert`，release 会剥掉；`0` = 永久排队） | ✅ **已闭环（5.6，2026-10-21）**：`budgetOrDefault` 在 release 也生效（`<= 0` 回落默认 + warning），设置页的下限也是 1 |
 | `httpClientProvider` 是 autoDispose，预算挂在实例上 ⇒ 跨操作会重建 | ✅ **已闭环（5.6）**：改 `keepAlive`，预算跨操作保持一份（批量下载因此不必另起机制） |
@@ -454,8 +603,9 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | 按书源清理缓存（给 `cache_entries` 加列 + 迁移） | ✅ **已闭环（M22-a，2026-10-25，ADR-0072 §决策 1）**：v10 给缓存加 `source_key` + 索引（升级时顺带清空旧缓存），「我的 → 缓存管理」按源列章数、可清理该源 / 过期 / 全部 |
 | 每书源 **Cookie 隔离**（本仓的 Cookie 罐按域共享） | **未做（ADR-0072 §决策 2）**：M22-a 先把「能看能删」做出来，共享语义保持不变。触发 = 出现「两个源同域但需要不同会话」的真实需求 |
 | 页面请求的 job 里读不到 `source.getLoginInfo*` | **未做（M22-a，ADR-0072 实现注记）**：登录信息只喂给登录自己的 job；要一路传到 `PageFetchService` 造的每个 job 上。触发 = 出现「`loginCheckJs` / 字段规则里读登录信息」的真实源 |
-| `java.upLoginData`（脚本动态改登录表单）与 `source.putLoginHeader`（脚本改登录头） | **未做（ADR-0072）**：前者要 UI 与沙箱双向通道，后者要新增「按源的登录头」存储。触发 = 出现只能用它们的真实源 |
-| 登录信息（`login_info`）**明文存库** | **登记差异（ADR-0072 §决策 3）**：与 v8 起明文存的 Cookie 同级；触发 = 引入 `flutter_secure_storage` 或系统密钥库封装时一并改。另：`source.putLoginHeader` / `java.upLoginData` 仍未实现 |
+| `java.upLoginData`（脚本动态改登录表单） | **未做（ADR-0072）**：要 UI 与沙箱的双向通道。触发 = 出现只能用它的真实源 |
+| **HttpTTS 源**（网络朗读：独立源表 + url/contentType/concurrentRate 规则面 + `speakText`/`speakSpeed` 绑定） | **未做（M25/S3b 裁决，2026-10-26）**：本仓只有系统 TTS（`flutter_tts`），`java.speakText` / `speakSpeed` 因此**不绑定**（规则读到会 `ReferenceError`，不是恒空值）。触发 = 用户要求接入云端 TTS 书源 |
+| 登录信息（`login_info`）与登录头（`login_header`）**明文存库** | **登记差异（ADR-0072 §决策 3）**：与 v8 起明文存的 Cookie 同级；触发 = 引入 `flutter_secure_storage` 或系统密钥库封装时一并改。登录头本身已落地（M25/S3b：`source.putLoginHeader` / `getLoginHeader` + 请求头与 Cookie 合并，见 `book-source.md` §6）；`java.upLoginData` 仍未实现 |
 | 备份的**自动执行**与 **WebDAV** 上传/下载 | ✅ **已闭环（M22-c，2026-10-25，ADR-0074 §决策 2/6）**：启动时 1 天节流 + 保留份数 N（N=1 即上游 `onlyLatestBackup`）；WebDAV 四条动作（PROPFIND/PUT/GET/DELETE）与远端保留份数，凭据在系统密钥库 |
 | 备份的**覆盖式恢复**与「恢复前自动备份」 | ✅ **已闭环（M22-c，ADR-0074 §决策 3）**：一个事务里清空七张表再写入；覆盖前先写时间戳安全副本，写不出来就中止 |
 | 备份**加密** | ✅ **已闭环（M22-c，ADR-0074 §决策 4）**：整包 WinZip AES-256（`archive` 自带，无新密码学依赖），口令存系统密钥库；无口令时先判「加密包」再报 `passwordRequired` |
@@ -480,8 +630,12 @@ M19/M21 之后，U17（RSS）/U18（AI 翻译）**不排期**（新产品线，�
 | `webView` / `webJs` / `retry` 等 URL 选项字段 | ✅ **已闭环（M21a，ADR-0068 §决策 6/8）**：`webView`（GET/POST）+ `webViewDelayTime` + `webJs` + `overrideUrlRegex` + `retry`（≤3）+ `readTimeout`（≤120 s）；`proxy` / `dnsIp` / `callTimeout` / `HEAD` / `encodedForm` 仍按名记 `unsupported`（§决策 8 登记） |
 | 过人机验证（可见 WebView、图片验证码、`loginCheckJs`） | ✅ **已闭环（M21a 第二刀，2026-10-24）**：可见 WebView 页 + 图片验证码 + `java.startBrowser*` / `getVerificationCode` / `webView*` + Cookie v8 持久化与双向同步 + 三个登录源字段 + `loginCheckJs` **响应拦截器** + 书源管理的「登录 / 过验证」入口 + `sourceRegex` / `bodyJs`（ADR-0068 及其增补）。**未做**：原生 `loginUi` 表单（归 M21b/U15）、字体反爬（见下一行） |
 | 字体反爬 `queryTTF` / `queryBase64TTF` / `replaceFont` | ✅ **已闭环（M21a 第三刀，2026-10-24）**：零新依赖，自研 `cmap`（format 0/4/6/12）+ `post` 2.0 解析，字形名优先、字形 id 兜底，字体以不透明句柄随 job 存活；`queryTTF(url)` 走新加的字节门并返回 Promise。`getFontGlyph` 上游并不存在，未实现（ADR-0068 增补决策 9） |
-| 图片源兼容面（ADR-0069）：URL 规则里的 `{{非 JS 规则}}`（G2）、封面 / 图片的 per-URL header、`imageStyle` 的 `left`/`right`/居中分支 | **大部分闭环（ADR-0069 及其 2026-10-24 增补）**：G1/G3/G4/G5/G7/G8 已修，设备日志取证后又修了 **G9**（`contentRule.content` 是单值读取：多匹配用换行拼成 `result`，`extractJoined`）、**G10**（默认 UA 对齐上游桌面 Chrome）、**G11**（`exploreUrl` 的空 URL 条目是分组标题，保留成不可点标签）、**G12**（HTTP 失败日志带 `type`/`status`，不再只有脱敏的 `DioException`）。剩 G2（URL 规则里的非 JS `{{…}}`）与 per-URL header、`imageStyle` 对齐分支，触发条件见 ADR-0069「登记差异」 |
-| 同步 `java.post/get/ajax` 响应对象（G6） | **登记不做（ADR-0069）**：沙箱是独立 isolate，阻塞不了宿主；规则要改成 `await http.post(...)`。触发 = 出现只能靠同步响应对象、改写不了的真实源 |
+| 图片源兼容面（ADR-0069）：URL 规则里的 `{{非 JS 规则}}`（G2）、封面 / 图片的 per-URL header、`imageStyle` 的 `left`/`right`/居中分支 | **大部分闭环（ADR-0069 及其 2026-10-24 增补）**：G1/G3/G4/G5/G7/G8 已修，设备日志取证后又修了 **G9**（`contentRule.content` 是单值读取：多匹配用换行拼成 `result`，`extractJoined`）、**G10**（默认 UA 对齐上游桌面 Chrome）、**G11**（`exploreUrl` 的空 URL 条目是分组标题，保留成不可点标签）、**G12**（HTTP 失败日志带 `type`/`status`，不再只有 `DioException` 的类型名；脱敏本身已随 ADR-0082 取消）。剩 G2（URL 规则里的非 JS `{{…}}`）与 per-URL header、`imageStyle` 对齐分支，触发条件见 ADR-0069「登记差异」 |
+| 同步 `java.post/get/ajax` 响应对象（G6） | ✅ **已闭环（M24，2026-10-26，ADR-0076 §决策 1）**：重放层（取页缓存 + 从头重跑，pass 上限 16）让 `java.ajax` / `java.post` / `java.head` / `java.getCookie` / `cookie.*` 值上同步；`java.get(url)` / `ajaxAll` / `connect` 仍具名拒绝（名字被规则变量占用 / 无真实需求），清单归 `book-source.md` §11 |
+| 重放层的**非幂等规则**会被重复执行（每趟重跑都会重做副作用） | **有意代价（M24，ADR-0076 §后果）**：pass 上限 16 + `js:replay` 报错兜底。触发 = 出现真实源因副作用重放而拿到错结果，届时给「同 job 内 `java.put` 之外的写」加一次性门闩 |
+| 每源变量表（`source_variables`）在**删除书源**时不清理 | **未做（M24）**：孤儿行无害，且「同一个源重新导入后变量还在」更接近上游语义（`BaseSource.getVariableMap` 随源走）。触发 = 用户要求「删源就忘掉它的登录态 / token」 |
+| 重放时**同步取页的时间不计入脚本 CPU 预算**，且每趟重跑重新拥有一次「每规则调用额度」 | **有意差异（M24，ADR-0076 §决策 1）**：预算是给 CPU 的（同 ADR-0068 §决策 5 对人机验证的口径），额度的单位因此是「一趟」而不是「一个 job」。触发 = 出现「靠反复重放拖时间」的真实源 |
+| `java.setContent` 只影响**同一 job 内后续**的 `java.getString*` / `parse.*`，首参字面量的 `java.getString` 因此看不到它 | **登记差异（M24，ADR-0076 §决策 3）**：字面量首参由引擎在 job 之前内联（ADR-0037 §决策 3①）。触发 = 出现「先 setContent 再写字面量规则」的真实源 |
 | 替换净化规则的已知差异：`@js:` 替换表达式、正则超时、上游的逐行 trim | **大部分闭环（M23，ADR-0071 §决策 5）**：`@js:` 替换已实现（一条规则一章**一个** job，`timeoutMs` 作为该 job 的上限）；剩**正则**规则没有超时（Dart `RegExp` 无此 API，只做上游那两条静态拦截）与上游的逐行 trim（已裁定属阅读器排版） |
 | 净化规则的**分组**（上游 `group`）只保存不展示，也没有按组筛选 | **未做（M23）**：payload 已建模 `group` 并随导入导出往返；列表仍是单一顺序。触发 = 规则超过几十条后用户要求分组 |
 | **标题**净化只覆盖阅读器一侧 | **有意差异（M23，ADR-0071 §决策 4）**：目录 sheet / 正文头 / 进度名 / 搜索命中同一份净化后的标题；书源详情页的目录预览与书架「最新章节」读的是 `book_source` 的目录缓存，保持原样。触发 = 用户反馈两处标题不一致 |

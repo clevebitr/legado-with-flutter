@@ -28,8 +28,12 @@ void main() {
       final ReaderSettings settings = ReaderSettings(
         fontScale: 1.4,
         lineHeight: 2,
+        brightness: 0.6,
         background: ReaderBackground.sepia,
         pageMode: ReaderPageMode.paged,
+        keepScreenAwake: false,
+        eyeProtection: 40,
+        showReaderStatus: false,
       );
 
       await repository.save(settings);
@@ -78,6 +82,25 @@ void main() {
 
       expect(settings.fontScale, maxReaderFontScale);
       expect(settings.lineHeight, minReaderLineHeight);
+    });
+
+    test('load_givenAnOutOfRangeBrightness_clampsIt', () async {
+      final ReaderSettingsRepositoryImpl repository = await _repository(
+        <String, Object>{'reader.brightness': 0.1},
+      );
+
+      expect((await repository.load()).brightness, minReaderBrightness);
+    });
+
+    test('save_whenCalled_roundTripsTheAutoPageInterval', () async {
+      // ADR-0093 §决策 1：间隔是一条阅读轴，与字号/行距同一套持久化。
+      final ReaderSettingsRepositoryImpl repository = await _repository();
+
+      await repository.save(
+        ReaderSettings.defaults.copyWith(autoPageSeconds: 42),
+      );
+
+      expect((await repository.load()).autoPageSeconds, 42);
     });
 
     test('load_givenAnUnknownEnumIndex_fallsBackToTheDefault', () async {

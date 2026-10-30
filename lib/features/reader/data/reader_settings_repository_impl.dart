@@ -14,6 +14,12 @@ const String _lineHeightKey = 'reader.lineHeight';
 /// `shared_preferences` key of the background palette index.
 const String _backgroundKey = 'reader.background';
 
+/// `shared_preferences` key of the auto-page interval, in seconds (ADR-0093).
+const String _autoPageSecondsKey = 'reader.autoPageSeconds';
+
+/// `shared_preferences` key of the in-page dimming overlay brightness.
+const String _brightnessKey = 'reader.brightness';
+
 /// `shared_preferences` key of the page mode index.
 const String _pageModeKey = 'reader.pageMode';
 
@@ -44,6 +50,15 @@ const String _ttsVoiceLocaleKey = 'reader.ttsVoiceLocale';
 /// `shared_preferences` key of the “stop speech when leaving the reader” switch.
 const String _stopTtsOnExitKey = 'reader.stopTtsOnExit';
 
+/// `shared_preferences` key of the “keep the display on while reading” switch.
+const String _keepScreenAwakeKey = 'reader.keepScreenAwake';
+
+/// `shared_preferences` key of the warm filter strength.
+const String _eyeProtectionKey = 'reader.eyeProtection';
+
+/// `shared_preferences` key of the “show the status line” switch.
+const String _showReaderStatusKey = 'reader.showReaderStatus';
+
 /// [ReaderSettingsRepository] on top of [PreferenceStore] (`docs/dev/roadmap.md` 5.3, C-NET-9).
 ///
 /// Every read is defensive: an unknown enum index (a store written by a newer build, or a
@@ -59,6 +74,7 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
   Future<ReaderSettings> load() async => ReaderSettings(
     fontScale: _store.readDouble(_fontScaleKey) ?? defaultReaderFontScale,
     lineHeight: _store.readDouble(_lineHeightKey) ?? defaultReaderLineHeight,
+    brightness: _store.readDouble(_brightnessKey) ?? defaultReaderBrightness,
     background: _backgroundOf(_store.readInt(_backgroundKey)),
     pageMode: _pageModeOf(_store.readInt(_pageModeKey)),
     fontFamily: _fontFamilyOf(_store.readInt(_fontFamilyKey)),
@@ -70,6 +86,12 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     ttsVoiceName: _nonEmpty(_store.readString(_ttsVoiceNameKey)),
     ttsVoiceLocale: _nonEmpty(_store.readString(_ttsVoiceLocaleKey)),
     stopTtsOnExit: _store.readBool(_stopTtsOnExitKey) ?? true,
+    keepScreenAwake: _store.readBool(_keepScreenAwakeKey) ?? true,
+    eyeProtection:
+        _store.readInt(_eyeProtectionKey) ?? defaultReaderEyeProtection,
+    showReaderStatus: _store.readBool(_showReaderStatusKey) ?? true,
+    autoPageSeconds:
+        _store.readInt(_autoPageSecondsKey) ?? defaultReaderAutoPageSeconds,
   );
 
   @override
@@ -77,6 +99,7 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     // 存的是**钳制后**的值：读回来的永远是 UI 能表示的范围（与 `SettingsRepositoryImpl` 同口径）。
     await _store.writeDouble(_fontScaleKey, settings.fontScale);
     await _store.writeDouble(_lineHeightKey, settings.lineHeight);
+    await _store.writeDouble(_brightnessKey, settings.brightness);
     await _store.writeInt(_backgroundKey, settings.background.index);
     await _store.writeInt(_pageModeKey, settings.pageMode.index);
     await _store.writeInt(_fontFamilyKey, settings.fontFamily.index);
@@ -89,6 +112,10 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     await _store.writeString(_ttsVoiceNameKey, settings.ttsVoiceName ?? '');
     await _store.writeString(_ttsVoiceLocaleKey, settings.ttsVoiceLocale ?? '');
     await _store.writeBool(_stopTtsOnExitKey, settings.stopTtsOnExit);
+    await _store.writeBool(_keepScreenAwakeKey, settings.keepScreenAwake);
+    await _store.writeInt(_eyeProtectionKey, settings.eyeProtection);
+    await _store.writeBool(_showReaderStatusKey, settings.showReaderStatus);
+    await _store.writeInt(_autoPageSecondsKey, settings.autoPageSeconds);
   }
 
   /// Maps a stored index onto [ReaderFontFamily], defaulting when it names nothing.

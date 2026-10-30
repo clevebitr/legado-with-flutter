@@ -942,6 +942,34 @@ abstract class AppLocalizations {
   /// **'Took {millis} ms'**
   String bookSourceCheckElapsed(int millis);
 
+  /// Name of the Android notification channel used by the batch check.
+  ///
+  /// In en, this message translates to:
+  /// **'Book source check'**
+  String get bookSourceCheckNotificationChannel;
+
+  /// Title of the ongoing notification shown while a batch check runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking book sources'**
+  String get bookSourceCheckNotificationTitle;
+
+  /// Line of the ongoing check notification: the source being checked and the progress.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {completed}/{total}'**
+  String bookSourceCheckNotificationProgress(
+    String name,
+    int completed,
+    int total,
+  );
+
+  /// Text of the notification shown when a batch check finishes.
+  ///
+  /// In en, this message translates to:
+  /// **'Check finished: {succeeded} passed, {failed} failed'**
+  String bookSourceCheckNotificationFinished(int succeeded, int failed);
+
   /// Tooltip of the action that opens the debug console.
   ///
   /// In en, this message translates to:
@@ -1176,6 +1204,30 @@ abstract class AppLocalizations {
   /// **'Pages'**
   String get readerPageModePaged;
 
+  /// Reader setting: strength of the blue-light reducing filter over the page.
+  ///
+  /// In en, this message translates to:
+  /// **'Warm filter'**
+  String get readerEyeProtection;
+
+  /// Reader setting: whether the display stays awake while reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the screen on'**
+  String get readerKeepAwake;
+
+  /// Reader setting: the line at the bottom with chapter, progress, time and charge.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the status line'**
+  String get readerStatusLine;
+
+  /// Charge shown in the reader's status line.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% battery'**
+  String readerBatteryLevel(int percent);
+
   /// Action that opens the previous chapter.
   ///
   /// In en, this message translates to:
@@ -1188,11 +1240,17 @@ abstract class AppLocalizations {
   /// **'Next chapter'**
   String get readerNextChapter;
 
-  /// Shown on the last page of a chapter in paged mode.
+  /// Shown where a chapter that has not arrived yet will appear.
   ///
   /// In en, this message translates to:
-  /// **'End of this chapter'**
-  String get readerChapterEnd;
+  /// **'Loading…'**
+  String get readerChapterLoading;
+
+  /// Action that tries to read a neighbouring chapter again.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload this chapter'**
+  String get readerChapterRetry;
 
   /// Shown when the open chapter is the last one.
   ///
@@ -1764,6 +1822,30 @@ abstract class AppLocalizations {
   /// **'Check this source'**
   String get bookSourceRowCheck;
 
+  /// Row menu: opens the source's login page in the visible WebView.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in / pass check'**
+  String get bookSourceRowSignIn;
+
+  /// Snackbar after the login / verification page finished.
+  ///
+  /// In en, this message translates to:
+  /// **'The site\'s cookies are saved; the source can be checked again.'**
+  String get bookSourceSignInDone;
+
+  /// Snackbar when the login page failed for a reason other than the user closing it.
+  ///
+  /// In en, this message translates to:
+  /// **'The sign-in / verification did not finish.'**
+  String get bookSourceSignInFailed;
+
+  /// Snackbar when the platform cannot show a verification page.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no WebView; finish the check in the system browser first.'**
+  String get bookSourceSignInUnsupported;
+
   /// Row menu: opens the editor.
   ///
   /// In en, this message translates to:
@@ -2189,30 +2271,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.'**
   String get readerAudioPlainHttp;
-
-  /// Row menu: opens the source's login page in the visible WebView.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in / pass check'**
-  String get bookSourceRowSignIn;
-
-  /// Snackbar after the login / verification page finished.
-  ///
-  /// In en, this message translates to:
-  /// **'The site\'s cookies are saved; the source can be checked again.'**
-  String get bookSourceSignInDone;
-
-  /// Snackbar when the login page failed for a reason other than the user closing it.
-  ///
-  /// In en, this message translates to:
-  /// **'The sign-in / verification did not finish.'**
-  String get bookSourceSignInFailed;
-
-  /// Snackbar when the platform cannot show a verification page.
-  ///
-  /// In en, this message translates to:
-  /// **'This platform has no WebView; finish the check in the system browser first.'**
-  String get bookSourceSignInUnsupported;
 
   /// No description provided for @bookmarkTitle.
   ///
@@ -3653,6 +3711,384 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The background image could not be saved; try again.'**
   String get settingsBackgroundImageFailed;
+
+  /// No description provided for @externalLinkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open this address?'**
+  String get externalLinkTitle;
+
+  /// No description provided for @externalLinkFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'{source} wants to open this address in your browser:'**
+  String externalLinkFrom(Object source);
+
+  /// No description provided for @externalLinkOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get externalLinkOpen;
+
+  /// No description provided for @externalLinkCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get externalLinkCancel;
+
+  /// Log verbosity setting (ADR-0082).
+  ///
+  /// In en, this message translates to:
+  /// **'Log level'**
+  String get settingsLogLevel;
+
+  /// No description provided for @settingsLogLevelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Records below this level are dropped. Applies immediately.'**
+  String get settingsLogLevelHint;
+
+  /// No description provided for @settingsLogDebug.
+  ///
+  /// In en, this message translates to:
+  /// **'debug'**
+  String get settingsLogDebug;
+
+  /// No description provided for @settingsLogInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'info'**
+  String get settingsLogInfo;
+
+  /// No description provided for @settingsLogWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'warning'**
+  String get settingsLogWarning;
+
+  /// No description provided for @settingsLogError.
+  ///
+  /// In en, this message translates to:
+  /// **'error'**
+  String get settingsLogError;
+
+  /// No description provided for @settingsLogOff.
+  ///
+  /// In en, this message translates to:
+  /// **'off'**
+  String get settingsLogOff;
+
+  /// No description provided for @settingsDiagnostics.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics'**
+  String get settingsDiagnostics;
+
+  /// No description provided for @settingsLogFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Log files'**
+  String get settingsLogFiles;
+
+  /// No description provided for @settingsLogFilesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Kept for 7 days, at most 20 MB in total.'**
+  String get settingsLogFilesBody;
+
+  /// No description provided for @logFilesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Log files'**
+  String get logFilesTitle;
+
+  /// No description provided for @logFilesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No log file yet.'**
+  String get logFilesEmpty;
+
+  /// No description provided for @logFilesClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear every log file'**
+  String get logFilesClear;
+
+  /// No description provided for @logFilesCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted {count} file(s).'**
+  String logFilesCleared(int count);
+
+  /// No description provided for @logFilesCopyPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy the folder path'**
+  String get logFilesCopyPath;
+
+  /// No description provided for @logFilesCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Path copied.'**
+  String get logFilesCopied;
+
+  /// No description provided for @logFilesTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total: {size}'**
+  String logFilesTotal(String size);
+
+  /// List entry that opens the system share sheet with all log files (ADR-0083).
+  ///
+  /// In en, this message translates to:
+  /// **'Share every log file'**
+  String get logFilesShareAll;
+
+  /// Tooltip of the share button on one log file row.
+  ///
+  /// In en, this message translates to:
+  /// **'Share this file'**
+  String get logFilesShareFile;
+
+  /// Explains why the log folder needs a share action on Android.
+  ///
+  /// In en, this message translates to:
+  /// **'The folder is private to the app; sharing hands a copy to another app.'**
+  String get logFilesShareBody;
+
+  /// Snack bar shown when the system share sheet fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not share the log files.'**
+  String get logFilesShareFailed;
+
+  /// Label of the keyword field on the change-source page (defaults to the book title).
+  ///
+  /// In en, this message translates to:
+  /// **'Keyword'**
+  String get changeSourceKeyword;
+
+  /// The button that actually begins the change-source search; nothing runs before it is tapped.
+  ///
+  /// In en, this message translates to:
+  /// **'Start search'**
+  String get changeSourceStart;
+
+  /// Progress counter: how many candidate sources were found so far.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} found'**
+  String changeSourceFound(int count);
+
+  /// Switch: a candidate's author must contain this book's author.
+  ///
+  /// In en, this message translates to:
+  /// **'Check author'**
+  String get changeSourceCheckAuthor;
+
+  /// Switch: read each candidate's detail page (cover, latest chapter).
+  ///
+  /// In en, this message translates to:
+  /// **'Load details'**
+  String get changeSourceLoadInfo;
+
+  /// Switch: read each candidate's chapter list, which adds the chapter count.
+  ///
+  /// In en, this message translates to:
+  /// **'Load chapters'**
+  String get changeSourceLoadToc;
+
+  /// Idle state of the change-source page: no request has been sent yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a scope, then start the search.'**
+  String get changeSourceSearchPrompt;
+
+  /// Header of the second step: pick which chapter the reader continues from.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the chapter to align to'**
+  String get changeSourceChapterTitle;
+
+  /// Shown above the chapter list so the user knows what they are aligning from.
+  ///
+  /// In en, this message translates to:
+  /// **'Now reading: {chapter}'**
+  String changeSourceCurrentChapter(String chapter);
+
+  /// The chapter the automatic alignment picked, before the user changes it.
+  ///
+  /// In en, this message translates to:
+  /// **'Aligned to: {chapter}'**
+  String changeSourceAlignHint(String chapter);
+
+  /// The button that applies the switch and closes the page.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch source'**
+  String get changeSourceConfirm;
+
+  /// The picked source's chapter list came back empty.
+  ///
+  /// In en, this message translates to:
+  /// **'This source returned no chapters.'**
+  String get changeSourceNoChapters;
+
+  /// The scope resolved to zero searchable sources, so nothing was searched.
+  ///
+  /// In en, this message translates to:
+  /// **'No source in this scope can be searched.'**
+  String get changeSourceNoSources;
+
+  /// Title of the sheet that lists every source which found the same book; the chosen one decides which copy opens.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a source'**
+  String get searchSourceSheetTitle;
+
+  /// Tooltip of the discover page's layout toggle while the grid is shown: switch back to the list.
+  ///
+  /// In en, this message translates to:
+  /// **'List layout'**
+  String get exploreLayoutList;
+
+  /// Tooltip of the discover page's layout toggle while the list is shown: switch to the grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid layout'**
+  String get exploreLayoutGrid;
+
+  /// Title of the sheet that sets how many columns the grid uses in the current orientation.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid columns'**
+  String get exploreGridColumnsAction;
+
+  /// Slider label of the grid column count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} columns'**
+  String exploreGridColumnsValue(int count);
+
+  /// Action that opens the shelf's editor for one book, and the editor's own title.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit book'**
+  String get shelfEditTitle;
+
+  /// Form field: the book's title, which the user can correct.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get shelfEditName;
+
+  /// Validation message when the title field is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'A title is required.'**
+  String get shelfEditNameRequired;
+
+  /// Form field: the book's author.
+  ///
+  /// In en, this message translates to:
+  /// **'Author'**
+  String get shelfEditAuthor;
+
+  /// Form field: the user's own introduction, which wins over the source's synopsis.
+  ///
+  /// In en, this message translates to:
+  /// **'Introduction'**
+  String get shelfEditIntro;
+
+  /// Helper text under the introduction field.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to show the source\'s synopsis again.'**
+  String get shelfEditIntroHint;
+
+  /// Button that opens the image picker for the book's cover.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose cover'**
+  String get shelfEditCoverPick;
+
+  /// Button that removes the user's cover and falls back to the source's image.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the source\'s cover'**
+  String get shelfEditCoverReset;
+
+  /// Button that writes the edited details.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get shelfEditSave;
+
+  /// Confirmation after the edited details were written.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved.'**
+  String get shelfEditSaved;
+
+  /// Tooltip of the back arrow that returns from the chapter step to the candidate list.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get actionBack;
+
+  /// Tooltip of the toolbar toggle that starts reading on its own.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto page'**
+  String get readerAutoPageAction;
+
+  /// Tooltip of the same toggle while auto page is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop auto page'**
+  String get readerAutoPageStop;
+
+  /// Slider label of the auto-page interval (ADR-0093).
+  ///
+  /// In en, this message translates to:
+  /// **'Auto page interval: {seconds} s'**
+  String readerAutoPageInterval(int seconds);
+
+  /// Tooltip of the reader toolbar button that opens the replace-rule switches.
+  ///
+  /// In en, this message translates to:
+  /// **'Purge rules'**
+  String get readerPurgeAction;
+
+  /// Title of the in-reader replace-rule sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Purge rules'**
+  String get readerPurgeTitle;
+
+  /// Explains the scope of turning a replace rule on or off from inside the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes apply to every book and re-read this book\'s cached chapters.'**
+  String get readerPurgeHint;
+
+  /// Empty state of the in-reader purge sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'No replace rules yet. Add them under “Mine → Purge rules”.'**
+  String get readerPurgeEmpty;
+
+  /// Failure state of the in-reader purge sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the purge rules.'**
+  String get readerPurgeLoadFailed;
+
+  /// Snack bar shown when a rule write did not apply.
+  ///
+  /// In en, this message translates to:
+  /// **'The rule was not changed.'**
+  String get readerPurgeFailed;
 }
 
 class _AppLocalizationsDelegate

@@ -119,9 +119,10 @@ final class FetchAudioTracks {
             if (!_looksLikeAddress(value)) {
               // 真实源里 content 规则可能返回整页 HTML（`<js>result</js>` + webView 源）：
               // 那不是地址，交给播放器只会得到一条假 URL，甚至在 Windows 上崩掉原生插件。
-              _pages.warn(
+              _pages.warnThrottled(
+                'audio-not-url|${source.url}',
                 'Audio value skipped (not a URL): source=${source.url} '
-                'field=contentRule.content',
+                    'field=contentRule.content',
               );
               continue;
             }

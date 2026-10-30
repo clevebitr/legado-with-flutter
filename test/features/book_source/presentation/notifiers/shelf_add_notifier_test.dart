@@ -45,6 +45,19 @@ final class _RecordingWriter implements BookshelfWriter {
     required String sourceUrl,
     required String bookUrl,
   }) async => const ParseSuccess<void>(null);
+
+  @override
+  Future<ParseResult<void>> migrateIdentity({
+    required String sourceUrl,
+    required String bookUrl,
+    required String newSourceUrl,
+    required String newBookUrl,
+    required String newTocUrl,
+    required String newName,
+    String? newAuthor,
+    String? newCoverUrl,
+    String? newLastChapter,
+  }) async => const ParseSuccess<void>(null);
 }
 
 void main() {

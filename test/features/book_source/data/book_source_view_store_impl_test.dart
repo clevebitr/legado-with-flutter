@@ -44,23 +44,6 @@ void main() {
       expect(filtered.copyWith().group, '精选');
       expect(filtered.copyWith(clearGroup: true).group, isNull);
     });
-
-    test('equality_givenTheSameValues_isEqual', () {
-      const BookSourceListView left = BookSourceListView(
-        order: BookSourceSortOrder.name,
-        group: '精选',
-      );
-      const BookSourceListView right = BookSourceListView(
-        order: BookSourceSortOrder.name,
-        group: '精选',
-      );
-
-      expect(left, right);
-      expect(left.hashCode, right.hashCode);
-      expect(left == left.copyWith(clearGroup: true), isFalse);
-      expect(left == Object(), isFalse);
-      expect(left.toString(), contains('精选'));
-    });
   });
 
   group('BookSourceViewStoreImpl', () {

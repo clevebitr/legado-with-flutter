@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_settings.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_theme_mode.dart';
 import 'package:flutter_reader/features/settings/presentation/notifiers/settings_notifier.dart';
+import 'package:flutter_reader/features/settings/presentation/pages/log_files_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -20,12 +22,24 @@ import 'package:m3e_design/m3e_design.dart';
 ///
 /// The 「关于」 entry is deliberately absent: it belongs to 5.9's legal-notice page, and a menu
 /// row that opens nothing would be a dead end (C-BAN-2). The roadmap registers that split.
-class SettingsPage extends ConsumerWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   /// Creates the page.
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
+}
+
+/// State of the page: the in-flight text-scale preview.
+class _SettingsPageState extends ConsumerState<SettingsPage> {
+  /// The scale while the slider is being dragged; `null` means “show the stored value”.
+  ///
+  /// 拖动中的值只活在页面上，松手才落盘：每一帧都写 shared_preferences 会让全局主题
+  /// 随每像素重建，滑动看起来就是卡顿。
+  double? _fontScaleDrag;
+
+  @override
+  Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final M3ETheme tokens = context.m3e;
     final AsyncValue<AppSettings> settings = ref.watch(settingsProvider);
@@ -104,6 +118,20 @@ class SettingsPage extends ConsumerWidget {
           ref.read(settingsProvider.notifier).setAllowPlainHttp(allow),
         ),
       ),
+      _heading(l10n.settingsDiagnostics, tokens),
+      _logLevel(ref, settings, tokens, l10n),
+      ListTile(
+        leading: const Icon(Icons.description_outlined),
+        title: Text(l10n.settingsLogFiles),
+        subtitle: Text(l10n.settingsLogFilesBody),
+        onTap: () => unawaited(
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (BuildContext context) => const LogFilesPage(),
+            ),
+          ),
+        ),
+      ),
       _heading(l10n.settingsCache, tokens),
       ListTile(
         leading: const Icon(Icons.cleaning_services_outlined),
@@ -112,6 +140,41 @@ class SettingsPage extends ConsumerWidget {
         onTap: () => unawaited(_clearCache(context, ref, l10n)),
       ),
     ],
+  );
+
+  /// Builds the log-level selector (`ADR-0082`): the change applies to the running app at once.
+  Widget _logLevel(
+    WidgetRef ref,
+    AppSettings settings,
+    M3ETheme tokens,
+    AppLocalizations l10n,
+  ) => Padding(
+    padding: EdgeInsets.symmetric(horizontal: tokens.spacing.lg),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        DropdownButton<LogLevel>(
+          value: settings.logLevel,
+          isExpanded: true,
+          items: <DropdownMenuItem<LogLevel>>[
+            for (final LogLevel level in LogLevel.values)
+              DropdownMenuItem<LogLevel>(
+                value: level,
+                child: Text(logLevelLabel(level, l10n)),
+              ),
+          ],
+          onChanged: (LogLevel? level) {
+            if (level != null) {
+              unawaited(ref.read(settingsProvider.notifier).setLogLevel(level));
+            }
+          },
+        ),
+        Text(
+          l10n.settingsLogLevelHint,
+          style: tokens.typography.base.bodySmall,
+        ),
+      ],
+    ),
   );
 
   /// Builds a section heading.
@@ -240,8 +303,14 @@ class SettingsPage extends ConsumerWidget {
           settings.backgroundImageName ?? l10n.settingsBackgroundImageNone,
         ),
         subtitle: Text(l10n.settingsBackgroundImageHint),
-        trailing: Wrap(
-          spacing: tokens.spacing.xs,
+      ),
+      // 两个动作放在标题下方而不是 trailing：中文标签在窄屏上会把标题挤成一字一行。
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: tokens.spacing.lg),
+        child: Wrap(
+          spacing: tokens.spacing.sm,
+          runSpacing: tokens.spacing.xs,
+          alignment: WrapAlignment.end,
           children: <Widget>[
             if (settings.backgroundImageName != null)
               TextButton(
@@ -250,7 +319,7 @@ class SettingsPage extends ConsumerWidget {
                 ),
                 child: Text(l10n.settingsBackgroundImageRemove),
               ),
-            TextButton(
+            FilledButton.tonal(
               onPressed: () =>
                   unawaited(_pickBackgroundImage(context, ref, l10n)),
               child: Text(l10n.settingsBackgroundImageChoose),
@@ -279,33 +348,49 @@ class SettingsPage extends ConsumerWidget {
   }
 
   /// Builds the text-scale slider; the current value is spelled as a percentage.
+  ///
+  /// 拖动中只改本地预览（`_fontScaleDrag`），松手才写设置：写设置会让整个 `MaterialApp`
+  /// 按新字号重建一次，每帧写一次就是肉眼可见的卡顿。
   Widget _fontScale(
     WidgetRef ref,
     AppSettings settings,
     M3ETheme tokens,
     AppLocalizations l10n,
-  ) => Padding(
-    padding: EdgeInsets.symmetric(horizontal: tokens.spacing.lg),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          l10n.settingsFontScaleValue((settings.fontScale * 100).round()),
-          style: tokens.typography.base.bodyMedium,
-        ),
-        Slider(
-          value: settings.fontScale,
-          min: minFontScale,
-          max: maxFontScale,
-          // 0.1 一档：步进太细会让用户按不出想要的值，太粗又无法微调。
-          divisions: 12,
-          onChanged: (double value) => unawaited(
-            ref.read(settingsProvider.notifier).setFontScale(value),
+  ) {
+    final double value = _fontScaleDrag ?? settings.fontScale;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: tokens.spacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            l10n.settingsFontScaleValue((value * 100).round()),
+            style: tokens.typography.base.bodyMedium,
           ),
-        ),
-      ],
-    ),
-  );
+          Slider(
+            value: value,
+            min: minFontScale,
+            max: maxFontScale,
+            // 0.1 一档：步进太细会让用户按不出想要的值，太粗又无法微调。
+            divisions: 12,
+            label: l10n.settingsFontScaleValue((value * 100).round()),
+            onChanged: (double next) => setState(() => _fontScaleDrag = next),
+            onChangeEnd: (double next) => unawaited(
+              ref
+                  .read(settingsProvider.notifier)
+                  .setFontScale(next)
+                  .whenComplete(() {
+                    if (mounted) {
+                      setState(() => _fontScaleDrag = null);
+                    }
+                  }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   /// Builds the per-source concurrency control.
   ///

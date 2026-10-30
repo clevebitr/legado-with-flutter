@@ -3,19 +3,28 @@ import 'package:flutter_reader/core/platform/background_image_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/backup_directory_picker.dart';
+import 'package:flutter_reader/core/platform/battery_level.dart';
 import 'package:flutter_reader/core/platform/dynamic_color_provider.dart';
+import 'package:flutter_reader/core/platform/external_url_opener.dart';
 import 'package:flutter_reader/core/platform/file_selector_background_image_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_archive_saver.dart';
 import 'package:flutter_reader/core/platform/file_selector_backup_directory_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_picker.dart';
 import 'package:flutter_reader/core/platform/file_selector_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/file_sharer.dart';
 import 'package:flutter_reader/core/platform/flutter_secure_storage_secret_store.dart';
+import 'package:flutter_reader/core/platform/install_id.dart';
 import 'package:flutter_reader/core/platform/json_file_picker.dart';
 import 'package:flutter_reader/core/platform/json_file_saver.dart';
 import 'package:flutter_reader/core/platform/long_running_task.dart';
 import 'package:flutter_reader/core/platform/platform_info.dart';
+import 'package:flutter_reader/core/platform/screen_awake.dart';
 import 'package:flutter_reader/core/platform/secret_store.dart';
+import 'package:flutter_reader/core/platform/share_plus_file_sharer.dart';
+import 'package:flutter_reader/core/platform/sharing_backup_archive_saver.dart';
+import 'package:flutter_reader/core/platform/sharing_json_file_saver.dart';
+import 'package:flutter_reader/core/platform/source_check_notification.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -47,26 +56,50 @@ JsonFilePicker jsonFilePicker(Ref ref) {
       : const UnsupportedJsonFilePicker();
 }
 
-/// Provides the platform save dialog for single-source export.
+/// Provides the system share sheet, or a no-op on platforms without one (`ADR-0083`).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Only mobile uses it today: on Android/iOS the export and log directories are private, while a
+/// desktop already has a save dialog and a reachable folder. Capability detection, not a platform
+/// branch in the UI, decides whether the log page offers sharing.
+@Riverpod(keepAlive: true)
+FileSharer fileSharer(Ref ref) {
+  final PlatformInfo platform = ref.watch(platformInfoProvider);
+
+  return platform.isMobile
+      ? SharePlusFileSharer()
+      : const UnsupportedFileSharer();
+}
+
+/// Provides the platform save path for single-source export.
+///
+/// Mobile platforms have no save dialog, so they hand the document to the system share sheet
+/// (`ADR-0083`). Unsupported platforms report `not saved` instead of throwing.
 @Riverpod(keepAlive: true)
 JsonFileSaver jsonFileSaver(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 
-  return platform.isMobile || platform.isDesktop
+  if (platform.isMobile) {
+    return SharingJsonFileSaver(sharer: ref.watch(fileSharerProvider));
+  }
+
+  return platform.isDesktop
       ? const FileSelectorJsonFileSaver()
       : const UnsupportedJsonFileSaver();
 }
 
-/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+/// Provides the platform save path for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Mobile platforms share the archive instead of opening a save dialog (`ADR-0083`). Unsupported
+/// platforms report `not saved` instead of throwing.
 @Riverpod(keepAlive: true)
 BackupArchiveSaver backupArchiveSaver(Ref ref) {
   final PlatformInfo platform = ref.watch(platformInfoProvider);
 
-  return platform.isMobile || platform.isDesktop
+  if (platform.isMobile) {
+    return SharingBackupArchiveSaver(sharer: ref.watch(fileSharerProvider));
+  }
+
+  return platform.isDesktop
       ? const FileSelectorBackupArchiveSaver()
       : const UnsupportedBackupArchiveSaver();
 }
@@ -126,6 +159,34 @@ LongRunningTask longRunningTask(Ref ref) =>
     ? MethodChannelLongRunningTask(logger: ref.watch(appLoggerProvider))
     : const UnsupportedLongRunningTask();
 
+/// Provides the marker that keeps the display on while the reader is open.
+///
+/// Only Android implements it; elsewhere (and in tests) the no-op keeps the port total
+/// (ADR-0086 §决策 1).
+@Riverpod(keepAlive: true)
+ScreenAwake screenAwake(Ref ref) => ref.watch(platformInfoProvider).isAndroid
+    ? MethodChannelScreenAwake(logger: ref.watch(appLoggerProvider))
+    : const UnsupportedScreenAwake();
+
+/// Provides the device charge reader behind the reader's status line (ADR-0086 §决策 6).
+///
+/// Only Android implements it; elsewhere the status line omits the charge rather than showing a
+/// made-up value.
+@Riverpod(keepAlive: true)
+BatteryLevel batteryLevel(Ref ref) => ref.watch(platformInfoProvider).isAndroid
+    ? MethodChannelBatteryLevel(logger: ref.watch(appLoggerProvider))
+    : const UnsupportedBatteryLevel();
+
+/// Provides the batch check's progress notification.
+///
+/// Only Android has a system notification surface here; other platforms (and the tests) get the
+/// no-op. The check itself never depends on it.
+@Riverpod(keepAlive: true)
+SourceCheckNotification sourceCheckNotification(Ref ref) =>
+    ref.watch(platformInfoProvider).isAndroid
+    ? MethodChannelSourceCheckNotification(logger: ref.watch(appLoggerProvider))
+    : const NoopSourceCheckNotification();
+
 /// Provides visible-WebView verification, unbound by default.
 ///
 /// An unbound port answers `isSupported == false`, which surfaces as
@@ -133,6 +194,23 @@ LongRunningTask longRunningTask(Ref ref) =>
 @Riverpod(keepAlive: true)
 SourceVerification sourceVerification(Ref ref) =>
     UnboundSourceVerification(logger: ref.watch(appLoggerProvider));
+
+/// Provides the install id `java.androidId` answers with (M25/S3b).
+///
+/// The holder is read **synchronously** from every job, so `main()` awaits `InstallId.hydrate`
+/// before the first frame (the cookie jar's pattern, ADR-0068 §决策 4). A build that never hydrated
+/// it answers `''`, which is what the sandbox does when the host has no id.
+@Riverpod(keepAlive: true)
+InstallId installId(Ref ref) => InstallId(logger: ref.watch(appLoggerProvider));
+
+/// Provides the confirmation dialog `java.openUrl` shows before a rule opens an address.
+///
+/// Silent by default for the same reason as [sourceVerification]: `core/` cannot show a widget, so
+/// the composition root binds the real one. A build without the override still runs every rule —
+/// the bridge logs the address it refused to open.
+@Riverpod(keepAlive: true)
+ExternalUrlOpener externalUrlOpener(Ref ref) =>
+    const UnboundExternalUrlOpener();
 
 /// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
 ///

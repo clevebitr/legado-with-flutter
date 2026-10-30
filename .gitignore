@@ -36,3 +36,6 @@ desktop.ini
 
 # Windows / Android / iOS 平台目录的构建产物由 Flutter 模板自带的 .gitignore 覆盖，
 # 运行 `flutter create --platforms=android,ios,windows .` 后会生成各平台内的 .gitignore。
+
+# Flutter tool state (generated per machine)
+devtools_options.yaml

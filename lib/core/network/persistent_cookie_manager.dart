@@ -58,6 +58,23 @@ final class PersistentCookieManager implements CookieManager {
     }
   }
 
+  @override
+  void mergeCookieHeader(Uri url, String cookieHeader) {
+    for (final StoredCookie cookie in parseCookieHeader(url, cookieHeader)) {
+      _storeOne(cookie);
+    }
+  }
+
+  @override
+  void removeCookiesFor(Uri url) {
+    // 存储只能按域删，所以先问内存宗「这条 URL 会收到哪些域的 cookie」，再一起删干净。
+    final Set<String> domains = _memory.domainsFor(url);
+    _memory.removeCookiesFor(url);
+    for (final String domain in domains) {
+      unawaited(_store.deleteByDomain(domain));
+    }
+  }
+
   /// Takes over the cookies a visible WebView collected.
   ///
   /// The WebView is authoritative for its domain: an expired or empty cookie here is a deletion.

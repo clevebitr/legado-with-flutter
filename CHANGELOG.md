@@ -5,7 +5,280 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-10-30
+
+第一个正式版：从 0.2.0 以来的阅读体验线、换源与搜索、书架编辑与缓存策略。2 875 条宿主测试，
+`flutter analyze` 零警告，覆盖率 98.38% / 96.28% / 94.96%（核心 / 领域 / 数据层）。
+
+### Reading (M26–M38)
+
+- **连续阅读与单一页表.** 相邻章正文接成一条跨章阅读流（ADR-0085），页表由页面统一测量、widget 只画不量
+  （ADR-0087）；章标题成为章首章头，正文首行的重复标题被剥离。
+- **预取与滚动稳定.** ±15 章预取、队列化、同一时刻一个请求（ADR-0088）；跨章不换屏、不打断惯性、
+  上滑回上一章不跳到章首（ADR-0090），目录更新不挪动读者（ADR-0089）。**预取顺序改为后 15 章优先**
+  （ADR-0097）：进入阅读页就先把后面 15 章填好。
+- **自动翻页**（ADR-0093）：间隔 3–60 秒（默认 15，随阅读轴持久化），工具条开关，点正文 / 翻章 /
+  起朗读 / 说明书末都会停。
+- **阅读内净化开关**（ADR-0094）：工具条打开替换净化面板，逐条开关；改动后只清这本书的正文缓存并重读当前章。
+- **目录按卷折叠**（ADR-0095）：`isVolume` 渲染为可折叠组头，搜索时忽略折叠。
+- **键盘翻页**（ADR-0096）：→/↓/PageDown/空格 翻页，←/↑/PageUp 回页（Android 音量键登记未做）。
+- 阅读舒适度：常亮、护眼滤镜、常驻状态行（章节 / 进度 / 时间 / 电量）、亮度遮罩、8 条排版轴（ADR-0075/0086）。
+
+### Sources, search and cache
+
+- **换源重做**（ADR-0091）：阅读页与详情页弹出同一个面板，关键词可改、范围可选（全部 / 分组 / 点名，
+  独立记忆）、三个开关（校验作者 / 加载详情 / 加载目录）、进度条与计数、开始 / 暂停 / 恢复 / 停止，
+  点某个源后才进章节列表并自动对齐，确认后才写库。无名书不再被判死刑：标题读不到时按作者搜。
+- **搜索结果选源**（ADR-0091 §决策 6）：合并条目保留每个源的快照，点开先选来源再进详情。
+- **发现页两种布局**：列表 / 网格切换，网格列数 1–10 且横竖屏分别记忆（ADR-0097 记录口径）。
+- **正文缓存寿命**（ADR-0097）：非在架书 3 天，在架书写入为无过期、直到用户清掉这本书的缓存。
+- **目录翻页上限 50 → 500**：真机日志里多本长书的尾部章节曾被截断（ADR-0097 背景）。
+
+### Shelf
+
+- **编辑书籍详情**（ADR-0092）：书名 / 作者 / 封面 / 自己的简介；`books.custom_intro`（schemaVersion 13 → 14）、
+  备份格式带该键、旧备份缺键按「保留本地」合并。书架行菜单与详情页「编辑」两个入口。
+
+### Mobile exports and log sharing (ADR-0083)
+
+- **Exports work on Android and iOS again.** `file_selector` has no save dialog there, so
+  `JsonFileSaver` and `BackupArchiveSaver` now hand the document/zip to the system share sheet
+  (`share_plus`, BSD-3-Clause) on mobile; the desktop save dialog is unchanged.
+- **Logs leave the private directory.** The log page gained “share every log file” and a per-file
+  share button, both available only when the platform reports a share sheet. Files stay on disk
+  (paths are passed to the plugin, not read into memory) and are flushed before sharing.
+- Cancelling a share is silent (`ParseSuccess(false)`); only a real platform failure shows an error.
+- `share_plus ^13.3.1` + `share_plus_platform_interface ^7.2.0` are new dependencies; no storage
+  permission was added.
+
+
+### The remaining work is ordered by a real corpus (M25, DECISIONS #49)
+
+A new `tool/spot_check/corpus_census.dart` counts what two real exports actually use — 334 sources after
+deduplication (280 text / 35 image / 7 audio / 7 file / 5 video) — without touching the network or the JS
+engine, so it runs with plain `dart run`. Its `java.*` "implemented" set is read out of the sandbox prelude,
+so the tool cannot drift from the engine.
+
+The numbers changed the plan:
+
+- the biggest syntax gap is a **bare `//` XPath head: 43 sources**, with `@xpath:` itself at zero;
+- **nested extraction segments (`class.a@css:.b`): 22 sources / 125 places**;
+- the **`source` object's fields** (`key` 14, `bookSourceUrl` 10, `bookSourceComment` 5) plus its
+  `put`/`get` and login-header aliases cover roughly 30 sources for a tenth of the effort — so that
+  becomes S5a;
+- Rhino interop (`java.lang` 13, `java.util` 10, `java.io` 4, `java.security` 3) needs an ADR: the real
+  calls are `new java.lang.String(bytes,'UTF-8')`, `java.util.UUID.randomUUID()`,
+  `java.util.Arrays.copyOfRange(...)`, `java.util.HashMap`, all of which have one-line equivalents;
+- **`imageStyle`, `ruleReview`, `eventListener`, `customButton`, `homepageModules` and `@webJs` are
+  confirmed non-issues**: the corpus only ever writes `FULL`/`0` for `imageStyle` (which the existing
+  `full`/`single`/default already covers) and never uses the others at all.
+
+`engine-parity.md` §9 records the census and the resulting order
+(S5a → S5b → S5c → S5d → S5e → S6b → S6c).
+
+### Documentation can no longer drift from the engine (ADR-0078 S7, M25)
+
+Two gates in `test/docs/book_source_doc_test.dart` (the one place a test has no `lib/` counterpart):
+
+- **G1**: the two rejection lists in `book-source.md` §11 (the named `java.*` members and the Rhino
+  interop packages) are now machine-readable `text` blocks, and the gate compares them with
+  `__javaRejectedNames` / `__javaInteropNames` in the sandbox prelude — changing one side without the
+  other fails the suite. The first run caught a real drift: the doc named four interop packages, the
+  sandbox rejects eight.
+- **G2**: every matrix row marked 已确认 in `book-source.md` §3 must be named by a test
+  (`matrix #N`), so a row cannot keep claiming coverage after its test is gone. Ten rows were
+  covered but unmarked; each now points at the test that covers it.
+
+`docs/dev/testing.md` §3 records the `test/docs/` exception.
+
+### URL rules speak upstream's full dialect (ADR-0078 S4, M25)
+
+Five dialects the engine used to reject or ignore, all of them plain rule-surface work:
+
+- **A URL rule is a chain**: literal pieces plus `@js:` / `<js>` scripts, where a script receives what the
+  chain produced so far and a literal replaces it (substituting `@result` first). A rule that is nothing but
+  a script therefore renders its value — `searchUrl: "@js:'https://a.test/s?q=' + key"` used to be sent as a
+  literal address.
+- **`<1,2,3>` page lists** pick the entry for the page being fetched, and the last entry past the end.
+- **A declared `charset` escapes the whole GET query**, not just `{{key}}` — GBK sites decode their
+  parameters correctly now. An already-encoded query is left alone; upstream's `escape` dialect is not
+  modelled and is registered as such.
+- **`+` is accepted as the explicit「ascending」prefix** (stripped like `-`), so a rule that says so no
+  longer fails.
+- **A list rule may end in `@js:`**: any JS segment routes the rule through the segment chain, so
+  `class.list@tag.li@js:…` works. The script sees each item's content (its `outerHtml`), not a DOM handle.
+
+### Rules see the page, the chapter and the platform (ADR-0078 S3b, M25)
+
+The last slice of S3b. The sandbox now carries the bindings upstream's `AnalyzeRule` / `AnalyzeUrl` set up,
+and the `java.*` family that needs the platform:
+
+- **`src`** is the page body a rule was read on (the same text for a whole-page rule, an element rule and
+  `loginCheckJs`); **`chapter`** is the chapter being read (`title` / `url` / `isVip` / `isPay` / `isVolume` /
+  `updateTime` + `getVariable` / `putVariable`); **`nextChapterUrl`** is the address after it in the TOC;
+  **`fromBookInfo`** marks rules reached from the detail stage. All four ride on `JsPageContext`, so a paged
+  walk carries them to page 2 as well.
+- **`infoMap`** is the per-source scratch map explore rules use to remember a token across category loads. It
+  is a mutable object (`save()` / `saveNow()` / `get()` / `set()`), shared for the session like `cache.*` —
+  no database row, registered as the difference.
+- **`java.connect`** answers a response object and **swallows** a failure into its body (upstream's
+  `runCatching`), while **`java.ajaxAll`** fetches every address and fails the call if any of them does
+  (upstream's `mapAsync`). Both replay like the rest of the synchronous family; `skipRateLimit` is accepted
+  but never bypasses the per-source budget.
+- **`java.openUrl`** shows a confirmation dialog and then hands the address to the system browser — the one
+  new dependency (`url_launcher`, BSD-3) and the only place it is used, behind a `core/platform` port.
+- **`java.androidId`** answers a generated v4 UUID persisted on first launch (upstream returns Android's
+  `ANDROID_ID`; the format difference is registered).
+- **`speakText` / `speakSpeed` stay unbound**: they only exist for upstream's HttpTTS sources, which this app
+  does not have. A rule that reads them fails loudly instead of seeing a permanently empty value.
+
+### A source can save and use its login header (ADR-0078 S3b, M25)
+
+`source.getLoginHeader()` / `source.putLoginHeader(header)` and `source.getKey()` / `source.getTag()`
+now exist in the sandbox, which is how a source keeps the token it got from signing in:
+
+- **The login header is stored per source URL** (`book_sources.login_header`, schema v13), because that
+  is upstream's cache key (`loginHeader_<bookSourceUrl>`) and all a running rule knows. Two imports of
+  the same URL therefore share one value; a re-import leaves it alone (user state, like `loginInfo`).
+- **It is merged into every stage's request headers**, on top of the source's own `header` — upstream's
+  `getHeaderMap(userAgent, hasLoginHeader = true)` order — and `@js:` rules' `http.*` calls see the
+  same map. The `Cookie` inside it is merged into the app's cookie jar too
+  (`CookieManager.mergeCookieHeader`), because the jar is what actually sends `Cookie`.
+- **Writes take effect at once**: the worker reports the header back with the job result and the bridge
+  writes it through, so a login script that saves a token and then fetches a page gets the new header.
+  Reads never write.
+- `source.login()` **inside a rule** is a named rejection: it would have to run another script in the
+  worker that is already executing the current job. Signing in still works — the login page runs the
+  same `loginUrl` script through `SignIn`. `source.removeLoginHeader()` stays unbound.
+- Schema v13 adds one nullable column (`login_header`); the migration adds it only when the target
+  version is 13 or later, and the migration tests now validate against the latest schema.
+
+### One dev worktree, one integration branch (ADR-0079)
+
+The repository had four checkouts of the same history (the main clone plus three `git worktree`s on
+old feature branches) and no integration branch at all: work landed on `feat/ui-m15-m18` while
+`ci.yml` only gated pushes to `main`, so the commits that actually shipped were never verified by the
+L1 gate. One of those checkouts had also accumulated 137 uncommitted files that existed nowhere else.
+
+- **`dev` is now the integration branch**: every development commit lands there, and `main` only
+  takes merges from a `dev` pull request.
+- **One checkout per machine**, the repository's main clone, checked out on `dev`. No more
+  `git worktree add`: a short-lived branch is switched inside the dev worktree (announcing it first,
+  as the multi-writer rule already required) and full isolation uses a throwaway clone.
+- `ci.yml` gates pushes to **`dev`** as well as `main`; the release channels (`release.yml` on tags,
+  `beta.yml` manual, `debug.yml` on `main`) are unchanged.
+- The stale checkouts were removed after archiving the dirty one to `F:/Projetcs/_archive/`
+  (patch + untracked files). The remote is down to `main` + `dev`: the four `feat/*` branches were
+  deleted after checking that each held **no** commit `dev` lacks, so nothing became unreachable.
+
+Rules live in `CONTRIBUTING.md` §4.1, the reasoning in ADR-0079, and `AGENTS.md` §3 step 0 points at
+both.
+
+### The content stage answers the whole chapter (ADR-0078 S2 part 2, M25)
+
+`FetchContent` used to answer a `String`. It now answers a `ChapterContent` — body, content-page
+title, review image and lyrics — because three more fields belong to the same read:
+
+- **`subContent`**: appended to the body for a text source, kept as `lyric` for an **audio** source
+  (upstream stores it as the chapter's `lyric` variable). A rule that answers an `http(s)` address is
+  fetched first; a page that cannot be read only logs a warning, it never fails the chapter.
+- **`title`**: read from the **content page** after the body, renaming the chapter and carrying a
+  review image (the last media URL in the value). A title that is only an image keeps the TOC name.
+  One small deviation: leftover markup is stripped from the title, where upstream would keep
+  `<div id=…>` (or half an `<img src="`).
+- **Order is upstream's**: `content` → `subContent` → `title` → `replaceRegex`, so the replacement
+  rule sees the sub-content too.
+- The body cache stores the **whole** result: a chapter with only text still caches as plain text
+  (same shape as before, no migration), and one with a title or lyrics caches as a small versioned
+  JSON line. Reader-facing behaviour is unchanged — the reader port still takes `.body`, so the
+  content-page rename and the lyrics are not shown yet (registered in `engine-parity.md`).
+
+Modelled but still not executed: `payAction` (needs a paid-content UI) and `callBackJs` /
+`eventListener` (needs a reader event surface).
+
+### The TOC stage reads the fields upstream reads (ADR-0078 S2, M25)
+
+S2 of the parity slices. Two halves: the table-of-contents fields now behave like upstream, and the
+fields that need a wider return shape are modelled (not executed) so nothing silently disappears.
+
+- **`formatJs`** rewrites chapter names the way upstream does: **one** JS job for the whole list,
+  `index` rebound per chapter while `gInt` persists across the loop; a script that throws only
+  leaves that chapter's title alone. `preUpdateJs` runs **before** the first request and aborts the
+  TOC when it fails.
+- **`isVolume` / `isPay` / `wordCount`** are read (same `isTrue()` predicate as `isVip`). A volume
+  heading without a URL keeps its title with a `title + index` placeholder link; an entry whose name
+  cannot be read is dropped (upstream `if (title.isNotEmpty)`), which also settles an older
+  ADR-0026 case where a blank name used to stay in the list.
+- **Duplicates** are dropped by `(name, url)` keeping the first occurrence, and `Chapter` grew
+  `isPay` / `isVolume` / `wordCount` / `variable` / `reviewImg` so the fields have somewhere to live.
+- **`bookUrlPattern`** (`book-source.md` §4.1b): a search whose final URL matches the pattern is
+  parsed as **one** result through `ruleBookInfo`; with no pattern, an empty list also falls back to
+  a detail read. A search page with nothing on it is now an empty result rather than `parseFailed`
+  — the source check still reports it as「搜索失效」, and says which rule to look at.
+- **Modelled, not executed** (`engine-parity.md`): `ContentRule.subContent` / `title` need a
+  `ChapterContent` return shape (next S2 step), and `payAction` / `callBackJs` / `eventListener`
+  need UI surfaces this app does not have.
+
+### Source-owned JavaScript libraries run before every rule (ADR-0078 S1, M25)
+
+- **`jsLib` is modelled and executed.** Upstream treats a source's own JS library as the prototype
+  scope of every script it runs, so a source can write `getSign(url)` and rely on the library for it.
+  Every such source used to fail with `js:error` on *every* rule — the field was neither modelled nor
+  registered anywhere. It is now `BookSource.jsLib` (part of the fingerprint, since it changes what
+  rules produce), resolved by `JsLibStore` and run by the worker **in the same function scope** as the
+  rule.
+- **Both shapes upstream accepts.** Plain JavaScript runs as-is; a JSON object is treated as a map of
+  absolute URLs whose scripts are downloaded and concatenated in object order (non-URL values ignored,
+  like upstream's `isAbsUrl()` check). The resolved text is cached per `jsLib` string, bounded at the
+  same 16 entries upstream's `LruCache` uses, single-flight per key, and **failures are not cached**.
+- **Failures stay attributable.** A library that cannot be downloaded, or that throws while being
+  evaluated, fails the rule with `js:lib` on its `rulePath` — distinct from the rule's own `js:error`,
+  because one is fixed by replacing the library and the other by editing the rule.
+- Registered differences (`book-source.md` §6): top-level `let`/`const` in a library are not visible to
+  the rule (Rhino is ES5 and would reject them too), the cache is in memory only, and `source.jsLib` is
+  deliberately not part of the sandbox's `source` object.
+
+### Upstream's synchronous `java.*` dialect runs unchanged (ADR-0076, M24)
+
+- **Replay instead of blocking.** A QuickJS isolate cannot block on the host, so a synchronous call
+  the script has never made raises a sentinel; the worker fetches the page once, caches it (failures
+  included) and **runs the rule again from its first line** — on that pass the call answers the
+  cached value. `java.ajax` / `java.post` / `java.head` / `java.getCookie` therefore return values,
+  not Promises, exactly as upstream's Rhino does. Pass limit 16; past it the field fails with
+  `js:replay` («this rule cannot be replayed»), never a misleading `js:timeout`.
+- **`java.post(url, body, headers)` answers a response object** (`body` property, `url()` / `code()` /
+  `header(name)` / …), the same shape `loginCheckJs` already sees, so a rule can read the `Location`
+  of a `302` and re-issue the address. `HttpClient` grew a `head` for the matching verb.
+- **`cookie.getCookie` / `setCookie` / `removeCookie`** are wired to the app's cookie jar (per-pair
+  writes, `Max-Age=0` deletion); `java.setContent(html)` replaces the page scope the rest of the
+  job reads; `java.toast` / `longToast` reach the UI through a new `UserMessages` port (a snack bar at
+  the composition root, deduplicated per job).
+- **`source.getVariable` / `setVariable` / `putVariable`** now persist per source: new Drift table
+  `source_variables` (schema v12, dump + generated migrations + migration and on-disk tests). The
+  variables are not the rule variables (`java.put`), and they no longer live in the source payload,
+  which stays byte-faithful for export.
+- **Human verification is asked once.** `getVerificationCode` / `startBrowserAwait` / `startBrowser`
+  remember their answer per `op+url`, so a replay pass cannot pop a second dialog.
+- Registered differences (`book-source.md` §6, `roadmap.md` §3.7): non-idempotent rules run their
+  side effects once per pass; `java.get(url)` / `ajaxAll` / `connect` stay rejected; a literal-first
+  `java.getString` still cannot see `setContent`; deleting a source keeps its variables.
+
+### Tests carry behaviour, not lines (ADR-0077)
+
+- **Coverage thresholds: `core` / `domain` 100% → 95%** (`data` stays ≥80%). 100% had saturated:
+  the two layers were reported at exactly `2643/2643` and `4636/4636`, so plumbing
+  (`copyWith` / `==` / `hashCode` / DI wiring / single-branch fallbacks) each needed its own test
+  to keep the gate green. The ADR keeps the rule "no new production file without a test" intact
+  (the unmeasured-file check is unchanged) and only allows deleting tests that assert *that a line
+  ran*, never tests that assert behaviour. Thresholds may still only go up.
+- **Tests that existed for the gate are gone** (≈80 cases / 700 lines): pure `==` / `hashCode` /
+  `toString` boilerplate on freezed entities, `copyWith`-keeps-every-other-field cases, and the
+  14 tests that only read a provider to assert its implementation type.
+- **One target, one test file** (C-TEST-4): three test pairs that had drifted into two files are
+  merged and the extras deleted — `book_source_list_page` (+`_batch`), `book_source_list_notifier`
+  (+`_view`), `reader_page` (+`_audio`). Same-page/provider assertions that were isomorphic
+  (status lights, toolbar hand-over, sign-in outcomes, DAO wiring, platform ports) are now
+  table-driven, so one case states the rule instead of one case per row.
 
 ### A theme you can colour, with a picture behind it (ADR-0075, M22-d part 1)
 
@@ -3049,3 +3322,40 @@ or handed back to the dev team (code and evidence).
 - `applicationId` is still the Flutter default `com.example.flutter_reader` and the release
   build reuses the debug signing config; both must be replaced before release
   (`docs/dev/platform.md` §8.2).
+
+## [0.2.0] - 2026-10-27
+
+The engine-alignment milestone (M25) and the diagnostics foundation. 2 657 host tests, `flutter analyze`
+clean.
+
+### Added
+
+- **`source` object completed (S5a).** The sandbox sees the fields the corpus reads (`key`,
+  `bookSourceUrl`, `bookSourceName`, `bookSourceComment`, `header`, `loginUrl`), the keyed `put`/`get`
+  store, upstream's no-argument whole-variable shape, `getLoginHeaderMap`/`removeLoginHeader` (log-out
+  also drops the source's cookies) and `putLoginInfo`/`removeLoginInfo` written through to the source row.
+- **XPath (S5b).** An in-repo subset (paths, node tests, eight axes, the predicates the corpus uses and a
+  union) replaces the named rejection; anything outside it reports `unsupported:xpath:<syntax>`.
+  ADR-0080 records why no dependency was usable.
+- **Rhino package shim (S5d).** `Packages.java.lang.String`/`System`/`Thread`, `java.util.UUID`/`Arrays`/
+  `HashMap`/`ArrayList`, `android.util.Base64`, `TextUtils`, hutool `DigestUtil`/`Base64` and Legado's
+  `StrResponse` work; every other member stays a named rejection (ADR-0081).
+- **`:regex` list rules (S5e).** A regex chain on `&&`, one item per match, `$N` templates on the item's
+  fields.
+- **File logging (ADR-0082).** Logs go to `app-YYYY-MM-DD.log` under the app's support directory (one file
+  per day, seven days kept, 20 MB cap), the level is switchable at runtime in Settings, and Dart-side
+  crashes are recorded with their stacks.
+
+### Changed
+
+- **Logs are no longer redacted** (release included): URLs, search keywords and raw error text are written
+  as-is. Request headers and page bodies are still never handed to the logger (C-SEC-4).
+- **Chapter bodies are plain text.** Every `content` match now participates (upstream's `getString` join)
+  and `@html`/`@all` markup is converted before `replaceRegex` and the purge rules run.
+
+### Fixed
+
+- A chapter whose `content` rule matches per paragraph no longer collapses to one line.
+- Chapters whose rule yields HTML no longer show `<p>`/`<br>` tags in the reader.
+- The corpus census counted leading `@css:` rules, `{{...}}` templates and `+@css:` prefixes as nested
+  extraction segments; matrix #30 is now correctly zero sources (S5c).

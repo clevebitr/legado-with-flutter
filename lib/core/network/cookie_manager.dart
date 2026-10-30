@@ -16,6 +16,20 @@ abstract interface class CookieManager {
   ///
   /// Unparsable headers are ignored.
   void storeFromResponse(Uri url, List<String> setCookieHeaders);
+
+  /// Merges a bare `Cookie` header value (`a=1; b=2`) into the jar for [url].
+  ///
+  /// This is what `source.putLoginHeader` needs: upstream hands the login header's `Cookie` to
+  /// `CookieStore.replaceCookie(getKey(), cookie)` so the jar — not the header map — is what sends
+  /// it later (`BaseSource.kt:150-153`). Cookies with the same name are replaced.
+  void mergeCookieHeader(Uri url, String cookieHeader);
+
+  /// Drops every cookie [url] would send (`source.removeLoginHeader`, M25/S5a).
+  ///
+  /// Upstream's logout deletes the whole cookie record of the source's second-level domain
+  /// (`CookieStore.removeCookie(getKey())`), so the unit is 「what this source's URL would send」,
+  /// not one name: a source has no way to say which cookies the login created.
+  void removeCookiesFor(Uri url);
 }
 
 /// In-memory [CookieManager].
@@ -79,6 +93,35 @@ final class InMemoryCookieManager implements CookieManager {
     } else {
       cookies[cookie.name] = cookie;
     }
+  }
+
+  @override
+  void mergeCookieHeader(Uri url, String cookieHeader) {
+    for (final StoredCookie cookie in parseCookieHeader(url, cookieHeader)) {
+      store(cookie);
+    }
+  }
+
+  @override
+  void removeCookiesFor(Uri url) {
+    final String host = url.host.toLowerCase();
+    _cookiesByDomain.removeWhere(
+      (String domain, Map<String, StoredCookie> byName) =>
+          _hostMatchesDomain(host, domain),
+    );
+  }
+
+  /// The domains in the jar that [url] would receive cookies from, expired ones included.
+  ///
+  /// The persistent jar needs them to delete the same cookies from storage: it can only delete a
+  /// whole domain, and the domain of a stored cookie is not derivable from the URL alone.
+  Set<String> domainsFor(Uri url) {
+    final String host = url.host.toLowerCase();
+
+    return <String>{
+      for (final String domain in _cookiesByDomain.keys)
+        if (_hostMatchesDomain(host, domain)) domain,
+    };
   }
 
   /// Every stored cookie, expired ones included (the persistent jar purges them).
@@ -224,6 +267,40 @@ final class StoredCookie {
 
 bool _hostMatchesDomain(String host, String domain) =>
     host == domain || host.endsWith('.$domain');
+
+/// Parses a bare `Cookie` header (`a=1; b=2`) into session cookies for [url].
+///
+/// Blank values are skipped instead of treated as deletions: empty means “delete” for `Set-Cookie`,
+/// not for a `Cookie` header, and upstream's `CookieStore.cookieToMap` skips them too. The cookies
+/// are not `secure`-flagged either, because upstream's jar has no such attribute and a source whose
+/// login address is https may still fetch its chapters over http.
+List<StoredCookie> parseCookieHeader(Uri url, String cookieHeader) {
+  final List<StoredCookie> cookies = <StoredCookie>[];
+  for (final String pair in cookieHeader.split(';')) {
+    // 值里可能含 '='（base64 填充），所以只按第一个 '=' 切分。
+    final int separator = pair.indexOf('=');
+    if (separator <= 0) {
+      continue;
+    }
+    final String name = pair.substring(0, separator).trim();
+    final String value = pair.substring(separator + 1).trim();
+    if (name.isEmpty || value.isEmpty) {
+      continue;
+    }
+    cookies.add(
+      StoredCookie(
+        name: name,
+        value: value,
+        domain: url.host.toLowerCase(),
+        path: '/',
+        isSecure: false,
+        isDeletion: false,
+      ),
+    );
+  }
+
+  return cookies;
+}
 
 // 解析失败按「无过期信息」处理，当作会话 cookie。
 DateTime? _parseHttpDate(String value) {

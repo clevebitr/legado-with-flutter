@@ -457,70 +457,66 @@ final class ReadingRecordRepositoryProvider
 String _$readingRecordRepositoryHash() =>
     r'eefa1b9de76dc114d9cef6566a91cf2df8c99cae';
 
-/// Provides the source-switch port, **unbound** by default.
+/// Provides the in-reader 替换净化 switches, **unbound** by default (ADR-0094).
 ///
-/// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity
-/// migration (ADR-0051 §决策 3). Unbound it answers an `unsupportedRule` failure, so the sheet shows
-/// a message instead of throwing (`docs/dev/platform.md` §2's habit).
+/// The composition root binds it to the rules feature plus the chapter cache, so the reader never
+/// imports either (C-ARCH-2).
 
-@ProviderFor(bookSourceSwitcher)
-final bookSourceSwitcherProvider = BookSourceSwitcherProvider._();
+@ProviderFor(purgeRuleSwitches)
+final purgeRuleSwitchesProvider = PurgeRuleSwitchesProvider._();
 
-/// Provides the source-switch port, **unbound** by default.
+/// Provides the in-reader 替换净化 switches, **unbound** by default (ADR-0094).
 ///
-/// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity
-/// migration (ADR-0051 §决策 3). Unbound it answers an `unsupportedRule` failure, so the sheet shows
-/// a message instead of throwing (`docs/dev/platform.md` §2's habit).
+/// The composition root binds it to the rules feature plus the chapter cache, so the reader never
+/// imports either (C-ARCH-2).
 
-final class BookSourceSwitcherProvider
+final class PurgeRuleSwitchesProvider
     extends
         $FunctionalProvider<
-          BookSourceSwitcher,
-          BookSourceSwitcher,
-          BookSourceSwitcher
+          PurgeRuleSwitches,
+          PurgeRuleSwitches,
+          PurgeRuleSwitches
         >
-    with $Provider<BookSourceSwitcher> {
-  /// Provides the source-switch port, **unbound** by default.
+    with $Provider<PurgeRuleSwitches> {
+  /// Provides the in-reader 替换净化 switches, **unbound** by default (ADR-0094).
   ///
-  /// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity
-  /// migration (ADR-0051 §决策 3). Unbound it answers an `unsupportedRule` failure, so the sheet shows
-  /// a message instead of throwing (`docs/dev/platform.md` §2's habit).
-  BookSourceSwitcherProvider._()
+  /// The composition root binds it to the rules feature plus the chapter cache, so the reader never
+  /// imports either (C-ARCH-2).
+  PurgeRuleSwitchesProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'bookSourceSwitcherProvider',
+        name: r'purgeRuleSwitchesProvider',
         isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$bookSourceSwitcherHash();
+  String debugGetCreateSourceHash() => _$purgeRuleSwitchesHash();
 
   @$internal
   @override
-  $ProviderElement<BookSourceSwitcher> $createElement(
+  $ProviderElement<PurgeRuleSwitches> $createElement(
     $ProviderPointer pointer,
   ) => $ProviderElement(pointer);
 
   @override
-  BookSourceSwitcher create(Ref ref) {
-    return bookSourceSwitcher(ref);
+  PurgeRuleSwitches create(Ref ref) {
+    return purgeRuleSwitches(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(BookSourceSwitcher value) {
+  Override overrideWithValue(PurgeRuleSwitches value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<BookSourceSwitcher>(value),
+      providerOverride: $SyncValueProvider<PurgeRuleSwitches>(value),
     );
   }
 }
 
-String _$bookSourceSwitcherHash() =>
-    r'ec6fd4eace21025a8fa2dd41e1fee987e9a3f449';
+String _$purgeRuleSwitchesHash() => r'899eb6605e8a3527de194d47c65177c91bb47ff5';
 
 /// Provides the audio player, **unbound** to a platform until it is really needed.
 ///

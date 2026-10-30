@@ -1,3 +1,4 @@
+import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/network/request_limiter.dart';
 import 'package:flutter_reader/features/settings/domain/entities/app_theme_mode.dart';
 
@@ -24,6 +25,9 @@ const int maxConcurrentBudget = 8;
 /// The folder user-picked images are stored in (`ADR-0075` §决策 1).
 const String backgroundImageFolder = 'backgrounds';
 
+/// The log level new installs start with (`ADR-0082`).
+const LogLevel defaultLogLevel = LogLevel.info;
+
 /// The light switches the user chose (C-NET-9: these live in `shared_preferences`).
 ///
 /// Every value is **clamped in the factory**, not asserted: an assertion would be stripped in
@@ -38,6 +42,7 @@ final class AppSettings {
     required this.allowPlainHttp,
     required this.seedColor,
     required this.backgroundImageName,
+    required this.logLevel,
   });
 
   /// Creates settings, clamping every value into its documented range.
@@ -48,6 +53,7 @@ final class AppSettings {
     bool allowPlainHttp = false,
     int? seedColor,
     String? backgroundImageName,
+    LogLevel logLevel = defaultLogLevel,
   }) => AppSettings._(
     themeMode: themeMode,
     fontScale: fontScale.clamp(minFontScale, maxFontScale),
@@ -58,6 +64,7 @@ final class AppSettings {
     allowPlainHttp: allowPlainHttp,
     seedColor: seedColor,
     backgroundImageName: backgroundImageName,
+    logLevel: logLevel,
   );
 
   /// The settings used before anything was stored and while the store is still loading.
@@ -68,6 +75,7 @@ final class AppSettings {
     allowPlainHttp: false,
     seedColor: null,
     backgroundImageName: null,
+    logLevel: defaultLogLevel,
   );
 
   /// Which scheme the app follows.
@@ -92,6 +100,12 @@ final class AppSettings {
   /// them, so the setting survives the original file moving or an expired Android URI grant.
   final String? backgroundImageName;
 
+  /// The verbosity of the application log (`ADR-0082`).
+  ///
+  /// A **runtime** choice: the settings page changes it and the façade applies it at once, so a
+  /// user chasing a broken source does not need a special build.
+  final LogLevel logLevel;
+
   /// Whether the user allows plaintext `http://` media (C-SEC-2's explicit opt-in).
   ///
   /// Page requests still go through `HttpPolicy` with the same flag; this value is shared by
@@ -106,6 +120,7 @@ final class AppSettings {
     bool? allowPlainHttp,
     int? seedColor,
     String? backgroundImageName,
+    LogLevel? logLevel,
     bool clearSeedColor = false,
     bool clearBackgroundImage = false,
   }) => AppSettings(
@@ -114,6 +129,7 @@ final class AppSettings {
     maxConcurrentPerSource:
         maxConcurrentPerSource ?? this.maxConcurrentPerSource,
     allowPlainHttp: allowPlainHttp ?? this.allowPlainHttp,
+    logLevel: logLevel ?? this.logLevel,
     seedColor: clearSeedColor ? null : (seedColor ?? this.seedColor),
     backgroundImageName: clearBackgroundImage
         ? null
@@ -128,7 +144,8 @@ final class AppSettings {
       other.maxConcurrentPerSource == maxConcurrentPerSource &&
       other.allowPlainHttp == allowPlainHttp &&
       other.seedColor == seedColor &&
-      other.backgroundImageName == backgroundImageName;
+      other.backgroundImageName == backgroundImageName &&
+      other.logLevel == logLevel;
 
   @override
   int get hashCode => Object.hash(
@@ -138,5 +155,6 @@ final class AppSettings {
     allowPlainHttp,
     seedColor,
     backgroundImageName,
+    logLevel,
   );
 }

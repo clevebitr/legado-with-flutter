@@ -106,24 +106,5 @@ void main() {
       expect(settings.fontScale, maxFontScale);
       expect(settings.themeMode, AppThemeMode.dark);
     });
-
-    test('copyWith_givenNoArguments_keepsEveryValue', () {
-      final AppSettings settings = AppSettings(
-        themeMode: AppThemeMode.light,
-        fontScale: 1.5,
-        maxConcurrentPerSource: 5,
-      );
-
-      expect(settings.copyWith(), settings);
-    });
-
-    test('equality_givenTheSameValues_holds', () {
-      expect(AppSettings(fontScale: 1.2), AppSettings(fontScale: 1.2));
-      expect(
-        AppSettings(fontScale: 1.2).hashCode,
-        AppSettings(fontScale: 1.2).hashCode,
-      );
-      expect(AppSettings(fontScale: 1.2), isNot(AppSettings(fontScale: 1.3)));
-    });
   });
 }

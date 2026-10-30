@@ -84,6 +84,7 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
     required String? coverUrl,
     required String? intro,
     required String? lastChapter,
+    String? customIntro,
     DateTime? addedAt,
     DateTime? updatedAt,
   }) {
@@ -100,6 +101,7 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
         coverUrl: Value<String?>(coverUrl),
         intro: Value<String?>(intro),
         lastChapter: Value<String?>(lastChapter),
+        customIntro: Value<String?>(customIntro),
         addedAt: addedAt ?? now,
         updatedAt: updatedAt ?? now,
       ),
@@ -131,6 +133,25 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
       author: rewritesTitle
           ? Value<String?>(author)
           : const Value<String?>.absent(),
+      updatedAt: Value<DateTime>(_clock.now()),
+    ),
+  );
+
+  /// Writes the details the user edited by hand: title, author and their own introduction.
+  ///
+  /// Only these three: the cover has its own write (`setCustomCover`) because it also moves a file,
+  /// and everything else on the row is either the source's snapshot or user state that has its own
+  /// action (M33, ADR-0092).
+  Future<void> updateDetails({
+    required int id,
+    required String name,
+    required String? author,
+    required String? customIntro,
+  }) => (update(books)..where((Books table) => table.id.equals(id))).write(
+    BooksCompanion(
+      name: Value<String>(name),
+      author: Value<String?>(author),
+      customIntro: Value<String?>(customIntro),
       updatedAt: Value<DateTime>(_clock.now()),
     ),
   );
@@ -240,6 +261,7 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
     required bool isPinned,
     required int? groupId,
     required String? customCoverPath,
+    String? customIntro,
     String? tocUrl,
   }) => (update(books)..where((Books table) => table.id.equals(id))).write(
     BooksCompanion(
@@ -247,6 +269,10 @@ class BookshelfDao extends DatabaseAccessor<ReaderDatabase>
       isPinned: Value<bool>(isPinned),
       groupId: Value<int?>(groupId),
       customCoverPath: Value<String?>(customCoverPath),
+      // 备份没有这一列（旧版本）时保留本地：合并语义，不回滚用户的编辑。
+      customIntro: customIntro == null
+          ? const Value<String?>.absent()
+          : Value<String?>(customIntro),
       // 本地没有目录地址时才补：有值说明本机已经解析过这个源，恢复不该把它改回去。
       tocUrl: tocUrl == null
           ? const Value<String?>.absent()

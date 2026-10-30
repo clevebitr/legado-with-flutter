@@ -242,12 +242,55 @@ void main() {
     });
 
     test(
+      'execute_givenAnItemWithoutATitle_keepsItAndWarnsWithTheRulePath',
+      () async {
+        // 书名取不到曾经是静默的空串：换源把它当关键词，于是整本书变成「没有标题」（ADR-0091 §决策 7）。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            _categoryUrl,
+            '<ul class="explore-list"><li class="item">'
+            '<a class="title" href="/book/1/"></a></li></ul>',
+          );
+        final BookSource source = _source(
+          exploreRule: const ExploreRule(
+            bookList: 'class.explore-list@tag.li',
+            name: 'class.title@text',
+            bookUrl: 'class.title@href',
+          ),
+        );
+        final ({PageFetchService pages, FakeLogPrinter printer}) service =
+            _service(http);
+
+        final List<Book> books = _data(
+          await ExploreBooks(pages: service.pages).execute(
+            source,
+            const ExploreCategory(title: '玄幻', url: _categoryUrl),
+          ),
+        );
+
+        // 命中保留（能打开、能换源），但日志把失败钉到具体的字段规则上。
+        expect(books.single.name, isEmpty);
+        expect(
+          service.printer.events.map(
+            (LogEvent event) => event.message.toString(),
+          ),
+          contains(
+            allOf(
+              contains('without a title'),
+              contains('rulePath=exploreRule.name'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
       'execute_givenARejectedExploreListRule_propagatesTheFailure',
       () async {
         final FakeHttpClient http = FakeHttpClient()
           ..serve(_categoryUrl, _page('explore-list'));
         final BookSource source = _source(
-          exploreRule: const ExploreRule(bookList: '@xpath://div'),
+          exploreRule: const ExploreRule(bookList: '@webJs:'),
         );
 
         final ParseFailure<Never> failure = _failure(
@@ -259,7 +302,7 @@ void main() {
 
         // 顶层列表规则被拒仍整次失败（C-SRC-4 / §7）。
         expect(failure.kind, ParseFailureKind.unsupportedRule);
-        expect(failure.rulePath, 'unsupported:@xpath:');
+        expect(failure.rulePath, 'unsupported:@webJs');
       },
     );
 

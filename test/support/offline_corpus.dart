@@ -9,6 +9,8 @@ import 'package:flutter_reader/core/di/http_client_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
+import 'package:flutter_reader/core/js/source_login_info.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/background_image_picker.dart';
@@ -36,6 +38,7 @@ import 'fake_book_source_view_store.dart';
 import 'fake_bookshelf_repository.dart';
 import 'fake_bookshelf_writer.dart';
 import 'fake_content_cache.dart';
+import 'fake_explore_layout_store.dart';
 import 'fake_http_client.dart';
 import 'fake_log_printer.dart';
 import 'fake_search_scope_store.dart';
@@ -104,6 +107,14 @@ Future<void> pumpReaderApp(
           () => _FixedSelectedBookSource(source),
         ),
         httpClientProvider.overrideWithValue(http),
+        // 登录头（`source.putLoginHeader`，M25/S3b）与登录信息的写入口（M25/S5a）默认写穿数据库：
+        // 页面测试换成内存实现。
+        sourceLoginHeaderStoreProvider.overrideWithValue(
+          SourceLoginHeaderStore(),
+        ),
+        sourceLoginInfoWriterProvider.overrideWithValue(
+          InMemorySourceLoginInfoWriter(),
+        ),
         // 5.2 的正文缓存默认接真实 Drift；宿主 VM 里没有可用的执行器，页面测试用内存替身
         // （端口是 total，替身与适配器对页面是同一件事）。
         contentCacheProvider.overrideWithValue(FakeContentCache()),
@@ -140,6 +151,7 @@ Future<ProviderContainer?> pumpBookSourcePage(
   FakeBookSourceRepository? repository,
   FakeBookshelfWriter? writer,
   FakeContentCache? contentCache,
+  FakeExploreLayoutStore? exploreLayoutStore,
 }) async {
   _fixViewSize(tester);
 
@@ -156,6 +168,14 @@ Future<ProviderContainer?> pumpBookSourcePage(
       ] else
         bookSourceRepositoryProvider.overrideWithValue(repository),
       httpClientProvider.overrideWithValue(http),
+      // 登录头（`source.putLoginHeader`，M25/S3b）与登录信息的写入口（M25/S5a）默认写穿数据库：
+      // 页面测试换成内存实现。
+      sourceLoginHeaderStoreProvider.overrideWithValue(
+        SourceLoginHeaderStore(),
+      ),
+      sourceLoginInfoWriterProvider.overrideWithValue(
+        InMemorySourceLoginInfoWriter(),
+      ),
       // 跨 feature 的入口是端口（ADR-0042）：测试可以塞一个记录器，断言页面**请求了**
       // 什么（哪一章 / 哪本书），而不是去追一个路由。
       if (navigation != null)
@@ -166,6 +186,10 @@ Future<ProviderContainer?> pumpBookSourcePage(
         contentCache ?? FakeContentCache(),
       ),
       if (writer != null) bookshelfWriterProvider.overrideWithValue(writer),
+      // 发现页的布局偏好是 `shared_preferences`：页面测试用内存替身（C-NET-9 的轻量开关）。
+      exploreLayoutStoreProvider.overrideWith(
+        (Ref ref) async => exploreLayoutStore ?? FakeExploreLayoutStore(),
+      ),
       appLoggerProvider.overrideWithValue(_logger()),
     ],
   );
@@ -213,6 +237,14 @@ Future<void> pumpSourceManagementPage(
       overrides: [
         bookSourceRepositoryProvider.overrideWithValue(repository),
         httpClientProvider.overrideWithValue(http ?? FakeHttpClient()),
+        // 登录头（`source.putLoginHeader`，M25/S3b）与登录信息的写入口（M25/S5a）默认写穿数据库：
+        // 页面测试换成内存实现。
+        sourceLoginHeaderStoreProvider.overrideWithValue(
+          SourceLoginHeaderStore(),
+        ),
+        sourceLoginInfoWriterProvider.overrideWithValue(
+          InMemorySourceLoginInfoWriter(),
+        ),
         appLoggerProvider.overrideWithValue(_logger()),
         // 文件选择器的默认实现要走平台通道；测试永远覆盖端口（testing.md §4）。
         jsonFilePickerProvider.overrideWithValue(
@@ -274,6 +306,14 @@ Future<ProviderContainer> pumpSourceConsolePage(
     overrides: <Override>[
       bookSourceRepositoryProvider.overrideWithValue(repository),
       httpClientProvider.overrideWithValue(http),
+      // 登录头（`source.putLoginHeader`，M25/S3b）与登录信息的写入口（M25/S5a）默认写穿数据库：
+      // 页面测试换成内存实现。
+      sourceLoginHeaderStoreProvider.overrideWithValue(
+        SourceLoginHeaderStore(),
+      ),
+      sourceLoginInfoWriterProvider.overrideWithValue(
+        InMemorySourceLoginInfoWriter(),
+      ),
       contentCacheProvider.overrideWithValue(FakeContentCache()),
       appLoggerProvider.overrideWithValue(_logger()),
     ],
@@ -313,6 +353,14 @@ Future<ProviderContainer> pumpSearchPage(
     overrides: <Override>[
       bookSourceRepositoryProvider.overrideWithValue(repository),
       httpClientProvider.overrideWithValue(http),
+      // 登录头（`source.putLoginHeader`，M25/S3b）与登录信息的写入口（M25/S5a）默认写穿数据库：
+      // 页面测试换成内存实现。
+      sourceLoginHeaderStoreProvider.overrideWithValue(
+        SourceLoginHeaderStore(),
+      ),
+      sourceLoginInfoWriterProvider.overrideWithValue(
+        InMemorySourceLoginInfoWriter(),
+      ),
       contentCacheProvider.overrideWithValue(FakeContentCache()),
       searchScopeStoreProvider.overrideWith(
         (Ref ref) async => scopeStore ?? FakeSearchScopeStore(),

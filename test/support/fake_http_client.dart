@@ -116,6 +116,15 @@ final class FakeHttpClient implements HttpClient {
     }
   }
 
+  /// Forgets every registered failure, so a later request may be served normally.
+  ///
+  /// Used by the retry-shaped cases (`JsLibStore` re-downloads a library after a transient
+  /// failure) without building a second fixture just to get a fresh client.
+  void clearFailures() {
+    _failures.clear();
+    _causes.clear();
+  }
+
   /// Makes [url] **throw** [error] instead of answering with a [ParseResult].
   ///
   /// Deliberately out of contract: `HttpClient` answers with a [ParseResult]
@@ -201,6 +210,25 @@ final class FakeHttpClient implements HttpClient {
     headers: headers,
     sourceId: sourceId,
     declaredCharset: declaredCharset,
+    maxRetries: maxRetries,
+    receiveTimeout: receiveTimeout,
+  );
+
+  @override
+  Future<ParseResult<HttpResponse>> head(
+    String url, {
+    required String rulePath,
+    Map<String, String>? headers,
+    String? keyword,
+    String? sourceId,
+    int? maxRetries,
+    Duration? receiveTimeout,
+  }) => _serve(
+    method: 'HEAD',
+    url: url,
+    rulePath: rulePath,
+    headers: headers,
+    sourceId: sourceId,
     maxRetries: maxRetries,
     receiveTimeout: receiveTimeout,
   );

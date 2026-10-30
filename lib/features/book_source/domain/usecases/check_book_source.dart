@@ -155,6 +155,7 @@ final class CheckBookSource {
       isFromSearch: true,
       rulePath: 'searchUrl',
       emptyGroup: searchInvalidGroup,
+      emptyRulePath: 'searchRule.bookList',
       operation: () => _searchBooks.execute(source, keyword),
     );
     if (books == null) {
@@ -180,6 +181,7 @@ final class CheckBookSource {
       isFromSearch: false,
       rulePath: 'exploreUrl',
       emptyGroup: exploreRuleMissingGroup,
+      emptyRulePath: 'exploreRule.bookList',
       // 读分类是发现阶段的**前景**而不是它自己的阶段：成功不记一条结果，失败才记，
       // 否则一个阶段会跑出两条 outcome（UI 上的「阶段」就会重复）。
       recordsSuccess: false,
@@ -242,11 +244,26 @@ final class CheckBookSource {
       isFromSearch: isFromSearch,
       rulePath: 'ruleToc',
       emptyGroup: isFromSearch ? searchTocInvalidGroup : exploreTocInvalidGroup,
+      emptyRulePath: 'tocRule.chapterList',
       operation: () => _toc.execute(source, info.tocUrl),
     );
     if (chapters == null || !run.settings.runs(SourceCheckStage.content)) {
       return;
     }
+
+    // 上游 `BookSourceCheckRepository.kt:222-230`：正文校验要**喂下一章地址**，把「下一页 ==
+    // 下一章」的停止条件带下去，否则站点的 `nextContentUrl` 指到下一章时会被整本连读。
+    // 卷标题（`isVolume` 且 URL 是标题占位）不参与，取前两条真实章节。
+    final List<Chapter> readable = chapters
+        .where(
+          (Chapter chapter) =>
+              !(chapter.isVolume && chapter.url.startsWith(chapter.name)),
+        )
+        .take(2)
+        .toList(growable: false);
+    final List<Chapter> pick = readable.isEmpty
+        ? chapters.take(2).toList(growable: false)
+        : readable;
 
     await _stage(
       run,
@@ -256,13 +273,15 @@ final class CheckBookSource {
       emptyGroup: isFromSearch
           ? searchContentInvalidGroup
           : exploreContentInvalidGroup,
+      emptyRulePath: 'contentRule.content',
       // §6 / ADR-0049：校验也知道书名与章节名，顺手喂给 `java.get('bookName' / 'title')`。
       operation: () => _content.execute(
         source,
         ChapterRequest(
-          url: chapters.first.url,
-          title: chapters.first.name,
+          url: pick.first.url,
+          title: pick.first.name,
           bookName: info.name,
+          nextChapterUrl: pick.length > 1 ? pick[1].url : pick.first.url,
         ),
       ),
     );
@@ -280,6 +299,7 @@ final class CheckBookSource {
     required String rulePath,
     required Future<ParseResult<T>> Function() operation,
     String? emptyGroup,
+    String? emptyRulePath,
     bool recordsSuccess = true,
   }) async {
     if (run.isCancelled) {
@@ -321,7 +341,8 @@ final class CheckBookSource {
           run.recordFailure(
             stage,
             failureKind: ParseFailureKind.parseFailed,
-            rulePath: rulePath,
+            // 空结果指向**列表规则**：`searchUrl` 本身没错，是它读出来的东西不是列表。
+            rulePath: emptyRulePath ?? rulePath,
             invalidGroup: emptyGroup,
           );
 

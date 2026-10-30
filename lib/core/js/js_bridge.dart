@@ -1,26 +1,75 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/network/http_policy.dart';
 
 /// The book source fields a rule sees as `source`.
 ///
-/// Only `name`, `url` and `group` are exposed; everything else stays on the host.
+/// Upstream binds the **whole `BookSource` entity** (`BaseSource.kt:352-360`), so any of its public
+/// fields and methods is reachable from a script. Exposing the entity is not an option here (it
+/// would leak `payload`, ids and host-only fields), so this class is a **whitelist** of the fields
+/// the corpus actually reads (M25/S5a): the two `bookSource*` names plus `key`, `header`,
+/// `loginUrl` and `bookSourceComment`. `name` / `url` / `group` are this repository's own names for
+/// the same three values and stay for backward compatibility.
 final class JsSourceInfo {
   /// Creates the sandbox view of a book source.
-  const JsSourceInfo({required this.name, required this.url, this.group});
+  const JsSourceInfo({
+    required this.name,
+    required this.url,
+    this.group,
+    this.jsLib,
+    this.comment,
+    this.header,
+    this.loginUrl,
+  });
 
-  /// The source's display name.
+  /// The source's display name (`bookSourceName`).
   final String name;
 
-  /// The source's URL, which is also its id.
+  /// The source's URL, which is also its id (`bookSourceUrl`, and `key` upstream).
   final String url;
 
   /// The source's group, when it declares one.
   final String? group;
+
+  /// The source's `jsLib`, as declared (`book-source.md` §6).
+  ///
+  /// **Host-side only**: [toJson] does not send it, so the sandbox's `source` object never sees it
+  /// (a library that needs its own text would be circular). The rule engine reads it here and
+  /// resolves it through `JsLibStore` before building the job.
+  final String? jsLib;
+
+  /// The source's `bookSourceComment`, when it declares one.
+  ///
+  /// Real sources use it as a **script library**: five sources in the 2026-10-27 corpus run
+  /// `eval(String(source.bookSourceComment))` to get helpers and URL tables. The field is not
+  /// modelled as such (it stays in `BookSource.extra`), so nothing here interprets it either.
+  final String? comment;
+
+  /// The source's `header` field as declared, or `null` when it declares none.
+  ///
+  /// A rule-form header (`@js:` / `<js>`) travels verbatim, which is what sources inspect to decide
+  /// whether they must evaluate it themselves; a JSON-form header travels **re-serialised** from
+  /// the parsed map, so its whitespace and key order are not the author's
+  /// (`book-source.md` §6 registers that difference).
+  final String? header;
+
+  /// The source's `loginUrl` as declared, or `null` when it declares none.
+  ///
+  /// Sources `eval(String(source.loginUrl))` to reuse the sign-in script from a field rule, so the
+  /// text is handed over verbatim — flags included (`book-source.md` §6).
+  final String? loginUrl;
 
   /// The JSON object the sandbox receives as `source`.
   Map<String, Object?> toJson() => <String, Object?>{
     'name': name,
     'url': url,
     'group': group,
+    // 上游的字段名与 `key`：语料里 10 个源写 `source.bookSourceUrl`、14 个写 `source.key`。
+    'key': url,
+    'bookSourceUrl': url,
+    'bookSourceName': name,
+    'bookSourceComment': comment,
+    'header': header,
+    'loginUrl': loginUrl,
   };
 }
 
@@ -67,6 +116,50 @@ final class JsBookInfo {
   };
 }
 
+/// One chapter as a script sees it (upstream's `chapter` binding).
+///
+/// Data only: `tocRule.formatJs` reads `chapter.title` / `chapter.url` and the flags, and the script
+/// answers the new title through the job's result instead of mutating this object (S2).
+final class JsChapterInfo {
+  /// Creates the sandbox view of one chapter.
+  const JsChapterInfo({
+    required this.title,
+    required this.url,
+    this.isVip = false,
+    this.isPay = false,
+    this.isVolume = false,
+    this.updateTime,
+  });
+
+  /// The chapter name the `chapterName` rule produced.
+  final String title;
+
+  /// The chapter URL, already absolute.
+  final String url;
+
+  /// Whether the source marked the chapter as VIP-only.
+  final bool isVip;
+
+  /// Whether the source marked the chapter as already bought.
+  final bool isPay;
+
+  /// Whether this entry is a volume heading rather than a chapter.
+  final bool isVolume;
+
+  /// The display-only update time, when the source had one.
+  final String? updateTime;
+
+  /// The JSON object the sandbox receives as `chapter`.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'title': title,
+    'url': url,
+    'isVip': isVip,
+    'isPay': isPay,
+    'isVolume': isVolume,
+    'updateTime': updateTime,
+  };
+}
+
 /// One `parse.*` call from a running rule.
 ///
 /// The call travels to the host, which evaluates [rule] with the rule engine and
@@ -78,6 +171,7 @@ final class JsParseRequest {
     required this.wantsList,
     this.wantsValues = false,
     this.doc,
+    this.content,
   });
 
   /// The nested rule the script asked to evaluate.
@@ -96,6 +190,14 @@ final class JsParseRequest {
 
   /// The `doc` argument the rule passed, or `null` when it passed none.
   final String? doc;
+
+  /// The page body a `java.setContent(html)` in the same script replaced the scope with, or `null`
+  /// when the rule never called it.
+  ///
+  /// Upstream's `setContent` swaps the content later rules read inside the same evaluation; here
+  /// the page scope lives on the host, so the override travels with every `parse.*` call that
+  /// follows it (`book-source.md` §6).
+  final String? content;
 }
 
 /// The `rulePath` marker of a `parse.*` call without a page-level scope.
@@ -172,11 +274,20 @@ final class JsJob {
     this.sourceHeaders,
     this.parseEvaluator,
     this.variables = const <String, String>{},
+    this.sourceVariables = const <String, String>{},
+    this.jsLib,
+    this.titleFormatChapters,
     this.key,
     this.bookName,
     this.chapterTitle,
     this.book,
     this.loginInfo = const <String, String>{},
+    this.webViewUA = defaultUserAgent,
+    this.androidId,
+    this.src,
+    this.chapter,
+    this.nextChapterUrl,
+    this.fromBookInfo = false,
   });
 
   /// The JavaScript the rule asked for, with the `@js:` flag already removed.
@@ -189,6 +300,30 @@ final class JsJob {
   ///
   /// A snapshot taken when the job is built; writes travel back with the result.
   final Map<String, String> variables;
+
+  /// The variables the script reads and writes through `source.getVariable` / `setVariable`
+  /// (ADR-0076 §决策 1).
+  ///
+  /// A snapshot of the **persisted** per-source map: unlike [variables] these values outlive the
+  /// app, so the bridge writes what the job reported back to storage
+  /// (`SourceVariableStore.merge`).
+  final Map<String, String> sourceVariables;
+
+  /// The chapters a `tocRule.formatJs` pass rewrites, or `null` for an ordinary job (S2).
+  ///
+  /// Non-null switches the job into **title-format mode**: [script] is the `formatJs` rule and it
+  /// runs **once per chapter in one scope**, with `index` (1-based), `chapter`, `title` and `gInt`
+  /// bound — `gInt` deliberately persists across the loop, exactly like upstream's shared
+  /// `ScriptBindings` (`BookChapterList.kt:141-163`). The answer is a list aligned with this list:
+  /// a string replaces the title, `null` keeps the previous one.
+  final List<JsChapterInfo>? titleFormatChapters;
+
+  /// The source's **resolved** `jsLib`: the JavaScript the worker runs before the rule itself
+  /// (ADR-0078 S1).
+  ///
+  /// It is already the concatenation of everything the field declared (`JsLibStore.resolve`), so
+  /// the sandbox never has to fetch. `null` means the source declares no library.
+  final String? jsLib;
 
   /// The search keyword (the `key` binding) of a URL rule, or `null` otherwise.
   final String? key;
@@ -209,6 +344,42 @@ final class JsJob {
   /// travel with the job (the same mechanism as the rule variables, ADR-0034). Empty means「never
   /// signed in」, which is what a source that declares no `loginUi` always answers.
   final Map<String, String> loginInfo;
+
+  /// The `User-Agent` a WebView would send (`java.getWebViewUA`, M25/S3b).
+  ///
+  /// A constant per job: upstream reads the platform WebView's default UA once, which for us is the
+  /// desktop Chrome string every request already sends (`core/network/http_policy.dart`).
+  final String webViewUA;
+
+  /// The install id `java.androidId` answers with (M25/S3b), or `null` when the host has none.
+  ///
+  /// Upstream returns Android's `Settings.Secure.ANDROID_ID`; this repository has no such id, so the
+  /// assembly root passes a stable per-install value and the sandbox answers `''` when it is absent
+  /// (registered in `book-source.md` §6).
+  final String? androidId;
+
+  /// The page body the rule was read on (the `src` binding, M25/S3b).
+  ///
+  /// Upstream's `AnalyzeRule.evalJS` binds `src` to the scope's content — the fetched page, or a
+  /// `java.setContent(html)` replacement made before this evaluation. It is `null` where there is no
+  /// page (a URL rule, a `header` rule), which is also upstream's value there.
+  final String? src;
+
+  /// The chapter this job belongs to (the `chapter` binding, M25/S3b), or `null` when the stage has
+  /// none — a search page, a detail page, or a `tocRule.formatJs` pass (which rebinds `chapter` per
+  /// chapter inside the loop).
+  final JsChapterInfo? chapter;
+
+  /// The next chapter's URL (the `nextChapterUrl` binding), when the reader knows it.
+  ///
+  /// Upstream sets it on the content stage so a `nextContentUrl` / `content` rule can tell "the next
+  /// page is the next chapter" apart (and so a rule can build that address).
+  final String? nextChapterUrl;
+
+  /// Whether the running rules were reached from the book info stage (the `fromBookInfo` binding).
+  ///
+  /// Sources use it to answer differently on the detail page than on a list page.
+  final bool fromBookInfo;
 
   /// The page the rule was read on (the `baseUrl` binding).
   final String baseUrl;
@@ -248,11 +419,25 @@ final class JsJob {
     'result': result,
     'response': response?.toJson(),
     'variables': variables,
+    'sourceVariables': sourceVariables,
+    'jsLib': jsLib,
+    'titleFormatChapters': <Map<String, Object?>>[
+      for (final JsChapterInfo chapter
+          in titleFormatChapters ?? const <JsChapterInfo>[])
+        chapter.toJson(),
+    ],
+    'titleFormat': titleFormatChapters != null,
     'key': key,
     'bookName': bookName,
     'chapterTitle': chapterTitle,
     'book': book?.toJson(),
     'loginInfo': loginInfo,
+    'webViewUA': webViewUA,
+    'androidId': androidId,
+    'src': src,
+    'chapter': chapter?.toJson(),
+    'nextChapterUrl': nextChapterUrl,
+    'fromBookInfo': fromBookInfo,
   };
 }
 

@@ -51,7 +51,7 @@
 | 只跑主机侧 | `pwsh -File tool/test/run_unit.ps1` | 等价于 CI 的测试 + 覆盖率两步 |
 | 只跑 Windows 设备级 | `pwsh -File tool/test/run_windows.ps1` | 需要开发者模式 |
 | 只跑 Android 设备级 | `pwsh -File tool/test/run_android.ps1` | 没有在线设备时自动启动 AVD；**不用快照**，开机后跑完就关并清理。本机实测：全量 3 个文件 **~2 min**（新 worktree 首次要构建，~3 min 20 s），单文件 ~70 s（2026-10-13） |
-| 只跑其中一个用例文件 | `-TestFile <名字>` | 如 `-TestFile js_bridge`。逐文件运行意味着**一文件一次构建+安装**，引擎/桥类切片只需 `js_bridge_test.dart` |
+| 只跑其中一个用例文件 | `-FileFilter <名字>` | 如 `-FileFilter js_bridge`（参数名以 `common.ps1` 的 `Invoke-IntegrationTests` 为准；旧文档写的 `-TestFile` 并不存在）。逐文件运行意味着**一文件一次构建+安装**，引擎/桥类切片只需 `js_bridge_test.dart` |
 | 真正全新的 guest | `-WipeData` | 重置 AVD 的 userdata（完整首次开机，比普通冷启动慢）；只有需要排除残留用户数据时才用 |
 | 全量但跳过设备级 | `pwsh -File tool/test/run_all.ps1 -SkipDeviceTests` | 没有设备时的收敛选项 |
 | 跳过其中一端 | `-SkipWindows` / `-SkipAndroid` | — |

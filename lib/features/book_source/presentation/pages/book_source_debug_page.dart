@@ -183,7 +183,7 @@ class _BookSourceDebugPageState extends ConsumerState<BookSourceDebugPage> {
         ),
         SizedBox(height: tokens.spacing.lg),
         if (state.events.isEmpty)
-          StateMessage(message: l10n.bookSourceDebugEmpty)
+          StateMessage(message: l10n.bookSourceDebugEmpty, icon: Icons.code)
         else
           for (final SourceDebugEvent event in state.events)
             _eventLine(l10n, event),

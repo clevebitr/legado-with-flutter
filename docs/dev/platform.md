@@ -44,7 +44,8 @@ Please enable Developer Mode in your system settings.
 或执行 `start ms-settings:developers`。
 
 > 本项目依赖多个带原生代码的插件（`drift_flutter`、`path_provider`、`shared_preferences`、
-> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`、`just_audio_windows`、`flutter_tts`），
+> `dynamic_color`、`cached_network_image`、`flutter_qjs_next`、`just_audio_windows`、`flutter_tts`、
+> `share_plus`），
 > 因此该开关是 Windows 开发的**硬前提**。Android 与纯 Dart 开发（`flutter test` / `flutter analyze`）不受影响。
 
 **M17 / M24 起新增的 Windows 构建与能力前提（ADR-0054 A-0、ADR-0062 实测）：**
@@ -74,8 +75,10 @@ Please enable Developer Mode in your system settings.
 | `HapticsController` | 触感反馈能力探测与降级 | 组件内调用，不判断平台 |
 | `LongRunningTask` | 长任务的前台标记（Android 为 `PARTIAL_WAKE_LOCK`） | 批量书源校验开始 / 结束时 `acquire` / `release`（ADR-0043 §决策 3） |
 | `PlaybackNotification` | 媒体通知 / 锁屏控制（Android / iOS 由 `audio_service` 实现；Windows 返回 no-op 的 `null` 句柄） | 音频播放器在播放状态变化时 `attach` / `update` / `detach`；**UI 不判断平台**（ADR-0054 §决策 3/4） |
+| `SourceCheckNotification` | 批量校验的**状态通知**（Android 用 `MainActivity` 的 `NotificationManager`：当前源名 + completed/total + 进度条 + 完成提醒；其他平台 no-op） | `SourceCheck` notifier 在每次结论后推一条进度、收尾推结果；文案由页面从 ARB 传入（C-UI-5）。**不是**前台服务：校验仍在主 isolate 里跑，通知只解决「切到后台也能看见进度」（与上游 `BookSourceCheckService` 的差异：没有 Service 保活，ADR-0043 的「无前台服务」登记不变） |
 | `WebPageFetcher` | `,{webView:…}` 的 headless WebView（三端）；不支持的平台 `isSupported == false`，调用方回落普通 GET | `PageFetchService` 在 `webView` + GET + 无 body 时调用（ADR-0061 §决策 4） |
 | `usesMediaKitPlayback` | 播放后端的平台选择：Windows 用 media_kit，Android / iOS 用 just_audio | `reader/di.dart` 选适配器；**业务层不判断平台**（ADR-0061 §决策 1） |
+| `FileSharer` | 系统分享面板（Android `ACTION_SEND` / iOS `UIActivityViewController`）；不支持的平台 `isSupported == false` | 移动端的导出（书源 / 净化规则 / 备份）与日志页在 `isSupported` 时用分享代替保存对话框；**UI 只问能力，不判断平台**（ADR-0083） |
 
 **契约：** 每个接口在不支持的平台返回 `null` 或 no-op，**禁止抛出异常**；
 调用方必须把 `null` 当作正常分支处理，不得用 `!` 解包（C-TYPE-2）。
@@ -128,6 +131,7 @@ pageTransitionsTheme: const PageTransitionsTheme(
 ## 5. 路径与文件系统
 
 - 所有路径必须经 `path_provider` 获取（C-PLT-3）。
+- Android / iOS 的应用私有目录无法被文件管理器访问：导出与日志必须经 `FileSharer` 交给系统分享，或由用户显式选择路径（ADR-0083）。
 - 目录划分：
 
 | 用途 | 位置 |
@@ -151,6 +155,7 @@ pageTransitionsTheme: const PageTransitionsTheme(
 - [ ] Android 8–11 主题使用种子色且无崩溃
 - [ ] 状态栏/导航栏在 edge-to-edge 下内容不被遮挡
 - [ ] 批量书源校验运行期间 `LongRunningTask.isSupported` 为 true，退出后 wake lock 已释放（`dumpsys power` 无残留 tag）
+- [ ] 导出书源 / 净化规则 / 备份与日志分享都能拉起系统分享面板，取消后不弹错误
 
 **iOS**
 
@@ -184,6 +189,7 @@ pageTransitionsTheme: const PageTransitionsTheme(
 |---|---|---|
 | `android/gradle.properties` | `kotlin.incremental=false` | Kotlin 2.4 的增量编译缓存在 Windows 上偶发文件锁定，报 `Could not close incremental caches` 并中断构建（最近复现于 `dynamic_color` 模块）。**这是工具链问题，与任何插件无关，不要因更换插件而删除。** |
 | `windows/CMakeLists.txt` | `add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)`（在 `include(flutter/generated_plugins.cmake)` 之前） | Windows CI 的 `windows-latest` 已是 **Visual Studio 2026（MSVC 14.5x）**，它把 `<experimental/coroutine>` 的弃用升级为硬错误（`error C2338` / `STL1011`），而 `just_audio_windows` 用 C++/WinRT 的 experimental 协程 → 整个 Windows 构建失败。插件的 `vcxproj` 在 pub cache 里不能改；这个宏是 MSVC 给出的逃生口。**移除触发条件**：`just_audio_windows` 迁到 C++20 `<coroutine>`，或我们不再依赖它 |
+| `windows/runner/ax_log_filter.{h,cpp}` + `main.cpp`（`InstallAccessibilityLogFilter()`） | 把引擎那条 `Failed to update ui::AXTree` 噪声从**控制台**里过滤掉（进程 stderr → 管道 → 逐行转发，只丢这一条）。上游缺陷仍 open（flutter/flutter#182444），不影响功能。**这是模板外文件**：`flutter create` 重新生成 runner 时要连同 `CMakeLists.txt` 里的源文件行一起保留（ADR-0084） |
 | `android/gradle.properties` | `android.r8.proguardAndroidTxt.disallowed=false` | `flutter_inappwebview_android 1.1.3` 仍调用 `getDefaultProguardFile('proguard-android.txt')`，AGP 9 默认拒绝（`-dontoptimize`）。插件改用 `proguard-android-optimize.txt` 后删除该行（ADR-0061）。 |
 
 > 另一条曾经的变通 `kotlin.jvm.target.validation.mode=warning` **已删除**：它只为已移除的

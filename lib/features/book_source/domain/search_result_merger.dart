@@ -109,8 +109,10 @@ final class SearchResultMerger {
         if (existing.origins.contains(sourceUrl)) {
           continue;
         }
+        // 每源一份快照：M31 的「选择来源」只读它，不重新发请求（ADR-0091 §决策 6）。
         final SearchBook merged = existing.copyWith(
           origins: <String>[...existing.origins, sourceUrl],
+          hits: <OriginHit>[...existing.hits, ...candidate.hits],
         );
         _put(bucketOf(existing), key, merged);
         changed = true;

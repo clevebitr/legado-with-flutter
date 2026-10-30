@@ -249,7 +249,7 @@ void main() {
 
       final ParseFailure<Never> failure = _failure(
         await FetchAudioTracks(pages: _service(http)).execute(
-          _source(content: '@xpath://div'),
+          _source(content: '@webJs:'),
           const ChapterRequest(url: _chapterUrl),
         ),
       );

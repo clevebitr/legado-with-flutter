@@ -1,6 +1,7 @@
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
@@ -116,8 +117,9 @@ ParseFailure<Never> _failure<T>(ParseResult<T> result) => switch (result) {
 
 /// Builds the service under test around [jsBridge].
 ({PageFetchService pages, FakeLogPrinter printer}) _service(
-  FakeJsBridge jsBridge,
-) {
+  FakeJsBridge jsBridge, {
+  SourceLoginHeaderStore? loginHeaders,
+}) {
   final FakeLogPrinter printer = FakeLogPrinter();
 
   return (
@@ -129,6 +131,7 @@ ParseFailure<Never> _failure<T>(ParseResult<T> result) => switch (result) {
       ),
       http: FakeHttpClient(),
       logger: AppLogger(level: LogLevel.debug, printer: printer),
+      loginHeaders: loginHeaders,
     ),
     printer: printer,
   );
@@ -277,6 +280,7 @@ void main() {
         final JsPageContext? jsContext = switch (scope) {
           DomScope(:final JsPageContext? jsContext) => jsContext,
           JsonScope(:final JsPageContext? jsContext) => jsContext,
+          RegexScope(:final JsPageContext? jsContext) => jsContext,
         };
         expect(jsContext?.baseUrl, 'https://example-novel.test/book/9/?9bdb14');
       },
@@ -635,7 +639,8 @@ void main() {
       expect(http.requestedUrls, isEmpty);
     });
 
-    test('fetchRule_givenUnsupportedOptions_warnsByOptionName', () async {
+    test('fetchRule_givenUnsupportedOptions_failsBeforeRequesting', () async {
+      // 未建模的选项在取值处判失败（C-SRC-4）：忽略 `origin` / `js` 只会把错误留到更远的网络层。
       final FakeLogPrinter printer = FakeLogPrinter();
       final FakeHttpClient http = FakeHttpClient()
         ..serve(
@@ -652,20 +657,177 @@ void main() {
         logger: AppLogger(level: LogLevel.debug, printer: printer),
       );
 
-      await pages.fetchRule(
+      final ParseResult<FetchedPage> result = await pages.fetchRule(
         'https://example-novel.test/s?k={{key}},{"origin":"https://a.test"}',
         rulePath: 'searchUrl',
         params: <String, String>{'key': '剑来'},
         context: _context(),
       );
 
-      expect(http.requestedMethods, <String>['GET']);
+      expect(
+        (result as ParseFailure<FetchedPage>).kind,
+        ParseFailureKind.unsupportedRule,
+      );
+      expect(result.rulePath, 'unsupported:url-options:origin');
+      expect(http.requestedMethods, isEmpty);
       expect(
         printer.events
             .map((LogEvent event) => event.message.toString())
             .any((String message) => message.contains('option=origin')),
         isTrue,
       );
+    });
+  });
+
+  group('PageFetchService stage bindings', () {
+    test('fetchRule_givenAPage_carriesTheBodyAsSrc', () async {
+      // M25/S3b：`src` 是这一页的正文（上游 `AnalyzeRule.evalJS` 的 `content`），元素级规则
+      // 与 `loginCheckJs` 读到的都是同一份。
+      final FakeJsBridge bridge = FakeJsBridge()..result = null;
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=x',
+          '<div class="result">ok</div>',
+        );
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/s?q={{key}}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{'key': 'x'},
+        context: _context(),
+        login: const SourceLoginGuard(checkScript: 'result'),
+      );
+
+      final JsJob job = bridge.jobs.singleWhere(
+        (JsJob job) => job.rulePath == 'loginCheckJs',
+      );
+      expect(job.src, '<div class="result">ok</div>');
+    });
+
+    test('fetchRule_givenAStageContext_keepsChapterAndBookInfo', () async {
+      // 阶段声明的上下文整份带到页面上（M25/S3b）：`chapter` / `nextChapterUrl` /
+      // `fromBookInfo` 在第二页与第一页一样，`src` 换成那一页的正文。
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'ok';
+      const JsChapterInfo chapter = JsChapterInfo(
+        title: '第一章',
+        url: 'https://example-novel.test/1.html',
+        isVip: true,
+      );
+
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/1.html?v=2',
+          '<div class="content">正文</div>',
+        );
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: bridge,
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      final ParseResult<FetchedPage> fetched = await pages.fetchRule(
+        'https://example-novel.test/1.html?v=2',
+        rulePath: 'contentRule.nextContentUrl',
+        params: const <String, String>{},
+        context: const JsPageContext(
+          baseUrl: 'https://example-novel.test/1.html',
+          source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+          chapter: chapter,
+          nextChapterUrl: 'https://example-novel.test/2.html',
+          fromBookInfo: true,
+        ),
+        login: const SourceLoginGuard(checkScript: 'result'),
+      );
+
+      final JsJob job = bridge.jobs.singleWhere(
+        (JsJob job) => job.rulePath == 'loginCheckJs',
+      );
+      expect(fetched, isA<ParseSuccess<FetchedPage>>());
+      expect(job.chapter?.title, '第一章');
+      expect(job.chapter?.isVip, isTrue);
+      expect(job.nextChapterUrl, 'https://example-novel.test/2.html');
+      expect(job.fromBookInfo, isTrue);
+      expect(job.src, isNotNull);
+    });
+  });
+
+  group('PageFetchService URL dialect', () {
+    test('fetchRule_givenADeclaredCharset_encodesTheWholeQuery', () async {
+      // M25/S4：声明了 `charset` 的 GET 把整条 query 按该编码转义（上游 `analyzeQuery`），
+      // 不只是 `{{key}}`——GBK 站点的中文参数靠这一条才对得上。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/s?q=%BD%A3%C0%B4&p=2',
+          '<div>x</div>',
+        );
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge());
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: service.printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: service.printer),
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/s?q=剑来&p={{page}},{"charset":"gbk"}',
+        rulePath: 'searchUrl',
+        params: const <String, String>{'page': '2'},
+        context: _context(),
+      );
+
+      expect(
+        http.requestedUrls.single,
+        'https://example-novel.test/s?q=%BD%A3%C0%B4&p=2',
+      );
+    });
+
+    test('fetchRule_givenAPageList_asksThePageEntry', () async {
+      // 页码列表 `<1,2,3>`：第 2 页请求第二个地址（上游 `pagePattern`）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve('https://example-novel.test/2.html', '<div>x</div>');
+      final FakeLogPrinter printer = FakeLogPrinter();
+      final PageFetchService pages = PageFetchService(
+        engine: RuleEngine(
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+          jsBridge: FakeJsBridge(),
+          variables: JsVariableStore(),
+        ),
+        http: http,
+        logger: AppLogger(level: LogLevel.debug, printer: printer),
+      );
+
+      await pages.fetchRule(
+        'https://example-novel.test/<1,2,3>.html',
+        rulePath: 'searchUrl',
+        params: const <String, String>{},
+        page: 2,
+        context: const JsPageContext(
+          baseUrl: 'https://example-novel.test/',
+          page: 2,
+          source: JsSourceInfo(name: '示例书源', url: 'https://example-novel.test'),
+        ),
+      );
+
+      expect(http.requestedUrls.single, 'https://example-novel.test/2.html');
     });
   });
 
@@ -745,6 +907,75 @@ void main() {
       expect(
         await service.pages.headersOf(_source(headerRule: '@js:42')),
         isNull,
+      );
+    });
+
+    test('headersOf_givenAStoredLoginHeader_mergesItOverTheDeclared', () async {
+      // M25/S3b：上游 `getHeaderMap(userAgent, hasLoginHeader = true)` 把登录头压在源自己的
+      // header 之上——登录换来的 token 要能盖掉源里写死的那个。
+      final SourceLoginHeaderStore loginHeaders = SourceLoginHeaderStore(
+        repository: InMemorySourceLoginHeaderRepository(),
+      );
+      await loginHeaders.ensureLoaded('https://example-novel.test');
+      loginHeaders.put(
+        'https://example-novel.test',
+        '{"Token":"t","Referer":"https://login.test/"}',
+      );
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge(), loginHeaders: loginHeaders);
+      final BookSource source = _source(
+        headers: const <String, String>{
+          'Referer': 'https://declared.test/',
+          'Accept': 'x',
+        },
+      );
+
+      expect(await service.pages.headersOf(source), <String, String>{
+        'Accept': 'x',
+        'Referer': 'https://login.test/',
+        'Token': 't',
+      });
+    });
+
+    test('headersOf_givenNoLoginHeader_answersTheDeclaredMap', () async {
+      final SourceLoginHeaderStore loginHeaders = SourceLoginHeaderStore(
+        repository: InMemorySourceLoginHeaderRepository(),
+      );
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge(), loginHeaders: loginHeaders);
+      final BookSource source = _source(
+        headers: const <String, String>{'Accept': 'x'},
+      );
+
+      expect(await service.pages.headersOf(source), <String, String>{
+        'Accept': 'x',
+      });
+    });
+
+    test('headersOf_givenALoginHeaderThatIsNotJson_warnsAndSkips', () async {
+      // 规则可以往登录头里写任何东西：坏值只该丢这次的合并，不该让请求失败。
+      final SourceLoginHeaderStore loginHeaders = SourceLoginHeaderStore(
+        repository: InMemorySourceLoginHeaderRepository(),
+      );
+      await loginHeaders.ensureLoaded('https://example-novel.test');
+      loginHeaders.put('https://example-novel.test', 'not json');
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(FakeJsBridge(), loginHeaders: loginHeaders);
+
+      expect(
+        await service.pages.headersOf(
+          _source(headers: const <String, String>{'Accept': 'x'}),
+        ),
+        <String, String>{'Accept': 'x'},
+      );
+      expect(
+        service.printer.events
+            .map((LogEvent event) => event.message)
+            .any(
+              (Object? message) =>
+                  '$message'.contains('Login header is not a JSON object'),
+            ),
+        isTrue,
       );
     });
 
@@ -1178,10 +1409,58 @@ void main() {
         hasLength(2),
       );
     });
+
+    test(
+      'walk_givenTheNextPageIsTheNextChapter_stopsBeforeReadingIt',
+      () async {
+        // 上游 BookContent.kt:90-96：翻页规则指到**下一章**时提前停止。没有这一条，站点把
+        // 「下一章」写进 nextContentUrl 的源会被整本连读，直到 50 页上限。
+        final FakeLogPrinter printer = FakeLogPrinter();
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            'https://example-novel.test/book/1/ch1.html',
+            '<div class="body">第一页</div>'
+                '<a id="next" href="ch2.html">下一章</a>',
+          );
+        final PageFetchService pages = PageFetchService(
+          engine: RuleEngine(
+            logger: AppLogger(level: LogLevel.debug, printer: printer),
+            jsBridge: FakeJsBridge(),
+            variables: JsVariableStore(),
+          ),
+          http: http,
+          logger: AppLogger(level: LogLevel.debug, printer: printer),
+        );
+
+        final PageWalk walk = _data(
+          await pages.walk(
+            rule: 'https://example-novel.test/book/1/ch1.html',
+            rulePath: 'ruleContent',
+            nextRule: '@css:a#next @href',
+            nextRulePath: 'contentRule.nextContentUrl',
+            context: const JsPageContext(
+              baseUrl: 'https://example-novel.test/book/1/',
+              page: 1,
+              source: JsSourceInfo(
+                name: '示例书源',
+                url: 'https://example-novel.test',
+              ),
+              nextChapterUrl: 'https://example-novel.test/book/1/ch2.html',
+            ),
+            sourceId: 'https://example-novel.test',
+          ),
+        );
+
+        expect(walk.pages, hasLength(1));
+        expect(http.requestedUrls, <String>[
+          'https://example-novel.test/book/1/ch1.html',
+        ]);
+      },
+    );
   });
 
   group('PageFetchService post-processing', () {
-    // ADR-0068 §决策 7：`sourceRegex` 先截取再建 scope，`bodyJs` 对响应体跑脚本。
+    // ADR-0068 §决策 7：`sourceRegex` 先截取再建 scope（matrix #23），`bodyJs` 对响应体跑脚本。
     test('sourceRegex_givenAMatch_buildsTheScopeFromTheFragment', () async {
       final FakeLogPrinter printer = FakeLogPrinter();
       final FakeHttpClient http = FakeHttpClient()

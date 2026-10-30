@@ -49,6 +49,7 @@
 | `concurrentRate` | `concurrentRate` | `String?` | **M1** | 并发限速；语法、毫秒单位与「速率门 → 并发门」的合成归 §8（ADR-0036） |
 | `variableComment` | `variableComment` | `String?` | **M1** | 书源变量说明；**纯展示**，引擎不读（上游 `BookSource.kt:245-252` 只与校验注释拼接显示） |
 | `loginUrl` / `loginUi` / `loginCheckJs` | 同名 | `String?` ×3 | **M21a** | 三个字段都建模（导入/导出保真）。`loginCheckJs` 是**每次取页后运行的响应拦截器**（不是 true/false 检查），绑定与返回值见 §6；`loginUrl` 是登录入口打开的地址（URL 规则，后缀丢掉），`loginUi` 只保留原文（原生表单归 M21b/U15）。口径与三条登记差异见 ADR-0068（2026-10-24 增补） |
+| `jsLib` | `jsLib` | `String?` | **M25/S1** | 源内 JS 库：每条 `@js:` 规则执行**前**先把它跑进同一个函数作用域（纯 JS 原样跑；写成 `{名:http(s)地址}` 的 JSON 对象时逐条下载后按对象序拼接）。解析/缓存与失败语义见 §6（ADR-0078 S1） |
 | `lastUpdateTime` / `respondTime` / `weight` / `customOrder` | 同名 | `int?` | M0 | 仅用于展示与排序 |
 
 **子规则字段**（原版字段名 → Dart，全部 camelCase）：
@@ -57,6 +58,7 @@
 |---|---|---|
 | `SearchRule` | `bookList`、`name`、`author`、`kind`、`wordCount`、`lastChapter`、`intro`、`coverUrl`、`bookUrl`、`updateTime`；`checkKeyWord` | M0（`updateTime` 为 M1；`checkKeyWord` 为 **5.10**） |
 | `ExploreRule` | 与 `SearchRule` 的九个列表字段**同形** + `updateTime`（上游 `BookListRule` 接口，`BookListRule.kt:6-18`；无 `checkKeyWord`） | M1 |
+| 书源级 | `bookSourceName`、`bookSourceUrl`、`bookSourceGroup`、`bookSourceType`、`enabled`、`header`、`searchUrl`、`exploreUrl`、`ruleSearch`、`ruleExplore`、`ruleBookInfo`、`ruleToc`、`ruleContent`、`concurrentRate`、`variableComment`、`loginUrl`、`loginUi`、`loginCheckJs`、`jsLib`（✅ M25/S1：每条 `@js:` 规则执行前先跑库脚本，见 §6） | M0 / M25 |
 | `BookInfoRule` | `init`、`name`、`author`、`kind`、`lastChapter`、`intro`、`coverUrl`、`tocUrl`、`wordCount`、`canReName`、`updateTime` | M0（`canReName`、`updateTime` 为 M1） |
 | `TocRule` | `chapterList`、`chapterName`、`chapterUrl`、`isVip`、`updateTime`、`nextTocUrl` | M0（`updateTime` 为 M1） |
 | `ContentRule` | `content`、`nextContentUrl`、`replaceRegex` | M0 |
@@ -64,15 +66,24 @@
 
 **默认请求头：** 源没写 `header` 时，请求带一个**桌面 Chrome** 的 `User-Agent`（与上游默认一致，
 ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前就 403；源自己的 `header` 仍然覆盖它（C-NET-4）。
+**登录头（`source.putLoginHeader`，M25/S3b）压在 `header` 之上**：顺序是「源的 `header`（规则形态先求值）
+→ 登录头」，与上游 `getHeaderMap(userAgent, hasLoginHeader = true)` 一致；它是**按阶段**合并的
+（每个阶段取一次 header 表），不是每个请求都重读，所以同一个阶段里中途写下的登录头从下一个阶段起生效。
 
 模型必须使用 `freezed` + `json_serializable`（C-SRC-7）。未知字段必须**保留而非丢弃**：
 在 `extra` 中承载，以便导出时不丢信息。
 
 > **列表类规则的「同形」约束（M1-b0 裁决，ADR-0035 §决策 1）：** `SearchRule` 与 `ExploreRule` 的九个
-> 列表字段由上游 `BookListRule` 接口固定，两者**必须同批**增减字段，不得只改一处；
-> 上游确实存在而本仓尚未建模的字段（`BookInfoRule.downloadUrls` /
-> `relatedBooks`、`TocRule.preUpdateJs` / `formatJs` / `isVolume` / `isPay`）按「保留在 `extra` +
-> 去向登记」处理，清单与去向见 `docs/dev/roadmap.md` §3.7，不得在此处另开一份。
+> 列表字段由上游 `BookListRule` 接口固定，两者**必须同批**增减字段，不得只改一处。
+>
+> **上游存在而本仓尚未建模的字段（清单的唯一出处是 `docs/dev/engine-parity.md`）：**
+> `BookInfoRule.downloadUrls` / `relatedBooks`、书源级 `coverDecodeJs` / `ruleReview` /
+> `customButton` / `homepageModules`。
+> **自 M25 起已建模的**：`jsLib`（S1）；`bookUrlPattern`、`eventListener`、`TocRule.formatJs` /
+> `isVolume` / `isPay` / `wordCount` / `preUpdateJs`、`ContentRule.subContent` / `title` /
+> `payAction` / `callBackJs`（S2，其中 `subContent` / `title` 只建模、执行留待 S2 剩余）。
+> 它们的处理口径固定：**保留在 `extra`**（导入/导出不变形）+ **不假装支持**（不生效即是不生效）+
+> **去向登记**（`engine-parity.md` 的切片或「有意差异 + 触发条件」）。本表不重列、不另开清单。
 > `SearchRule.checkKeyWord` **不在此列**：它属「校验 / 调试的默认关键词」，已随 5.10 建模
 > （判据与默认值见 ADR-0043 §决策 2）。
 >
@@ -102,8 +113,9 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > 必然全空。
 > **本仓口径与登记差异：** `init` 复用列表规则的元素语义（`RuleEngine.selectAll`）——JSON 规则
 > 给出 `JsonScope`（后续字段从该子结构读），DOM 规则给出命中元素的 `DomScope`；命中多个时
-> **取第一个**，命中零个按 §7 报 `parseFailed`。**差异：** `init` 本身是裸 `@js:` 时报
-> `unsupported:@js:list`（列表规则尚无「JS 返回元素」的契约，见 §3 的 #14 注记）。
+> **取第一个**，命中零个按 §7 报 `parseFailed`。`init` 整条写成 `@js:` 或 `<js>…</js>` 时按
+> 列表规则的 JS 段求值（脚本返回数组即 scope 列表，见 §3 的 #14 注记补充）；**列表规则尾部**
+> 的 `@js:`（`class.a@js:…`）仍报 `unsupported:@js:list`，去向见 `docs/dev/engine-parity.md` S4。
 
 > **层归属与 `extra` 的落地形态**见 ADR-0021（模型位于 `domain/entities/`；`extra` 由
 > `fromLegadoJson` 逐层填充）。本表只拥有字段映射与分期。
@@ -134,21 +146,21 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 | 4 | 类型 `children`（取全部子标签，忽略第二、三段） | `class.list@children` | 所有字段 | M0 | 已确认 |
 | 5 | 位置：正索引与负索引（`-1` 为倒数第一） | `tag.li.-1@text` | 所有字段 | M0 | 已确认 |
 | 6 | `!` 位置排除（序号用 `:` 分隔，支持负数） | `tag.li!0:1@text` | 所有字段 | M0 | 已确认 |
-| 7 | 列表首字符 `-` 使结果**倒置** | `-class.odd@tag.a@href` | 所有字段 | M0 | 已确认 |
+| 7 | 列表首字符 `-` 使结果**倒置**；`+` 是「正序」的显式写法（剥掉即忽略，`-+` 仍倒序） | `-class.odd@tag.a@href` | 所有字段 | M0 / **M25/S4** | 已确认 |
 | 8 | 提取内容：`text` / `textNodes` / `ownText` / `html` / `all` / `href` / `src`（及其他 HTML 属性名） | `tag.a@href` | 所有字段 | M0 | 已确认 |
 | 9 | 正则替换 `##正则##替换内容`（替换为空时可省略第二个 `##`） | `tag.p@text##全文阅读` | 所有字段 | M0 | 已确认 |
 | 10 | `\|\|` 依次尝试，首个非空即成功 | `class.odd.0@tag.a.0@text\|\|tag.dd.0@tag.h1@text` | 所有字段 | M0 | 已确认 |
 | 11 | `&&` **合并两侧结果（并集，非串联；仅限同种规则，不含 js 与正则）** | `class.odd.0@tag.a.0@text&&tag.dd.0@tag.h1@text` | 所有字段 | M0 | 已确认 |
 | 12 | `@css:` 标准 CSS 选择器 | `@css:.book-list li@text` | 所有字段 | M0 | 已确认 |
 | 13 | `@json:` JSONPath（以 `$.` 开头时可省略标志） | `@json:$.data.list[*].name` | 所有字段 | M0 | 已确认 |
-| 14 | `@js:` JavaScript | `@js:result.replace(/\\s/g,'')` | 所有字段 | **M0** | 已确认（**列表规则**自 M12 起支持：脚本返回数组即条目，ADR-0047 §决策 3；脚本文本内的 `{{…}}` / `@get:` 先展开（ADR-0060 §决策 1）） |
+| 14 | `@js:` JavaScript | `@js:result.replace(/\\s/g,'')` | 所有字段 | **M0** | 已确认（**列表规则**自 M12 起支持：脚本返回数组即条目，ADR-0047 §决策 3；**任一段**都可以是 JS 段，含 `class.list@tag.li@js:…` 这种尾部写法——脚本拿到上一段的条目内容（M25/S4）；脚本文本内的 `{{…}}` / `@get:` 先展开（ADR-0060 §决策 1）） |
 | 15 | `@@` 默认规则标志（在 `{{}}` 内使用时必填） | `@@class.odd.0@text` | 所有字段 | M1 | 已确认 |
 | 16 | `@put:{key:rule}` / `@get:{key}`（**仅限 js 以外**的规则；`@put` 内 JSONPath 不加引号，其他规则加引号） | `@put:{bid:"//*[@bid-data]/@bid-data"}` | 所有字段 | M1 | 已确认 |
 | 17 | `java.put(key,value)` / `java.get(key)`（**仅限 js 内**，js 中不能使用 `@get`） | — | 所有字段 | M1 | 已确认 |
 | 18 | `{{}}` 内嵌规则 / JS（搜索 URL 与发现 URL 内**只能**用 JS；其他位置默认 JS，用其他规则必须带标志头 `@@` / `//` 或 `@xpath:` / `$.` 或 `@json:` / `@css:`） | `{{result.match(...)}}` | 所有字段 | M1 | 已确认 |
 | 19 | `{}`（阅读 2.0 遗留规则，**只能**用 JSONPath，应尽量避免） | `{$.data.name}` | 所有字段 | M1 | 已确认 |
-| 20 | `:正则规则`（不可省略标志；**仅书籍列表与目录列表**） | 待按原版实现确认 | 仅书籍列表、目录列表 | **M2** | 待验证 |
-| 21 | `@xpath:` XPath（以 `//` 开头时可省略标志） | `@xpath://div[@id='a']/text()` | 所有字段 | **M2** | 不支持 |
+| 20 | `:正则规则`（不可省略标志；**仅书籍列表与目录列表**；`&&` 在里面是**正则链**不是分支连接符） | `:(?s)(\d+)" class="(isvip)?[^"]*name[^>]*>([^<]*)` | 仅书籍列表、目录列表 | **M25/S5e** | 已确认（每条匹配成一个条目，条目字段用 `$1` / `$2` / `$0` 模板取组值，可带 `##正则##替换`；值规则位置具名拒绝 `unsupported::`，条目上的非模板规则具名拒绝 `unsupported:regex:item`。语义见下方 `:正则` 注记） |
+| 21 | `@xpath:` XPath（以 `//` 开头时可省略标志；本仓**只认 `//`**，见下方注记） | `@xpath://div[@id='a']/text()` | 所有字段 | **M25/S5b** | 已确认（自研子集：路径 + `*` / 标签 / `text()` / `@attr`、谓词（位置、`@a='v'`、`contains()`、`not()`、`starts-with()`、`position()`/`last()`、存在性路径）、`\|` 并集、`following-sibling::` 等七个轴；其余轴与函数**具名拒绝**。语义见下方 XPath 注记） |
 | 22 | `@webJs` 网页 JS | — | 正文规则 | **M2** | 不支持 |
 | 23 | `sourceRegex` 源码正则 | `sourceRegex`（`ruleContent`） | 正文规则 | **M21a** | 已确认（先截取再建 scope，不命中即 `parseFailed`；见 §4.3 与 ADR-0068） |
 | 24 | 字体反爬字形映射 | `queryTTF` / `queryBase64TTF` / `replaceFont` | 正文替换规则 | **M21a** | 已确认（自研 `cmap` + `post` 解析；字形名优先、id 兜底，见 §6） |
@@ -157,8 +169,10 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 | 27 | `%%` 并行交叉合并（与 `\|\|`、`&&` 同级的选择器连接符） | — | 所有字段 | **M0** → Phase 3.2（与 #10 / #11 同族，复用同一套连接符切分） | 已确认 |
 | 28 | 索引作为 `@` 分段后每段的首规则：`.1` / `[1]` / `!0` / `children[1]`，等价于 `children` + 该索引（可与 #5 / #6 / #26 的位置写法组合）；**任意段末尾**的 `.N` / `.-N`（纯数字）同样是索引（`#id img.0`，ADR-0069 G3） | `head@.1@text`、`head@[1]@text`、`head@children[1]@text`、`#image_div img.0@src`（等价） | 所有字段 | **M0** → Phase 3.1（已实现） | 已确认 |
 | 29 | `@css:` 内的 jsoup 索引伪类 `:eq(n)` / `:gt(n)` / `:lt(n)`（**兄弟索引**，0-based，**不是**结果集索引） | `@css:div#info > p:eq(3) @text` | 所有字段 | **M0** → Phase 3.2 | 已确认 |
-| 30 | 提取段里的**嵌套规则**（末段本身是一条规则，如 `class.a@css:.b`） | `class.a@css:.b` | 所有字段 | **M2 / 暂不实现**（复审触发条件：真实语料统计显示使用率 > 0 且影响可用率时改判 M1） | 不支持 |
+| 30 | 提取段里的**嵌套规则**（末段本身是一条规则，如 `class.a@css:.b`） | `class.a@css:.b` | 所有字段 | **M2 / 登记不做**（2026-10-27 复核：修掉普查探测器后语料命中 **0 源 / 0 处**，见下方 #30 注记） | 有意差异（触发 = 出现依赖它的真实源） |
 | 31 | `<js>…</js>` JS 包装（**任意位置**，可作其他规则的分隔符；与 #14 同能力、不同包装） | `tag.li<js>…</js>//a`（原版文档示例） | 所有字段 | **M12**（值规则与列表规则都支持） | 已确认（**分段链**：上一段产出是下一段 `result`，`{{result}}` 由此拼进后续文本；ADR-0047 §决策 2） |
+| 32 | 默认规则里的**属性选择器**：`[attr]` / `[attr=v]` / `[attr*=v]`，可带标签名（`meta[...]`） | `[property$=image]@content`、`meta[name=description]@content` | 所有字段 | **M27** | 已确认（`[` 后是字母 / `_` 时整段交给 cascadia；索引列表仍归 #6 / #26 / #33。上游 `AnalyzeByJSoup.kt:406-440` 的 `findIndexSet` 解析不出索引就 `break`，整段留给 jsoup） |
+| 33 | 位置列表 `.N:M[:N]`（`.` 是筛选，`:` 分隔序号，可负数；与 #6 的 `!` 同族） | `tag.div.-1:10:2`、`span.1:2`、`p.3:4:5:6:7` | 所有字段 | **M27** | 已确认（上游 `ElementsSingle` 注释与 `AnalyzeByJSoup.kt:406`：非 `[]` 式索引里 `:` 分隔、`.` / `!` 决定筛选；顺序按写法，不是升序） |
 
 > **G4 状态（2026-10-14）：** #15–#19 **全部**已翻「已确认」，逐行证据（源名 + 字段 + 产出样本）见
 > `tool/spot_check/README.md` §4 的 G4 记录（RUN 1 = 漫客栈，#16/#18/#19；RUN 2 = QB女生派生，#17；
@@ -170,6 +184,26 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > `ruleSearch.kind` 加一个 `@@` 前缀（选择器与替换段逐字不动）：search 产出 `kind=武侠`，
 > 其余三段计数/哈希与 G2b 记录逐字相同（toc 1310、content 3031 / `sha256=6578ef3efc456856`）。
 > 活源普查（319/25）保留为背景证据。
+
+> **#32 / #33 为 2026-10-28 日志取证补录（M27）：** 真实书源日志（54 源全量校验）暴露了两条
+> **上游早已有、矩阵却没有行**的写法，补录同样追加在表尾：
+>
+> - **#32 属性选择器。** `[property$=image]` / `meta[name=description]` / `a[href*="_"]` 在本仓
+>   一直被当成索引列表（`[` 后一律进索引解析）→ `parseFailed`；日志里 4 个 meta 驱动的详情页
+>   字段全空（静态普查 10 源 / 31 处）。上游是「索引解析不出就当 CSS」，本仓照此判定：`[` 后
+>   首个非空格字符是字母 / `_` 即整段交给 cascadia，数字 / `-` / `!` / 空串仍走索引。
+>   **不加引号的属性值：** 真实源写的是 jsoup 方言 `[property=og:novel:book_name]`（值里有 `:`），
+>   而 CSS 只允许不加引号的标识符；本仓在交给 cascadia **之前**把这种值包成双引号（已加引号 / 纯
+>   标识符不动），否则修复只会把这些字段从 `parseFailed` 变成仍是 `parseFailed`。
+>   **尚未对齐的一处：** jsoup 的 `[attr~=regex]` 是**正则子串匹配**，CSS 的 `~=` 是「空白分隔的整词」
+>   —— `[property~=category|status|tags]` 因此在本仓解析成功但**匹配不到**（3 源，仅影响 `kind` 展示，
+>   登记在 `engine-parity.md`）。
+>   **仍然更严的差异：** 已实现的类型名后面写属性选择器（`tag.li[x]`）在本仓是 `parseFailed`，
+>   上游会把它当标签名的一部分静默无匹配（登记在 `engine-parity.md`）。
+> - **#33 位置列表。** 上游把 `span.1:2` / `li.4:6` 读成「`.` 筛选 + `:` 分隔的序号列表」
+>   （`ElementsSingle` 注释的 `tag.div.-1:10:2`），本仓此前只实现了 `!` 那张表；日志里 3 个源的
+>   `kind` / `wordCount` 因它置空（静态 10 源 / 15 处）。顺序按写法保留（`2:0` 就是第 2 个再第 0 个），
+>   与 `[N,M]` 的顺序语义一致。
 
 > **#25–#27 为 2026-10-11 补录（回执 B3）：** 这三条语法此前只存在于上游实现里，本仓矩阵没有行，
 > 于是出现「引擎拒绝得对、账本却没记」的缺口。补录时**追加在表尾而不是插在中间**：`docs/dev/roadmap.md`
@@ -202,12 +236,42 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 >   html / all / 属性）扩成「提取值可以是子规则」，与 `##` 替换、以及 JSON / JS 的 scope 改造
 >   三者叠加，属「接口形状未定型就横向铺开」；且当前无使用率证据。`rulePath` 用
 >   **`unsupported:nested-rule`**，与已支持的中段 `@css:` 区分开。
+>   **2026-10-27 复核（M25/S5c）：** 原先登记的「22 源 / 125 处」是**普查工具误报**——探测器用
+>   `text.split('@').skip(1)` 切段（不管括号、引号、`{{…}}` 与 `@js:`），于是把三类**已支持**的写法
+>   算成了 #30：① 整条规则以 `@css:` / `@json:` 开头又含后续 `@`（117 条）、② `{{@css:…@text}}`
+>   模板里的内联规则、③ `+@css:` / `-@css:` 正倒序前缀。按「括号感知切段 + 首段非空（去掉 `+`/`-`/`@@`）」
+>   重算后命中 **0 源 / 0 处**，`corpus_census.dart` 已改成这个口径。因此它维持「不做」，但改为
+>   **有意差异 + 触发条件（出现依赖它的真实源）**，不再排在切片里。
 > - **#12 注记（裁决 5）：** `@css:` 内的**状态伪类**（`:hover` / `:visited` / `:focus` …）在静态
 >   DOM 下**恒不匹配**，这是正确答案而不是错误：实现为「成功且结果为空」，不报
 >   `unsupportedRule`。同处登记两处 cascadia ≠ jsoup 的差异（当前都表现为 `parseFailed`，
 >   属「响亮失败」，可接受）：`:containsOwn(a b)` 这类**不带引号的多词参数**会报
 >   `Invalid argument`（jsoup 接受；真实语料的 `containsOwn(下一页)` 无空格，可用）；
 >   `:matches(x)` 必须写成 `:matches(/x/)`（jsoup 收裸正则）。
+
+> **#10 注记（2026-10-28，M27）：空分支与「`##` 属于整条规则」。** 上游把一条值规则切成
+> 候选后，空候选 / 空分支直接跳过（`AnalyzeByJSoup.getString` 的 `temp.isNullOrEmpty()`），
+> 而 `##` 的替换段属于**整条规则**（`AnalyzeRule.kt:339`：规则体为空但有替换时跳过求值、
+> 把替换打在上一段结果上）。因此真实写法 `class.span@text||##最新章节.*`（天地中文的
+> `wordCount`）在本仓不再 `parseFailed`：空候选不贡献值，替换照常应用。
+> **边界：** 整条规则都是空（`-` 只剩倒置前缀、`&&` 只剩连接符）仍报 `parseFailed`——
+> 那是写错，不是一个可跳过的候选（C-SRC-4）。一个候选解析失败仍结束整条规则，不会去尝下一个
+> `||` 分支（与上游的「失败态不存在」不同，属 C-SRC-4 的响亮失败，登记在 `engine-parity.md`）。
+
+> **#9 / #25 注记（2026-10-28，M27 第二轮日志）：只有替换段的字段规则。** 一条字段规则可以
+> 没有选择器，只写 `##pattern##replace###`：上游 `getString` 里替换对象是**这一层的内容**
+> ——页面给 body，条目给元素的 HTML（`Element.toString()`），JSON 条目是 Java `Map` 的
+> `toString()`（本仓用 JSON 文本，与矩阵 #13 的登记差异同源）。真实源用它从条目 HTML 里抽地址：
+> `##href="//m.qidian.com/chapter/(\d+)/0/"##https://m.qidian.com/book/$1/###`（千寻、未来天王、
+> 肉文屋的 `ruleSearch.bookUrl` / `ruleBookInfo.*`）。`###` 的「首个匹配内替换」语义不变；
+> 模式不命中时结果是空串（单值字段即「没有值」）。
+
+> **行首装饰性 `@` 注记（2026-10-28，M27 第二轮日志）：** 上游 `RuleAnalyzer.trim()` 在切段前
+> 把行首的 `@` 与空白**一并剥掉**，所以真实源写的 `@tag.td.2@text` / `@href` /
+> `@onclick@js:…` 等于去掉那个 `@`。标志头不受影响：剥掉后 `_flagOf` 会把它补回来，`@js:` /
+> `@css:` / `@json:` / `@xpath:` / `@put:` / `@get:` / `@webJs` / `@@` 仍是语法。
+> 语料命中：三九小说 6 条、金银小说网 6 条、阅友小说 2 条、笔趣阁 gei / 版主13 / 开心看漫画 /
+> PO5 / 废纸文学各 1–2 条（只差这一个字符就整片搜索字段 `parseFailed`）。
 
 > **#13 注记（2026-10-11，随 3.2 落地；接口裁决见 ADR-0028）：**
 >
@@ -222,6 +286,13 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 >   （上游 `AnalyzeByJSonPath.kt:137` 的 `read<ArrayList<Any>>`），所以 `bookList: $.info.Datas`
 >   给 30 个条目而不是 1 个数组——这两点都是 3.7 的真实源回归（`tool/spot_check/README.md` §4b）
 >   发现的保真缺口，已修。
+> - **JSON 条目上的裸键（2026-10-28，M27）：** 条目的 scope 是 JSON **对象**时，一条**没有选择器**
+>   的规则就是成员名（上游 `AnalyzeRule.kt:331` 的 `LinkedTreeMap` 分支），值按矩阵 #13 的形状
+>   返回（字符串原样 / 列表展开 / 对象 JSON 文本）。真实源：`ruleToc.chapterUrl` 写成
+>   `$.pic@put:{img:pic}`，其中 `pic` 就是条目成员；本仓此前在 JSON scope 上看不到选择器就报
+>   `parseFailed`，导致整条规则与正文 `@get:{img}` 一起失效（日志 511 条）。
+>   **边界：** 只有 map 条目能这么读；列表 / 标量条目、以及 JSON **页**（ADR-0047 §决策 6 的
+>   「不自动切模式」）仍然按原来的口径响亮失败。
 > - **JSONPath 方言：`]` 后直接跟成员名（2026-10-13，b5）：** 上游的 JsonPath 接受
 >   `$.a[0]b` / `$.data.page[*]image`，而 RFC 9535 那个解析器只认 `].`。本仓在把表达式交给
 >   解析器**之前**把「`]` 紧跟标识符（字母 / `_` / 非 ASCII，即中文键）」归一成 `].`；
@@ -251,7 +322,10 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 
 > **#14 注记（2026-10-12，随 3.4 落地；状态列已确认于 3.7）：** 值规则上的**终段** `@js:`
 > 已实现（`@js:` 贪婪吞掉本条规则剩余部分，与上游 `AppPattern.JS_PATTERN` 同形）；**列表规则**
-> 上的 `@js:` 报 `unsupported:@js:list`（尚无「JS 返回一列元素」的契约）。白名单绑定、配额与四条边界
+> 上的 `@js:` 当时报 `unsupported:@js:list`（尚无「JS 返回一列元素」的契约）——**该句已被 M12
+> 部分取代**：整条规则为 JS、或规则体内出现 `<js>…</js>` 时，脚本返回数组即条目；只有
+> **尾部** `@js:`（`class.list@tag.li@js:result`，上游同样支持）仍报 `unsupported:@js:list`，
+> 去向见 `docs/dev/engine-parity.md` S4。白名单绑定、配额与四条边界
 > （`js:timeout` / `js:error` / `js:parse-scope` / `js:parse-recursion` / `js:quota`）的唯一出处是
 > §6。**真实源证据（3.7，2026-10-12）：** 语料 `legado_js_rules_source.json`（猫耳FM，已脱敏）
 > 在活站点上跑通搜索 30 条 + 目录 34 条，两条逐项 `@js:`（`$.id@js:'…'+result` 与
@@ -299,6 +373,21 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 >   模板时，那就是遗留写法 `{$.data.name}`。列表规则里只取其中的 JSONPath，字面文本不贡献元素
 >   （矩阵「只能用 JSONPath」）。
 >
+> **#14 的条目形态（2026-10-28，M27 第二轮日志）：** 列表规则由脚本产出时，条目按值分流：
+> 字符串若形如 `{…}` / `[…]`（上游 `String?.isJson()`）**解码成 JSON 条目**（所以
+> `$.title` / `$.url` 命中，福书网的章列表就是 `JSON.stringify({title,url})` 的数组），其余字符串
+> 当 HTML 片段解析；对象 / 数组 / 标量仍是 JSON scope。
+>
+> **`result` 的元素垫片（同一轮的取舍）：** 上游在**条目上的裸 `@js:`** 里把 `result` 绑成 jsoup
+> `Element`，真实源因此会写 `result.attr('href')`、`result.select('span').get(1).text()`。沙箱没有
+> DOM（ADR-0029 §决策 5），本仓改为**宿主就地求值再内联**：只处理参数是字面量的链
+> （`attr` / `text` / `ownText` / `html` / `outerHtml` / `select` / `children` / `parent` /
+> `first` / `last` / `get` / `size` / `elementSiblingIndex`），替换成一个 JS 字面量；
+> 变量参数（`get(i)`）或链里出现未知元素方法时**整条不内联**，脚本原样交给沙箱响亮失败。
+> 整页 `result` 仍是正文文本（上游同形），不做这个替换。真实源证据：re0zero 的
+> `tocRule.isVolume = @js:result.attr('href')…`（920 次 `not a function`）、福书网的
+> `ruleExplore.author`、金银小说网的 11 条搜索字段。
+
 > **展开的两处边界（已登记，均有测试）：** ① 展开深度上限（8 层）：上游的递归替换没有上限，
 > 而按源变量可以装着规则文本，自引用会让一条字段永远展开下去，故以可定位的 `parseFailed` 收场；
 > ② 未闭合的 `{{…}` 在规则字段里原样留下（上游的 `{{[\w\W]*?}}` 也匹配不上），但在 **URL** 里
@@ -328,7 +417,7 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > 「`class` / `id` / `tag` / `text` / `children`，**或一段原始 CSS**」。类型不在这五个之内时
 > （`.searchresult`、`li`、`dd`、`p`、`tr!0`、`#txt`、`div.item`），该段整体作为 CSS 选择器交给
 > cascadia；`!` / `[...]` 后缀仍按位置解析（`tr!0` 不是合法 CSS）。`unsupportedRule` 只留给真正
-> 未实现的标志（`@xpath:` / 裸 `//` / `<js>` / `:正则` / M1 模板）。依据：G2b spot-check 实测
+> 未实现的标志（`:正则` / `@webJs`；XPath 自 M25/S5b 起支持，见下方注记）。依据：G2b spot-check 实测
 > **197 条 M0 源中 137 条（69.5%）** 依赖该写法（复算命令与输出见 `tool/spot_check/README.md` §3；
 > ADR-0032 §背景的原始 157/270 已作废）。
 >
@@ -342,13 +431,51 @@ ADR-0069 G10）——裸的客户端标识会让一批站点在规则跑之前�
 > `:168`（`private fun analyzeJs()`）、`:171`（`JS_PATTERN.findAll(ruleUrl)`）—— 因此它在 **URL 规则**
 > 里同样生效。核对日期：2026-10-12。
 
+> **`:正则` 注记（2026-10-27，M25/S5e）：** 上游只在 `getElements` / `getElement` 里有 `Mode.Regex`
+> 分支（`AnalyzeRule.kt:393/430`），`getString` / `getStringList` 没有——所以这一条**只作用于书籍列表与
+> 目录列表**，值规则位置写了 `:` 是具名拒绝（`unsupported::`），而不是一个悄悄返回规则原文的结果。
+> 三条要与上游对齐的语义：
+>
+> 1. **`&&` 是正则链**（`AnalyzeByRegex.getElements` 的 `rule.splitNotBlank("&&")`）：除最后一条外，
+>    每条正则把文本**缩到自己的匹配段**再交给下一条；最后一条每个匹配产出一个条目。
+> 2. **条目 = 一次匹配的全部组**：`[整段, 组1, 组2, …]`（Java 的 `groupValues`，含 `$0` 整段）。
+>    条目字段用模板取组值：`chapterName: $2$3`、`chapterUrl: https://a.test/c/$1`（上游
+>    `SourceRule.splitRegex` 拆 `\$\d{1,2}`，`makeUpRule` 用该条的组值填回）。模板可以带
+>    `##正则##替换`（矩阵 #9）。
+> 3. **文本来源是页面正文**（`DomScope.body`，元素 scope 上是它的 `outerHTML`）；对着 JSON 值跑正则
+>    是 `parseFailed`（没有正文）。条目上的非模板规则（例如 `class.a@text`）具名拒绝为
+>    `unsupported:regex:item`——正则匹配没有 DOM 可选。
+>
+> 语料命中 **2 源 / 2 处**，都是目录列表（若夏的 `<id> isvip 章节名` 三段组、快眼小说的
+> `正文卷…/dl && href="…">名字` 正则链）。
+
+> **XPath 注记（2026-10-27，M25/S5b，ADR-0080）：** 上游把「以 `/` 开头」的规则都当 XPath
+> （`AnalyzeRule.kt:637-639`），本仓只认 **`//`** 与 **`@xpath:`**（大小写不敏感）：语料里 131 处 XPath
+> 没有一处以单个 `/` 开头，而根相对地址（`/static/x.jpg`）也可能落进 `coverUrl` 这类规则字段——把
+> 「`/` 开头一律 XPath」照搬进来会让那种源静默变成一条选不中的表达式。支持面是**自研子集**（没有可用的
+> Dart 3 XPath 包，取舍见 ADR-0080）：
+>
+> - **路径**：`/`（子）、`//`（后代）、`.` / `..`、`@attr`（属性轴）；
+> - **节点测试**：标签名、`*`、`text()`；
+> - **轴**：`child` / `descendant` / `descendant-or-self` / `self` / `parent` / `following-sibling` /
+>   `preceding-sibling` / `attribute`；
+> - **谓词**：`[N]`、`[@a='v']`（`'` 与 `"` 都收）、`[contains(@class,'x')]`、`[contains(text(),'x')]`、
+>   `[not(...)]`、`[starts-with(...)]`、`[position() < last()-1]`、`[.//a]`（存在性）、`[a and b]` / `or`；
+> - **并集**：`|`（答案是**节点集合**，按文档顺序去重）。
+>
+> 三条语义口径：① 结果是**文档顺序**（`//h2/a//text()` 答 `<b>粗体</b>尾巴` 的先后）；② 元素的值是
+> 折叠空白后的整段文本（与 `text` 提取同一口径），`text()` 只答**直接**文本子节点；③ 列表规则必须选中
+> 元素——选中文本 / 属性的列表规则是 `parseFailed`，不静默少几条。**具名拒绝**（`rulePath` 为
+> `unsupported:xpath:<语法>`）：`ancestor` / `ancestor-or-self` / `following` / `preceding` / `namespace`
+> 轴、`node()` / `comment()` 节点测试、`@*`、以及 `count()` / `normalize-space()` / `concat()` 等函数。
+
 ### 3.1 实现分期（对齐 ADR-0014）
 
 | 阶段 | 范围 | 完成判定 |
 |---|---|---|
 | **M0** | 矩阵 #1–#14、#25、#26、#27、#28、#29；搜索 / 详情 / 目录 / 正文四段完整字段；`nextTocUrl`；`nextContentUrl`；`{{key}}`、`{{page}}`、`{{baseUrl}}` | 至少 2 个真实书源完成「搜索 → 详情 → 目录 → 正文」离线回放 |
 | **M1** | 矩阵 #15–#19；`exploreUrl` 发现页；`canReName`；`updateTime`；`java.timeFormat`；`concurrentRate` | 每条语法至少 1 条真实书源验证记录 |
-| **M2 / 暂不实现** | 矩阵 #20–#24、#30；登录脚本与登录 UI；RSS / 订阅源；朗读规则 | 命中时返回 `ParseFailure(unsupportedRule)` |
+| **M2 / 暂不实现** | 矩阵 #20、#22、#30；登录脚本与登录 UI；RSS / 订阅源；朗读规则 | 命中时返回 `ParseFailure(unsupportedRule)` |
 
 **M0 未全部通过前，不得发布「支持导入书源」的版本。**
 命中 M2 或任何未实现语法时，禁止静默返回空结果（C-SRC-4）。
@@ -410,6 +537,13 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 > 脚本结果里的整数不带 `.0`（上游对整数结果的格式化，`AnalyzeUrl.kt:203-207`），
 > 未闭合的 `{{` 与渲染失败的 `{{…}}` 都是该字段的 `ParseFailed`（不把字面 `{{…}}` 交给请求层）。
 
+> **尚缺的三条 URL 方言（2026-10-26 登记，去向 `docs/dev/engine-parity.md` S4）：** 本节的模板语义
+> 只覆盖 `{{key}}` / `{{page}}` / `{{baseUrl}}` / `{{…}}` 四类，上游还有三处**没有**对应实现：
+> ① 页码取值 `<1,2,3>`（按 `page` 取第 n 个、超出取末值，`AnalyzeUrl.kt:777`）；② 段链 `@result`
+> （URL 由「字面段 + `@js:`/`<js>` 段」串联，字面段里的 `@result` 引用上一段产出，`:157-176`）；
+> ③ GET query 的**全量**按 `charset` 编码（本仓只编 `{{key}}`，`:268-273`、`:295-300`）。
+> 命中前两者的真实源现在会拿到字面文本/未转码参数（响亮失败或 404，不静默成功）。
+
 ### 4.1 目录与正文的特殊规则
 
 | 规则 | 原版语义 | 分期 |
@@ -417,12 +551,34 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 | `chapterList` | 结果列表；**首字符 `-` 使列表反序** | M0 |
 | `chapterName` / `chapterUrl` | 章节名与章节 URL（相对路径需转绝对） | M0 |
 | `isVip` | 结果为 `null` / `false` / `0` / `""` 时视为**非 VIP** | M0 |
+| `isPay` | 已购标记；与 `isVip` 同一套 `isTrue()` 判定 | **M25/S2** |
+| `isVolume` | 分卷标记；卷标题没有 URL 时用「标题 + 序号」占位 | **M25/S2** |
+| `wordCount` | 章节字数，展示用字符串 | **M25/S2** |
+| `formatJs` | 整份目录一次跑的标题重写脚本（`index` / `chapter` / `title` / `gInt`） | **M25/S2** |
+| `preUpdateJs` | 取目录**之前**跑的脚本；失败即整段目录失败 | **M25/S2** |
 | `updateTime` | 可调用 `java.timeFormat(timestamp)` 转为 `yyyy/MM/dd HH:mm` | M1 |
 | `nextTocUrl` | 支持**单个 URL** 或 **URL 数组**；JS 返回 `[]` / `null` / `""` 时停止加载下一页 | M0 |
-| `content` | 正文内容；可含多个 `##` 替换 | M0 |
+| `content` | 正文内容；**每一个匹配都参与**（上游 `getString` 用换行拼接 `getStringList`），结果统一成**纯文本**（`@html` / `@all` 的标签在这里摘掉） | M0 / M26 |
 | `nextContentUrl` | 正文分页；返回空即停止 | M0 |
 | `replaceRegex` | 正文的批量替换规则 | M0 |
 | `canReName` | 允许重命名书籍 | M1 |
+
+> **正文的统一形状（2026-10-27，M26 前置修复）：** 正文交给 `replaceRegex` 与净化规则之前，先
+> 变成**纯文本**，并且**每个匹配都参与**。两条都是对着真实语料修的：
+>
+> 1. **多匹配拼接。** `content` 以前只取第一条匹配，`#content p@textNodes` 这种「一段一个元素」的
+>   规则会让整章只剩一行（免费小说）。现在按上游 `getString` 的口径把全部匹配用换行拼起来
+>   换行 → 与分页拼接、副文追加同一形状）。
+> 2. **HTML → 纯文本。** 语料 249 条 `content` 规则里有 **83 条**以 `@html` / `@all` 结尾，产出的是
+>   标签（PO18 系、顶点小说网等）。上游把正文当 HTML 留着、由自己的富文本视图渲染；本仓的阅读端
+>   是纯文本（`readerBodyText` 按换行分段），所以标签必须在正文边界就摘掉：块级标签（`p` / `div` /
+>    `br` / `li` / `tr` …）变成换行，行内标签剥掉，`<script>` / `<style>` 的**内容**整段丢弃，
+>   `&nbsp;` / `&amp;` / `&#xNN;` 解码，空行与缩进折叠，图片丢弃（阅读端没有图片落点，S6c 才有）。
+> 3. **转换在 `replaceRegex` 之前。** 这些替换规则是作者对着**能读的正文**写的（`&nbsp;`、`\<.*`
+>   这类清理 HTML 残留的写法）；让它们继续面对标签，会把标签后面的真文字一起删掉。成品正文再做一次
+>   首尾 `trim`（`replaceRegex` 删掉一整段会留下那一段的换行）。
+> 4. 实现是**扫描器不是 DOM**（`html_to_text.dart`）：正文已经为跑规则解析过一次，为了丢标签再解析
+>   一遍是 M26 要去掉的那类工作；纯文本输入直接原样返回。
 
 > **§4.1 的分页与净化语义（2026-10-12，随 `docs/dev/roadmap.md` 3.5 落地）：** 上表是原版语义；
 > 本仓实现到哪一步、以及与原版有意不同的地方，逐条记在这里（原来的「返回空即停止」太粗，
@@ -462,14 +618,55 @@ URL 字段的渲染统一走同一个渲染入口（同步部分仍是 `renderUr
 >   本仓的正文保持解析出来的原样（否则语料回归里已有的正文会被改形）。
 >   规则体带选择器时报 `parseFailed`（规则里没有可选的 DOM）；`@js:` 净化规则在沙箱里跑
 >   （`result` = 拼接后的整章正文，与上游 `analyzeRule.getString(replaceRegex, contentStr)` 同形），
->   其余未实现标志（`@xpath:` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
+>   其余未实现标志（`@webJs` / `{{}}` …）报 `unsupportedRule`；三种都降级为「不替换」+ warning
 >   （ADR-0026 §决策 2）。
+
+> **副文与正文页标题（2026-10-26，M25/S2，ADR-0078）：** `ruleContent` 的另外两条字段也该生效了，
+> 顺序照抄上游 `BookContent.kt:144-196`（`content` → `subContent` → `title` → `replaceRegex`）：
+>
+> - **`subContent`（副文）。** 文本源把副文**追加**到正文（换行分隔，与分页拼接同形）；**音频源**不并进
+>   正文，而是作为 `ChapterContent.lyric`（上游写成章节变量 `lyric`）交回调用方。规则值是 `http(s)` 开头
+>   的地址时，先取那一页的**正文原文**（上游 `AnalyzeUrl(...).body`）；那一页取不到只记 warning、
+>   副文为空，**不**判整章失败——正文仍然可用。
+> - **`title`（正文页章节名）。** 正文读完后在**第一页**的 scope 上求值；非空即改名，并把值里**最后一个**
+>   media URL 当作 `reviewImg`（上游 `AppPattern.imgRegex`）。只剩一张图时标题回落到目录里的名字。
+>   与上游的一处小差异：标题里残留的 HTML 标签会被剔掉（`@html` 取出来的 `<div id=…>` 或半截
+>   `<img src="` 显然不是章节名）。
+> - **落地形状。** 正文阶段返回 `ChapterContent`（正文 + 标题 + reviewImg + 歌词），缓存也按整个结果存：
+>   只有正文的章节仍以**纯文本**缓存（旧形状、无迁移），带标题/歌词时才写成一行带版本号的 JSON。
+>   阅读器端口目前只取 `.body`，所以**正文页改名与歌词还没有显示在界面上**（登记在
+>   `engine-parity.md`）。
+
+> **目录字段族（2026-10-26，M25/S2，ADR-0078）：** 六条语义，逐条对齐上游
+> `BookChapterList.kt`（行号见 `engine-parity.md` 3.2）：
+>
+> - **无名条目丢掉。** 名字读不出来（规则未命中 / 被拒）的条目不是章节（上游
+>   `if (title.isNotEmpty)`），整条跳过——这与 `isVip` / `wordCount` 这类**可选字段**的
+>   「降级为空」不同：名字是条目存在的条件。阶段本身不会因此失败，只是目录变短。
+> - **`isPay` / `isVolume` / `isVip` 共用 `isTrue()`**（见下一条的谓词）。`isPay` 目前只解析、
+>   不参与阅读器的锁定判定（锁定仍看 `isVip`）。
+> - **卷标题的占位地址。** `isVolume` 为真的条目若没有 URL，地址取「标题 + 序号」（上游
+>   `title + index`，无分隔符）；普通章节仍回落到目录页地址（ADR-0069 G8）。
+> - **去重按 `(名字, URL)`、保序**（上游 `LinkedHashSet`）：分页目录里同一章出现两次只留第一次。
+> - **`formatJs` 一条脚本跑完整份目录。** 每次迭代重绑 `index`（1-based）/ `chapter` /
+>   `title`，`gInt` **跨章保留**；返回非空字符串才替换标题，返回空/抛错都保留原标题（上游
+>   `runCatching(...).onFailure`）。整个目录是**一个 JS job**，所以它同样吃 §6 的超时与配额。
+> - **`preUpdateJs` 在第一个请求之前跑，失败即失败。** 上游 `runPreUpdateJs(...).getOrThrow()`
+>   会中断整次目录更新；本仓连请求都不发（`FetchToc` 在 `walk` 之前执行）。
+
+> **「下一页 == 下一章」提前停止（2026-10-28，M27 第二轮日志）。** 上游 `BookContent.kt:90-96`
+> 在翻页遍历里比较「下一页地址」与 `nextChapterUrl`，相同就停。本仓的 `walk` 现在也做这个比较
+> （两边都按当前页绝对化）；校验阶段按上游 `BookSourceCheckRepository.kt:222-230` 把目录的
+> **第 2 章**作为 `nextChapterUrl` 传进正文请求（卷标题不参与）。没有这一条，站点把「下一章」
+> 写进 `nextContentUrl` 的源会被整本连读，直到翻页上限（一轮日志里 14 个源）。
 
 > **正文缓存（2026-10-14，`docs/dev/roadmap.md` 5.2）：** 一章的**成品正文**（分页已拼好、`replaceRegex` 已跑过）
 > 存进与 charset 缓存同一张 `cache_entries`，键复用 `CacheDao` 的稳定键（`ruleField` 固定为
 > `content`、`page` 固定为 1，键含**书源 ID**，所以两个书源发布同一章节 URL 也不会串味）；
 > TTL 的唯一出处是 `lib/features/book_source/domain/content_cache.dart` 的 `chapterCacheTtl`
-> （半天：覆盖一次阅读会话与当天回访，同时让被站点改过的章节一天内回来）。
+> （**3 天**：非在架书读一次三天内不再请求，站点改过的章节三天内回来）。**在架的书不走 TTL**：
+> 装配根的正文端口按书架行判定，写入时带 `persistent`（过期时间写哨兵 `DateTime.utc(9999)`），
+> 一直留到用户在详情页/缓存管理页清掉这本书的缓存（ADR-0097 §决策 1）。
 > **只缓存成功**：失败路径在写入之前就返回，一章的失败不会被永久粘住；
 > **失败面在适配器（`CacheDaoContentCache`）里被吸收**，端口因此是 total——丢一条缓存只值一次请求，
 > 绝不把章节变成失败（C-ERR-1、ADR-0033）。过期条目在**读**时即未命中，物理清理归 `docs/dev/roadmap.md` 5.7。
@@ -498,7 +695,7 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 | `overrideUrlRegex` | 命中则把该 URL 当结果页，停止加载 | ✅ M21a |
 | `retry` | 这一条请求的重试次数（规则侧上限 3） | ✅ M21a |
 | `readTimeout` | 这一条请求的响应超时（上限 120 s） | ✅ M21a |
-| `origin` / `type` / `js` / `dnsIp` / `proxy` / `callTimeout` / `HEAD` / `encodedForm` | 本仓没有对应实现，按名记 `unsupported` 并 warning | ❌ **裁决不做**（ADR-0068 2026-10-24 增补：理由与重开触发条件逐项写死） |
+| `origin` / `type` / `js` / `dnsIp` / `proxy` / `callTimeout` / `HEAD` / `encodedForm` | 本仓没有对应实现 | ❌ **裁决不做**（ADR-0068 2026-10-24 增补）。**2026-10-28 改判：** 这些选项不再「忽略后照发」，而是**在取值处 `unsupportedRule` 失败**（`rulePath=unsupported:url-options:<名字>`）——丢掉 `js` 会改写地址，忽略只会把错误推到更远的网络层 |
 
 约定：
 
@@ -507,6 +704,39 @@ https://a.test/modules/article/search.php?searchkey={{key}}&page={{page}},{"char
 - 后缀是**宽松 JSON**：单引号、裸键、尾逗号、值里嵌 `{{…}}` 都是真实写法。
 - 读不懂的后缀是 `unsupported:url-options` 的显式失败——**绝不**把 `,{…}` 当 URL 发出去
   （那是真实语料里 50 条源 404 的来源）。
+
+**地址本身的三条方言（M25/S4，`AnalyzeUrl.kt:157-213`、`:295-300`）：** 后缀之前的那段地址不只是
+模板，它依次经过三步，顺序与上游 `initUrl` 一致（JS 段 → `{{…}}` → 页码列表）：
+
+| 写法 | 语义 | 例 |
+|---|---|---|
+| **JS 段链** `@js:` / `<js>` | 规则是「字面段 + 脚本段」的链：脚本拿到当前值作 `result`，返回值成为新值；**字面段替换**当前值，但先把其中的 `@result` 换成它。整条规则就是一个 `@js:` 时，地址就是脚本的返回值 | `@js:'https://a.test/s?q=' + key` |
+| **页码列表** `<1,2,3>` | 按**请求的页码**取第 n 个，超出取末项 | `https://a.test/list/&lt;1,2,3&gt;.html` |
+| **GET query 全量编码** | 声明了 `charset` 时，**整条 query** 按该编码百分号转义（空格是 `%20`，不是 `+`）；已经编码过的 query 原样保留 | `https://a.test/s?q=剑来,{"charset":"gbk"}` → `q=%BD%A3%C0%B4` |
+
+三条要知道的事：① `@js:` 是**贪婪**的（吞到规则尾部），所以链中想再写字面段要用 `<js>…</js>`；
+② 字面段是**替换**而不是拼接，只在 `@result` 处保留前一个值（上游 `it.replace("@result", result)`）；
+③ `charset: "escape"` 是上游另一套编码方言（空格与保留字符的细节不同），本仓**没建模**：地址原样
+发出，`{{key}}` 仍走表单编码。
+
+### 4.1b 搜索页就是详情页（`bookUrlPattern`，M25/S2）
+
+上游的搜索阶段有两条「当成详情页读」的路径（`BookList.kt:62-84`、`:100-110`），本仓两条都实现：
+
+1. **`bookUrlPattern` 全匹配最终响应地址**：搜索请求被重定向进了详情页（单书站、或搜索直接跳书），
+   这时不再读列表规则，而是用 `ruleBookInfo` 把这一页读成**一条**搜索结果（书名、作者、封面、简介…），
+   地址就是响应地址本身。
+2. **没有 `bookUrlPattern` 且列表为空**：`bookList` 一条都没命中时先按详情页再读一次；详情页也读不出
+   书名，就返回**空结果**（不是 `parseFailed`）。
+
+因此三件事与从前不同，改动都是对齐上游：①「搜索页没有结果条目」不再是阶段失败（书源校验那边仍把它
+判成「搜索失效」，因为校验要的是「这条源还能不能搜」，见 `roadmap.md` 5.10）；②`bookUrlPattern` 是
+**全匹配**（Kotlin `String.matches`），写错的正则只记 warning 并按普通列表继续；③详情页读出来的那一条
+结果用的是 `ruleBookInfo`，所以 `ruleSearch` 里即使写了 `bookUrl` 也不参与这条路径。
+
+> 待办：`bookUrlPattern` 命中后「列表规则完全跳过」意味着列表字段（`lastChapter` 等）只来自
+> `ruleBookInfo`；这与上游一致，但如果某源的详情规则缺字段，搜索结果会比列表路径稀。真实语料出现时
+> 再评估是否补「先按列表读、再回落详情」。
 
 ### 4.2 发现页（`exploreUrl` 与 `ruleExplore`）
 
@@ -640,16 +870,40 @@ JS 规则运行在独立 Isolate 中，**只能**访问以下绑定（C-SRC-3）
 | `result` | `String?` \| `List` \| 响应对象 | 当前页 responseBody（原版同名变量） | M0 |
 | `result`（**仅 `loginCheckJs`**） | 响应对象 | `body` 属性 + `url()` / `code()` / `headers()` / `header(name)` / `cookie()` / `contentType()` / `isSuccessful()` / `String(result)`——上游 `StrResponse` 的形状。拦截器的返回值决定页面（见下方「`loginCheckJs` 的返回值」） | M21a |
 | `page` | `int` | 当前页码 | M0 |
-| `source` | 只读对象 | 仅 `name`、`url`、`group`，其余不可见 | M0 |
+| `source` | 只读对象 | **白名单字段**（M25/S5a）：`name` / `url` / `group`（本仓名）+ 上游名 `key` / `bookSourceUrl` / `bookSourceName` / `bookSourceComment` / `header` / `loginUrl`，其余不可见（`jsLib` 只在宿主侧） | M0 / M25/S5a |
 | `book` | 对象（字段 + 方法） | 字段 `name` / `author` / `bookUrl` / `tocUrl` / `intro` / `kind`；阶段不知道时为 `null`。方法：`putVariable(k,v)` / `getVariable(k)`（= `java.put` / `java.get` 的规则变量表）、`setType` / `getType` / `setReverseToc` / `getReverseToc`（job 内可读回，**不影响宿主**）、`type` 字段。ADR-0061 §决策 5、ADR-0062 §决策 2 | M17 / M24 |
 | `http.get(url, options)` | `String` | 经 `core/network/HttpClient` 代理，受超时与重试策略约束；`{response:true}` 改为返回整个响应对象 | M0 / M21a |
 | `http.post(url, options)` | `String` | 同上 | M0 / M21a |
 | `parse.getString(rule, doc)` | `String` | 复用规则引擎，可递归 | M0 |
 | `parse.getElements(rule, doc)` | `List` | 同上 | M0 |
 | `java.put(key, value)` / `java.get(key)` | `void` / `String` | 规则变量，与 `@put:` / `@get:` 是同一份（ADR-0034）；**仅 JS 内可用** | M1 |
+| `java.ajax(url[, headers])` | `String` | **同步**返回正文（上游写法）。未命中本 job 的取页缓存时抛哨兵，worker 取页后**从头重跑**；失败抛错，规则自己的 `try` / `catch` 可用（ADR-0076 §决策 1，语义见下方「同步族」） | M24 |
+| `java.post(url, body, headers)` | 响应对象 | **同步**返回响应对象（与 `loginCheckJs` 的 `result` 同形：`body` 属性 + `url()` / `code()` / `header(name)` …），规则靠它读 `Location` | M24 |
+| `java.head(url)` | 响应对象 | 同上，动词是 `HEAD`（`HttpClient.head`），正文为空 | M24 |
+| `java.getCookie(url[, key])` | `String?` | 读 Cookie 宗；带 `key` 时给该 cookie 的值（没有则 `null`），不带时给整条 `Cookie` 头（没有则 `''`） | M24 |
+| `cookie.getCookie(url[, key])` / `cookie.setCookie(url, value)` / `cookie.removeCookie(url[, key])` | `String?` / `void` / `void` | 与 `java.getCookie` 同一通道的上游另一种拼写；`setCookie` 可传一对也可传整条 `a=1; b=2`（逐对落宗）。**`removeCookie` 上游只绑了一个参数**（`CookieStore.kt:79`：删「这个 URL 会发的整份 Cookie」，真实源写 `cookie.removeCookie(source.getKey())`）；本仓额外接受第二个参数表示按名删除（「空值 + `Max-Age=0`」），两种都可用 | M24 / M27 |
+| `java.setContent(html)` | `void` | 把本 job 的页级 scope 换成这份 HTML：随后的 `java.getString*` / `parse.*` 读新页面（`result` 绑定不变） | M24 |
+| `java.toast(msg)` / `java.longToast(msg)` | `void` | 转发到装配根绑定的 `UserMessages`（snack bar），同一 job 内同句只贴一次，同时记 info 日志 | M24 |
+| `source.getVariable()` / `setVariable(v)` / `putVariable(v)` | `String` / `void` | **整份变量**，无参（上游 `BaseSource.kt:283-295`）：源拿它当自己的小仓库（语料里 54 处读、41 处写，`setVariable(JSON.stringify(...))` + `getVariable()` 是主流写法）。存在 `source_variables` 的**无名条目**里（与 `put`/`get` 同一张表），写 `null` / 不传即删除；与 `java.get` / `put` 的规则变量**不是**同一张表。**M25/S5a 改正**：S3b 曾做成 `getVariable(key)` 的键值形状（语料命中 0） | M24 / M25/S5a |
+| `source.put(k, v)` / `source.get(k)` | `String` / `String` | **按名键值**（上游 `v_<url>_<name>`）：`put` 把值原样答回去（真实源拿返回值拼 URL），`get` 未写过答空串 | M25/S5a |
+| `source.getKey()` / `source.getTag()` | `String` | 源身份：`getKey()` = `bookSourceUrl`（= `source.url`），`getTag()` = `bookSourceName`（= `source.name`）；纯读取，不过通道 | M25/S3b |
+| `source.getLoginHeader()` | `String?` | 登录头 JSON（上游存在 `CacheManager` 的 `loginHeader_<url>`）；本仓存 `book_sources.login_header` 列，随 job 下传。**没有值时是 `null`**（`getVariable` 才是空串） | M25/S3b |
+| `source.getLoginHeaderMap()` | 对象 \| `null` | 登录头的 map 形态（上游 `GSON.fromJsonObject`）：**Java `Map` 的读法都可用**（`get` / `put` / `remove` / `containsKey` / `size` / `isEmpty`，方法不可枚举，`JSON.stringify` 只看数据），没有登录头或值不是 JSON 对象时答 `null` | M25/S5a |
+| `source.removeLoginHeader()` | `void` | **登出**：删登录头，并清掉这个源 URL 会发的 Cookie（上游 `CookieStore.removeCookie(getKey())`）。规则自己能清、不需要 UI | M25/S5a |
+| `source.getLoginInfoMap()` / `getLoginInfo()` | 对象 / `String` | 登录表单收集的值（ADR-0072 §决策 3）的**快照**：`Map` 的读法同 `getLoginHeaderMap()`；没有值时答空表（`getLoginInfo()` 答 `"{}"`）。只有登录自己的 job 里读得到（`roadmap.md` §3.7 的登记差异） | M22-a |
+| `source.putLoginInfo(json)` / `removeLoginInfo()` | `bool` / `void` | **写登录信息**（M25/S5a）：只收 JSON 文本，收下就 `true`；解析不出对象时答 `false`（上游照样存，读时退回空表）。写入随 job 结束写穿 `book_sources.login_info`（按 URL），同一 job 内 `getLoginInfoMap()` 立刻读到新值 | M25/S5a |
+| `source.putLoginHeader(header)` | `void` | 写入登录头并**立即写穿**：同一 job 内读回新值，job 结束后下一个阶段的请求自动带上它（§2 的请求头合并），其中的 `Cookie` 同时并进 Cookie 宗 | M25/S3b |
+| `src` | `String?` | **当前页正文**（上游 `AnalyzeRule.evalJS` 绑的 `content`）：整页规则与元素级规则读到同一份；没有页面的 job（URL 规则、`header` 规则）是 `null` | M25/S3b |
+| `chapter` | 对象 \| `null` | 正在读的这一章：`title` / `url` / `isVip` / `isPay` / `isVolume` / `updateTime` + `getVariable(k)` / `putVariable(k,v)`（与 `book` 一样落**规则变量表**，差异见下）。搜索 / 详情 / 目录阶段是 `null`；`tocRule.formatJs` 的循环里逐章重绑 | M25/S3b |
+| `nextChapterUrl` | `String?` | 目录里这一章**后面**那条地址；阅读器还没加载目录时是 `null` | M25/S3b |
+| `fromBookInfo` | `bool` | 这一串规则是不是从**详情阶段**跑起来的（上游 `isFromBookInfo`）；别处恒为 `false` | M25/S3b |
+| `infoMap` | 可变对象 | 每源**一张小表**（上游 `InfoMap`，缓存键 `infoMap_<url>`）：直接写属性即可，`save()` / `saveNow()` / `get()` / `set(v)` 都在，值在本会话内跨规则可见。差异：**不落盘**（与 `cache.*` 同一裁决） | M25/S3b |
+| `java.connect(url[, header])` | 响应对象 | 与 `ajax` 同一条同步通道，但**答响应对象**，且**失败也是答案**（上游 `runCatching` 后把错误正文塞进响应）。差异：失败正文是可读的 kind 名（`connect failed (…)`），不是 Java 堆栈 | M25/S3b |
+| `java.ajaxAll(urlList[, skipRateLimit])` | 响应对象数组 | 并发取多页，**任一页失败整次调用抛错**（上游 `mapAsync` 不吞异常）。差异：`skipRateLimit` 收下但**不绕过**单源预算（§8） | M25/S3b |
+| `java.openUrl(url[, mimeType])` | `void` | 单向事件：宿主弹**确认弹窗**，用户同意后才交给系统浏览器。地址超过 64 K 字符即拒绝（上游同一道门） | M25/S3b |
 | `java.startBrowser(url, title[, html])` | `void` | 打开**可见 WebView**让用户过人机验证；不等结果（ADR-0068 §决策 5） | M21a |
-| `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])` | `Promise<{url, body}>` | 同上但等用户按「完成」，成功后按需用新 cookie 重取；**本仓返回 Promise，规则里要 `await`**（上游是同步，差异见注记） | M21a |
-| `java.getVerificationCode(imageUrl)` | `Promise<String>` | 图片验证码对话框，返回用户输入的字符串；**需 `await`** | M21a |
+| `java.startBrowserAwait(url, title[, refetchAfterSuccess[, html]])` | `Promise<{url, body}>` | 同上但等用户按「完成」，成功后按需用新 cookie 重取；**本仓返回 Promise，规则里要 `await`**（上游是同步，差异见注记）。同一个 `op+url` 在一个 job 里只问一次：重放的那一趟直接拿到上次的答案（ADR-0076 §决策 4） | M21a / M24 |
+| `java.getVerificationCode(imageUrl)` | `Promise<String>` | 图片验证码对话框，返回用户输入的字符串；**需 `await`**。答案同样按 `op+url` 记忆，重放不重复弹窗 | M21a / M24 |
 | `java.webView(url[, js])` / `webViewGetString(url[, js])` | `Promise<String>` | 隐藏 WebView 渲染（可执行 `js`），结果是 body | M21a |
 | `java.queryTTF(data)` | 句柄对象 | 字体反解（见下方注记）：`data` 认 **base64**（含 `data:…;base64,` 前缀与换行）与 **url**；url 走字节门并返回 Promise，规则要 `await` | M21a |
 | `java.queryBase64TTF(data)` | 句柄对象 | 同上的 base64 专用形态（上游已弃用，真实语料仍在用） | M21a |
@@ -706,6 +960,23 @@ java.replaceFont(result, errorFont, correctFont);
 | `put(key, value)` / `get(key)` | 规则变量，与 `@put:` / `@get:` 同一份（ADR-0034） | ✅ 已落地 |
 | `timeFormat(ms)` | `yyyy/MM/dd HH:mm`、本地时区、worker 内同步（不限额） | ✅ 已落地（M1-b1） |
 | `md5Encode(str)` | = 本表的 `crypto.md5`（UTF-8 字节的十六进制 MD5；上游 `MD5Utils.kt:13-15`） | ✅ 已落地（M1-b1b） |
+| `md5Encode16(str)` | 32 位 MD5 的第 9..24 位字符（上游 `MD5Utils.md5Encode16`） | ✅ M25/S3a |
+| `base64DecodeToByteArray(str[, flags])` / `hexDecodeToByteArray(hex)` | 答 `byte[]`（沙箱里是 `Uint8Array`）；base64 按上游 hutool 的宽容规则解（空白、`-_`、缺填充都收），空白输入答 `null`；hex 必须偶数位且只含 `0-9a-fA-F` | ✅ M25/S3a |
+| `hexEncodeToString(str)` / `hexDecodeToString(hex)` | UTF-8 字节与十六进制互转（小写出口） | ✅ M25/S3a |
+| `strToBytes(str[, charset])` / `bytesToStr(bytes[, charset])` | 字符串与字节数组按声明字符集互转：未知标签与坏字节都退 UTF-8（坏序列换 U+FFFD），不抛错 | ✅ M25/S3a |
+| `digestHex(data, algorithm)` / `digestBase64Str(data, algorithm)` | 摘要，算法认 `MD5` / `SHA-1` / `SHA-224` / `SHA-256` / `SHA-384` / `SHA-512`（`-` 可省、大小写不敏感），出口 hex 或 `NO_WRAP` base64 | ✅ M25/S3a |
+| `HMacHex(data, algorithm, key)` / `HMacBase64(data, algorithm, key)` | HMAC，算法名照抄 Java 拼写（`HmacSHA256` / `HMAC-SHA1` / `HmacMD5`），`key` 取 UTF-8 字节 | ✅ M25/S3a |
+| `createSymmetricCrypto(transformation[, key[, iv]])` | 不透明句柄（`{__symmetric: true, id}`），九个方法：`encrypt` / `encryptBase64` / `encryptHex` / `encryptStr` / `decrypt` / `decryptStr` / `decryptHex` / `decryptBase64` / `setIv` | ✅ M25/S3a |
+| `aes*` / `des*` / `tripleDES*`（上游 `@Deprecated` 一族） | 按「组一个密码器 + 调一个方法」实现，参数顺序逐个照抄上游（含 `*ArgsBase64Str` 那组的 key/iv 不对称） | ✅ M25/S3a |
+| `randomUUID()` | 标准 v4 UUID（8-4-4-4-12），`Random.secure()` | ✅ M25/S3b |
+| `timeFormatUTC(time, format, sh)` | 固定 `sh` 小时偏移的 `SimpleDateFormat`：`y`/`M`/`d`/`H`/`h`/`m`/`s`/`S` + `'…'` 字面量；未知字母原样输出 | ✅ M25/S3b |
+| `toNumChapter(str)` | 把 `第…章` 里的中文数字换成阿拉伯数字（`第一百二十三章` → `第123章`），认不出就原样返回 | ✅ M25/S3b |
+| `toURL(url[, baseUrl])` | `{host, origin, pathname, searchParams}`；`searchParams` 按 `URLDecoder` 语义解码（`+` → 空格） | ✅ M25/S3b |
+| `htmlFormat(str)` | 上游 `HtmlFormatter.formatKeepImg`：标签 → 段落、只留 `<img src>`（含 `,{…}` 选项）、统一段首缩进 | ✅ M25/S3b |
+| `t2s(str)` / `s2t(str)` | 繁简互转，最长匹配；码表见下方注记 | ✅ M25/S3b |
+| `getWebViewUA()` | 随 job 下发的 UA 常量（与请求默认 UA 同一出处） | ✅ M25/S3b |
+| `androidId()` | 本仓自己生成并持久化的安装 id（v4 UUID，`main()` 在第一帧之前 hydrate）；宿主没 hydrate 时答空串（**不是** Android ID，见注记） | ✅ M25/S3b |
+| `cache.put/get/getInt/getLong/getDouble/putMemory/getFromMemory/delete/deleteMemory` | **内存 LRU**（容量 + 单值长度上限，随 worker 存亡）；上游是「内存 + 持久表」两层 | ✅ M25/S3b（差异见注记） |
 | `base64Encode(str)` / `base64Decode(str)` | = `crypto.base64Encode` / `crypto.base64Decode`；前者对齐上游 flags = 2（`Base64.NO_WRAP`），非法输入抛错 | ✅ 已落地（M1-b1b） |
 | `encodeURI(str)` | **Java `URLEncoder.encode(str, "UTF-8")`**：空格 → `+`，保留 `A-Za-z0-9` 与 `-_.*`，其余 UTF-8 字节 `%XX` 大写——**不是** JS 的 `encodeURI`（上游 `JsExtensions.kt:683-689`） | ✅ 已落地（M1-b1b） |
 | `encodeURI(str, charset)` | 同上，但按**声明的字符集**取字节（真实语料：`java.encodeURI(key, "GBK")`，ADR-0069 G1）；未知标签退 UTF-8（上游抛错返回 `""`） | ✅ M21a（ADR-0069） |
@@ -714,24 +985,195 @@ java.replaceFont(result, errorFont, correctFont);
 | `getString(rule, false)` | 接受（`false` = 不 unescape，正是本仓行为）；`(rule, true)` 与三参形态**具名拒绝** | ✅ 已落地（M1-b1b） |
 | 列表返回值 | JS `Array`；沙箱另装 `Array.prototype.toArray()`（返回 `this`），配上游 Java `List.toArray()` 习惯用法（语料 38 处） | ✅ 已落地（M1-b1b） |
 | 多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)` / `encodeURI` 两参 …） | 具名拒绝：本仓没有 flags / charset 语义，猜一个只会静默给不同结果 | 拒绝 |
+| `ajax(url[, headers])` / `post(url, body, headers)` / `head(url)` / `getCookie(url[, key])` / `setContent(html)` / `toast(msg)` / `longToast(msg)` | 同步族与提示族；语义见上方绑定表与「同步族」注记 | ✅ M24（ADR-0076） |
 | 其余成员 | 见 §11 的具名拒绝清单（抛错存根，Rhino 互操作类用抛错 Proxy） | M2 |
 
-> **规则求值族的时机（登记差异）：** ①在脚本执行前求值，②在脚本执行到那一行时求值。脚本无法改变
-> scope（`java.setContent` 属 M2），所以这个时机差在实践中不可观测；两条路径**共用同一实现点**，
-> 同一 (规则, scope) 的结果必然一致。URL 规则里**没有**页面 scope，该族命中即按 `js:parse-scope` 同族拒绝。
+**同步族（M24，ADR-0076 §决策 1）：** 上游的 Rhino 可以阻塞线程直到页面回来，所以 `java.ajax` 是**同步**的；
+本仓的 QuickJS 在独立 isolate 里，宿主的回答只能是 Future，因此用「**取页缓存 + 从头重跑**」仿真：
+
+1. 脚本命中一个本 job 还没取过的同步调用 → worker 抛哨兵，记下 `{op, url, body, key}`；
+2. 桥取一次页（或读一次 Cookie 宗），答案连同失败一起记进缓存，然后脚本**从第一行重跑**；
+3. 重跑时同一个调用同步拿到缓存里的值（失败则抛错，规则自己的 `try` / `catch` 照常工作）。
+
+规则作者必须知道四件事：
+
+- **整条规则会重跑 n 次**（n = 不同同步调用的个数）。`java.put` / `source.setVariable` 这类写入每趟重做，
+  幂等；**非幂等副作用（外部计数、发消息）会被重复执行**，这是这条路线明写的代价。
+- **pass 上限 16**：不同同步调用（含 `java.post` / `java.head` / Cookie 三个动词）超过 16 个时该字段失败，
+  `rulePath` 带 `js:replay`——意思是「这条规则重放不了」，不是超时。
+- **取页的时间不算脚本预算**：同步取页期间硬预算暂停、等掉的时间从 `elapsedMs` 扣掉，且每趟重跑
+  重新拥有一次调用额度（额度的单位是「一趟」，不是「一个 job」）。
+- **验证类只问一次**：`getVerificationCode` / `startBrowserAwait` / `startBrowser` 按 `op+url` 记答案，
+  重放的那趟直接答上次的结果，不会再弹一次窗（它们的形态仍是 Promise，规则要 `await`）。
+
+> **`java.setContent` 的边界：** 它只换**同一 job 内后续** `java.getString*` / `parse.*` 读的页级 scope；
+> `result` 绑定与已经算出的值不变，也不影响 job 之外的阶段。首参是字符串字面量的 `java.getString`
+> 会被引擎在 job 之前内联（见上表），因此那一路看不到 `setContent`。
+
+> **规则求值族的时机（登记差异）：** ①在脚本执行前求值，②在脚本执行到那一行时求值。首参是字面量时
+> 走①，所以那一路读不到 `java.setContent` 换掉的页面（§6「`java.setContent` 的边界」）；两条路径**共用
+> 同一实现点**，同一 (规则, scope) 的结果必然一致。URL 规则里**没有**页面 scope，该族命中即按
+> `js:parse-scope` 同族拒绝。
+
+**书源自带的库脚本（`jsLib`，M25/S1，ADR-0078 §切片 S1）：** 上游把 `jsLib` 当**每个脚本的原型作用域**
+（`SharedJsScope.kt:23-60`、`AnalyzeRule.kt:848`），所以源可以只写 `getSign(url)` 这样的调用。本仓的做法：
+
+1. 引擎在造 job **之前**把 `jsLib` 解析成可运行的 JS（`JsLibStore`）：纯 JS 原样用；**JSON 对象**形态只取
+   `http(s)://` 开头的值逐条下载，按对象序拼接（非 URL 值忽略，与上游的 `isAbsUrl()` 判定一致）。
+2. worker 把这份文本与规则**放在同一个函数作用域里**跑（先 `eval(lib)`，再 `eval(rule)`），因此库里的
+   `var` / `function` 对规则可见，而两者都不会漏到 `globalThis`（上游用 `preventExtensions` 达到同一效果）。
+3. 解析失败（下载不通）就是**这条规则**的失败，`rulePath` 带 `js:lib`；库自身抛错同样是 `js:lib`，
+   与规则自己的 `js:error` 分开，便于判断「换库」还是「改规则」。
+4. 缓存按 `jsLib` 原文、上限 16 条（与上游 `LruCache` 同数），失败不缓存；同一个源的一页里二十个
+   `@js:` 字段只解析一次。
+
+三条必须知道的差异：① 库顶层的 `let` / `const` 规则**看不见**（它们属于那次 `eval` 的词法环境，本仓用
+`var` / `function` 才有跨 eval 的可见性；上游 Rhino 是 ES5，本来也不认 `let`）；② 缓存只在内存里，
+重启后重新解析（上游把它落到磁盘 `ACache`）；③ `source.jsLib` **不在** `source` 绑定里（那个对象仍只有
+`name` / `url` / `group`，防信息外泄），需要库内容的规则请直接依赖库函数。
+
+**字节与密钥族（M25/S3a，ADR-0078 §切片 S3a）：** 上游这一族靠 Rhino 直接拿到 Java `byte[]` 与活的
+`SymmetricCryptoAndroid` 对象，本仓用两个形状兑现：
+
+1. **`byte[]` = JS `Uint8Array`。** 语料对它的用法是 `length` / `Array.from(bytes)` / `slice(8, -16)`
+   （阅文系的解密链），三种都成立；它过隔离体边界时是一整块 typed array，不是「JSON 数字数组」。
+   差异：把字节数组**直接当返回值**时，`JSON.stringify` 看到的是对象而不是数组，所以规则要落库/拼字符串
+   时先转（`hexEncodeToString` / `bytesToStr` / `encryptBase64`）。
+2. **`SymmetricCrypto` = 不透明句柄**（`{__symmetric: true, id}`）：密码器本体留在宿主，每次方法调用只走
+   一个小信封。句柄**随 job 失效**（与字体句柄同一套契约，`_fonts` / `_ciphers` 都在 job 开始时清空），
+   脚本把句柄存进 `globalThis` 跨 job 用会拿到 `unknown symmetric crypto handle`，而不是别人的密码器。
+
+**transformation 与密钥的规范化照抄上游 `SymmetricCryptoAndroid`：**
+
+- 不带 `/` 的写法按 `/<算法>/ECB/PKCS5Padding` 补全（所以 `AES` = `AES/ECB/PKCS5Padding`）。
+- 密钥可以是字符串（取 UTF-8 字节）或字节数组；DES 超过 8 字节截前 8，DESede 超过 24 字节截前 24；
+  `key` 缺省时用随机密钥（`KeyGenerator` 语义：规则只能在同一段脚本里加密再解密）。
+- **支持面：AES / DES / DESede × ECB / CBC × PKCS5Padding / PKCS7Padding / NoPadding。**
+  CFB / OFB / CTR / GCM、非对称（`createAsymmetricCrypto`）与签名（`createSign`）**不在支持面**内，
+  命中即抛可读错误（触发条件：真实语料出现且能给出复现源，见 §11）。
+- 单 DES 由 `DESede(K1=K2=K3)` 兑现（pointycastle 只带三倍引擎），与 Java 单 DES **逐字节相同**；
+  `NoPadding` 要求字节数正好是块大小的非零整数倍（Java 抛 `IllegalBlockSizeException`，本仓同样失败，
+  不悄悄补零）。
+- `decrypt(String)` 自己猜编码：全 hex 且偶数位按 hex，否则按 base64（上游 `SymmetricCryptoAndroid.kt:80-90`）；
+  `decryptHex` / `decryptBase64` 则强制那一种。
+
+三条**有意差异**：① `aesEncodeToString` 上游实现是 `decryptStr`（历史 bug），本仓按名字的意图**加密**——
+依赖这个 bug 的源本来也解不出正文；② `base64DecodeToByteArray(str, flags)` 接受 `flags` 但**不按位分支**
+（上游两个重载最终都走 hutool 的宽容解码器，行为一致）；③ 上游的 `strToBytes/bytesToStr` 没有
+`@JavascriptInterface` 注解、只靠 Rhino 的公开方法可见性拿到，本仓照样绑定，但只做「未知标签退 UTF-8」
+这一档容错。
+
+> 这些调用**纯计算**，在 worker 的同一 isolate 内完成：不联网、不进 `http.*` / `parse.*` 的调用额度，
+> 也不受单源并发/限速影响。
+
+**纯计算与工具族（M25/S3b，ADR-0078 §切片 S3b）：** 这一族的共同点是**在 worker 内同步完成**，
+不联网、不进 `http.*` / `parse.*` 的调用额度。四条必须知道的差异：
+
+1. **`t2s` / `s2t` 的码表不是上游那一份。** 上游走 `quick-chinese-transfer`，它的 pom 没有
+   `<licenses>`、仓库也没有 LICENSE 文件，按 C-DEP-7 不能搬；本仓用 **OpenCC（Apache-2.0）** 的
+   `TSCharacters/TSPhrases`（繁→简）与 `STCharacters/STPhrases`（简→繁）生成 `assets/zh/*.txt`
+   （来源、生成规则与哈希见 `assets/zh/README.md`）。所以上游 `fixT2sDict()` 里那份「不该转换」的
+   港台词表（`雪梨` / `鳳梨` / `魔戒` …）本仓没有，这类词按 OpenCC 的默认结果走。码表随 worker 的
+   bootstrap 进来、**首次用到才解析**（简→繁表 842 KB）。
+2. **`cache.*` 只在内存里**（容量 256 条、单值 64 K 字符、`saveTime` 以秒计的 TTL 照上游语义）。
+   上游的 `Cache` 是持久表，重启后还能读到 token；本仓重启即丢。这是有意差异（M25/S3b 裁决），
+   触发条件是「有源依赖跨会话缓存且能复现」。
+3. **`toURL().origin` 按意图实现**：上游那一行把整个 URL 又插进了 `host:` 与端口之间
+   （`"${protocol}://$host:${mUrl}:${mUrl.port}"`，`JsURL.kt:22-25`），带端口的源会拿到
+   `https://a.test:https://a.test/p:8443` 这种值。本仓答 `scheme://host[:port]`。
+4. **`androidId()` 不是 Android ID**：上游取 `Settings.Secure.ANDROID_ID`；本仓没有这个标识，改在首次
+   启动时生成一个 **v4 UUID** 存进轻量开关（`InstallId`），重启不变、卸载才换。宿主没 hydrate 过时答
+   空串而不是 `undefined`。差异：格式不是 16 位十六进制，**依赖 Android 格式做解析的规则不适用**；
+   只要「一个稳定 id」的规则照常工作。
+
+**登录头（M25/S3b，上游 `BaseSource.getLoginHeader` / `putLoginHeader`）：** 登录脚本换来的 token 写在
+这里，之后**每个阶段的请求都自动带上**：`headersOf` 把它合并**在源自己的 `header` 之上**（上游
+`getHeaderMap(userAgent, hasLoginHeader = true)` 的同一顺序），`@js:` 规则的 `http.*` 也走同一份
+map。四条要知道的：
+
+1. **键是源 URL**，不是行：上游的缓存键是 `loginHeader_<bookSourceUrl>`，本仓也按 URL 读写，因此两条
+   同 URL 的导入共享同一个登录头。
+2. **`Cookie` 会被并进 Cookie 宗**（上游 `CookieStore.replaceCookie`）：真正发 `Cookie` 的是宗，
+   只存头不并宗的话下一次请求会被宗里的旧 Cookie 盖掉。
+3. **值的形状是「JSON 对象文本」**，本仓照上游不校验：解析不出来时只记 warning 并跳过合并
+   （坏值不该让请求失败），但 `putLoginHeader` 只收字符串。
+4. **一条与上游不同的地方**：规则内调用 `source.login()` **具名拒绝**——登录脚本由登录页跑
+   （`SignIn`，同一段 `loginUrl` 脚本），规则里重入 worker 会死锁。`source.removeLoginHeader()` **M25/S5a
+   起已绑定**：删登录头 + 清这个源 URL 会发的 Cookie（上游 `CookieStore.removeCookie(getKey())`），
+   所以语料里那些 `clearLogin()` / `gx()` 按钮写法能跑。
+
+**阶段上下文绑定（M25/S3b，`src` / `chapter` / `nextChapterUrl` / `fromBookInfo` / `infoMap`）：**
+这五条都是**阶段事实**，由造 job 的那一层填，规则只读。四条要知道的：
+
+1. **`chapter` 的变量是规则变量。** 上游把 `chapter.putVariable` 写进章自己的 map；本仓与 `book` 同口径
+   落规则变量表（`java.get` / `java.put` 的同一张），差异与 `book` 的那条一起登记。
+2. **`infoMap` 只在会话里。** 上游的值落在 `CacheManager`（`infoMap_<url>`，可选 `saveTime`），重启后还在；
+   本仓按 `cache.*` 的同一裁决只做内存（容量按源 LRU 32 个），`save()` / `saveNow()` 保留为空操作，
+   免得规则报 `not a function`。触发条件：出现「探索 token 要跨启动保留」的真实源。
+3. **`speakText` / `speakSpeed` 不绑定。** 它们只由上游的 **HttpTTS 源**提供（另一张源表 + 自己的一套
+   朗读规则），本仓只有系统 TTS，没有那条链路 → 规则里读它们会得到 `ReferenceError` 而不是一个恒为空的
+   值（有意差异，触发 = 引入 HttpTTS 朗读引擎）。
+4. **`src` 是 job 开始时的正文。** `java.setContent(html)` 之后同一个 job 里的 `src` 不变（它已经是
+   快照），下一页/下一条规则才看到新正文——上游每次 `evalJS` 重新绑 `content`，效果相同。
+
+**`source` 对象（M25/S5a）：** 上游把**整个源实体**绑成 `source`（`BaseSource.evalJS` 的
+`bindings["source"] = this`），所以任何公开字段都读得到。本仓不那样做（会把 `payload` / 行 id / 宿主
+字段一起漏出去），改成**白名单字段**（表里那一行）+ 方法面。五条要知道的：
+
+1. **字段是白名单，不是实体。** `key`（= `bookSourceUrl`）、`bookSourceUrl`、`bookSourceName`、
+   `bookSourceComment`、`header`、`loginUrl`；本仓自己的 `name` / `url` / `group` 保留（同一批值的旧名）。
+   `jsLib` **仍不外泄**（库脚本要读自己的文本就是循环依赖）。
+2. **`header` 的两种形态不同源**：规则形态（`@js:` / `<js>`）是**声明原文**——真实源靠前缀判断要不要
+   自己求值；JSON 形态是**解析后的表重新序列化**，所以空白与键序不是作者写的那份（唯一的相关差异，
+   `JSON.parse(source.header)` 与字符串前缀判断都照常成立）。
+3. **`bookSourceComment` 不单独建模**（留在 `extra`，§2 的未建模清单）：五个源拿它当脚本库
+   （`eval(String(source.bookSourceComment))`），所以这里给的就是声明的原文，读不到才答 `null`。
+4. **两套变量不是一回事**：`put(k, v)` / `get(k)` 是**按名键值**（上游 `v_<url>_<name>`），
+   `getVariable()` / `setVariable(v)` / `putVariable(v)` 是**整份字符串**（上游 `sourceVariable_<url>`）。
+   本仓两者共用 `source_variables` 表——整份变量落在**无名条目**里，好处是只有一套写穿路径。
+   `put` 答回写入的值（真实源拿返回值拼 URL），`get` 未写过答空串。
+5. **登录信息（`login_info`）可写。** `putLoginInfo(json)` / `removeLoginInfo()` 在**同一个 job 内**立刻
+   可见（读的也是同一份槽位），job 结束时由桥写穿 `book_sources.login_info`（按 URL，同登录头）。
+   只收字符串：解析不出对象就答 `false`，不把读不回来的文本写进库（上游会存）。
+
+**`Packages.*` 最小垫片（M25/S5d，ADR-0081）：** 上游把 Rhino 的 Java 包入口原样交给脚本，语料里有一批
+「一行就能等价实现」的写法。本仓按**白名单**兑现它们，白名单外的成员仍然具名拒绝（错误里带完整包路径）。
+术语与边界：
+
+1. **只做数据/编码/集合，不做对象模型。** 白名单是：`java.lang.String`（`new String(bytes,'UTF-8')`
+   解码、`String(x).getBytes('UTF-8')` 编码）、`java.lang.System.currentTimeMillis`、
+   `java.lang.Thread.sleep`（**空操作**：沙箱里没有线程，也不会为一个 `sleep` 让出预算）、
+   `java.util.UUID.randomUUID().toString()`、`java.util.Arrays`（`copyOfRange` / `copyOf` / `toString`）、
+   `java.util.HashMap` / `LinkedHashMap`（`Map` 读法同 §6 的登录头 map）/ `java.util.ArrayList`
+   （数组 + 不可枚举的 `add` / `size`）、`android.util.Base64`（`encodeToString` / `decode`，
+   `NO_WRAP` 等常量照有）、`android.text.TextUtils.isEmpty`、hutool 的 `DigestUtil.md5` / `md5Hex` 与
+   `cn.hutool.core.codec.Base64`（`encode` / `decode` / `decodeStr`）、
+   `io.legado.app.help.http.StrResponse(url, body)`（与 `loginCheckJs` 的 `result` 同形，脚本把它
+   `return` 出去就替换页面）。
+2. **`javax.crypto` / `java.io` 流 / `java.net.URL` / `okhttp3` / `org.jsoup` / `JavaImporter` 不在白名单里。**
+   它们要的是真实 Java 对象（密码器、流、HTTP 客户端、DOM），本仓的等价能力在 `java.*` 与 `crypto.*`
+   上（`createSymmetricCrypto` / `java.ajax` / `parse.*`），因此维持具名拒绝：错误里给出**到第一个未知段**
+   的路径（`Packages.javax`、`Packages.java.util.TreeMap`），`new JavaImporter(…)` 报
+   `JavaImporter is not supported`。
+3. **`java` 不是包。** 上游 `java` 绑定是 `JsExtensions` 实例，`java.lang.*` 在上游也不存在；本仓同样只在
+   `Packages.*` 下提供白名单，`java.lang` / `java.util` … 这 8 个名字仍是抛错 Proxy（§11 的名单）。
 
 **禁止暴露：** 文件系统、进程、环境变量、Socket、定时器、原生绑定、
-`eval` 之外任意代码加载、`source` 的完整对象（防信息外泄）。
+`eval` 之外任意代码加载、`source` 的完整实体（只给白名单字段，S5a）。
 
 > **JS 侧形态（本表是唯一出处；ADR-0029 §决策 3，2026-10-11 生效）：** 本表「形态」列描述的是**值类型**；
 > 调用能否同步取值另有一层，判定标准是「该绑定是否需要在别处执行」：
 >
-> - **立即返回值（同步）**：`java.put` / `java.get`、`log.*`、`crypto.*`。
->   前提是它们只在运行时所在 isolate 内完成（变量存 Dart 侧、按 `sourceId` 键控，见 ADR-0030 §决策 4）；
+> - **立即返回值（同步）**：`java.put` / `java.get` / `source.getVariable` / `setVariable` / `putVariable` /
+>   `put` / `get` / `getKey` / `getTag` / `getLoginHeader` / `putLoginHeader` / `getLoginHeaderMap` /
+>   `removeLoginHeader` / `getLoginInfo` / `getLoginInfoMap` / `putLoginInfo` / `removeLoginInfo`、`log.*`、
+>   `crypto.*`、`java.timeFormat`，以及**重放层**里的 `java.ajax` / `java.post` / `java.head` / `java.getCookie` /
+>   `cookie.*`（ADR-0076 §决策 1：它们值上同步，背后是「未命中则抛哨兵 → 取页 → 从头重跑」）。
+>   前提是它们要么只在运行时所在 isolate 内完成（变量存 Dart 侧、按 `sourceId` 键控，见 ADR-0030 §决策 4），
+>   要么由重放层兑现「值上同步」；
 > - **返回 Promise（规则**必须** `await`）**：`http.get` / `http.post`（唯一实现是 `core/network/HttpClient`，
->   C-NET-1）、`parse.getString` / `parse.getElements`（引擎与 scope 不在该 isolate）。
->   **同步写法不在支持面**，不得写成 `result.replace(...)` 式的同步链；仅凭 3.7 真实语料证据 + 新 ADR
->   才可追加（ADR-0029 §决策 4）。
+>   C-NET-1）、`parse.getString` / `parse.getElements`（引擎与 scope 不在该 isolate）、验证族与 `java.webView*`。
+>   仅凭 3.7 真实语料证据 + 新 ADR 才可追加（ADR-0029 §决策 4）；重放层就是那条新 ADR。
 >
 > **`parse.*` 的 scope 边界（ADR-0029 §决策 5）：** 3.3 只承诺**页级 scope**（worker 侧用页面 body 重建）；
 > 元素级 scope 命中时报 `unsupportedRule` / `parseFailed`，`rulePath` 用 `js:parse-scope`。
@@ -755,10 +1197,11 @@ java.replaceFont(result, errorFont, correctFont);
 >   连接符；`result` 的形态按上游：`getString` 语义（单值字段）给**字符串**，`getStringList`
 >   语义（多值字段，如 `nextTocUrl`）给**列表**，列表返回值也保持列表（§4.1 的 URL 数组靠它）；
 >   `##` 替换在脚本**之后**应用（上游同一 `SourceRule` 的 `replaceRegex` 也是最后跑）。
-> - **未落的边界（显式报错，不静默）：** 列表规则（`bookList` / `chapterList`）上的 `@js:` 报
->   `unsupported:@js:list`（它要的是「JS 返回一列元素」的契约——上游 `getElements` 的
->   `Mode.Js` 分支，`AnalyzeRule.kt:439`——尚未成型）；`<js>…</js>` 仍按矩阵 #31 拒（M2；
->   `exploreUrl` 整字段那一个例外见矩阵 #31 的注记与 §4.2）。
+> - **列表规则的 JS 边界（M12 落定）：** 整条规则就是 JS（裸 `@js:` 开头）或规则体内出现
+>   `<js>…</js>` 时走**分段链**，脚本返回的数组逐项成为条目（上游 `getElements` 的 `Mode.Js`
+>   分支，`AnalyzeRule.kt:439`）；**只有尾部 `@js:`**（`class.list@tag.li@js:result`）仍报
+>   `unsupported:@js:list`——上游把这种形态当「选择器段 + JS 段」的链，本仓尚未打通，去向见
+>   `docs/dev/engine-parity.md` S4。`exploreUrl` 整字段的 `<js>` 另见 §4.2。
 > - **独立 `@js:` 的 `result`：** 整页 scope 给 responseBody；**元素 scope**（逐项字段，如
 >   `searchRule.name`）给它自己的 `outerHtml`——沙箱里没有 DOM 句柄可交（ADR-0029 §决策 5），
 >   但规则总得看见它所属的那一项；JSON 条目 scope 给该条目的 JSON 文本。
@@ -774,6 +1217,16 @@ java.replaceFont(result, errorFont, correctFont);
 >   唯一实现是 `core/network/HttpClient`（C-NET-1），因此超时 / 重试 / 编码 / 明文策略与页面
 >   抓取完全同一套。请求带上书源自带的 `header`（C-NET-4，规则自己的同名键优先），并以**书源
 >   URL** 作为并发预算键，所以它花的仍是 §8 那份预算。
+> - **规则想 `await` 就必须把整段包成 `(async function () { … })()`。** 沙箱执行一条规则是
+>   `__runRule(script)` → **同步** `eval(script)`（`core/js/quickjs_worker.dart`），顶层 `await`
+>   在那里是**语法错误**（`await is only valid in async functions`，错误落在该字段、耗时 0–1 ms，
+>   一个请求都不会发）。`http.*` / `parse.*` / `java.startBrowserAwait` / `java.getVerificationCode`
+>   都要这个包装才用得了。
+> - **`<js>…</js>` 的链式求值（矩阵 #31）：** 脚本段之后的段读到的是**脚本的产出**——
+>   选择器段在「脚本返回的那份 HTML」上跑（值规则与列表规则同口径，与上游
+>   `AnalyzeRule.getString` 把上一段的值当新 `content` 一致）；字符串长得不像标记时仍留在原
+>   页面上，所以 `<js>java.put(…)</js>https://…/{{result}}.html` 这类拼接不受影响。这是
+>   「先过盾取回真实页面、再读正文」的写法能工作的前提。
 > - **`options` 只认 `headers`、`response` 与（POST 的）`body`**，其余键（如 `charset` / `timeout` / `retry` /
 >   `webView`）让**该次调用抛错**：策略由 `HttpPolicy` 拥有，而 `webView` 本仓没有，悄悄忽略
 >   它会把「未渲染的页面」当成答案（§1 的不兼容清单）。
@@ -887,7 +1340,7 @@ java.replaceFont(result, errorFont, correctFont);
   - 顶层匹配成功但集合为空 → **成功**，返回空列表（搜索无结果属正常业务）。
 - 失败必须携带 `rulePath`（C-SRC-8），格式 `<字段名>` 或 `<字段名>.<子字段>`，
   例如 `searchRule.bookList`、`tocRule.chapterUrl`、`contentRule.content`；
-  命中未实现语法时用 `unsupported:<语法名>`，例如 `unsupported:@xpath:`。
+  命中未实现语法时用 `unsupported:<语法名>`，例如 `unsupported:@webJs`、`unsupported:xpath:ancestor::`。
 - 失败对象**禁止**携带用户可见文案（C-ERR-7）。
 
 ---
@@ -975,7 +1428,7 @@ java.replaceFont(result, errorFont, correctFont);
 | 场景 | 行为 |
 |---|---|
 | 单章正文失败 | 该章标记失败，不中断整本书的目录展示 |
-| 目录缺页 | 按 `nextTocUrl` 翻页，最多 50 页后停止并记录 warning（正文分页共用同一上限，见 §4.1） |
+| 目录缺页 | 按 `nextTocUrl` 翻页，上限 **500 页**后停止并记录 warning（正文分页共用同一上限，见 §4.1）。这个上限只是失控保护：上游不设固定值（靠 `nextTocUrl` 收敛 + 去重），2026-10-30 真机日志里 50 页让多本长书缺了尾部章节（`DECISIONS.md` #85） |
 | 发现页单页失败 | 只影响该分类：该分类报错 + 记录，其余分类与其余页面照常（发现页不进自动翻页队列，§4.2） |
 | 章节正文分页失败 | 该章**整次失败**，不返回被截断的正文（§4.1） |
 | 规则失效（0 结果） | 记录到书源健康度统计，UI 提示「规则可能已失效」 |
@@ -992,7 +1445,7 @@ java.replaceFont(result, errorFont, correctFont);
 | 前缀大小写 | `@css:`/`@CSS:`、`@json:`/`@Json:`、`@js:`/`@JS:` 各 1 条 |
 | 失败单测 | §7 表中每个 `ParseFailureKind` 至少 1 条单测 |
 | 链路测试 | 至少 2 个书源完成「搜索 → 详情 → 目录 → 正文」离线回放（已达成 **G2a 离线回放**：1 个 HTML 默认规则源 + 1 个 JSON 接口源；其中 JSON 源的 2 条 URL 规则按 `test/fixtures/json/README.md` 改写，因此**不**等于真实站点回放——只有真实抓取页面 / 真实链路才能把 §3 矩阵的状态列改为「已确认」，归 `docs/dev/roadmap.md` §3.4 的 3.7） |
-| M2 拒绝测试 | `@xpath:` 与 `:` 正则规则各 1 条，断言返回 `unsupportedRule` |
+| M2 拒绝测试 | `:正则` 与 `@webJs` 各 1 条，断言返回 `unsupportedRule`（XPath 已支持，其**未实现子集**的拒绝由 `matrix #21` 那组用例覆盖） |
 | 真实书源验证 | 每个 M0/M1 语法行需在 PR 中附验证记录，并把状态列改为「已确认」 |
 | 网络隔离 | 单元测试禁止真实联网；`HttpClient` 必须可注入替身（C-NET-8） |
 
@@ -1015,7 +1468,7 @@ java.replaceFont(result, errorFont, correctFont);
 > | `#14` 列表 JS + §4.3 `charset` | 飞卢小说💰（`b.faloo.com`，`searchUrl` 带 `{"charset":"gbk"}`） | 搜索 → 详情 → 目录 → 正文 | 已确认（search=28 / toc=1087 / content=1156，`sha256=d208052977d3039c`）；目录页数由 291 变为 1087，证明 GBK 链路真的被解开 |
 > | `$.[*]` 方言（§3 的 #13 变体） | 有声听书网 | 搜索 | 由 `parseFailed` 变为真命中（2 条） |
 >
-> 未覆盖的部分（`@xpath:` / `webJs` / `sourceRegex`）保持「不支持」，不受本轮影响。
+> 未覆盖的部分（`@webJs` / `sourceRegex`）保持「不支持」，不受本轮影响；XPath 自 M25/S5b 起支持（§3 注记）。
 
 > **#13（`@json:` / 裸 `$.`）的当前证据（2026-10-11）：**
 > 语法 `#13 @json:`；书源 示例书源（JSON 规则，真实导出结构，已脱敏，
@@ -1035,38 +1488,68 @@ java.replaceFont(result, errorFont, correctFont);
 
 命中以下任一语法必须在导入或解析时明确拒绝并给出可读提示，不得假装成功：
 
-- `@xpath:` XPath 规则（需要引入 XPath 依赖，须先开 ADR）
-- `:` 正则规则（仅书籍列表与目录列表）
-- 原生登录表单的**后续交互**：`java.upLoginData`（脚本动态改表单）、`source.putLoginHeader`（脚本改登录头）
-  仍未实现；`loginUi` 的 text / password / button / select / toggle + `action` JS 与
-  `source.getLoginInfo()` / `getLoginInfoMap()` **已实现**（M22-a，ADR-0072 §决策 3），但登录信息目前只喂给
-  登录自己的脚本 job，页面请求的 job 里还读不到（登记在 `roadmap.md` §3.7）
+- `:` 正则规则在**值规则位置**（它只作用于书籍列表与目录列表；条目上的非 `$N` 模板同样具名拒绝，
+  见 §3 的 `:正则` 注记）
+- **XPath 里本仓没实现的那部分**（M25/S5b，语义与支持面见 §3 的 XPath 注记）：`ancestor` /
+  `ancestor-or-self` / `following` / `preceding` / `namespace` 轴、`node()` / `comment()` 节点测试、
+  `@*`、以及 `count()` / `normalize-space()` / `concat()` 这类函数——命中即 `unsupported:xpath:<语法>`
+- 原生登录表单的**后续交互**：`java.upLoginData`（脚本动态改表单）仍未实现；`loginUi` 的
+text / password / button / select / toggle + `action` JS、`source.getLoginInfo()` / `getLoginInfoMap()` /
+`putLoginInfo` / `removeLoginInfo`（M22-a 读、M25/S5a 写，ADR-0072 §决策 3）与
+`source.putLoginHeader` / `getLoginHeader` / `getLoginHeaderMap` / `removeLoginHeader`（M25/S3b + S5a，
+含请求头合并、Cookie 合并与登出清 Cookie）**已实现**。两条仍与上游不同：① 登录**信息**（`loginInfo`）
+只喂给登录自己的脚本 job，页面请求的 job 里还读不到（登记在 `roadmap.md` §3.7）；② 规则内
+`source.login()` **具名拒绝**（登录走登录页）——登出已有入口，不再拒绝
 - 图片字节解密 `ruleContent.imageDecode`（非空即显式 `unsupportedRule`，ADR-0069 G5）
-- **同步**返回响应对象的 `java.post` / `java.get` / `java.ajax*` / `java.head` / `java.connect`：
-  沙箱阻塞不了宿主，规则要写 `await http.post(...)`（ADR-0069 G6 登记差异）
-- RSS / 订阅源、朗读规则
-- 需要浏览器 DOM/BOM 的网页 JS、依赖 Android WebView 行为的规则
-- 提取段里的嵌套规则（矩阵 #30：末段本身是一条规则，如 `class.a@css:.b`；命中报 `unsupported:nested-rule`）
-- `<js>…</js>` JS 包装（矩阵 #31：任意位置、可作分隔符；命中报 `unsupported:<js>`）
-  —— **唯一例外：** 整个 `exploreUrl` 字段就是一个 `<js>…</js>` 时，按发现页整字段 JS 支持
-  （§4.2、ADR-0035 §决策 6）；它在规则体内的分隔符用法仍属 M2。
-- 发现页的**表单型分类**（`type` 为 `text` / `button` / `toggle` / `select`，以及 `chars` / `default` /
-  `action` / `style`）：M1 只支持 `type` 缺省或 `url`；命中报 `unsupportedRule` 并记录，
-  其余分类照常（§4.2）。
-- 发现页整字段 JS 的 `infoMap` 绑定、分类参数传递（`args` / 临时变量）与排名模块
-  （`executeForRanking` 一套）：均不在 M1；`infoMap` 命中即 `js:error`（§4.2）。
-- `java.timeFormatUTC(time, format, sh)`（带时区偏移与自定义 pattern）：不在 M1；
-  `java.timeFormat` 的语义见 §6。
 - **`java.*` 的具名拒绝族（ADR-0037 §决策 5；形态与实现档位见 §6 的兼容面表）：**
-  **其中 `get` / `put` 不在拒绝族里：** §6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**读写（ADR-0034），名字被占用；上游那套同步返回 body 的 `get(url)` / `post(url)` 因此没有可用拼写，只能靠 `ajax` 族具名拒绝（`java.post` 也已登记具名拒绝）。另：`base64Encode` / `base64Decode` 的多参重载**具名拒绝**（本仓没有 `flags` / `charset` 语义）。
-  `ajax` / `get` / `post` / `head` / `ajaxAll` / `connect`（上游**同步**返回 body，与本仓 `http.*` 的
-  Promise 形态冲突）、`webViewGetElements`（本仓没有元素列表形态的渲染接口）、
-  `downloadFile` / `cacheFile` / `importScript` / `getCookie`（沙箱禁忌或需要平台能力）、
-  `setContent`（脚本中途改 scope，
-  需要一个规则 / 作用域 API）、`toast` / `longToast`（UI）、`base64DecodeToByteArray` /
-  `hexDecodeToByteArray`（Rhino 字节数组；语料里 326/328 处直接喂给 `IvParameterSpec` /
-  `SecretKeySpec`，即密钥类 crypto）、`createSymmetricCrypto` / `aes*` / `des*` / `HMac*`（密钥类 crypto）、
-  `md5Encode16` / `htmlFormat` / `refreshBookUrl`（零散）——命中即抛**可读错误**，不得落到
-  `undefined is not a function`。
-- Rhino Java 互操作（`java.lang` / `java.security` / `java.util` / `java.net`，以及 `Packages.*`）：
-  `new java.util.ArrayList()` 这类写法命中**抛错 Proxy**，报可读原因。
+  其中 `get` / `put` 不在拒绝族里——§6 把 `java.get(key)` / `java.put(key, value)` 定义为**规则变量**
+  读写（ADR-0034），名字被占用，上游那套同步返回 body 的 `get(url)` 因此仍无可用拼写。
+  **仍拒绝的：** `webViewGetElements`（本仓没有元素列表形态的渲染接口）、`downloadFile` / `cacheFile` /
+  `importScript`（沙箱禁忌或需要平台能力）——命中即抛**可读错误**，不得落到
+  `undefined is not a function`。多参重载（`base64Encode(str, flags)` / `base64Decode(str, charset)`）
+  同样具名拒绝：本仓没有 flags / charset 语义。
+  **这份名单是机器的对照面（S7 门禁 G1）：** 下面两个代码块必须与
+  `lib/core/js/quickjs_worker.dart` 的 `__javaRejectedNames` / `__javaInteropNames` **逐字一致**，
+  由 `test/docs/book_source_doc_test.dart` 校验——改任何一边都会让门禁失败（ADR-0012）。
+
+```text
+downloadFile
+cacheFile
+importScript
+createAsymmetricCrypto
+createSign
+```
+  **已随 M25/S3b 落地、不再拒绝：** `java.connect` / `java.ajaxAll` / `java.openUrl` / `java.androidId`，
+  以及阶段上下文绑定 `src` / `chapter` / `nextChapterUrl` / `fromBookInfo` / `infoMap`（语义见 §6）。
+  **M25/S3b 登记的两条有意差异：** `speakText` / `speakSpeed` 只由上游的 **HttpTTS 源**提供，本仓没有那条
+  链路，所以**不绑定**（触发 = 引入 HttpTTS 朗读引擎）；`java.androidId()` 答的是本仓自己生成并持久化的
+  UUID，而不是 Android 的 16 位十六进制 id。
+  **已随 M24 落地、不再拒绝：** `java.ajax` / `java.post` / `java.head` / `java.getCookie` / `java.setContent` /
+  `java.toast` / `java.longToast` / `cookie.*` / `source.getVariable`（语义见 §6）。
+  **已随 M25/S5a 落地、不再拒绝：** `source` 的白名单字段（`key` / `bookSourceUrl` / `bookSourceName` /
+  `bookSourceComment` / `header` / `loginUrl`）、`source.put` / `get`、`getLoginHeaderMap` /
+  `removeLoginHeader`、`putLoginInfo` / `removeLoginInfo`（语义见 §6「`source` 对象」）。
+  **已随 M25/S3a 落地、不再拒绝：** `java.md5Encode16` / `base64DecodeToByteArray` / `hexDecodeToByteArray` /
+  `hexEncodeToString` / `hexDecodeToString` / `strToBytes` / `bytesToStr` / `digestHex` / `digestBase64Str` /
+  `HMacHex` / `HMacBase64` / `createSymmetricCrypto` / `aes*` / `des*` / `tripleDES*`（语义见 §6
+  「字节与密钥族」）。
+  **密钥族的边界（S3a 登记）：** 只支持 AES / DES / DESede × ECB / CBC × PKCS5/PKCS7/NoPadding；
+  CFB / OFB / CTR / GCM 这类模式与非对称（`createAsymmetricCrypto`）、签名（`createSign`）**仍是具名拒绝**
+  （前两者在上面的拒绝族里，模式不匹配则报 `unsupported mode`）。重新评审的触发条件：真实语料出现
+  该 transformation 且有能复现的源。
+- Rhino Java 互操作（`Packages.*` 与下列 `java.*` 包，命中**抛错 Proxy**，报可读原因）：
+
+```text
+lang
+security
+util
+net
+io
+nio
+math
+text
+```
+  **M25/S5d 之后的口径（ADR-0081）：** 上面的 8 个名字仍然是抛错 Proxy（本仓 `java` 是扩展面、不是包），
+  但 Rhino 真正的包入口 `Packages.*` 有了**最小垫片**：白名单成员（`java.lang.String`、`java.util.*`、
+  `android.util.Base64`、hutool 的 `DigestUtil` / `Base64`、`…http.StrResponse` 等）可用，白名单外的名字
+  抛 `Packages.<包.类.成员> is not supported`；`new JavaImporter(…)` 同样具名拒绝。清单与边界见 §6。

@@ -1,7 +1,9 @@
-/// How long one cached chapter body stays usable.
+/// How long one cached chapter body stays usable for a book **that is not on the shelf**.
 ///
-/// The bound is about staleness, not size: half a day covers a reading session.
-const Duration chapterCacheTtl = Duration(hours: 12);
+/// Three days (ADR-0097 §决策 1): long enough that a book opened twice in a week costs one round of
+/// requests, short enough that a source which fixed its chapter pages shows the fix. A book **on the
+/// shelf** ignores this bound entirely — its bodies are kept until the user clears that book's cache.
+const Duration chapterCacheTtl = Duration(days: 3);
 
 /// Remembers one chapter body so a second visit costs no request.
 ///
@@ -11,7 +13,11 @@ abstract interface class ContentCache {
   /// The stored body of [url] under [sourceId], or `null` when it is missing or expired.
   Future<String?> read({required String sourceId, required String url});
 
-  /// Stores [body] for ([sourceId], [url]) with [chapterCacheTtl].
+  /// Stores [body] for ([sourceId], [url]) with [chapterCacheTtl], or without an expiry when
+  /// [persistent] is set (ADR-0097 §决策 1).
+  ///
+  /// [persistent] is for a book **on the shelf**: the body then lives until the user clears that
+  /// book's cache, which is what «加入到书架就一直留着» means to the user.
   ///
   /// [bookUrl] scopes the entry but is not part of the key.
   Future<void> write({
@@ -19,6 +25,7 @@ abstract interface class ContentCache {
     required String url,
     required String body,
     String? bookUrl,
+    bool persistent = false,
   });
 
   /// How many cached chapter bodies belong to one book.

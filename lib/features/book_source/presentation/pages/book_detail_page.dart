@@ -6,14 +6,18 @@ import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
+import 'package:flutter_reader/features/book_source/di.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/switch_book_source.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_cache_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_queries.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_add_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_book_notifier.dart';
+import 'package:flutter_reader/features/book_source/presentation/widgets/change_source_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -23,7 +27,7 @@ import 'package:m3e_design/m3e_design.dart';
 /// The two stages fail independently: a chapter list that cannot be read still
 /// shows the information that was read, and each section has its own retry
 /// (`docs/dev/book-source.md` §9).
-class BookDetailPage extends ConsumerWidget {
+class BookDetailPage extends ConsumerStatefulWidget {
   /// Creates the page.
   const BookDetailPage({required this.book, super.key});
 
@@ -31,7 +35,16 @@ class BookDetailPage extends ConsumerWidget {
   final Book book;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BookDetailPage> createState() => _BookDetailPageState();
+}
+
+/// State of the detail page: the hit and, after a source switch, the new identity.
+class _BookDetailPageState extends ConsumerState<BookDetailPage> {
+  /// The book this page shows; a source switch replaces it in place.
+  late Book _book = widget.book;
+
+  @override
+  Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final M3ETheme tokens = context.m3e;
     final BookSource? source = ref.watch(currentBookSourceProvider);
@@ -57,7 +70,7 @@ class BookDetailPage extends ConsumerWidget {
     AppLocalizations l10n,
   ) {
     final AsyncValue<ParseResult<BookInfo>> info = ref.watch(
-      bookInfoProvider(source, book),
+      bookInfoProvider(source, _book),
     );
 
     return switch (info) {
@@ -74,13 +87,13 @@ class BookDetailPage extends ConsumerWidget {
           ParseFailure<BookInfo>(:final ParseFailureKind kind) =>
             FailureMessage(
               kind: kind,
-              onRetry: () => ref.invalidate(bookInfoProvider(source, book)),
+              onRetry: () => ref.invalidate(bookInfoProvider(source, _book)),
             ),
         },
       // 用例按 C-ERR-1 不抛异常：这里只兜住意外错误，避免用户看到白屏。
       AsyncError<ParseResult<BookInfo>>() => FailureMessage(
         kind: ParseFailureKind.parseFailed,
-        onRetry: () => ref.invalidate(bookInfoProvider(source, book)),
+        onRetry: () => ref.invalidate(bookInfoProvider(source, _book)),
       ),
       _ => const Center(child: CircularProgressIndicator()),
     };
@@ -215,77 +228,90 @@ class BookDetailPage extends ConsumerWidget {
 
     return Padding(
       padding: EdgeInsets.all(tokens.spacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          // 封面 + 元信息并排：封面是 S1（roadmap §3.9），源没有 `coverUrl` 时是占位块；
-          // 用户换过的本地封面优先（M19 批 B）。
-          Row(
+      // 书籍信息是一张卡片：与下面的目录拉开层次，长目录滚动时头部也有明确的边界。
+      child: Card(
+        margin: EdgeInsets.zero,
+        elevation: 0,
+        color: tokens.colors.surfaceContainerLow,
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: EdgeInsets.all(tokens.spacing.lg),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              CoverImage(
-                url: info.coverUrl,
-                localPath: membership?.customCoverPath,
-                width: 84,
-                height: 112,
-              ),
-              SizedBox(width: tokens.spacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      info.name,
-                      style: tokens.typography.base.headlineSmall,
+              // 封面 + 元信息并排：封面是 S1（roadmap §3.9），源没有 `coverUrl` 时是占位块；
+              // 用户换过的本地封面优先（M19 批 B）。
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  CoverImage(
+                    url: info.coverUrl,
+                    localPath: membership?.customCoverPath,
+                    width: 84,
+                    height: 112,
+                  ),
+                  SizedBox(width: tokens.spacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          info.name,
+                          style: tokens.typography.base.headlineSmall,
+                        ),
+                        SizedBox(height: tokens.spacing.xs),
+                        if (info.author case final String author)
+                          Text(
+                            l10n.bookSourceAuthorLine(author),
+                            style: tokens.typography.base.bodyMedium,
+                          ),
+                        if (info.kind case final String kind)
+                          Text(
+                            l10n.bookSourceKindLine(kind),
+                            style: tokens.typography.base.bodyMedium,
+                          ),
+                        if (info.lastChapter case final String chapter)
+                          Text(
+                            l10n.bookSourceLastChapterLine(chapter),
+                            style: tokens.typography.base.bodyMedium,
+                          ),
+                        if (info.updateTime case final String updated
+                            when updated.isNotEmpty)
+                          Text(
+                            l10n.bookSourceUpdateTimeLine(updated),
+                            style: tokens.typography.base.bodyMedium,
+                          ),
+                      ],
                     ),
-                    SizedBox(height: tokens.spacing.xs),
-                    if (info.author case final String author)
-                      Text(
-                        l10n.bookSourceAuthorLine(author),
-                        style: tokens.typography.base.bodyMedium,
-                      ),
-                    if (info.kind case final String kind)
-                      Text(
-                        l10n.bookSourceKindLine(kind),
-                        style: tokens.typography.base.bodyMedium,
-                      ),
-                    if (info.lastChapter case final String chapter)
-                      Text(
-                        l10n.bookSourceLastChapterLine(chapter),
-                        style: tokens.typography.base.bodyMedium,
-                      ),
-                    if (info.updateTime case final String updated
-                        when updated.isNotEmpty)
-                      Text(
-                        l10n.bookSourceUpdateTimeLine(updated),
-                        style: tokens.typography.base.bodyMedium,
-                      ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+              // 用户自己写的简介优先于书源快照（M33，ADR-0092）。
+              if (membership?.customIntro ?? info.intro case final String intro
+                  when intro.trim().isNotEmpty) ...[
+                SizedBox(height: tokens.spacing.md),
+                // 简介默认折三行：目录可能有上千条，一整段简介会把目录推到屏幕外。
+                _IntroText(text: intro, l10n: l10n, tokens: tokens),
+              ],
+              SizedBox(height: tokens.spacing.md),
+              Wrap(
+                spacing: tokens.spacing.sm,
+                runSpacing: tokens.spacing.sm,
+                children: <Widget>[
+                  _readButton(context, ref, source, info, l10n, toc),
+                  _continueButton(context, ref, source, info, l10n),
+                  _shelfButton(context, ref, source, info, l10n),
+                  _changeSourceButton(ref, source, info, membership, l10n),
+                  _readingRecordsButton(context, ref, source, info, l10n),
+                  _groupButton(context, ref, source, info, membership, l10n),
+                  _coverButton(context, ref, source, info, membership, l10n),
+                  _editButton(context, ref, membership, l10n),
+                  _bookCacheButton(context, ref, source, info, l10n),
+                ],
               ),
             ],
           ),
-          if (info.intro case final String intro
-              when intro.trim().isNotEmpty) ...[
-            SizedBox(height: tokens.spacing.md),
-            // 简介默认折三行：目录可能有上千条，一整段简介会把目录推到屏幕外。
-            _IntroText(text: intro, l10n: l10n, tokens: tokens),
-          ],
-          SizedBox(height: tokens.spacing.md),
-          Wrap(
-            spacing: tokens.spacing.sm,
-            runSpacing: tokens.spacing.sm,
-            children: <Widget>[
-              _readButton(context, ref, source, info, l10n, toc),
-              _continueButton(context, ref, source, info, l10n),
-              _shelfButton(context, ref, source, info, l10n),
-              _readingRecordsButton(context, ref, source, info, l10n),
-              _groupButton(context, ref, source, info, membership, l10n),
-              _coverButton(context, ref, source, info, membership, l10n),
-              _bookCacheButton(context, ref, source, info, l10n),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -326,6 +352,137 @@ class BookDetailPage extends ConsumerWidget {
     onPressed: () => _openReader(context, ref, source, info, null),
     icon: const Icon(Icons.play_arrow_outlined),
     label: Text(l10n.bookSourceContinueReading),
+  );
+
+  /// 「换源」: finds another enabled text source and switches this page onto it in place.
+  ///
+  /// The switch keeps the shelf identity (the row's URL is rewritten, its progress follows the row)
+  /// and moves the global selected source, so every other parsing page follows the new one.
+  Widget _changeSourceButton(
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    ShelfMembership? membership,
+    AppLocalizations l10n,
+  ) => OutlinedButton.icon(
+    onPressed: () =>
+        unawaited(_changeSource(ref, source, info, membership, l10n)),
+    icon: const Icon(Icons.swap_horiz),
+    label: Text(l10n.readerChangeSource),
+  );
+
+  /// Runs the change-source flow: the page answers a source + chapter, this applies it.
+  ///
+  /// 换源页自己做搜索、进度与章节选择（ADR-0091）；页面返回之后才写库：先切选中的书源，再把
+  /// 书架行的身份改写成新源（`migrateIdentity`），最后把本页换成新身份。
+  Future<void> _changeSource(
+    WidgetRef ref,
+    BookSource source,
+    BookInfo info,
+    ShelfMembership? membership,
+    AppLocalizations l10n,
+  ) async {
+    final ChangeSourceSelection? selection = await showChangeSourceSheet(
+      context,
+      target: (
+        sourceUrl: source.url,
+        bookUrl: info.url,
+        name: info.name,
+        author: info.author,
+        chapterName: membership?.progressChapterName ?? '',
+        chapterIndex: 0,
+      ),
+    );
+    if (selection == null || !mounted) {
+      return;
+    }
+
+    final BookSource? target = await _sourceByUrl(
+      ref,
+      selection.candidate.sourceUrl,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (target == null) {
+      _showMessage(context, l10n.readerSourceFailed);
+
+      return;
+    }
+    final SourceSwitchResult data = ref
+        .read(switchBookSourceProvider)
+        .withChapters(target: target, selection: selection);
+    final List<StoredBookSource> rows = await ref.read(
+      bookSourceListProvider.future,
+    );
+    for (final StoredBookSource row in rows) {
+      if (row.source.url == data.sourceUrl) {
+        await ref.read(selectedBookSourceProvider.notifier).select(row.id);
+        break;
+      }
+    }
+    // 不在书架上时端口会直接返回成功；不要用 membership 判断，避免它仍在加载时漏掉迁移。
+    await ref
+        .read(bookshelfWriterProvider)
+        .migrateIdentity(
+          sourceUrl: source.url,
+          bookUrl: info.url,
+          newSourceUrl: data.sourceUrl,
+          newBookUrl: data.bookUrl,
+          newTocUrl: data.tocUrl,
+          newName: data.bookName,
+          newAuthor: data.author,
+          newCoverUrl: data.coverUrl,
+          newLastChapter: data.lastChapter,
+        );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _book = Book(
+        name: data.bookName,
+        url: data.bookUrl,
+        author: data.author,
+        kind: info.kind,
+        coverUrl: data.coverUrl,
+        intro: info.intro,
+        lastChapter: data.lastChapter,
+        updateTime: info.updateTime,
+      );
+    });
+  }
+
+  /// The stored book source with [sourceUrl], or `null` when it was deleted meanwhile.
+  Future<BookSource?> _sourceByUrl(WidgetRef ref, String sourceUrl) async {
+    for (final StoredBookSource row in await ref.read(
+      bookSourceListProvider.future,
+    )) {
+      if (row.source.url == sourceUrl) {
+        return row.source;
+      }
+    }
+
+    return null;
+  }
+
+  /// 「编辑」: opens the shelf's editor so the user can fix a title/author/intro the source got
+  /// wrong (M33, ADR-0092).
+  ///
+  /// Disabled when the book is not on the shelf: there is no row to edit, and the shelf is the
+  /// owner of the user's own copy of these fields.
+  Widget _editButton(
+    BuildContext context,
+    WidgetRef ref,
+    ShelfMembership? membership,
+    AppLocalizations l10n,
+  ) => OutlinedButton.icon(
+    onPressed: switch (membership?.id) {
+      final int id =>
+        () => ref.read(appNavigationProvider).openShelfBookEdit(context, id),
+      null => null,
+    },
+    icon: const Icon(Icons.edit_outlined),
+    label: Text(l10n.shelfEditTitle),
   );
 
   /// 「阅读记录」: opens the reader-owned record page for this book (ADR-0066 §决策 5).
@@ -420,8 +577,12 @@ class BookDetailPage extends ConsumerWidget {
           for (final ShelfGroupOption group in membership.groups)
             SimpleDialogOption(
               onPressed: () => Navigator.of(dialogContext).pop(group.id),
-              child: Text(
-                group.id == membership.groupId ? '${group.name} ✓' : group.name,
+              child: Row(
+                children: <Widget>[
+                  Expanded(child: Text(group.name)),
+                  if (group.id == membership.groupId)
+                    Icon(Icons.check, semanticLabel: l10n.bookSourceShelfGroup),
+                ],
               ),
             ),
         ],

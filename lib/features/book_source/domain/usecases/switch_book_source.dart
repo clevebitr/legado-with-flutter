@@ -1,38 +1,30 @@
-import 'dart:async';
-
-import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
-import 'package:flutter_reader/features/book_source/domain/source_budget.dart';
-import 'package:flutter_reader/features/book_source/domain/usecases/fetch_book_info.dart';
-import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
-import 'package:flutter_reader/features/book_source/domain/usecases/search_books.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/change_source_search.dart';
 
-/// Another source that has the book being read.
-final class SourceCandidate {
-  /// Creates a candidate.
-  const SourceCandidate({
-    required this.sourceUrl,
-    required this.sourceName,
-    required this.bookUrl,
-    this.author,
-    this.lastChapter,
+/// The candidate and chapter the change-source page answers (ADR-0091 §决策 1).
+///
+/// It carries the chapter list the page already read, so the caller does not fetch the same table
+/// of contents twice just to learn which chapter was picked.
+final class ChangeSourceSelection {
+  /// Creates a selection.
+  const ChangeSourceSelection({
+    required this.candidate,
+    required this.chapters,
+    required this.chapterIndex,
   });
 
-  /// The candidate source's URL (its key in the repository).
-  final String sourceUrl;
+  /// The source the user picked.
+  final ChangeSourceCandidate candidate;
 
-  /// The candidate source's display name.
-  final String sourceName;
+  /// That source's chapters, as the page read them.
+  final List<Chapter> chapters;
 
-  /// The book's detail URL inside that source.
-  final String bookUrl;
+  /// The chapter the user aligned to.
+  final int chapterIndex;
 
-  /// The author as that source spelled it, when it declared one.
-  final String? author;
-
-  /// The latest chapter as that source spelled it, when it declared one.
-  final String? lastChapter;
+  /// The chapter at [chapterIndex].
+  Chapter get chapter => chapters[chapterIndex];
 }
 
 /// The outcome of switching to another source.
@@ -67,7 +59,7 @@ final class SourceSwitchResult {
   /// The new table-of-contents URL.
   final String tocUrl;
 
-  /// The chapter the reader should open: the one aligned to the old chapter.
+  /// The chapter the reader should open: the one the user aligned to.
   final String chapterUrl;
 
   /// The aligned chapter's title.
@@ -86,181 +78,43 @@ final class SourceSwitchResult {
   final String? lastChapter;
 }
 
-/// Finds other sources for the book being read and switches to one of them.
+/// Turns "this candidate, that chapter" into the new identity (ADR-0091 §决策 1).
 ///
-/// Searches per source, because a switch needs the book URL inside each candidate source.
+/// The search itself is [ChangeSourceSearch] and the page that collects the choice is
+/// `ChangeSourcePage`; this class is the last, pure step: no I/O, no storage, no UI. Whether the
+/// switch is applied to the shelf (and which source becomes the selected one) stays the caller's
+/// job, because only it knows which side of the app it is on (ADR-0051 §决策 3).
 final class SwitchBookSource {
   /// Creates the use case.
-  const SwitchBookSource({
-    required this._search,
-    required this._bookInfo,
-    required this._toc,
-    this.concurrency = 4,
-    this.budget = const Duration(seconds: 60),
-  });
+  const SwitchBookSource();
 
-  final SearchBooks _search;
-  final FetchBookInfo _bookInfo;
-  final FetchToc _toc;
-
-  /// How many sources search at once.
-  final int concurrency;
-
-  /// The per-source search budget.
-  final Duration budget;
-
-  /// Every other enabled source that has a book called [bookName].
-  ///
-  /// Exact title matches come first; the current source is excluded and at most [limit] are returned.
-  Future<ParseResult<List<SourceCandidate>>> candidates({
-    required String bookName,
-    required List<BookSource> sources,
-    required String currentSourceUrl,
-    int limit = 20,
-  }) async {
-    final String name = bookName.trim();
-    if (name.isEmpty || sources.isEmpty) {
-      return const ParseSuccess<List<SourceCandidate>>(<SourceCandidate>[]);
-    }
-
-    final List<BookingHit> hits = <BookingHit>[];
-    var next = 0;
-    Future<void> worker() async {
-      while (true) {
-        final int index = next++;
-        if (index >= sources.length) {
-          return;
-        }
-        final BookSource source = sources[index];
-        if (source.url == currentSourceUrl) {
-          continue;
-        }
-        final ParseResult<List<Book>> found = await SourceBudget(budget)
-            .run(() => _search.execute(source, name), rulePath: 'searchUrl');
-        switch (found) {
-          case ParseSuccess<List<Book>>(:final List<Book> data):
-            final Book? hit = _bestMatch(data, name);
-            if (hit != null) {
-              hits.add(BookingHit(source: source, book: hit));
-            }
-          case ParseFailure<List<Book>>():
-            // 这个源没搜到或出错：少一条候选，不影响整次换源。
-            break;
-        }
-      }
-    }
-
-    await Future.wait(<Future<void>>[
-      for (var index = 0; index < (concurrency < 1 ? 1 : concurrency); index++)
-        worker(),
-    ]);
-
-    final List<BookingHit> exact = <BookingHit>[
-      for (final BookingHit hit in hits)
-        if (hit.book.name.trim().toLowerCase() == name.toLowerCase()) hit,
-    ];
-    final List<BookingHit> partial = <BookingHit>[
-      for (final BookingHit hit in hits)
-        if (!exact.contains(hit)) hit,
-    ];
-
-    return ParseSuccess<List<SourceCandidate>>(
-      <SourceCandidate>[
-        for (final BookingHit hit in <BookingHit>[...exact, ...partial])
-          SourceCandidate(
-            sourceUrl: hit.source.url,
-            sourceName: hit.source.name,
-            bookUrl: hit.book.url,
-            author: hit.book.author,
-            lastChapter: hit.book.lastChapter,
-          ),
-      ].take(limit).toList(growable: false),
-    );
-  }
-
-  Book? _bestMatch(List<Book> data, String name) {
-    final String wanted = name.toLowerCase();
-    Book? exact;
-    Book? partial;
-    for (final Book book in data) {
-      final String title = book.name.trim().toLowerCase();
-      if (title == wanted) {
-        exact ??= book;
-      } else if (title.contains(wanted) || wanted.contains(title)) {
-        partial ??= book;
-      }
-    }
-
-    return exact ?? partial;
-  }
-
-  /// Switches to [candidate] and answers where the reader should continue.
-  ///
-  /// Aligns by exact chapter name, then by a contained name, then by the same clamped index.
-  Future<ParseResult<SourceSwitchResult>> switchTo({
+  /// The switch result for the chapter the user picked on the change-source page.
+  SourceSwitchResult withChapters({
     required BookSource target,
-    required SourceCandidate candidate,
-    required String currentChapterName,
-    required int currentChapterIndex,
-  }) async {
-    final ParseResult<BookInfo> info = await _bookInfo.execute(
-      target,
-      candidate.bookUrl,
-    );
-    final BookInfo bookInfo;
-    switch (info) {
-      case ParseFailure<BookInfo>(
-        :final ParseFailureKind kind,
-        :final String rulePath,
-      ):
-        return failureAt<SourceSwitchResult>(kind: kind, rulePath: rulePath);
-      case ParseSuccess<BookInfo>(:final BookInfo data):
-        bookInfo = data;
-    }
+    required ChangeSourceSelection selection,
+  }) {
+    final ChangeSourceCandidate candidate = selection.candidate;
+    final Chapter chapter = selection.chapter;
 
-    final ParseResult<List<Chapter>> toc = await _toc.execute(
-      target,
-      bookInfo.tocUrl,
-      bookName: bookInfo.name,
-    );
-    final List<Chapter> chapters;
-    switch (toc) {
-      case ParseFailure<List<Chapter>>(
-        :final ParseFailureKind kind,
-        :final String rulePath,
-      ):
-        return failureAt<SourceSwitchResult>(kind: kind, rulePath: rulePath);
-      case ParseSuccess<List<Chapter>>(:final List<Chapter> data):
-        // `FetchToc` 已经保证「成功即非空」：列表规则没命中是 `parseFailed`，而命中后每条
-        // 都至少带着目录页地址（ADR-0069 G8 的回落），所以这里不再重复判空。
-        chapters = data;
-    }
-
-    final int index = alignChapterIndex(
-      chapters,
-      currentChapterName,
-      fallbackIndex: currentChapterIndex,
-    );
-    final Chapter aligned = chapters[index];
-
-    return ParseSuccess<SourceSwitchResult>(
-      SourceSwitchResult(
-        sourceUrl: target.url,
-        sourceName: target.name,
-        bookUrl: bookInfo.url,
-        bookName: bookInfo.name,
-        tocUrl: bookInfo.tocUrl,
-        chapterUrl: aligned.url,
-        chapterName: aligned.name,
-        chapterIndex: index,
-        author: bookInfo.author,
-        coverUrl: bookInfo.coverUrl,
-        lastChapter: bookInfo.lastChapter,
-      ),
+    return SourceSwitchResult(
+      sourceUrl: target.url,
+      sourceName: target.name,
+      bookUrl: candidate.book.url,
+      bookName: candidate.book.name,
+      tocUrl: candidate.tocUrl ?? candidate.book.url,
+      chapterUrl: chapter.url,
+      chapterName: chapter.name,
+      chapterIndex: selection.chapterIndex,
+      author: candidate.book.author,
+      coverUrl: candidate.book.coverUrl,
+      lastChapter: candidate.book.lastChapter,
     );
   }
 
   /// The index of the chapter matching [name], or [fallbackIndex] clamped into [chapters].
+  ///
+  /// Alignment tries an equal name, then a contained one, then the same index — the three-step
+  /// fallback of ADR-0051 §决策 3. The page uses it to pre-select the chapter it will propose.
   int alignChapterIndex(
     List<Chapter> chapters,
     String name, {
@@ -283,16 +137,4 @@ final class SwitchBookSource {
 
     return fallbackIndex.clamp(0, chapters.length - 1);
   }
-}
-
-/// One source's best hit, kept with the source it came from.
-final class BookingHit {
-  /// Creates a hit.
-  const BookingHit({required this.source, required this.book});
-
-  /// The source that found [book].
-  final BookSource source;
-
-  /// The hit inside [source].
-  final Book book;
 }

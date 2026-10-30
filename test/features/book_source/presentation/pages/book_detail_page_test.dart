@@ -235,7 +235,7 @@ void main() {
     ) async {
       final BookSource source = loadCorpusBookSource();
       final BookSource unsupportedToc = source.copyWith(
-        tocRule: source.tocRule.copyWith(chapterList: '@xpath://a'),
+        tocRule: source.tocRule.copyWith(chapterList: '@webJs:'),
       );
       final FakeHttpClient http = serveCorpusPages(FakeHttpClient());
 

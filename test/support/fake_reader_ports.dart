@@ -49,6 +49,15 @@ final class FakeChapterContentProvider implements ChapterContentProvider {
   /// The chapter URLs requested, in order.
   final List<String> requests = <String>[];
 
+  /// How long every request takes, so a case can look at how many run at once.
+  Duration delay = Duration.zero;
+
+  /// The most requests that were ever in flight at the same time.
+  int maxInFlight = 0;
+
+  /// The requests currently in flight.
+  int inFlight = 0;
+
   /// The `(bookName, chapterTitle)` context of every request, in order (ADR-0049).
   final List<(String, String)> contexts = <(String, String)>[];
 
@@ -60,9 +69,22 @@ final class FakeChapterContentProvider implements ChapterContentProvider {
     String chapterTitle = '',
     String bookUrl = '',
     String tocUrl = '',
+    String nextChapterUrl = '',
+    bool isVip = false,
+    bool isPay = false,
+    bool isVolume = false,
+    String? updateTime,
   }) async {
     requests.add(chapterUrl);
     contexts.add((bookName, chapterTitle));
+    inFlight++;
+    if (inFlight > maxInFlight) {
+      maxInFlight = inFlight;
+    }
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+    inFlight--;
     final ParseFailureKind? kind = failures[chapterUrl];
     if (kind != null) {
       return failureAt<String>(kind: kind, rulePath: 'reader.chapterContent');

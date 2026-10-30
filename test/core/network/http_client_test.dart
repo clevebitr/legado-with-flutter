@@ -472,9 +472,10 @@ void main() {
         ParseFailureKind.networkFailed,
       );
       expect(fixture.adapter.requests, isEmpty);
+      // 日志不脱敏（ADR-0082）：拒掉的地址原样记，才看得出哪里写错了。
       expect(
         fixture.printer.events.single.message,
-        contains('<unparsable-url>'),
+        contains('url=http://[bad'),
       );
     });
 
@@ -503,7 +504,7 @@ void main() {
         ParseFailureKind.networkFailed,
       );
       expect(fixture.adapter.requests, isEmpty);
-      expect(fixture.printer.events.single.message, contains('token=***'));
+      expect(fixture.printer.events.single.message, contains('token=abc123'));
     });
 
     test('get_whenPlainHttpIsAllowed_sendsTheRequest', () async {
@@ -632,12 +633,15 @@ void main() {
 
       final Object? loggedError = fixture.printer.events.single.error;
 
+      // 异常文本原样落库：定位坏源要靠那句 Dio 报错本身（这条桩只答 "request cancelled"）。
       expect(loggedError, isA<String>());
-      expect(loggedError, isNot(contains('example.com')));
-      expect(fixture.printer.events.single.message, contains('token=***'));
+      expect(loggedError, contains('request cancelled'));
+      expect(fixture.printer.events.single.message, contains('token=abc123'));
     });
 
-    test('get_whenSearchUrlFails_keepsTheKeywordOutOfTheLog', () async {
+    test('get_whenSearchUrlFails_logsTheUrlAndTheKeyword', () async {
+      // 日志不脱敏之后，关键词也在里面：搜索失败最常见的原因就是关键词被站点重定向，
+      // 看不到它等于少了一半线索（ADR-0082）。
       final _Fixture fixture = _buildClient();
       fixture.adapter.enqueueFailure(DioExceptionType.cancel);
 
@@ -647,7 +651,7 @@ void main() {
         keyword: 'hello',
       );
 
-      expect(fixture.printer.events.single.message, isNot(contains('hello')));
+      expect(fixture.printer.events.single.message, contains('/search/hello'));
     });
 
     test('get_givenMoreRequestsThanTheSourcesBudget_queuesTheExcess', () async {
@@ -753,6 +757,44 @@ void main() {
         fixture.adapter.requests.single.headers['content-type'],
         'text/plain',
       );
+    });
+
+    test('head_whenServerAnswers_sendsTheHeadMethodWithoutABody', () async {
+      // `java.head(url)` 的宿主侧（ADR-0076 §决策 1）：只要响应头，所以是 HEAD，
+      // 其余规则（地址校验、预算、重试、头策略）与 GET 完全一致。
+      final _Fixture fixture = _buildClient();
+      fixture.adapter.enqueueResponse(
+        bytes: const <int>[],
+        headers: <String, List<String>>{
+          'location': <String>['/next'],
+        },
+      );
+
+      final HttpResponse response = _expectSuccess(
+        await fixture.client.head(
+          'https://example.com/page',
+          rulePath: 'java.head',
+        ),
+      );
+
+      expect(response.body, isEmpty);
+      expect(response.headers['location'], <String>['/next']);
+      expect(fixture.adapter.requests.single.method, 'HEAD');
+    });
+
+    test('head_sharesTheGetRejectionPolicy', () async {
+      final _Fixture fixture = _buildClient();
+
+      expect(
+        _expectFailure(
+          await fixture.client.head(
+            'http://example.com/a',
+            rulePath: 'java.head',
+          ),
+        ),
+        ParseFailureKind.networkFailed,
+      );
+      expect(fixture.adapter.requests, isEmpty);
     });
 
     test('post_whenTheBodyIsAbsent_sendsAnEmptyPayload', () async {

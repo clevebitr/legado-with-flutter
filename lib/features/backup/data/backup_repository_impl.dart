@@ -74,6 +74,7 @@ final class BackupRepositoryImpl implements BackupRepository {
               'lastUpdateTime': source.lastUpdateTime,
               'respondTime': source.respondTime,
               'loginInfo': source.loginInfo,
+              'loginHeader': source.loginHeader,
               'importedAt': dateToJson(source.importedAt),
               'updatedAt': dateToJson(source.updatedAt),
             },
@@ -97,6 +98,7 @@ final class BackupRepositoryImpl implements BackupRepository {
                   ? null
                   : groupNames[row.book.groupId],
               'customCoverPath': row.book.customCoverPath,
+              'customIntro': row.book.customIntro,
               'addedAt': dateToJson(row.book.addedAt),
               'updatedAt': dateToJson(row.book.updatedAt),
             },
@@ -285,6 +287,7 @@ final class BackupRepositoryImpl implements BackupRepository {
             coverUrl: optionalStringOf(row, 'coverUrl'),
             intro: optionalStringOf(row, 'intro'),
             lastChapter: optionalStringOf(row, 'lastChapter'),
+            customIntro: optionalStringOf(row, 'customIntro'),
             addedAt: optionalDateOf(row, 'addedAt'),
             updatedAt: optionalDateOf(row, 'updatedAt'),
           );
@@ -294,6 +297,7 @@ final class BackupRepositoryImpl implements BackupRepository {
             isPinned: optionalBoolOf(row, 'isPinned', fallback: false),
             groupId: groupId,
             customCoverPath: optionalStringOf(row, 'customCoverPath'),
+            customIntro: optionalStringOf(row, 'customIntro'),
           );
           counter.inserted += 1;
           continue;
@@ -312,6 +316,7 @@ final class BackupRepositoryImpl implements BackupRepository {
           customCoverPath:
               optionalStringOf(row, 'customCoverPath') ??
               existing.customCoverPath,
+          customIntro: optionalStringOf(row, 'customIntro'),
           tocUrl: existing.tocUrl == null
               ? optionalStringOf(row, 'tocUrl')
               : null,
@@ -533,6 +538,7 @@ final class BackupRepositoryImpl implements BackupRepository {
             ),
             comment: optionalStringOf(row, 'comment'),
             loginInfo: optionalStringOf(row, 'loginInfo'),
+            loginHeader: optionalStringOf(row, 'loginHeader'),
             importedAt: optionalDateOf(row, 'importedAt'),
             updatedAt: optionalDateOf(row, 'updatedAt'),
           );
@@ -552,6 +558,11 @@ final class BackupRepositoryImpl implements BackupRepository {
         await _sources.writeLoginInfo(
           id: existing.id,
           loginInfo: optionalStringOf(row, 'loginInfo') ?? existing.loginInfo,
+        );
+        await _sources.writeLoginHeader(
+          id: existing.id,
+          loginHeader:
+              optionalStringOf(row, 'loginHeader') ?? existing.loginHeader,
         );
         await _sources.setEnabled(
           id: existing.id,

@@ -310,3 +310,15 @@ WebView 验证页 + 图片验证码页、`SourceVerification` / `WebViewCookieBr
 5. **失败语义**：不是字体（认不出 `cmap`）、base64 坏了、句柄失效都只让**这次调用**抛错
    （`java.queryTTF failed`），脚本可以 catch 后保留原文；不判整条 job 死，因为「字体没换成功」
    的正文仍然可读。
+
+## 增补（2026-10-28，M27 第二轮日志取证）：未建模的 URL 选项改为显式失败
+
+**改判：** 「决策 8 / §决策 6 的未支持选项按名 warning 并忽略」改为 **`unsupportedRule` 显式失败**
+（`rulePath = unsupported:url-options:<名字>`），不再「忽略后照发」。理由来自真实日志：`js` 是改写
+地址的后处理器，忽略它等于把一条错的地址发出去，失败点被推到更远的网络层（`option=js` 的
+`searchUrl` 只会得到一个 404/超时，日志里看不出是选项的问题）。C-SRC-4 要的正是「不支持的取值
+就地报出来」。
+
+**影响面：** 本机 254 源里 3 处（`m.ganggou.net`、`www.dameishuwang.net` 的 `searchUrl` /
+`ruleBookInfo`）。**重开触发条件：** 出现只差 `js` 选项就能跑的真实源（那时按 `AnalyzeUrl` 的
+地址后处理实现它，而不是回退到忽略）。

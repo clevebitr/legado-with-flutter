@@ -267,6 +267,97 @@ void main() {
     });
   });
 
+  group('BookSource jsLib (ADR-0078 S1)', () {
+    test('fromLegadoJson_givenAJsLib_modelsItAndKeepsItOutOfExtra', () {
+      // 库脚本是行为字段：建模之后必须能读写，也不该再留在 extra 里（那会变成「未知键」）。
+      final Map<String, Object?> json = _minimalJson()
+        ..['jsLib'] = 'function sign(url) { return url; }';
+
+      final BookSource source = BookSource.fromLegadoJson(json);
+
+      expect(source.jsLib, 'function sign(url) { return url; }');
+      expect(source.extra.containsKey('jsLib'), isFalse);
+      expect(source.toJson()['jsLib'], 'function sign(url) { return url; }');
+    });
+
+    test('fromLegadoJson_givenNoJsLib_answersNull', () {
+      expect(BookSource.fromLegadoJson(_minimalJson()).jsLib, isNull);
+    });
+
+    test('jsSourceInfo_carriesTheLibraryForTheEngineButNotForTheSandbox', () {
+      // 库脚本只给引擎用：白名单里的字段照旧，`jsLib` 不进 `source` 绑定（M25/S5a 的字段同表）。
+      final BookSource source = BookSource.fromLegadoJson(
+        _minimalJson()..['jsLib'] = 'var lib = 1;',
+      );
+
+      expect(source.jsSourceInfo.jsLib, 'var lib = 1;');
+      expect(source.jsSourceInfo.toJson().keys, <String>[
+        'name',
+        'url',
+        'group',
+        'key',
+        'bookSourceUrl',
+        'bookSourceName',
+        'bookSourceComment',
+        'header',
+        'loginUrl',
+      ]);
+      expect(source.jsSourceInfo.toJson(), isNot(contains('jsLib')));
+    });
+  });
+
+  group('BookSource source view (M25/S5a)', () {
+    test('jsSourceInfo_givenTheCorpusFields_carriesThemVerbatim', () {
+      // 语料把 `bookSourceComment` 当脚本库（`eval(String(...))`）、把 `loginUrl` 当可复用脚本，
+      // 两者都必须是原文；`key` / `bookSourceUrl` / `bookSourceName` 是上游的字段名。
+      final BookSource source = BookSource.fromLegadoJson(
+        _minimalJson()
+          ..['bookSourceComment'] = 'var helper = 1;'
+          ..['loginUrl'] = '@js:function login(){}'
+          ..['header'] = '{"User-Agent":"x"}',
+      );
+      final Map<String, Object?> json = source.jsSourceInfo.toJson();
+
+      expect(json['bookSourceComment'], 'var helper = 1;');
+      expect(json['loginUrl'], '@js:function login(){}');
+      // JSON 形态的 header 按解析后的表重新序列化（差异登记在 book-source.md §6）。
+      expect(json['header'], '{"User-Agent":"x"}');
+      expect(json['key'], 'https://example-novel.test');
+      expect(json['bookSourceUrl'], 'https://example-novel.test');
+      expect(json['bookSourceName'], '最小书源');
+    });
+
+    test('jsSourceInfo_givenARuleFormHeader_keepsTheDeclaredText', () {
+      // 规则形态的 header 必须原文：真实源靠前缀（`js:` / `js>`）判断要不要自己求值。
+      final BookSource source = BookSource.fromLegadoJson(
+        _minimalJson()..['header'] = '<js>JSON.stringify({a:1})</js>',
+      );
+
+      expect(
+        source.jsSourceInfo.toJson()['header'],
+        '<js>JSON.stringify({a:1})</js>',
+      );
+    });
+
+    test('jsSourceInfo_withoutOptionalFields_answersNulls', () {
+      final BookSource source = BookSource.fromLegadoJson(_minimalJson());
+      final Map<String, Object?> json = source.jsSourceInfo.toJson();
+
+      expect(json['header'], isNull);
+      expect(json['loginUrl'], isNull);
+      expect(json['bookSourceComment'], isNull);
+    });
+
+    test('jsSourceInfo_givenANonStringComment_answersNull', () {
+      // `extra` 里什么都可能：非字符串不该让沙箱视图炸掉（`extra` 是导入保真的兜底）。
+      final BookSource source = BookSource.fromLegadoJson(
+        _minimalJson()..['bookSourceComment'] = <String, Object?>{'a': 1},
+      );
+
+      expect(source.jsSourceInfo.toJson()['bookSourceComment'], isNull);
+    });
+  });
+
   group('BookSource extra retention', () {
     test('fromLegadoJson_givenRealExport_keepsTheUnmodelledTopLevelKeys', () {
       final BookSource source = BookSource.fromLegadoJson(_loadFixture());
@@ -275,7 +366,6 @@ void main() {
         source.extra.keys,
         unorderedEquals(<String>[
           'bookSourceComment',
-          'bookUrlPattern',
           'customOrder',
           'enabledCookieJar',
           'enabledExplore',
@@ -286,6 +376,9 @@ void main() {
           'weight',
         ]),
       );
+      // `bookUrlPattern` / `eventListener` 自 M25/S2 起是建模字段（ADR-0078），不再落进 extra。
+      expect(source.bookUrlPattern, r'https://example-novel.test/\d.*');
+      expect(source.eventListener, isFalse);
       expect(source.extra['customOrder'], 60);
       expect(source.extra['lastUpdateTime'], 1676448109528);
       expect(source.extra['enabledReview'], isFalse);
@@ -307,16 +400,17 @@ void main() {
       'fromLegadoJson_givenUnrecognisedRuleKeys_keepsThemInTheRuleOwnExtra',
       () {
         final Map<String, Object?> json = _loadFixture();
-        // 该导出里 ruleToc / ruleContent 的键已全部建模（PLAN 3.5 补齐），所以先加一个
-        // 模型不认识的键，才能验证「规则对象自己也会保留未识别键」（book-source.md §2）。
-        (json['ruleToc']! as Map<String, Object?>)['formatJs'] =
+        // 该导出里 ruleToc / ruleContent 的键已全部建模（PLAN 3.5 补齐、M25/S2 又补了
+        // formatJs / isPay / isVolume / wordCount / preUpdateJs），所以先加一个模型仍不认识的
+        // 键，才能验证「规则对象自己也会保留未识别键」（book-source.md §2）。
+        (json['ruleToc']! as Map<String, Object?>)['futureTocKey'] =
             'chapter.title';
 
         final BookSource source = BookSource.fromLegadoJson(json);
 
         expect(
           source.tocRule.extra.keys,
-          unorderedEquals(<String>['formatJs']),
+          unorderedEquals(<String>['futureTocKey']),
         );
         expect(source.contentRule.extra, isEmpty);
         expect(source.searchRule.extra, isEmpty);

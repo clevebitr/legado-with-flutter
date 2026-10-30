@@ -171,23 +171,84 @@ final class JsonFilePickerProvider
 
 String _$jsonFilePickerHash() => r'2c6acd27ff8a29e555afbdc24db48da8f0c725e9';
 
-/// Provides the platform save dialog for single-source export.
+/// Provides the system share sheet, or a no-op on platforms without one (`ADR-0083`).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Only mobile uses it today: on Android/iOS the export and log directories are private, while a
+/// desktop already has a save dialog and a reachable folder. Capability detection, not a platform
+/// branch in the UI, decides whether the log page offers sharing.
+
+@ProviderFor(fileSharer)
+final fileSharerProvider = FileSharerProvider._();
+
+/// Provides the system share sheet, or a no-op on platforms without one (`ADR-0083`).
+///
+/// Only mobile uses it today: on Android/iOS the export and log directories are private, while a
+/// desktop already has a save dialog and a reachable folder. Capability detection, not a platform
+/// branch in the UI, decides whether the log page offers sharing.
+
+final class FileSharerProvider
+    extends $FunctionalProvider<FileSharer, FileSharer, FileSharer>
+    with $Provider<FileSharer> {
+  /// Provides the system share sheet, or a no-op on platforms without one (`ADR-0083`).
+  ///
+  /// Only mobile uses it today: on Android/iOS the export and log directories are private, while a
+  /// desktop already has a save dialog and a reachable folder. Capability detection, not a platform
+  /// branch in the UI, decides whether the log page offers sharing.
+  FileSharerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'fileSharerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$fileSharerHash();
+
+  @$internal
+  @override
+  $ProviderElement<FileSharer> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  FileSharer create(Ref ref) {
+    return fileSharer(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(FileSharer value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<FileSharer>(value),
+    );
+  }
+}
+
+String _$fileSharerHash() => r'2b9d48b785ff6afdcacd01a37b1cd9e848dd6ff3';
+
+/// Provides the platform save path for single-source export.
+///
+/// Mobile platforms have no save dialog, so they hand the document to the system share sheet
+/// (`ADR-0083`). Unsupported platforms report `not saved` instead of throwing.
 
 @ProviderFor(jsonFileSaver)
 final jsonFileSaverProvider = JsonFileSaverProvider._();
 
-/// Provides the platform save dialog for single-source export.
+/// Provides the platform save path for single-source export.
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Mobile platforms have no save dialog, so they hand the document to the system share sheet
+/// (`ADR-0083`). Unsupported platforms report `not saved` instead of throwing.
 
 final class JsonFileSaverProvider
     extends $FunctionalProvider<JsonFileSaver, JsonFileSaver, JsonFileSaver>
     with $Provider<JsonFileSaver> {
-  /// Provides the platform save dialog for single-source export.
+  /// Provides the platform save path for single-source export.
   ///
-  /// Unsupported platforms report `not saved` instead of throwing.
+  /// Mobile platforms have no save dialog, so they hand the document to the system share sheet
+  /// (`ADR-0083`). Unsupported platforms report `not saved` instead of throwing.
   JsonFileSaverProvider._()
     : super(
         from: null,
@@ -221,18 +282,20 @@ final class JsonFileSaverProvider
   }
 }
 
-String _$jsonFileSaverHash() => r'51d513898a1bf349e8152385c6c8a72590d2add9';
+String _$jsonFileSaverHash() => r'dd7cd423ca70e9787c788f80a30a9506fa6bb021';
 
-/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+/// Provides the platform save path for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Mobile platforms share the archive instead of opening a save dialog (`ADR-0083`). Unsupported
+/// platforms report `not saved` instead of throwing.
 
 @ProviderFor(backupArchiveSaver)
 final backupArchiveSaverProvider = BackupArchiveSaverProvider._();
 
-/// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+/// Provides the platform save path for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///
-/// Unsupported platforms report `not saved` instead of throwing.
+/// Mobile platforms share the archive instead of opening a save dialog (`ADR-0083`). Unsupported
+/// platforms report `not saved` instead of throwing.
 
 final class BackupArchiveSaverProvider
     extends
@@ -242,9 +305,10 @@ final class BackupArchiveSaverProvider
           BackupArchiveSaver
         >
     with $Provider<BackupArchiveSaver> {
-  /// Provides the platform save dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
+  /// Provides the platform save path for backups (`docs/dev/roadmap.md` M22, ADR-0073).
   ///
-  /// Unsupported platforms report `not saved` instead of throwing.
+  /// Mobile platforms share the archive instead of opening a save dialog (`ADR-0083`). Unsupported
+  /// platforms report `not saved` instead of throwing.
   BackupArchiveSaverProvider._()
     : super(
         from: null,
@@ -280,7 +344,7 @@ final class BackupArchiveSaverProvider
 }
 
 String _$backupArchiveSaverHash() =>
-    r'3d40b6a2082c5dc2ff9d2a3ff20b8a5605b28a90';
+    r'c611ae117e9419c77e47dae2c6db5e87ec0a04b3';
 
 /// Provides the platform open dialog for backups (`docs/dev/roadmap.md` M22, ADR-0073).
 ///
@@ -558,6 +622,178 @@ final class LongRunningTaskProvider
 
 String _$longRunningTaskHash() => r'c4f24b2ab4e07af40943e68f73e182a163752df6';
 
+/// Provides the marker that keeps the display on while the reader is open.
+///
+/// Only Android implements it; elsewhere (and in tests) the no-op keeps the port total
+/// (ADR-0086 §决策 1).
+
+@ProviderFor(screenAwake)
+final screenAwakeProvider = ScreenAwakeProvider._();
+
+/// Provides the marker that keeps the display on while the reader is open.
+///
+/// Only Android implements it; elsewhere (and in tests) the no-op keeps the port total
+/// (ADR-0086 §决策 1).
+
+final class ScreenAwakeProvider
+    extends $FunctionalProvider<ScreenAwake, ScreenAwake, ScreenAwake>
+    with $Provider<ScreenAwake> {
+  /// Provides the marker that keeps the display on while the reader is open.
+  ///
+  /// Only Android implements it; elsewhere (and in tests) the no-op keeps the port total
+  /// (ADR-0086 §决策 1).
+  ScreenAwakeProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'screenAwakeProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$screenAwakeHash();
+
+  @$internal
+  @override
+  $ProviderElement<ScreenAwake> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  ScreenAwake create(Ref ref) {
+    return screenAwake(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ScreenAwake value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ScreenAwake>(value),
+    );
+  }
+}
+
+String _$screenAwakeHash() => r'19a53e08baf87dd87535071e30567497249d9924';
+
+/// Provides the device charge reader behind the reader's status line (ADR-0086 §决策 6).
+///
+/// Only Android implements it; elsewhere the status line omits the charge rather than showing a
+/// made-up value.
+
+@ProviderFor(batteryLevel)
+final batteryLevelProvider = BatteryLevelProvider._();
+
+/// Provides the device charge reader behind the reader's status line (ADR-0086 §决策 6).
+///
+/// Only Android implements it; elsewhere the status line omits the charge rather than showing a
+/// made-up value.
+
+final class BatteryLevelProvider
+    extends $FunctionalProvider<BatteryLevel, BatteryLevel, BatteryLevel>
+    with $Provider<BatteryLevel> {
+  /// Provides the device charge reader behind the reader's status line (ADR-0086 §决策 6).
+  ///
+  /// Only Android implements it; elsewhere the status line omits the charge rather than showing a
+  /// made-up value.
+  BatteryLevelProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'batteryLevelProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$batteryLevelHash();
+
+  @$internal
+  @override
+  $ProviderElement<BatteryLevel> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  BatteryLevel create(Ref ref) {
+    return batteryLevel(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(BatteryLevel value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<BatteryLevel>(value),
+    );
+  }
+}
+
+String _$batteryLevelHash() => r'6d849cf4f086815b92868851bdbd759e761a7da1';
+
+/// Provides the batch check's progress notification.
+///
+/// Only Android has a system notification surface here; other platforms (and the tests) get the
+/// no-op. The check itself never depends on it.
+
+@ProviderFor(sourceCheckNotification)
+final sourceCheckNotificationProvider = SourceCheckNotificationProvider._();
+
+/// Provides the batch check's progress notification.
+///
+/// Only Android has a system notification surface here; other platforms (and the tests) get the
+/// no-op. The check itself never depends on it.
+
+final class SourceCheckNotificationProvider
+    extends
+        $FunctionalProvider<
+          SourceCheckNotification,
+          SourceCheckNotification,
+          SourceCheckNotification
+        >
+    with $Provider<SourceCheckNotification> {
+  /// Provides the batch check's progress notification.
+  ///
+  /// Only Android has a system notification surface here; other platforms (and the tests) get the
+  /// no-op. The check itself never depends on it.
+  SourceCheckNotificationProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sourceCheckNotificationProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sourceCheckNotificationHash();
+
+  @$internal
+  @override
+  $ProviderElement<SourceCheckNotification> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SourceCheckNotification create(Ref ref) {
+    return sourceCheckNotification(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SourceCheckNotification value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SourceCheckNotification>(value),
+    );
+  }
+}
+
+String _$sourceCheckNotificationHash() =>
+    r'529c720021995b4f62262d3f97c698239590c027';
+
 /// Provides visible-WebView verification, unbound by default.
 ///
 /// An unbound port answers `isSupported == false`, which surfaces as
@@ -619,6 +855,128 @@ final class SourceVerificationProvider
 
 String _$sourceVerificationHash() =>
     r'f8f51b442facda34452fd3c221f42a3f012cdeb3';
+
+/// Provides the install id `java.androidId` answers with (M25/S3b).
+///
+/// The holder is read **synchronously** from every job, so `main()` awaits `InstallId.hydrate`
+/// before the first frame (the cookie jar's pattern, ADR-0068 §决策 4). A build that never hydrated
+/// it answers `''`, which is what the sandbox does when the host has no id.
+
+@ProviderFor(installId)
+final installIdProvider = InstallIdProvider._();
+
+/// Provides the install id `java.androidId` answers with (M25/S3b).
+///
+/// The holder is read **synchronously** from every job, so `main()` awaits `InstallId.hydrate`
+/// before the first frame (the cookie jar's pattern, ADR-0068 §决策 4). A build that never hydrated
+/// it answers `''`, which is what the sandbox does when the host has no id.
+
+final class InstallIdProvider
+    extends $FunctionalProvider<InstallId, InstallId, InstallId>
+    with $Provider<InstallId> {
+  /// Provides the install id `java.androidId` answers with (M25/S3b).
+  ///
+  /// The holder is read **synchronously** from every job, so `main()` awaits `InstallId.hydrate`
+  /// before the first frame (the cookie jar's pattern, ADR-0068 §决策 4). A build that never hydrated
+  /// it answers `''`, which is what the sandbox does when the host has no id.
+  InstallIdProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'installIdProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$installIdHash();
+
+  @$internal
+  @override
+  $ProviderElement<InstallId> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  InstallId create(Ref ref) {
+    return installId(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(InstallId value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<InstallId>(value),
+    );
+  }
+}
+
+String _$installIdHash() => r'b9731d8589a58bb8598e109e9f1cb435b1782733';
+
+/// Provides the confirmation dialog `java.openUrl` shows before a rule opens an address.
+///
+/// Silent by default for the same reason as [sourceVerification]: `core/` cannot show a widget, so
+/// the composition root binds the real one. A build without the override still runs every rule —
+/// the bridge logs the address it refused to open.
+
+@ProviderFor(externalUrlOpener)
+final externalUrlOpenerProvider = ExternalUrlOpenerProvider._();
+
+/// Provides the confirmation dialog `java.openUrl` shows before a rule opens an address.
+///
+/// Silent by default for the same reason as [sourceVerification]: `core/` cannot show a widget, so
+/// the composition root binds the real one. A build without the override still runs every rule —
+/// the bridge logs the address it refused to open.
+
+final class ExternalUrlOpenerProvider
+    extends
+        $FunctionalProvider<
+          ExternalUrlOpener,
+          ExternalUrlOpener,
+          ExternalUrlOpener
+        >
+    with $Provider<ExternalUrlOpener> {
+  /// Provides the confirmation dialog `java.openUrl` shows before a rule opens an address.
+  ///
+  /// Silent by default for the same reason as [sourceVerification]: `core/` cannot show a widget, so
+  /// the composition root binds the real one. A build without the override still runs every rule —
+  /// the bridge logs the address it refused to open.
+  ExternalUrlOpenerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'externalUrlOpenerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$externalUrlOpenerHash();
+
+  @$internal
+  @override
+  $ProviderElement<ExternalUrlOpener> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  ExternalUrlOpener create(Ref ref) {
+    return externalUrlOpener(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ExternalUrlOpener value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ExternalUrlOpener>(value),
+    );
+  }
+}
+
+String _$externalUrlOpenerHash() => r'4c8d2aed52e421567304648d3d1b4a4bd7260fa7';
 
 /// Provides WebView support for `,{webView:…}` rules and `java.webView`; unsupported by default.
 ///

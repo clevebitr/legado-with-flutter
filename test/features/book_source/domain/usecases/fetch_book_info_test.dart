@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/js/js_bridge.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/core/logging/log_level.dart';
@@ -68,6 +69,37 @@ T _data<T>(ParseResult<T> result) => switch (result) {
 
 void main() {
   group('FetchBookInfo', () {
+    test('execute_givenTheDetailPage_marksTheStageAsFromBookInfo', () async {
+      // M25/S3b：`fromBookInfo` 是详情阶段的标记，规则靠它区分「详情页」与「列表页」。
+      final FakeJsBridge bridge = FakeJsBridge()..result = '正文';
+      final AppLogger logger = AppLogger(
+        level: LogLevel.debug,
+        printer: FakeLogPrinter(),
+      );
+      final FetchBookInfo fetch = FetchBookInfo(
+        pages: PageFetchService(
+          engine: RuleEngine(
+            logger: logger,
+            jsBridge: bridge,
+            variables: JsVariableStore(),
+          ),
+          http: FakeHttpClient()..serve(_bookUrl, _page('book_page.html')),
+          logger: logger,
+        ),
+      );
+
+      final BookSource source = _source();
+      // 规则写成 `@js:` 才会拉起一次沙箱调用；字段内容无关紧要，要断言的是 job 上的标记。
+      final BookSource scripted = source.copyWith(
+        bookInfoRule: source.bookInfoRule?.copyWith(name: '@js:result'),
+      );
+
+      _data(await fetch.execute(scripted, _bookUrl));
+
+      expect(bridge.jobs, isNotEmpty);
+      expect(bridge.jobs.every((JsJob job) => job.fromBookInfo), isTrue);
+    });
+
     test('execute_givenBookPage_readsEveryField', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_bookUrl, _page('book_page.html'));
@@ -158,7 +190,7 @@ void main() {
           ..serve(_bookUrl, _page('book_page.html'));
         final BookSource source = _source();
         final BookSource withJs = source.copyWith(
-          bookInfoRule: source.bookInfoRule?.copyWith(intro: '@xpath://div'),
+          bookInfoRule: source.bookInfoRule?.copyWith(intro: '@webJs:'),
         );
         final FakeLogPrinter printer = FakeLogPrinter();
         final AppLogger logger = AppLogger(
@@ -401,7 +433,7 @@ void main() {
         await FetchBookInfo(pages: _service(http)).execute(
           _source().copyWith(
             bookInfoRule: const BookInfoRule(
-              init: '@xpath://div',
+              init: '@webJs:',
               name: 'class.book-name@text',
             ),
           ),
@@ -412,7 +444,7 @@ void main() {
       // init 不适用 ADR-0026 的非顶层降级：丢掉 scope 会静默清空所有字段。
       // rulePath 按 §7 取语法标记（而非字段路径），与被拒规则的通用口径一致。
       expect(failure.kind, ParseFailureKind.unsupportedRule);
-      expect(failure.rulePath, 'unsupported:@xpath:');
+      expect(failure.rulePath, 'unsupported:@webJs');
     });
   });
 }

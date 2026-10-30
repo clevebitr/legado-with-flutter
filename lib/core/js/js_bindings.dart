@@ -35,6 +35,29 @@ const String jsHttpBinding = 'http';
 /// The binding name of `parse.*` in a [JsHostCall].
 const String jsParseBinding = 'parse';
 
+/// The binding name of the **synchronous** `java.*` / `cookie.*` family (ADR-0076 §决策 1).
+///
+/// The worker answers this name from its own per-job replay cache; a call it has not seen before
+/// travels to the bridge under the same name, which fetches once and lets the script start over.
+const String jsSyncBinding = 'sync';
+
+/// The binding name of `java.openUrl`.
+///
+/// One-way like [jsToastBinding]: upstream starts a confirmation screen and returns immediately, and
+/// a rule never waits for the user to answer.
+const String jsOpenUrlBinding = 'openUrl';
+
+/// The binding name of `java.toast` / `java.longToast`.
+///
+/// A one-way channel: the rule never reads anything back, so nothing here can suspend it.
+const String jsToastBinding = 'toast';
+
+/// The binding name of `source.getVariable` / `setVariable` / `putVariable`.
+///
+/// Answered inside the worker (the map travels with the job and back with the result), which is
+/// what makes it synchronous without a replay pass.
+const String jsSourceBinding = 'source';
+
 /// The binding name of `java.*`, which the worker answers inside its own isolate.
 const String jsJavaBinding = 'java';
 
@@ -774,6 +797,337 @@ Map<String, String?> decodeJsVariables(Object? value) {
   return variables;
 }
 
+/// Reads the job's `loginInfo` snapshot (`source.getLoginInfo*`), ignoring unusable entries.
+///
+/// The values come from the login form, so they are strings by construction; a hand-built job in a
+/// test may pass anything, and a non-string entry must not make the login door fail.
+Map<String, String> decodeJsLoginInfo(Object? value) {
+  final Map<String, String> info = <String, String>{};
+  if (value is! Map) {
+    return info;
+  }
+  for (final MapEntry<Object?, Object?> entry in value.entries) {
+    final Object? key = entry.key;
+    final Object? entryValue = entry.value;
+    if (key is String && entryValue is String) {
+      info[key] = entryValue;
+    }
+  }
+
+  return info;
+}
+
+/// The job-local **login header** of `source.getLoginHeader` / `putLoginHeader` (M25/S3b).
+///
+/// Seeded from the job envelope with the value the store holds, written by the rule, and reported
+/// back with the result **only when the rule wrote it**: a read must not cause a database write,
+/// and upstream's `putLoginHeader` takes effect at once (`BaseSource.kt:150-157`).
+final class JsLoginHeaderSlot {
+  /// Creates a slot seeded with [value].
+  JsLoginHeaderSlot(this.value);
+
+  /// The header JSON the rule sees, or `null` when the source never signed in.
+  String? value;
+
+  /// Whether the rule wrote the slot during this job.
+  bool touched = false;
+
+  /// Whether the rule **removed** the header (`source.removeLoginHeader`, M25/S5a).
+  ///
+  /// A removal is not the same report as a write of `null`: upstream also drops the source's
+  /// cookies (`BaseSource.removeLoginHeader` → `CookieStore.removeCookie(getKey())`), and only the
+  /// bridge can do that.
+  bool cleared = false;
+
+  /// Marks the slot as removed by the rule.
+  void clear() {
+    value = null;
+    touched = true;
+    cleared = true;
+  }
+}
+
+/// The job-local **login info** of `source.getLoginInfo*` / `putLoginInfo` / `removeLoginInfo`
+/// (M22-a reads, M25/S5a writes).
+///
+/// Same contract as [JsLoginHeaderSlot]: seeded from the job, written by the rule, reported back
+/// only when the rule wrote it. `null` means 「no login info」, which is also what a removal
+/// reports.
+final class JsLoginInfoSlot {
+  /// Creates a slot seeded with [value].
+  JsLoginInfoSlot(this.value);
+
+  /// The values `loginUi` collected, or `null` when the source never signed in.
+  Map<String, String>? value;
+
+  /// Whether the rule changed the slot during this job.
+  bool touched = false;
+}
+
+/// The name the source's **whole** variable blob is stored under (`source.getVariable`).
+///
+/// Upstream keeps that blob in one cache entry per source (`sourceVariable_<url>`,
+/// `BaseSource.kt:283-295`), next to the per-name entries `source.put` / `get` use
+/// (`v_<url>_<name>`, `:305-320`). This repository stores both in `source_variables`, so the blob
+/// is the **unnamed** entry: an empty name is what 「the variable has no name」 means, and it keeps
+/// one storage with one write-through path instead of a second column that carries a single string.
+const String sourceVariableBlobName = '';
+
+/// Applies one `source.*` call and returns a JSON envelope.
+///
+/// The map is the job's own copy of the source's variables: seeded from the store when the job is
+/// built and returned with the result, exactly like the rule variables (ADR-0034 §决策 1). A write
+/// is therefore visible to later reads in the same job, and persists because the bridge merges the
+/// returned map back into the store.
+///
+/// [loginHeader] and [loginInfo] are the same contract for the two login doors; passing `null`
+/// means the job seeded none, and those operations then fail **loudly** (`{'ok':false}`) instead of
+/// pretending the source has nothing stored.
+String applyJsSourceCall(
+  Map<String, String?> variables,
+  Object? args, {
+  JsLoginHeaderSlot? loginHeader,
+  JsLoginInfoSlot? loginInfo,
+}) {
+  final Map<String, Object?>? call = _jsonObjectOf(args);
+  if (call == null) {
+    return '{"ok":false}';
+  }
+
+  switch (call['operation']) {
+    case 'getLoginHeader':
+      if (loginHeader == null) {
+        return '{"ok":false}';
+      }
+
+      return jsonEncode(<String, Object?>{
+        'ok': true,
+        // 上游 `getLoginHeader()` 没有值时返回 null；`getVariable` 才返回空串。
+        'value': loginHeader.value,
+      });
+    case 'putLoginHeader':
+      final Object? header = call['value'];
+      if (loginHeader == null || header is! String) {
+        return '{"ok":false}';
+      }
+      loginHeader.value = header;
+      loginHeader.touched = true;
+
+      return '{"ok":true}';
+    case 'removeLoginHeader':
+      if (loginHeader == null) {
+        return '{"ok":false}';
+      }
+      loginHeader.clear();
+
+      return '{"ok":true}';
+    case 'getLoginInfo':
+      if (loginInfo == null) {
+        return '{"ok":false}';
+      }
+
+      return jsonEncode(<String, Object?>{
+        'ok': true,
+        'value': loginInfo.value ?? const <String, String>{},
+      });
+    case 'putLoginInfo':
+      return _putLoginInfo(loginInfo, call['value']);
+    case 'removeLoginInfo':
+      if (loginInfo == null) {
+        return '{"ok":false}';
+      }
+      loginInfo.value = null;
+      loginInfo.touched = true;
+
+      return '{"ok":true}';
+  }
+
+  // 整份变量（`source.getVariable` / `setVariable` / `putVariable`）没有名字，所以它在
+  // [sourceVariableBlobName] 这个条目里；带名字的读写是 `source.get` / `put`。
+  if (call['operation'] == 'getVariable' ||
+      call['operation'] == 'putVariable') {
+    return _applyBlobVariable(variables, call);
+  }
+
+  final Object? key = call['key'];
+  final Object? value = call['value'];
+  if (key is! String) {
+    return '{"ok":false}';
+  }
+
+  switch (call['operation']) {
+    case 'get':
+      return jsonEncode(<String, Object?>{
+        'ok': true,
+        // 未写过的变量答空串：上游的 `get` 不区分「没有」与「空」。
+        'value': variables[key] ?? '',
+      });
+    case 'put':
+      if (value is! String?) {
+        return '{"ok":false}';
+      }
+      variables[key] = value;
+
+      // 上游 `put(key, value): String` 把值原样答回去：真实源里就有
+      // `return base + source.put('surl', …)` 这种拿返回值拼 URL 的写法。
+      return jsonEncode(<String, Object?>{'ok': true, 'value': value ?? ''});
+    default:
+      return '{"ok":false}';
+  }
+}
+
+String _applyBlobVariable(
+  Map<String, String?> variables,
+  Map<String, Object?> call,
+) {
+  final Object? value = call['value'];
+  if (call['operation'] == 'getVariable') {
+    return jsonEncode(<String, Object?>{
+      'ok': true,
+      'value': variables[sourceVariableBlobName] ?? '',
+    });
+  }
+  if (value is! String?) {
+    return '{"ok":false}';
+  }
+  variables[sourceVariableBlobName] = value;
+
+  return '{"ok":true}';
+}
+
+// `putLoginInfo(info: String): Boolean`（上游：加密整份 JSON 存起来，读时再解）。本仓的列本身
+// 就是一个 JSON map，所以写入时先解成表：解不出来就答 false，而不是把一段读不回来的文本写进库。
+// 值一律按字符串收下（上游的 map 是 `Map<String, String>`）。
+String _putLoginInfo(JsLoginInfoSlot? slot, Object? raw) {
+  if (slot == null) {
+    return '{"ok":false}';
+  }
+  if (raw is! String) {
+    return jsonEncode(<String, Object?>{'ok': true, 'value': false});
+  }
+  Object? decoded;
+  try {
+    decoded = jsonDecode(raw);
+  } on FormatException {
+    return jsonEncode(<String, Object?>{'ok': true, 'value': false});
+  }
+  if (decoded is! Map) {
+    return jsonEncode(<String, Object?>{'ok': true, 'value': false});
+  }
+  final Map<String, String> info = <String, String>{};
+  for (final MapEntry<Object?, Object?> entry in decoded.entries) {
+    final Object? key = entry.key;
+    final Object? value = entry.value;
+    if (key is String && value != null) {
+      info[key] = value is String ? value : value.toString();
+    }
+  }
+  slot.value = info;
+  slot.touched = true;
+
+  return jsonEncode(<String, Object?>{'ok': true, 'value': true});
+}
+
+/// One `java.openUrl` call.
+final class JsOpenUrlRequest {
+  /// Creates an open-url request.
+  const JsOpenUrlRequest({required this.url, this.mimeType});
+
+  /// The address the rule wants the user to open.
+  final String url;
+
+  /// The MIME type the rule declared, when it declared one.
+  final String? mimeType;
+}
+
+/// Reads one `java.openUrl` call's arguments, or `null` when they are unusable.
+///
+/// The arguments are JSON: `{url, mimeType}`. An address longer than [maxJsOpenUrlLength] is
+/// refused the way upstream refuses it (`require(url.length < 64 * 1024)`) instead of being shown in
+/// a dialog nobody can read.
+JsOpenUrlRequest? decodeJsOpenUrlRequest(Object? args) {
+  final Map<String, Object?>? call = _jsonObjectOf(args);
+  if (call == null) {
+    return null;
+  }
+  final Object? url = call['url'];
+  final Object? mimeType = call['mimeType'];
+  if (url is! String || mimeType is! String?) {
+    return null;
+  }
+  final String text = url.trim();
+  if (text.isEmpty || text.length > maxJsOpenUrlLength) {
+    return null;
+  }
+
+  return JsOpenUrlRequest(
+    url: text,
+    mimeType: mimeType == null || mimeType.trim().isEmpty
+        ? null
+        : mimeType.trim(),
+  );
+}
+
+/// Longest address `java.openUrl` accepts, matching upstream's own guard.
+const int maxJsOpenUrlLength = 64 * 1024;
+
+/// One `java.toast` / `java.longToast` call.
+final class JsToastRequest {
+  /// Creates a toast request.
+  const JsToastRequest({required this.message, this.isLong = false});
+
+  /// The text the rule wants the user to see.
+  final String message;
+
+  /// Whether the rule asked for the long toast.
+  ///
+  /// Both spellings land in the same place here (a snack bar); the flag is kept so the log line can
+  /// say which one the rule used.
+  final bool isLong;
+}
+
+/// Reads one toast call's arguments, or `null` when they are unusable.
+///
+/// The arguments are JSON: `{message, long}`.
+JsToastRequest? decodeJsToastRequest(Object? args) {
+  final Map<String, Object?>? call = _jsonObjectOf(args);
+  if (call == null) {
+    return null;
+  }
+  final Object? message = call['message'];
+  final Object? isLong = call['long'];
+  if (message is! String || isLong is! bool?) {
+    return null;
+  }
+  final String text = message.trim();
+  if (text.isEmpty) {
+    return null;
+  }
+
+  return JsToastRequest(message: text, isLong: isLong ?? false);
+}
+
+/// The `loginCheckJs`-shaped response object a rule can read (`book-source.md` §6).
+///
+/// Shared by the async `http.*` door and the synchronous `java.ajax` family so both hand the script
+/// the same shape: a `body` property plus `url()` / `code()` / `headers()` methods, which the
+/// prelude adds (`__sandboxValue`).
+Map<String, Object?> jsResponsePayload({
+  required String url,
+  required String body,
+  required int code,
+  required Map<String, List<String>> headers,
+}) => <String, Object?>{
+  jsResponseMarker: true,
+  'body': body,
+  '__url': url,
+  '__code': code,
+  '__headers': <String, String>{
+    for (final MapEntry<String, List<String>> entry in headers.entries)
+      entry.key: entry.value.join(', '),
+  },
+};
+
 /// Reads one `parse.*` call's arguments, or `null` when they are unusable.
 ///
 /// `parse.getString` and `parse.getElements` differ only in
@@ -791,10 +1145,11 @@ JsParseRequest? decodeJsParseRequest(Object? args) {
   };
   final Object? rule = call['rule'];
   final Object? doc = call['doc'];
+  final Object? content = call['content'];
   if (wantsList == null || rule is! String) {
     return null;
   }
-  if (doc is! String?) {
+  if (doc is! String? || content is! String?) {
     return null;
   }
 
@@ -804,6 +1159,7 @@ JsParseRequest? decodeJsParseRequest(Object? args) {
     // `java.getStringList` 要**抽取值**（上游语义），`parse.getElements` 要元素文档。
     wantsValues: call['operation'] == 'getStringList',
     doc: doc,
+    content: content,
   );
 }
 

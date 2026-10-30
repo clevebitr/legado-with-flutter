@@ -8,6 +8,7 @@ import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_repository_impl.dart';
 import 'package:flutter_reader/features/book_source/data/book_source_view_store_impl.dart';
 import 'package:flutter_reader/features/book_source/data/cache_dao_content_cache.dart';
+import 'package:flutter_reader/features/book_source/data/explore_layout_store_impl.dart';
 import 'package:flutter_reader/features/book_source/data/search_scope_store_impl.dart';
 import 'package:flutter_reader/features/book_source/domain/content_cache.dart';
 import 'package:flutter_reader/features/book_source/domain/content_purifier.dart';
@@ -16,9 +17,11 @@ import 'package:flutter_reader/features/book_source/domain/purge_rules_port.dart
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_repository.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/book_source_view_store.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/bookshelf_writer.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/explore_layout_store.dart';
 import 'package:flutter_reader/features/book_source/domain/repositories/search_scope_store.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/aggregate_search_books.dart';
+import 'package:flutter_reader/features/book_source/domain/usecases/change_source_search.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/check_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/explore_books.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/export_book_sources.dart';
@@ -83,6 +86,11 @@ RuleEngine ruleEngine(Ref ref) => RuleEngine(
   logger: ref.watch(appLoggerProvider),
   jsBridge: ref.watch(jsBridgeProvider),
   variables: ref.watch(jsVariableStoreProvider),
+  // 每源持久变量（`source.getVariable`，ADR-0076 §决策 1）：引擎只负责把快照下发，
+  // 写穿由桥做（它拿到 job 的结果）。
+  sourceVariables: ref.watch(sourceVariableStoreProvider),
+  // 书源自带的 JS 库（ADR-0078 S1）：规则执行前解析成可运行的脚本。
+  jsLib: ref.watch(jsLibStoreProvider),
 );
 
 /// Provides the page fetch + rule reading service the use cases are built on.
@@ -92,6 +100,9 @@ PageFetchService pageFetchService(Ref ref) => PageFetchService(
   http: ref.watch(httpClientProvider),
   logger: ref.watch(appLoggerProvider),
   webPages: ref.watch(webPageFetcherProvider),
+  // 登录头（`source.putLoginHeader`，M25/S3b）：与桥看到的是同一个 store，所以登录脚本写下的
+  // 头会在下一阶段的每个请求上生效。
+  loginHeaders: ref.watch(sourceLoginHeaderStoreProvider),
 );
 
 /// Provides the search use case.
@@ -193,13 +204,22 @@ RunSourceDebug runSourceDebug(Ref ref) => RunSourceDebug(
   clock: ref.watch(clockProvider),
 );
 
-/// Provides the source switch of the reader.
+/// Provides the candidate search of a source switch (ADR-0091).
+///
+/// It is its own provider because the switch page (M30) drives it directly: the progress
+/// callbacks, the pause latch and the cancellation belong to that page, while the one-shot
+/// [switchBookSourceProvider] keeps answering the reader's port.
 @Riverpod(keepAlive: true)
-SwitchBookSource switchBookSource(Ref ref) => SwitchBookSource(
+ChangeSourceSearch changeSourceSearch(Ref ref) => ChangeSourceSearch(
   search: ref.watch(searchBooksProvider),
   bookInfo: ref.watch(fetchBookInfoProvider),
   toc: ref.watch(fetchTocProvider),
+  logger: ref.watch(appLoggerProvider),
 );
+
+/// Provides the source switch: the last, pure step of the change-source flow (ADR-0091).
+@Riverpod(keepAlive: true)
+SwitchBookSource switchBookSource(Ref ref) => const SwitchBookSource();
 
 /// Provides the list's view state store (sort key and group filter).
 @Riverpod(keepAlive: true)
@@ -220,4 +240,21 @@ AggregateSearchBooks aggregateSearchBooks(Ref ref) => AggregateSearchBooks(
 Future<SearchScopeStore> searchScopeStore(Ref ref) async =>
     SearchScopeStoreImpl(
       store: await ref.watch(preferenceStoreProvider.future),
+    );
+
+/// Provides the stored discover layout (`DECISIONS.md` #77).
+@Riverpod(keepAlive: true)
+Future<ExploreLayoutStore> exploreLayoutStore(Ref ref) async =>
+    ExploreLayoutStoreImpl(
+      store: await ref.watch(preferenceStoreProvider.future),
+    );
+
+/// Provides the stored change-source scope (ADR-0091 §决策 5).
+///
+/// Same codec, different key: switching a book and searching the library are separate intents.
+@Riverpod(keepAlive: true)
+Future<SearchScopeStore> changeSourceScopeStore(Ref ref) async =>
+    SearchScopeStoreImpl(
+      store: await ref.watch(preferenceStoreProvider.future),
+      key: changeSourceScopeKey,
     );

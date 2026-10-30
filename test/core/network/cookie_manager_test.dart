@@ -228,6 +228,117 @@ void main() {
       );
     });
 
+    test('mergeCookieHeader_givenABareCookie_storesEveryPair', () {
+      // `source.putLoginHeader` 里的 Cookie 走这里：上游把它并进宗，宗才是真正发它的地方。
+      final InMemoryCookieManager cookies = InMemoryCookieManager();
+
+      cookies.mergeCookieHeader(
+        Uri.parse('https://example.com/'),
+        'sid=1; token=ab; padding==',
+      );
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/x')),
+        allOf(contains('sid=1'), contains('token=ab'), contains('padding==')),
+      );
+    });
+
+    test('mergeCookieHeader_replacesACookieWithTheSameName', () {
+      final InMemoryCookieManager cookies = InMemoryCookieManager();
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'sid=old',
+      ]);
+
+      cookies.mergeCookieHeader(Uri.parse('https://example.com/'), 'sid=new');
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'sid=new',
+      );
+    });
+
+    test('mergeCookieHeader_skipsPairsWithoutANameOrValue', () {
+      final InMemoryCookieManager cookies = InMemoryCookieManager();
+
+      cookies.mergeCookieHeader(
+        Uri.parse('https://example.com/'),
+        'sid=1; ; =broken; empty= ',
+      );
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://example.com/')),
+        'sid=1',
+      );
+    });
+
+    test('removeCookiesFor_givenTheSourceUrl_dropsWhatItWouldSend', () {
+      // `source.removeLoginHeader`（M25/S5a）：上游删的是这个源二级域的整条记录。
+      final InMemoryCookieManager cookies = InMemoryCookieManager();
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'sid=1',
+      ]);
+      cookies.storeFromResponse(Uri.parse('https://www.example.com/'), <String>[
+        'session=2',
+      ]);
+      cookies.storeFromResponse(Uri.parse('https://other.test/'), <String>[
+        'keep=3',
+      ]);
+
+      // 子域登录后落在父域上的 cookie 也算「这个源会发出去的」。
+      cookies.storeFromResponse(Uri.parse('https://sub.example.com/'), <String>[
+        'parenthost=4; Domain=example.com',
+      ]);
+
+      cookies.removeCookiesFor(Uri.parse('https://www.example.com/book/1'));
+
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://www.example.com/')),
+        isNull,
+      );
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://sub.example.com/')),
+        isNull,
+      );
+      // 反方向不算：`www.example.com` 自己的 cookie 不会被 `example.com` 的请求带上。
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://www.example.com/')),
+        isNull,
+      );
+      // 别的域不受影响：登出一个源不该顺手把别人的会话也清掉。
+      expect(
+        cookies.cookieHeaderFor(Uri.parse('https://other.test/')),
+        'keep=3',
+      );
+    });
+
+    test('domainsFor_givenASourceUrl_answersTheStoredDomains', () {
+      // 持久宗只能按域删：域名得从宗里问，不能从 URL 推。
+      final InMemoryCookieManager cookies = InMemoryCookieManager();
+      cookies.storeFromResponse(Uri.parse('https://example.com/'), <String>[
+        'sid=1',
+      ]);
+      cookies.storeFromResponse(Uri.parse('https://other.test/'), <String>[
+        'keep=3',
+      ]);
+
+      expect(cookies.domainsFor(Uri.parse('https://example.com/a')), <String>{
+        'example.com',
+      });
+      expect(cookies.domainsFor(Uri.parse('https://nothing.test/')), isEmpty);
+    });
+
+    test('parseCookieHeader_storesThemForTheURLHostOnly', () {
+      final List<StoredCookie> parsed = parseCookieHeader(
+        Uri.parse('https://example.com/a'),
+        'sid=1',
+      );
+
+      expect(parsed.single.domain, 'example.com');
+      expect(parsed.single.path, '/');
+      expect(parsed.single.isSecure, isFalse);
+      expect(parsed.single.expiresAt, isNull);
+    });
+
     test(
       'storeFromResponse_whenExpiresIsUnparsable_keepsItAsASessionCookie',
       () {

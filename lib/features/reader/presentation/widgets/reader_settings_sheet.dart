@@ -31,7 +31,8 @@ class ReaderSettingsSheet extends StatelessWidget {
     final M3ETheme tokens = context.m3e;
 
     return SafeArea(
-      child: Padding(
+      // 七个控件在窄屏或大字号下放不进默认的 9/16 高度：整张面板可滚动。
+      child: SingleChildScrollView(
         padding: EdgeInsets.all(tokens.spacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -173,6 +174,51 @@ class ReaderSettingsSheet extends StatelessWidget {
               selected: <ReaderPageMode>{settings.pageMode},
               onSelectionChanged: (Set<ReaderPageMode> selection) =>
                   onChanged(settings.copyWith(pageMode: selection.single)),
+            ),
+            SizedBox(height: tokens.spacing.md),
+            // 护眼（ADR-0086 §决策 2）：强度 0 = 关；只压暖正文，不动系统亮度。
+            _slider(
+              context,
+              label: l10n.readerEyeProtection,
+              value: settings.eyeProtection.toDouble(),
+              min: 0,
+              max: maxReaderEyeProtection.toDouble(),
+              divisions: 10,
+              onChanged: (double value) =>
+                  onChanged(settings.copyWith(eyeProtection: value.round())),
+            ),
+            // 常亮（ADR-0086 §决策 1）：默认开，因为阅读本来就是「很久不碰屏幕」。
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                l10n.readerKeepAwake,
+                style: tokens.typography.base.labelLarge,
+              ),
+              value: settings.keepScreenAwake,
+              onChanged: (bool value) =>
+                  onChanged(settings.copyWith(keepScreenAwake: value)),
+            ),
+            // 状态栏（ADR-0086 §决策 6）：章节 / 进度 / 时间 / 电量。
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                l10n.readerStatusLine,
+                style: tokens.typography.base.labelLarge,
+              ),
+              value: settings.showReaderStatus,
+              onChanged: (bool value) =>
+                  onChanged(settings.copyWith(showReaderStatus: value)),
+            ),
+            // 自动翻页间隔（ADR-0093 §决策 1）：开关在工具条上，这里只调快慢。
+            _slider(
+              context,
+              label: l10n.readerAutoPageInterval(settings.autoPageSeconds),
+              value: settings.autoPageSeconds.toDouble(),
+              min: minReaderAutoPageSeconds.toDouble(),
+              max: maxReaderAutoPageSeconds.toDouble(),
+              divisions: maxReaderAutoPageSeconds - minReaderAutoPageSeconds,
+              onChanged: (double value) =>
+                  onChanged(settings.copyWith(autoPageSeconds: value.round())),
             ),
           ],
         ),

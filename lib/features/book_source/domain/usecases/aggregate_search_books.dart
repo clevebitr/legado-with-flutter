@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/logging/error_text.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';

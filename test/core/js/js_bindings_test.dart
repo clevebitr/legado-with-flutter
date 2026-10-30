@@ -326,6 +326,467 @@ void main() {
         }),
         isNull,
       );
+      expect(
+        decodeJsParseRequest(<String, Object?>{
+          'operation': 'getString',
+          'rule': 'a',
+          'content': 1,
+        }),
+        isNull,
+      );
+    });
+
+    test('decodeJsParseRequest_givenASetContent_keepsThePageOverride', () {
+      // `java.setContent(html)` 之后，`parse.*` 带着替换后的正文来问宿主（ADR-0076 §决策 1）。
+      final JsParseRequest? request = decodeJsParseRequest(<String, Object?>{
+        'operation': 'getString',
+        'rule': 'id.c@text',
+        'content': '<html><div id="c">新</div></html>',
+      });
+
+      expect(request?.content, '<html><div id="c">新</div></html>');
+      expect(request?.doc, isNull);
+    });
+  });
+
+  group('decodeJsOpenUrlRequest', () {
+    test('decodeJsOpenUrlRequest_givenAnAddress_readsIt', () {
+      final JsOpenUrlRequest? request = decodeJsOpenUrlRequest(
+        <String, Object?>{'url': ' https://a.test/book/1 '},
+      );
+
+      expect(request?.url, 'https://a.test/book/1');
+      expect(request?.mimeType, isNull);
+    });
+
+    test('decodeJsOpenUrlRequest_givenAMimeType_keepsIt', () {
+      expect(
+        decodeJsOpenUrlRequest(<String, Object?>{
+          'url': 'https://a.test/a',
+          'mimeType': 'text/html',
+        })?.mimeType,
+        'text/html',
+      );
+    });
+
+    test('decodeJsOpenUrlRequest_givenAnEmptyAddress_isNull', () {
+      // 空地址弹窗没有意义，也开不出任何东西：调用方会明确拒绝而不是弹一个空框。
+      expect(decodeJsOpenUrlRequest(<String, Object?>{'url': '   '}), isNull);
+      expect(decodeJsOpenUrlRequest('nonsense'), isNull);
+      expect(decodeJsOpenUrlRequest(<String, Object?>{'url': 7}), isNull);
+    });
+
+    test('decodeJsOpenUrlRequest_givenAnAddressPastTheBound_isNull', () {
+      // 上游 `require(url.length < 64 * 1024)` 的同一道门。
+      expect(
+        decodeJsOpenUrlRequest(<String, Object?>{
+          'url': 'https://a.test/${'a' * maxJsOpenUrlLength}',
+        }),
+        isNull,
+      );
+    });
+  });
+
+  group('applyJsSourceCall', () {
+    test('applyJsSourceCall_givenAGet_answersTheStoredValue', () {
+      final Map<String, String?> variables = <String, String?>{'token': 'abc'};
+
+      expect(
+        jsonDecode(
+          applyJsSourceCall(variables, <String, Object?>{
+            'operation': 'get',
+            'key': 'token',
+          }),
+        ),
+        <String, Object?>{'ok': true, 'value': 'abc'},
+      );
+    });
+
+    test('applyJsSourceCall_givenAnUnwrittenKey_answersAnEmptyString', () {
+      // 上游 `getVariable` 不区分「没有」与「空」。
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'get',
+            'key': 'missing',
+          }),
+        ),
+        <String, Object?>{'ok': true, 'value': ''},
+      );
+    });
+
+    test('applyJsSourceCall_givenAPut_writesTheMapAndAnswersTheValue', () {
+      // 上游 `put(key, value): String` 把值答回去：真实语料拿返回值拼 URL。
+      final Map<String, String?> variables = <String, String?>{};
+
+      expect(
+        jsonDecode(
+          applyJsSourceCall(variables, <String, Object?>{
+            'operation': 'put',
+            'key': 'token',
+            'value': 'abc',
+          }),
+        ),
+        <String, Object?>{'ok': true, 'value': 'abc'},
+      );
+      expect(variables, <String, String?>{'token': 'abc'});
+    });
+
+    test('applyJsSourceCall_givenAGetVariable_answersTheWholeBlob', () {
+      // M25/S5a：上游 `getVariable()` 无参，答的是整份变量（存在无名条目里）。
+      final Map<String, String?> variables = <String, String?>{
+        sourceVariableBlobName: '{"a":1}',
+        'token': 'abc',
+      };
+
+      expect(
+        jsonDecode(
+          applyJsSourceCall(variables, <String, Object?>{
+            'operation': 'getVariable',
+          }),
+        ),
+        <String, Object?>{'ok': true, 'value': '{"a":1}'},
+      );
+    });
+
+    test('applyJsSourceCall_givenAnUnwrittenBlob_answersAnEmptyString', () {
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'getVariable',
+          }),
+        ),
+        <String, Object?>{'ok': true, 'value': ''},
+      );
+    });
+
+    test('applyJsSourceCall_givenAPutVariable_writesTheBlob', () {
+      final Map<String, String?> variables = <String, String?>{'token': 'abc'};
+
+      expect(
+        applyJsSourceCall(variables, <String, Object?>{
+          'operation': 'putVariable',
+          'value': 'whole',
+        }),
+        '{"ok":true}',
+      );
+      expect(variables, <String, String?>{
+        'token': 'abc',
+        sourceVariableBlobName: 'whole',
+      });
+    });
+
+    test('applyJsSourceCall_givenANullBlob_clearsIt', () {
+      // 上游 `setVariable(null)` 就是删除。
+      final Map<String, String?> variables = <String, String?>{
+        sourceVariableBlobName: 'whole',
+      };
+
+      applyJsSourceCall(variables, <String, Object?>{
+        'operation': 'putVariable',
+      });
+
+      expect(variables[sourceVariableBlobName], isNull);
+    });
+
+    test('applyJsSourceCall_givenANonStringBlob_fails', () {
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'putVariable',
+          'value': 7,
+        }),
+        '{"ok":false}',
+      );
+    });
+
+    test('applyJsSourceCall_givenARemoveLoginHeader_clearsTheSlot', () {
+      // M25/S5a：登出 = 删登录头 + 清 Cookie，后半截由桥做（`cleared` 就是那个信号）。
+      final JsLoginHeaderSlot slot = JsLoginHeaderSlot('{"Token":"t"}');
+
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'removeLoginHeader',
+        }, loginHeader: slot),
+        '{"ok":true}',
+      );
+      expect(slot.value, isNull);
+      expect(slot.touched, isTrue);
+      expect(slot.cleared, isTrue);
+    });
+
+    test('applyJsSourceCall_withoutASlot_failsTheRemoveLoginHeader', () {
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'removeLoginHeader',
+        }),
+        '{"ok":false}',
+      );
+    });
+
+    test('applyJsSourceCall_givenAGetLoginInfo_answersTheSeededMap', () {
+      final JsLoginInfoSlot slot = JsLoginInfoSlot(<String, String>{
+        '账号': 'alice',
+      });
+
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'getLoginInfo',
+          }, loginInfo: slot),
+        ),
+        <String, Object?>{
+          'ok': true,
+          'value': <String, String>{'账号': 'alice'},
+        },
+      );
+    });
+
+    test('applyJsSourceCall_givenNoSeededLoginInfo_answersAnEmptyMap', () {
+      // 上游没有登录信息时 `getLoginInfoMap()` 答一张空表：语料直接 `.get(...)`，给 null 会炸。
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'getLoginInfo',
+          }, loginInfo: JsLoginInfoSlot(null)),
+        ),
+        <String, Object?>{'ok': true, 'value': <String, Object?>{}},
+      );
+    });
+
+    test('applyJsSourceCall_givenAPutLoginInfo_storesTheMap', () {
+      final JsLoginInfoSlot slot = JsLoginInfoSlot(null);
+
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'putLoginInfo',
+            'value': '{"账号":"alice","记住":true,"等级":3}',
+          }, loginInfo: slot),
+        ),
+        <String, Object?>{'ok': true, 'value': true},
+      );
+      // 值一律按字符串收下：上游那张表是 `Map<String, String>`。
+      expect(slot.value, <String, String>{
+        '账号': 'alice',
+        '记住': 'true',
+        '等级': '3',
+      });
+      expect(slot.touched, isTrue);
+    });
+
+    test('applyJsSourceCall_givenUnparsableLoginInfo_answersFalse', () {
+      // 上游签名收 `String`：一段读不回来的文本不该被当成「存好了」。
+      final JsLoginInfoSlot slot = JsLoginInfoSlot(null);
+
+      for (final Object? value in <Object?>['not json', '[1,2]', 3, null]) {
+        expect(
+          jsonDecode(
+            applyJsSourceCall(<String, String?>{}, <String, Object?>{
+              'operation': 'putLoginInfo',
+              'value': value,
+            }, loginInfo: slot),
+          ),
+          <String, Object?>{'ok': true, 'value': false},
+        );
+      }
+      expect(slot.touched, isFalse);
+    });
+
+    test('applyJsSourceCall_givenARemoveLoginInfo_clearsTheSlot', () {
+      final JsLoginInfoSlot slot = JsLoginInfoSlot(<String, String>{
+        '账号': 'alice',
+      });
+
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'removeLoginInfo',
+        }, loginInfo: slot),
+        '{"ok":true}',
+      );
+      expect(slot.value, isNull);
+      expect(slot.touched, isTrue);
+    });
+
+    test('applyJsSourceCall_withoutASlot_failsTheLoginInfoOperations', () {
+      for (final String operation in <String>[
+        'getLoginInfo',
+        'putLoginInfo',
+        'removeLoginInfo',
+      ]) {
+        expect(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': operation,
+            'value': '{}',
+          }),
+          '{"ok":false}',
+        );
+      }
+    });
+
+    test('applyJsSourceCall_givenANullValue_clearsTheKey', () {
+      final Map<String, String?> variables = <String, String?>{'token': 'abc'};
+
+      applyJsSourceCall(variables, <String, Object?>{
+        'operation': 'put',
+        'key': 'token',
+      });
+
+      expect(variables['token'], isNull);
+    });
+
+    test('applyJsSourceCall_givenAGetLoginHeader_answersTheSeededValue', () {
+      // M25/S3b：登录头随 job 下传，读它是纯粹的本地读取。
+      final JsLoginHeaderSlot slot = JsLoginHeaderSlot('{"Token":"t"}');
+
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'getLoginHeader',
+          }, loginHeader: slot),
+        ),
+        <String, Object?>{'ok': true, 'value': '{"Token":"t"}'},
+      );
+    });
+
+    test('applyJsSourceCall_givenNoSeededLoginHeader_answersNull', () {
+      // 上游 `getLoginHeader()` 没有值时返回 null，而 `getVariable` 返回空串。
+      expect(
+        jsonDecode(
+          applyJsSourceCall(<String, String?>{}, <String, Object?>{
+            'operation': 'getLoginHeader',
+          }, loginHeader: JsLoginHeaderSlot(null)),
+        ),
+        <String, Object?>{'ok': true, 'value': null},
+      );
+    });
+
+    test('applyJsSourceCall_givenAPutLoginHeader_writesAndMarksItTouched', () {
+      final JsLoginHeaderSlot slot = JsLoginHeaderSlot(null);
+
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'putLoginHeader',
+          'value': '{"Token":"t"}',
+        }, loginHeader: slot),
+        '{"ok":true}',
+      );
+      expect(slot.value, '{"Token":"t"}');
+      expect(slot.touched, isTrue);
+    });
+
+    test('applyJsSourceCall_givenAReadOnlySlot_leavesItUntouched', () {
+      final JsLoginHeaderSlot slot = JsLoginHeaderSlot('{"Token":"t"}');
+
+      applyJsSourceCall(<String, String?>{}, <String, Object?>{
+        'operation': 'getLoginHeader',
+      }, loginHeader: slot);
+
+      expect(slot.touched, isFalse);
+    });
+
+    test('applyJsSourceCall_givenANonStringLoginHeader_fails', () {
+      // 上游签名是 `putLoginHeader(header: String)`：给别的类型就是规则写错了，必须响亮。
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'putLoginHeader',
+          'value': 1,
+        }, loginHeader: JsLoginHeaderSlot(null)),
+        '{"ok":false}',
+      );
+    });
+
+    test('applyJsSourceCall_withoutASlot_failsTheLoginHeaderOperations', () {
+      // 没播种就当作「这条规则跑过的 job 不该用登录头」，读和写都响亮失败（C-SRC-4 的同一立场）。
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'getLoginHeader',
+        }),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'putLoginHeader',
+          'value': '{"Token":"t"}',
+        }),
+        '{"ok":false}',
+      );
+    });
+
+    test('applyJsSourceCall_givenUnusableArguments_answersAFailure', () {
+      expect(
+        applyJsSourceCall(<String, String?>{}, 'nonsense'),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'get',
+        }),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'delete',
+          'key': 'a',
+        }),
+        '{"ok":false}',
+      );
+      expect(
+        applyJsSourceCall(<String, String?>{}, <String, Object?>{
+          'operation': 'put',
+          'key': 'a',
+          'value': 1,
+        }),
+        '{"ok":false}',
+      );
+    });
+  });
+
+  group('decodeJsToastRequest', () {
+    test('decodeJsToastRequest_givenAMessage_readsItAndTheLength', () {
+      expect(
+        decodeJsToastRequest(<String, Object?>{'message': '请先登录', 'long': true})
+            ?.message,
+        '请先登录',
+      );
+      expect(
+        decodeJsToastRequest(<String, Object?>{'message': '请先登录', 'long': true})
+            ?.isLong,
+        isTrue,
+      );
+      expect(
+        decodeJsToastRequest(<String, Object?>{'message': 'x'})?.isLong,
+        isFalse,
+      );
+    });
+
+    test('decodeJsToastRequest_givenUnusableArguments_returnsNull', () {
+      expect(decodeJsToastRequest(null), isNull);
+      expect(decodeJsToastRequest(<String, Object?>{'message': 1}), isNull);
+      expect(decodeJsToastRequest(<String, Object?>{'message': '   '}), isNull);
+      expect(
+        decodeJsToastRequest(<String, Object?>{'message': 'x', 'long': 'yes'}),
+        isNull,
+      );
+    });
+  });
+
+  group('jsResponsePayload', () {
+    test('jsResponsePayload_givenAHeadersMap_joinsRepeatedValues', () {
+      // 与 `loginCheckJs` 看到的 result 同形：头名保持原样、多值用逗号拼。
+      final Map<String, Object?> payload = jsResponsePayload(
+        url: 'https://a.test/next',
+        body: '<html></html>',
+        code: 200,
+        headers: <String, List<String>>{
+          'set-cookie': <String>['a=1', 'b=2'],
+        },
+      );
+
+      expect(payload[jsResponseMarker], isTrue);
+      expect(payload['body'], '<html></html>');
+      expect(payload['__url'], 'https://a.test/next');
+      expect(payload['__code'], 200);
+      expect(payload['__headers'], <String, String>{'set-cookie': 'a=1, b=2'});
     });
   });
 
@@ -517,6 +978,22 @@ void main() {
       );
       expect(decodeJsVariables('token'), isEmpty);
       expect(decodeJsVariables(null), isEmpty);
+    });
+  });
+
+  group('decodeJsLoginInfo', () {
+    test('decodeJsLoginInfo_givenTheFormSnapshot_keepsStringPairs', () {
+      // 登录信息来自登录表单，构造上就是字符串；非字符串条目丢弃而不是强转。
+      expect(
+        decodeJsLoginInfo(<String, Object?>{'账号': 'alice', '记住': true}),
+        <String, String>{'账号': 'alice'},
+      );
+    });
+
+    test('decodeJsLoginInfo_givenSomethingElse_answersAnEmptyMap', () {
+      expect(decodeJsLoginInfo(null), isEmpty);
+      expect(decodeJsLoginInfo(<Object?>['a']), isEmpty);
+      expect(decodeJsLoginInfo('{}'), isEmpty);
     });
   });
 
@@ -750,6 +1227,7 @@ void main() {
       return (handle as Map<String, Object?>)['id'] as int;
     }
 
+    // matrix #24：字体反爬（`queryTTF` / `queryBase64TTF` / `replaceFont`，ADR-0068 §决策 9）。
     test('queryTtf_givenAFontBase64_answersAHandle', () {
       final Object? handle = _valueOf(
         applyJsJavaCall(<String, String?>{}, <String, Object?>{

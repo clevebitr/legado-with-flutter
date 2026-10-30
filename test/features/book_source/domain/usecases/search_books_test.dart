@@ -269,18 +269,19 @@ void main() {
       expect(failure.rulePath, 'searchUrl');
     });
 
-    test('execute_givenPageWithoutResultItems_returnsParseFailed', () async {
+    test('execute_givenPageWithoutResultItems_answersAnEmptyList', () async {
+      // M25/S2 起对齐上游：`bookList` 一条都没命中时不再报 `parseFailed`，而是先按**详情页**再读
+      // 一次（BookList.kt:100-110）；详情页也没有书名时结果就是「零条」，不是失败。
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_searchUrl, '<html><body><p>没有结果</p></body></html>');
       final ({PageFetchService pages, FakeLogPrinter printer}) service =
           _service(http);
 
-      final ParseFailure<Never> failure = _failure(
+      final List<Book> books = _data(
         await SearchBooks(pages: service.pages).execute(_source(), '剑来'),
       );
 
-      expect(failure.kind, ParseFailureKind.parseFailed);
-      expect(failure.rulePath, 'searchRule.bookList');
+      expect(books, isEmpty);
     });
 
     test('execute_givenItemWithoutBookUrl_skipsItAndWarns', () async {
@@ -324,7 +325,7 @@ void main() {
         final BookSource source = _source();
         // ADR-0026 §决策 2：非顶层字段被拒 → 置空 + warning，搜索结果照常返回。
         final BookSource withJs = source.copyWith(
-          searchRule: source.searchRule.copyWith(name: '@xpath://div'),
+          searchRule: source.searchRule.copyWith(name: '@webJs:'),
         );
 
         final ParseResult<List<Book>> result = await SearchBooks(
@@ -349,7 +350,7 @@ void main() {
             _service(http);
         final BookSource source = _source();
         final BookSource withXpath = source.copyWith(
-          searchRule: source.searchRule.copyWith(bookList: '@xpath://div'),
+          searchRule: source.searchRule.copyWith(bookList: '@webJs:'),
         );
 
         final ParseFailure<Never> failure = _failure(
@@ -358,7 +359,7 @@ void main() {
 
         expect(failure.kind, ParseFailureKind.unsupportedRule);
         // 顶层列表规则被拒必须整次失败（C-SRC-4），且报的是那条语法本身。
-        expect(failure.rulePath, 'unsupported:@xpath:');
+        expect(failure.rulePath, 'unsupported:@webJs');
       },
     );
 
@@ -399,7 +400,7 @@ void main() {
           pages: service.pages,
           cache: FakeContentCache(),
         ).execute(source, ChapterRequest(url: chapters.first.url)),
-      );
+      ).body;
       expect(content, '正文第一段。\n正文第二段。\n正文第三段。');
 
       // 四段请求的地址与规则路径，证明 URL 模板、编码与相对地址解析都走了生产代码。
@@ -466,7 +467,7 @@ void main() {
           pages: service.pages,
           cache: FakeContentCache(),
         ).execute(source, ChapterRequest(url: chapters.first.url)),
-      );
+      ).body;
       // JSON 里的 `\n` 是转义序列，解出来是一个真正的换行。
       expect(content, '正文第一段。\n正文第二段。');
 
@@ -661,5 +662,96 @@ void main() {
         expect(http.sourceRates, <String, String?>{source.url: '5/1000'});
       },
     );
+  });
+
+  // ── M25/S2：bookUrlPattern（ADR-0078 A4） ─────────────────────────────────────
+  group('SearchBooks bookUrlPattern', () {
+    /// A detail page: `ruleBookInfo` lives on the same document as a search result would.
+    const String detailHtml =
+        '<div class="book"><h1 class="name">剑来</h1>'
+        '<span class="author">烽火戏诸侯</span>'
+        '<a class="toc" href="/book/1/">目录</a></div>';
+
+    test('execute_givenASearchUrlThatIsADetailPage_returnsOneBook', () async {
+      // 上游 `baseUrl.matches(bookUrlPattern)` 命中就当详情页解析（BookList.kt:62-84）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_searchUrl, detailHtml);
+      final BookSource source = _source().copyWith(
+        bookUrlPattern: r'https://example-novel\.test/search\.php.*',
+        bookInfoRule: const BookInfoRule(
+          name: 'class.name@text',
+          author: 'class.author@text',
+          tocUrl: 'class.toc@href',
+        ),
+      );
+
+      final List<Book> books = _data(
+        await SearchBooks(pages: _service(http).pages).execute(source, '剑来'),
+      );
+
+      expect(books, hasLength(1));
+      expect(books.single.name, '剑来');
+      expect(books.single.author, '烽火戏诸侯');
+      expect(books.single.url, _searchUrl);
+    });
+
+    test(
+      'execute_givenAnEmptyListAndNoPattern_fallsBackToTheDetailPage',
+      () async {
+        // 没有 bookUrlPattern 时，`bookList` 一条都没命中也会按详情页再读一次
+        // （BookList.kt:100-110）——单书站因此不会显示「搜索失效」。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(_searchUrl, detailHtml);
+        final BookSource source = _source().copyWith(
+          bookInfoRule: const BookInfoRule(
+            name: 'class.name@text',
+            author: 'class.author@text',
+            tocUrl: 'class.toc@href',
+          ),
+        );
+
+        final List<Book> books = _data(
+          await SearchBooks(pages: _service(http).pages).execute(source, '剑来'),
+        );
+
+        expect(books.single.name, '剑来');
+      },
+    );
+
+    test('execute_givenAPatternThatDoesNotMatch_keepsTheListPath', () async {
+      // 地址不匹配就不能当详情页：否则「搜索页」会被读成一本错书。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_searchUrl, _page('search_result.html'));
+      final BookSource source = _source().copyWith(
+        bookUrlPattern: r'^https://other\.test/.*$',
+      );
+
+      final List<Book> books = _data(
+        await SearchBooks(pages: _service(http).pages).execute(source, '剑来'),
+      );
+
+      expect(books, hasLength(2));
+    });
+
+    test('execute_givenAnUnusablePattern_warnsAndKeepsTheListPath', () async {
+      // 坏正则不能吃掉整次搜索：记 warning，按普通列表继续。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_searchUrl, _page('search_result.html'));
+      final BookSource source = _source().copyWith(bookUrlPattern: '(');
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(http);
+
+      final List<Book> books = _data(
+        await SearchBooks(pages: service.pages).execute(source, '剑来'),
+      );
+
+      expect(books, hasLength(2));
+      expect(
+        service.printer.events.map(
+          (LogEvent event) => event.message.toString(),
+        ),
+        anyElement(contains('unusable bookUrlPattern')),
+      );
+    });
   });
 }

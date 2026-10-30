@@ -466,6 +466,26 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get bookSourceCheckNotificationChannel => '书源校验';
+
+  @override
+  String get bookSourceCheckNotificationTitle => '正在校验书源';
+
+  @override
+  String bookSourceCheckNotificationProgress(
+    String name,
+    int completed,
+    int total,
+  ) {
+    return '$name · $completed/$total';
+  }
+
+  @override
+  String bookSourceCheckNotificationFinished(int succeeded, int failed) {
+    return '校验完成：成功 $succeeded，失败 $failed';
+  }
+
+  @override
   String get bookSourceCheckOpenDebug => '调试该书源';
 
   @override
@@ -583,13 +603,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerPageModePaged => '分页';
 
   @override
+  String get readerEyeProtection => '护眼';
+
+  @override
+  String get readerKeepAwake => '阅读时常亮';
+
+  @override
+  String get readerStatusLine => '显示状态栏';
+
+  @override
+  String readerBatteryLevel(int percent) {
+    return '$percent%（电量）';
+  }
+
+  @override
   String get readerPreviousChapter => '上一章';
 
   @override
   String get readerNextChapter => '下一章';
 
   @override
-  String get readerChapterEnd => '本章读完';
+  String get readerChapterLoading => '正在加载…';
+
+  @override
+  String get readerChapterRetry => '重新加载这一章';
 
   @override
   String get readerLastChapter => '已是最后一章';
@@ -913,6 +950,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bookSourceRowCheck => '校验该书源';
 
   @override
+  String get bookSourceRowSignIn => '登录 / 过验证';
+
+  @override
+  String get bookSourceSignInDone => '已保存该站的 Cookie，可以重新校验了。';
+
+  @override
+  String get bookSourceSignInFailed => '登录 / 验证未完成。';
+
+  @override
+  String get bookSourceSignInUnsupported => '该平台没有可用的 WebView，请先在系统浏览器里完成验证。';
+
+  @override
   String get bookSourceRowEdit => '编辑';
 
   @override
@@ -1140,18 +1189,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerAudioPlainHttp => '这条音轨使用明文 HTTP。请在设置中开启「允许明文 HTTP」后播放。';
-
-  @override
-  String get bookSourceRowSignIn => '登录 / 过验证';
-
-  @override
-  String get bookSourceSignInDone => '已保存该站的 Cookie，可以重新校验了。';
-
-  @override
-  String get bookSourceSignInFailed => '登录 / 验证未完成。';
-
-  @override
-  String get bookSourceSignInUnsupported => '该平台没有可用的 WebView，请先在系统浏览器里完成验证。';
 
   @override
   String get bookmarkTitle => '书签';
@@ -1939,4 +1976,209 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsBackgroundImageFailed => '背景图没能保存，请再试一次。';
+
+  @override
+  String get externalLinkTitle => '打开这个地址？';
+
+  @override
+  String externalLinkFrom(Object source) {
+    return '$source 想在浏览器里打开这个地址：';
+  }
+
+  @override
+  String get externalLinkOpen => '打开';
+
+  @override
+  String get externalLinkCancel => '取消';
+
+  @override
+  String get settingsLogLevel => '日志等级';
+
+  @override
+  String get settingsLogLevelHint => '低于该等级的记录不写入。切换立即生效。';
+
+  @override
+  String get settingsLogDebug => '调试';
+
+  @override
+  String get settingsLogInfo => '信息';
+
+  @override
+  String get settingsLogWarning => '警告';
+
+  @override
+  String get settingsLogError => '错误';
+
+  @override
+  String get settingsLogOff => '关闭';
+
+  @override
+  String get settingsDiagnostics => '诊断';
+
+  @override
+  String get settingsLogFiles => '日志文件';
+
+  @override
+  String get settingsLogFilesBody => '保留 7 天，总大小不超过 20 MB。';
+
+  @override
+  String get logFilesTitle => '日志文件';
+
+  @override
+  String get logFilesEmpty => '还没有日志文件。';
+
+  @override
+  String get logFilesClear => '清空全部日志';
+
+  @override
+  String logFilesCleared(int count) {
+    return '已删除 $count 个文件。';
+  }
+
+  @override
+  String get logFilesCopyPath => '复制目录路径';
+
+  @override
+  String get logFilesCopied => '路径已复制。';
+
+  @override
+  String logFilesTotal(String size) {
+    return '合计：$size';
+  }
+
+  @override
+  String get logFilesShareAll => '分享全部日志';
+
+  @override
+  String get logFilesShareFile => '分享该文件';
+
+  @override
+  String get logFilesShareBody => '目录只在应用内可读；分享会把副本交给其他应用。';
+
+  @override
+  String get logFilesShareFailed => '无法分享日志文件。';
+
+  @override
+  String get changeSourceKeyword => '关键词';
+
+  @override
+  String get changeSourceStart => '开始搜索';
+
+  @override
+  String changeSourceFound(int count) {
+    return '已找到 $count 条';
+  }
+
+  @override
+  String get changeSourceCheckAuthor => '校验作者';
+
+  @override
+  String get changeSourceLoadInfo => '加载详情';
+
+  @override
+  String get changeSourceLoadToc => '加载目录';
+
+  @override
+  String get changeSourceSearchPrompt => '选好范围后点「开始搜索」。';
+
+  @override
+  String get changeSourceChapterTitle => '选择要对齐的章节';
+
+  @override
+  String changeSourceCurrentChapter(String chapter) {
+    return '当前阅读：$chapter';
+  }
+
+  @override
+  String changeSourceAlignHint(String chapter) {
+    return '自动对齐到：$chapter';
+  }
+
+  @override
+  String get changeSourceConfirm => '确认换源';
+
+  @override
+  String get changeSourceNoChapters => '这个源没有返回目录。';
+
+  @override
+  String get changeSourceNoSources => '当前范围里没有可搜索的书源。';
+
+  @override
+  String get searchSourceSheetTitle => '选择来源';
+
+  @override
+  String get exploreLayoutList => '列表布局';
+
+  @override
+  String get exploreLayoutGrid => '网格布局';
+
+  @override
+  String get exploreGridColumnsAction => '网格列数';
+
+  @override
+  String exploreGridColumnsValue(int count) {
+    return '$count 列';
+  }
+
+  @override
+  String get shelfEditTitle => '编辑书籍';
+
+  @override
+  String get shelfEditName => '书名';
+
+  @override
+  String get shelfEditNameRequired => '书名不能为空。';
+
+  @override
+  String get shelfEditAuthor => '作者';
+
+  @override
+  String get shelfEditIntro => '简介';
+
+  @override
+  String get shelfEditIntroHint => '留空则显示书源原来的简介。';
+
+  @override
+  String get shelfEditCoverPick => '选择封面';
+
+  @override
+  String get shelfEditCoverReset => '改用书源封面';
+
+  @override
+  String get shelfEditSave => '保存';
+
+  @override
+  String get shelfEditSaved => '已保存。';
+
+  @override
+  String get actionBack => '返回';
+
+  @override
+  String get readerAutoPageAction => '自动翻页';
+
+  @override
+  String get readerAutoPageStop => '停止自动翻页';
+
+  @override
+  String readerAutoPageInterval(int seconds) {
+    return '自动翻页间隔：$seconds 秒';
+  }
+
+  @override
+  String get readerPurgeAction => '净化规则';
+
+  @override
+  String get readerPurgeTitle => '净化规则';
+
+  @override
+  String get readerPurgeHint => '规则是全局的；改动会重读本书已缓存的正文。';
+
+  @override
+  String get readerPurgeEmpty => '还没有替换净化规则，可在「我的 → 替换净化」里添加。';
+
+  @override
+  String get readerPurgeLoadFailed => '读不到净化规则。';
+
+  @override
+  String get readerPurgeFailed => '规则没有改成功。';
 }

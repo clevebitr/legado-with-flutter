@@ -49,8 +49,10 @@ final class InAppWebViewPageFetcher implements WebPageFetcher {
       if (completer.isCompleted) {
         return;
       }
-      final String finalUrl =
-          headless.webViewController?.getUrl().toString() ?? page.url;
+      // `getUrl()` 返回 `Future<WebUri?>`：不 await 就把 Future 的 `toString()` 当地址记下来，
+      // 真机日志里就是 `url=Instance of 'Future<WebUri?>'`，随后所有相对地址都拿它当基准。
+      final WebUri? loaded = await headless.webViewController?.getUrl();
+      final String finalUrl = loaded?.toString() ?? page.url;
       completer.complete(FetchedWebPage(url: finalUrl, body: page.body));
     }
 

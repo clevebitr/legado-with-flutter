@@ -491,6 +491,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get bookSourceCheckNotificationChannel => 'Book source check';
+
+  @override
+  String get bookSourceCheckNotificationTitle => 'Checking book sources';
+
+  @override
+  String bookSourceCheckNotificationProgress(
+    String name,
+    int completed,
+    int total,
+  ) {
+    return '$name · $completed/$total';
+  }
+
+  @override
+  String bookSourceCheckNotificationFinished(int succeeded, int failed) {
+    return 'Check finished: $succeeded passed, $failed failed';
+  }
+
+  @override
   String get bookSourceCheckOpenDebug => 'Debug this source';
 
   @override
@@ -610,13 +630,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerPageModePaged => 'Pages';
 
   @override
+  String get readerEyeProtection => 'Warm filter';
+
+  @override
+  String get readerKeepAwake => 'Keep the screen on';
+
+  @override
+  String get readerStatusLine => 'Show the status line';
+
+  @override
+  String readerBatteryLevel(int percent) {
+    return '$percent% battery';
+  }
+
+  @override
   String get readerPreviousChapter => 'Previous chapter';
 
   @override
   String get readerNextChapter => 'Next chapter';
 
   @override
-  String get readerChapterEnd => 'End of this chapter';
+  String get readerChapterLoading => 'Loading…';
+
+  @override
+  String get readerChapterRetry => 'Reload this chapter';
 
   @override
   String get readerLastChapter => 'This is the last chapter';
@@ -945,6 +982,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookSourceRowCheck => 'Check this source';
 
   @override
+  String get bookSourceRowSignIn => 'Sign in / pass check';
+
+  @override
+  String get bookSourceSignInDone =>
+      'The site\'s cookies are saved; the source can be checked again.';
+
+  @override
+  String get bookSourceSignInFailed =>
+      'The sign-in / verification did not finish.';
+
+  @override
+  String get bookSourceSignInUnsupported =>
+      'This platform has no WebView; finish the check in the system browser first.';
+
+  @override
   String get bookSourceRowEdit => 'Edit';
 
   @override
@@ -1177,21 +1229,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get readerAudioPlainHttp =>
       'This track uses plaintext HTTP. Turn on “Allow plaintext HTTP” in settings to play it.';
-
-  @override
-  String get bookSourceRowSignIn => 'Sign in / pass check';
-
-  @override
-  String get bookSourceSignInDone =>
-      'The site\'s cookies are saved; the source can be checked again.';
-
-  @override
-  String get bookSourceSignInFailed =>
-      'The sign-in / verification did not finish.';
-
-  @override
-  String get bookSourceSignInUnsupported =>
-      'This platform has no WebView; finish the check in the system browser first.';
 
   @override
   String get bookmarkTitle => 'Bookmarks';
@@ -2003,4 +2040,215 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsBackgroundImageFailed =>
       'The background image could not be saved; try again.';
+
+  @override
+  String get externalLinkTitle => 'Open this address?';
+
+  @override
+  String externalLinkFrom(Object source) {
+    return '$source wants to open this address in your browser:';
+  }
+
+  @override
+  String get externalLinkOpen => 'Open';
+
+  @override
+  String get externalLinkCancel => 'Cancel';
+
+  @override
+  String get settingsLogLevel => 'Log level';
+
+  @override
+  String get settingsLogLevelHint =>
+      'Records below this level are dropped. Applies immediately.';
+
+  @override
+  String get settingsLogDebug => 'debug';
+
+  @override
+  String get settingsLogInfo => 'info';
+
+  @override
+  String get settingsLogWarning => 'warning';
+
+  @override
+  String get settingsLogError => 'error';
+
+  @override
+  String get settingsLogOff => 'off';
+
+  @override
+  String get settingsDiagnostics => 'Diagnostics';
+
+  @override
+  String get settingsLogFiles => 'Log files';
+
+  @override
+  String get settingsLogFilesBody => 'Kept for 7 days, at most 20 MB in total.';
+
+  @override
+  String get logFilesTitle => 'Log files';
+
+  @override
+  String get logFilesEmpty => 'No log file yet.';
+
+  @override
+  String get logFilesClear => 'Clear every log file';
+
+  @override
+  String logFilesCleared(int count) {
+    return 'Deleted $count file(s).';
+  }
+
+  @override
+  String get logFilesCopyPath => 'Copy the folder path';
+
+  @override
+  String get logFilesCopied => 'Path copied.';
+
+  @override
+  String logFilesTotal(String size) {
+    return 'Total: $size';
+  }
+
+  @override
+  String get logFilesShareAll => 'Share every log file';
+
+  @override
+  String get logFilesShareFile => 'Share this file';
+
+  @override
+  String get logFilesShareBody =>
+      'The folder is private to the app; sharing hands a copy to another app.';
+
+  @override
+  String get logFilesShareFailed => 'Could not share the log files.';
+
+  @override
+  String get changeSourceKeyword => 'Keyword';
+
+  @override
+  String get changeSourceStart => 'Start search';
+
+  @override
+  String changeSourceFound(int count) {
+    return '$count found';
+  }
+
+  @override
+  String get changeSourceCheckAuthor => 'Check author';
+
+  @override
+  String get changeSourceLoadInfo => 'Load details';
+
+  @override
+  String get changeSourceLoadToc => 'Load chapters';
+
+  @override
+  String get changeSourceSearchPrompt => 'Pick a scope, then start the search.';
+
+  @override
+  String get changeSourceChapterTitle => 'Choose the chapter to align to';
+
+  @override
+  String changeSourceCurrentChapter(String chapter) {
+    return 'Now reading: $chapter';
+  }
+
+  @override
+  String changeSourceAlignHint(String chapter) {
+    return 'Aligned to: $chapter';
+  }
+
+  @override
+  String get changeSourceConfirm => 'Switch source';
+
+  @override
+  String get changeSourceNoChapters => 'This source returned no chapters.';
+
+  @override
+  String get changeSourceNoSources =>
+      'No source in this scope can be searched.';
+
+  @override
+  String get searchSourceSheetTitle => 'Choose a source';
+
+  @override
+  String get exploreLayoutList => 'List layout';
+
+  @override
+  String get exploreLayoutGrid => 'Grid layout';
+
+  @override
+  String get exploreGridColumnsAction => 'Grid columns';
+
+  @override
+  String exploreGridColumnsValue(int count) {
+    return '$count columns';
+  }
+
+  @override
+  String get shelfEditTitle => 'Edit book';
+
+  @override
+  String get shelfEditName => 'Title';
+
+  @override
+  String get shelfEditNameRequired => 'A title is required.';
+
+  @override
+  String get shelfEditAuthor => 'Author';
+
+  @override
+  String get shelfEditIntro => 'Introduction';
+
+  @override
+  String get shelfEditIntroHint =>
+      'Leave empty to show the source\'s synopsis again.';
+
+  @override
+  String get shelfEditCoverPick => 'Choose cover';
+
+  @override
+  String get shelfEditCoverReset => 'Use the source\'s cover';
+
+  @override
+  String get shelfEditSave => 'Save';
+
+  @override
+  String get shelfEditSaved => 'Saved.';
+
+  @override
+  String get actionBack => 'Back';
+
+  @override
+  String get readerAutoPageAction => 'Auto page';
+
+  @override
+  String get readerAutoPageStop => 'Stop auto page';
+
+  @override
+  String readerAutoPageInterval(int seconds) {
+    return 'Auto page interval: $seconds s';
+  }
+
+  @override
+  String get readerPurgeAction => 'Purge rules';
+
+  @override
+  String get readerPurgeTitle => 'Purge rules';
+
+  @override
+  String get readerPurgeHint =>
+      'Changes apply to every book and re-read this book\'s cached chapters.';
+
+  @override
+  String get readerPurgeEmpty =>
+      'No replace rules yet. Add them under “Mine → Purge rules”.';
+
+  @override
+  String get readerPurgeLoadFailed => 'Could not read the purge rules.';
+
+  @override
+  String get readerPurgeFailed => 'The rule was not changed.';
 }

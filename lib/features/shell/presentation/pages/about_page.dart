@@ -31,8 +31,23 @@ class AboutPage extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.symmetric(vertical: tokens.spacing.lg),
         children: <Widget>[
-          Icon(Icons.auto_stories, size: tokens.spacing.xxl),
-          SizedBox(height: tokens.spacing.sm),
+          // 应用标识：圆形色块里的书本，与「我的」入口卡片形成一致的视觉锚点。
+          Center(
+            child: Container(
+              width: tokens.spacing.xxl * 2.5,
+              height: tokens.spacing.xxl * 2.5,
+              decoration: BoxDecoration(
+                color: tokens.colors.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.auto_stories,
+                size: tokens.spacing.xxl,
+                color: tokens.colors.onPrimaryContainer,
+              ),
+            ),
+          ),
+          SizedBox(height: tokens.spacing.md),
           Text(
             l10n.appTitle,
             textAlign: TextAlign.center,
@@ -51,6 +66,7 @@ class AboutPage extends StatelessWidget {
             leading: const Icon(Icons.gavel_outlined),
             title: Text(l10n.aboutLicenses),
             subtitle: Text(l10n.legalNoticesTitle),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () =>
                 pushShellRoute(context, const ShellRoute.legalNotices()),
           ),

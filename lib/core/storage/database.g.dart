@@ -566,6 +566,17 @@ class $BookSourcesTable extends BookSources
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _loginHeaderMeta = const VerificationMeta(
+    'loginHeader',
+  );
+  @override
+  late final GeneratedColumn<String> loginHeader = GeneratedColumn<String>(
+    'login_header',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _importedAtMeta = const VerificationMeta(
     'importedAt',
   );
@@ -605,6 +616,7 @@ class $BookSourcesTable extends BookSources
     lastUpdateTime,
     respondTime,
     loginInfo,
+    loginHeader,
     importedAt,
     updatedAt,
   ];
@@ -730,6 +742,15 @@ class $BookSourcesTable extends BookSources
         loginInfo.isAcceptableOrUnknown(data['login_info']!, _loginInfoMeta),
       );
     }
+    if (data.containsKey('login_header')) {
+      context.handle(
+        _loginHeaderMeta,
+        loginHeader.isAcceptableOrUnknown(
+          data['login_header']!,
+          _loginHeaderMeta,
+        ),
+      );
+    }
     if (data.containsKey('imported_at')) {
       context.handle(
         _importedAtMeta,
@@ -819,6 +840,10 @@ class $BookSourcesTable extends BookSources
         DriftSqlType.string,
         data['${effectivePrefix}login_info'],
       ),
+      loginHeader: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}login_header'],
+      ),
       importedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}imported_at'],
@@ -886,6 +911,15 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
   /// the same level as the cookie jar (registered in `roadmap.md` §3.7).
   final String? loginInfo;
 
+  /// The header map `source.putLoginHeader` stored, as JSON, or `null` when the source never
+  /// signed in (M25/S3b).
+  ///
+  /// Upstream keeps it in `CacheManager` under `loginHeader_<url>`, i.e. keyed by source URL, which
+  /// is what the engine has when a rule writes it; several rows may share one URL and then share
+  /// this value. User state like [loginInfo]: an import never overwrites it, and the engine merges
+  /// it over the source's own `header` on every request (`BaseSource.getHeaderMap`).
+  final String? loginHeader;
+
   /// When the row was created.
   final DateTime importedAt;
 
@@ -907,6 +941,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     this.lastUpdateTime,
     this.respondTime,
     this.loginInfo,
+    this.loginHeader,
     required this.importedAt,
     required this.updatedAt,
   });
@@ -937,6 +972,9 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     }
     if (!nullToAbsent || loginInfo != null) {
       map['login_info'] = Variable<String>(loginInfo);
+    }
+    if (!nullToAbsent || loginHeader != null) {
+      map['login_header'] = Variable<String>(loginHeader);
     }
     map['imported_at'] = Variable<DateTime>(importedAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -970,6 +1008,9 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       loginInfo: loginInfo == null && nullToAbsent
           ? const Value.absent()
           : Value(loginInfo),
+      loginHeader: loginHeader == null && nullToAbsent
+          ? const Value.absent()
+          : Value(loginHeader),
       importedAt: Value(importedAt),
       updatedAt: Value(updatedAt),
     );
@@ -996,6 +1037,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       lastUpdateTime: serializer.fromJson<int?>(json['lastUpdateTime']),
       respondTime: serializer.fromJson<int?>(json['respondTime']),
       loginInfo: serializer.fromJson<String?>(json['loginInfo']),
+      loginHeader: serializer.fromJson<String?>(json['loginHeader']),
       importedAt: serializer.fromJson<DateTime>(json['importedAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1019,6 +1061,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
       'lastUpdateTime': serializer.toJson<int?>(lastUpdateTime),
       'respondTime': serializer.toJson<int?>(respondTime),
       'loginInfo': serializer.toJson<String?>(loginInfo),
+      'loginHeader': serializer.toJson<String?>(loginHeader),
       'importedAt': serializer.toJson<DateTime>(importedAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1040,6 +1083,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     Value<int?> lastUpdateTime = const Value.absent(),
     Value<int?> respondTime = const Value.absent(),
     Value<String?> loginInfo = const Value.absent(),
+    Value<String?> loginHeader = const Value.absent(),
     DateTime? importedAt,
     DateTime? updatedAt,
   }) => BookSourceRow(
@@ -1060,6 +1104,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
         : this.lastUpdateTime,
     respondTime: respondTime.present ? respondTime.value : this.respondTime,
     loginInfo: loginInfo.present ? loginInfo.value : this.loginInfo,
+    loginHeader: loginHeader.present ? loginHeader.value : this.loginHeader,
     importedAt: importedAt ?? this.importedAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1092,6 +1137,9 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
           ? data.respondTime.value
           : this.respondTime,
       loginInfo: data.loginInfo.present ? data.loginInfo.value : this.loginInfo,
+      loginHeader: data.loginHeader.present
+          ? data.loginHeader.value
+          : this.loginHeader,
       importedAt: data.importedAt.present
           ? data.importedAt.value
           : this.importedAt,
@@ -1117,6 +1165,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
           ..write('lastUpdateTime: $lastUpdateTime, ')
           ..write('respondTime: $respondTime, ')
           ..write('loginInfo: $loginInfo, ')
+          ..write('loginHeader: $loginHeader, ')
           ..write('importedAt: $importedAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1140,6 +1189,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
     lastUpdateTime,
     respondTime,
     loginInfo,
+    loginHeader,
     importedAt,
     updatedAt,
   );
@@ -1162,6 +1212,7 @@ class BookSourceRow extends DataClass implements Insertable<BookSourceRow> {
           other.lastUpdateTime == this.lastUpdateTime &&
           other.respondTime == this.respondTime &&
           other.loginInfo == this.loginInfo &&
+          other.loginHeader == this.loginHeader &&
           other.importedAt == this.importedAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1182,6 +1233,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
   final Value<int?> lastUpdateTime;
   final Value<int?> respondTime;
   final Value<String?> loginInfo;
+  final Value<String?> loginHeader;
   final Value<DateTime> importedAt;
   final Value<DateTime> updatedAt;
   const BookSourcesCompanion({
@@ -1200,6 +1252,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     this.lastUpdateTime = const Value.absent(),
     this.respondTime = const Value.absent(),
     this.loginInfo = const Value.absent(),
+    this.loginHeader = const Value.absent(),
     this.importedAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -1219,6 +1272,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     this.lastUpdateTime = const Value.absent(),
     this.respondTime = const Value.absent(),
     this.loginInfo = const Value.absent(),
+    this.loginHeader = const Value.absent(),
     required DateTime importedAt,
     required DateTime updatedAt,
   }) : url = Value(url),
@@ -1243,6 +1297,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     Expression<int>? lastUpdateTime,
     Expression<int>? respondTime,
     Expression<String>? loginInfo,
+    Expression<String>? loginHeader,
     Expression<DateTime>? importedAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -1262,6 +1317,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
       if (lastUpdateTime != null) 'last_update_time': lastUpdateTime,
       if (respondTime != null) 'respond_time': respondTime,
       if (loginInfo != null) 'login_info': loginInfo,
+      if (loginHeader != null) 'login_header': loginHeader,
       if (importedAt != null) 'imported_at': importedAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -1283,6 +1339,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     Value<int?>? lastUpdateTime,
     Value<int?>? respondTime,
     Value<String?>? loginInfo,
+    Value<String?>? loginHeader,
     Value<DateTime>? importedAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -1302,6 +1359,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
       lastUpdateTime: lastUpdateTime ?? this.lastUpdateTime,
       respondTime: respondTime ?? this.respondTime,
       loginInfo: loginInfo ?? this.loginInfo,
+      loginHeader: loginHeader ?? this.loginHeader,
       importedAt: importedAt ?? this.importedAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -1355,6 +1413,9 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
     if (loginInfo.present) {
       map['login_info'] = Variable<String>(loginInfo.value);
     }
+    if (loginHeader.present) {
+      map['login_header'] = Variable<String>(loginHeader.value);
+    }
     if (importedAt.present) {
       map['imported_at'] = Variable<DateTime>(importedAt.value);
     }
@@ -1382,6 +1443,7 @@ class BookSourcesCompanion extends UpdateCompanion<BookSourceRow> {
           ..write('lastUpdateTime: $lastUpdateTime, ')
           ..write('respondTime: $respondTime, ')
           ..write('loginInfo: $loginInfo, ')
+          ..write('loginHeader: $loginHeader, ')
           ..write('importedAt: $importedAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1543,6 +1605,17 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _customIntroMeta = const VerificationMeta(
+    'customIntro',
+  );
+  @override
+  late final GeneratedColumn<String> customIntro = GeneratedColumn<String>(
+    'custom_intro',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _addedAtMeta = const VerificationMeta(
     'addedAt',
   );
@@ -1581,6 +1654,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
     isPinned,
     groupId,
     customCoverPath,
+    customIntro,
     addedAt,
     updatedAt,
   ];
@@ -1689,6 +1763,15 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
         ),
       );
     }
+    if (data.containsKey('custom_intro')) {
+      context.handle(
+        _customIntroMeta,
+        customIntro.isAcceptableOrUnknown(
+          data['custom_intro']!,
+          _customIntroMeta,
+        ),
+      );
+    }
     if (data.containsKey('added_at')) {
       context.handle(
         _addedAtMeta,
@@ -1774,6 +1857,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
         DriftSqlType.string,
         data['${effectivePrefix}custom_cover_path'],
       ),
+      customIntro: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_intro'],
+      ),
       addedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}added_at'],
@@ -1838,6 +1925,12 @@ class BookRow extends DataClass implements Insertable<BookRow> {
   /// Absolute path of a cover the user picked; `null` falls back to [coverUrl].
   final String? customCoverPath;
 
+  /// The introduction the user wrote, which wins over [intro] when set (M33, ADR-0092).
+  ///
+  /// [intro] stays the source's snapshot: re-adding the book refreshes it, and a user's own words
+  /// must survive that.
+  final String? customIntro;
+
   /// When the book was put on the shelf.
   final DateTime addedAt;
 
@@ -1858,6 +1951,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     required this.isPinned,
     this.groupId,
     this.customCoverPath,
+    this.customIntro,
     required this.addedAt,
     required this.updatedAt,
   });
@@ -1894,6 +1988,9 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     if (!nullToAbsent || customCoverPath != null) {
       map['custom_cover_path'] = Variable<String>(customCoverPath);
     }
+    if (!nullToAbsent || customIntro != null) {
+      map['custom_intro'] = Variable<String>(customIntro);
+    }
     map['added_at'] = Variable<DateTime>(addedAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -1929,6 +2026,9 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       customCoverPath: customCoverPath == null && nullToAbsent
           ? const Value.absent()
           : Value(customCoverPath),
+      customIntro: customIntro == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customIntro),
       addedAt: Value(addedAt),
       updatedAt: Value(updatedAt),
     );
@@ -1954,6 +2054,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       isPinned: serializer.fromJson<bool>(json['isPinned']),
       groupId: serializer.fromJson<int?>(json['groupId']),
       customCoverPath: serializer.fromJson<String?>(json['customCoverPath']),
+      customIntro: serializer.fromJson<String?>(json['customIntro']),
       addedAt: serializer.fromJson<DateTime>(json['addedAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1976,6 +2077,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       'isPinned': serializer.toJson<bool>(isPinned),
       'groupId': serializer.toJson<int?>(groupId),
       'customCoverPath': serializer.toJson<String?>(customCoverPath),
+      'customIntro': serializer.toJson<String?>(customIntro),
       'addedAt': serializer.toJson<DateTime>(addedAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1996,6 +2098,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     bool? isPinned,
     Value<int?> groupId = const Value.absent(),
     Value<String?> customCoverPath = const Value.absent(),
+    Value<String?> customIntro = const Value.absent(),
     DateTime? addedAt,
     DateTime? updatedAt,
   }) => BookRow(
@@ -2015,6 +2118,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     customCoverPath: customCoverPath.present
         ? customCoverPath.value
         : this.customCoverPath,
+    customIntro: customIntro.present ? customIntro.value : this.customIntro,
     addedAt: addedAt ?? this.addedAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -2038,6 +2142,9 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       customCoverPath: data.customCoverPath.present
           ? data.customCoverPath.value
           : this.customCoverPath,
+      customIntro: data.customIntro.present
+          ? data.customIntro.value
+          : this.customIntro,
       addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -2060,6 +2167,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
           ..write('isPinned: $isPinned, ')
           ..write('groupId: $groupId, ')
           ..write('customCoverPath: $customCoverPath, ')
+          ..write('customIntro: $customIntro, ')
           ..write('addedAt: $addedAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -2082,6 +2190,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     isPinned,
     groupId,
     customCoverPath,
+    customIntro,
     addedAt,
     updatedAt,
   );
@@ -2103,6 +2212,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
           other.isPinned == this.isPinned &&
           other.groupId == this.groupId &&
           other.customCoverPath == this.customCoverPath &&
+          other.customIntro == this.customIntro &&
           other.addedAt == this.addedAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -2122,6 +2232,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
   final Value<bool> isPinned;
   final Value<int?> groupId;
   final Value<String?> customCoverPath;
+  final Value<String?> customIntro;
   final Value<DateTime> addedAt;
   final Value<DateTime> updatedAt;
   const BooksCompanion({
@@ -2139,6 +2250,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     this.isPinned = const Value.absent(),
     this.groupId = const Value.absent(),
     this.customCoverPath = const Value.absent(),
+    this.customIntro = const Value.absent(),
     this.addedAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -2157,6 +2269,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     this.isPinned = const Value.absent(),
     this.groupId = const Value.absent(),
     this.customCoverPath = const Value.absent(),
+    this.customIntro = const Value.absent(),
     required DateTime addedAt,
     required DateTime updatedAt,
   }) : sourceUrl = Value(sourceUrl),
@@ -2179,6 +2292,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     Expression<bool>? isPinned,
     Expression<int>? groupId,
     Expression<String>? customCoverPath,
+    Expression<String>? customIntro,
     Expression<DateTime>? addedAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -2197,6 +2311,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
       if (isPinned != null) 'is_pinned': isPinned,
       if (groupId != null) 'group_id': groupId,
       if (customCoverPath != null) 'custom_cover_path': customCoverPath,
+      if (customIntro != null) 'custom_intro': customIntro,
       if (addedAt != null) 'added_at': addedAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -2217,6 +2332,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     Value<bool>? isPinned,
     Value<int?>? groupId,
     Value<String?>? customCoverPath,
+    Value<String?>? customIntro,
     Value<DateTime>? addedAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -2235,6 +2351,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
       isPinned: isPinned ?? this.isPinned,
       groupId: groupId ?? this.groupId,
       customCoverPath: customCoverPath ?? this.customCoverPath,
+      customIntro: customIntro ?? this.customIntro,
       addedAt: addedAt ?? this.addedAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -2285,6 +2402,9 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     if (customCoverPath.present) {
       map['custom_cover_path'] = Variable<String>(customCoverPath.value);
     }
+    if (customIntro.present) {
+      map['custom_intro'] = Variable<String>(customIntro.value);
+    }
     if (addedAt.present) {
       map['added_at'] = Variable<DateTime>(addedAt.value);
     }
@@ -2311,6 +2431,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
           ..write('isPinned: $isPinned, ')
           ..write('groupId: $groupId, ')
           ..write('customCoverPath: $customCoverPath, ')
+          ..write('customIntro: $customIntro, ')
           ..write('addedAt: $addedAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -5843,6 +5964,325 @@ class RulesCompanion extends UpdateCompanion<RuleRow> {
   }
 }
 
+class $SourceVariablesTable extends SourceVariables
+    with TableInfo<$SourceVariablesTable, SourceVariableRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SourceVariablesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sourceUrlMeta = const VerificationMeta(
+    'sourceUrl',
+  );
+  @override
+  late final GeneratedColumn<String> sourceUrl = GeneratedColumn<String>(
+    'source_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'value',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [sourceUrl, name, value, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'source_variables';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SourceVariableRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('source_url')) {
+      context.handle(
+        _sourceUrlMeta,
+        sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceUrlMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sourceUrl, name};
+  @override
+  SourceVariableRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SourceVariableRow(
+      sourceUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_url'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SourceVariablesTable createAlias(String alias) {
+    return $SourceVariablesTable(attachedDatabase, alias);
+  }
+}
+
+class SourceVariableRow extends DataClass
+    implements Insertable<SourceVariableRow> {
+  /// `bookSourceUrl` of the source the variable belongs to.
+  final String sourceUrl;
+
+  /// The variable's name.
+  final String name;
+
+  /// The variable's value; upstream's map holds strings only.
+  final String value;
+
+  /// When the row was last written; a diagnostic column, not part of the value.
+  final DateTime updatedAt;
+  const SourceVariableRow({
+    required this.sourceUrl,
+    required this.name,
+    required this.value,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['source_url'] = Variable<String>(sourceUrl);
+    map['name'] = Variable<String>(name);
+    map['value'] = Variable<String>(value);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  SourceVariablesCompanion toCompanion(bool nullToAbsent) {
+    return SourceVariablesCompanion(
+      sourceUrl: Value(sourceUrl),
+      name: Value(name),
+      value: Value(value),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SourceVariableRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SourceVariableRow(
+      sourceUrl: serializer.fromJson<String>(json['sourceUrl']),
+      name: serializer.fromJson<String>(json['name']),
+      value: serializer.fromJson<String>(json['value']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sourceUrl': serializer.toJson<String>(sourceUrl),
+      'name': serializer.toJson<String>(name),
+      'value': serializer.toJson<String>(value),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  SourceVariableRow copyWith({
+    String? sourceUrl,
+    String? name,
+    String? value,
+    DateTime? updatedAt,
+  }) => SourceVariableRow(
+    sourceUrl: sourceUrl ?? this.sourceUrl,
+    name: name ?? this.name,
+    value: value ?? this.value,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SourceVariableRow copyWithCompanion(SourceVariablesCompanion data) {
+    return SourceVariableRow(
+      sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
+      name: data.name.present ? data.name.value : this.name,
+      value: data.value.present ? data.value.value : this.value,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceVariableRow(')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('name: $name, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(sourceUrl, name, value, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SourceVariableRow &&
+          other.sourceUrl == this.sourceUrl &&
+          other.name == this.name &&
+          other.value == this.value &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SourceVariablesCompanion extends UpdateCompanion<SourceVariableRow> {
+  final Value<String> sourceUrl;
+  final Value<String> name;
+  final Value<String> value;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const SourceVariablesCompanion({
+    this.sourceUrl = const Value.absent(),
+    this.name = const Value.absent(),
+    this.value = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SourceVariablesCompanion.insert({
+    required String sourceUrl,
+    required String name,
+    required String value,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : sourceUrl = Value(sourceUrl),
+       name = Value(name),
+       value = Value(value),
+       updatedAt = Value(updatedAt);
+  static Insertable<SourceVariableRow> custom({
+    Expression<String>? sourceUrl,
+    Expression<String>? name,
+    Expression<String>? value,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sourceUrl != null) 'source_url': sourceUrl,
+      if (name != null) 'name': name,
+      if (value != null) 'value': value,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SourceVariablesCompanion copyWith({
+    Value<String>? sourceUrl,
+    Value<String>? name,
+    Value<String>? value,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SourceVariablesCompanion(
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      name: name ?? this.name,
+      value: value ?? this.value,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sourceUrl.present) {
+      map['source_url'] = Variable<String>(sourceUrl.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SourceVariablesCompanion(')
+          ..write('sourceUrl: $sourceUrl, ')
+          ..write('name: $name, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ReaderDatabase extends GeneratedDatabase {
   _$ReaderDatabase(QueryExecutor e) : super(e);
   $ReaderDatabaseManager get managers => $ReaderDatabaseManager(this);
@@ -5858,6 +6298,9 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
   late final $ReadRecordsTable readRecords = $ReadRecordsTable(this);
   late final $CookiesTable cookies = $CookiesTable(this);
   late final $RulesTable rules = $RulesTable(this);
+  late final $SourceVariablesTable sourceVariables = $SourceVariablesTable(
+    this,
+  );
   late final Index cacheEntriesSource = Index(
     'cache_entries_source',
     'CREATE INDEX cache_entries_source ON cache_entries (source_key)',
@@ -5886,6 +6329,10 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
     'rules_kind_order',
     'CREATE INDEX rules_kind_order ON rules (kind, sort_order)',
   );
+  late final Index sourceVariablesSource = Index(
+    'source_variables_source',
+    'CREATE INDEX source_variables_source ON source_variables (source_url)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5901,6 +6348,7 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
     readRecords,
     cookies,
     rules,
+    sourceVariables,
     cacheEntriesSource,
     sourceChecksSourceChecked,
     bookmarksBook,
@@ -5908,6 +6356,7 @@ abstract class _$ReaderDatabase extends GeneratedDatabase {
     readRecordsEnded,
     cookiesDomain,
     rulesKindOrder,
+    sourceVariablesSource,
   ];
 }
 
@@ -6137,6 +6586,7 @@ typedef $$BookSourcesTableCreateCompanionBuilder =
       Value<int?> lastUpdateTime,
       Value<int?> respondTime,
       Value<String?> loginInfo,
+      Value<String?> loginHeader,
       required DateTime importedAt,
       required DateTime updatedAt,
     });
@@ -6157,6 +6607,7 @@ typedef $$BookSourcesTableUpdateCompanionBuilder =
       Value<int?> lastUpdateTime,
       Value<int?> respondTime,
       Value<String?> loginInfo,
+      Value<String?> loginHeader,
       Value<DateTime> importedAt,
       Value<DateTime> updatedAt,
     });
@@ -6242,6 +6693,11 @@ class $$BookSourcesTableFilterComposer
 
   ColumnFilters<String> get loginInfo => $composableBuilder(
     column: $table.loginInfo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get loginHeader => $composableBuilder(
+    column: $table.loginHeader,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6340,6 +6796,11 @@ class $$BookSourcesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get loginHeader => $composableBuilder(
+    column: $table.loginHeader,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get importedAt => $composableBuilder(
     column: $table.importedAt,
     builder: (column) => ColumnOrderings(column),
@@ -6417,6 +6878,11 @@ class $$BookSourcesTableAnnotationComposer
   GeneratedColumn<String> get loginInfo =>
       $composableBuilder(column: $table.loginInfo, builder: (column) => column);
 
+  GeneratedColumn<String> get loginHeader => $composableBuilder(
+    column: $table.loginHeader,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get importedAt => $composableBuilder(
     column: $table.importedAt,
     builder: (column) => column,
@@ -6472,6 +6938,7 @@ class $$BookSourcesTableTableManager
                 Value<int?> lastUpdateTime = const Value.absent(),
                 Value<int?> respondTime = const Value.absent(),
                 Value<String?> loginInfo = const Value.absent(),
+                Value<String?> loginHeader = const Value.absent(),
                 Value<DateTime> importedAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => BookSourcesCompanion(
@@ -6490,6 +6957,7 @@ class $$BookSourcesTableTableManager
                 lastUpdateTime: lastUpdateTime,
                 respondTime: respondTime,
                 loginInfo: loginInfo,
+                loginHeader: loginHeader,
                 importedAt: importedAt,
                 updatedAt: updatedAt,
               ),
@@ -6510,6 +6978,7 @@ class $$BookSourcesTableTableManager
                 Value<int?> lastUpdateTime = const Value.absent(),
                 Value<int?> respondTime = const Value.absent(),
                 Value<String?> loginInfo = const Value.absent(),
+                Value<String?> loginHeader = const Value.absent(),
                 required DateTime importedAt,
                 required DateTime updatedAt,
               }) => BookSourcesCompanion.insert(
@@ -6528,6 +6997,7 @@ class $$BookSourcesTableTableManager
                 lastUpdateTime: lastUpdateTime,
                 respondTime: respondTime,
                 loginInfo: loginInfo,
+                loginHeader: loginHeader,
                 importedAt: importedAt,
                 updatedAt: updatedAt,
               ),
@@ -6580,6 +7050,7 @@ typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
   Value<bool> isPinned,
   Value<int?> groupId,
   Value<String?> customCoverPath,
+  Value<String?> customIntro,
   required DateTime addedAt,
   required DateTime updatedAt,
 });
@@ -6598,6 +7069,7 @@ typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
   Value<bool> isPinned,
   Value<int?> groupId,
   Value<String?> customCoverPath,
+  Value<String?> customIntro,
   Value<DateTime> addedAt,
   Value<DateTime> updatedAt,
 });
@@ -6678,6 +7150,11 @@ class $$BooksTableFilterComposer
 
   ColumnFilters<String> get customCoverPath => $composableBuilder(
     column: $table.customCoverPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customIntro => $composableBuilder(
+    column: $table.customIntro,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6771,6 +7248,11 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get customIntro => $composableBuilder(
+    column: $table.customIntro,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get addedAt => $composableBuilder(
     column: $table.addedAt,
     builder: (column) => ColumnOrderings(column),
@@ -6837,6 +7319,11 @@ class $$BooksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get customIntro => $composableBuilder(
+    column: $table.customIntro,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get addedAt =>
       $composableBuilder(column: $table.addedAt, builder: (column) => column);
 
@@ -6886,6 +7373,7 @@ class $$BooksTableTableManager
                 Value<bool> isPinned = const Value.absent(),
                 Value<int?> groupId = const Value.absent(),
                 Value<String?> customCoverPath = const Value.absent(),
+                Value<String?> customIntro = const Value.absent(),
                 Value<DateTime> addedAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => BooksCompanion(
@@ -6903,6 +7391,7 @@ class $$BooksTableTableManager
                 isPinned: isPinned,
                 groupId: groupId,
                 customCoverPath: customCoverPath,
+                customIntro: customIntro,
                 addedAt: addedAt,
                 updatedAt: updatedAt,
               ),
@@ -6922,6 +7411,7 @@ class $$BooksTableTableManager
                 Value<bool> isPinned = const Value.absent(),
                 Value<int?> groupId = const Value.absent(),
                 Value<String?> customCoverPath = const Value.absent(),
+                Value<String?> customIntro = const Value.absent(),
                 required DateTime addedAt,
                 required DateTime updatedAt,
               }) => BooksCompanion.insert(
@@ -6939,6 +7429,7 @@ class $$BooksTableTableManager
                 isPinned: isPinned,
                 groupId: groupId,
                 customCoverPath: customCoverPath,
+                customIntro: customIntro,
                 addedAt: addedAt,
                 updatedAt: updatedAt,
               ),
@@ -8765,6 +9256,206 @@ typedef $$RulesTableProcessedTableManager =
       RuleRow,
       PrefetchHooks Function()
     >;
+typedef $$SourceVariablesTableCreateCompanionBuilder =
+    SourceVariablesCompanion Function({
+      required String sourceUrl,
+      required String name,
+      required String value,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SourceVariablesTableUpdateCompanionBuilder =
+    SourceVariablesCompanion Function({
+      Value<String> sourceUrl,
+      Value<String> name,
+      Value<String> value,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$SourceVariablesTableFilterComposer
+    extends Composer<_$ReaderDatabase, $SourceVariablesTable> {
+  $$SourceVariablesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SourceVariablesTableOrderingComposer
+    extends Composer<_$ReaderDatabase, $SourceVariablesTable> {
+  $$SourceVariablesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get sourceUrl => $composableBuilder(
+    column: $table.sourceUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SourceVariablesTableAnnotationComposer
+    extends Composer<_$ReaderDatabase, $SourceVariablesTable> {
+  $$SourceVariablesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get sourceUrl =>
+      $composableBuilder(column: $table.sourceUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SourceVariablesTableTableManager
+    extends
+        RootTableManager<
+          _$ReaderDatabase,
+          $SourceVariablesTable,
+          SourceVariableRow,
+          $$SourceVariablesTableFilterComposer,
+          $$SourceVariablesTableOrderingComposer,
+          $$SourceVariablesTableAnnotationComposer,
+          $$SourceVariablesTableCreateCompanionBuilder,
+          $$SourceVariablesTableUpdateCompanionBuilder,
+          (
+            SourceVariableRow,
+            BaseReferences<
+              _$ReaderDatabase,
+              $SourceVariablesTable,
+              SourceVariableRow
+            >,
+          ),
+          SourceVariableRow,
+          PrefetchHooks Function()
+        > {
+  $$SourceVariablesTableTableManager(
+    _$ReaderDatabase db,
+    $SourceVariablesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SourceVariablesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SourceVariablesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SourceVariablesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> sourceUrl = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> value = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SourceVariablesCompanion(
+                sourceUrl: sourceUrl,
+                name: name,
+                value: value,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String sourceUrl,
+                required String name,
+                required String value,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SourceVariablesCompanion.insert(
+                sourceUrl: sourceUrl,
+                name: name,
+                value: value,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SourceVariablesTable, SourceVariableRow>(table),
+                  BaseReferences<
+                    _$ReaderDatabase,
+                    $SourceVariablesTable,
+                    SourceVariableRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SourceVariablesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ReaderDatabase,
+      $SourceVariablesTable,
+      SourceVariableRow,
+      $$SourceVariablesTableFilterComposer,
+      $$SourceVariablesTableOrderingComposer,
+      $$SourceVariablesTableAnnotationComposer,
+      $$SourceVariablesTableCreateCompanionBuilder,
+      $$SourceVariablesTableUpdateCompanionBuilder,
+      (
+        SourceVariableRow,
+        BaseReferences<
+          _$ReaderDatabase,
+          $SourceVariablesTable,
+          SourceVariableRow
+        >,
+      ),
+      SourceVariableRow,
+      PrefetchHooks Function()
+    >;
 
 class $ReaderDatabaseManager {
   final _$ReaderDatabase _db;
@@ -8789,4 +9480,6 @@ class $ReaderDatabaseManager {
       $$CookiesTableTableManager(_db, _db.cookies);
   $$RulesTableTableManager get rules =>
       $$RulesTableTableManager(_db, _db.rules);
+  $$SourceVariablesTableTableManager get sourceVariables =>
+      $$SourceVariablesTableTableManager(_db, _db.sourceVariables);
 }

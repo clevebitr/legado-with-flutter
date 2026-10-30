@@ -49,6 +49,7 @@ final class _FailingCacheDao extends CacheDao {
     required Duration ttl,
     String? scopeKey,
     String? sourceKey,
+    bool persistent = false,
   }) async => throw error;
 
   @override
@@ -102,6 +103,33 @@ void main() {
       await cache.write(sourceId: sourceId, url: url, body: body);
       clock.advance(chapterCacheTtl + const Duration(minutes: 1));
 
+      expect(await cache.read(sourceId: sourceId, url: url), isNull);
+    });
+
+    test('read_givenAPersistentBody_survivesTheTtlAndCleanup', () async {
+      // 在架书的正文不自动过期（ADR-0097 §决策 1）：十天后再读仍然命中，`clearExpired` 也不碰它。
+      await cache.write(
+        sourceId: sourceId,
+        url: url,
+        body: body,
+        bookUrl: 'https://example-novel.test/book/1',
+        persistent: true,
+      );
+      clock.advance(const Duration(days: 10));
+
+      expect(await cache.read(sourceId: sourceId, url: url), body);
+      expect(await cache.clearExpired(), 0);
+      expect(await cache.read(sourceId: sourceId, url: url), body);
+    });
+
+    test('read_givenANonShelfBody_expiresAfterThreeDays', () async {
+      // 非在架书默认 3 天（ADR-0097 §决策 1）。
+      await cache.write(sourceId: sourceId, url: url, body: body);
+      clock.advance(const Duration(days: 2));
+
+      expect(await cache.read(sourceId: sourceId, url: url), body);
+
+      clock.advance(const Duration(days: 1, hours: 1));
       expect(await cache.read(sourceId: sourceId, url: url), isNull);
     });
 

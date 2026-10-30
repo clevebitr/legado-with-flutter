@@ -94,7 +94,8 @@ void main() {
       expect(printer.events.single.error, isNull);
     });
 
-    test('error_whenRawExceptionIsPassed_recordsADigestInsteadOfItsText', () {
+    test('error_whenRawExceptionIsPassed_recordsItsFullText', () {
+      // 日志不脱敏（ADR-0082）：原始报错是定位坏源的唯一线索，浅层摘要只会让人再复现一次。
       final FakeLogPrinter printer = FakeLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.info,
@@ -106,14 +107,13 @@ void main() {
         const FormatException('GET https://example.com/a?token=abc failed'),
       );
 
-      final Object? recorded = printer.events.single.error;
-
-      expect(recorded, isA<String>());
-      expect(recorded, isNot(contains('example.com')));
-      expect(recorded, isNot(contains('abc')));
+      expect(
+        printer.events.single.error,
+        '<FormatException: GET https://example.com/a?token=abc failed>',
+      );
     });
 
-    test('warning_whenStringErrorCarriesAToken_recordsItScrubbed', () {
+    test('warning_whenAStringErrorIsPassed_recordsItVerbatim', () {
       final FakeLogPrinter printer = FakeLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.info,
@@ -127,11 +127,11 @@ void main() {
 
       expect(
         printer.events.single.error,
-        'GET https://example.com/a?token=*** failed',
+        'GET https://example.com/a?token=abc failed',
       );
     });
 
-    test('error_whenMessageCarriesAToken_recordsItMasked', () {
+    test('error_whenMessageCarriesAToken_recordsItVerbatim', () {
       final FakeLogPrinter printer = FakeLogPrinter();
       final AppLogger logger = AppLogger(
         level: LogLevel.info,
@@ -142,7 +142,7 @@ void main() {
 
       expect(
         printer.events.single.message,
-        'GET https://example.com/a?token=*** failed',
+        'GET https://example.com/a?token=abc123 failed',
       );
     });
   });

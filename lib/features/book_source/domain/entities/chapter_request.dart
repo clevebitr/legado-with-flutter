@@ -40,5 +40,29 @@ abstract class ChapterRequest with _$ChapterRequest {
 
     /// The introduction, when the caller knows it (`book.intro`, ADR-0060 P2).
     @Default('') String intro,
+
+    /// The **next** chapter's URL, when the reader knows it (the `nextChapterUrl` binding).
+    ///
+    /// Upstream sets it while reading so a `content` / `nextContentUrl` rule can build "the next
+    /// page" out of the next chapter's address, and tell the two apart (M25/S3b).
+    @Default('') String nextChapterUrl,
+
+    /// Whether the source marked this chapter VIP-only (`chapter.isVip`).
+    @Default(false) bool isVip,
+
+    /// Whether the source marked this chapter as bought (`chapter.isPay`).
+    @Default(false) bool isPay,
+
+    /// Whether this entry is a volume heading rather than a chapter (`chapter.isVolume`).
+    @Default(false) bool isVolume,
+
+    /// The chapter's display update time, when the source had one (`chapter.updateTime`).
+    String? updateTime,
+
+    /// Whether the finished body should be cached **without** an expiry (ADR-0097 §决策 1).
+    ///
+    /// The caller sets it when the book is on the shelf: its chapters then stay cached until the
+    /// user clears that book's cache, instead of expiring after `chapterCacheTtl`.
+    @Default(false) bool persistCache,
   }) = _ChapterRequest;
 }

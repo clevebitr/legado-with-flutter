@@ -39,6 +39,56 @@ import 'package:m3e_design/m3e_design.dart';
   ),
 };
 
+/// The warm (blue-light reducing) filter of [strength] percent, or `null` when it is off.
+///
+/// Upstream blends towards a 2596–5500 K colour temperature (`EyeProtection.kt`); this is the same
+/// idea in one colour matrix — red keeps its weight, green loses a little and blue loses most of
+/// it, with a small negative offset on both so the tint lands on the paper rather than on the
+/// whole screen. It is a **filter over the page**, not a system feature: the display's own
+/// brightness is untouched (ADR-0086 §决策 2).
+///
+/// A pure function on purpose: the strength → filter mapping is the part worth pinning in a test.
+ColorFilter? readerEyeProtectionFilter(int strength) {
+  final List<double>? matrix = readerEyeProtectionMatrix(strength);
+
+  return matrix == null ? null : ColorFilter.matrix(matrix);
+}
+
+/// The colour matrix behind [readerEyeProtectionFilter], or `null` when the filter is off.
+///
+/// Split out because [ColorFilter] does not expose its numbers: the mapping is what a test can
+/// pin, and the widget only needs the wrapped form.
+List<double>? readerEyeProtectionMatrix(int strength) {
+  final int clamped = strength.clamp(0, maxReaderEyeProtection);
+  if (clamped == 0) {
+    return null;
+  }
+  final double k = clamped / maxReaderEyeProtection;
+
+  return <double>[
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1 - 0.08 * k,
+    0,
+    0,
+    -4 * k,
+    0,
+    0,
+    1 - 0.30 * k,
+    0,
+    -12 * k,
+    0,
+    0,
+    0,
+    1,
+    0,
+  ];
+}
+
 /// The body text style of the reader.
 ///
 /// [fontScale] multiplies the theme's body size and [lineHeight] sets its line spacing; the
@@ -50,16 +100,103 @@ TextStyle readerTextStyle({
   required double lineHeight,
   required Color foreground,
   ReaderFontFamily family = ReaderFontFamily.theme,
-}) => tokens.typography.base.bodyLarge!.copyWith(
-  fontSize: (tokens.typography.base.bodyLarge!.fontSize ?? 16) * fontScale,
-  height: lineHeight,
-  color: foreground,
-  // 平台通用族名（ADR-0051 §决策 4）：缺字体时 Flutter 回落到系统字体，不会出现豆腐块。
-  fontFamily: readerFontFamilyName(family),
-);
+}) {
+  // 主题没有 bodyLarge 时用基线的 16 号字：阅读正文永远不能因此变成默认的 14 号。
+  final TextStyle base =
+      tokens.typography.base.bodyLarge ?? const TextStyle(fontSize: 16);
+
+  return base.copyWith(
+    fontSize: (base.fontSize ?? 16) * fontScale,
+    height: lineHeight,
+    color: foreground,
+    // 平台通用族名（ADR-0051 §决策 4）：缺字体时 Flutter 回落到系统字体，不会出现豆腐块。
+    fontFamily: readerFontFamilyName(family),
+    // 正文的行高是**按这个样式量出来的**（`readerPageStarts` / `readerTextHeight`）。`Text` 默认会
+    // 把 `style` 合到环境的 `DefaultTextStyle` 上，环境给了这个样式没写的字段（字距、行高分布…）时，
+    // 量出来的高度与画出来的高度就对不上；页表按量到的高度给每一项定高，差一行就是 RenderFlex 溢出。
+    // `inherit: false` 让「量的」与「画的」是同一个样式。
+    inherit: false,
+  );
+}
 
 /// The newline character the body layout joins paragraphs with.
 final String _newline = String.fromCharCode(10);
+
+/// Everything a chapter title may be padded with in a body: whitespace, punctuation, symbols.
+final RegExp _titleNoise = RegExp(r'[\s\p{P}\p{S}]', unicode: true);
+
+/// The style the chapter heading is painted with (`docs/dev/adr/0087` §决策 3).
+///
+/// It is painted **inside** the chapter's first page, so it only takes the body's colour: size and
+/// weight come from the theme, and the page is measured with this very style.
+///
+/// The result is **fully resolved** ([TextStyle.inherit] off, font size never null) on purpose: the
+/// theme's `titleMedium` may carry a font family but no font size, and in that case `Text` inherits a
+/// size from the ambient `DefaultTextStyle` while `TextPainter` falls back to 14 — measured and
+/// painted heights then differ by a line and the page overflows the height the table gave it.
+TextStyle readerChapterTitleStyle({
+  required M3ETheme tokens,
+  required Color foreground,
+  required double bodyFontSize,
+}) {
+  final TextStyle? themed = tokens.typography.base.titleMedium;
+
+  return (themed ?? const TextStyle(fontSize: 16)).copyWith(
+    fontSize: themed?.fontSize ?? bodyFontSize * _chapterTitleScale,
+    color: foreground,
+    inherit: false,
+  );
+}
+
+/// How much larger than the body a chapter heading is when the theme does not say.
+const double _chapterTitleScale = 1.2;
+
+/// The space between the chapter heading and the body below it (ADR-0087 §决策 3).
+double readerChapterTitleGap(M3ETheme tokens) => tokens.spacing.xl;
+
+/// [body] with a leading copy of the chapter's own title removed.
+///
+/// Sources routinely put the chapter title on the first line of the body, and the reader prints the
+/// title itself as the chapter heading — so without this the title appears twice
+/// (`docs/dev/adr/0087-reader-page-table-and-chapter-heading.md` §决策 4). Upstream removes the same
+/// line while processing a chapter's content (`ContentProcessor.kt` `//去除重复标题`).
+///
+/// The comparison ignores whitespace, punctuation and symbols, and tolerates the book's name in
+/// front of the title; only the **first non-empty line** is ever considered, and only when it is the
+/// title and nothing else. A line that merely starts with the title is left alone: keeping a line
+/// that should have gone is recoverable, eating a line of the story is not.
+String readerStripDuplicateTitle(
+  String body, {
+  required String title,
+  required String bookName,
+}) {
+  final String wanted = _titleKey(title);
+  if (wanted.isEmpty || body.isEmpty) {
+    return body;
+  }
+  final String book = _titleKey(bookName);
+  final List<String> lines = body.split(_newline);
+  for (var index = 0; index < lines.length; index++) {
+    final String line = lines[index];
+    if (line.trim().isEmpty) {
+      continue;
+    }
+    if (!_isChapterTitle(_titleKey(line), wanted, book)) {
+      break;
+    }
+
+    return lines.sublist(index + 1).join(_newline);
+  }
+
+  return body;
+}
+
+/// Whether [line] (already stripped of noise) is the chapter title [wanted], optionally led by [book].
+bool _isChapterTitle(String line, String wanted, String book) =>
+    line == wanted || (book.isNotEmpty && line == '$book$wanted');
+
+/// [value] without whitespace, punctuation or symbols — the form titles are compared in.
+String _titleKey(String value) => value.replaceAll(_titleNoise, '');
 
 /// The body text as it should be **laid out**: paragraph spacing and first-line indent applied.
 ///
@@ -154,7 +291,19 @@ Widget readingText({
     end: end,
   );
 
+  // `textWidthBasis` / `textHeightBehavior` 也定死：`Text` 会从环境补齐这两项，而量高用的是
+  // `TextPainter` 的默认值——环境一旦不同，页高就差一截（见 [readerTextStyle]）。
   return span.children == null
-      ? Text(span.text ?? '', style: style)
-      : Text.rich(span);
+      ? Text(
+          span.text ?? '',
+          style: style,
+          textWidthBasis: TextWidthBasis.parent,
+          textHeightBehavior: const TextHeightBehavior(),
+        )
+      : Text.rich(
+          span,
+          style: style,
+          textWidthBasis: TextWidthBasis.parent,
+          textHeightBehavior: const TextHeightBehavior(),
+        );
 }

@@ -11,6 +11,7 @@ import 'package:flutter_reader/features/book_source/domain/page_fetch_service.da
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_engine.dart';
 import 'package:flutter_reader/features/book_source/domain/usecases/fetch_toc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logger/logger.dart';
 
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/fake_js_bridge.dart';
@@ -225,7 +226,7 @@ void main() {
           ..serve(_tocUrl, _page('book_page.html'));
         final BookSource source = _source();
         final BookSource withJs = source.copyWith(
-          tocRule: source.tocRule.copyWith(chapterName: '@xpath://div'),
+          tocRule: source.tocRule.copyWith(chapterName: '@webJs:'),
         );
         final ({PageFetchService pages, FakeLogPrinter printer}) service =
             _service(http);
@@ -234,12 +235,19 @@ void main() {
           pages: service.pages,
         ).execute(withJs, _tocUrl);
 
-        // ADR-0026 §决策 2：非顶层字段被拒 → 章节名回落为空串，目录照常返回。
-        expect(result.dataOrNull, isNotEmpty);
-        expect(result.dataOrNull?.first.name, isEmpty);
+        // ADR-0026 §决策 2：非顶层字段被拒不会让整段失败；但名字读不出来的条目**不是章节**，
+        // 按上游 `if (title.isNotEmpty)` 丢掉（BookChapterList.kt:263-270），所以目录是空的、
+        // 阶段仍然成功（不是失败），拒绝记录照旧留在日志里。
+        expect(result.dataOrNull, isEmpty);
+        // 字段级降级是 WARN；引擎的 `Rejected rule` 已降为 debug，逐章复制的行不再刷屏。
+        final Iterable<String> warnings = service.printer.events
+            .where((LogEvent event) => event.level == Level.warning)
+            .map((LogEvent event) => event.message.toString());
         expect(
-          service.printer.events.last.message.toString(),
-          allOf(contains('tocRule.chapterName'), contains(source.url)),
+          warnings,
+          anyElement(
+            allOf(contains('tocRule.chapterName'), contains(source.url)),
+          ),
         );
       },
     );
@@ -364,37 +372,32 @@ void main() {
       },
     );
 
-    test(
-      'execute_givenMorePagesThanTheBound_stopsAtTheBoundWithAWarning',
-      () async {
-        const String base = 'https://example-novel.test/book/9/';
-        final FakeHttpClient http = FakeHttpClient();
-        for (var page = 1; page <= 51; page++) {
-          http.serve(
-            '$base$page.html',
-            _tocHtml(<String>[
-              '第$page章',
-            ], nextHref: page < 51 ? '${page + 1}.html' : null),
-          );
-        }
-        final ({PageFetchService pages, FakeLogPrinter printer}) service =
-            _service(http);
-
-        final List<Chapter> chapters = _data(
-          await FetchToc(pages: service.pages)
-              .execute(_pagingSource(_nextRule), '${base}1.html'),
+    test('execute_givenLongTablesOfContents_readsEveryPage', () async {
+      const String base = 'https://example-novel.test/book/9/';
+      final FakeHttpClient http = FakeHttpClient();
+      // 语料只有 51 页，而上限现在是 500：这条用例改成「上限远高于真实目录」的回归点，
+      // 即 51 页必须**全部**读到（真机日志里 50 页上限让长书缺了尾部章节）。
+      for (var page = 1; page <= 51; page++) {
+        http.serve(
+          '$base$page.html',
+          _tocHtml(<String>[
+            '第$page章',
+          ], nextHref: page < 51 ? '${page + 1}.html' : null),
         );
+      }
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(http);
 
-        // §9：翻页最多 50 页，到顶后停止并记录 warning。
-        expect(http.requestedUrls, hasLength(50));
-        expect(chapters, hasLength(50));
-        expect(service.printer.events, hasLength(1));
-        expect(
-          service.printer.events.single.message.toString(),
-          contains('50 pages'),
-        );
-      },
-    );
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: service.pages)
+            .execute(_pagingSource(_nextRule), '${base}1.html'),
+      );
+
+      expect(http.requestedUrls, hasLength(51));
+      expect(chapters, hasLength(51));
+      // 没有到顶就没有 warning。
+      expect(service.printer.events, isEmpty);
+    });
 
     test(
       'execute_givenALaterTocPageFails_returnsTheChaptersReadSoFar',
@@ -452,7 +455,7 @@ void main() {
 
         final List<Chapter> chapters = _data(
           await FetchToc(pages: service.pages)
-              .execute(_pagingSource('@xpath://div'), _tocUrl),
+              .execute(_pagingSource('@webJs:'), _tocUrl),
         );
 
         // ADR-0026 §决策 2：非顶层字段被拒 → 降级为「没有下一页」+ warning。
@@ -573,5 +576,191 @@ void main() {
         expect(http.sourceRates, <String, String?>{source.url: '3/500'});
       },
     );
+  });
+  // ── M25/S2：目录字段族（ADR-0078） ────────────────────────────────────────────
+  group('FetchToc S2 fields', () {
+    /// The corpus source with extra `ruleToc` fields installed.
+    BookSource tocSource({
+      String? isPay,
+      String? isVolume,
+      String? wordCount,
+      String? formatJs,
+      String? preUpdateJs,
+    }) {
+      final BookSource source = _source();
+
+      return source.copyWith(
+        tocRule: source.tocRule.copyWith(
+          isPay: isPay,
+          isVolume: isVolume,
+          wordCount: wordCount,
+          formatJs: formatJs,
+          preUpdateJs: preUpdateJs,
+        ),
+      );
+    }
+
+    test('execute_givenIsPayAndWordCount_carriesThemOnTheChapter', () async {
+      // B5/B7：`isPay` 与 `wordCount` 与 isVip 同一套 `isTrue()` 判定（BookChapterList.kt:229-295）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _tocUrl,
+          '<div id="list"><dl>'
+          '<dd><a href="c1.html">第一章</a><i class="pay">true</i>'
+          '<i class="wc">1024</i></dd>'
+          '</dl></div>',
+        );
+      final BookSource source = tocSource(
+        isPay: 'class.pay@text',
+        wordCount: 'class.wc@text',
+      );
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages).execute(source, _tocUrl),
+      );
+
+      expect(chapters.single.isPay, isTrue);
+      expect(chapters.single.wordCount, '1024');
+    });
+
+    test(
+      'execute_givenAVolumeWithoutUrl_keepsItWithAPlaceholderLink',
+      () async {
+        // B5：卷标题没有 URL 时用「标题 + 序号」占位，普通章节才回落到目录页
+        // （BookChapterList.kt:240-259）。
+        final FakeHttpClient http = FakeHttpClient()
+          ..serve(
+            _tocUrl,
+            '<div id="list"><dl>'
+            '<dd><a>第一卷</a><i class="vol-flag">1</i></dd>'
+            '<dd><a href="c1.html">第一章</a></dd>'
+            '</dl></div>',
+          );
+        final BookSource source = tocSource(isVolume: 'class.vol-flag@text');
+
+        final List<Chapter> chapters = _data(
+          await FetchToc(pages: _service(http).pages).execute(source, _tocUrl),
+        );
+
+        expect(chapters, hasLength(2));
+        expect(chapters.first.name, '第一卷');
+        expect(chapters.first.isVolume, isTrue);
+        expect(chapters.first.url, '第一卷0');
+        expect(chapters.last.url, 'https://example-novel.test/book/1/c1.html');
+      },
+    );
+
+    test('execute_givenAnEntryWithoutName_dropsIt', () async {
+      // 上游 `if (title.isNotEmpty)`（BookChapterList.kt:263-270）：无名条目不是章节。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _tocUrl,
+          '<div id="list"><dl>'
+          '<dd><a href="c1.html"></a></dd>'
+          '<dd><a href="c2.html">第二章</a></dd>'
+          '</dl></div>',
+        );
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages).execute(_source(), _tocUrl),
+      );
+
+      expect(chapters.map((Chapter chapter) => chapter.name), <String>['第二章']);
+    });
+
+    test('execute_givenRepeatedChapters_keepsTheFirstOccurrence', () async {
+      // B7：上游用 `LinkedHashSet` 去重，身份是（名字 + 地址）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _tocUrl,
+          '<div id="list"><dl>'
+          '<dd><a href="c1.html">第一章</a></dd>'
+          '<dd><a href="c1.html">第一章</a></dd>'
+          '<dd><a href="c2.html">第二章</a></dd>'
+          '</dl></div>',
+        );
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http).pages).execute(_source(), _tocUrl),
+      );
+
+      expect(chapters.map((Chapter chapter) => chapter.name), <String>[
+        '第一章',
+        '第二章',
+      ]);
+    });
+
+    test('execute_givenFormatJs_rewritesTheTitlesInOneJob', () async {
+      // B5：`formatJs` 一次 job 跑完整份目录（`index` 逐章重绑、`gInt` 跨章累积）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_tocUrl, _page('book_page.html'));
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..result = <String?>['改名一', null];
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(http, jsBridge: bridge);
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: service.pages)
+            .execute(tocSource(formatJs: 'index + "|" + title'), _tocUrl),
+      );
+
+      expect(chapters.first.name, '改名一');
+      // null 表示「保持原标题」。
+      expect(chapters.last.name, isNot('改名一'));
+      expect(bridge.jobs.single.titleFormatChapters, isNotNull);
+      expect(bridge.jobs.single.script, 'index + "|" + title');
+    });
+
+    test('execute_givenAFailingFormatJs_failsTheStage', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_tocUrl, _page('book_page.html'));
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = const ParseFailure<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'tocRule.formatJs:js:error',
+        );
+
+      final ParseFailure<Never> failure = _failure(
+        await FetchToc(pages: _service(http, jsBridge: bridge).pages)
+            .execute(tocSource(formatJs: 'broken('), _tocUrl),
+      );
+
+      expect(failure.kind, ParseFailureKind.parseFailed);
+      expect(failure.rulePath, 'tocRule.formatJs:js:error');
+    });
+
+    test('execute_givenPreUpdateJs_runsItBeforeTheFetch', () async {
+      // B5：`preUpdateJs` 在第一个请求之前跑；失败即整段目录失败（WebBook.kt:305-313）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_tocUrl, _page('book_page.html'));
+      final FakeJsBridge bridge = FakeJsBridge()..result = 'warmed';
+
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: _service(http, jsBridge: bridge).pages)
+            .execute(tocSource(preUpdateJs: 'java.put("t", "1")'), _tocUrl),
+      );
+
+      expect(chapters, isNotEmpty);
+      expect(bridge.jobs.single.script, 'java.put("t", "1")');
+      expect(bridge.jobs.single.rulePath, 'tocRule.preUpdateJs');
+    });
+
+    test('execute_givenAFailingPreUpdateJs_failsWithoutFetching', () async {
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_tocUrl, _page('book_page.html'));
+      final FakeJsBridge bridge = FakeJsBridge()
+        ..failure = const ParseFailure<Never>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: 'tocRule.preUpdateJs:js:error',
+        );
+
+      final ParseFailure<Never> failure = _failure(
+        await FetchToc(pages: _service(http, jsBridge: bridge).pages)
+            .execute(tocSource(preUpdateJs: 'boom('), _tocUrl),
+      );
+
+      expect(failure.rulePath, 'tocRule.preUpdateJs:js:error');
+      expect(http.requestedUrls, isEmpty);
+    });
   });
 }

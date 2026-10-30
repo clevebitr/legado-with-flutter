@@ -10,6 +10,8 @@ const List<String> bookSourceFingerprintFields = <String>[
   'bookSourceName',
   'searchUrl',
   'header',
+  // 库脚本决定每条 `@js:` 规则能不能跑（ADR-0078 S1），所以它属于行为字段。
+  'jsLib',
   'ruleSearch',
   'ruleBookInfo',
   'ruleToc',

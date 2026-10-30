@@ -51,6 +51,11 @@ final class _GatedContent implements ChapterContentProvider {
     String chapterTitle = '',
     String bookUrl = '',
     String tocUrl = '',
+    String nextChapterUrl = '',
+    bool isVip = false,
+    bool isPay = false,
+    bool isVolume = false,
+    String? updateTime,
   }) async {
     requests.add(chapterUrl);
     inFlight++;

@@ -192,7 +192,7 @@ final class ReaderContentProvider
   }
 }
 
-String _$readerContentHash() => r'84c32a892dd86cb9b83bdb6d790a58667a381c7c';
+String _$readerContentHash() => r'3dccf34c6f2c9bbd16b3d893b30689adf38de75e';
 
 /// Reads the body of one chapter (`docs/dev/roadmap.md` 5.3).
 ///
@@ -412,7 +412,7 @@ final class ReaderSessionProvider
   }
 }
 
-String _$readerSessionHash() => r'f72625ca69ca2e4d92228232c04917bdbe8977e3';
+String _$readerSessionHash() => r'aa71b1c707b0bea6729c1a8e0c979b235a00ce91';
 
 /// The reading session: which chapter is open and where the user is inside it
 /// (`docs/dev/roadmap.md` 5.3).

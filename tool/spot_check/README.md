@@ -606,3 +606,33 @@ SPOT_CHECK_ARGS="--source=<collection.json> --keyword=剑来 --concurrency=6 --p
   只认 `$.data.page[*].image`；两者在真实数据上一个 `parseFailed`、一个返回 3 张图。
   它让 b1b 的派生真源在 content 段失败（`java.getStringList` 的快路径**已被调用**，卡在内层规则），
   登记在 `docs/dev/roadmap.md` §3.7。
+
+## 8. 语料静态普查（`corpus_census.dart`，2026-10-27 新增）
+
+`batch_probe.dart` 跑的是**联网链路**，要真实 JS 引擎与一台设备；普查只读 JSON，因此单独一个脚本，
+用 `dart run` 就能跑（不进 CI，与本节其余工具同一模式）：
+
+```bash
+dart run tool/spot_check/corpus_census.dart \
+  --source="<合集 A.json>" --source="<合集 B.json>"
+```
+
+输出四段，每行 `name<TAB>源数<TAB>处数`：语料概览（按 `bookSourceType` 分）、书源级字段、规则语法、
+沙箱绑定成员，最后单列「沙箱**未实现**、但语料里出现的成员」。
+
+判定口径：源数按**合集内不同 `bookSourceUrl`** 计（两份合集重叠的只算一次）；规则文本取自 JSON 里的
+每个字符串值（所以 `searchUrl`、`coverUrl`、`bookSourceComment` 与 `ruleSearch.bookList` 都算）；
+`java.*` 的「已实现」名单**从 `lib/core/js/quickjs_worker.dart` 的沙箱前奏读**（surface 键 +
+`__javaRejectedNames`），所以新增绑定不需要同步这份工具；`source.*` 与全局变量的名单是手写的
+（它们在前奏里不是「键: function」的形状），改 `source` 对象时要同步。
+
+**位置敏感的探测器先去掉「不是规则」的文本（2026-10-27，S5c 复核）：** 「裸 `//` 开头」「嵌套提取段
+（matrix #30）」「`:正则`」「`+` 正序」这四条问的是「这条规则**开头 / 某一段**是什么」，所以它们跑在
+`_ruleHeadOf(text)` 上——`@js:` 脚本体与 `{{…}}` 模板被整段剔掉（脚本里的 `//` 是注释、模板里的
+`@css:` 属于内层规则），段切分也只按**顶层** `@`（引号、`[]`、`()` 内的 `@` 不算），并且首段只剩下
+`+` / `-` / `@@` 时不算「有第二段」。这条修正把 matrix #30 的「22 源 / 125 处」纠回 **0 源 / 0 处**：
+原来的写法把「整条规则以 `@css:` / `@json:` 开头又含后续 `@`」「`{{@css:…@text}}` 里的内联规则」
+「`+@css:` / `-@css:`」全算成了嵌套提取段。其余探测器只问「用过没有」，仍看原文。
+
+2026-10-27 的基线（两份导出合并，334 个源）：见 `docs/dev/engine-parity.md` §9 的普查表——它决定了
+S5/S6 的排序。

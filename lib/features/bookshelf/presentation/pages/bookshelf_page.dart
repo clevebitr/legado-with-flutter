@@ -94,7 +94,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
       body: switch (shelf) {
         AsyncData<List<ShelvedBook>>(:final List<ShelvedBook> value) =>
           value.isEmpty
-              ? StateMessage(message: l10n.shelfEmpty)
+              ? StateMessage(
+                  message: l10n.shelfEmpty,
+                  icon: Icons.library_books_outlined,
+                )
               : _body(context, value, groups, tokens, l10n),
         // 读取失败与「书架为空」是两件事：空态会误导用户以为书没了。
         AsyncError<List<ShelvedBook>>() => StateMessage(
@@ -140,7 +143,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
         Expanded(
           child: visible.isEmpty
               // 分组里没有书与「书架为空」不同：前者是筛选的结果，不是数据丢了。
-              ? StateMessage(message: l10n.shelfGroupEmpty)
+              ? StateMessage(
+                  message: l10n.shelfGroupEmpty,
+                  icon: Icons.filter_alt_off_outlined,
+                )
               : ListView.builder(
                   padding: EdgeInsets.symmetric(vertical: tokens.spacing.sm),
                   itemCount: visible.length,
@@ -197,17 +203,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
         CoverImage(
           url: book.coverUrl,
           localPath: book.customCoverPath,
-          width: 40,
-          height: 54,
+          // 宽高由间距令牌推导，保持书封约 3:4 的比例，不写死像素。
+          width: tokens.spacing.xxl + tokens.spacing.sm,
+          height: (tokens.spacing.xxl + tokens.spacing.sm) * 1.35,
         ),
         // 已读完仍然要在封面上留一个角标：封面替换掉了原来的图标位，状态不能丢。
         if (book.status == ShelfStatus.read)
           Positioned(
-            right: -4,
-            bottom: -4,
+            right: -tokens.spacing.xs,
+            bottom: -tokens.spacing.xs,
             child: Icon(
               Icons.check_circle,
-              size: 16,
+              size: tokens.spacing.lg,
               semanticLabel: l10n.shelfStatusRead,
             ),
           ),
@@ -219,6 +226,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
       tooltip: book.name,
       onSelected: (_ShelfAction action) => unawaited(_act(book, action, l10n)),
       itemBuilder: (BuildContext context) => <PopupMenuEntry<_ShelfAction>>[
+        PopupMenuItem<_ShelfAction>(
+          value: _ShelfAction.edit,
+          child: Text(l10n.shelfEditTitle),
+        ),
         if (book.isPinned)
           PopupMenuItem<_ShelfAction>(
             value: _ShelfAction.unpin,
@@ -370,6 +381,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
     _ShelfAction action,
     AppLocalizations l10n,
   ) async {
+    if (action == _ShelfAction.edit) {
+      // 编辑页是 bookshelf 自己的一页（M33）：带上整行，页面用当前值填表。
+      pushBookshelfRoute(context, BookshelfRoute.editBook(book: book));
+
+      return;
+    }
     if (action == _ShelfAction.remove) {
       final bool confirmed = await _confirmRemove(context, l10n);
       if (!confirmed) {
@@ -382,6 +399,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
 
     final Bookshelf shelf = ref.read(bookshelfProvider.notifier);
     final ParseResult<void> result = switch (action) {
+      // `edit` 在上面已经返回：编辑器不是一次仓储写入。
+      _ShelfAction.edit => const ParseResult<void>.success(null),
       _ShelfAction.pin => await shelf.updateUserState(
         id: book.id,
         status: book.status,
@@ -546,7 +565,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
 }
 
 /// The actions the row menu offers.
-enum _ShelfAction { pin, unpin, markRead, markTracking, remove }
+enum _ShelfAction { edit, pin, unpin, markRead, markTracking, remove }
 
 /// The actions the selection toolbar offers.
 enum _BatchAction { assignGroup, pin, unpin, markRead, markTracking, remove }

@@ -83,41 +83,53 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
 
-    return Scaffold(
-      // 四个 tab 同时存活：切走再回来不重拉书架、不丢搜索结果。
-      body: IndexedStack(
-        index: _index,
-        children: const <Widget>[
-          BookshelfPage(),
-          ExplorePage(),
-          SearchBooksPage(),
-          MyPage(),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (int index) => setState(() => _index = index),
-        destinations: <NavigationDestination>[
-          NavigationDestination(
-            icon: const Icon(Icons.library_books_outlined),
-            selectedIcon: const Icon(Icons.library_books),
-            label: l10n.shellTabBookshelf,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.explore_outlined),
-            selectedIcon: const Icon(Icons.explore),
-            label: l10n.shellTabExplore,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.search),
-            label: l10n.shellTabSearch,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline),
-            selectedIcon: const Icon(Icons.person),
-            label: l10n.shellTabMy,
-          ),
-        ],
+    return PopScope(
+      // 安卓返回键在非首个 tab 上回到书架，而不是直接退出应用
+      // （与上游 MainScreen 的 back 处理一致，M18）。
+      canPop: _index == 0,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) {
+          return;
+        }
+        setState(() => _index = 0);
+      },
+      child: Scaffold(
+        // 四个 tab 同时存活：切走再回来不重拉书架、不丢搜索结果。
+        body: IndexedStack(
+          index: _index,
+          children: const <Widget>[
+            BookshelfPage(),
+            ExplorePage(),
+            SearchBooksPage(),
+            MyPage(),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (int index) => setState(() => _index = index),
+          destinations: <NavigationDestination>[
+            NavigationDestination(
+              icon: const Icon(Icons.library_books_outlined),
+              selectedIcon: const Icon(Icons.library_books),
+              label: l10n.shellTabBookshelf,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.explore_outlined),
+              selectedIcon: const Icon(Icons.explore),
+              label: l10n.shellTabExplore,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.search),
+              selectedIcon: const Icon(Icons.manage_search),
+              label: l10n.shellTabSearch,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline),
+              selectedIcon: const Icon(Icons.person),
+              label: l10n.shellTabMy,
+            ),
+          ],
+        ),
       ),
     );
   }

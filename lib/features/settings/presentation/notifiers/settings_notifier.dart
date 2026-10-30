@@ -2,6 +2,7 @@ import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/di/storage_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
+import 'package:flutter_reader/core/logging/log_level.dart';
 import 'package:flutter_reader/core/platform/background_image_picker.dart';
 import 'package:flutter_reader/core/storage/local_image_store.dart';
 import 'package:flutter_reader/features/settings/di.dart';
@@ -48,6 +49,16 @@ class Settings extends _$Settings {
   Future<void> setMaxConcurrentPerSource(int budget) => _update(
     (AppSettings current) => current.copyWith(maxConcurrentPerSource: budget),
   );
+
+  /// Sets the log level and applies it at once (`ADR-0082`).
+  ///
+  /// The stored value is what the next launch starts with; the façade is changed
+  /// **immediately** so the very next log line honours the new level — a user chasing a broken
+  /// source should not have to restart the app to see `debug` records.
+  Future<void> setLogLevel(LogLevel level) async {
+    ref.read(appLoggerProvider).setLevel(level);
+    await _update((AppSettings current) => current.copyWith(logLevel: level));
+  }
 
   /// Sets the theme seed colour (`ADR-0075` §决策 1); `null` restores the project default.
   Future<void> setSeedColor(int? color) => _update(

@@ -11,12 +11,22 @@ import 'dart:typed_data';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bindings.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_lib.dart';
+import 'package:flutter_reader/core/js/js_sync_call.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
+import 'package:flutter_reader/core/js/source_info_map.dart';
+import 'package:flutter_reader/core/js/source_login_header.dart';
+import 'package:flutter_reader/core/js/source_login_info.dart';
+import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
-import 'package:flutter_reader/core/logging/redaction.dart';
+import 'package:flutter_reader/core/logging/error_text.dart';
+import 'package:flutter_reader/core/logging/log_throttle.dart';
+import 'package:flutter_reader/core/network/cookie_manager.dart';
 import 'package:flutter_reader/core/network/http_client.dart';
 import 'package:flutter_reader/core/network/http_response.dart';
+import 'package:flutter_reader/core/platform/external_url_opener.dart';
 import 'package:flutter_reader/core/platform/source_verification.dart';
+import 'package:flutter_reader/core/platform/user_messages.dart';
 import 'package:flutter_reader/core/platform/web_page_fetcher.dart';
 
 /// Single-evaluation wall-clock budget.
@@ -43,9 +53,17 @@ const int maxJsLogMessageLength = 2000;
 
 const String _jsQuotaMarker = 'js:quota';
 
+/// The marker of a job that needed more synchronous fetches than the pass limit allows.
+const String _jsReplayMarker = 'js:replay';
+
+// 验证答案按 `op + url` 记忆；NUL 不会出现在两者里，拼不出两项相撞的键。
+const String _answerKeySeparator = '\u0000';
+
 /// Longest chain of binding calls one rule may make.
 ///
-/// Only calls that cross to the host count; `crypto.*` is answered in the worker.
+/// Only calls that cross to the host count; `crypto.*` is answered in the worker. A synchronous
+/// replay fetch starts a new pass, so the quota is per pass rather than per job
+/// (ADR-0076 §决策 1).
 const int defaultJsMaxBindingCalls = 20;
 
 /// [JsBridge] backed by one resident worker isolate with one reused runtime.
@@ -64,12 +82,27 @@ final class QuickJsWorkerBridge implements JsBridge {
     required this._variables,
     SourceVerification? verification,
     WebPageFetcher? webPages,
+    CookieManager? cookies,
+    SourceVariableStore? sourceVariables,
+    SourceLoginHeaderStore? loginHeaders,
+    SourceLoginInfoWriter? loginInfos,
+    SourceInfoMapStore? infoMaps,
+    ExternalUrlOpener externalUrlOpener = const UnboundExternalUrlOpener(),
+    this.androidId,
+    UserMessages userMessages = const UnboundUserMessages(),
     this._timeout = defaultJsTimeout,
     this._killGrace = defaultJsKillGrace,
     this._memoryLimit = defaultJsMemoryLimitBytes,
     this._maxBindingCalls = defaultJsMaxBindingCalls,
   }) : _verification = verification,
-       _webPages = webPages;
+       _webPages = webPages,
+       _cookies = cookies,
+       _sourceVariables = sourceVariables,
+       _loginHeaders = loginHeaders,
+       _loginInfos = loginInfos,
+       _infoMaps = infoMaps,
+       _externalUrlOpener = externalUrlOpener,
+       _userMessages = userMessages;
 
   final AppLogger _logger;
   final JsWorkerLauncher _launch;
@@ -81,6 +114,17 @@ final class QuickJsWorkerBridge implements JsBridge {
   final int _maxBindingCalls;
   final SourceVerification? _verification;
   final WebPageFetcher? _webPages;
+  final CookieManager? _cookies;
+  final SourceVariableStore? _sourceVariables;
+  final SourceLoginHeaderStore? _loginHeaders;
+  final SourceLoginInfoWriter? _loginInfos;
+  final SourceInfoMapStore? _infoMaps;
+  final ExternalUrlOpener _externalUrlOpener;
+
+  /// The install id `java.androidId` answers with (M25/S3b); `null` until the host hydrated one.
+  final String? androidId;
+
+  final UserMessages _userMessages;
 
   final Queue<_PendingJob> _pending = Queue<_PendingJob>();
   _WorkerSession? _session;
@@ -138,6 +182,8 @@ final class QuickJsWorkerBridge implements JsBridge {
 
   Future<ParseResult<Object?>> _run(JsJob job) async {
     try {
+      // 登录头是持久表：首个 job 前读一次，之后走内存（与每源变量同一份契约）。
+      await _loginHeaders?.ensureLoaded(job.source.url);
       final _WorkerSession session = await _currentSession();
 
       return await session.run(job);
@@ -180,6 +226,14 @@ final class QuickJsWorkerBridge implements JsBridge {
       maxBindingCalls: _maxBindingCalls,
       verification: _verification,
       webPages: _webPages,
+      cookies: _cookies,
+      sourceVariables: _sourceVariables,
+      loginHeaders: _loginHeaders,
+      loginInfos: _loginInfos,
+      infoMaps: _infoMaps,
+      externalUrlOpener: _externalUrlOpener,
+      androidId: androidId,
+      userMessages: _userMessages,
     );
     _session = created;
 
@@ -211,7 +265,22 @@ final class _WorkerSession {
     required this._maxBindingCalls,
     required this._verification,
     required this._webPages,
-  }) {
+    required CookieManager? cookies,
+    required SourceVariableStore? sourceVariables,
+    required SourceLoginHeaderStore? loginHeaders,
+    required SourceLoginInfoWriter? loginInfos,
+    required SourceInfoMapStore? infoMaps,
+    required ExternalUrlOpener externalUrlOpener,
+    required String? androidId,
+    required UserMessages userMessages,
+  }) : _cookies = cookies,
+       _sourceVariables = sourceVariables,
+       _loginHeaders = loginHeaders,
+       _loginInfos = loginInfos,
+       _infoMaps = infoMaps,
+       _externalUrlOpener = externalUrlOpener,
+       _androidId = androidId,
+       _userMessages = userMessages {
     _subscription = _handle.messages.listen(
       _onMessage,
       onDone: _onWorkerDone,
@@ -221,6 +290,10 @@ final class _WorkerSession {
 
   final JsWorkerHandle _handle;
   final AppLogger _logger;
+
+  /// `JS rule failed` 按 (字段, 错误) 聚合：一次目录扫描会让同一个失败复制上千行。
+  final LogThrottle _failureThrottle = LogThrottle();
+
   final HttpClient _http;
   final JsVariableStore _variables;
   final Duration _timeout;
@@ -228,12 +301,26 @@ final class _WorkerSession {
   final int _maxBindingCalls;
   final SourceVerification? _verification;
   final WebPageFetcher? _webPages;
+  final CookieManager? _cookies;
+  final SourceVariableStore? _sourceVariables;
+  final SourceLoginHeaderStore? _loginHeaders;
+  final SourceLoginInfoWriter? _loginInfos;
+  final SourceInfoMapStore? _infoMaps;
+  final ExternalUrlOpener _externalUrlOpener;
+  final String? _androidId;
+  final UserMessages _userMessages;
 
-  /// Milliseconds the job's wall clock spent waiting for a human.
+  /// Milliseconds the job's wall clock spent on something other than its own CPU.
   ///
-  /// The budget protects the CPU, not the user: without subtracting this, a two-minute challenge
-  /// would look like a runaway script (ADR-0068 §决策 5).
-  int _humanWaitMs = 0;
+  /// The budget protects the CPU, not the network and not the user: waiting for a human
+  /// (ADR-0068 §决策 5) and waiting for a page that a synchronous `java.*` call forced
+  /// (ADR-0076 §决策 1) are both subtracted from `elapsedMs`, so neither can be mistaken for a
+  /// runaway script.
+  int _budgetPausedMs = 0;
+
+  // 一趟重放里已经弹过的窗 / 已经贴过的消息（ADR-0076 §决策 1/4）。
+  final Map<String, Object?> _verifyAnswers = <String, Object?>{};
+  final Set<String> _toasts = <String>{};
 
   late final StreamSubscription<Map<String, Object?>> _subscription;
   final Completer<void> _closed = Completer<void>();
@@ -258,8 +345,22 @@ final class _WorkerSession {
     _inFlight = completer;
     _inFlightJob = job;
     _bindingCalls = 0;
-    _humanWaitMs = 0;
-    _handle.send(<String, Object?>{'type': 'evaluate', 'job': job.toJson()});
+    _budgetPausedMs = 0;
+    _verifyAnswers.clear();
+    _toasts.clear();
+    _handle.send(<String, Object?>{
+      'type': 'evaluate',
+      // 安装 id 是**主机**事实（`java.androidId`），job 自己不知道：由桥补进载荷，job 若显式带了
+      // 一个（测试）就以 job 的为准。
+      'job': <String, Object?>{
+        ...job.toJson(),
+        'androidId': job.androidId ?? _androidId,
+      },
+      // 登录头与 `infoMap` 都随 job 下传（快照），写回时再随结果上来：worker 读不到库，
+      // 也不该为它们多跑一趟。
+      'loginHeader': _loginHeaders?.snapshot(job.source.url),
+      'infoMap': _infoMaps?.snapshot(job.source.url),
+    });
     _budget = Timer(_timeout + _killGrace, _onBudgetExpired);
 
     return completer.future;
@@ -315,10 +416,28 @@ final class _WorkerSession {
       return;
     }
 
-    // 先落地脚本的 java.put 写入（上游写入立即生效），再决定 job 的答案。
+    // 先落地脚本的 java.put 与 source.setVariable 写入（上游写入立即生效），再决定 job 的答案。
     final JsJob? job = _inFlightJob;
     if (job != null) {
       _variables.merge(job.source.url, decodeJsVariables(message['variables']));
+      // 每源变量是**持久**的（ADR-0076 §决策 1）：交给 store 去写穿，失败只记 warning。
+      _sourceVariables?.merge(
+        job.source.url,
+        decodeJsVariables(message['sourceVariables']),
+      );
+      // 登录头只在规则写过时才上来（M25/S3b）：读一次不该触发一次落库。
+      // 登出（M25/S5a）是同一份状态上的另一件事：删登录头，并清掉这个源的 Cookie。
+      if (message['loginHeaderCleared'] == true) {
+        _clearLoginHeader(job.source.url);
+      } else if (message.containsKey('loginHeader')) {
+        _applyLoginHeader(job.source.url, message['loginHeader']);
+      }
+      // 登录信息（M25/S5a）：`source.putLoginInfo` / `removeLoginInfo` 同样只在写过时上来。
+      if (message.containsKey('loginInfo')) {
+        _applyLoginInfo(job.source.url, message['loginInfo']);
+      }
+      // `infoMap`（M25/S3b）：探索规则把它当一张可写的小表，写回即合并进内存 store。
+      _infoMaps?.merge(job.source.url, decodeJsVariables(message['infoMap']));
     }
 
     // 边界失败已经定了答案，脚本自己写出的值不再算数。
@@ -335,11 +454,40 @@ final class _WorkerSession {
       return;
     }
 
+    // 库脚本（`jsLib`）坏了要能和规则自己的错区分开：两者的修法完全不同（ADR-0078 S1）。
+    if (message['libError'] == true) {
+      _logger.warning('The source jsLib failed: field=$_field');
+      _completeInFlight(
+        failureAt<Object?>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: '$_field:$jsLibMarker',
+        ),
+      );
+
+      return;
+    }
+
+    // 重放超限是一个**自己的**边界：把「这条规则重放不了」告诉调用方，而不是报成 js:timeout 或
+    // 一个看不出所以然的 js:error（ADR-0076 §决策 1 的后果）。
+    if (message['replayLimit'] == true) {
+      _logger.warning(
+        'JS rule needed more replay passes than the limit: field=$_field',
+      );
+      _completeInFlight(
+        failureAt<Object?>(
+          kind: ParseFailureKind.parseFailed,
+          rulePath: '$_field:$_jsReplayMarker',
+        ),
+      );
+
+      return;
+    }
+
     // 中断和脚本异常都表现为 isError，用耗时区分：跑满预算才算超时。
     final int elapsedMs = _intField(message, 'elapsedMs') ?? 0;
     final Object? error = message['error'];
-    // 等用户的时间不计入超时判定：跑满预算才叫超时（ADR-0068 §决策 5）。
-    final int activeMs = elapsedMs - _humanWaitMs;
+    // 等用户 / 等同步取页的时间不计入超时判定：跑满预算才叫超时（ADR-0068 §决策 5）。
+    final int activeMs = elapsedMs - _budgetPausedMs;
     if (activeMs >= _timeout.inMilliseconds) {
       _completeInFlight(
         failureAt<Object?>(
@@ -351,10 +499,14 @@ final class _WorkerSession {
       return;
     }
 
-    _logger.warning(
-      'JS rule failed: field=$_field '
-      'error=${error == null ? 'unknown' : describeError(error)}',
-    );
+    final String description = error == null ? 'unknown' : describeError(error);
+    final int? suppressed = _failureThrottle.admit('$_field|$description');
+    if (suppressed != null) {
+      _logger.warning(
+        'JS rule failed: field=$_field error=$description'
+        '${suppressed == 0 ? '' : ' suppressed=$suppressed'}',
+      );
+    }
     _completeInFlight(
       failureAt<Object?>(
         kind: ParseFailureKind.parseFailed,
@@ -364,6 +516,80 @@ final class _WorkerSession {
   }
 
   // 日志按字段打标，超长文本截断并标记，而不是静默丢掉尾巴。
+  // 登录头的写入：先写穿存储，再把其中的 Cookie 合并进 Cookie 宗（上游 `BaseSource.putLoginHeader`）。
+  //
+  // 宗才是真正发 Cookie 的地方：`_CookieInterceptor` 会用宗里的值盖掉请求头里的 `Cookie`，所以只把
+  // 登录头存下来而不合并，下一次请求就会把登录 Cookie 丢掉。
+  void _applyLoginHeader(String sourceUrl, Object? raw) {
+    if (raw is! String) {
+      _logger.warning('Ignoring a malformed login header: source=$sourceUrl');
+
+      return;
+    }
+    _loginHeaders?.put(sourceUrl, raw);
+    final String? cookie = loginHeaderCookieOf(raw);
+    final CookieManager? cookies = _cookies;
+    if (cookie == null || cookies == null) {
+      return;
+    }
+    final Uri? url = Uri.tryParse(sourceUrl);
+    if (url == null || url.host.isEmpty) {
+      _logger.debug(
+        'Skipping the login header cookie, the source URL has no host: '
+        'source=$sourceUrl',
+      );
+
+      return;
+    }
+    cookies.mergeCookieHeader(url, cookie);
+  }
+
+  // 登出（`source.removeLoginHeader`，M25/S5a）：登录头删掉，这个源的 Cookie 也一起清。
+  //
+  // 上游就这两步（`BaseSource.removeLoginHeader` → `CacheManager.delete` +
+  // `CookieStore.removeCookie(getKey())`）：只删头不清宗，下一次请求仍然带着旧会话上去。
+  void _clearLoginHeader(String sourceUrl) {
+    _loginHeaders?.put(sourceUrl, null);
+    final CookieManager? cookies = _cookies;
+    final Uri? url = Uri.tryParse(sourceUrl);
+    if (cookies == null || url == null || url.host.isEmpty) {
+      _logger.debug(
+        'Skipping the logout cookie cleanup, the source URL has no host: '
+        'source=$sourceUrl',
+      );
+
+      return;
+    }
+    cookies.removeCookiesFor(url);
+  }
+
+  // 登录信息（`source.putLoginInfo` / `removeLoginInfo`，M25/S5a）：按 URL 写穿 `login_info`。
+  //
+  // 沙箱里的登录信息是**快照**（ADR-0072 §决策 3），一套写入路径就是结果信封：worker 只在规则写过时
+  // 带上这个键，所以一次读取不会引发一次库写。
+  void _applyLoginInfo(String sourceUrl, Object? raw) {
+    final SourceLoginInfoWriter? writer = _loginInfos;
+    if (writer == null) {
+      _logger.warning(
+        'Dropping the login info, no writer is wired: '
+        'source=$sourceUrl',
+      );
+
+      return;
+    }
+    if (raw == null) {
+      unawaited(writer.write(sourceUrl, null));
+
+      return;
+    }
+    if (raw is! Map) {
+      _logger.warning('Ignoring a malformed login info: source=$sourceUrl');
+
+      return;
+    }
+    unawaited(writer.write(sourceUrl, decodeJsLoginInfo(raw)));
+  }
+
   void _onLog(Map<String, Object?> message) {
     if (_fatalFailure != null) {
       // 这个 job 已定案，后续日志不再影响结果。
@@ -410,7 +636,19 @@ final class _WorkerSession {
 
       return;
     }
-    // 验证调用等的是人：不占每规则的调用额度，也不受硬预算限制（ADR-0068 §决策 5）。
+    // toast 与 `openUrl` 是一次性 UI 事件，不占额度也不受预算影响：规则已经跑了，消息要么贴
+    // 要么不贴、链接要么开要么不开（上游 `openUrl` 同样只是起一个确认页就返回）。
+    if (call.binding == jsToastBinding) {
+      _serveToast(call);
+
+      return;
+    }
+    if (call.binding == jsOpenUrlBinding) {
+      _serveOpenUrl(call);
+
+      return;
+    }
+    // 同步族取页等的是网络，不是规则自己的 CPU（ADR-0076 §决策 1），所以得像验证族那样免额度。
     if (call.binding != jsVerifyBinding && _countCall()) {
       _failJobFatally(
         kind: ParseFailureKind.parseFailed,
@@ -429,6 +667,8 @@ final class _WorkerSession {
         unawaited(_serveParse(call));
       case jsVerifyBinding:
         unawaited(_serveVerify(call));
+      case jsSyncBinding:
+        unawaited(_serveSync(call));
       default:
         // 白名单外的频道显式拒绝，不静默返回 undefined。
         _reply(
@@ -444,6 +684,10 @@ final class _WorkerSession {
   // * 每规则的调用额度不扣（它数的是 CPU 侧的往返）；
   // * 硬预算暂停，完成后重新计时（预算保护的是 CPU，不是人的耐心）；
   // * 等掉的时间从 `elapsedMs` 里减掉，否则 3 分钟的验证会被判成 `js:timeout`。
+  //
+  // 重放层落地以后多一条：同一次 `op+url` 的答案在本 job 内记下来（`_verifyAnswers`），
+  // 下一趟重放**不再弹窗**，直接答上次的答案——否则一个 `java.ajax` 就要把验证码问用户两次
+  // （ADR-0076 §决策 4）。
   Future<void> _serveVerify(JsHostCall call) async {
     final JsVerifyRequest? request = decodeJsVerifyRequest(call.args);
     if (request == null) {
@@ -461,10 +705,20 @@ final class _WorkerSession {
     final String sourceName = job.source.name;
     final String url = request.url;
     final Map<String, String>? headers = _headersOrNull(job.sourceHeaders);
+    final String answerKey =
+        '${request.operation.name}$_answerKeySeparator$url';
+
+    // 重放的那一趟：上次已经问过用户了。
+    if (_verifyAnswers.containsKey(answerKey)) {
+      _reply(JsHostReply.success(call.callId, _verifyAnswers[answerKey]));
+
+      return;
+    }
 
     // `startBrowser` 上游返回 void：先答复再慢慢开页面，规则不会被它挡住。
     final SourceVerification? verification = _verification;
     if (request.operation == JsVerifyOperation.startBrowser) {
+      _verifyAnswers[answerKey] = '';
       _reply(JsHostReply.success(call.callId, ''));
       if (verification != null && verification.isSupported) {
         unawaited(
@@ -559,7 +813,7 @@ final class _WorkerSession {
           ParseFailure<Object?>(kind: kind, rulePath: rulePath),
       };
     }
-    _humanWaitMs += DateTime.now().difference(startedAt).inMilliseconds;
+    _budgetPausedMs += DateTime.now().difference(startedAt).inMilliseconds;
     if (_inFlight != null) {
       // 等完之后重新给满预算：脚本接下来还有它自己的那一份执行时间。
       _budget = Timer(_timeout + _killGrace, _onBudgetExpired);
@@ -572,6 +826,8 @@ final class _WorkerSession {
 
     switch (reply) {
       case ParseSuccess<Object?>(:final Object? data):
+        // 记住答案：重放的那一趟不再问用户，而且答得一模一样（ADR-0076 §决策 4）。
+        _verifyAnswers[answerKey] = data;
         _reply(JsHostReply.success(call.callId, data));
       case ParseFailure<Object?>(
         :final ParseFailureKind kind,
@@ -591,6 +847,347 @@ final class _WorkerSession {
   /// An empty header map and “no headers” are the same thing for a request.
   static Map<String, String>? _headersOrNull(Map<String, String>? headers) =>
       headers == null || headers.isEmpty ? null : headers;
+
+  /// Serves one **synchronous** call the worker could not answer from its replay cache.
+  ///
+  /// The worker raises a sentinel on a miss, waits for this answer, stores it and runs the script
+  /// again from its first line (ADR-0076 §决策 1); the script therefore never sees a Promise where
+  /// upstream hands it a value.
+  ///
+  /// Two budget decisions live here:
+  /// * a fetch starts a **new pass**, so the per-rule call quota restarts — otherwise sixteen
+  ///   passes of a rule that also calls `http.*` would run out of quota for no reason;
+  /// * the hard budget is paused while the page is in flight and the wait is subtracted from
+  ///   `elapsedMs`: the budget protects the CPU, not the network.
+  ///
+  /// A transport failure is answered as a **rejection**, not as a fatal failure: upstream's
+  /// `java.ajax` throws, so the rule's own `try` / `catch` (a mirror URL, a second attempt) still
+  /// works. The worker caches the failure, which is what stops a replay loop.
+  Future<void> _serveSync(JsHostCall call) async {
+    final JsSyncRequest? request = decodeJsSyncRequest(call.args);
+    if (request == null) {
+      _reply(JsHostReply.rejected(call.callId, 'malformed synchronous call'));
+
+      return;
+    }
+    final JsJob? job = _inFlightJob;
+    if (job == null) {
+      _reply(JsHostReply.rejected(call.callId, 'no job is running'));
+
+      return;
+    }
+
+    _bindingCalls = 0;
+    final DateTime startedAt = DateTime.now();
+    _budget?.cancel();
+    final ParseResult<Object?> reply = await _answerSync(request, job);
+    _budgetPausedMs += DateTime.now().difference(startedAt).inMilliseconds;
+    if (_inFlight != null) {
+      _budget = Timer(_timeout + _killGrace, _onBudgetExpired);
+    }
+    if (_inFlightJob != job || _fatalFailure != null) {
+      _reply(JsHostReply.rejected(call.callId, 'the job already failed'));
+
+      return;
+    }
+
+    switch (reply) {
+      case ParseSuccess<Object?>(:final Object? data):
+        _reply(JsHostReply.success(call.callId, data));
+      case ParseFailure<Object?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        final int? suppressed = _failureThrottle.admit(
+          'sync|$rulePath|${kind.name}',
+        );
+        if (suppressed != null) {
+          _logger.warning(
+            'Synchronous JS fetch failed: field=$rulePath kind=${kind.name}'
+            '${suppressed == 0 ? '' : ' suppressed=$suppressed'}',
+          );
+        }
+        _reply(JsHostReply.rejected(call.callId, kind.name));
+    }
+  }
+
+  /// Performs one synchronous call and answers what the script will receive.
+  Future<ParseResult<Object?>> _answerSync(
+    JsSyncRequest request,
+    JsJob job,
+  ) async {
+    final String sourceId = job.source.url;
+    switch (request.operation) {
+      case JsSyncOperation.ajax:
+        final ParseResult<HttpResponse> response = await _http.get(
+          request.url,
+          rulePath: job.rulePath,
+          headers: _headersOrNull(
+            mergeJsHttpHeaders(job.sourceHeaders, request.headers),
+          ),
+          sourceId: sourceId.isEmpty ? null : sourceId,
+        );
+
+        return switch (response) {
+          ParseSuccess<HttpResponse>(:final HttpResponse data) =>
+            ParseSuccess<Object?>(data.body),
+          ParseFailure<HttpResponse>(
+            :final ParseFailureKind kind,
+            :final String rulePath,
+          ) =>
+            ParseFailure<Object?>(kind: kind, rulePath: rulePath),
+        };
+      case JsSyncOperation.post:
+      case JsSyncOperation.head:
+        final Map<String, String> headers = mergeJsHttpHeaders(
+          job.sourceHeaders,
+          request.headers,
+        );
+        final ParseResult<HttpResponse> response =
+            request.operation == JsSyncOperation.post
+            ? await _http.post(
+                request.url,
+                rulePath: job.rulePath,
+                body: request.body,
+                headers: headers,
+                sourceId: sourceId.isEmpty ? null : sourceId,
+              )
+            : await _http.head(
+                request.url,
+                rulePath: job.rulePath,
+                headers: _headersOrNull(headers),
+                sourceId: sourceId.isEmpty ? null : sourceId,
+              );
+
+        return switch (response) {
+          ParseSuccess<HttpResponse>(:final HttpResponse data) =>
+            ParseSuccess<Object?>(
+              jsResponsePayload(
+                url: data.url,
+                body: data.body,
+                code: data.statusCode,
+                headers: data.headers,
+              ),
+            ),
+          ParseFailure<HttpResponse>(
+            :final ParseFailureKind kind,
+            :final String rulePath,
+          ) =>
+            ParseFailure<Object?>(kind: kind, rulePath: rulePath),
+        };
+      case JsSyncOperation.connect:
+        return _connect(request, job);
+      case JsSyncOperation.ajaxAll:
+        return _ajaxAll(request, job);
+      case JsSyncOperation.getCookie:
+      case JsSyncOperation.cookieGet:
+        return _readCookie(request, job);
+      case JsSyncOperation.cookieSet:
+        return _writeCookie(request, job);
+      case JsSyncOperation.cookieRemove:
+        return _removeCookie(request, job);
+    }
+  }
+
+  /// `java.connect(url[, header[, callTimeout]])`: one response, with the failure swallowed.
+  ///
+  /// Upstream wraps the request in `runCatching` and answers `StrResponse(url, stackTrace)` on
+  /// failure, because a rule uses `connect` as「try this address」rather than as a required page.
+  /// Our answer is the same **shape** with a readable body (the failure kind, not a stack trace —
+  /// a registered difference): the script can look at `code()` / `body` and decide.
+  Future<ParseResult<Object?>> _connect(
+    JsSyncRequest request,
+    JsJob job,
+  ) async {
+    final String sourceId = job.source.url;
+    final ParseResult<HttpResponse> response = await _http.get(
+      request.url,
+      rulePath: job.rulePath,
+      headers: _headersOrNull(
+        mergeJsHttpHeaders(job.sourceHeaders, request.headers),
+      ),
+      sourceId: sourceId.isEmpty ? null : sourceId,
+    );
+
+    return switch (response) {
+      ParseSuccess<HttpResponse>(:final HttpResponse data) =>
+        ParseSuccess<Object?>(
+          jsResponsePayload(
+            url: data.url,
+            body: data.body,
+            code: data.statusCode,
+            headers: data.headers,
+          ),
+        ),
+      ParseFailure<HttpResponse>(
+        :final ParseFailureKind kind,
+        rulePath: final String rulePath,
+      ) =>
+        ParseSuccess<Object?>(
+          jsResponsePayload(
+            url: request.url,
+            body: 'connect failed ($rulePath): ${kind.name}',
+            code: 0,
+            headers: const <String, List<String>>{},
+          ),
+        ),
+    };
+  }
+
+  /// `java.ajaxAll(urlList[, skipRateLimit])`: every response, and **one failure fails the call**.
+  ///
+  /// Upstream fetches with `mapAsync(threadCount)` and lets an exception through, so a rule that
+  /// wants to tolerate a bad address wraps the call itself. `skipRateLimit` is accepted and ignored:
+  /// the per-source budget is enforced by the request layer and this repository never bypasses it
+  /// (`book-source.md` §8, C-NET-6).
+  Future<ParseResult<Object?>> _ajaxAll(
+    JsSyncRequest request,
+    JsJob job,
+  ) async {
+    final String sourceId = job.source.url;
+    final List<String> urls = request.urls;
+    final List<ParseResult<HttpResponse>> responses = await Future.wait(
+      <Future<ParseResult<HttpResponse>>>[
+        for (final String url in urls)
+          _http.get(
+            url,
+            rulePath: job.rulePath,
+            headers: _headersOrNull(
+              mergeJsHttpHeaders(job.sourceHeaders, request.headers),
+            ),
+            sourceId: sourceId.isEmpty ? null : sourceId,
+          ),
+      ],
+    );
+    final List<Object?> payloads = <Object?>[];
+    for (final ParseResult<HttpResponse> response in responses) {
+      switch (response) {
+        case ParseSuccess<HttpResponse>(:final HttpResponse data):
+          payloads.add(
+            jsResponsePayload(
+              url: data.url,
+              body: data.body,
+              code: data.statusCode,
+              headers: data.headers,
+            ),
+          );
+        case ParseFailure<HttpResponse>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ):
+          return ParseFailure<Object?>(kind: kind, rulePath: rulePath);
+      }
+    }
+
+    return ParseSuccess<Object?>(payloads);
+  }
+
+  // 读 Cookie 走内存宗（`cookieHeaderFor` 同步），所以这一路真的不需要等。
+  //
+  // 地址不再校验：它已经是规则拼出来的字符串，`Uri.parse` 对任何字符串都能给出一个值，
+  // 宗里没有匹配的域就答空——与浏览器一致，也不必为「畸形地址」留一条不可达分支。
+  ParseResult<Object?> _readCookie(JsSyncRequest request, JsJob job) {
+    final CookieManager? cookies = _cookies;
+    if (cookies == null) {
+      return _unsupportedSync('cookie.getCookie', job);
+    }
+    final String? header = cookies.cookieHeaderFor(Uri.parse(request.url));
+    final String? key = request.key;
+    if (key == null) {
+      // 不带名字时上游答整条 Cookie 头；没有时答空串（规则常常直接拼进 header）。
+      return ParseSuccess<Object?>(header ?? '');
+    }
+
+    return ParseSuccess<Object?>(cookieValueOf(header, key));
+  }
+
+  ParseResult<Object?> _writeCookie(JsSyncRequest request, JsJob job) {
+    final CookieManager? cookies = _cookies;
+    final String body = request.body ?? request.key ?? '';
+    if (cookies == null) {
+      return _unsupportedSync('cookie.setCookie', job);
+    }
+    final Uri url = Uri.parse(request.url);
+    // `cookie.setCookie(url, value)` 可以传一对，也可以传整条 `a=1; b=2`：上游交给 CookieManager
+    // 的就是后者，所以逐对交下去，而不是把第二对当成第一对的属性。
+    final List<String> pairs = <String>[
+      for (final String pair in body.split(';'))
+        if (pair.contains('=')) pair.trim(),
+    ];
+    if (pairs.isEmpty) {
+      return _unsupportedSync('cookie.setCookie', job);
+    }
+    for (final String pair in pairs) {
+      cookies.storeFromResponse(url, <String>[pair]);
+    }
+
+    return const ParseSuccess<Object?>('');
+  }
+
+  ParseResult<Object?> _removeCookie(JsSyncRequest request, JsJob job) {
+    final CookieManager? cookies = _cookies;
+    if (cookies == null) {
+      return _unsupportedSync('cookie.removeCookie', job);
+    }
+    final Uri? url = Uri.tryParse(request.url);
+    if (url == null) {
+      return _unsupportedSync('cookie.removeCookie', job);
+    }
+    final String? key = request.key;
+    if (key == null || key.isEmpty) {
+      // 上游绑的是 `CookieStore`，只有一个参数：`removeCookie(url)` 删「这个地址会发的整份
+      // Cookie」（`CookieStore.kt:79`，真实源写 `cookie.removeCookie(source.getKey())`）。
+      // 按名删除是 `CookieManager` 的另一个重载，上游没有绑给 JS；两条都收是为了让依赖它的
+      // 源也能跑，语义各按各的。
+      cookies.removeCookiesFor(url);
+
+      return const ParseSuccess<Object?>('');
+    }
+    // 空值 + Max-Age=0 就是删除指令，CookieManager 与持久化层都认这个形状。
+    cookies.storeFromResponse(url, <String>['$key=; Max-Age=0']);
+
+    return const ParseSuccess<Object?>('');
+  }
+
+  ParseFailure<Object?> _unsupportedSync(String name, JsJob job) =>
+      ParseFailure<Object?>(
+        kind: ParseFailureKind.unsupportedRule,
+        rulePath: '${job.rulePath}:$name',
+      );
+
+  // toast 是一次性 UI 事件：同一句在一个 job 里只贴一次（重放会把同一行再走一遍）。
+  void _serveToast(JsHostCall call) {
+    final JsToastRequest? request = decodeJsToastRequest(call.args);
+    if (request == null) {
+      _reply(JsHostReply.rejected(call.callId, 'malformed toast call'));
+
+      return;
+    }
+    if (_toasts.add(request.message)) {
+      _logger.info('[js:$_field] toast: ${_limitLogMessage(request.message)}');
+      _userMessages.show(request.message);
+    }
+    _reply(JsHostReply.success(call.callId, ''));
+  }
+
+  // `java.openUrl`：先答复（规则不等人），再把地址交给装配根绑定的确认弹窗。
+  //
+  // 上游 `openUrl` 同样返回 void：它起一个「要在浏览器里打开吗」的确认页，用户点确认之后才真的
+  // 打开。本仓的确认弹窗由 `ExternalUrlOpener` 的实现在 UI 层完成（C-ARCH-2：`core/` 不认识 widget）。
+  void _serveOpenUrl(JsHostCall call) {
+    final JsOpenUrlRequest? request = decodeJsOpenUrlRequest(call.args);
+    if (request == null) {
+      _reply(JsHostReply.rejected(call.callId, 'malformed openUrl call'));
+
+      return;
+    }
+    final JsJob? job = _inFlightJob;
+    _reply(JsHostReply.success(call.callId, ''));
+    _logger.info('[js:$_field] openUrl: ${request.url}');
+    unawaited(
+      _externalUrlOpener.open(request.url, sourceName: job?.source.name ?? ''),
+    );
+  }
 
   // 传输失败只拒绝脚本的 Promise（规则可换镜像重试），不直接判 job 失败。
   Future<void> _serveHttp(JsHostCall call) async {

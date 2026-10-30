@@ -39,6 +39,8 @@ final class FetchBookInfo {
         // 详情阶段还不知道书名 / 作者（它们和 tocUrl 在同一次读取里），先把两个 URL 给规则：
         // `book.tocUrl` / `book.bookUrl` 在这一阶段指向书籍页本身（上游的回落口径）。
         book: JsBookInfo(bookUrl: url, tocUrl: url),
+        // `fromBookInfo`（M25/S3b）：规则可以据此区分「在详情页跑」与「在列表页跑」。
+        fromBookInfo: true,
       ),
       headers: headers,
       sourceId: source.url,
@@ -78,14 +80,37 @@ final class FetchBookInfo {
     }
     final String clean = stripUrlOptions(value);
     if (clean != value) {
-      pages.warn(
+      pages.warnThrottled(
+        'cover-options|$baseUrl',
         'Cover URL options dropped (covers carry no request headers): '
-        'base=$baseUrl',
+            'base=$baseUrl',
       );
     }
 
     return clean;
   }
+
+  /// Reads one book out of a page that was **already fetched** (`bookUrlPattern`, ADR-0078 S2).
+  ///
+  /// Upstream's search stage calls `getInfoItem` on the same response when the search URL is a
+  /// detail page, or when `bookList` matched nothing (`BookList.kt:62-84`, `:100-110`). Keeping the
+  /// reader here means both stages run the same field rules against the same scope, instead of the
+  /// search stage growing a second, subtly different copy.
+  Future<ParseResult<BookInfo>> readFromPage(
+    BookSource source,
+    FetchedPage page,
+  ) async => switch (await _initScope(source, page.scope)) {
+    ParseFailure<RuleScope>(
+      :final ParseFailureKind kind,
+      rulePath: final String failedAt,
+    ) =>
+      failureAt<BookInfo>(kind: kind, rulePath: failedAt),
+    ParseSuccess<RuleScope>(data: final RuleScope scope) => await _read(
+      source,
+      page.url,
+      scope,
+    ),
+  };
 
   /// Reads every `ruleBookInfo` field out of [scope].
   Future<ParseResult<BookInfo>> _read(

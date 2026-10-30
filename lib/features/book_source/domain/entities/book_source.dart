@@ -56,6 +56,20 @@ abstract class BookSource with _$BookSource {
     @JsonKey(name: 'concurrentRate') String? concurrentRate,
     @JsonKey(name: 'variableComment') String? variableComment,
 
+    /// A regex that recognises a **detail page** where a list was expected
+    /// (`bookUrlPattern`, upstream `BookList.kt:62-84`).
+    ///
+    /// When the search URL itself matches, the page is parsed as one book (detail rules) instead of
+    /// as a result list; and when `bookList` matches nothing while this field is blank, the page is
+    /// parsed as a detail page too (`BookList.kt:100-110`).
+    String? bookUrlPattern,
+
+    /// Whether the source wants reader-event callbacks at all (`eventListener`).
+    ///
+    /// Modelled together with `ContentRule.callBackJs`; nothing consumes it yet (registered
+    /// difference, `engine-parity.md` A5/B4).
+    @Default(false) bool eventListener,
+
     /// The address (or a script defining `login()`) a source signs in at (`loginUrl`).
     ///
     /// It is a **URL rule**, so it may carry the `,{…}` suffix of `book-source.md` §4.3, and it is
@@ -76,6 +90,14 @@ abstract class BookSource with _$BookSource {
     /// replaces the response with whatever the script returns (see `book-source.md` §6 and the
     /// ADR-0068 addendum). Blank means "no interceptor".
     String? loginCheckJs,
+
+    /// The source's own JavaScript library (`jsLib`), run **before** every `@js:` rule of the same
+    /// source (ADR-0078 S1).
+    ///
+    /// It holds either plain JavaScript or a JSON object whose values are absolute URLs of scripts
+    /// to download (upstream `SharedJsScope.kt:23-60`); the resolved text is what the sandbox runs.
+    /// Blank means "no library".
+    String? jsLib,
     @JsonKey(name: 'ruleBookInfo') BookInfoRule? bookInfoRule,
     @JsonKey(name: 'ruleToc') required TocRule tocRule,
     @JsonKey(name: 'ruleContent') required ContentRule contentRule,
@@ -234,6 +256,38 @@ abstract class TocRule with _$TocRule {
     String? chapterName,
     String? chapterUrl,
     String? isVip,
+
+    /// Marks a **paid** (already bought) chapter, upstream `TocRule.isPay`.
+    ///
+    /// Together with [isVip] it decides whether a chapter is locked upstream
+    /// (`BookChapterList.kt:229-268`). Modelled in M25/S2; the reader's lock UI is a separate
+    /// slice.
+    String? isPay,
+
+    /// Marks a **volume** heading rather than a chapter, upstream `TocRule.isVolume`.
+    ///
+    /// A volume whose `chapterUrl` matched nothing keeps its title and gets a synthetic URL
+    /// (`title + index`), so it survives the「chapter without URL」rule
+    /// (`BookChapterList.kt:240-259`).
+    String? isVolume,
+
+    /// Chapter word count, read as display text (`wordCount`).
+    String? wordCount,
+
+    /// Rewrites every chapter name before the list is used (`formatJs`).
+    ///
+    /// Upstream runs it once per chapter with `index` (1-based), `chapter` (the chapter object),
+    /// `title` and a `gInt` counter that **persists across the loop**
+    /// (`BookChapterList.kt:141-163`). A non-blank result replaces the title, an error leaves the
+    /// previous title alone.
+    String? formatJs,
+
+    /// Runs **before** the table of contents is fetched (`preUpdateJs`).
+    ///
+    /// Upstream aborts the whole TOC update when it throws (`WebBook.kt:305-313`); so does
+    /// `FetchToc` here.
+    String? preUpdateJs,
+
     String? updateTime,
     String? nextTocUrl,
     @JsonKey(includeFromJson: false, includeToJson: false)
@@ -263,6 +317,34 @@ abstract class ContentRule with _$ContentRule {
     String? content,
     String? nextContentUrl,
     String? replaceRegex,
+
+    /// Secondary text that belongs to the same chapter (`subContent`, upstream
+    /// `BookContent.kt:144-163`).
+    ///
+    /// For a text source it is appended to the body; for an **audio** source it becomes the
+    /// chapter's `lyric` variable. A rule that resolves to an absolute URL is fetched first
+    /// (upstream does the same), so a site may keep its lyrics on a second page.
+    String? subContent,
+
+    /// Chapter name read from the **content page** (`title`, upstream `BookContent.kt:165-190`).
+    ///
+    /// Evaluated after the body was read; a non-blank result renames the chapter, and a value that
+    /// carries an `<img src=…>` tag also becomes the chapter's `reviewImg`.
+    String? title,
+
+    /// The unlock action of a paid chapter (`payAction`).
+    ///
+    /// Upstream evaluates it when the user asks to unlock (`ReadBookViewModel.kt:2623`) — i.e. it
+    /// needs a paid-content UI this app does not have. Modelled so import/export round trips keep
+    /// it; **not executed** (registered difference, `engine-parity.md` B3).
+    String? payAction,
+
+    /// A script the source wants to run on reader events (`callBackJs`).
+    ///
+    /// Upstream gates it on `eventListener` and runs it for a dozen UI events
+    /// (`SourceCallBack.kt:54/94/117`). Modelled only: this app has no such event surface yet
+    /// (registered difference, `engine-parity.md` B4).
+    String? callBackJs,
 
     /// A regex that cuts the wanted payload out of the **raw** page before the rules run
     /// (`docs/dev/roadmap.md` M21a, ADR-0068 §决策 7).
@@ -386,12 +468,30 @@ Map<String, String> _toStringMap(Map<Object?, Object?> raw) {
   return headers;
 }
 
-/// The sandbox view of a book source; only `name`, `url` and `group` are exposed.
+/// The sandbox view of a book source (`source.*`, M25/S5a).
 extension BookSourceJsView on BookSource {
   /// The read-only object the sandbox receives as `source`.
-  JsSourceInfo get jsSourceInfo =>
-      JsSourceInfo(name: name, url: url, group: group);
+  ///
+  /// [jsLib] travels along but is **not** sent to the sandbox (`JsSourceInfo.toJson` drops it): it
+  /// is the rule engine's input for resolving the library (ADR-0078 S1).
+  JsSourceInfo get jsSourceInfo => JsSourceInfo(
+    name: name,
+    url: url,
+    group: group,
+    jsLib: jsLib,
+    // `bookSourceComment` 不单独建模，落在 [extra]（`book-source.md` §2 的未建模清单）；源把它
+    // 当脚本库用时，规则读到的就是声明的原文。
+    comment: _stringOrNull(extra['bookSourceComment']),
+    header: headerRule ?? (headers == null ? null : jsonEncode(headers)),
+    loginUrl: loginUrl,
+  );
 }
+
+/// [value] when it is a string, `null` otherwise.
+///
+/// Used for fields the model keeps in `extra`: a source may declare anything there, and a
+/// non-string value must not crash the sandbox view.
+String? _stringOrNull(Object? value) => value is String ? value : null;
 
 // 用序列化后的 Legado 键名比对，才能正确判断哪些键未被建模。
 Map<String, Object?> _unrecognisedKeys(

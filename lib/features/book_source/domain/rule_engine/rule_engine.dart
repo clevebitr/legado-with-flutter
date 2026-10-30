@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'package:cascadia/cascadia.dart' as cascadia;
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/js/js_bridge.dart';
+import 'package:flutter_reader/core/js/js_lib.dart';
 import 'package:flutter_reader/core/js/js_variables.dart';
+import 'package:flutter_reader/core/js/source_variables.dart';
 import 'package:flutter_reader/core/logging/app_logger.dart';
 import 'package:flutter_reader/features/book_source/domain/rule_engine/rule_scope.dart';
+import 'package:flutter_reader/features/book_source/domain/rule_engine/xpath_rule.dart';
 import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
@@ -27,14 +30,20 @@ import 'package:json_path/json_path.dart';
 /// [RuleEngine]). A bare `{` is gone as well: `{$jsonpath}` is matrix #19, and a `{`
 /// without a `$` is not any implemented syntax, so it degrades to a raw CSS selector like
 /// every other unknown type (ADR-0032).
-const List<String> _deferredFlags = <String>[
-  '//',
-  ':',
-  '@@',
-  '@xpath:',
-  '@webjs',
-  '<js>',
-];
+const List<String> _deferredFlags = <String>['@@', '@webjs', '<js>'];
+
+/// The flag of matrix #20: a rule that starts with a **single** `:` is a regular expression.
+///
+/// `::` is not: that is the `::before`-style CSS pseudo-element / our malformed-selector marker.
+const String _regexFlag = ':';
+
+/// The `@xpath:` flag of matrix #21, lower-cased for a case-insensitive compare.
+///
+/// Upstream also treats a rule that merely **starts with `/`** as XPath
+/// (`AnalyzeRule.kt:637-639`); this repository asks for `//` or the flag, so a root-relative URL
+/// that ended up in a rule field cannot silently become an XPath expression
+/// (`book-source.md` §3 matrix #21 的注记).
+const String _xpathFlag = '@xpath:';
 
 /// One `@put:{key:rule,key:rule}` flag of matrix #16.
 ///
@@ -56,11 +65,29 @@ const String _valueSeparator = '\n';
 /// The trailing `.N` / `.-N` index a degraded segment may carry (matrix #28's dot form).
 final RegExp _dotIndex = RegExp(r'^-?\d+$');
 
+/// The trailing `.N:M[:N]` position list a degraded segment may carry (matrix #33).
+///
+/// Upstream's `ElementsSingle.findIndexSet` reads `tag.div.-1:10:2` as “indices -1, 10 and 2”
+/// (`AnalyzeByJSoup.kt:280-288`): the dot form of matrix #6's `:`-separated list, where `.`
+/// selects and `!` excludes.
+final RegExp _dotIndexList = RegExp(r'^-?\d+(?::-?\d+)+$');
+
 /// The `@put:` flag, lower-cased for a case-insensitive scan.
 const String _putScanFlag = '@put:';
 
 /// The opening brace of matrix #19's legacy JSONPath rule.
 const String _jsonTemplateOpen = r'{$';
+
+/// The literal a URL-rule chain replaces with what it produced so far (`@result`, upstream
+/// `AnalyzeUrl.kt:166`).
+const String _urlChainVariable = '@result';
+
+/// The `rulePath` marker of a nested **list** rule that would need its own `@js:` job.
+///
+/// A nested list rule runs inside the job that asked for it, so a script segment there would have to
+/// queue behind its own caller (ADR-0030 §决策 1/3). The top-level form is fine — a list rule's own
+/// `@js:` is part of the same evaluation (matrix #14) — this marker is only for the nested shape.
+const String _jsListMarker = 'unsupported:@js:list';
 
 /// The URL variable that carries the search keyword (`book-source.md` §4).
 ///
@@ -220,6 +247,9 @@ final RegExp _whitespace = RegExp(r'\s+');
 ///
 /// The engine is stateless, so one instance can evaluate rules concurrently
 /// (C-SRC-9), and it never mutates the scope it is given or its elements.
+///
+/// The one exception is the rule-compilation counters behind [compileStats]: they are
+/// diagnostics for the P3 metric of `docs/dev/adr/0078` 决策 4 and carry no behaviour.
 final class RuleEngine {
   /// Creates an engine that reports rejected rules through `logger`, runs `@js:` rules
   /// on `jsBridge` and reads / writes the rules' variables in `variables`.
@@ -232,15 +262,79 @@ final class RuleEngine {
   /// (`book-source.md` §6). The engine reads it for `@get:` and `{{name}}`, writes it for
   /// `@put:`, and the bridge applies what a script wrote through `java.put` — one store,
   /// two ends (ADR-0034 §决策 1).
+  ///
+  /// [sourceVariables] is the **persisted** map behind `source.getVariable` / `setVariable`
+  /// (ADR-0076 §决策 1). It defaults to an unwired store, which behaves exactly like a source that
+  /// never wrote a variable — which is what a unit test wants by default.
+  ///
+  /// [jsLib] resolves a source's own JavaScript library before every job it runs (ADR-0078 S1).
+  /// The default store handles plain-JavaScript libraries only and reports a URL-shaped one as
+  /// unsupported; the app wires one that can download.
   RuleEngine({
     required this._logger,
     required this._jsBridge,
     required this._variables,
-  });
+    SourceVariableStore? sourceVariables,
+    JsLibStore? jsLib,
+  }) : _sourceVariables = sourceVariables ?? SourceVariableStore(),
+       _jsLib = jsLib ?? JsLibStore();
 
   final AppLogger _logger;
   final JsBridge _jsBridge;
   final JsVariableStore _variables;
+  final SourceVariableStore _sourceVariables;
+  final JsLibStore _jsLib;
+
+  int _ruleLookups = 0;
+  int _ruleCompilations = 0;
+  int _inlinedJavaCalls = 0;
+  int _bridgedJavaCalls = 0;
+
+  /// Parsed rule texts by text ("R1"): a rule's steps are a pure function of its text.
+  final Map<String, _ParsedRule> _parsedRules = <String, _ParsedRule>{};
+
+  /// Compiled selectors by (text, field, `hasExtraction`); see [_checkForEvaluation].
+  final Map<
+    ({String rule, String field, bool hasExtraction}),
+    _Parsed<List<_CheckedCandidate>>
+  >
+  _checkedRules =
+      <
+        ({String rule, String field, bool hasExtraction}),
+        _Parsed<List<_CheckedCandidate>>
+      >{};
+
+  /// How many rule texts one session keeps translated into steps.
+  ///
+  /// A real book source declares 20–40 rule texts; 256 covers several imported sources and still
+  /// bounds the engine (which lives as long as the app, ADR-0078 决策 4 的 P6).
+  static const int _parsedRuleCacheLimit = 256;
+
+  /// How many compiled selector sets one session keeps.
+  ///
+  /// Wider than [_parsedRuleCacheLimit] because the key carries the field: the same text may be
+  /// compiled once for a list rule and once for a value rule, and each field has its own entry.
+  static const int _checkedRuleCacheLimit = 512;
+
+  /// How often a rule text had to be turned into steps, and how often that was a real compile.
+  ///
+  /// The P3 metric of `docs/dev/adr/0078` 决策 4 ("one rule text is compiled once per session")
+  /// is a hit rate, so it needs both ends counted rather than inferred from wall clock:
+  /// `lookups` is every evaluation that asked for a rule (parse **and** selector compile) and
+  /// `compilations` is the subset that really worked. `tool/bench/` reads this pair; no production
+  /// code does.
+  RuleCompileStats get compileStats =>
+      RuleCompileStats(lookups: _ruleLookups, compilations: _ruleCompilations);
+
+  /// How the sandbox's **nested rule calls** were served: inline on the host, or through a job.
+  ///
+  /// The P5 metric of `docs/dev/adr/0078` 决策 4 asks for ≥90% of the nested calls to take the
+  /// literal-inline path (ADR-0037 §决策 3①), because only that path is synchronous and free of a
+  /// worker round trip. Same stance as [compileStats]: diagnostics only, read by `tool/bench/`.
+  JsInlineStats get inlineStats => JsInlineStats(
+    inlinedCalls: _inlinedJavaCalls,
+    bridgedCalls: _bridgedJavaCalls,
+  );
 
   /// Evaluates one **whole-field** JavaScript expression and returns its raw value.
   ///
@@ -271,27 +365,115 @@ final class RuleEngine {
     required JsPageContext context,
     Object? result,
     JsResponseView? response,
+    String? key,
   }) async {
     if (script.trim().isEmpty) {
       return const ParseSuccess<Object?>(null);
     }
 
-    return _jsBridge.evaluate(
-      JsJob(
-        script: script,
-        rulePath: rulePath,
-        baseUrl: context.baseUrl,
-        page: context.page,
-        source: context.source,
-        sourceHeaders: context.headers,
-        variables: _variables.snapshot(context.source.url),
-        bookName: context.bookName,
-        chapterTitle: context.chapterTitle,
-        book: context.book,
-        result: result,
-        response: response,
-      ),
-    );
+    final ParseResult<String?> lib = await _jsLibOf(context, rulePath);
+    switch (lib) {
+      case ParseFailure<String?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        return failureAt<Object?>(kind: kind, rulePath: rulePath);
+      case ParseSuccess<String?>(:final String? data):
+        return _jsBridge.evaluate(
+          JsJob(
+            script: script,
+            rulePath: rulePath,
+            baseUrl: context.baseUrl,
+            page: context.page,
+            source: context.source,
+            sourceHeaders: context.headers,
+            variables: _variables.snapshot(context.source.url),
+            jsLib: data,
+            bookName: context.bookName,
+            chapterTitle: context.chapterTitle,
+            book: context.book,
+            src: context.src,
+            chapter: context.chapter,
+            nextChapterUrl: context.nextChapterUrl,
+            fromBookInfo: context.fromBookInfo,
+            result: result,
+            response: response,
+            key: key,
+          ),
+        );
+    }
+  }
+
+  /// The source's `jsLib` as runnable JavaScript, or `null` when it declares none
+  /// (ADR-0078 S1).
+  ///
+  /// Resolution happens **before** the job: the worker is an isolate and cannot fetch, and a
+  /// library that cannot be resolved must fail the rule with [jsLibMarker] instead of running it
+  /// without its helpers (C-SRC-4).
+  Future<ParseResult<String?>> _jsLibOf(JsPageContext context, String field) =>
+      _jsLib.resolve(
+        sourceUrl: context.source.url,
+        jsLib: context.source.jsLib,
+        rulePath: field,
+      );
+
+  /// Rewrites chapter names with a `tocRule.formatJs` rule (ADR-0078 S2).
+  ///
+  /// One job for the whole list, because upstream evaluates the script once per chapter **inside
+  /// one scope**: `index` is rebound each round while `gInt` keeps its value across rounds
+  /// (`BookChapterList.kt:141-163`). A script that throws leaves that chapter's title alone
+  /// (upstream `runCatching(...).onFailure`), so the answer is always the same length as
+  /// [chapters]: a string replaces the title, `null` keeps it.
+  Future<ParseResult<List<String?>>> formatTitles({
+    required String script,
+    required List<JsChapterInfo> chapters,
+    required JsPageContext context,
+    required String rulePath,
+  }) async {
+    if (script.trim().isEmpty || chapters.isEmpty) {
+      return const ParseSuccess<List<String?>>(<String?>[]);
+    }
+
+    final ParseResult<String?> lib = await _jsLibOf(context, rulePath);
+    switch (lib) {
+      case ParseFailure<String?>(
+        :final ParseFailureKind kind,
+        :final String rulePath,
+      ):
+        return failureAt<List<String?>>(kind: kind, rulePath: rulePath);
+      case ParseSuccess<String?>(:final String? data):
+        final ParseResult<Object?> formatted = await _jsBridge.evaluate(
+          JsJob(
+            script: script,
+            rulePath: rulePath,
+            baseUrl: context.baseUrl,
+            page: context.page,
+            source: context.source,
+            sourceHeaders: context.headers,
+            variables: _variables.snapshot(context.source.url),
+            sourceVariables: _sourceVariables.snapshot(context.source.url),
+            jsLib: data,
+            titleFormatChapters: chapters,
+            bookName: context.bookName,
+            chapterTitle: context.chapterTitle,
+            book: context.book,
+          ),
+        );
+
+        return switch (formatted) {
+          ParseFailure<Object?>(
+            :final ParseFailureKind kind,
+            rulePath: final String failedAt,
+          ) =>
+            failureAt<List<String?>>(kind: kind, rulePath: failedAt),
+          ParseSuccess<Object?>(:final Object? data) =>
+            ParseSuccess<List<String?>>(<String?>[
+              if (data is List)
+                for (final Object? title in data)
+                  if (title is String) title else null,
+            ]),
+        };
+    }
   }
 
   /// Returns every element matched by the **list** rule [rule] inside [scope].
@@ -332,11 +514,13 @@ final class RuleEngine {
       return const ParseSuccess<List<RuleScope>>(<RuleScope>[]);
     }
 
-    // 矩阵 #14 / #31 的列表形态：`bookList` / `chapterList` 写成 JS（裸 `@js:` 或 `<js>`），
-    // 上游 `getElements` 的 `Mode.Js` 分支就是 `evalJS`，返回的数组逐项成为一个条目
-    // （`AnalyzeRule.kt:439`）。
-    if (_hasJsBlock(rule) ||
-        rule.trimLeft().toLowerCase().startsWith(_jsFlag)) {
+    // 矩阵 #14 / #31 的列表形态：**任一段**是 JS 段（`<js>` 或 `@js:`，包括
+    // `class.list@tag.li@js:result` 这种尾部写法）就走段链解释器——上游 `getElements` 的段循环
+    // 里，`Mode.Js` 分支同样是 `evalJS`，它的结果成为下一段的输入（`AnalyzeRule.kt:435-440`）。
+    //
+    // 脚本看到的是上一段的**条目内容**（元素的 `outerHtml`、JSON 值），不是 jsoup 元素：沙箱里
+    // 没有 DOM 句柄（§6），所以 `attr()` / `text()` 这类写法仍然不成立，差异登记在 §3。
+    if (_jsSegmentsOf(rule).any((_RuleSegment segment) => segment.isScript)) {
       return _selectAllSegments(rule, scope, rulePath: rulePath, depth: depth);
     }
 
@@ -362,8 +546,9 @@ final class RuleEngine {
       return const ParseSuccess<List<RuleScope>>(<RuleScope>[]);
     }
 
-    final _ParsedRule parsed = _parse(expanded);
-    final _Parsed<List<_CheckedCandidate>> check = _check(
+    final _ParsedRule parsed = _parseForEvaluation(expanded);
+    final _Parsed<List<_CheckedCandidate>> check = _checkForEvaluation(
+      expanded,
       parsed,
       field: rulePath,
       hasExtraction: false,
@@ -482,13 +667,35 @@ final class RuleEngine {
       for (final Object? item in items)
         if (item != null)
           switch (item) {
-            final String text => RuleScope.dom(
-              html_parser.parse(text),
-              jsContext: jsContext,
-            ),
+            // 上游 `setContent(string)` 用 `isJson()`（`{…}` / `[…]`）决定读法：JSON 文本按
+            // JSON 条目读（`$.title` 能命中），其余当 HTML 片段解析。真实源把章列表写成
+            // `list.push(JSON.stringify({title, url}))`，逐字段再用 `$.title` / `$.url`。
+            final String text =>
+              _jsonScriptItem(text, jsContext: jsContext) ??
+                  RuleScope.dom(html_parser.parse(text), jsContext: jsContext),
             _ => RuleScope.json(item, jsContext: jsContext),
           },
     ];
+  }
+
+  /// A script-produced string that **is** a JSON document, as a JSON scope (matrix #13).
+  ///
+  /// The check mirrors upstream's `String?.isJson()`: only `{…}` and `[…]` qualify. A text that
+  /// looks like JSON but does not decode stays an HTML fragment, which is what a script producing
+  /// a literal brace-prefixed snippet meant.
+  RuleScope? _jsonScriptItem(String text, {required JsPageContext? jsContext}) {
+    final String trimmed = text.trim();
+    final bool looksJson =
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'));
+    if (!looksJson) {
+      return null;
+    }
+    try {
+      return RuleScope.json(jsonDecode(trimmed), jsContext: jsContext);
+    } on FormatException {
+      return null;
+    }
   }
 
   /// Runs every branch of a candidate from [scope] and merges the matches.
@@ -571,6 +778,29 @@ final class RuleEngine {
             RuleScope.dom(element, jsContext: _jsContextOf(scope)),
         ]),
     },
+    final _XPathBranch xpath => switch (_xpathElements(
+      xpath,
+      scope,
+      field: field,
+    )) {
+      _ParsedFailure<List<Element>>(:final _RuleRejection rejection) =>
+        _ParsedFailure<List<RuleScope>>(rejection),
+      _ParsedValue<List<Element>>(:final List<Element> value) =>
+        _ParsedValue<List<RuleScope>>(<RuleScope>[
+          for (final Element element in value)
+            RuleScope.dom(element, jsContext: _jsContextOf(scope)),
+        ]),
+    },
+    final _RegexBranch regex => switch (_regexScopes(
+      regex,
+      scope,
+      field: field,
+    )) {
+      _ParsedFailure<List<RuleScope>>(:final _RuleRejection rejection) =>
+        _ParsedFailure<List<RuleScope>>(rejection),
+      _ParsedValue<List<RuleScope>>(:final List<RuleScope> value) =>
+        _ParsedValue<List<RuleScope>>(value),
+    },
     final _JsonBranch json => switch (_jsonScopeOf(scope, field: field)) {
       _ParsedFailure<Object?>(:final _RuleRejection rejection) =>
         _ParsedFailure<List<RuleScope>>(rejection),
@@ -617,7 +847,9 @@ final class RuleEngine {
     DomScope(:final Node node) => _ParsedValue<List<Element>>(
       _run(branch.selectors, node),
     ),
-    JsonScope() => _ParsedFailure<List<Element>>(_malformed(field)),
+    // 正则匹配与 JSON 值都没有 DOM：一条选择器规则对着它们只能报畸形（C-SRC-4）。
+    JsonScope() ||
+    RegexScope() => _ParsedFailure<List<Element>>(_malformed(field)),
   };
 
   /// The JSON value [scope] offers a `@json:` branch (matrix #13).
@@ -638,6 +870,7 @@ final class RuleEngine {
           null => _ParsedFailure<Object?>(_malformed(field)),
           final String text => _decodeJson(text, field: field),
         },
+        RegexScope() => _ParsedFailure<Object?>(_malformed(field)),
       };
 
   /// Decodes a page body, or reports that it is not JSON.
@@ -773,6 +1006,12 @@ final class RuleEngine {
       return const ParseSuccess<List<String>>(<String>[]);
     }
 
+    // 矩阵 #20 的条目字段：一次正则匹配的 scope 上，规则是 `$1` / `$2` 模板（上游
+    // `SourceRule.splitRegex` 把 `$\d{1,2}` 拆出来、`makeUpRule` 用该条的组值填回去）。
+    if (scope is RegexScope) {
+      return _evaluateRegexItem(rule, scope, rulePath: rulePath);
+    }
+
     // 矩阵 #31：`<js>…</js>` 可以出现在规则中间，上游把它切成「默认段 / JS 段」依次求值，
     // 上一段的产出就是下一段的 `result`（`AnalyzeRule.getString` 的链式循环）。只有真的
     // 出现 `<js>` 时才走这条链，尾部 `@js:` 的既有语义保持逐字节不变。
@@ -810,7 +1049,7 @@ final class RuleEngine {
       // 上游把带 `{{}}` / `@get:` 的规则切成 **Regex 模式**（`AnalyzeRule.kt:674-680`），
       // 而 `AnalyzeByRegex` 不拿它当选择器读：替换后的整段文本就是这一条规则的值。
       // 这也是 `{{@@class.a@text}}` / `“地址/{{@get:{x}}}”` 这类写法能工作的原因。
-      final _ParsedRule substituted = _parse(expanded.text);
+      final _ParsedRule substituted = _parseForEvaluation(expanded.text);
       if (substituted.body.isEmpty) {
         return const ParseSuccess<List<String>>(<String>[]);
       }
@@ -820,14 +1059,30 @@ final class RuleEngine {
       );
     }
 
-    final _ParsedRule parsed = _parse(expanded.text);
+    final _ParsedRule parsed = _parseForEvaluation(expanded.text);
+    // 矩阵 #9 的「只有替换段」写法：`##pattern##replace###` 没有选择器，替换对象是**这一层的
+    // 内容**（上游 `getString` 里 `result` 仍是 content：页面给 body，条目给元素的
+    // `toString()` / HTML）。真实源用它从条目 HTML 里抽地址：千寻的
+    // `##href="//m.qidian.com/chapter/(\d+)/0/"##https://m.qidian.com/book/$1/###`。
+    if (parsed.body.isEmpty &&
+        !parsed.isBareJs &&
+        parsed.replacementParts.length > 1) {
+      final String? content = _replacementContentOf(scope);
+      if (content == null) {
+        return _fail<List<String>>(_malformed(rulePath), field: rulePath);
+      }
+
+      return ParseSuccess<List<String>>(_finish(<String>[content], parsed));
+    }
+
     final List<String> merged;
     if (parsed.isBareJs) {
       // `@js:` 独立成规则：没有选择器要跑，`result` 就是这一层的内容（§6 的 result 绑定：
       // 页面给正文，JSON 条目给条目对象）。
       merged = const <String>[];
     } else {
-      final _Parsed<List<_CheckedCandidate>> check = _check(
+      final _Parsed<List<_CheckedCandidate>> check = _checkForEvaluation(
+        expanded.text,
         parsed,
         field: rulePath,
         hasExtraction: true,
@@ -873,6 +1128,7 @@ final class RuleEngine {
       scope,
       field: rulePath,
       allowJs: allowJs,
+      elementResult: parsed.isBareJs,
     );
 
     return switch (evaluated) {
@@ -880,6 +1136,219 @@ final class RuleEngine {
       ParseSuccess<List<String>>(:final List<String> data) =>
         ParseSuccess<List<String>>(_finish(data, parsed)),
     };
+  }
+
+  /// One host-evaluable `result.…` call chain (ADR-0037 §决策 3 的同族：宿主就地内联).
+  static final RegExp _elementChain = RegExp(
+    r'''(?<![\w$.])result((?:\s*\.\s*[A-Za-z][A-Za-z0-9_]*\s*\((?:[^()]*)\))+)''',
+  );
+
+  /// The element methods this shim knows; a chain that stops on one of them is not inlined.
+  static const Set<String> _elementOperations = <String>{
+    'select',
+    'children',
+    'parent',
+    'first',
+    'last',
+    'get',
+    'size',
+    'text',
+    'ownText',
+    'html',
+    'outerHtml',
+    'attr',
+    'elementSiblingIndex',
+  };
+
+  /// One `.op(argument)` of an element chain; the argument is parsed separately so a
+  /// non-literal one can stop the inlining instead of being silently skipped.
+  static final RegExp _elementCall = RegExp(
+    r'''\.\s*([A-Za-z][A-Za-z0-9_]*)\s*\(([^()]*)\)''',
+  );
+
+  /// Inlines literal `result.attr('href')`-shaped chains with the value the host reads.
+  ///
+  /// Upstream binds `result` to the jsoup **element** for a bare `@js:` item field, so real
+  /// sources walk it: `result.attr('href')`, `result.select('span').get(1).text()`. The sandbox has
+  /// no DOM (ADR-0029 §决策 5), but the host owns the element — so a chain whose arguments are
+  /// **literals** is evaluated here and substituted as a JavaScript literal, before the job is
+  /// built. Anything else (a variable index, a non-DOM receiver) is left untouched and keeps
+  /// failing loudly; that is the registered boundary of this shim.
+  String _inlineElementChains(String script, RuleScope scope) {
+    final Node? node = scope is DomScope && scope.body == null
+        ? scope.node
+        : null;
+    if (node is! Element || !script.contains('result')) {
+      return script;
+    }
+
+    return script.replaceAllMapped(_elementChain, (Match match) {
+      final String chain = match.group(1) ?? '';
+      final _ElementPrefix? prefix = _evaluateElementPrefix(node, chain);
+
+      // 只替换宿主认得出来的**前缀**：`result.attr('href').endsWith('x')` 里后半段是字符串
+      // 自己的方法，留在脚本里由 JS 跑；一个都认不出来就原样保留（响亮失败）。
+      return prefix == null
+          ? (match.group(0) ?? '')
+          : '${prefix.literal}${chain.substring(prefix.consumed)}';
+    });
+  }
+
+  /// The literal one element-chain **prefix** evaluates to, and how much of the chain it used.
+  _ElementPrefix? _evaluateElementPrefix(Element element, String chain) {
+    _ElementChain? current = _ChainElements(<Element>[element]);
+    var consumed = 0;
+    for (final RegExpMatch call in _elementCall.allMatches(chain)) {
+      if (call.start != consumed) {
+        break;
+      }
+      final String operation = call.group(1) ?? '';
+      final String rawArgument = (call.group(2) ?? '').trim();
+      final String? argument = _stringLiteralOf(rawArgument);
+      final int? number = int.tryParse(rawArgument);
+      if (rawArgument.isNotEmpty && argument == null && number == null) {
+        // 变量/表达式参数：元素方法停下来（整条不内联），字符串方法把前缀当最终值。
+        if (_elementOperations.contains(operation)) {
+          return null;
+        }
+        break;
+      }
+      final _ElementChain? next = _applyElementCall(
+        current,
+        operation,
+        argument,
+        number,
+      );
+      if (next == null) {
+        // 元素链在中间断了（`get(i)` 这种变量索引、越界、未知元素方法）：整条不内联，
+        // 让脚本原样交给沙箱响亮失败，而不是换成一个语义更远的替身。
+        if (_elementOperations.contains(operation)) {
+          return null;
+        }
+        // 非元素方法（`attr(…)` 之后的 `.endsWith(…)` 之类）：前缀已经是最终值，停在这里。
+        break;
+      }
+      current = next;
+      consumed = call.end;
+    }
+    if (consumed == 0 || current == null) {
+      return null;
+    }
+
+    return (literal: current.toJsLiteral(), consumed: consumed);
+  }
+
+  /// The text of a quoted literal argument, or `null` when [argument] is not one.
+  String? _stringLiteralOf(String argument) {
+    if (argument.length < 2) {
+      return null;
+    }
+    final String quote = argument[0];
+    if ((quote != '"' && quote != "'") || !argument.endsWith(quote)) {
+      return null;
+    }
+
+    return argument.substring(1, argument.length - 1);
+  }
+
+  /// Applies one chain call, or answers `null` when this repository cannot evaluate it.
+  _ElementChain? _applyElementCall(
+    _ElementChain? current,
+    String operation,
+    String? argument,
+    int? number,
+  ) {
+    if (current is! _ChainElements) {
+      // 上游字符串/数字没有这些成员；`String(result).trim()` 这类写法走 JS 本身，不需要这里。
+      return null;
+    }
+    final List<Element> elements = current.elements;
+    switch (operation) {
+      case 'select':
+        if (argument == null) {
+          return null;
+        }
+        final List<Element> matched = <Element>[];
+        for (final Element element in elements) {
+          matched.addAll(_selectWithin(element, argument));
+        }
+
+        return _ChainElements(matched);
+      case 'children':
+        return _ChainElements(<Element>[
+          for (final Element element in elements)
+            ...element.children.whereType<Element>(),
+        ]);
+      case 'parent':
+        return _ChainElements(<Element>[
+          for (final Element element in elements)
+            if (element.parent is Element) element.parent!,
+        ]);
+      case 'first':
+        return elements.isEmpty
+            ? null
+            : _ChainElements(<Element>[elements.first]);
+      case 'last':
+        return elements.isEmpty
+            ? null
+            : _ChainElements(<Element>[elements.last]);
+      case 'get':
+        if (number == null || number < 0 || number >= elements.length) {
+          return null;
+        }
+
+        return _ChainElements(<Element>[elements[number]]);
+      case 'size':
+        return _ChainNumber(elements.length);
+      case 'text':
+        return _ChainString(
+          elements
+              .map((Element element) => _collapseWhitespace(element.text))
+              .join(' '),
+        );
+      case 'ownText':
+        return _ChainString(elements.isEmpty ? '' : _ownTextOf(elements.first));
+      case 'html':
+        return _ChainString(elements.isEmpty ? '' : elements.first.innerHtml);
+      case 'outerHtml':
+        return _ChainString(elements.isEmpty ? '' : elements.first.outerHtml);
+      case 'attr':
+        if (argument == null) {
+          return null;
+        }
+
+        return _ChainString(
+          elements.isEmpty ? '' : elements.first.attributes[argument] ?? '',
+        );
+      case 'elementSiblingIndex':
+        if (elements.isEmpty) {
+          return null;
+        }
+        final Node? parent = elements.first.parent;
+
+        return _ChainNumber(
+          parent is Element
+              ? parent.children
+                    .whereType<Element>()
+                    .toList(growable: false)
+                    .indexOf(elements.first)
+              : 0,
+        );
+    }
+
+    return null;
+  }
+
+  /// The elements [selector] matches inside [element], the element itself included (jsoup).
+  List<Element> _selectWithin(Element element, String selector) {
+    try {
+      return <Element>[
+        if (cascadia.matches(element, selector)) element,
+        ...cascadia.queryAll(element, selector),
+      ];
+    } on FormatException {
+      return const <Element>[];
+    }
   }
 
   /// Runs one terminal `@js:` script on [result] (matrix #14).
@@ -899,6 +1368,7 @@ final class RuleEngine {
     RuleScope scope, {
     required String field,
     required bool allowJs,
+    bool elementResult = false,
   }) async {
     final ParseResult<Object?> evaluated = await _runScript(
       script,
@@ -906,6 +1376,7 @@ final class RuleEngine {
       scope,
       field: field,
       allowJs: allowJs,
+      elementResult: elementResult,
     );
 
     return switch (evaluated) {
@@ -931,6 +1402,7 @@ final class RuleEngine {
     RuleScope scope, {
     required String field,
     required bool allowJs,
+    bool elementResult = false,
   }) async {
     if (!allowJs) {
       // 嵌套求值（`parse.*` 的递推，或 `{{}}` 里的 JS）不能碰沙箱：单 worker 正在跑的就是
@@ -952,7 +1424,10 @@ final class RuleEngine {
     final String scriptText;
     switch (inlined) {
       case ParseSuccess<String>(:final String data):
-        scriptText = data;
+        // 元素句柄的最小垫片：**只有 `result` 本身就是这一层内容**时才成立（裸 `@js:` / 首个
+        // `<js>` 段）。选择器之后的 `@js:` 拿到的是提取出来的字符串（上游同形），在那里把
+        // `result.attr(…)` 当 DOM 读会静默给出错值——所以用 elementResult 把两者分开。
+        scriptText = elementResult ? _inlineElementChains(data, scope) : data;
       case ParseFailure<String>(
         :final ParseFailureKind kind,
         :final String rulePath,
@@ -961,6 +1436,16 @@ final class RuleEngine {
     }
 
     final JsPageContext context = _jsContextOf(scope);
+    // 每源变量是持久表：首个 job 前读一次，之后走内存（ADR-0076 §决策 1）。
+    await _sourceVariables.ensureLoaded(context.source.url);
+    // 库脚本先解析（可能要下载），失败就是这条规则的失败（ADR-0078 S1）。
+    final ParseResult<String?> lib = await _jsLibOf(context, field);
+    if (lib case ParseFailure<String?>(
+      :final ParseFailureKind kind,
+      :final String rulePath,
+    )) {
+      return failureAt<Object?>(kind: kind, rulePath: rulePath);
+    }
     final ParseResult<Object?> evaluated = await _jsBridge.evaluate(
       JsJob(
         script: scriptText,
@@ -972,9 +1457,19 @@ final class RuleEngine {
         sourceHeaders: context.headers,
         parseEvaluator: _parseEvaluatorFor(scope, field: field),
         variables: _variables.snapshot(context.source.url),
+        sourceVariables: _sourceVariables.snapshot(context.source.url),
+        jsLib: switch (lib) {
+          ParseSuccess<String?>(:final String? data) => data,
+          // 上面已经返回；这里给编译器一个不可能是别的值的分支。
+          ParseFailure<String?>() => null,
+        },
         bookName: context.bookName,
         chapterTitle: context.chapterTitle,
         book: context.book,
+        src: context.src,
+        chapter: context.chapter,
+        nextChapterUrl: context.nextChapterUrl,
+        fromBookInfo: context.fromBookInfo,
       ),
     );
 
@@ -1023,7 +1518,9 @@ final class RuleEngine {
   ///
   /// This is upstream's chaining loop (`AnalyzeRule.getString` / `getStringList`): the first
   /// segment reads the **page**, every later one reads the previous segment's value as
-  /// `result`. That is what makes `<js>java.put(…)</js>https://…/{{result}}.html` produce a
+  /// `result` — and a script that answers a whole document becomes the page the next selector
+  /// reads (see [_chainedPageOf]), which is how a rule replaces a shell page before reading it.
+  /// That is also what makes `<js>java.put(…)</js>https://…/{{result}}.html` produce a
   /// URL: the script's value becomes `{{result}}` in the text that follows.
   ///
   /// A failing segment fails the whole rule (C-SRC-4); a script is subject to the same
@@ -1038,13 +1535,15 @@ final class RuleEngine {
   }) async {
     List<String> values = const <String>[];
     var hasResult = false;
+    // 脚本段可能把整页换掉（过盾后重取的真实页面）：下一段选择器要读它，而不是原页面。
+    var pageScope = scope;
 
     for (final _RuleSegment segment in _jsSegmentsOf(rule)) {
       final Object? previous = hasResult
           ? (single
                 ? (values.isEmpty ? null : values.join(_valueSeparator))
                 : values)
-          : _resultOf(scope);
+          : _resultOf(pageScope);
       final ParseResult<List<String>> evaluated;
       if (segment.isScript) {
         // `<js>…</js>` 里的 `{{…}}` / `@get:` 同样在脚本执行前展开（上游 makeUpRule 对
@@ -1068,11 +1567,14 @@ final class RuleEngine {
           scope,
           field: rulePath,
           allowJs: allowJs,
+          // 首个脚本段的 `result` 就是这一层的内容（页面 body / 条目元素）；后面的段拿到的是
+          // 上一段的产出，不再是元素。
+          elementResult: !hasResult,
         );
       } else {
         evaluated = await _evaluate(
           segment.text,
-          scope,
+          pageScope,
           rulePath: rulePath,
           single: single,
           allowJs: allowJs,
@@ -1087,10 +1589,39 @@ final class RuleEngine {
           values = data;
       }
       hasResult = true;
+      if (segment.isScript) {
+        pageScope = _chainedPageOf(values, pageScope);
+      }
     }
 
     return ParseSuccess<List<String>>(values);
   }
+
+  /// The page a selector segment after `<js>…</js>` reads.
+  ///
+  /// 上游 `AnalyzeRule.getString` 的链式循环把上一段的产出当成新的 content 交给
+  /// `AnalyzeByJSoup`：脚本换掉的页面（`java.startBrowserAwait` / 过盾后重取的真实页面）
+  /// 就是下一段选择器要读的正文。只有长得像标记的值才重建 scope——一个普通字符串（URL、
+  /// 章节名）留在原页面上，语义与今天的完全一致，也不白解析一次 HTML。
+  RuleScope _chainedPageOf(List<String> values, RuleScope origin) {
+    final String text = values.join(_valueSeparator);
+    if (!_looksLikeMarkup(text)) {
+      return origin;
+    }
+
+    return RuleScope.dom(
+      html_parser.parse(text),
+      body: text,
+      jsContext: _jsContextOf(origin),
+    );
+  }
+
+  /// Whether a value carries an HTML tag (`<div`, `</p`, or an opening comment).
+  static final RegExp _markupPattern = RegExp(r'<[a-zA-Z!/]');
+
+  /// Whether a value is a document rather than a plain value (URL, chapter name).
+  static bool _looksLikeMarkup(String text) =>
+      text.length > 3 && _markupPattern.hasMatch(text);
 
   /// The `result` binding a script sees on [scope].
   ///
@@ -1102,6 +1633,9 @@ final class RuleEngine {
     JsonScope(:final Object? value) => value,
     DomScope(:final String? body, :final Node node) =>
       body ?? (node is Element ? node.outerHtml : (node.text ?? '')),
+    // 正则匹配的 `result` 是它的**整段文本**（上游 `AnalyzeByRegex` 里 `info[0]`）。
+    RegexScope(:final List<String> groups) =>
+      groups.isEmpty ? '' : groups.first,
   };
 
   /// Inlines every `java.getString('literal')`-shaped call of [script] with its value.
@@ -1199,6 +1733,8 @@ final class RuleEngine {
             // ——异步路径（`parse.getString`）就是这个形状（ADR-0069 G9）。
             _ => jsonEncode(data.join(_valueSeparator)),
           });
+          // P5 的观测点：这一次嵌套调用没有跨进 sandbox。
+          _inlinedJavaCalls++;
       }
     }
 
@@ -1628,12 +2164,22 @@ final class RuleEngine {
   /// by [params] first.
   ///
   /// [rulePath] names the field the URL came from (`searchUrl`, `tocRule.nextTocUrl`), so a
-  /// failing script stays locatable (C-SRC-8).
+  /// failing script stays locatable (C-SRC-8). The keyword is exposed to **every** script of the
+  /// rule — the `{{…}}` templates and the `@js:` / `<js>` segments alike — as `key`
+  /// (`AnalyzeUrl.kt:377`); a `@js:` segment used to be the one place where it was missing, which
+  /// is what made a real source's `searchUrl` fail with `'key' is not defined`.
   ///
   /// [charset] is the request's declared encoding (`url,{“charset”:“gbk”}`,
   /// `book-source.md` §4.3) and only affects how `key` is escaped; [encodeKeyword] is `false`
   /// when the template is a **body** that must carry the keyword verbatim (a JSON payload,
   /// which upstream does not form-encode either).
+  ///
+  /// [expandSegments] runs upstream's `analyzeJs` first: a URL rule may be a **chain** of literal
+  /// text and `@js:` / `<js>` scripts, where a literal piece replaces `@result` with what the chain
+  /// produced so far and each script receives it as `result` (`AnalyzeUrl.kt:157-176`). A rule that
+  /// is nothing but a script therefore renders its value — the form a source writes as
+  /// `searchUrl: "@js:'https://a.test/s?q=' + key"`. A **body** keeps it off ([expandSegments]
+  /// `false`): upstream expands the address only.
   Future<ParseResult<String>> renderUrl(
     String template, {
     required String rulePath,
@@ -1641,30 +2187,47 @@ final class RuleEngine {
     required JsPageContext context,
     String? charset,
     bool encodeKeyword = true,
+    bool expandSegments = true,
   }) async {
+    String source = template;
+    if (expandSegments) {
+      final _Parsed<String> chained = await _expandUrlSegments(
+        template,
+        rulePath: rulePath,
+        context: context,
+        params: params,
+      );
+      switch (chained) {
+        case _ParsedFailure<String>(:final _RuleRejection rejection):
+          return _fail<String>(rejection, field: rulePath);
+        case _ParsedValue<String>(:final String value):
+          source = value;
+      }
+    }
+
     final StringBuffer out = StringBuffer();
     var index = 0;
-    while (index < template.length) {
-      final int at = template.indexOf('{{', index);
+    while (index < source.length) {
+      final int at = source.indexOf('{{', index);
       if (at < 0) {
-        out.write(template.substring(index));
+        out.write(source.substring(index));
         break;
       }
-      final int end = _templateEnd(template, at);
+      final int end = _templateEnd(source, at);
       if (end < 0) {
         // §4：不得把字面 `{{…}}` 交给请求层 —— 在 URL 里它只能显式失败。
         return _fail<String>(_malformed(rulePath), field: rulePath);
       }
 
-      out.write(template.substring(index, at));
-      final String inner = template.substring(at + 2, end - 2).trim();
+      out.write(source.substring(index, at));
+      final String inner = source.substring(at + 2, end - 2).trim();
       if (params.containsKey(inner)) {
         if (!encodeKeyword && inner == _urlKeywordVariable) {
           // 非表单载荷（JSON / XML body）里关键词必须原样出现。
           out.write(params[inner]);
         } else {
           // 交给同步渲染器统一处理（`key` 只编码一次）：原样搬过去。
-          out.write(template.substring(at, end));
+          out.write(source.substring(at, end));
         }
       } else {
         final _Parsed<String> value = await _urlJsValue(
@@ -1689,8 +2252,71 @@ final class RuleEngine {
         params,
         logger: _logger,
         charset: charset,
+        page: context.page,
       ),
     );
+  }
+
+  /// Upstream's `AnalyzeUrl.analyzeJs` (`:160-176`): a URL rule is a chain of literal pieces and
+  /// `@js:` / `<js>` scripts.
+  ///
+  /// The running value starts as the whole rule. A literal piece **replaces** `@result` with it (all
+  /// occurrences), and a script receives it as `result`; the script's value becomes the new running
+  /// value. Upstream trims every literal piece, and a piece that trims to nothing contributes
+  /// nothing — an empty piece must not wipe the chain.
+  Future<_Parsed<String>> _expandUrlSegments(
+    String template, {
+    required String rulePath,
+    required JsPageContext context,
+    required Map<String, String> params,
+  }) async {
+    final Iterable<RegExpMatch> matches = _jsSegmentPattern.allMatches(
+      template,
+    );
+    if (matches.isEmpty) {
+      return _ParsedValue<String>(template);
+    }
+
+    String running = template;
+    var start = 0;
+    for (final RegExpMatch match in matches) {
+      if (match.start > start) {
+        final String literal = template.substring(start, match.start).trim();
+        if (literal.isNotEmpty) {
+          running = literal.replaceAll(_urlChainVariable, running);
+        }
+      }
+      final String block = (match.group(1) ?? '').trim();
+      final String script = block.isNotEmpty ? block : (match.group(2) ?? '');
+      final ParseResult<Object?> evaluated = await evaluateJs(
+        script,
+        rulePath: rulePath,
+        context: context,
+        result: running,
+        // 上游 `AnalyzeUrl.evalJS` 的绑定（`AnalyzeUrl.kt:377`）：URL 链里的 `@js:` 也能读 `key`。
+        key: params['key'],
+      );
+      switch (evaluated) {
+        case ParseFailure<Object?>(
+          :final ParseFailureKind kind,
+          :final String rulePath,
+        ):
+          return _ParsedFailure<String>(
+            _RuleRejection(kind: kind, rulePath: rulePath),
+          );
+        case ParseSuccess<Object?>(:final Object? data):
+          running = data?.toString() ?? '';
+      }
+      start = match.end;
+    }
+    if (template.length > start) {
+      final String literal = template.substring(start).trim();
+      if (literal.isNotEmpty) {
+        running = literal.replaceAll(_urlChainVariable, running);
+      }
+    }
+
+    return _ParsedValue<String>(running);
   }
 
   /// Evaluates one non-template `{{…}}` of a URL (§4, matrix #18).
@@ -1979,6 +2605,20 @@ final class RuleEngine {
       jsContext ?? const JsPageContext(baseUrl: ''),
     JsonScope(:final JsPageContext? jsContext) =>
       jsContext ?? const JsPageContext(baseUrl: ''),
+    RegexScope(:final JsPageContext? jsContext) =>
+      jsContext ?? const JsPageContext(baseUrl: ''),
+  };
+
+  /// The text a **replacement-only** rule (`##pattern##replace`) applies to.
+  ///
+  /// Upstream's `getString` keeps the scope's content as `result` and runs the replacement on
+  /// `result.toString()`: the page body for a page, the element's `outerHtml` for an item. A JSON
+  /// item would be a Java `Map` there; this repository uses its JSON text (the same registered
+  /// difference as matrix #13).
+  String? _replacementContentOf(RuleScope scope) => switch (_resultOf(scope)) {
+    null => null,
+    final String text => text,
+    final Object? value => jsonEncode(value),
   };
 
   /// The page content a bare `@js:` rule receives as `result` (`book-source.md` §6).
@@ -1998,8 +2638,9 @@ final class RuleEngine {
   /// * a nested rule that itself needs `@js:` — the one worker is busy running the job that asked
   ///   (ADR-0030 §决策 1/3), so a nested evaluation could only wait on its own queue. The value
   ///   shape (`parse.getString`) reports it as `js:parse-recursion`; the element shape
-  ///   (`parse.getElements`) reports `unsupported:@js:list`, because list rules do not accept
-  ///   `@js:` at all (matrix #14's list boundary).
+  ///   (`parse.getElements`) reports `unsupported:@js:list`, because a nested **list** rule that
+  ///   needs `@js:` would have to run another job (the top-level rule form is fine: matrix #14 and
+  ///   the trailing-`@js:` list chain both go through `_selectAllSegments`).
   ///
   /// `parse.getString` answers with the first value, or `''` when the nested rule matched
   /// nothing — upstream's `getString` shape, which rules do string work on. `parse.getElements`
@@ -2009,7 +2650,12 @@ final class RuleEngine {
     RuleScope scope, {
     required String field,
   }) => (JsParseRequest request) async {
-    final String? page = _pageBodyOf(scope);
+    // P5 的观测点：这一次嵌套调用没能内联，只能把规则交回宿主并等待这一次 job。
+    _bridgedJavaCalls++;
+    // `java.setContent(html)` 换掉页级 scope（ADR-0076 §决策 1）：上游在同一个评价里换 content，
+    // 本仓的 scope 在宿主上，所以按覆盖后的正文重建一个页级 scope 再求值。
+    final RuleScope effective = _withContent(scope, request.content);
+    final String? page = _pageBodyOf(effective);
     if (page == null || (request.doc != null && request.doc != page)) {
       return failureAt<Object?>(
         kind: ParseFailureKind.unsupportedRule,
@@ -2021,7 +2667,7 @@ final class RuleEngine {
       // `java.getStringList`：抽取值（上游 `AnalyzeRule.getStringList` 会跑提取段）。
       return switch (await _evaluate(
         request.rule,
-        scope,
+        effective,
         rulePath: field,
         single: false,
         allowJs: false,
@@ -2037,7 +2683,22 @@ final class RuleEngine {
     }
 
     if (request.wantsList) {
-      return switch (await selectAll(request.rule, scope, rulePath: field)) {
+      // 元素形状（`parse.getElements`）的 `@js:` 柜口：段链里的脚本要再起一个 job，而 worker
+      // 正在跑发起这次嵌套的 job（ADR-0030 §决策 1/3）——顶层列表规则的 `@js:` 不受影响，
+      // 那是同一次评价里的段链（矩阵 #14），这里只是「嵌套再嵌套」这一档。
+      if (_jsSegmentsOf(request.rule)
+          .any((_RuleSegment segment) => segment.isScript)) {
+        return failureAt<Object?>(
+          kind: ParseFailureKind.unsupportedRule,
+          rulePath: '$field:$_jsListMarker',
+        );
+      }
+
+      return switch (await selectAll(
+        request.rule,
+        effective,
+        rulePath: field,
+      )) {
         ParseFailure<List<RuleScope>>(
           :final ParseFailureKind kind,
           :final String rulePath,
@@ -2052,7 +2713,7 @@ final class RuleEngine {
 
     return switch (await _evaluate(
       request.rule,
-      scope,
+      effective,
       rulePath: field,
       single: true,
       allowJs: false,
@@ -2068,16 +2729,41 @@ final class RuleEngine {
     };
   };
 
+  /// The scope a `parse.*` request has to be evaluated against: `java.setContent(html)` replaces
+  /// body a rule reads inside the same job (ADR-0076 §决策 1).
+  ///
+  /// Upstream mutates `AnalyzeUrl.content` in place; here the page scope lives on the host, so the
+  /// override arrives with the call and the engine rebuilds a page scope around it — same URL, same
+  /// page number, same source, new body.
+  RuleScope _withContent(RuleScope scope, String? content) {
+    if (content == null) {
+      return scope;
+    }
+    final JsPageContext? context = switch (scope) {
+      DomScope(:final JsPageContext? jsContext) => jsContext,
+      JsonScope(:final JsPageContext? jsContext) => jsContext,
+      RegexScope(:final JsPageContext? jsContext) => jsContext,
+    };
+
+    return RuleScope.dom(
+      html_parser.parse(content),
+      body: content,
+      jsContext: context,
+    );
+  }
+
   /// The response body [scope] carries, or `null` when it is not a page scope.
   String? _pageBodyOf(RuleScope scope) => switch (scope) {
     DomScope(:final String? body) => body,
-    JsonScope() => null,
+    JsonScope() || RegexScope() => null,
   };
 
   /// The value one `parse.getElements` match becomes in the sandbox (§6).
   Object? _jsDocOf(RuleScope match) => switch (match) {
     DomScope(:final Node node) => node is Element ? node.outerHtml : node.text,
     JsonScope(:final Object? value) => value,
+    RegexScope(:final List<String> groups) =>
+      groups.isEmpty ? '' : groups.first,
   };
 
   /// Applies a **standalone** `##regex##replacement` rule to [text] (matrix #9).
@@ -2191,18 +2877,62 @@ final class RuleEngine {
     return const _ParsedValue<List<String>>(<String>[]);
   }
 
+  /// Extracts one selector branch's values, including the JSON-item bare-key form.
+  ///
+  /// Upstream's `AnalyzeRule.getString` has a `LinkedTreeMap` branch that reads the whole rule as
+  /// one member name (`AnalyzeRule.kt:331`), which is how a real source's
+  /// `$.pic@put:{img:pic}` gets the `pic` member of the item. A [JsonScope] holding a map
+  /// therefore answers a **selector-less** rule with `map[key]`, through the same value shape as
+  /// matrix #13 ([_jsonValues]): a string as is, a list expanded, a map as JSON text.
+  ///
+  /// The boundary is deliberately narrow: only a map answers, and only when the rule has no
+  /// selector step. A JSON **page** is still read as DOM (ADR-0047 §决策 6), and a list or scalar
+  /// item still fails loudly instead of guessing what a bare name could mean (C-SRC-4).
+  _Parsed<List<String>> _domValues(
+    _DomBranch dom,
+    RuleScope scope, {
+    required String field,
+  }) {
+    if (dom.selectors.isEmpty && scope is JsonScope) {
+      final Object? value = scope.value;
+      final String key = dom.extraction;
+      if (value is Map<Object?, Object?> && key.isNotEmpty) {
+        return _ParsedValue<List<String>>(<String>[..._jsonValues(value[key])]);
+      }
+    }
+
+    return switch (_matchElements(dom, scope, field: field)) {
+      _ParsedFailure<List<Element>>(:final _RuleRejection rejection) =>
+        _ParsedFailure<List<String>>(rejection),
+      _ParsedValue<List<Element>>(:final List<Element> value) =>
+        _ParsedValue<List<String>>(_extract(dom.extraction, value)),
+    };
+  }
+
   /// Extracts the values of one value-rule branch from [scope].
   _Parsed<List<String>> _values(
     _RuleBranch branch,
     RuleScope scope, {
     required String field,
   }) => switch (branch) {
-    final _DomBranch dom => switch (_matchElements(dom, scope, field: field)) {
-      _ParsedFailure<List<Element>>(:final _RuleRejection rejection) =>
+    final _DomBranch dom => _domValues(dom, scope, field: field),
+    final _XPathBranch xpath => switch (_xpathMatches(
+      xpath,
+      scope,
+      field: field,
+    )) {
+      _ParsedFailure<List<XPathMatch>>(:final _RuleRejection rejection) =>
         _ParsedFailure<List<String>>(rejection),
-      _ParsedValue<List<Element>>(:final List<Element> value) =>
-        _ParsedValue<List<String>>(_extract(dom.extraction, value)),
+      _ParsedValue<List<XPathMatch>>(:final List<XPathMatch> value) =>
+        _ParsedValue<List<String>>(<String>[
+          for (final XPathMatch match in value)
+            if (match.stringValue.isNotEmpty) match.stringValue,
+        ]),
     },
+    // 值规则位置的正则在上面的 `_check` 里就具名拒绝了，这里只为了让 switch 完整。
+    final _RegexBranch _ => _ParsedFailure<List<String>>(
+      _unsupported(_regexFlag),
+    ),
     final _JsonBranch json => switch (_jsonScopeOf(scope, field: field)) {
       _ParsedFailure<Object?>(:final _RuleRejection rejection) =>
         _ParsedFailure<List<String>>(rejection),
@@ -2210,6 +2940,128 @@ final class RuleEngine {
         _jsonValuesOf(json, value),
       ),
     },
+  };
+
+  /// The scopes one regex branch produces from [scope] (matrix #20).
+  ///
+  /// The chain runs over the **page text** (`DomScope.body`, the element's own HTML for a nested
+  /// scope). Every non-final regex narrows the text to its matches' whole match text, exactly like
+  /// `AnalyzeByRegex.getElements`; the final one yields one [RegexScope] per match, whose groups are
+  /// what the item's field rules read as `$1` / `$2`.
+  _Parsed<List<RuleScope>> _regexScopes(
+    _RegexBranch branch,
+    RuleScope scope, {
+    required String field,
+  }) {
+    final String? text = switch (scope) {
+      DomScope(:final String? body, :final Node node) =>
+        body ?? (node is Element ? node.outerHtml : node.text),
+      JsonScope() => null,
+      RegexScope() => null,
+    };
+    if (text == null) {
+      return _ParsedFailure<List<RuleScope>>(_malformed(field));
+    }
+
+    String haystack = text;
+    for (var index = 0; index < branch.regexes.length - 1; index++) {
+      final StringBuffer narrowed = StringBuffer();
+      for (final RegExpMatch match in branch.regexes[index].allMatches(
+        haystack,
+      )) {
+        narrowed.write(match.group(0));
+      }
+      haystack = narrowed.toString();
+    }
+
+    final RegExp last = branch.regexes.last;
+    return _ParsedValue<List<RuleScope>>(<RuleScope>[
+      for (final RegExpMatch match in last.allMatches(haystack))
+        RegexScope(<String>[
+          for (var group = 0; group <= match.groupCount; group++)
+            match.group(group) ?? '',
+        ], jsContext: _jsContextOf(scope)),
+    ]);
+  }
+
+  // `$1` / `$2` / `$0` of a regex match (upstream `SourceRule.splitRegex` 的
+  // `\$\d{1,2}` 分组引用)：一条规则里可以有多个，也可以和字面文本拼在一起
+  // （`https://a.test/c/$1`）。
+  static final RegExp _regexGroupReference = RegExp(r'\$(\d{1,2})');
+
+  /// Reads one **item** rule of a regex list rule against its match (matrix #20).
+  ///
+  /// The corpus shape is a pure template — `$2$3`, `$1`, `https://a.test/c/$1` — optionally with a
+  /// `##regex##replacement` tail (matrix #9). Anything else on a regex match has nothing to select
+  /// from, so it is [ParseFailureKind.unsupportedRule] with the name `regex:item` instead of quietly
+  /// answering the page.
+  ParseResult<List<String>> _evaluateRegexItem(
+    String rule,
+    RegexScope scope, {
+    required String rulePath,
+  }) {
+    final List<String> parts = rule.split('##');
+    final String body = parts.first;
+    if (!body.contains(_regexGroupReference)) {
+      return _fail<List<String>>(
+        body.trim().isEmpty ? _malformed(rulePath) : _unsupported('regex:item'),
+        field: rulePath,
+      );
+    }
+    final String substituted = body.replaceAllMapped(_regexGroupReference, (
+      Match reference,
+    ) {
+      final int index = int.tryParse(reference.group(1) ?? '') ?? -1;
+
+      return index >= 0 && index < scope.groups.length
+          ? scope.groups[index]
+          : '';
+    });
+    final String value = _applyReplacement(<String>[substituted], parts).first;
+
+    return ParseSuccess<List<String>>(
+      value.isEmpty ? const <String>[] : <String>[value],
+    );
+  }
+
+  /// The nodes an XPath branch selects inside [scope] (matrix #21).
+  _Parsed<List<XPathMatch>> _xpathMatches(
+    _XPathBranch branch,
+    RuleScope scope, {
+    required String field,
+  }) => switch (scope) {
+    DomScope(:final Node node) => _ParsedValue<List<XPathMatch>>(
+      branch.expression.select(node),
+    ),
+    // 一个 JSON 值或一次正则匹配没有 DOM，XPath 规则对着它们跑只能是规则写错了（C-SRC-4）。
+    JsonScope() ||
+    RegexScope() => _ParsedFailure<List<XPathMatch>>(_malformed(field)),
+  };
+
+  /// The **elements** an XPath branch selects, for a list rule.
+  ///
+  /// A list rule's answers become scopes, so only element matches can be one. A rule that selects
+  /// text or attributes there (say `//div/text()` as a `bookList`) is [ParseFailureKind.parseFailed]
+  /// rather than a silently shorter list.
+  _Parsed<List<Element>> _xpathElements(
+    _XPathBranch branch,
+    RuleScope scope, {
+    required String field,
+  }) => switch (_xpathMatches(branch, scope, field: field)) {
+    _ParsedFailure<List<XPathMatch>>(:final _RuleRejection rejection) =>
+      _ParsedFailure<List<Element>>(rejection),
+    _ParsedValue<List<XPathMatch>>(:final List<XPathMatch> value) =>
+      switch (<Element>[
+        for (final XPathMatch match in value)
+          if (match is XPathElementMatch) match.element,
+      ]) {
+        final List<Element> elements when elements.isNotEmpty =>
+          _ParsedValue<List<Element>>(elements),
+        // 选中了东西却没有一个元素：这条规则在列表位置只能读元素。
+        final List<Element> _ when value.isNotEmpty =>
+          _ParsedFailure<List<Element>>(_malformed(field)),
+        final List<Element> elements => _ParsedValue<List<Element>>(elements),
+      },
   };
 
   /// The values one JSON branch contributes (matrix #13 / #19).
@@ -2483,6 +3335,82 @@ final class RuleEngine {
         .join();
   }
 
+  /// Parses [rule] for one evaluation, serving it from the compile cache when it is known.
+  ///
+  /// The cache is the "R1" refactor face of `docs/dev/adr/0078` 决策 3: the compiled steps of a
+  /// rule text do not depend on the page, the field or the score, so one text only has to be
+  /// parsed once per session (P3).
+  ///
+  /// Sharing is safe because everything the parse produces is immutable — selector steps, the
+  /// `RegExp` chain, the compiled `JsonPath` and the `XPathExpression` — and evaluation never
+  /// mutates them (the engine's own contract: it never mutates a scope or its elements).
+  _ParsedRule _parseForEvaluation(String rule) {
+    _ruleLookups++;
+    final _ParsedRule? cached = _parsedRules.remove(rule);
+    if (cached != null) {
+      // Reinsert so the eviction order is least-recently-used rather than oldest-inserted.
+      _parsedRules[rule] = cached;
+
+      return cached;
+    }
+
+    final _ParsedRule parsed = _parse(rule);
+    _ruleCompilations++;
+    _remember(_parsedRules, rule, parsed, _parsedRuleCacheLimit);
+
+    return parsed;
+  }
+
+  /// Compiles the selectors of [rule] for one evaluation, or serves them from the cache.
+  ///
+  /// The key carries `field` and `hasExtraction` on purpose: a malformed rule names the field it
+  /// belongs to as its `rulePath` (C-SRC-8), and the last segment of a rule is a selector in a list
+  /// rule but the extraction in a value rule (`book_source_doc` matrix #8). Two callers that differ
+  /// in either respect therefore get their own entry, and no failure can be reported against
+  /// another field's path.
+  _Parsed<List<_CheckedCandidate>> _checkForEvaluation(
+    String rule,
+    _ParsedRule parsed, {
+    required String field,
+    required bool hasExtraction,
+  }) {
+    _ruleLookups++;
+    final ({String rule, String field, bool hasExtraction}) key = (
+      rule: rule,
+      field: field,
+      hasExtraction: hasExtraction,
+    );
+    final _Parsed<List<_CheckedCandidate>>? cached = _checkedRules.remove(key);
+    if (cached != null) {
+      _checkedRules[key] = cached;
+
+      return cached;
+    }
+
+    final _Parsed<List<_CheckedCandidate>> checked = _check(
+      parsed,
+      field: field,
+      hasExtraction: hasExtraction,
+    );
+    _ruleCompilations++;
+    _remember(_checkedRules, key, checked, _checkedRuleCacheLimit);
+
+    return checked;
+  }
+
+  /// Stores [value] under [key], evicting the least recently used entry past [limit].
+  ///
+  /// Both maps are insertion-ordered, and every hit reinserts its entry (see
+  /// [_parseForEvaluation]), so `keys.first` is the least recently used one. A cap matters because
+  /// the engine lives as long as the app: without it a long session would accumulate every rule text
+  /// of every imported source.
+  void _remember<K, V>(Map<K, V> cache, K key, V value, int limit) {
+    cache[key] = value;
+    while (cache.length > limit) {
+      cache.remove(cache.keys.first);
+    }
+  }
+
   /// Splits [rule] into its `##` parts, its leading `-` and its `@`-separated
   /// segments.
   ///
@@ -2494,7 +3422,13 @@ final class RuleEngine {
     // 矩阵 #7：`-` 是整条规则的前缀（`-class.odd@tag.a@href`）。必须在按 `@`
     // 切段之前摘掉，否则它会变成一个空段，后面的标志头也会被切错。
     final bool reverse = rawBody.startsWith('-');
-    final String stripped = (reverse ? rawBody.substring(1) : rawBody).trim();
+    // `+` 是「正序」的显式写法：上游先剥 `-` 再剥 `+`，两个都只当标记（`BookList.kt:73-75`、
+    // `BookChapterList.kt:59-65`），所以 `-+rule` 仍然是倒序。
+    final String withoutReverse = (reverse ? rawBody.substring(1) : rawBody)
+        .trim();
+    final String stripped = withoutReverse.startsWith('+')
+        ? withoutReverse.substring(1).trim()
+        : withoutReverse;
     // 矩阵 #15：`@@` 是规则体前缀（上游 `AnalyzeRule.kt:612-615`：剥掉两字符、模式不变），
     // 所以必须比 `@` 切段早——否则它会变成一个空段。
     final String body = stripped.startsWith(_defaultRuleFlag)
@@ -2511,13 +3445,46 @@ final class RuleEngine {
         ? null
         : body.substring(jsAt + _jsFlag.length).trim();
 
+    // 矩阵 #20：`:` 开头是正则规则，`&&` 在里面是**正则链**而不是分支连接符，所以要在切候选
+    // 之前就认出来（`book-source.md` §3 的 #20 注记）。
+    final List<RegExp>? regexes =
+        selectorBody.startsWith(_regexFlag) &&
+            !selectorBody.startsWith('$_regexFlag$_regexFlag')
+        ? _regexChainOf(selectorBody.substring(_regexFlag.length))
+        : null;
+
     return _ParsedRule(
       body: selectorBody,
       jsScript: jsScript,
       replacementParts: replacementParts,
       reverse: reverse,
-      candidates: _candidatesOf(selectorBody),
+      candidates: regexes == null
+          ? _candidatesOf(selectorBody)
+          : const <_RuleCandidate>[],
+      regexes: regexes,
     );
+  }
+
+  /// Compiles the `&&`-separated regex chain of a `:`-rule, or `null` when one does not compile.
+  ///
+  /// Upstream keeps the chain as text and compiles per call (`AnalyzeByRegex.getElements`); a bad
+  /// pattern there is an exception the field degrades on. Here it is [ParseFailureKind.parseFailed]
+  /// at parse time, which is the same outcome with a better `rulePath`.
+  List<RegExp>? _regexChainOf(String text) {
+    final List<RegExp> chain = <RegExp>[];
+    for (final String part in text.split('&&')) {
+      final String pattern = part.trim();
+      if (pattern.isEmpty) {
+        return null;
+      }
+      try {
+        chain.add(RegExp(pattern));
+      } on FormatException {
+        return null;
+      }
+    }
+
+    return chain.isEmpty ? null : chain;
   }
 
   /// Splits the rule body into candidates (matrix #10's `||`) and, inside each, into
@@ -2526,10 +3493,36 @@ final class RuleEngine {
   /// `||` binds loosest, so it is split first: `a&&b||c` is `(a&&b) || c`
   /// (`book-source.md` §3.2, architect ruling 1). Inside a candidate `%%` and `&&` are
   /// the same level, so the first one to occur decides.
-  List<_RuleCandidate> _candidatesOf(String body) => <_RuleCandidate>[
-    for (final String candidate in _splitRule(body, <String>['||']).parts)
-      _candidateOf(candidate),
-  ];
+  List<_RuleCandidate> _candidatesOf(String body) {
+    final List<_RuleCandidate> raw = <_RuleCandidate>[
+      for (final String candidate in _splitRule(body, <String>['||']).parts)
+        _candidateOf(candidate),
+    ];
+    final bool hasValue = raw.any(
+      (_RuleCandidate candidate) =>
+          candidate.branches.any((String branch) => branch.trim().isNotEmpty),
+    );
+    // 整条规则都为空（`-` 只剩倒置前缀、`&&` 只剩连接符）：那是写错了，不是可以被跳过的
+    // 候选，原样交给 [_readBranch] 报畸形（C-SRC-4）。
+    if (!hasValue) {
+      return raw;
+    }
+
+    // 空候选与空分支不产出任何值：上游对空规则直接跳过（`AnalyzeByJSoup.getString` 的
+    // `temp.isNullOrEmpty()`）。真实写法是把 `##` 替换挂在候选后面
+    // （`class.span@text||##最新章节.*`），`##` 属于整条规则，切完就剩一个空候选。
+    return <_RuleCandidate>[
+      for (final _RuleCandidate candidate in raw)
+        if (candidate.branches.any((String branch) => branch.trim().isNotEmpty))
+          _RuleCandidate(
+            branches: <String>[
+              for (final String branch in candidate.branches)
+                if (branch.trim().isNotEmpty) branch,
+            ],
+            connector: candidate.connector,
+          ),
+    ];
+  }
 
   /// Splits one candidate into its branches.
   ///
@@ -2563,12 +3556,25 @@ final class RuleEngine {
   /// a flag really follows, so `@foo` stays a broken rule.
   List<String> _segmentsOf(String branch) {
     final String trimmed = branch.trim();
-    final String text =
-        trimmed.startsWith('@') && _flagSegment.hasMatch(trimmed.substring(1))
-        ? trimmed.substring(1)
-        : trimmed;
+    // 上游 `RuleAnalyzer.trim()` 在切段前把行首的 `@` / 空白一并剥掉，所以真实语料里的
+    // `@tag.td.2@text` / `@href` / `@onclick@js:…` 等同于去掉那个 `@`。标志头不能剥：
+    // `@js:` / `@css:` / `@json:` / `@xpath:` / `@put:` / `@get:` / `@webJs` / `@@` 都是语法。
+    final String text = _stripLeadingAt(trimmed);
 
     return text.split('@').map((String segment) => segment.trim()).toList();
+  }
+
+  /// Strips a single leading `@` (upstream `RuleAnalyzer.trim()`).
+  ///
+  /// A flag head loses the `@` here too: [_flagOf] puts it back when it reads the segment, so
+  /// `@js:` keeps being matrix #14 while `@tag.li.0@text` becomes the selector it means. `@@`
+  /// (matrix #15) is a rule-body prefix and was already stripped by [_parse].
+  String _stripLeadingAt(String text) {
+    if (!text.startsWith('@') || text.startsWith(_defaultRuleFlag)) {
+      return text;
+    }
+
+    return text.substring(1).trimLeft();
   }
 
   /// Reads [parsed] into the selector steps it runs, or reports the rejection.
@@ -2583,10 +3589,25 @@ final class RuleEngine {
   }) {
     final String body = parsed.body;
 
+    // 矩阵 #20 只作用于**书籍列表 / 目录列表**（上游 `getElements` / `getElement` 才有
+    // `Mode.Regex` 分支；`getString` 没有，落到 `else -> rule` 等于答规则原文）。值规则位置
+    // 因此是具名拒绝，而不是一个悄悄返回原文的结果。
+    final List<RegExp>? regexes = parsed.regexes;
+    if (regexes != null) {
+      return hasExtraction
+          ? _ParsedFailure<List<_CheckedCandidate>>(_unsupported(_regexFlag))
+          : _ParsedValue<List<_CheckedCandidate>>(<_CheckedCandidate>[
+              _CheckedCandidate(
+                branches: <_RuleBranch>[_RegexBranch(regexes)],
+                connector: _RuleConnector.union,
+              ),
+            ]);
+    }
+
     if (!hasExtraction && parsed.jsScript != null) {
-      // 矩阵 #14 目前只实现**值规则**上的 `@js:`（终段）。列表规则上的 JS 要的是「JS
-      // 返回一列元素」的契约（上游 `getElements` 的 `Mode.Js` 分支，AnalyzeRule.kt:439），
-      // 该契约尚未成型，所以显式拒绝——顶层列表规则被拒仍整次失败（C-SRC-4）。
+      // 列表规则上的 `@js:` 由 `_selectAllRule` 提前交给段链解释器（矩阵 #14 / `AnalyzeRule.kt:439`），
+      // 走到这里的只可能是**没有 JS 段**的规则；留着这一档是为了让 `_check` 与 `_parse` 的契约
+      // 完整（两个入口共享同一个解析），而不是一条可达分支。
       return _ParsedFailure<List<_CheckedCandidate>>(_unsupported('@js:list'));
     }
 
@@ -2642,6 +3663,13 @@ final class RuleEngine {
     required String field,
     required bool hasExtraction,
   }) {
+    // 矩阵 #21：XPath 整条表达式就是这一分支，**不按 `@` 切段**——`[@class='a']` 与
+    // `/@content` 里的 `@` 都属于 XPath 自己，切成段就散架了（S5b）。
+    final String? xpathText = _xpathTextOf(branch);
+    if (xpathText != null) {
+      return _readXPath(xpathText, field: field);
+    }
+
     final String? jsonPath = _jsonPathOf(branch);
     if (jsonPath != null) {
       return _readJsonBranch(jsonPath, field: field);
@@ -2681,6 +3709,46 @@ final class RuleEngine {
     return _ParsedValue<_RuleBranch>(
       _DomBranch(selectors: steps, extraction: extraction),
     );
+  }
+
+  /// The XPath expression [branch] carries, or `null` when it is not an XPath branch.
+  ///
+  /// Three spellings arrive here: the `@xpath:` flag, the same flag without its `@` (a branch
+  /// written after another segment), and the bare `//` head upstream also treats as XPath.
+  String? _xpathTextOf(String branch) {
+    final String trimmed = branch.trim();
+    final String lower = trimmed.toLowerCase();
+    if (lower.startsWith(_xpathFlag)) {
+      return trimmed.substring(_xpathFlag.length).trim();
+    }
+    if (lower.startsWith('xpath:')) {
+      return trimmed.substring('xpath:'.length).trim();
+    }
+    if (trimmed.startsWith('//')) {
+      return trimmed;
+    }
+
+    return null;
+  }
+
+  /// Reads a branch whose whole text is one XPath expression (matrix #21).
+  ///
+  /// The subset is `xpath_rule.dart`'s; syntax it names but does not implement is reported as
+  /// [ParseFailureKind.unsupportedRule] with the syntax in the rule path, and anything else is
+  /// [ParseFailureKind.parseFailed] (C-SRC-4).
+  _Parsed<_RuleBranch> _readXPath(String text, {required String field}) {
+    if (text.isEmpty) {
+      return _ParsedFailure<_RuleBranch>(_malformed(field));
+    }
+    switch (compileXPath(text)) {
+      case XPathCompiled(:final XPathExpression expression):
+        return _ParsedValue<_RuleBranch>(_XPathBranch(expression));
+      case XPathUnsupported(:final String syntax):
+        // 编译器给的名字已经带 `xpath:` 前缀（`xpath:ancestor::`），别再叠一层。
+        return _ParsedFailure<_RuleBranch>(_unsupported(syntax));
+      case XPathMalformed():
+        return _ParsedFailure<_RuleBranch>(_malformed(field));
+    }
   }
 
   /// Reads one selector [segment] into the step it stands for (matrix #1..#7,
@@ -2904,6 +3972,13 @@ final class RuleEngine {
     String segment, {
     required String field,
   }) {
+    // 矩阵 #32 先判：属性值里可以带 `.`（`a[href*=".html"]`），先把整段认成属性选择器，
+    // 后面的位置切分才不会切错。
+    final int bracket = segment.indexOf('[');
+    if (bracket >= 0 && _isAttributeSelector(segment, bracket)) {
+      return _ParsedValue<_NamedSelector>((name: segment, selection: null));
+    }
+
     // 上游把**任何**段末尾的 `.N` 当索引（`ElementsSingle`）：`#image_div img.0` 读的是
     // 「`#image_div img` 的第 0 个」，不是「类名 0」。只有纯数字（可带负号）才算索引，
     // 所以 `div.item` / `.result-item` 仍是 CSS（ADR-0069 G3）。
@@ -2916,7 +3991,16 @@ final class RuleEngine {
       );
     }
 
-    final int bracket = segment.indexOf('[');
+    // 矩阵 #33：`.` 形态的位置列表（`span.1:2`、`li.4:6`、`p.3:4:5:6:7`）。上游用同一个
+    // `findIndexSet` 读它，`:` 分隔序号、`.` 表示筛选（`!` 表示排除）。
+    if (dot > 0 && _dotIndexList.hasMatch(segment.substring(dot + 1))) {
+      return _indexSuffix(
+        segment.substring(0, dot),
+        segment.substring(dot + 1),
+        field: field,
+      );
+    }
+
     if (bracket >= 0) {
       return _indexSuffix(
         segment.substring(0, bracket),
@@ -3227,7 +4311,9 @@ final class RuleEngine {
   /// [_readSelector], which reports its segment as unsupported or malformed.
   bool _mergesTwoScopes(List<_RuleBranch> branches) =>
       branches.any((_RuleBranch branch) => branch is _JsonBranch) &&
-      branches.any((_RuleBranch branch) => branch is _DomBranch);
+      branches.any(
+        (_RuleBranch branch) => branch is _DomBranch || branch is _XPathBranch,
+      );
 
   /// Reads the `@css:` form of matrix #12: the rest of the segment is a CSS
   /// selector that goes to cascadia unchanged (C-SRC-6).
@@ -3248,10 +4334,118 @@ final class RuleEngine {
       _ParsedFailure<String>(:final _RuleRejection rejection) =>
         _ParsedFailure<_SelectorStep>(rejection),
       _ParsedValue<String>(:final String value) => _compileCss(
-        value,
+        _quoteAttributeValues(value),
         field: field,
       ),
     };
+  }
+
+  /// One attribute selector's name, operator and (possibly unquoted) value.
+  static final RegExp _attributeValue = RegExp(
+    r'''^\s*([^\s~|^$*=]+)\s*(~=|\|=|\^=|\$=|\*=|=)\s*(.*?)\s*$''',
+  );
+
+  /// An attribute value that CSS accepts without quotes.
+  static final RegExp _plainAttributeValue = RegExp(r'^[A-Za-z0-9_-]+$');
+
+  /// Quotes the unquoted attribute values jsoup accepts but CSS does not (matrix #32).
+  ///
+  /// Real book sources are written for jsoup, which reads `[property=og:novel:book_name]` and
+  /// `[property~=category|status|tags]` literally. CSS only allows an identifier unquoted, so the
+  /// `:` / `|` makes cascadia reject the whole selector — a `parseFailed` the page cannot explain.
+  /// Wrapping such a value in double quotes keeps the matching inside cascadia (C-SRC-6); values
+  /// that are already quoted, or are plain identifiers, are left byte for byte.
+  String _quoteAttributeValues(String selector) {
+    final StringBuffer out = StringBuffer();
+    var index = 0;
+    while (index < selector.length) {
+      final String character = selector[index];
+      if (character == '"' || character == "'") {
+        final int end = _quotedEnd(selector, index);
+        final int next = end < 0 ? selector.length : end + 1;
+        out.write(selector.substring(index, next));
+        index = next;
+        continue;
+      }
+      if (character != '[') {
+        out.write(character);
+        index++;
+        continue;
+      }
+      final int close = _attributeEnd(selector, index + 1);
+      if (close < 0) {
+        // 未闭合：原样交给 cascadia 报错，不在这里猜。
+        out.write(selector.substring(index));
+        break;
+      }
+      out
+        ..write('[')
+        ..write(_quoteAttributeBody(selector.substring(index + 1, close)))
+        ..write(']');
+      index = close + 1;
+    }
+
+    return out.toString();
+  }
+
+  /// The index of the `]` closing an attribute selector, or `-1` when it is unclosed.
+  int _attributeEnd(String selector, int start) {
+    var index = start;
+    while (index < selector.length) {
+      final String character = selector[index];
+      if (character == '"' || character == "'") {
+        final int end = _quotedEnd(selector, index);
+        if (end < 0) {
+          return -1;
+        }
+        index = end + 1;
+        continue;
+      }
+      if (character == ']') {
+        return index;
+      }
+      index++;
+    }
+
+    return -1;
+  }
+
+  /// The index of the quote closing the one at [start], or `-1`.
+  int _quotedEnd(String selector, int start) {
+    final String quote = selector[start];
+    var index = start + 1;
+    while (index < selector.length) {
+      final String character = selector[index];
+      if (character == r'\') {
+        index += 2;
+        continue;
+      }
+      if (character == quote) {
+        return index;
+      }
+      index++;
+    }
+
+    return -1;
+  }
+
+  /// Wraps one attribute body's unquoted value when CSS would not accept it.
+  String _quoteAttributeBody(String body) {
+    final RegExpMatch? match = _attributeValue.firstMatch(body);
+    if (match == null) {
+      return body;
+    }
+    final String value = match.group(3) ?? '';
+    if (value.isEmpty ||
+        value.startsWith('"') ||
+        value.startsWith("'") ||
+        _plainAttributeValue.hasMatch(value)) {
+      return body;
+    }
+    final String quoted =
+        '"${value.replaceAll(r'\', r'\\').replaceAll('"', r'\"')}"';
+
+    return '${match.group(1)}${match.group(2)}$quoted';
   }
 
   /// Parses the rewritten [selector] with cascadia, or reports why it cannot be
@@ -3347,11 +4541,38 @@ final class RuleEngine {
       // 裸 `children`（矩阵 #4）与 `children.li.0`（忽略第二、三段）都不是索引写法。
       return _looksLikeIndexExpression(expression) ? expression : null;
     }
-    if (type.startsWith('[') || type.startsWith('!')) {
+    if (type.startsWith('[')) {
+      // 矩阵 #32：`[property=…]` / `[x]` 是属性选择器，不是索引列表——上游 `findIndexSet`
+      // 解析不出索引就整段交给 jsoup（`AnalyzeByJSoup.kt:406-440`）。只有 `[` 后是数字、
+      // `-`、`!` 或空串时才走矩阵 #26。
+      return _isAttributeSelector(segment, 0) ? null : segment;
+    }
+    if (type.startsWith('!')) {
       return segment;
     }
 
     return null;
+  }
+
+  /// Whether the `[...]` starting at [bracket] is a **CSS attribute selector** (matrix #32).
+  ///
+  /// An index list always starts with a digit, `-`, `!` or an empty body, while an attribute name
+  /// starts with a letter or `_`. Upstream's `findIndexSet` draws the same line by giving up on the
+  /// first non-index character and leaving the whole segment to jsoup, which is what makes
+  /// `[property$=image]`, `meta[name=description]` and `a[href*="_"]` match at all.
+  bool _isAttributeSelector(String text, int bracket) {
+    var index = bracket + 1;
+    while (index < text.length && text[index] == ' ') {
+      index++;
+    }
+    if (index >= text.length) {
+      return false;
+    }
+    final int first = text.codeUnitAt(index);
+
+    return (first >= 0x41 && first <= 0x5A) ||
+        (first >= 0x61 && first <= 0x7A) ||
+        first == 0x5F;
   }
 
   /// Whether [text] starts like an index expression (an index, a range or a list).
@@ -3457,7 +4678,9 @@ final class RuleEngine {
 
   /// Logs [rejection] and turns it into the caller's result type (C-SRC-4).
   ParseResult<T> _fail<T>(_RuleRejection rejection, {required String field}) {
-    _logger.warning(
+    // 每次求值都会经过这里，而目录/列表是「一条字段 × N 个条目」：一个坏字段能把同一行刷上千次。
+    // 失败本身由字段级的 `Field rule degraded`（WARN，已按窗口聚合）与阶段结论承担，这里留 debug。
+    _logger.debug(
       'Rejected rule: field=$field reason=${rejection.rulePath} '
       'kind=${rejection.kind.name}',
     );
@@ -3482,6 +4705,90 @@ final class RuleEngine {
   }
 }
 
+/// The literal a host-evaluated `result.…` chain prefix becomes, and its length in the script.
+typedef _ElementPrefix = ({String literal, int consumed});
+
+/// One intermediate value of a host-evaluated `result.…` chain.
+sealed class _ElementChain {
+  const _ElementChain();
+
+  /// The JavaScript literal this value becomes in the script.
+  String toJsLiteral();
+}
+
+/// A list of elements (upstream `Elements` or a single `Element`).
+final class _ChainElements extends _ElementChain {
+  const _ChainElements(this.elements);
+
+  final List<Element> elements;
+
+  @override
+  String toJsLiteral() => jsonEncode(<String>[
+    for (final Element element in elements) element.outerHtml,
+  ]);
+}
+
+/// A string the chain produced (`text` / `attr` / `html` / `outerHtml`).
+final class _ChainString extends _ElementChain {
+  const _ChainString(this.value);
+
+  final String value;
+
+  @override
+  String toJsLiteral() => jsonEncode(value);
+}
+
+/// A number the chain produced (`size` / `elementSiblingIndex`).
+final class _ChainNumber extends _ElementChain {
+  const _ChainNumber(this.value);
+
+  final int value;
+
+  @override
+  String toJsLiteral() => value.toString();
+}
+
+/// Snapshot of the engine's rule-compilation counters.
+///
+/// Read by `tool/bench/` to report the P3 hit rate of `docs/dev/adr/0078` 决策 4; [RuleEngine] never
+/// reads it back, so it cannot influence behaviour.
+final class RuleCompileStats {
+  /// Creates a snapshot from the engine's raw counts.
+  const RuleCompileStats({required this.lookups, required this.compilations});
+
+  /// Evaluations that asked for a rule text to become steps.
+  final int lookups;
+
+  /// Those that really parsed the text (a cache miss, once the compile cache lands).
+  final int compilations;
+
+  /// Lookups served without parsing.
+  int get hits => lookups - compilations;
+
+  /// Share of lookups served without parsing, `0` when nothing was looked up.
+  double get hitRate => lookups == 0 ? 0 : hits / lookups;
+}
+
+/// How the sandbox's nested rule calls were served, and the share that stayed on the host.
+///
+/// Read by `tool/bench/` for the P5 inline-coverage metric (`docs/dev/adr/0078` 决策 4).
+final class JsInlineStats {
+  /// Creates a snapshot from the engine's raw counts.
+  const JsInlineStats({required this.inlinedCalls, required this.bridgedCalls});
+
+  /// `java.getString('…')`-shaped calls the host evaluated and inlined into the script.
+  final int inlinedCalls;
+
+  /// Nested calls that had to cross into the sandbox (`parse.*` requests) instead.
+  final int bridgedCalls;
+
+  /// Nested calls seen, whichever way they were served.
+  int get calls => inlinedCalls + bridgedCalls;
+
+  /// Share of nested calls served without a worker round trip, `0` when there were none.
+  double get inlineCoverage => calls == 0 ? 0 : inlinedCalls / calls;
+}
+
 /// One parsed rule: its body, its script, its leading `-` and its `@`-separated segments.
 final class _ParsedRule {
   const _ParsedRule({
@@ -3490,6 +4797,7 @@ final class _ParsedRule {
     required this.replacementParts,
     required this.reverse,
     required this.candidates,
+    this.regexes,
   });
 
   /// The rule itself: everything before the first `##` and before an `@js:` flag, without
@@ -3510,6 +4818,13 @@ final class _ParsedRule {
 
   /// The candidates of the body: `||` alternatives, each with its own branches.
   final List<_RuleCandidate> candidates;
+
+  /// The regex chain of a `:`-rule (matrix #20), or `null` when the rule is not one.
+  ///
+  /// `&&` inside a regex rule is **not** the branch connector: upstream splits it into a chain of
+  /// regexes where every non-final one narrows the text for the next
+  /// (`AnalyzeByRegex.getElements`), so the chain lives here rather than in [candidates].
+  final List<RegExp>? regexes;
 }
 
 /// One piece of a rule that mixes `<js>…</js>` with selectors (matrix #31).
@@ -3634,6 +4949,25 @@ final class _DomBranch extends _RuleBranch {
 
   /// The extraction segment of a value rule, or `''` for a list rule.
   final String extraction;
+}
+
+/// A branch that reads the page text through a regex chain (matrix #20).
+final class _RegexBranch extends _RuleBranch {
+  const _RegexBranch(this.regexes);
+
+  /// The `&&`-separated chain; every non-final one narrows the text for the next.
+  final List<RegExp> regexes;
+}
+
+/// A branch that reads the DOM through XPath (matrix #21, S5b).
+///
+/// The whole branch is the expression: unlike a default rule there is no `@`-separated extraction
+/// segment, because `/@content` and `text()` are XPath itself.
+final class _XPathBranch extends _RuleBranch {
+  const _XPathBranch(this.expression);
+
+  /// The compiled expression.
+  final XPathExpression expression;
 }
 
 /// A branch that reads JSON: `@json:`, the bare `$.` / `$[` form (matrix #13) and the

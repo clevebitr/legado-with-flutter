@@ -61,7 +61,69 @@ final class JsBridgeProvider
   }
 }
 
-String _$jsBridgeHash() => r'b1ad36586e8a7c306de1489465378f4c5a275142';
+String _$jsBridgeHash() => r'ef2509fcbad82a4f9653adda92877edfcc2a12d4';
+
+/// Provides the per-source `infoMap` (`book-source.md` §6, M25/S3b).
+///
+/// In memory only, like `cache.*`: it is explore state, not a record, and it is read and written by
+/// every job, so a rebuild between two stages must not wipe it — hence `keepAlive`.
+
+@ProviderFor(sourceInfoMapStore)
+final sourceInfoMapStoreProvider = SourceInfoMapStoreProvider._();
+
+/// Provides the per-source `infoMap` (`book-source.md` §6, M25/S3b).
+///
+/// In memory only, like `cache.*`: it is explore state, not a record, and it is read and written by
+/// every job, so a rebuild between two stages must not wipe it — hence `keepAlive`.
+
+final class SourceInfoMapStoreProvider
+    extends
+        $FunctionalProvider<
+          SourceInfoMapStore,
+          SourceInfoMapStore,
+          SourceInfoMapStore
+        >
+    with $Provider<SourceInfoMapStore> {
+  /// Provides the per-source `infoMap` (`book-source.md` §6, M25/S3b).
+  ///
+  /// In memory only, like `cache.*`: it is explore state, not a record, and it is read and written by
+  /// every job, so a rebuild between two stages must not wipe it — hence `keepAlive`.
+  SourceInfoMapStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'sourceInfoMapStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$sourceInfoMapStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<SourceInfoMapStore> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  SourceInfoMapStore create(Ref ref) {
+    return sourceInfoMapStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SourceInfoMapStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SourceInfoMapStore>(value),
+    );
+  }
+}
+
+String _$sourceInfoMapStoreHash() =>
+    r'14de203b059a85667e2da16b9320749ea3dda959';
 
 /// Provides the rule variables shared by `@put:` / `@get:` and `java.put` /
 /// `java.get`.
@@ -118,3 +180,58 @@ final class JsVariableStoreProvider
 }
 
 String _$jsVariableStoreHash() => r'c6e15401e66da680841340a4e08b1644de9e2c08';
+
+/// Provides the resolver for a book source's own JavaScript library (`jsLib`, ADR-0078 S1).
+///
+/// `keepAlive` matters: the store caches the resolved text per library, so one page with twenty
+/// `@js:` fields downloads the library once — and a rebuild between stages would throw that away.
+
+@ProviderFor(jsLibStore)
+final jsLibStoreProvider = JsLibStoreProvider._();
+
+/// Provides the resolver for a book source's own JavaScript library (`jsLib`, ADR-0078 S1).
+///
+/// `keepAlive` matters: the store caches the resolved text per library, so one page with twenty
+/// `@js:` fields downloads the library once — and a rebuild between stages would throw that away.
+
+final class JsLibStoreProvider
+    extends $FunctionalProvider<JsLibStore, JsLibStore, JsLibStore>
+    with $Provider<JsLibStore> {
+  /// Provides the resolver for a book source's own JavaScript library (`jsLib`, ADR-0078 S1).
+  ///
+  /// `keepAlive` matters: the store caches the resolved text per library, so one page with twenty
+  /// `@js:` fields downloads the library once — and a rebuild between stages would throw that away.
+  JsLibStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'jsLibStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$jsLibStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<JsLibStore> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  JsLibStore create(Ref ref) {
+    return jsLibStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(JsLibStore value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<JsLibStore>(value),
+    );
+  }
+}
+
+String _$jsLibStoreHash() => r'a1fd59f7223168f628175c97b83ad7bae1edbe58';

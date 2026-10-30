@@ -17,6 +17,7 @@ Future<List<int>> _pump(
   WidgetTester tester, {
   int currentIndex = 1,
   String? query,
+  List<ReadingChapter> chapters = _chapters,
 }) async {
   final List<int> picked = <int>[];
   await tester.pumpWidget(
@@ -27,7 +28,7 @@ Future<List<int>> _pump(
       theme: buildReaderTheme(fallbackLightColorScheme()),
       home: Scaffold(
         body: ReaderTocSheet(
-          chapters: _chapters,
+          chapters: chapters,
           currentIndex: currentIndex,
           onSelected: picked.add,
         ),
@@ -106,6 +107,73 @@ void main() {
           .getTopLeft(find.widgetWithText(ListTile, '第1章 开端'))
           .dy;
       expect(first, lessThan(last));
+    });
+  });
+
+  group('ReaderTocSheet volumes', () {
+    /// One volume heading followed by two chapters, then a second volume heading.
+    const List<ReadingChapter> volumes = <ReadingChapter>[
+      ReadingChapter(
+        title: '第一卷 少年',
+        url: 'https://source.test/v1.html',
+        isVolume: true,
+      ),
+      ReadingChapter(title: '第1章 开端', url: 'https://source.test/1.html'),
+      ReadingChapter(title: '第2章 继续', url: 'https://source.test/2.html'),
+      ReadingChapter(
+        title: '第二卷 江湖',
+        url: 'https://source.test/v2.html',
+        isVolume: true,
+      ),
+      ReadingChapter(title: '第3章 结束', url: 'https://source.test/3.html'),
+    ];
+
+    testWidgets('build_givenVolumeHeadings_groupsTheChaptersUnderThem', (
+      WidgetTester tester,
+    ) async {
+      // ADR-0095：卷标题是组头，与章节同列出现，且点击**不**跳转。
+      final List<int> picked = await _pump(
+        tester,
+        chapters: volumes,
+        currentIndex: 1,
+      );
+
+      expect(find.text('第一卷 少年'), findsOneWidget);
+      expect(find.text('第二卷 江湖'), findsOneWidget);
+
+      await tester.tap(find.text('第一卷 少年'));
+      await tester.pumpAndSettle();
+
+      expect(picked, isEmpty);
+    });
+
+    testWidgets('volume_whenCollapsed_hidesItsChaptersUntilTheNextHeading', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester, chapters: volumes, currentIndex: 1);
+
+      await tester.tap(find.text('第一卷 少年'));
+      await tester.pumpAndSettle();
+
+      // 卷内两章隐藏；下一卷的章节仍然在（折叠只作用于自己的区间）。
+      expect(find.text('第1章 开端'), findsNothing);
+      expect(find.text('第2章 继续'), findsNothing);
+      expect(find.text('第3章 结束'), findsOneWidget);
+      expect(find.text('第一卷 少年'), findsOneWidget);
+    });
+
+    testWidgets('volume_whenCollapsedAndSearching_showsTheHits', (
+      WidgetTester tester,
+    ) async {
+      // 搜索忽略折叠：命中项必须看得见（ADR-0095 §决策 2）。
+      await _pump(tester, chapters: volumes, currentIndex: 1);
+      await tester.tap(find.text('第一卷 少年'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), '开端');
+      await tester.pumpAndSettle();
+
+      expect(find.text('第1章 开端'), findsOneWidget);
     });
   });
 }

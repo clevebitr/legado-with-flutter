@@ -38,7 +38,10 @@ class ShelfGroupsPage extends ConsumerWidget {
       body: switch (groups) {
         AsyncData<List<ShelfGroup>>(:final List<ShelfGroup> value) =>
           value.isEmpty
-              ? StateMessage(message: l10n.shelfGroupsEmpty)
+              ? StateMessage(
+                  message: l10n.shelfGroupsEmpty,
+                  icon: Icons.folder_outlined,
+                )
               : _list(context, ref, value, tokens, l10n),
         AsyncError<List<ShelfGroup>>() => StateMessage(
           message: l10n.shelfLoadFailed,

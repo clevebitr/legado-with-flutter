@@ -24,6 +24,9 @@
 
 **所有测试禁止真实联网**；`HttpClient` 与时间源必须可注入替身（C-NET-8、C-DEP-3）。
 
+**性能基准不在测试层里**：P1–P6 的口径、脚本与改前/改后数字归 ADR-0078 决策 4 与
+`tool/bench/README.md`（`tool/` 入口，**不进 CI**，不被 `flutter test` 发现）；本节与 §7 不复述数字。
+
 ---
 
 ## 2. 覆盖率门禁
@@ -32,11 +35,15 @@
 
 | 层 | 匹配路径 | 阈值 |
 |---|---|---|
-| `core` | `lib/core/**` | **100%** |
-| `domain` | `lib/features/*/domain/**` | **100%** |
+| `core` | `lib/core/**` | **95%** |
+| `domain` | `lib/features/*/domain/**` | **95%** |
 | `data` | `lib/features/*/data/**` | **≥80%** |
 
 生成物（`*.g.dart`、`*.freezed.dart`、`*.gr.dart`、`**/generated/**`）不计入门禁。
+
+> 阈值从 100% 降到 95% 的理由见 **ADR-0077**：100% 已经饱和成「为覆盖率而写测试」
+> （plumbing / `copyWith` / DI 装配 / 为凑执行点而造的构造方式），空出的 5% 只能用来
+> 删掉**无行为可言**的用例，不得用于「新功能先不写测试」——《未测量源文件》判定不变。
 
 门禁有两类判定，**任何一类失败即整体失败**（ADR-0019）：
 
@@ -74,6 +81,13 @@ dart run tool/check_coverage.dart --allowlist=    # 不使用 allowlist（排查
   `test/core/error/parse_result_test.dart`；**设备级集成测试**放在 `integration_test/` 下平铺，
   不镜像 `lib/`（ADR-0017 §决策 5、`docs/dev/test-environment.md`）。
   `lib/**` 下禁止出现 `*_test.dart`。
+- **唯一例外：文档漂移门禁**（`test/docs/book_source_doc_test.dart`）。它们比对的是
+  `docs/dev/book-source.md` 与代码/用例，没有 `lib/` 对应物，所以固定放在 `test/docs/`。两条门禁
+  （M27 的 G1/G2，ADR-0078 §切片 S7）：
+  - **G1**：§11 的两个 `text` 代码块必须与 `quickjs_worker.dart` 的 `__javaRejectedNames` /
+    `__javaInteropNames` 逐字一致——改实现必须改文档，反之亦然；
+  - **G2**：§3 矩阵里状态为「已确认」的每一行都必须有具名用例（测试文件里出现 `matrix #N`），
+    行号不变而用例被删时这里先红。
 - 测试名：`方法名_场景_预期结果`（C-TEST-3）。
 
 ```dart
@@ -82,6 +96,11 @@ test('parseHtml_givenExcludedRule_dropsMatchingNodes', () { /* ... */ });
 ```
 
 - 一个 `test` 只断言一个行为；`group` 名称使用被测类型名。
+- **同构用例写成表驱动**（ADR-0077 §决策 4）：当只有输入/期望值不同（同一个方法的多行平台、多个 provider
+  的同一形状、多个失败种类走同一条路径）时，写一个 `test` + 循环，并使用 `reason:` 标出当前行。
+  用例名仍按 `方法名_场景_预期结果` 写，只是场景描述的是**规则**而不是单行数据，
+  例如 `dialogPorts_givenAShippedPlatform_useTheRealDialogOrKeyStore`。
+  链路上确实分叉的行为不要塞进表驱动（那样断言的就不是同一件事了）。
 - 禁止在测试中 `sleep`；时间相关逻辑必须注入时钟（`Clock` 抽象）。
 - 禁止 `skip: true` 合入 `main`（C-TEST-5）。
 
@@ -202,5 +221,6 @@ await tester.pumpAndSettle();
 - 使用 `golden_toolkit`（已停止维护）。
 - 在测试中真实联网或依赖外部站点可用性。
 - 用 `pump(Duration)` 代替 `pumpAndSettle` 来规避动画问题。
-- 为了让门禁通过而降低阈值或删除断言。
+- 为了让门禁通过而降低阈值或删除断言（阈值只能按 ADR-0077 的规则调整：
+  只能上调，下调必须另写 ADR，不得在一个 PR 里「顺手」改）。
 - 把生成物加入 `.gitignore` 之外的白名单以绕过一致性检查。

@@ -191,6 +191,7 @@ m3e.spacing.md;
 | `shared_preferences` | `^2.5.3` | 仅轻量开关（主题模式、字号） | BSD-3-Clause | C-NET-9 |
 | `path_provider` | `^2.1.6` | 跨平台路径（唯一来源） | BSD-3-Clause | C-PLT-3 |
 | `file_selector` | `^1.1.0` | 文件选择（平台对话框；只在 `core/platform/` 内使用） | BSD-3-Clause | C-PLT-1、C-SEC-5、ADR-0040 §决策 9 的修订注记 |
+| `share_plus` | `^13.3.1` | 系统分享面板（移动端导出与日志分享；只在 `core/platform/` 的 `FileSharer` 实现里使用） | BSD-3-Clause | C-PLT-1、C-PERF-5、ADR-0083 |
 | `archive` | `^4.5.2` | 备份 zip 的编解码与整包 AES-256（纯 Dart；只在 `features/backup/domain/` 使用） | MIT | C-PERF-4/5、C-SEC-5、ADR-0073 §决策 2/5、ADR-0074 §决策 4 |
 | `flutter_secure_storage` | `^11.2.0` | 备份口令与 WebDAV 密码（系统密钥库；只在 `core/platform/` 的 `SecretStore` 实现里使用） | BSD-3-Clause | C-SEC-1、C-DEP-7、ADR-0074 §决策 5 |
 
@@ -200,6 +201,11 @@ m3e.spacing.md;
 > 官方仓库维护 + 三端（Android / iOS / Windows）都有官方实现，符合 §13 第 2 条的平台支持要求。
 > 用法约束：**只允许 `core/platform/` 引用它**（C-PLT-1），页面与用例只看见
 > `BookSourceFilePicker` 端口；体积上限在读取之前按文件大小判（C-SEC-5）。
+
+> **关于 `share_plus`（2026-10-27 新增）：** Flutter Community 维护的 BSD-3-Clause 联邦插件，
+> Android 用 `ACTION_SEND` + 自带 `FileProvider`，iOS 用 `UIActivityViewController`，
+> 不要求 `WRITE_EXTERNAL_STORAGE`。只在 `core/platform/share_plus_file_sharer.dart` 里引用；
+> 页面只看见 `FileSharer` 端口（ADR-0083）。
 
 > **关于 `sqlite3_flutter_libs`：** 不要**直接**声明它。
 > `drift_flutter 0.3.1` 自己会传递依赖 `sqlite3_flutter_libs: ^0.6.0+eol`
@@ -213,7 +219,9 @@ m3e.spacing.md;
 | 依赖 | 版本 | 用途 | 许可证 | 关联约束 |
 |---|---|---|---|---|
 | `logger` | `^2.8.0` | 日志实现；业务侧只允许通过 `core/logging` 使用 | MIT | C-ERR-5、C-SEC-4 |
-| `crypto` | `^3.0.7` | 日志脱敏摘要（SHA-256）与 `@js:` 的 `crypto.md5` / `sha1`；仅 `core/logging/redaction.dart` 与 `core/js/` 使用 | BSD-3-Clause | C-SEC-4、ADR-0006 §5 |
+| `crypto` | `^3.0.7` | `@js:` 的 `crypto.md5` / `sha1` / `HMac*` 与密钥族派生；仅 `core/js/` 使用（日志脱敏已随 ADR-0082 取消） | BSD-3-Clause | ADR-0078 S3a |
+| `pointycastle` | `^4.0.0` | `@js:` 沙箱的密钥类 crypto（`java.createSymmetricCrypto` 的 AES / DES / DESede × ECB / CBC × PKCS5 / NoPadding）；仅 `core/js/js_crypto.dart` 使用，纯 Dart | MIT | C-DEP-7、ADR-0078 §实现注记 |
+| `url_launcher` | `^6.3.2` | `java.openUrl` 的最后一步：用户确认后把地址交给系统浏览器；仅装配根的 `ExternalUrlOpener` 实现使用，其余层只见端口 | BSD-3-Clause | C-DEP-7、ADR-0078 §实现注记 |
 
 ## 8. 代码生成
 

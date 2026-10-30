@@ -31,6 +31,17 @@ void main() {
       expect(bookSourceFingerprint(reversed), bookSourceFingerprint(_entry()));
     });
 
+    test('bookSourceFingerprint_givenChangedJsLib_differs', () {
+      // 库脚本决定每条 `@js:` 规则跑出来的值（ADR-0078 S1），所以它属于行为字段。
+      final Map<String, Object?> changed = _entry()
+        ..['jsLib'] = 'function sign(u) { return u; }';
+
+      expect(
+        bookSourceFingerprint(changed),
+        isNot(bookSourceFingerprint(_entry())),
+      );
+    });
+
     test('bookSourceFingerprint_givenChangedRuleText_differs', () {
       final Map<String, Object?> changed = _entry()
         ..['ruleContent'] = <String, Object?>{'content': 'class.other'};

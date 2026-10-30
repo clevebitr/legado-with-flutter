@@ -40,6 +40,46 @@ void main() {
       );
     });
 
+    test('readerPageStarts_givenAHeadingInset_fitsLessOnTheFirstPage', () {
+      final String text = _longText();
+      final List<int> plain = readerPageStarts(
+        text: text,
+        style: _style,
+        size: _size,
+        textScaler: TextScaler.noScaling,
+      );
+      final List<int> withHeading = readerPageStarts(
+        text: text,
+        style: _style,
+        size: _size,
+        textScaler: TextScaler.noScaling,
+        firstPageInset: 120,
+      );
+
+      // 章头占掉首页的一部分高度：首页装得少，所以第二页起点更靠前（ADR-0087 §决策 3）。
+      expect(withHeading.length, greaterThan(1));
+      expect(withHeading[1], lessThan(plain[1]));
+      // 后面的页仍然按整页高度切，不受章头影响。
+      expect(withHeading[1], greaterThan(0));
+    });
+
+    test('readerPageStarts_givenAnInsetTallerThanThePage_ignoresIt', () {
+      final String text = _longText();
+      final List<int> starts = readerPageStarts(
+        text: text,
+        style: _style,
+        size: _size,
+        textScaler: TextScaler.noScaling,
+        // 章头高过整页（字号被放到极大时的病态输入）：宁可忽略章头，也不能产出空页。
+        firstPageInset: _size.height * 2,
+      );
+
+      expect(starts.length, greaterThan(1));
+      for (var index = 1; index < starts.length; index++) {
+        expect(starts[index], greaterThan(starts[index - 1]));
+      }
+    });
+
     test('readerPageStarts_givenALongText_splitsItIntoIncreasingPages', () {
       final String text = _longText();
       final List<int> starts = readerPageStarts(
@@ -86,6 +126,68 @@ void main() {
         size: _size,
         textScaler: const TextScaler.linear(2),
       ).length;
+
+      expect(scaled, greaterThan(plain));
+    });
+  });
+
+  group('readerTextHeight', () {
+    test('readerTextHeight_givenAnEmptyText_answersZero', () {
+      expect(
+        readerTextHeight(
+          text: '',
+          style: _style,
+          width: _size.width,
+          textScaler: TextScaler.noScaling,
+        ),
+        0,
+      );
+    });
+
+    test('readerTextHeight_givenNoWidth_answersZero', () {
+      // 布局还没算出来时不能量出一个「一列排下来」的假高度。
+      expect(
+        readerTextHeight(
+          text: _longText(),
+          style: _style,
+          width: 0,
+          textScaler: TextScaler.noScaling,
+        ),
+        0,
+      );
+    });
+
+    test('readerTextHeight_givenMoreLines_answersMoreHeight', () {
+      final double short = readerTextHeight(
+        text: _longText(4),
+        style: _style,
+        width: _size.width,
+        textScaler: TextScaler.noScaling,
+      );
+      final double tall = readerTextHeight(
+        text: _longText(40),
+        style: _style,
+        width: _size.width,
+        textScaler: TextScaler.noScaling,
+      );
+
+      expect(short, greaterThan(0));
+      expect(tall, greaterThan(short));
+    });
+
+    test('readerTextHeight_givenALargerTextScale_answersMoreHeight', () {
+      final double plain = readerTextHeight(
+        text: _longText(10),
+        style: _style,
+        width: _size.width,
+        textScaler: TextScaler.noScaling,
+      );
+      final double scaled = readerTextHeight(
+        text: _longText(10),
+        style: _style,
+        width: _size.width,
+        textScaler: const TextScaler.linear(2),
+      );
 
       expect(scaled, greaterThan(plain));
     });

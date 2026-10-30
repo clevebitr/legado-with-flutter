@@ -1,7 +1,7 @@
 name: flutter_reader
 description: Flutter 阅读 App —— MD3E 设计、多平台支持、Dart 书源解析
 publish_to: 'none'
-version: 0.1.0+1
+version: 1.0.0+1
 
 environment:
   sdk: ^3.13.0
@@ -71,6 +71,10 @@ dependencies:
   json_annotation: ^4.12.0
   file_selector: ^1.1.0
 
+  # 系统分享：移动端导出与日志分享走系统分享面板（C-PLT-1、ADR-0083）。
+  # BSD-3-Clause，Flutter Community 维护；Android 用 ACTION_SEND、iOS 用 UIActivityViewController。
+  share_plus: ^13.3.1
+
   # 播放后端与 WebView（ADR-0061）：
   # Windows 用 media_kit（libmpv，随包二进制 LGPL-2.1+ 白名单）；Android / iOS 仍用 just_audio。
   # flutter_inappwebview 提供 `,{webView:…}` 的 headless WebView（Apache-2.0）。
@@ -78,6 +82,11 @@ dependencies:
   media_kit_libs_windows_audio: ^1.0.9
   flutter_inappwebview: ^6.1.5
   flutter_secure_storage: ^11.2.0
+  pointycastle: ^4.0.0
+
+  # `java.openUrl` 要真的把地址交给系统浏览器（M25/S3b，ADR-0078 §实现注记）：BSD-3-Clause，
+  # 三端与 Web 都有实现。只在装配根的确认弹窗实现里使用，其余层只认 `ExternalUrlOpener` 端口。
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -114,3 +123,7 @@ flutter:
     # `app/src/main/assets/defaultData/`，与本仓同许可（GPL-3.0），来源见 assets/rules/README.md。
     - assets/rules/txt_toc_rule.json
     - assets/rules/dict_rule.json
+    # 简繁转换码表（M25/S3b）：`java.t2s` / `java.s2t`。由 OpenCC（Apache-2.0）生成，
+    # 来源、生成规则与哈希见 assets/zh/README.md；登记见 NOTICE.md §5。
+    - assets/zh/t2s.txt
+    - assets/zh/s2t.txt

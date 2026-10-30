@@ -13,10 +13,11 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/search_book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/search_match_mode.dart';
-import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/aggregate_search_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
+import 'package:flutter_reader/features/book_source/presentation/widgets/search_source_sheet.dart';
+import 'package:flutter_reader/features/book_source/presentation/widgets/source_scope_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -75,13 +76,8 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
         title: Text(l10n.bookSourceSearchTitle),
         backgroundColor: tokens.colors.surface,
         actions: <Widget>[
-          // 书架与设置都是**其他 feature** 的页面：经 AppNavigation 端口打开，而不是
-          // import 对方的 route（C-ARCH-2、ADR-0042）。
-          IconButton(
-            icon: const Icon(Icons.collections_bookmark_outlined),
-            tooltip: l10n.shelfTitle,
-            onPressed: () => navigation.openBookshelf(context),
-          ),
+          // 设置属于**其他 feature**：经 AppNavigation 端口打开，而不是 import 对方的 route
+          // （C-ARCH-2、ADR-0042）。书架不再放一个入口：它就是底部导航的第一个 tab。
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: l10n.settingsTitle,
@@ -138,11 +134,30 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     return Row(
       children: <Widget>[
         Expanded(
-          child: TextField(
-            controller: _keyword,
-            decoration: InputDecoration(hintText: l10n.bookSourceSearchHint),
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _submit(),
+          // 只重建输入框本身：每敲一个字都重建结果列表既浪费又会让滚动位置跳动。
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _keyword,
+            builder:
+                (BuildContext context, TextEditingValue value, Widget? _) =>
+                    TextField(
+                      controller: _keyword,
+                      decoration: InputDecoration(
+                        hintText: l10n.bookSourceSearchHint,
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: value.text.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.clear),
+                                tooltip: l10n.actionCancel,
+                                onPressed: _keyword.clear,
+                              ),
+                      ),
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) {
+                        FocusScope.of(context).unfocus();
+                        _submit();
+                      },
+                    ),
           ),
         ),
         SizedBox(width: tokens.spacing.sm),
@@ -168,8 +183,12 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
         Expanded(
           child: ActionChip(
             avatar: const Icon(Icons.filter_alt_outlined),
-            label: Text(_scopeLabel(l10n, scope, rows)),
-            onPressed: () => _openScopeSheet(l10n, scope, rows),
+            label: Text(
+              sourceScopeLabel(l10n, scope),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            onPressed: () => _openScopeSheet(scope, rows),
           ),
         ),
         SizedBox(width: tokens.spacing.sm),
@@ -215,13 +234,6 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
                 style: tokens.typography.base.bodySmall,
               ),
             ),
-            // 范围已不存在的回退要说出来：否则「我选了一个分组，结果搜了全库」看起来就像
-            // 筛选坏了（ADR-0058）。
-            if (search.scopeFellBack)
-              Text(
-                l10n.searchScopeFellBack,
-                style: tokens.typography.base.bodySmall,
-              ),
             if (search.isRunning)
               TextButton(
                 onPressed: search.isPaused
@@ -238,6 +250,16 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
               ),
           ],
         ),
+        // 范围已不存在的回退要说出来：否则「我选了一个分组，结果搜了全库」看起来就像
+        // 筛选坏了（ADR-0058）。单独一行，窄屏上也不会把暂停/停止挤出屏幕。
+        if (search.scopeFellBack)
+          Padding(
+            padding: EdgeInsets.only(top: tokens.spacing.xs),
+            child: Text(
+              l10n.searchScopeFellBack,
+              style: tokens.typography.base.bodySmall,
+            ),
+          ),
       ],
     );
   }
@@ -256,6 +278,7 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     return switch (search.status) {
       AggregateSearchStatus.idle => StateMessage(
         message: l10n.bookSourceSearchPrompt,
+        icon: Icons.search,
       ),
       AggregateSearchStatus.running when search.books.isEmpty => const Center(
         child: CircularProgressIndicator(),
@@ -328,56 +351,129 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
       // 封面来自命中它的**第一个**源（ADR-0046 §决策 4 的单条合并口径）。
       leading: CoverImage(url: book.coverUrl, width: 48, height: 64),
       title: Text(book.name),
+      // 标题 + 两行副标题（作者/更新时间一行、来源数一行）：`isThreeLine` 与之对应，
+      // 有更新时间的命中不会因为三行副标题被截断。
       subtitle: Text(
         <String>[
-          if (author != null) l10n.bookSourceAuthorLine(author),
-          if (updated != null) l10n.bookSourceUpdateTimeLine(updated),
+          if (author != null || updated != null)
+            <String>[
+              if (author != null) l10n.bookSourceAuthorLine(author),
+              if (updated != null) l10n.bookSourceUpdateTimeLine(updated),
+            ].join(' · '),
           l10n.searchOriginsLine(book.origins.length),
         ].join('\n'),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
-      isThreeLine: author != null || updated != null,
-      onTap: () => _openHit(context, book, rows),
+      isThreeLine: true,
+      onTap: () => unawaited(_openHit(context, book, rows)),
     );
   }
 
-  /// Opens [book] through the **first source that found it** (ADR-0046 §决策 4).
+  /// Opens [book] through the source the user picks (`DECISIONS.md` #76).
+  ///
+  /// A merged row that only one source found opens straight away — a sheet with a single row would
+  /// be a pointless tap. With several, the sheet lists every origin's own snapshot (ADR-0091
+  /// §决策 6) and the chosen one decides both the book address and the selected source.
   ///
   /// The detail page reads the selected source, so the selection has to move first; a source that
-  /// was deleted meanwhile is reported as a failure rather than opening the wrong one.
-  void _openHit(
+  /// was deleted meanwhile is reported as a failure rather than opening the wrong one. 选择写入后才
+  /// 推页：`select` 要读一次书源表，先推页会让详情页用上一个源发一轮请求（然后才重建到正确的
+  /// 源），看起来就是先闪一下旧书 / 解析失败。
+  Future<void> _openHit(
     BuildContext context,
     SearchBook book,
     List<StoredBookSource> rows,
-  ) {
-    final String sourceUrl = book.origins.isEmpty ? '' : book.origins.first;
-    StoredBookSource? stored;
-    for (final StoredBookSource row in rows) {
-      if (row.source.url == sourceUrl) {
-        stored = row;
-        break;
-      }
+  ) async {
+    final List<OriginHit> hits = _originsOf(book);
+    if (hits.isEmpty) {
+      _showMissingSource(context);
+
+      return;
     }
+    final OriginHit? picked = hits.length == 1
+        ? hits.first
+        : await showSearchSourceSheet(
+            context: context,
+            book: book.copyWith(hits: hits),
+            rows: rows,
+          );
+    if (picked == null || !context.mounted) {
+      return;
+    }
+
+    final StoredBookSource? stored = _rowOf(rows, picked.sourceUrl);
     if (stored == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).actionRetry)),
-      );
+      // 命中的来源已被删除：不是「重试搜索」，而是这条结果已经没有可打开的源。
+      _showMissingSource(context);
 
       return;
     }
 
-    unawaited(ref.read(selectedBookSourceProvider.notifier).select(stored.id));
+    await ref.read(selectedBookSourceProvider.notifier).select(stored.id);
+    if (!context.mounted) {
+      return;
+    }
     pushBookSourceRoute(
       context,
       BookSourceRoute.bookDetail(
         book: Book(
           name: book.name,
-          author: book.author,
-          kind: book.kind,
-          coverUrl: book.coverUrl,
+          author: picked.author ?? book.author,
+          kind: picked.kind ?? book.kind,
+          coverUrl: picked.coverUrl ?? book.coverUrl,
           intro: book.intro,
-          lastChapter: book.lastChapter,
-          updateTime: book.updateTime,
-          url: book.url,
+          lastChapter: picked.lastChapter ?? book.lastChapter,
+          updateTime: picked.updateTime ?? book.updateTime,
+          url: picked.url,
+        ),
+      ),
+    );
+  }
+
+  /// Every origin snapshot of [book], with a fallback for rows that predate `hits`.
+  ///
+  /// The fallback only exists for a merged row built before ADR-0091 (an in-memory row cannot
+  /// outlive a restart, but a test or a future caller may build one): it reads the first origin's
+  /// address, which is what the row used to open.
+  List<OriginHit> _originsOf(SearchBook book) {
+    if (book.hits.isNotEmpty) {
+      return book.hits;
+    }
+    if (book.origins.isEmpty) {
+      return const <OriginHit>[];
+    }
+
+    return <OriginHit>[
+      OriginHit(
+        sourceUrl: book.origins.first,
+        url: book.url,
+        author: book.author,
+        kind: book.kind,
+        coverUrl: book.coverUrl,
+        lastChapter: book.lastChapter,
+        updateTime: book.updateTime,
+      ),
+    ];
+  }
+
+  /// The stored row behind [sourceUrl], or `null` when it was deleted.
+  StoredBookSource? _rowOf(List<StoredBookSource> rows, String sourceUrl) {
+    for (final StoredBookSource row in rows) {
+      if (row.source.url == sourceUrl) {
+        return row;
+      }
+    }
+
+    return null;
+  }
+
+  /// Tells the user the hit's source is gone; it is not a search failure.
+  void _showMissingSource(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          AppLocalizations.of(context).bookSourceCheckFailureSourceMissing,
         ),
       ),
     );
@@ -404,175 +500,16 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     );
   }
 
-  /// The label of the scope chip.
-  String _scopeLabel(
-    AppLocalizations l10n,
-    BookSearchScope scope,
-    List<StoredBookSource> rows,
-  ) => switch (scope) {
-    SearchScopeAll() => l10n.searchScopeAll,
-    SearchScopeGroups(:final Set<String> groups) =>
-      groups.isEmpty ? l10n.searchScopeAll : groups.join('、'),
-    SearchScopeSources(:final List<ScopeSource> sources) =>
-      sources.isEmpty
-          ? l10n.searchScopeAll
-          : sources.map((ScopeSource source) => source.name).join('、'),
-  };
-
-  /// Opens the scope sheet: everything, a group, or specific sources.
-  ///
-  /// One sheet instead of a nested picker: "all" and the groups are the radio part, the named
-  /// sources are the check-box part, and ticking any source switches the scope to `sources`
-  /// (ADR-0046 §决策 1).
-  ///
-  /// The body is a [Consumer] that **watches** the scope instead of rendering a snapshot
-  /// (ADR-0058): with a snapshot, ticking a source changed the provider but not the sheet — the box
-  /// stayed empty, and because the tile kept reporting `false` the tick could never be undone.
-  void _openScopeSheet(
-    AppLocalizations l10n,
-    BookSearchScope scope,
-    List<StoredBookSource> rows,
-  ) {
-    final List<String> groups = <String>{
-      for (final StoredBookSource row in rows)
-        ...splitGroups(row.groupName ?? row.source.group),
-    }.toList()..sort();
-
+  /// Opens the shared scope sheet; the pick is persisted before it is shown again.
+  void _openScopeSheet(BookSearchScope scope, List<StoredBookSource> rows) {
     unawaited(
-      showModalBottomSheet<void>(
+      showSourceScopeSheet(
         context: context,
-        isScrollControlled: true,
-        builder: (BuildContext sheetContext) => SafeArea(
-          child: Consumer(
-            builder: (BuildContext context, WidgetRef ref, Widget? _) {
-              final BookSearchScope current =
-                  ref.watch(searchScopeSelectionProvider).value ??
-                  BookSearchScope.defaults;
-              final Set<String> named = <String>{
-                for (final ScopeSource source in current.sourcesOrEmpty)
-                  source.url,
-              };
-
-              return ListView(
-                shrinkWrap: true,
-                children: <Widget>[
-                  ListTile(title: Text(l10n.searchScopeLabel)),
-                  RadioGroup<String>(
-                    groupValue: _scopeKeyOf(current),
-                    onChanged: (String? key) => unawaited(
-                      _selectScope(
-                        key == null || key.isEmpty
-                            ? BookSearchScope.defaults
-                            : BookSearchScope.groups(<String>{
-                                key.substring(_groupKeyPrefix.length),
-                              }),
-                        sheetContext,
-                      ),
-                    ),
-                    child: Column(
-                      children: <Widget>[
-                        RadioListTile<String>(
-                          value: '',
-                          title: Text(l10n.searchScopeAll),
-                        ),
-                        for (final String group in groups)
-                          RadioListTile<String>(
-                            value: '$_groupKeyPrefix$group',
-                            title: Text(group),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    title: Text(l10n.searchScopeNamed),
-                    subtitle: Text(
-                      named.isEmpty
-                          ? l10n.searchScopeAll
-                          : rows
-                                .where(
-                                  (StoredBookSource row) =>
-                                      named.contains(row.source.url),
-                                )
-                                .map((StoredBookSource row) => row.source.name)
-                                .join('、'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  for (final StoredBookSource row in rows)
-                    CheckboxListTile(
-                      value: named.contains(row.source.url),
-                      title: Text(row.source.name),
-                      onChanged: (bool? checked) => unawaited(
-                        _toggleNamed(current, rows, row, checked ?? false),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
+        initial: scope,
+        rows: rows,
+        onSelected: ref.read(searchScopeSelectionProvider.notifier).select,
       ),
     );
-  }
-
-  /// The radio value of [scope]: `''` for everything / several groups / named sources, or
-  /// `group:<token>` for exactly one group.
-  String _scopeKeyOf(BookSearchScope scope) => switch (scope) {
-    SearchScopeAll() => '',
-    SearchScopeGroups(:final Set<String> groups) when groups.length == 1 =>
-      '$_groupKeyPrefix${groups.first}',
-    SearchScopeGroups() || SearchScopeSources() => '',
-  };
-
-  /// Applies [scope] and closes the sheet.
-  ///
-  /// The write is awaited **before** popping: 范围是持久化的偏好，弹回后用户可能立刻点搜索，
-  /// 写入还没落地就会拿到旧范围（ADR-0058）。
-  Future<void> _selectScope(
-    BookSearchScope scope,
-    BuildContext sheetContext,
-  ) async {
-    await ref.read(searchScopeSelectionProvider.notifier).select(scope);
-    if (!sheetContext.mounted) {
-      return;
-    }
-    Navigator.of(sheetContext).pop();
-  }
-
-  /// Adds or removes one named source, switching the scope to `sources` as soon as one is ticked.
-  ///
-  /// The sheet stays open so a user can tick several sources; the boxes redraw themselves because
-  /// the sheet watches the scope ([Consumer] above).
-  Future<void> _toggleNamed(
-    BookSearchScope current,
-    List<StoredBookSource> rows,
-    StoredBookSource row,
-    bool checked,
-  ) async {
-    final Set<String> next = <String>{
-      for (final ScopeSource named in current.sourcesOrEmpty) named.url,
-    };
-    if (checked) {
-      next.add(row.source.url);
-    } else {
-      next.remove(row.source.url);
-    }
-    await ref
-        .read(searchScopeSelectionProvider.notifier)
-        .select(
-          next.isEmpty
-              ? BookSearchScope.defaults
-              : BookSearchScope.sources(<ScopeSource>[
-                  for (final StoredBookSource candidate in rows)
-                    if (next.contains(candidate.source.url))
-                      ScopeSource(
-                        name: candidate.source.name,
-                        url: candidate.source.url,
-                      ),
-                ]),
-        );
   }
 
   /// Opens the filters sheet: source types and match mode.
@@ -695,6 +632,3 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     );
   }
 }
-
-/// The radio-value prefix of a single-group scope in the scope sheet.
-const String _groupKeyPrefix = 'group:';

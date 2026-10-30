@@ -36,7 +36,10 @@ class BookmarkListPage extends ConsumerWidget {
       body: switch (bookmarks) {
         AsyncData<List<Bookmark>>(:final List<Bookmark> value) =>
           value.isEmpty
-              ? StateMessage(message: l10n.bookmarkEmpty)
+              ? StateMessage(
+                  message: l10n.bookmarkEmpty,
+                  icon: Icons.bookmark_border,
+                )
               : _list(context, ref, value, tokens, l10n),
         // 读取失败与「没有书签」是两件事：空态会误导用户以为标记被删了。
         AsyncError<List<Bookmark>>() => StateMessage(

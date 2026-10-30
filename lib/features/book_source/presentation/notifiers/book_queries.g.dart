@@ -199,11 +199,17 @@ final class TocFamily extends $Family
 }
 
 /// Reads the body of the chapter at [url] of [source].
+///
+/// The stage answers a `ChapterContent` (body + content-page title + lyrics); this debug-facing
+/// query only surfaces the body, which is what the console shows.
 
 @ProviderFor(chapterContent)
 final chapterContentProvider = ChapterContentFamily._();
 
 /// Reads the body of the chapter at [url] of [source].
+///
+/// The stage answers a `ChapterContent` (body + content-page title + lyrics); this debug-facing
+/// query only surfaces the body, which is what the console shows.
 
 final class ChapterContentProvider
     extends
@@ -216,6 +222,9 @@ final class ChapterContentProvider
         $FutureModifier<ParseResult<String>>,
         $FutureProvider<ParseResult<String>> {
   /// Reads the body of the chapter at [url] of [source].
+  ///
+  /// The stage answers a `ChapterContent` (body + content-page title + lyrics); this debug-facing
+  /// query only surfaces the body, which is what the console shows.
   ChapterContentProvider._({
     required ChapterContentFamily super.from,
     required (BookSource, String) super.argument,
@@ -260,9 +269,12 @@ final class ChapterContentProvider
   }
 }
 
-String _$chapterContentHash() => r'56a60c5716ab7a1f814cbd0466ad60007836f753';
+String _$chapterContentHash() => r'3d0d2ef96edaa4f53f8e06ff36411c68efe2be7e';
 
 /// Reads the body of the chapter at [url] of [source].
+///
+/// The stage answers a `ChapterContent` (body + content-page title + lyrics); this debug-facing
+/// query only surfaces the body, which is what the console shows.
 
 final class ChapterContentFamily extends $Family
     with
@@ -280,6 +292,9 @@ final class ChapterContentFamily extends $Family
       );
 
   /// Reads the body of the chapter at [url] of [source].
+  ///
+  /// The stage answers a `ChapterContent` (body + content-page title + lyrics); this debug-facing
+  /// query only surfaces the body, which is what the console shows.
 
   ChapterContentProvider call(BookSource source, String url) =>
       ChapterContentProvider._(argument: (source, url), from: this);
