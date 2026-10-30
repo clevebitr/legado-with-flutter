@@ -43,6 +43,7 @@ final class CacheDaoContentCache implements ContentCache {
     required String url,
     required String body,
     String? bookUrl,
+    bool persistent = false,
   }) async {
     await absorbCacheFailure(
       () async {
@@ -53,6 +54,7 @@ final class CacheDaoContentCache implements ContentCache {
           page: _page,
           payload: body,
           ttl: chapterCacheTtl,
+          persistent: persistent,
           // 归属书与来源只用于「按书 / 按源统计与清理」，不参与键计算。
           scopeKey: bookUrl == null
               ? null

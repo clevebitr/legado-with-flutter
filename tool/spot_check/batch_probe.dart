@@ -64,6 +64,7 @@ final class _NoContentCache implements ContentCache {
     required String url,
     required String body,
     String? bookUrl,
+    bool persistent = false,
   }) async {}
 
   @override

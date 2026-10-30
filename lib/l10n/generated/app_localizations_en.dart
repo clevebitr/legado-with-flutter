@@ -2123,4 +2123,132 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logFilesShareFailed => 'Could not share the log files.';
+
+  @override
+  String get changeSourceKeyword => 'Keyword';
+
+  @override
+  String get changeSourceStart => 'Start search';
+
+  @override
+  String changeSourceFound(int count) {
+    return '$count found';
+  }
+
+  @override
+  String get changeSourceCheckAuthor => 'Check author';
+
+  @override
+  String get changeSourceLoadInfo => 'Load details';
+
+  @override
+  String get changeSourceLoadToc => 'Load chapters';
+
+  @override
+  String get changeSourceSearchPrompt => 'Pick a scope, then start the search.';
+
+  @override
+  String get changeSourceChapterTitle => 'Choose the chapter to align to';
+
+  @override
+  String changeSourceCurrentChapter(String chapter) {
+    return 'Now reading: $chapter';
+  }
+
+  @override
+  String changeSourceAlignHint(String chapter) {
+    return 'Aligned to: $chapter';
+  }
+
+  @override
+  String get changeSourceConfirm => 'Switch source';
+
+  @override
+  String get changeSourceNoChapters => 'This source returned no chapters.';
+
+  @override
+  String get changeSourceNoSources =>
+      'No source in this scope can be searched.';
+
+  @override
+  String get searchSourceSheetTitle => 'Choose a source';
+
+  @override
+  String get exploreLayoutList => 'List layout';
+
+  @override
+  String get exploreLayoutGrid => 'Grid layout';
+
+  @override
+  String get exploreGridColumnsAction => 'Grid columns';
+
+  @override
+  String exploreGridColumnsValue(int count) {
+    return '$count columns';
+  }
+
+  @override
+  String get shelfEditTitle => 'Edit book';
+
+  @override
+  String get shelfEditName => 'Title';
+
+  @override
+  String get shelfEditNameRequired => 'A title is required.';
+
+  @override
+  String get shelfEditAuthor => 'Author';
+
+  @override
+  String get shelfEditIntro => 'Introduction';
+
+  @override
+  String get shelfEditIntroHint =>
+      'Leave empty to show the source\'s synopsis again.';
+
+  @override
+  String get shelfEditCoverPick => 'Choose cover';
+
+  @override
+  String get shelfEditCoverReset => 'Use the source\'s cover';
+
+  @override
+  String get shelfEditSave => 'Save';
+
+  @override
+  String get shelfEditSaved => 'Saved.';
+
+  @override
+  String get actionBack => 'Back';
+
+  @override
+  String get readerAutoPageAction => 'Auto page';
+
+  @override
+  String get readerAutoPageStop => 'Stop auto page';
+
+  @override
+  String readerAutoPageInterval(int seconds) {
+    return 'Auto page interval: $seconds s';
+  }
+
+  @override
+  String get readerPurgeAction => 'Purge rules';
+
+  @override
+  String get readerPurgeTitle => 'Purge rules';
+
+  @override
+  String get readerPurgeHint =>
+      'Changes apply to every book and re-read this book\'s cached chapters.';
+
+  @override
+  String get readerPurgeEmpty =>
+      'No replace rules yet. Add them under “Mine → Purge rules”.';
+
+  @override
+  String get readerPurgeLoadFailed => 'Could not read the purge rules.';
+
+  @override
+  String get readerPurgeFailed => 'The rule was not changed.';
 }

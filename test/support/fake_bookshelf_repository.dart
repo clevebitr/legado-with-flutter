@@ -284,6 +284,23 @@ final class FakeBookshelfRepository implements BookshelfRepository {
   }
 
   @override
+  Future<void> updateDetails({
+    required int id,
+    required String name,
+    required String? author,
+    required String? customIntro,
+  }) async {
+    _guard();
+    _mapBooks(<int>[id], (ShelvedBook book) {
+      return book.copyWith(
+        name: name,
+        author: author,
+        customIntro: customIntro,
+      );
+    });
+  }
+
+  @override
   Future<ShelvedBook?> findByUrl({
     required String sourceUrl,
     required String bookUrl,

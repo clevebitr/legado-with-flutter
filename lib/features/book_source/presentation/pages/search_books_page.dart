@@ -13,10 +13,11 @@ import 'package:flutter_reader/features/book_source/domain/entities/book_source.
 import 'package:flutter_reader/features/book_source/domain/entities/search_book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/search_match_mode.dart';
-import 'package:flutter_reader/features/book_source/domain/source_check_group.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/aggregate_search_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
+import 'package:flutter_reader/features/book_source/presentation/widgets/search_source_sheet.dart';
+import 'package:flutter_reader/features/book_source/presentation/widgets/source_scope_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -183,11 +184,11 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
           child: ActionChip(
             avatar: const Icon(Icons.filter_alt_outlined),
             label: Text(
-              _scopeLabel(l10n, scope, rows),
+              sourceScopeLabel(l10n, scope),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            onPressed: () => _openScopeSheet(l10n, scope, rows),
+            onPressed: () => _openScopeSheet(scope, rows),
           ),
         ),
         SizedBox(width: tokens.spacing.sm),
@@ -369,35 +370,42 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     );
   }
 
-  /// Opens [book] through the **first source that found it** (ADR-0046 §决策 4).
+  /// Opens [book] through the source the user picks (`DECISIONS.md` #76).
+  ///
+  /// A merged row that only one source found opens straight away — a sheet with a single row would
+  /// be a pointless tap. With several, the sheet lists every origin's own snapshot (ADR-0091
+  /// §决策 6) and the chosen one decides both the book address and the selected source.
   ///
   /// The detail page reads the selected source, so the selection has to move first; a source that
-  /// was deleted meanwhile is reported as a failure rather than opening the wrong one.
-  ///
-  /// 选择写入后才推页：`select` 要读一次书源表，先推页会让详情页用上一个源发一轮请求
-  /// （然后才重建到正确的源），看起来就是先闪一下旧书 / 解析失败。
+  /// was deleted meanwhile is reported as a failure rather than opening the wrong one. 选择写入后才
+  /// 推页：`select` 要读一次书源表，先推页会让详情页用上一个源发一轮请求（然后才重建到正确的
+  /// 源），看起来就是先闪一下旧书 / 解析失败。
   Future<void> _openHit(
     BuildContext context,
     SearchBook book,
     List<StoredBookSource> rows,
   ) async {
-    final String sourceUrl = book.origins.isEmpty ? '' : book.origins.first;
-    StoredBookSource? stored;
-    for (final StoredBookSource row in rows) {
-      if (row.source.url == sourceUrl) {
-        stored = row;
-        break;
-      }
+    final List<OriginHit> hits = _originsOf(book);
+    if (hits.isEmpty) {
+      _showMissingSource(context);
+
+      return;
     }
+    final OriginHit? picked = hits.length == 1
+        ? hits.first
+        : await showSearchSourceSheet(
+            context: context,
+            book: book.copyWith(hits: hits),
+            rows: rows,
+          );
+    if (picked == null || !context.mounted) {
+      return;
+    }
+
+    final StoredBookSource? stored = _rowOf(rows, picked.sourceUrl);
     if (stored == null) {
-      // 命中项的来源已被删除：不是「重试搜索」，而是这条结果已经没有可打开的源。
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context).bookSourceCheckFailureSourceMissing,
-          ),
-        ),
-      );
+      // 命中的来源已被删除：不是「重试搜索」，而是这条结果已经没有可打开的源。
+      _showMissingSource(context);
 
       return;
     }
@@ -411,13 +419,61 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
       BookSourceRoute.bookDetail(
         book: Book(
           name: book.name,
-          author: book.author,
-          kind: book.kind,
-          coverUrl: book.coverUrl,
+          author: picked.author ?? book.author,
+          kind: picked.kind ?? book.kind,
+          coverUrl: picked.coverUrl ?? book.coverUrl,
           intro: book.intro,
-          lastChapter: book.lastChapter,
-          updateTime: book.updateTime,
-          url: book.url,
+          lastChapter: picked.lastChapter ?? book.lastChapter,
+          updateTime: picked.updateTime ?? book.updateTime,
+          url: picked.url,
+        ),
+      ),
+    );
+  }
+
+  /// Every origin snapshot of [book], with a fallback for rows that predate `hits`.
+  ///
+  /// The fallback only exists for a merged row built before ADR-0091 (an in-memory row cannot
+  /// outlive a restart, but a test or a future caller may build one): it reads the first origin's
+  /// address, which is what the row used to open.
+  List<OriginHit> _originsOf(SearchBook book) {
+    if (book.hits.isNotEmpty) {
+      return book.hits;
+    }
+    if (book.origins.isEmpty) {
+      return const <OriginHit>[];
+    }
+
+    return <OriginHit>[
+      OriginHit(
+        sourceUrl: book.origins.first,
+        url: book.url,
+        author: book.author,
+        kind: book.kind,
+        coverUrl: book.coverUrl,
+        lastChapter: book.lastChapter,
+        updateTime: book.updateTime,
+      ),
+    ];
+  }
+
+  /// The stored row behind [sourceUrl], or `null` when it was deleted.
+  StoredBookSource? _rowOf(List<StoredBookSource> rows, String sourceUrl) {
+    for (final StoredBookSource row in rows) {
+      if (row.source.url == sourceUrl) {
+        return row;
+      }
+    }
+
+    return null;
+  }
+
+  /// Tells the user the hit's source is gone; it is not a search failure.
+  void _showMissingSource(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          AppLocalizations.of(context).bookSourceCheckFailureSourceMissing,
         ),
       ),
     );
@@ -444,175 +500,16 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     );
   }
 
-  /// The label of the scope chip.
-  String _scopeLabel(
-    AppLocalizations l10n,
-    BookSearchScope scope,
-    List<StoredBookSource> rows,
-  ) => switch (scope) {
-    SearchScopeAll() => l10n.searchScopeAll,
-    SearchScopeGroups(:final Set<String> groups) =>
-      groups.isEmpty ? l10n.searchScopeAll : groups.join('、'),
-    SearchScopeSources(:final List<ScopeSource> sources) =>
-      sources.isEmpty
-          ? l10n.searchScopeAll
-          : sources.map((ScopeSource source) => source.name).join('、'),
-  };
-
-  /// Opens the scope sheet: everything, a group, or specific sources.
-  ///
-  /// One sheet instead of a nested picker: "all" and the groups are the radio part, the named
-  /// sources are the check-box part, and ticking any source switches the scope to `sources`
-  /// (ADR-0046 §决策 1).
-  ///
-  /// The body is a [Consumer] that **watches** the scope instead of rendering a snapshot
-  /// (ADR-0058): with a snapshot, ticking a source changed the provider but not the sheet — the box
-  /// stayed empty, and because the tile kept reporting `false` the tick could never be undone.
-  void _openScopeSheet(
-    AppLocalizations l10n,
-    BookSearchScope scope,
-    List<StoredBookSource> rows,
-  ) {
-    final List<String> groups = <String>{
-      for (final StoredBookSource row in rows)
-        ...splitGroups(row.groupName ?? row.source.group),
-    }.toList()..sort();
-
+  /// Opens the shared scope sheet; the pick is persisted before it is shown again.
+  void _openScopeSheet(BookSearchScope scope, List<StoredBookSource> rows) {
     unawaited(
-      showModalBottomSheet<void>(
+      showSourceScopeSheet(
         context: context,
-        isScrollControlled: true,
-        builder: (BuildContext sheetContext) => SafeArea(
-          child: Consumer(
-            builder: (BuildContext context, WidgetRef ref, Widget? _) {
-              final BookSearchScope current =
-                  ref.watch(searchScopeSelectionProvider).value ??
-                  BookSearchScope.defaults;
-              final Set<String> named = <String>{
-                for (final ScopeSource source in current.sourcesOrEmpty)
-                  source.url,
-              };
-
-              return ListView(
-                shrinkWrap: true,
-                children: <Widget>[
-                  ListTile(title: Text(l10n.searchScopeLabel)),
-                  RadioGroup<String>(
-                    groupValue: _scopeKeyOf(current),
-                    onChanged: (String? key) => unawaited(
-                      _selectScope(
-                        key == null || key.isEmpty
-                            ? BookSearchScope.defaults
-                            : BookSearchScope.groups(<String>{
-                                key.substring(_groupKeyPrefix.length),
-                              }),
-                        sheetContext,
-                      ),
-                    ),
-                    child: Column(
-                      children: <Widget>[
-                        RadioListTile<String>(
-                          value: '',
-                          title: Text(l10n.searchScopeAll),
-                        ),
-                        for (final String group in groups)
-                          RadioListTile<String>(
-                            value: '$_groupKeyPrefix$group',
-                            title: Text(group),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    title: Text(l10n.searchScopeNamed),
-                    subtitle: Text(
-                      named.isEmpty
-                          ? l10n.searchScopeAll
-                          : rows
-                                .where(
-                                  (StoredBookSource row) =>
-                                      named.contains(row.source.url),
-                                )
-                                .map((StoredBookSource row) => row.source.name)
-                                .join('、'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  for (final StoredBookSource row in rows)
-                    CheckboxListTile(
-                      value: named.contains(row.source.url),
-                      title: Text(row.source.name),
-                      onChanged: (bool? checked) => unawaited(
-                        _toggleNamed(current, rows, row, checked ?? false),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
+        initial: scope,
+        rows: rows,
+        onSelected: ref.read(searchScopeSelectionProvider.notifier).select,
       ),
     );
-  }
-
-  /// The radio value of [scope]: `''` for everything / several groups / named sources, or
-  /// `group:<token>` for exactly one group.
-  String _scopeKeyOf(BookSearchScope scope) => switch (scope) {
-    SearchScopeAll() => '',
-    SearchScopeGroups(:final Set<String> groups) when groups.length == 1 =>
-      '$_groupKeyPrefix${groups.first}',
-    SearchScopeGroups() || SearchScopeSources() => '',
-  };
-
-  /// Applies [scope] and closes the sheet.
-  ///
-  /// The write is awaited **before** popping: 范围是持久化的偏好，弹回后用户可能立刻点搜索，
-  /// 写入还没落地就会拿到旧范围（ADR-0058）。
-  Future<void> _selectScope(
-    BookSearchScope scope,
-    BuildContext sheetContext,
-  ) async {
-    await ref.read(searchScopeSelectionProvider.notifier).select(scope);
-    if (!sheetContext.mounted) {
-      return;
-    }
-    Navigator.of(sheetContext).pop();
-  }
-
-  /// Adds or removes one named source, switching the scope to `sources` as soon as one is ticked.
-  ///
-  /// The sheet stays open so a user can tick several sources; the boxes redraw themselves because
-  /// the sheet watches the scope ([Consumer] above).
-  Future<void> _toggleNamed(
-    BookSearchScope current,
-    List<StoredBookSource> rows,
-    StoredBookSource row,
-    bool checked,
-  ) async {
-    final Set<String> next = <String>{
-      for (final ScopeSource named in current.sourcesOrEmpty) named.url,
-    };
-    if (checked) {
-      next.add(row.source.url);
-    } else {
-      next.remove(row.source.url);
-    }
-    await ref
-        .read(searchScopeSelectionProvider.notifier)
-        .select(
-          next.isEmpty
-              ? BookSearchScope.defaults
-              : BookSearchScope.sources(<ScopeSource>[
-                  for (final StoredBookSource candidate in rows)
-                    if (next.contains(candidate.source.url))
-                      ScopeSource(
-                        name: candidate.source.name,
-                        url: candidate.source.url,
-                      ),
-                ]),
-        );
   }
 
   /// Opens the filters sheet: source types and match mode.
@@ -735,6 +632,3 @@ class _SearchBooksPageState extends ConsumerState<SearchBooksPage> {
     );
   }
 }
-
-/// The radio-value prefix of a single-group scope in the scope sheet.
-const String _groupKeyPrefix = 'group:';

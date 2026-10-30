@@ -6,6 +6,12 @@ import 'package:flutter_reader/core/utils/clock.dart';
 
 part 'cache_dao.g.dart';
 
+/// The expiry written for an entry that must not expire on its own (ADR-0097 §决策 3).
+///
+/// A sentinel rather than a nullable column: `expiresAt.isAfter(now)` keeps working unchanged, and
+/// «permanent» can never be confused with «already expired».
+final DateTime persistentCacheExpiry = DateTime.utc(9999);
+
 /// Time-to-live cache for network payloads.
 ///
 /// Expired entries read as misses; [deleteExpired] purges them.
@@ -28,6 +34,7 @@ class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
     required Duration ttl,
     String? scopeKey,
     String? sourceKey,
+    bool persistent = false,
   }) async {
     await into(cacheEntries).insertOnConflictUpdate(
       CacheEntriesCompanion.insert(
@@ -38,7 +45,7 @@ class CacheDao extends DatabaseAccessor<ReaderDatabase> with _$CacheDaoMixin {
           page: page,
         ),
         payload: payload,
-        expiresAt: _clock.now().add(ttl),
+        expiresAt: persistent ? persistentCacheExpiry : _clock.now().add(ttl),
         scopeKey: Value<String?>(scopeKey),
         sourceKey: Value<String?>(sourceKey),
       ),

@@ -1605,6 +1605,17 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _customIntroMeta = const VerificationMeta(
+    'customIntro',
+  );
+  @override
+  late final GeneratedColumn<String> customIntro = GeneratedColumn<String>(
+    'custom_intro',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _addedAtMeta = const VerificationMeta(
     'addedAt',
   );
@@ -1643,6 +1654,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
     isPinned,
     groupId,
     customCoverPath,
+    customIntro,
     addedAt,
     updatedAt,
   ];
@@ -1751,6 +1763,15 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
         ),
       );
     }
+    if (data.containsKey('custom_intro')) {
+      context.handle(
+        _customIntroMeta,
+        customIntro.isAcceptableOrUnknown(
+          data['custom_intro']!,
+          _customIntroMeta,
+        ),
+      );
+    }
     if (data.containsKey('added_at')) {
       context.handle(
         _addedAtMeta,
@@ -1836,6 +1857,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, BookRow> {
         DriftSqlType.string,
         data['${effectivePrefix}custom_cover_path'],
       ),
+      customIntro: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_intro'],
+      ),
       addedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}added_at'],
@@ -1900,6 +1925,12 @@ class BookRow extends DataClass implements Insertable<BookRow> {
   /// Absolute path of a cover the user picked; `null` falls back to [coverUrl].
   final String? customCoverPath;
 
+  /// The introduction the user wrote, which wins over [intro] when set (M33, ADR-0092).
+  ///
+  /// [intro] stays the source's snapshot: re-adding the book refreshes it, and a user's own words
+  /// must survive that.
+  final String? customIntro;
+
   /// When the book was put on the shelf.
   final DateTime addedAt;
 
@@ -1920,6 +1951,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     required this.isPinned,
     this.groupId,
     this.customCoverPath,
+    this.customIntro,
     required this.addedAt,
     required this.updatedAt,
   });
@@ -1956,6 +1988,9 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     if (!nullToAbsent || customCoverPath != null) {
       map['custom_cover_path'] = Variable<String>(customCoverPath);
     }
+    if (!nullToAbsent || customIntro != null) {
+      map['custom_intro'] = Variable<String>(customIntro);
+    }
     map['added_at'] = Variable<DateTime>(addedAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -1991,6 +2026,9 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       customCoverPath: customCoverPath == null && nullToAbsent
           ? const Value.absent()
           : Value(customCoverPath),
+      customIntro: customIntro == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customIntro),
       addedAt: Value(addedAt),
       updatedAt: Value(updatedAt),
     );
@@ -2016,6 +2054,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       isPinned: serializer.fromJson<bool>(json['isPinned']),
       groupId: serializer.fromJson<int?>(json['groupId']),
       customCoverPath: serializer.fromJson<String?>(json['customCoverPath']),
+      customIntro: serializer.fromJson<String?>(json['customIntro']),
       addedAt: serializer.fromJson<DateTime>(json['addedAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -2038,6 +2077,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       'isPinned': serializer.toJson<bool>(isPinned),
       'groupId': serializer.toJson<int?>(groupId),
       'customCoverPath': serializer.toJson<String?>(customCoverPath),
+      'customIntro': serializer.toJson<String?>(customIntro),
       'addedAt': serializer.toJson<DateTime>(addedAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -2058,6 +2098,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     bool? isPinned,
     Value<int?> groupId = const Value.absent(),
     Value<String?> customCoverPath = const Value.absent(),
+    Value<String?> customIntro = const Value.absent(),
     DateTime? addedAt,
     DateTime? updatedAt,
   }) => BookRow(
@@ -2077,6 +2118,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     customCoverPath: customCoverPath.present
         ? customCoverPath.value
         : this.customCoverPath,
+    customIntro: customIntro.present ? customIntro.value : this.customIntro,
     addedAt: addedAt ?? this.addedAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -2100,6 +2142,9 @@ class BookRow extends DataClass implements Insertable<BookRow> {
       customCoverPath: data.customCoverPath.present
           ? data.customCoverPath.value
           : this.customCoverPath,
+      customIntro: data.customIntro.present
+          ? data.customIntro.value
+          : this.customIntro,
       addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -2122,6 +2167,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
           ..write('isPinned: $isPinned, ')
           ..write('groupId: $groupId, ')
           ..write('customCoverPath: $customCoverPath, ')
+          ..write('customIntro: $customIntro, ')
           ..write('addedAt: $addedAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -2144,6 +2190,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
     isPinned,
     groupId,
     customCoverPath,
+    customIntro,
     addedAt,
     updatedAt,
   );
@@ -2165,6 +2212,7 @@ class BookRow extends DataClass implements Insertable<BookRow> {
           other.isPinned == this.isPinned &&
           other.groupId == this.groupId &&
           other.customCoverPath == this.customCoverPath &&
+          other.customIntro == this.customIntro &&
           other.addedAt == this.addedAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -2184,6 +2232,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
   final Value<bool> isPinned;
   final Value<int?> groupId;
   final Value<String?> customCoverPath;
+  final Value<String?> customIntro;
   final Value<DateTime> addedAt;
   final Value<DateTime> updatedAt;
   const BooksCompanion({
@@ -2201,6 +2250,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     this.isPinned = const Value.absent(),
     this.groupId = const Value.absent(),
     this.customCoverPath = const Value.absent(),
+    this.customIntro = const Value.absent(),
     this.addedAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -2219,6 +2269,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     this.isPinned = const Value.absent(),
     this.groupId = const Value.absent(),
     this.customCoverPath = const Value.absent(),
+    this.customIntro = const Value.absent(),
     required DateTime addedAt,
     required DateTime updatedAt,
   }) : sourceUrl = Value(sourceUrl),
@@ -2241,6 +2292,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     Expression<bool>? isPinned,
     Expression<int>? groupId,
     Expression<String>? customCoverPath,
+    Expression<String>? customIntro,
     Expression<DateTime>? addedAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -2259,6 +2311,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
       if (isPinned != null) 'is_pinned': isPinned,
       if (groupId != null) 'group_id': groupId,
       if (customCoverPath != null) 'custom_cover_path': customCoverPath,
+      if (customIntro != null) 'custom_intro': customIntro,
       if (addedAt != null) 'added_at': addedAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -2279,6 +2332,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     Value<bool>? isPinned,
     Value<int?>? groupId,
     Value<String?>? customCoverPath,
+    Value<String?>? customIntro,
     Value<DateTime>? addedAt,
     Value<DateTime>? updatedAt,
   }) {
@@ -2297,6 +2351,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
       isPinned: isPinned ?? this.isPinned,
       groupId: groupId ?? this.groupId,
       customCoverPath: customCoverPath ?? this.customCoverPath,
+      customIntro: customIntro ?? this.customIntro,
       addedAt: addedAt ?? this.addedAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -2347,6 +2402,9 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
     if (customCoverPath.present) {
       map['custom_cover_path'] = Variable<String>(customCoverPath.value);
     }
+    if (customIntro.present) {
+      map['custom_intro'] = Variable<String>(customIntro.value);
+    }
     if (addedAt.present) {
       map['added_at'] = Variable<DateTime>(addedAt.value);
     }
@@ -2373,6 +2431,7 @@ class BooksCompanion extends UpdateCompanion<BookRow> {
           ..write('isPinned: $isPinned, ')
           ..write('groupId: $groupId, ')
           ..write('customCoverPath: $customCoverPath, ')
+          ..write('customIntro: $customIntro, ')
           ..write('addedAt: $addedAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -6991,6 +7050,7 @@ typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
   Value<bool> isPinned,
   Value<int?> groupId,
   Value<String?> customCoverPath,
+  Value<String?> customIntro,
   required DateTime addedAt,
   required DateTime updatedAt,
 });
@@ -7009,6 +7069,7 @@ typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
   Value<bool> isPinned,
   Value<int?> groupId,
   Value<String?> customCoverPath,
+  Value<String?> customIntro,
   Value<DateTime> addedAt,
   Value<DateTime> updatedAt,
 });
@@ -7089,6 +7150,11 @@ class $$BooksTableFilterComposer
 
   ColumnFilters<String> get customCoverPath => $composableBuilder(
     column: $table.customCoverPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customIntro => $composableBuilder(
+    column: $table.customIntro,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7182,6 +7248,11 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get customIntro => $composableBuilder(
+    column: $table.customIntro,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get addedAt => $composableBuilder(
     column: $table.addedAt,
     builder: (column) => ColumnOrderings(column),
@@ -7248,6 +7319,11 @@ class $$BooksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get customIntro => $composableBuilder(
+    column: $table.customIntro,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get addedAt =>
       $composableBuilder(column: $table.addedAt, builder: (column) => column);
 
@@ -7297,6 +7373,7 @@ class $$BooksTableTableManager
                 Value<bool> isPinned = const Value.absent(),
                 Value<int?> groupId = const Value.absent(),
                 Value<String?> customCoverPath = const Value.absent(),
+                Value<String?> customIntro = const Value.absent(),
                 Value<DateTime> addedAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
               }) => BooksCompanion(
@@ -7314,6 +7391,7 @@ class $$BooksTableTableManager
                 isPinned: isPinned,
                 groupId: groupId,
                 customCoverPath: customCoverPath,
+                customIntro: customIntro,
                 addedAt: addedAt,
                 updatedAt: updatedAt,
               ),
@@ -7333,6 +7411,7 @@ class $$BooksTableTableManager
                 Value<bool> isPinned = const Value.absent(),
                 Value<int?> groupId = const Value.absent(),
                 Value<String?> customCoverPath = const Value.absent(),
+                Value<String?> customIntro = const Value.absent(),
                 required DateTime addedAt,
                 required DateTime updatedAt,
               }) => BooksCompanion.insert(
@@ -7350,6 +7429,7 @@ class $$BooksTableTableManager
                 isPinned: isPinned,
                 groupId: groupId,
                 customCoverPath: customCoverPath,
+                customIntro: customIntro,
                 addedAt: addedAt,
                 updatedAt: updatedAt,
               ),

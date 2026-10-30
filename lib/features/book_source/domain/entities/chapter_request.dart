@@ -58,5 +58,11 @@ abstract class ChapterRequest with _$ChapterRequest {
 
     /// The chapter's display update time, when the source had one (`chapter.updateTime`).
     String? updateTime,
+
+    /// Whether the finished body should be cached **without** an expiry (ADR-0097 §决策 1).
+    ///
+    /// The caller sets it when the book is on the shelf: its chapters then stay cached until the
+    /// user clears that book's cache, instead of expiring after `chapterCacheTtl`.
+    @Default(false) bool persistCache,
   }) = _ChapterRequest;
 }

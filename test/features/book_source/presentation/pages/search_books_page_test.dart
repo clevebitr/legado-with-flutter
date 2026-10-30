@@ -451,6 +451,65 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('hit_whenSeveralSourcesFoundIt_asksWhichOneThenOpensThatCopy', (
+      WidgetTester tester,
+    ) async {
+      // 「N 个来源」是给用户的承诺：点开之后必须能选（DECISIONS #76、ADR-0091 §决策 6）。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          _searchUrl('https://a.test', corpusKeyword),
+          '<div class="result"><a href="/book/a">'
+          '<span class="title">剑来</span></a>'
+          '<span class="author">烽火戏诸侯</span></div>',
+        )
+        ..serve(
+          _searchUrl('https://b.test', corpusKeyword),
+          '<div class="result"><a href="/book/b">'
+          '<span class="title">剑来</span></a>'
+          '<span class="author">烽火戏诸侯</span></div>',
+        )
+        ..serve(
+          'https://a.test/book/a',
+          '<h1 class="title">剑来</h1><span class="author">烽火戏诸侯</span>',
+        )
+        ..serve(
+          'https://b.test/book/b',
+          '<h1 class="title">剑来</h1><span class="author">烽火戏诸侯</span>',
+        );
+      await pumpReaderApp(
+        tester,
+        source: _twoOriginSource('甲源', 'a.test'),
+        http: http,
+        repository: FakeBookSourceRepository()
+          ..add(source: _twoOriginSource('甲源', 'a.test'))
+          ..add(source: _twoOriginSource('乙源', 'b.test')),
+      );
+      await _openSearchTab(tester);
+      await _search(tester, corpusKeyword);
+
+      // 两个源各自命中同一本书 → 合并成一行，来源数是 2。
+      expect(
+        find.textContaining(_l10n(tester).searchOriginsLine(2)),
+        findsWidgets,
+      );
+
+      // 关键词输入框里也有「剑来」：点的是结果行，不是输入框。
+      await tester.tap(find.widgetWithText(ListTile, '剑来'));
+      await tester.pumpAndSettle();
+
+      final AppLocalizations l10n = _l10n(tester);
+      expect(find.text(l10n.searchSourceSheetTitle), findsOneWidget);
+      expect(find.text('甲源'), findsOneWidget);
+      expect(find.text('乙源'), findsOneWidget);
+
+      await tester.tap(find.text('乙源'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BookDetailPage), findsOneWidget);
+      // 打开的是**选中那个源**的书：详情页按它请求了书籍页。
+      expect(http.requestedUrls, contains('https://b.test/book/b'));
+    });
+
     testWidgets('search_givenAHit_opensTheDetailPageOfTheHit', (
       WidgetTester tester,
     ) async {
@@ -511,3 +570,30 @@ Future<void> _openSearchTab(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 }
+
+/// The search URL of [host] for [keyword].
+String _searchUrl(String host, String keyword) =>
+    '$host/s?q=${Uri.encodeComponent(keyword)}';
+
+/// A text source whose search page lists `剑来` at `/book/<first letter of host>`.
+BookSource _twoOriginSource(String name, String host) => BookSource(
+  name: name,
+  url: 'https://$host',
+  searchUrl: 'https://$host/s?q={{key}}',
+  searchRule: const SearchRule(
+    bookList: 'class.result',
+    name: 'class.title@text',
+    author: 'class.author@text',
+    bookUrl: 'tag.a.0@href',
+  ),
+  bookInfoRule: const BookInfoRule(
+    name: 'class.title@text',
+    author: 'class.author@text',
+  ),
+  tocRule: const TocRule(
+    chapterList: 'class.chapter',
+    chapterName: 'tag.a.0@text',
+    chapterUrl: 'tag.a.0@href',
+  ),
+  contentRule: const ContentRule(content: 'class.body'),
+);

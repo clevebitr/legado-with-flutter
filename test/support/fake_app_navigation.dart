@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/router/app_navigation.dart';
+import 'package:flutter_reader/core/router/change_source_contract.dart';
 
 /// [AppNavigation] double that records every destination a page asked for
 /// (`docs/dev/testing.md` §4).
@@ -57,6 +58,12 @@ final class FakeAppNavigation implements AppNavigation {
 
   /// How many times each rule list was opened, keyed by the stored `kind` value.
   final Map<String, int> ruleCalls = <String, int>{};
+
+  /// Every `openChangeSource` call's launch data, in the order the port takes them.
+  final List<ChangeSourceLaunch> changeSourceCalls = <ChangeSourceLaunch>[];
+
+  /// What `openChangeSource` answers; `null` (the default) means the user backed out.
+  ChangeSourceOutcome? changeSourceOutcome;
 
   /// Every `openBookReadingRecords` call's arguments, in the order the port takes them.
   final List<({String sourceUrl, String bookUrl, String bookName})>
@@ -116,6 +123,23 @@ final class FakeAppNavigation implements AppNavigation {
     bookUrl: bookUrl,
     bookName: bookName,
   ));
+
+  /// Every `openShelfBookEdit` call's book id.
+  final List<int> editBookCalls = <int>[];
+
+  @override
+  void openShelfBookEdit(BuildContext context, int bookId) =>
+      editBookCalls.add(bookId);
+
+  @override
+  Future<ChangeSourceOutcome?> openChangeSource(
+    BuildContext context,
+    ChangeSourceLaunch launch,
+  ) async {
+    changeSourceCalls.add(launch);
+
+    return changeSourceOutcome;
+  }
 
   @override
   void openReader(

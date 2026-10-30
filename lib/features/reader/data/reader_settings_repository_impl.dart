@@ -14,6 +14,9 @@ const String _lineHeightKey = 'reader.lineHeight';
 /// `shared_preferences` key of the background palette index.
 const String _backgroundKey = 'reader.background';
 
+/// `shared_preferences` key of the auto-page interval, in seconds (ADR-0093).
+const String _autoPageSecondsKey = 'reader.autoPageSeconds';
+
 /// `shared_preferences` key of the in-page dimming overlay brightness.
 const String _brightnessKey = 'reader.brightness';
 
@@ -87,6 +90,8 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     eyeProtection:
         _store.readInt(_eyeProtectionKey) ?? defaultReaderEyeProtection,
     showReaderStatus: _store.readBool(_showReaderStatusKey) ?? true,
+    autoPageSeconds:
+        _store.readInt(_autoPageSecondsKey) ?? defaultReaderAutoPageSeconds,
   );
 
   @override
@@ -110,6 +115,7 @@ final class ReaderSettingsRepositoryImpl implements ReaderSettingsRepository {
     await _store.writeBool(_keepScreenAwakeKey, settings.keepScreenAwake);
     await _store.writeInt(_eyeProtectionKey, settings.eyeProtection);
     await _store.writeBool(_showReaderStatusKey, settings.showReaderStatus);
+    await _store.writeInt(_autoPageSecondsKey, settings.autoPageSeconds);
   }
 
   /// Maps a stored index onto [ReaderFontFamily], defaulting when it names nothing.

@@ -3861,6 +3861,234 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not share the log files.'**
   String get logFilesShareFailed;
+
+  /// Label of the keyword field on the change-source page (defaults to the book title).
+  ///
+  /// In en, this message translates to:
+  /// **'Keyword'**
+  String get changeSourceKeyword;
+
+  /// The button that actually begins the change-source search; nothing runs before it is tapped.
+  ///
+  /// In en, this message translates to:
+  /// **'Start search'**
+  String get changeSourceStart;
+
+  /// Progress counter: how many candidate sources were found so far.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} found'**
+  String changeSourceFound(int count);
+
+  /// Switch: a candidate's author must contain this book's author.
+  ///
+  /// In en, this message translates to:
+  /// **'Check author'**
+  String get changeSourceCheckAuthor;
+
+  /// Switch: read each candidate's detail page (cover, latest chapter).
+  ///
+  /// In en, this message translates to:
+  /// **'Load details'**
+  String get changeSourceLoadInfo;
+
+  /// Switch: read each candidate's chapter list, which adds the chapter count.
+  ///
+  /// In en, this message translates to:
+  /// **'Load chapters'**
+  String get changeSourceLoadToc;
+
+  /// Idle state of the change-source page: no request has been sent yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a scope, then start the search.'**
+  String get changeSourceSearchPrompt;
+
+  /// Header of the second step: pick which chapter the reader continues from.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the chapter to align to'**
+  String get changeSourceChapterTitle;
+
+  /// Shown above the chapter list so the user knows what they are aligning from.
+  ///
+  /// In en, this message translates to:
+  /// **'Now reading: {chapter}'**
+  String changeSourceCurrentChapter(String chapter);
+
+  /// The chapter the automatic alignment picked, before the user changes it.
+  ///
+  /// In en, this message translates to:
+  /// **'Aligned to: {chapter}'**
+  String changeSourceAlignHint(String chapter);
+
+  /// The button that applies the switch and closes the page.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch source'**
+  String get changeSourceConfirm;
+
+  /// The picked source's chapter list came back empty.
+  ///
+  /// In en, this message translates to:
+  /// **'This source returned no chapters.'**
+  String get changeSourceNoChapters;
+
+  /// The scope resolved to zero searchable sources, so nothing was searched.
+  ///
+  /// In en, this message translates to:
+  /// **'No source in this scope can be searched.'**
+  String get changeSourceNoSources;
+
+  /// Title of the sheet that lists every source which found the same book; the chosen one decides which copy opens.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a source'**
+  String get searchSourceSheetTitle;
+
+  /// Tooltip of the discover page's layout toggle while the grid is shown: switch back to the list.
+  ///
+  /// In en, this message translates to:
+  /// **'List layout'**
+  String get exploreLayoutList;
+
+  /// Tooltip of the discover page's layout toggle while the list is shown: switch to the grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid layout'**
+  String get exploreLayoutGrid;
+
+  /// Title of the sheet that sets how many columns the grid uses in the current orientation.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid columns'**
+  String get exploreGridColumnsAction;
+
+  /// Slider label of the grid column count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} columns'**
+  String exploreGridColumnsValue(int count);
+
+  /// Action that opens the shelf's editor for one book, and the editor's own title.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit book'**
+  String get shelfEditTitle;
+
+  /// Form field: the book's title, which the user can correct.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get shelfEditName;
+
+  /// Validation message when the title field is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'A title is required.'**
+  String get shelfEditNameRequired;
+
+  /// Form field: the book's author.
+  ///
+  /// In en, this message translates to:
+  /// **'Author'**
+  String get shelfEditAuthor;
+
+  /// Form field: the user's own introduction, which wins over the source's synopsis.
+  ///
+  /// In en, this message translates to:
+  /// **'Introduction'**
+  String get shelfEditIntro;
+
+  /// Helper text under the introduction field.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to show the source\'s synopsis again.'**
+  String get shelfEditIntroHint;
+
+  /// Button that opens the image picker for the book's cover.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose cover'**
+  String get shelfEditCoverPick;
+
+  /// Button that removes the user's cover and falls back to the source's image.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the source\'s cover'**
+  String get shelfEditCoverReset;
+
+  /// Button that writes the edited details.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get shelfEditSave;
+
+  /// Confirmation after the edited details were written.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved.'**
+  String get shelfEditSaved;
+
+  /// Tooltip of the back arrow that returns from the chapter step to the candidate list.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get actionBack;
+
+  /// Tooltip of the toolbar toggle that starts reading on its own.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto page'**
+  String get readerAutoPageAction;
+
+  /// Tooltip of the same toggle while auto page is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop auto page'**
+  String get readerAutoPageStop;
+
+  /// Slider label of the auto-page interval (ADR-0093).
+  ///
+  /// In en, this message translates to:
+  /// **'Auto page interval: {seconds} s'**
+  String readerAutoPageInterval(int seconds);
+
+  /// Tooltip of the reader toolbar button that opens the replace-rule switches.
+  ///
+  /// In en, this message translates to:
+  /// **'Purge rules'**
+  String get readerPurgeAction;
+
+  /// Title of the in-reader replace-rule sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Purge rules'**
+  String get readerPurgeTitle;
+
+  /// Explains the scope of turning a replace rule on or off from inside the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes apply to every book and re-read this book\'s cached chapters.'**
+  String get readerPurgeHint;
+
+  /// Empty state of the in-reader purge sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'No replace rules yet. Add them under “Mine → Purge rules”.'**
+  String get readerPurgeEmpty;
+
+  /// Failure state of the in-reader purge sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the purge rules.'**
+  String get readerPurgeLoadFailed;
+
+  /// Snack bar shown when a rule write did not apply.
+  ///
+  /// In en, this message translates to:
+  /// **'The rule was not changed.'**
+  String get readerPurgeFailed;
 }
 
 class _AppLocalizationsDelegate

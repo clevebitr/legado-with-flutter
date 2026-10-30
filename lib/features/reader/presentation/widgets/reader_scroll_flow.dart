@@ -1,10 +1,13 @@
 /// The continuous scroll body: the page table stacked vertically, scrolled by the reader.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_chapter_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_table.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_turn.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:m3e_design/m3e_design.dart';
 
@@ -36,6 +39,7 @@ class ReaderScrollFlow extends StatefulWidget {
     required this.onProgress,
     required this.onSettled,
     required this.onNeedChapter,
+    this.turn,
     super.key,
   });
 
@@ -68,6 +72,9 @@ class ReaderScrollFlow extends StatefulWidget {
 
   /// Called with a chapter index whose body the flow needs (a loading page, or a retry).
   final void Function(int chapterIndex, {bool explicit}) onNeedChapter;
+
+  /// The page's "turn one page" command (ADR-0093 §决策 2), or `null` when it is not used.
+  final ReaderPageTurn? turn;
 
   @override
   State<ReaderScrollFlow> createState() => _ReaderScrollFlowState();
@@ -108,7 +115,49 @@ class _ReaderScrollFlowState extends State<ReaderScrollFlow> {
   final Set<int> _requested = <int>{};
 
   @override
+  void initState() {
+    super.initState();
+    widget.turn?.addListener(_onTurn);
+  }
+
+  @override
+  void didUpdateWidget(ReaderScrollFlow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.turn != widget.turn) {
+      oldWidget.turn?.removeListener(_onTurn);
+      widget.turn?.addListener(_onTurn);
+    }
+  }
+
+  /// Scrolls one screen in the commanded direction (ADR-0093 §决策 3, ADR-0096).
+  ///
+  /// The step is the viewport height, the same amount a manual swipe covers; the target is clamped to
+  /// the scrollable's range so the last screen does not fight the physics.
+  void _onTurn() {
+    if (!_scroll.hasClients) {
+      return;
+    }
+    final ScrollPosition position = _scroll.position;
+    final double step =
+        widget.turn?.direction == ReaderPageTurnDirection.previous
+        ? -position.viewportDimension
+        : position.viewportDimension;
+    final double target = (position.pixels + step).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    unawaited(
+      _scroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      ),
+    );
+  }
+
+  @override
   void dispose() {
+    widget.turn?.removeListener(_onTurn);
     _scroll.dispose();
     for (final ScrollController controller in _retired) {
       controller.dispose();

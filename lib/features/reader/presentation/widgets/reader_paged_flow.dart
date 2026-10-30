@@ -1,9 +1,12 @@
 /// The paged body: the same page table the scroll mode uses, one page at a time.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_chapter_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_table.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_turn.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:m3e_design/m3e_design.dart';
 
@@ -27,6 +30,7 @@ class ReaderPagedFlow extends StatefulWidget {
     required this.onProgress,
     required this.onSettled,
     required this.onNeedChapter,
+    this.turn,
     super.key,
   });
 
@@ -59,6 +63,9 @@ class ReaderPagedFlow extends StatefulWidget {
 
   /// Called with a chapter index whose body the flow needs (a loading page, or a retry).
   final void Function(int chapterIndex, {bool explicit}) onNeedChapter;
+
+  /// The page's "turn one page" command (ADR-0093 §决策 2), or `null` when it is not used.
+  final ReaderPageTurn? turn;
 
   @override
   State<ReaderPagedFlow> createState() => _ReaderPagedFlowState();
@@ -96,7 +103,44 @@ class _ReaderPagedFlowState extends State<ReaderPagedFlow> {
   final Set<int> _requested = <int>{};
 
   @override
+  void initState() {
+    super.initState();
+    widget.turn?.addListener(_onTurn);
+  }
+
+  @override
+  void didUpdateWidget(ReaderPagedFlow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.turn != widget.turn) {
+      oldWidget.turn?.removeListener(_onTurn);
+      widget.turn?.addListener(_onTurn);
+    }
+  }
+
+  /// Turns one page in the commanded direction (ADR-0093 §决策 3, ADR-0096).
+  ///
+  /// It goes through the pager's own animation, so progress, the page-table correction and crossing
+  /// a chapter boundary all keep working exactly as a manual swipe (ADR-0087 §决策 5).
+  void _onTurn() {
+    if (!_controller.hasClients) {
+      return;
+    }
+    final bool forward = widget.turn?.direction == ReaderPageTurnDirection.next;
+    final Future<void> turn = forward
+        ? _controller.nextPage(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          )
+        : _controller.previousPage(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+    unawaited(turn);
+  }
+
+  @override
   void dispose() {
+    widget.turn?.removeListener(_onTurn);
     _controller.dispose();
     for (final PageController controller in _retired) {
       controller.dispose();

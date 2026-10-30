@@ -17,7 +17,7 @@ import 'package:flutter_reader/features/book_source/presentation/notifiers/book_
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_add_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/shelf_book_notifier.dart';
-import 'package:flutter_reader/features/book_source/presentation/widgets/change_book_source_sheet.dart';
+import 'package:flutter_reader/features/book_source/presentation/widgets/change_source_sheet.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:m3e_design/m3e_design.dart';
@@ -286,7 +286,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                   ),
                 ],
               ),
-              if (info.intro case final String intro
+              // 用户自己写的简介优先于书源快照（M33，ADR-0092）。
+              if (membership?.customIntro ?? info.intro case final String intro
                   when intro.trim().isNotEmpty) ...[
                 SizedBox(height: tokens.spacing.md),
                 // 简介默认折三行：目录可能有上千条，一整段简介会把目录推到屏幕外。
@@ -304,6 +305,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                   _readingRecordsButton(context, ref, source, info, l10n),
                   _groupButton(context, ref, source, info, membership, l10n),
                   _coverButton(context, ref, source, info, membership, l10n),
+                  _editButton(context, ref, membership, l10n),
                   _bookCacheButton(context, ref, source, info, l10n),
                 ],
               ),
@@ -369,7 +371,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     label: Text(l10n.readerChangeSource),
   );
 
-  /// Runs the change-source flow: candidates → switch → selected source → shelf → page.
+  /// Runs the change-source flow: the page answers a source + chapter, this applies it.
+  ///
+  /// 换源页自己做搜索、进度与章节选择（ADR-0091）；页面返回之后才写库：先切选中的书源，再把
+  /// 书架行的身份改写成新源（`migrateIdentity`），最后把本页换成新身份。
   Future<void> _changeSource(
     WidgetRef ref,
     BookSource source,
@@ -377,111 +382,108 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     ShelfMembership? membership,
     AppLocalizations l10n,
   ) async {
-    final SourceCandidate? candidate =
-        await showModalBottomSheet<SourceCandidate>(
-          context: context,
-          isScrollControlled: true,
-          builder: (BuildContext context) => ChangeBookSourceSheet(
-            bookName: info.name,
-            currentSourceUrl: source.url,
-          ),
-        );
-    if (candidate == null || !mounted) {
+    final ChangeSourceSelection? selection = await showChangeSourceSheet(
+      context,
+      target: (
+        sourceUrl: source.url,
+        bookUrl: info.url,
+        name: info.name,
+        author: info.author,
+        chapterName: membership?.progressChapterName ?? '',
+        chapterIndex: 0,
+      ),
+    );
+    if (selection == null || !mounted) {
       return;
     }
 
-    final List<StoredBookSource> rows = await ref.read(
-      bookSourceListProvider.future,
+    final BookSource? target = await _sourceByUrl(
+      ref,
+      selection.candidate.sourceUrl,
     );
     if (!mounted) {
       return;
-    }
-    BookSource? target;
-    for (final StoredBookSource row in rows) {
-      if (row.source.url == candidate.sourceUrl) {
-        target = row.source;
-        break;
-      }
     }
     if (target == null) {
       _showMessage(context, l10n.readerSourceFailed);
 
       return;
     }
-    final BookSource targetSource = target;
-
-    // 换源要重拉详情与目录，可能几秒：盖一层不可取消的进度，避免用户以为按钮没反应。
-    unawaited(
-      showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) => const PopScope(
-          canPop: false,
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ),
+    final SourceSwitchResult data = ref
+        .read(switchBookSourceProvider)
+        .withChapters(target: target, selection: selection);
+    final List<StoredBookSource> rows = await ref.read(
+      bookSourceListProvider.future,
     );
-
-    ParseResult<SourceSwitchResult>? switched;
-    try {
-      switched = await ref
-          .read(switchBookSourceProvider)
-          .switchTo(
-            target: targetSource,
-            candidate: candidate,
-            currentChapterName: membership?.progressChapterName ?? '',
-            currentChapterIndex: 0,
-          );
-      if (switched case ParseSuccess<SourceSwitchResult>(
-        :final SourceSwitchResult data,
-      )) {
-        for (final StoredBookSource row in rows) {
-          if (row.source.url == data.sourceUrl) {
-            await ref.read(selectedBookSourceProvider.notifier).select(row.id);
-            break;
-          }
-        }
-        // 不在书架上时端口会直接返回成功；不要用 membership 判断，避免它仍在加载时漏掉迁移。
-        await ref
-            .read(bookshelfWriterProvider)
-            .migrateIdentity(
-              sourceUrl: source.url,
-              bookUrl: info.url,
-              newSourceUrl: data.sourceUrl,
-              newBookUrl: data.bookUrl,
-              newTocUrl: data.tocUrl,
-              newName: data.bookName,
-              newAuthor: data.author,
-              newCoverUrl: data.coverUrl,
-              newLastChapter: data.lastChapter,
-            );
-        if (mounted) {
-          setState(() {
-            _book = Book(
-              name: data.bookName,
-              url: data.bookUrl,
-              author: data.author,
-              kind: info.kind,
-              coverUrl: data.coverUrl,
-              intro: info.intro,
-              lastChapter: data.lastChapter,
-              updateTime: info.updateTime,
-            );
-          });
-        }
-      }
-    } finally {
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
+    for (final StoredBookSource row in rows) {
+      if (row.source.url == data.sourceUrl) {
+        await ref.read(selectedBookSourceProvider.notifier).select(row.id);
+        break;
       }
     }
+    // 不在书架上时端口会直接返回成功；不要用 membership 判断，避免它仍在加载时漏掉迁移。
+    await ref
+        .read(bookshelfWriterProvider)
+        .migrateIdentity(
+          sourceUrl: source.url,
+          bookUrl: info.url,
+          newSourceUrl: data.sourceUrl,
+          newBookUrl: data.bookUrl,
+          newTocUrl: data.tocUrl,
+          newName: data.bookName,
+          newAuthor: data.author,
+          newCoverUrl: data.coverUrl,
+          newLastChapter: data.lastChapter,
+        );
     if (!mounted) {
       return;
     }
-    if (switched is ParseFailure<SourceSwitchResult>) {
-      _showMessage(context, l10n.readerSourceFailed);
-    }
+    setState(() {
+      _book = Book(
+        name: data.bookName,
+        url: data.bookUrl,
+        author: data.author,
+        kind: info.kind,
+        coverUrl: data.coverUrl,
+        intro: info.intro,
+        lastChapter: data.lastChapter,
+        updateTime: info.updateTime,
+      );
+    });
   }
+
+  /// The stored book source with [sourceUrl], or `null` when it was deleted meanwhile.
+  Future<BookSource?> _sourceByUrl(WidgetRef ref, String sourceUrl) async {
+    for (final StoredBookSource row in await ref.read(
+      bookSourceListProvider.future,
+    )) {
+      if (row.source.url == sourceUrl) {
+        return row.source;
+      }
+    }
+
+    return null;
+  }
+
+  /// 「编辑」: opens the shelf's editor so the user can fix a title/author/intro the source got
+  /// wrong (M33, ADR-0092).
+  ///
+  /// Disabled when the book is not on the shelf: there is no row to edit, and the shelf is the
+  /// owner of the user's own copy of these fields.
+  Widget _editButton(
+    BuildContext context,
+    WidgetRef ref,
+    ShelfMembership? membership,
+    AppLocalizations l10n,
+  ) => OutlinedButton.icon(
+    onPressed: switch (membership?.id) {
+      final int id =>
+        () => ref.read(appNavigationProvider).openShelfBookEdit(context, id),
+      null => null,
+    },
+    icon: const Icon(Icons.edit_outlined),
+    label: Text(l10n.shelfEditTitle),
+  );
 
   /// 「阅读记录」: opens the reader-owned record page for this book (ADR-0066 §决策 5).
   ///

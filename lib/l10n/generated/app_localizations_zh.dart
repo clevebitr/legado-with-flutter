@@ -2057,4 +2057,128 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get logFilesShareFailed => '无法分享日志文件。';
+
+  @override
+  String get changeSourceKeyword => '关键词';
+
+  @override
+  String get changeSourceStart => '开始搜索';
+
+  @override
+  String changeSourceFound(int count) {
+    return '已找到 $count 条';
+  }
+
+  @override
+  String get changeSourceCheckAuthor => '校验作者';
+
+  @override
+  String get changeSourceLoadInfo => '加载详情';
+
+  @override
+  String get changeSourceLoadToc => '加载目录';
+
+  @override
+  String get changeSourceSearchPrompt => '选好范围后点「开始搜索」。';
+
+  @override
+  String get changeSourceChapterTitle => '选择要对齐的章节';
+
+  @override
+  String changeSourceCurrentChapter(String chapter) {
+    return '当前阅读：$chapter';
+  }
+
+  @override
+  String changeSourceAlignHint(String chapter) {
+    return '自动对齐到：$chapter';
+  }
+
+  @override
+  String get changeSourceConfirm => '确认换源';
+
+  @override
+  String get changeSourceNoChapters => '这个源没有返回目录。';
+
+  @override
+  String get changeSourceNoSources => '当前范围里没有可搜索的书源。';
+
+  @override
+  String get searchSourceSheetTitle => '选择来源';
+
+  @override
+  String get exploreLayoutList => '列表布局';
+
+  @override
+  String get exploreLayoutGrid => '网格布局';
+
+  @override
+  String get exploreGridColumnsAction => '网格列数';
+
+  @override
+  String exploreGridColumnsValue(int count) {
+    return '$count 列';
+  }
+
+  @override
+  String get shelfEditTitle => '编辑书籍';
+
+  @override
+  String get shelfEditName => '书名';
+
+  @override
+  String get shelfEditNameRequired => '书名不能为空。';
+
+  @override
+  String get shelfEditAuthor => '作者';
+
+  @override
+  String get shelfEditIntro => '简介';
+
+  @override
+  String get shelfEditIntroHint => '留空则显示书源原来的简介。';
+
+  @override
+  String get shelfEditCoverPick => '选择封面';
+
+  @override
+  String get shelfEditCoverReset => '改用书源封面';
+
+  @override
+  String get shelfEditSave => '保存';
+
+  @override
+  String get shelfEditSaved => '已保存。';
+
+  @override
+  String get actionBack => '返回';
+
+  @override
+  String get readerAutoPageAction => '自动翻页';
+
+  @override
+  String get readerAutoPageStop => '停止自动翻页';
+
+  @override
+  String readerAutoPageInterval(int seconds) {
+    return '自动翻页间隔：$seconds 秒';
+  }
+
+  @override
+  String get readerPurgeAction => '净化规则';
+
+  @override
+  String get readerPurgeTitle => '净化规则';
+
+  @override
+  String get readerPurgeHint => '规则是全局的；改动会重读本书已缓存的正文。';
+
+  @override
+  String get readerPurgeEmpty => '还没有替换净化规则，可在「我的 → 替换净化」里添加。';
+
+  @override
+  String get readerPurgeLoadFailed => '读不到净化规则。';
+
+  @override
+  String get readerPurgeFailed => '规则没有改成功。';
 }

@@ -372,37 +372,32 @@ void main() {
       },
     );
 
-    test(
-      'execute_givenMorePagesThanTheBound_stopsAtTheBoundWithAWarning',
-      () async {
-        const String base = 'https://example-novel.test/book/9/';
-        final FakeHttpClient http = FakeHttpClient();
-        for (var page = 1; page <= 51; page++) {
-          http.serve(
-            '$base$page.html',
-            _tocHtml(<String>[
-              '第$page章',
-            ], nextHref: page < 51 ? '${page + 1}.html' : null),
-          );
-        }
-        final ({PageFetchService pages, FakeLogPrinter printer}) service =
-            _service(http);
-
-        final List<Chapter> chapters = _data(
-          await FetchToc(pages: service.pages)
-              .execute(_pagingSource(_nextRule), '${base}1.html'),
+    test('execute_givenLongTablesOfContents_readsEveryPage', () async {
+      const String base = 'https://example-novel.test/book/9/';
+      final FakeHttpClient http = FakeHttpClient();
+      // 语料只有 51 页，而上限现在是 500：这条用例改成「上限远高于真实目录」的回归点，
+      // 即 51 页必须**全部**读到（真机日志里 50 页上限让长书缺了尾部章节）。
+      for (var page = 1; page <= 51; page++) {
+        http.serve(
+          '$base$page.html',
+          _tocHtml(<String>[
+            '第$page章',
+          ], nextHref: page < 51 ? '${page + 1}.html' : null),
         );
+      }
+      final ({PageFetchService pages, FakeLogPrinter printer}) service =
+          _service(http);
 
-        // §9：翻页最多 50 页，到顶后停止并记录 warning。
-        expect(http.requestedUrls, hasLength(50));
-        expect(chapters, hasLength(50));
-        expect(service.printer.events, hasLength(1));
-        expect(
-          service.printer.events.single.message.toString(),
-          contains('50 pages'),
-        );
-      },
-    );
+      final List<Chapter> chapters = _data(
+        await FetchToc(pages: service.pages)
+            .execute(_pagingSource(_nextRule), '${base}1.html'),
+      );
+
+      expect(http.requestedUrls, hasLength(51));
+      expect(chapters, hasLength(51));
+      // 没有到顶就没有 warning。
+      expect(service.printer.events, isEmpty);
+    });
 
     test(
       'execute_givenALaterTocPageFails_returnsTheChaptersReadSoFar',

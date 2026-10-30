@@ -177,9 +177,21 @@ Future<ParseResult<List<Book>>> readBooks(
       continue;
     }
 
+    // 书名取不到曾经是**静默**的空串：换源把书名当关键词，于是整本书变成"没有标题"，
+    // 而用户看不到任何线索（ADR-0091 §决策 7）。命中仍然保留（URL 有效就能打开、能换源），
+    // 但把失败钉到具体的 rulePath 上。
+    final String title = name.dataOrNull ?? '';
+    if (title.trim().isEmpty) {
+      pages.warnThrottled(
+        'no-name|$sourceId|$fieldPrefix',
+        '$noun without a title: source=$sourceId rulePath=$fieldPrefix.name '
+            'state=${name is ParseFailure<String?> ? 'failed' : 'empty'}',
+      );
+    }
+
     books.add(
       Book(
-        name: name.dataOrNull ?? '',
+        name: title,
         // 书籍地址可能带 `,{webView:…}` 选项：保留原文。
         url: resolveUrlRule(url, baseUrl),
         author: author.dataOrNull,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/material.dart';
@@ -20,6 +22,7 @@ import 'package:flutter_reader/core/platform/source_verification.dart';
 import 'package:flutter_reader/core/platform/user_messages.dart';
 import 'package:flutter_reader/core/router/app_navigation.dart';
 import 'package:flutter_reader/core/router/app_router.dart';
+import 'package:flutter_reader/core/router/change_source_contract.dart';
 import 'package:flutter_reader/core/theme/app_theme.dart';
 import 'package:flutter_reader/features/backup/di.dart';
 import 'package:flutter_reader/features/backup/domain/repositories/restore_completion_hook.dart';
@@ -50,6 +53,7 @@ import 'package:flutter_reader/features/book_source/presentation/pages/cache_man
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/source_captcha_page.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/source_verification_page.dart';
+import 'package:flutter_reader/features/book_source/presentation/widgets/change_source_sheet.dart';
 import 'package:flutter_reader/features/bookshelf/data/shelf_cover_picker_impl.dart';
 import 'package:flutter_reader/features/bookshelf/di.dart';
 import 'package:flutter_reader/features/bookshelf/domain/entities/shelf_candidate.dart';
@@ -66,8 +70,8 @@ import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.d
 import 'package:flutter_reader/features/reader/domain/entities/reading_page.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/audio_track_source.dart';
-import 'package:flutter_reader/features/reader/domain/repositories/book_source_switcher.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/manga_page_source.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/purge_rule_switches.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_source_kind_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
@@ -106,7 +110,7 @@ import 'package:url_launcher/url_launcher.dart';
 ///
 /// It is a function rather than a constant because two of the three bindings need a `Ref`.
 List<Override> appProviderOverrides() => <Override>[
-  appNavigationProvider.overrideWith((Ref ref) => const _RootNavigation()),
+  appNavigationProvider.overrideWith(_RootNavigation.new),
   bookshelfWriterProvider.overrideWith(_ShelfWriter.new),
   // 用户设置里的并发上限只影响请求层的策略，因此在**根**上把它接进 `core` 声明的位置；
   // `core` 自己不能 import `features/settings`（C-ARCH-2），而 `select` 保证改字号 / 主题
@@ -132,7 +136,6 @@ List<Override> appProviderOverrides() => <Override>[
   readerMangaPagesProvider.overrideWith(_MangaPageSource.new),
   readerSourceKindPortProvider.overrideWith(_SourceKindSource.new),
   readerProgressStoreProvider.overrideWith(_ProgressStore.new),
-  bookSourceSwitcherProvider.overrideWith(_SourceSwitcher.new),
   // 音频链路（ADR-0054 §决策 1/2）：同样由装配根绑定，reader 仍然不认识 book_source。
   readerAudioTrackProvider.overrideWith(_AudioTrackSource.new),
   // `,{webView:…}` 的真实现（ADR-0061）：headless WebView 在 UI isolate 上跑，
@@ -149,6 +152,8 @@ List<Override> appProviderOverrides() => <Override>[
   // 反过来的一条：规则写入后要作废已缓存的成品正文，端口由 `rules` 声明、这里绑到 `book_source`
   // 的正文缓存（ADR-0070 增补 §7）。
   chapterBodyInvalidatorProvider.overrideWith(_ChapterBodyInvalidator.new),
+  // 阅读内净化开关（ADR-0094）：`reader` 声明端口，这里绑到 `rules` 的仓储 + 这本书的正文缓存。
+  purgeRuleSwitchesProvider.overrideWith(_PurgeRuleSwitches.new),
   // 恢复写过设置之后要让界面重读（ADR-0073 §决策 3）：端口由 `backup` 声明，这里绑到
   // settings 与 reader 的 keepAlive provider —— 它们不失效就会一直显示恢复前的主题与字号。
   restoreCompletionHookProvider.overrideWith(_RestoreHook.new),
@@ -190,6 +195,55 @@ final class _PurgeRuleSource implements PurgeRuleSource {
               timeoutMs: payload.timeoutMs,
             ),
     ];
+  }
+}
+
+/// `PurgeRuleSwitches` bound to the rules feature and the chapter cache (ADR-0094).
+///
+/// The reader may flip a replace rule while reading. Two things have to happen for that to be
+/// visible: the rule row is written (rules feature) **and** the cached bodies of this book are
+/// dropped, because they were purified with the old rules.
+final class _PurgeRuleSwitches implements PurgeRuleSwitches {
+  const _PurgeRuleSwitches(this._ref);
+
+  final Ref _ref;
+
+  @override
+  Future<List<PurgeRuleSwitch>> list() async {
+    final RuleRepository repository = await _ref.read(
+      ruleRepositoryProvider.future,
+    );
+    final List<Rule> rules = await repository.ofKind(RuleKind.replace);
+
+    return <PurgeRuleSwitch>[
+      for (final Rule rule in rules)
+        if (rule.payload case final ReplacePayload payload)
+          PurgeRuleSwitch(
+            id: rule.id,
+            pattern: payload.pattern,
+            replacement: payload.replacement,
+            isEnabled: rule.isEnabled,
+          ),
+    ];
+  }
+
+  @override
+  Future<bool> setEnabled({
+    required int id,
+    required bool enabled,
+    required String sourceUrl,
+    required String bookUrl,
+  }) async {
+    final RuleRepository repository = await _ref.read(
+      ruleRepositoryProvider.future,
+    );
+    await repository.setEnabled(id: id, isEnabled: enabled);
+    // 只清这本书：阅读中的开关不该让全库重新下载。
+    await _ref
+        .read(contentCacheProvider)
+        .clearForBook(sourceId: sourceUrl, bookUrl: bookUrl);
+
+    return true;
   }
 }
 
@@ -443,7 +497,9 @@ class ReaderApp extends ConsumerWidget {
 /// The app-level destinations, bound to the real pages (ADR-0042).
 final class _RootNavigation implements AppNavigation {
   /// Creates the binding.
-  const _RootNavigation();
+  const _RootNavigation(this._ref);
+
+  final Ref _ref;
 
   @override
   void openBookshelf(BuildContext context) =>
@@ -460,6 +516,27 @@ final class _RootNavigation implements AppNavigation {
   @override
   void openAbout(BuildContext context) =>
       pushShellRoute(context, const ShellRoute.about());
+
+  @override
+  void openShelfBookEdit(BuildContext context, int bookId) {
+    // 行是本 feature 的对象：先按 id 找到它，再把整行交给编辑器（ADR-0092）。
+    unawaited(_openShelfBookEdit(context, bookId));
+  }
+
+  Future<void> _openShelfBookEdit(BuildContext context, int bookId) async {
+    for (final ShelvedBook book
+        in await _ref.read(bookshelfRepositoryProvider).getAll()) {
+      if (book.id != bookId) {
+        continue;
+      }
+      if (!context.mounted) {
+        return;
+      }
+      pushBookshelfRoute(context, BookshelfRoute.editBook(book: book));
+
+      return;
+    }
+  }
 
   /// Opens the reader on one book (ADR-0042 §决策 2, ADR-0044 §决策 2).
   ///
@@ -485,6 +562,98 @@ final class _RootNavigation implements AppNavigation {
       chapterUrl: chapterUrl,
     ),
   );
+
+  /// Opens the change-source page and applies the picked source (`docs/dev/roadmap.md` §3.12).
+  ///
+  /// Everything that crosses two features happens here (ADR-0041 §决策 3): the page answers a
+  /// candidate + chapter, this binding rewrites the shelf identity, moves the selected source, and
+  /// answers primitives the reader can use (C-ARCH-2).
+  ///
+  /// The author comes from the shelf row when the caller did not know it: the reader only carries
+  /// the title, and a book whose title rule failed needs the author to be found at all
+  /// (ADR-0091 §决策 3).
+  @override
+  Future<ChangeSourceOutcome?> openChangeSource(
+    BuildContext context,
+    ChangeSourceLaunch launch,
+  ) async {
+    String? author = launch.author;
+    final BookshelfRepository shelf = _ref.read(bookshelfRepositoryProvider);
+    final List<ShelvedBook> shelfRows = await shelf.getAll();
+    ShelvedBook? current;
+    for (final ShelvedBook row in shelfRows) {
+      if (row.sourceUrl == launch.sourceUrl && row.bookUrl == launch.bookUrl) {
+        current = row;
+        break;
+      }
+    }
+    if (author == null || author.trim().isEmpty) {
+      author = current?.author;
+    }
+    if (!context.mounted) {
+      return null;
+    }
+
+    final ChangeSourceSelection? selection = await showChangeSourceSheet(
+      context,
+      target: (
+        sourceUrl: launch.sourceUrl,
+        bookUrl: launch.bookUrl,
+        name: launch.bookName,
+        author: author,
+        chapterName: launch.chapterName,
+        chapterIndex: launch.chapterIndex,
+      ),
+    );
+    if (selection == null) {
+      return null;
+    }
+
+    final BookSource? target = await _sourceByUrl(
+      _ref,
+      selection.candidate.sourceUrl,
+    );
+    if (target == null) {
+      return null;
+    }
+    final SourceSwitchResult switched = _ref
+        .read(switchBookSourceProvider)
+        .withChapters(target: target, selection: selection);
+    for (final StoredBookSource row in await _ref.read(
+      bookSourceListProvider.future,
+    )) {
+      if (row.source.url == switched.sourceUrl) {
+        await _ref.read(selectedBookSourceProvider.notifier).select(row.id);
+        break;
+      }
+    }
+    if (current != null) {
+      final bool migrated = await shelf.migrateIdentity(
+        id: current.id,
+        sourceUrl: switched.sourceUrl,
+        bookUrl: switched.bookUrl,
+        tocUrl: switched.tocUrl,
+        name: switched.bookName,
+        author: switched.author,
+        coverUrl: switched.coverUrl,
+        lastChapter: switched.lastChapter,
+      );
+      // 书架是 keepAlive 的：不改写它，退出阅读器时守护还会拿旧身份判断「在不在书架」。
+      if (migrated) {
+        _ref.invalidate(bookshelfProvider);
+      }
+    }
+
+    return ChangeSourceOutcome(
+      sourceUrl: switched.sourceUrl,
+      bookUrl: switched.bookUrl,
+      tocUrl: switched.tocUrl,
+      bookName: switched.bookName,
+      chapterUrl: switched.chapterUrl,
+      chapterName: switched.chapterName,
+      chapterIndex: switched.chapterIndex,
+    );
+  }
 
   @override
   void openBookmarks(BuildContext context) =>
@@ -536,136 +705,6 @@ final class _RootNavigation implements AppNavigation {
       bookName: bookName,
     ),
   );
-}
-
-/// `BookSourceSwitcher` bound to `book_source`'s search chain and the shelf's identity migration
-/// (`docs/dev/roadmap.md` §3.9-R3, ADR-0051 §决策 3).
-///
-/// It is the one place that knows both sides: which rows are enabled (the search scope), how to
-/// switch (the use case), and that a switch changes the shelf's identity. The reader therefore only
-/// sees primitives, and neither feature imports the other (C-ARCH-2).
-final class _SourceSwitcher implements BookSourceSwitcher {
-  const _SourceSwitcher(this._ref);
-
-  final Ref _ref;
-
-  @override
-  Future<ParseResult<List<ReaderSourceCandidate>>> candidates(
-    ReaderBook book,
-  ) async {
-    final List<StoredBookSource> rows = await _ref.read(
-      bookSourceListProvider.future,
-    );
-    // 范围与聚合搜索同一条口径（ADR-0046 §决策 2）：启用 + 文本源。
-    final List<BookSource> sources = <BookSource>[
-      for (final StoredBookSource row in rows)
-        if (row.isEnabled && row.source.sourceType == BookSourceType.text)
-          row.source,
-    ];
-    final ParseResult<List<SourceCandidate>> found = await _ref
-        .read(switchBookSourceProvider)
-        .candidates(
-          bookName: book.name,
-          sources: sources,
-          currentSourceUrl: book.sourceUrl,
-        );
-
-    return switch (found) {
-      ParseFailure<List<SourceCandidate>>(
-        :final ParseFailureKind kind,
-        :final String rulePath,
-      ) =>
-        failureAt<List<ReaderSourceCandidate>>(kind: kind, rulePath: rulePath),
-      ParseSuccess<List<SourceCandidate>>(:final List<SourceCandidate> data) =>
-        ParseSuccess<List<ReaderSourceCandidate>>(<ReaderSourceCandidate>[
-          for (final SourceCandidate candidate in data)
-            ReaderSourceCandidate(
-              sourceUrl: candidate.sourceUrl,
-              sourceName: candidate.sourceName,
-              bookUrl: candidate.bookUrl,
-              author: candidate.author,
-              lastChapter: candidate.lastChapter,
-            ),
-        ]),
-    };
-  }
-
-  @override
-  Future<ParseResult<ReaderSourceSwitch>> switchTo({
-    required ReaderBook book,
-    required ReaderSourceCandidate candidate,
-    required String currentChapterName,
-    required int currentChapterIndex,
-  }) async {
-    final BookSource? target = await _sourceByUrl(_ref, candidate.sourceUrl);
-    if (target == null) {
-      return failureAt<ReaderSourceSwitch>(
-        kind: ParseFailureKind.invalidBookSource,
-        rulePath: 'reader.changeSource',
-      );
-    }
-    final ParseResult<SourceSwitchResult> switched = await _ref
-        .read(switchBookSourceProvider)
-        .switchTo(
-          target: target,
-          candidate: SourceCandidate(
-            sourceUrl: candidate.sourceUrl,
-            sourceName: candidate.sourceName,
-            bookUrl: candidate.bookUrl,
-            author: candidate.author,
-            lastChapter: candidate.lastChapter,
-          ),
-          currentChapterName: currentChapterName,
-          currentChapterIndex: currentChapterIndex,
-        );
-    final SourceSwitchResult result;
-    switch (switched) {
-      case ParseFailure<SourceSwitchResult>(
-        :final ParseFailureKind kind,
-        :final String rulePath,
-      ):
-        return failureAt<ReaderSourceSwitch>(kind: kind, rulePath: rulePath);
-      case ParseSuccess<SourceSwitchResult>(:final SourceSwitchResult data):
-        result = data;
-    }
-
-    // 身份迁移（ADR-0051 §决策 3）：书架上有旧行就原地改写，目标身份已有行则两行并存。
-    final BookshelfRepository shelf = _ref.read(bookshelfRepositoryProvider);
-    final List<ShelvedBook> rows = await shelf.getAll();
-    for (final ShelvedBook row in rows) {
-      if (row.sourceUrl == book.sourceUrl && row.bookUrl == book.bookUrl) {
-        final bool migrated = await shelf.migrateIdentity(
-          id: row.id,
-          sourceUrl: result.sourceUrl,
-          bookUrl: result.bookUrl,
-          tocUrl: result.tocUrl,
-          name: result.bookName,
-          author: result.author,
-          coverUrl: result.coverUrl,
-          lastChapter: result.lastChapter,
-        );
-        // 书架是 keepAlive 的：不改写它，退出阅读器时守护还会拿旧身份判断「在不在书架」。
-        if (migrated) {
-          _ref.invalidate(bookshelfProvider);
-        }
-        break;
-      }
-    }
-
-    return ParseSuccess<ReaderSourceSwitch>(
-      ReaderSourceSwitch(
-        book: ReaderBook(
-          sourceUrl: result.sourceUrl,
-          bookUrl: result.bookUrl,
-          name: result.bookName,
-          tocUrl: result.tocUrl,
-        ),
-        chapterUrl: result.chapterUrl,
-        chapterName: result.chapterName,
-        chapterIndex: result.chapterIndex,
-      ),
-    );
-  }
 }
 
 /// `ReadingProgressStore` bound to the shelf, which owns the table (ADR-0041 §决策 4).
@@ -767,8 +806,10 @@ final class _ShelfWriter implements BookshelfWriter {
 
     return ShelfMembership(
       onShelf: true,
+      id: book.id,
       groupId: book.groupId,
       customCoverPath: book.customCoverPath,
+      customIntro: book.customIntro,
       progressChapterName: book.progress?.chapterName,
       groups: options,
     );
@@ -1148,6 +1189,15 @@ final class _ChapterContentSource implements ChapterContentProvider {
       );
     }
 
+    // 在架书的正文不自动过期（ADR-0097 §决策 1）：只有装配根同时认识书架与书源，所以这条判定
+    // 放在这里，并且**每次**都查——一条错判成「永久」的缓存只有用户手动清理才会消失。
+    final bool onShelf =
+        bookUrl.isNotEmpty &&
+        await _ref
+                .read(bookshelfRepositoryProvider)
+                .findByUrl(sourceUrl: sourceUrl, bookUrl: bookUrl) !=
+            null;
+
     // 阅读器端口只要正文：正文页标题（`contentRule.title`）与歌词属于领域结果，阅读端还没消费
     // （登记在 `engine-parity.md` 3.1），所以在这里按 `body` 收口，不把两边的类型串在一起。
     final ParseResult<ChapterContent> content = await _ref
@@ -1165,6 +1215,7 @@ final class _ChapterContentSource implements ChapterContentProvider {
             isPay: isPay,
             isVolume: isVolume,
             updateTime: updateTime,
+            persistCache: onShelf,
           ),
         );
 

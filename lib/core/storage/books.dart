@@ -52,6 +52,12 @@ class Books extends Table {
   /// Absolute path of a cover the user picked; `null` falls back to [coverUrl].
   TextColumn get customCoverPath => text().nullable()();
 
+  /// The introduction the user wrote, which wins over [intro] when set (M33, ADR-0092).
+  ///
+  /// [intro] stays the source's snapshot: re-adding the book refreshes it, and a user's own words
+  /// must survive that.
+  TextColumn get customIntro => text().nullable()();
+
   /// When the book was put on the shelf.
   DateTimeColumn get addedAt => dateTime()();
 

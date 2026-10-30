@@ -114,6 +114,17 @@ void main() {
       expect(ReaderSettings.defaults.showReaderStatus, isTrue);
     });
 
+    test('ReaderSettings_givenAnOutOfRangeAutoPageInterval_clampsIt', () {
+      // ADR-0093 §决策 1：3–60 s，越界在工厂里钳制（release 没有 assert）。
+      expect(ReaderSettings(autoPageSeconds: 1).autoPageSeconds, 3);
+      expect(ReaderSettings(autoPageSeconds: 400).autoPageSeconds, 60);
+      expect(ReaderSettings.defaults.autoPageSeconds, 15);
+      expect(
+        ReaderSettings.defaults.copyWith(autoPageSeconds: 30).autoPageSeconds,
+        30,
+      );
+    });
+
     test('ReaderSettings_givenAnOutOfRangeEyeProtection_clampsIt', () {
       expect(ReaderSettings(eyeProtection: 400).eyeProtection, 100);
       expect(ReaderSettings(eyeProtection: -20).eyeProtection, 0);

@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/logger_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
@@ -22,6 +25,7 @@ import 'package:flutter_reader/features/reader/presentation/pages/reader_page.da
 import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader_view.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_chapter_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_table.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_purge_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_scroll_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_status_bar.dart';
@@ -425,7 +429,7 @@ void main() {
       expect(_tableChapters(tester), isNot(contains(2)));
     });
 
-    testWidgets('build_givenABigToc_prefetchesNearestFirstOneAtATime', (
+    testWidgets('build_givenABigToc_prefetchesForwardFirstOneAtATime', (
       WidgetTester tester,
     ) async {
       final FakeReadingProgressStore store = FakeReadingProgressStore()
@@ -450,24 +454,31 @@ void main() {
       }
 
       final List<String> requests = fixture.content.requests;
-      // 锚点自己那一章先取（它走 provider），然后队列「后 1、前 1、后 2、前 2、…」。
+      // 锚点自己那一章先取（它走 provider），然后队列是**后 15 章优先**（ADR-0097 §决策 2）。
       expect(requests.first, 'https://source.test/8.html');
       expect(requests.skip(1).take(6), <String>[
         'https://source.test/9.html',
-        'https://source.test/7.html',
         'https://source.test/10.html',
-        'https://source.test/6.html',
         'https://source.test/11.html',
-        'https://source.test/5.html',
+        'https://source.test/12.html',
+        'https://source.test/13.html',
+        'https://source.test/14.html',
       ]);
-      // 最近优先：与锚点的距离只增不减。
-      final List<int> distances = <int>[
-        for (final String url in requests.skip(1)) _chapterIndexOf(url) - 7,
-      ].map((int distance) => distance.abs()).toList();
-      for (var index = 1; index < distances.length; index++) {
-        expect(distances[index], greaterThanOrEqualTo(distances[index - 1]));
-        expect(distances[index], lessThanOrEqualTo(15));
+      // 前向先在半径内递增，然后才轮到最后一条之前（回翻）的那批。
+      final List<int> forward = <int>[
+        for (final String url in requests.skip(1))
+          if (_chapterIndexOf(url) > 7) _chapterIndexOf(url) - 7,
+      ];
+      for (var index = 1; index < forward.length; index++) {
+        expect(forward[index], greaterThan(forward[index - 1]));
+        expect(forward[index], lessThanOrEqualTo(15));
       }
+      final int firstBackward = requests.indexWhere(
+        (String url) => _chapterIndexOf(url) < 7,
+      );
+      expect(firstBackward, greaterThan(0));
+      // 回翻的顶点一定排在前向 15 章之后。
+      expect(firstBackward, 1 + math.min(15, _manyChapters.length - 8));
       // 每章只问一次；队列是串行的——同时在飞的除了队列那一个，只有页面自己 watch 的锚点章。
       expect(requests, hasLength(requests.toSet().length));
       expect(fixture.content.maxInFlight, lessThanOrEqualTo(2));
@@ -1200,6 +1211,164 @@ void main() {
       await tester.pump();
 
       expect(fixture.records.sessions, isEmpty);
+    });
+  });
+
+  group('ReaderPage keyboard page turn', () {
+    testWidgets('arrowRight_whenPressed_turnsOnePageForward', (
+      WidgetTester tester,
+    ) async {
+      // ADR-0096 §决策 2：桌面端方向键翻页，走的是与自动翻页同一条命令路径。
+      final _Fixture fixture = _fixture(
+        settings: ReaderSettings.defaults.copyWith(
+          pageMode: ReaderPageMode.paged,
+        ),
+      );
+      await _pump(tester, fixture);
+
+      final PageView before = tester.widget<PageView>(find.byType(PageView));
+      expect(before.controller!.page!.round(), 0);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final PageView after = tester.widget<PageView>(find.byType(PageView));
+      expect(after.controller!.page!.round(), greaterThan(0));
+    });
+
+    testWidgets('arrowLeft_whenPressed_turnsOnePageBack', (
+      WidgetTester tester,
+    ) async {
+      final _Fixture fixture = _fixture(
+        settings: ReaderSettings.defaults.copyWith(
+          pageMode: ReaderPageMode.paged,
+        ),
+      );
+      await _pump(tester, fixture);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      final int forward = tester
+          .widget<PageView>(find.byType(PageView))
+          .controller!
+          .page!
+          .round();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final int back = tester
+          .widget<PageView>(find.byType(PageView))
+          .controller!
+          .page!
+          .round();
+      expect(back, lessThan(forward));
+    });
+  });
+
+  group('ReaderPage purge switches', () {
+    testWidgets('toolbar_whenPurgeIsTapped_opensTheRuleSheet', (
+      WidgetTester tester,
+    ) async {
+      // ADR-0094 §决策 3：工具条入口打开净化面板（这里端口未绑定，面板给空态即可）。
+      final _Fixture fixture = _fixture();
+      await _pump(tester, fixture);
+
+      await _showChrome(tester);
+      await tester.tap(find.byTooltip(_l10n(tester).readerPurgeAction));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ReaderPurgeSheet), findsOneWidget);
+      expect(find.text(_l10n(tester).readerPurgeEmpty), findsOneWidget);
+    });
+  });
+
+  group('ReaderPage auto page', () {
+    /// Starts auto page from the immersive chrome.
+    Future<void> startAutoPage(WidgetTester tester) async {
+      await _showChrome(tester);
+      await tester.tap(find.byTooltip(_l10n(tester).readerAutoPageAction));
+      await tester.pump();
+    }
+
+    testWidgets('autoPage_whenTheIntervalPasses_turnsOnePage', (
+      WidgetTester tester,
+    ) async {
+      // ADR-0093 §决策 2：分页模式的「下一页」走 PageView 自己的动画，进度与页表补偿照旧。
+      final _Fixture fixture = _fixture(
+        settings: ReaderSettings.defaults.copyWith(
+          pageMode: ReaderPageMode.paged,
+          autoPageSeconds: 3,
+        ),
+      );
+      await _pump(tester, fixture);
+
+      await startAutoPage(tester);
+      expect(find.byTooltip(_l10n(tester).readerAutoPageStop), findsOneWidget);
+
+      final PageView before = tester.widget<PageView>(find.byType(PageView));
+      expect(before.controller!.page!.round(), 0);
+
+      // 一拍 + 动画时间；工具栏的 4 s 自动隐藏也在同一段里，之后靠「点正文」停。
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final PageView after = tester.widget<PageView>(find.byType(PageView));
+      expect(after.controller!.page!.round(), greaterThan(0));
+    });
+
+    testWidgets('autoPage_whenTheBodyIsTapped_stopsAndShowsTheStartIcon', (
+      WidgetTester tester,
+    ) async {
+      // ADR-0093 §决策 3.2：点正文 = 我要自己操作，自动翻页必须停。
+      final _Fixture fixture = _fixture(
+        settings: ReaderSettings.defaults.copyWith(
+          pageMode: ReaderPageMode.paged,
+          autoPageSeconds: 3,
+        ),
+      );
+      await _pump(tester, fixture);
+      await startAutoPage(tester);
+
+      final Size size = tester.getSize(find.byType(ReaderPage));
+      await tester.tapAt(Offset(size.width / 2, size.height / 2));
+      await tester.pump();
+      // 第一下停掉并收起工具栏（中间 ⅓ 是 chrome 的 toggle）：再点一下唤出来看按钮。
+      await tester.tapAt(Offset(size.width / 2, size.height / 2));
+      await tester.pump();
+
+      expect(
+        find.byTooltip(_l10n(tester).readerAutoPageAction),
+        findsOneWidget,
+      );
+      expect(find.byTooltip(_l10n(tester).readerAutoPageStop), findsNothing);
+    });
+
+    testWidgets('autoPage_inScrollMode_scrollsOneScreen', (
+      WidgetTester tester,
+    ) async {
+      // 滚动模式翻「一屏」：步长就是视口高度，与手动上滑一致（ADR-0093 §决策 2）。
+      final _Fixture fixture = _fixture(
+        settings: ReaderSettings.defaults.copyWith(autoPageSeconds: 3),
+      );
+      await _pump(tester, fixture);
+
+      await startAutoPage(tester);
+      // 工具条本身也是可滚动的：取正文那个（ScrollFlow 的 ListView）。
+      final Finder body = find.descendant(
+        of: find.byType(ReaderScrollFlow),
+        matching: find.byType(Scrollable),
+      );
+      final ScrollableState scrollable = tester.state<ScrollableState>(body);
+      final double before = scrollable.position.pixels;
+
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(scrollable.position.pixels, greaterThan(before));
     });
   });
 }

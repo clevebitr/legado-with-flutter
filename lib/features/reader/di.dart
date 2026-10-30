@@ -15,9 +15,9 @@ import 'package:flutter_reader/features/reader/data/reader_settings_repository_i
 import 'package:flutter_reader/features/reader/data/reading_record_repository_impl.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/audio_playback_engine.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/audio_track_source.dart';
-import 'package:flutter_reader/features/reader/domain/repositories/book_source_switcher.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/bookmark_repository.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/manga_page_source.dart';
+import 'package:flutter_reader/features/reader/domain/repositories/purge_rule_switches.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_settings_repository.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reader_source_kind_source.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_chapter_source.dart';
@@ -82,14 +82,13 @@ BookmarkRepository bookmarkRepository(Ref ref) =>
 ReadingRecordRepository readingRecordRepository(Ref ref) =>
     ReadingRecordRepositoryImpl(ref.watch(readRecordDaoProvider));
 
-/// Provides the source-switch port, **unbound** by default.
+/// Provides the in-reader 替换净化 switches, **unbound** by default (ADR-0094).
 ///
-/// The composition root binds it to `book_source`'s `SwitchBookSource` plus the shelf's identity
-/// migration (ADR-0051 §决策 3). Unbound it answers an `unsupportedRule` failure, so the sheet shows
-/// a message instead of throwing (`docs/dev/platform.md` §2's habit).
+/// The composition root binds it to the rules feature plus the chapter cache, so the reader never
+/// imports either (C-ARCH-2).
 @Riverpod(keepAlive: true)
-BookSourceSwitcher bookSourceSwitcher(Ref ref) =>
-    const UnboundBookSourceSwitcher();
+PurgeRuleSwitches purgeRuleSwitches(Ref ref) =>
+    UnboundPurgeRuleSwitches(logger: ref.watch(appLoggerProvider));
 
 /// Provides the audio player, **unbound** to a platform until it is really needed.
 ///

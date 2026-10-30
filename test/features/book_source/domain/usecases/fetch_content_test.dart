@@ -324,6 +324,21 @@ void main() {
       expect(cache.entries.values.single, content);
     });
 
+    test('execute_givenPersistCache_storesTheBodyWithoutAnExpiry', () async {
+      // 在架书的正文不自动过期（ADR-0097 §决策 1）：请求里的开关必须一路透传到缓存适配器。
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(_chapterUrl, _page('chapter_page.html'));
+      final FakeContentCache cache = FakeContentCache();
+      final BookSource source = _source();
+
+      await FetchContent(pages: _service(http), cache: cache).execute(
+        source,
+        const ChapterRequest(url: _chapterUrl, persistCache: true),
+      );
+
+      expect(cache.writePersistent, <bool>[true]);
+    });
+
     test('execute_givenTheSameChapterTwice_requestsItOnlyOnce', () async {
       final FakeHttpClient http = FakeHttpClient()
         ..serve(_chapterUrl, _page('chapter_page.html'));

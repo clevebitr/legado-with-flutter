@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_reader/core/di/app_navigation_provider.dart';
 import 'package:flutter_reader/core/di/clock_provider.dart';
 import 'package:flutter_reader/core/di/platform_provider.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/platform/battery_level.dart';
 import 'package:flutter_reader/core/platform/screen_awake.dart';
+import 'package:flutter_reader/core/router/change_source_contract.dart';
 import 'package:flutter_reader/core/utils/clock.dart';
 import 'package:flutter_reader/core/widgets/failure_message.dart';
 import 'package:flutter_reader/core/widgets/state_message.dart';
@@ -19,7 +22,6 @@ import 'package:flutter_reader/features/reader/domain/entities/reader_source_kin
 import 'package:flutter_reader/features/reader/domain/entities/reading_chapter.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_position.dart';
 import 'package:flutter_reader/features/reader/domain/entities/reading_session.dart';
-import 'package:flutter_reader/features/reader/domain/repositories/book_source_switcher.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_progress_store.dart';
 import 'package:flutter_reader/features/reader/domain/repositories/reading_record_repository.dart';
 import 'package:flutter_reader/features/reader/presentation/notifiers/manga_queries.dart';
@@ -32,11 +34,12 @@ import 'package:flutter_reader/features/reader/presentation/widgets/audio_reader
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_book_scope.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_chapter_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_table.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_page_turn.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_paged_flow.dart';
+import 'package:flutter_reader/features/reader/presentation/widgets/reader_purge_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_scroll_flow.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_search_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_settings_sheet.dart';
-import 'package:flutter_reader/features/reader/presentation/widgets/reader_source_sheet.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_status_bar.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_style.dart';
 import 'package:flutter_reader/features/reader/presentation/widgets/reader_toc_sheet.dart';
@@ -144,6 +147,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// Counts down while the chrome is shown; every interaction restarts it (4 s, §决策 1).
   Timer? _chromeTimer;
+
+  /// The page-turn command the mounted flow listens to (ADR-0093 §决策 2).
+  final ReaderPageTurn _turn = ReaderPageTurn();
+
+  /// The auto-page timer, or `null` when auto page is off (ADR-0093 §决策 3).
+  Timer? _autoPageTimer;
+
+  /// The position the last tick was fired at, so two ticks without movement stop the run (§决策 3.5).
+  ({int chapterIndex, int charOffset})? _lastAutoPagePosition;
 
   /// The dimming overlay's opacity while the slider is being dragged, or `null` to follow the
   /// stored [ReaderSettings.brightness]. App-level, not system brightness.
@@ -282,6 +294,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _tts?.onReaderClosed();
     _settingsWatch?.close();
     _chromeTimer?.cancel();
+    _autoPageTimer?.cancel();
+    _turn.dispose();
     // 离开阅读器就把常亮交还系统（ADR-0086 §决策 1）；幂等，重复释放无害。
     unawaited(_screenAwake?.setAwake(awake: false) ?? Future<void>.value());
     super.dispose();
@@ -344,6 +358,74 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
+  /// Starts or stops auto page (ADR-0093 §决策 3).
+  ///
+  /// The interval comes from the reader settings, so changing it in the sheet applies to the next
+  /// start (a running timer is not rescheduled mid-course: that would restart the countdown every
+  /// time the slider moved).
+  void _toggleAutoPage(ReaderSettings settings) {
+    if (_autoPageTimer != null) {
+      _stopAutoPage();
+
+      return;
+    }
+    _lastAutoPagePosition = null;
+    setState(() {
+      _autoPageTimer = Timer.periodic(
+        Duration(seconds: settings.autoPageSeconds),
+        (Timer _) => _autoPageTick(),
+      );
+    });
+  }
+
+  /// Stops auto page if it is running; used by every manual interaction (§决策 3).
+  void _stopAutoPage() {
+    if (_autoPageTimer == null) {
+      return;
+    }
+    _autoPageTimer?.cancel();
+    setState(() => _autoPageTimer = null);
+    _lastAutoPagePosition = null;
+  }
+
+  /// One auto-page tick: ask the flow to advance, and stop when nothing moved twice in a row.
+  ///
+  /// 「没有动」覆盖三种情况：书末（翻页是空操作）、正文还在加载（页表只有一页）、站点返回空正文。
+  /// 不停的话就是每 N 秒空转一次，用户只会看到按钮还亮着却什么也没发生。
+  void _autoPageTick() {
+    if (!mounted) {
+      _autoPageTimer?.cancel();
+
+      return;
+    }
+    final ({int chapterIndex, int charOffset}) position = (
+      chapterIndex: _currentIndex,
+      charOffset: _lastOffset,
+    );
+    if (_lastAutoPagePosition == position) {
+      _stopAutoPage();
+
+      return;
+    }
+    _lastAutoPagePosition = position;
+    _turn.next();
+  }
+
+  /// One page forward from the keyboard: manual input stops auto page (ADR-0093 §决策 3.2).
+  void _turnNextPage() {
+    _stopAutoPage();
+    _turn.next();
+  }
+
+  /// One page backward from the keyboard.
+  void _turnPreviousPage() {
+    _stopAutoPage();
+    _turn.previous();
+  }
+
+  /// Whether auto page is running (a null timer means it is not).
+  bool get _isAutoPageOn => _autoPageTimer != null;
+
   /// Decides which body the book needs and builds it: text, manga or audio
   /// (`docs/dev/roadmap.md` §3.10 M16/M17, ADR-0053 §决策 1, ADR-0054 §决策 1).
   ///
@@ -397,69 +479,88 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
     final List<ReadingChapter> knownChapters = _chaptersOf(chapters);
 
-    return Scaffold(
-      backgroundColor: palette.background,
-      // 沉浸式（ADR-0051 §决策 1）：AppBar 与工具条默认都不在，点正文中间 ⅓ 才出现。
-      appBar: _chromeVisible
-          ? AppBar(
-              backgroundColor: palette.background,
-              foregroundColor: palette.foreground,
-              title: Text(_title(chapters, l10n)),
-              actions: <Widget>[
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: l10n.readerSearchAction,
-                  onPressed: () => _keepAlive(
-                    () => _openSearch(switch (chapters.value) {
-                      ParseSuccess<List<ReadingChapter>>(
-                        :final List<ReadingChapter> data,
-                      ) =>
-                        data,
-                      _ => const <ReadingChapter>[],
-                    }),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.text_fields),
-                  tooltip: l10n.readerSettingsAction,
-                  onPressed: () => _keepAlive(() => _openSettings(settings)),
-                ),
-              ],
-            )
-          : null,
-      body: Stack(
-        children: <Widget>[
-          Positioned.fill(
-            // 护眼滤镜只作用在正文上（ADR-0086 §决策 2）：状态栏与亮度遮罩自己就是「看得清」
-            // 的手段，不该再被压暖。
-            child: _filtered(
-              eyeFilter,
-              _bodyOf(chapters, settings, palette, l10n),
-            ),
-          ),
-          // 亮度是**应用级遮罩**（ADR-0051 §决策 1）：不碰系统亮度，三端行为一致。
-          if (brightness < 1)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ColoredBox(
-                  // 亮度遮罩用主题的 scrim：它本来就是「压暗内容」的角色，避免硬编码黑色。
-                  color: tokens.colors.scrim.withValues(alpha: 1 - brightness),
+    // 键盘翻页（ADR-0096）：桌面端方向键 / PageUp / PageDown / 空格；`Focus` 拿焦点，
+    // 面板打开时由面板自己的路由接管（键盘事件先给最内层）。
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.arrowRight): _turnNextPage,
+        const SingleActivator(LogicalKeyboardKey.arrowDown): _turnNextPage,
+        const SingleActivator(LogicalKeyboardKey.pageDown): _turnNextPage,
+        const SingleActivator(LogicalKeyboardKey.space): _turnNextPage,
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): _turnPreviousPage,
+        const SingleActivator(LogicalKeyboardKey.arrowUp): _turnPreviousPage,
+        const SingleActivator(LogicalKeyboardKey.pageUp): _turnPreviousPage,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: palette.background,
+          // 沉浸式（ADR-0051 §决策 1）：AppBar 与工具条默认都不在，点正文中间 ⅓ 才出现。
+          appBar: _chromeVisible
+              ? AppBar(
+                  backgroundColor: palette.background,
+                  foregroundColor: palette.foreground,
+                  title: Text(_title(chapters, l10n)),
+                  actions: <Widget>[
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      tooltip: l10n.readerSearchAction,
+                      onPressed: () => _keepAlive(
+                        () => _openSearch(switch (chapters.value) {
+                          ParseSuccess<List<ReadingChapter>>(
+                            :final List<ReadingChapter> data,
+                          ) =>
+                            data,
+                          _ => const <ReadingChapter>[],
+                        }),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.text_fields),
+                      tooltip: l10n.readerSettingsAction,
+                      onPressed: () =>
+                          _keepAlive(() => _openSettings(settings)),
+                    ),
+                  ],
+                )
+              : null,
+          body: Stack(
+            children: <Widget>[
+              Positioned.fill(
+                // 护眼滤镜只作用在正文上（ADR-0086 §决策 2）：状态栏与亮度遮罩自己就是「看得清」
+                // 的手段，不该再被压暖。
+                child: _filtered(
+                  eyeFilter,
+                  _bodyOf(chapters, settings, palette, l10n),
                 ),
               ),
-            ),
-          // 状态栏（ADR-0086 §决策 6）：沉浸式把时间与电量都藏起来了，这一行把它们放回来。
-          if (settings.showReaderStatus)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _statusLine(knownChapters, settings, palette, l10n),
-            ),
-        ],
+              // 亮度是**应用级遮罩**（ADR-0051 §决策 1）：不碰系统亮度，三端行为一致。
+              if (brightness < 1)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ColoredBox(
+                      // 亮度遮罩用主题的 scrim：它本来就是「压暗内容」的角色，避免硬编码黑色。
+                      color: tokens.colors.scrim.withValues(
+                        alpha: 1 - brightness,
+                      ),
+                    ),
+                  ),
+                ),
+              // 状态栏（ADR-0086 §决策 6）：沉浸式把时间与电量都藏起来了，这一行把它们放回来。
+              if (settings.showReaderStatus)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _statusLine(knownChapters, settings, palette, l10n),
+                ),
+            ],
+          ),
+          bottomNavigationBar: _chromeVisible
+              ? _toolBar(context, l10n, chapters, palette, marks, settings)
+              : null,
+        ),
       ),
-      bottomNavigationBar: _chromeVisible
-          ? _toolBar(context, l10n, chapters, palette, marks)
-          : null,
     );
   }
 
@@ -535,6 +636,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     AsyncValue<ParseResult<List<ReadingChapter>>> chapters,
     ({Color background, Color foreground}) palette,
     AsyncValue<List<Bookmark>> marks,
+    ReaderSettings settings,
   ) {
     final M3ETheme tokens = context.m3e;
     final List<ReadingChapter> known = _chaptersOf(chapters);
@@ -601,59 +703,85 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       constraints: BoxConstraints(
                         minWidth: constraints.maxWidth,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: <Widget>[
-                          IconButton(
-                            icon: const Icon(Icons.skip_previous),
-                            tooltip: l10n.readerPreviousChapter,
-                            onPressed: index > 0
-                                ? () => _jumpToChapter(index - 1)
-                                : null,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.list),
-                            tooltip: l10n.readerTocAction,
-                            onPressed: () => _keepAlive(() => _openToc(known)),
-                          ),
-                          // 书签按钮是一个 toggle：同一位置再按一次就取消（ADR-0066 §决策 3）。
-                          IconButton(
-                            icon: Icon(
-                              marked ? Icons.bookmark : Icons.bookmark_border,
+                      // 9 个按钮在窄屏放不下：整条工具条可以横向滚动（ADR-0093 §决策 1）。
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: <Widget>[
+                            IconButton(
+                              icon: Icon(
+                                _isAutoPageOn
+                                    ? Icons.pause_circle_outline
+                                    : Icons.play_circle_outline,
+                              ),
+                              tooltip: _isAutoPageOn
+                                  ? l10n.readerAutoPageStop
+                                  : l10n.readerAutoPageAction,
+                              onPressed: known.isEmpty
+                                  ? null
+                                  : () => _keepAlive(
+                                      () => _toggleAutoPage(settings),
+                                    ),
                             ),
-                            tooltip: marked
-                                ? l10n.bookmarkRemove
-                                : l10n.bookmarkAdd,
-                            onPressed: known.isEmpty
-                                ? null
-                                : () => _keepAlive(
-                                    () => _toggleBookmark(known, index, l10n),
-                                  ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.swap_horiz),
-                            tooltip: l10n.readerChangeSource,
-                            onPressed: () => _keepAlive(_openChangeSource),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.brightness_6_outlined),
-                            tooltip: l10n.readerBrightness,
-                            onPressed: () =>
-                                _keepAlive(() => _openBrightness(tokens)),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.volume_up),
-                            tooltip: l10n.readerTtsAction,
-                            onPressed: _openTts,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.skip_next),
-                            tooltip: l10n.readerNextChapter,
-                            onPressed: index + 1 < total
-                                ? () => _jumpToChapter(index + 1)
-                                : null,
-                          ),
-                        ],
+                            IconButton(
+                              icon: const Icon(Icons.skip_previous),
+                              tooltip: l10n.readerPreviousChapter,
+                              onPressed: index > 0
+                                  ? () => _jumpToChapter(index - 1)
+                                  : null,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.list),
+                              tooltip: l10n.readerTocAction,
+                              onPressed: () =>
+                                  _keepAlive(() => _openToc(known)),
+                            ),
+                            // 书签按钮是一个 toggle：同一位置再按一次就取消（ADR-0066 §决策 3）。
+                            IconButton(
+                              icon: Icon(
+                                marked ? Icons.bookmark : Icons.bookmark_border,
+                              ),
+                              tooltip: marked
+                                  ? l10n.bookmarkRemove
+                                  : l10n.bookmarkAdd,
+                              onPressed: known.isEmpty
+                                  ? null
+                                  : () => _keepAlive(
+                                      () => _toggleBookmark(known, index, l10n),
+                                    ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.swap_horiz),
+                              tooltip: l10n.readerChangeSource,
+                              onPressed: () => _keepAlive(_openChangeSource),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.brightness_6_outlined),
+                              tooltip: l10n.readerBrightness,
+                              onPressed: () =>
+                                  _keepAlive(() => _openBrightness(tokens)),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.volume_up),
+                              tooltip: l10n.readerTtsAction,
+                              onPressed: _openTts,
+                            ),
+                            // 阅读内净化开关（ADR-0094）：规则坏了就在这儿关掉，不离开阅读器。
+                            IconButton(
+                              icon: const Icon(Icons.auto_fix_high),
+                              tooltip: l10n.readerPurgeAction,
+                              onPressed: () => _keepAlive(_openPurgeRules),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.skip_next),
+                              tooltip: l10n.readerNextChapter,
+                              onPressed: index + 1 < total
+                                  ? () => _jumpToChapter(index + 1)
+                                  : null,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -754,6 +882,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (_chapters.isEmpty) {
       return;
     }
+    // 换章从头自动翻会跳过开头：翻章一律停（ADR-0093 §决策 3.3）。
+    _stopAutoPage();
     final int target = index.clamp(0, _chapters.length - 1);
     // 显式跳转重置窗口：跳过去以后，锚点上方的章不再是读者刚读过的那些（ADR-0087 §决策 2）。
     setState(() {
@@ -769,76 +899,73 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _keepAlive(() {});
   }
 
-  /// Opens the “change source” sheet and switches when the user picks one (ADR-0051 §决策 3).
+  /// Opens the change-source page and switches in place when the user confirms
+  /// (ADR-0051 §决策 3, ADR-0091).
   ///
-  /// The switch happens **in place**: `_book` changes, every provider keyed by it re-reads the new
-  /// source, and the session is told which chapter to open. No navigation, so the reader keeps its
-  /// scroll position for the frame and the user never sees a page flash.
+  /// The page itself (search + progress + chapter pick + shelf identity) lives in `book_source`;
+  /// the reader only hands over primitives through the navigation port and gets the new identity
+  /// plus the aligned chapter back (C-ARCH-2, ADR-0042 §决策 2). The switch happens **in place**:
+  /// `_book` changes, every provider keyed by it re-reads the new source, and the session is told
+  /// which chapter to open — no navigation, so the user never sees a page flash.
   Future<void> _openChangeSource() async {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final Object? picked = await showModalBottomSheet<Object?>(
-      context: context,
-      isScrollControlled: true,
-      builder: (BuildContext context) => ReaderSourceSheet(book: _book),
-    );
-    if (!mounted || picked is! ReaderSourceCandidate) {
-      return;
-    }
-
     final String chapterName =
         _chaptersOf(ref.read(readerChaptersProvider(_book)))
             .elementAtOrNull(_currentIndex)
             ?.title ??
         '';
-    final ParseResult<ReaderSourceSwitch> switched = await ref
-        .read(bookSourceSwitcherProvider)
-        .switchTo(
-          book: _book,
-          candidate: picked,
-          currentChapterName: chapterName,
-          currentChapterIndex: _currentIndex,
+    final ChangeSourceOutcome? outcome = await ref
+        .read(appNavigationProvider)
+        .openChangeSource(
+          context,
+          ChangeSourceLaunch(
+            sourceUrl: _book.sourceUrl,
+            bookUrl: _book.bookUrl,
+            bookName: _book.name,
+            chapterName: chapterName,
+            chapterIndex: _currentIndex,
+          ),
         );
-    if (!mounted) {
+    if (!mounted || outcome == null) {
       return;
     }
 
-    switch (switched) {
-      case ParseSuccess<ReaderSourceSwitch>(:final ReaderSourceSwitch data):
-        setState(() {
-          _book = data.book;
-          // 换源就是换一份目录：正文流程必须按新身份的章节重新定位（ADR-0085 §决策 4）。
-          _restoreNonce++;
-          _pendingJump = (chapterIndex: data.chapterIndex, charOffset: 0);
-          _lastBody = null;
-          // 旧源的正文不能带到新源：换源后重新预取相邻章。
-          _prefetchedBodies.clear();
-          _prefetching.clear();
-          _prefetchFailed.clear();
-          _laidOut.clear();
-          _measures.clear();
-          _resetWindow();
-          _prefetchGeneration++;
-        });
-        // 退出守护要按换源后的身份判断「在不在书架」，否则会拿旧 URL 再问一次。
-        ReaderBookScope.maybeOf(context)?.value = data.book;
-        // 新身份上的会话从零开始：直接告诉它对齐到哪一章（进度也由它在新身份下落盘）。
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) {
-            return;
-          }
-          unawaited(
-            ref
-                .read(readerSessionProvider(_book).notifier)
-                .selectChapter(data.chapterIndex),
-          );
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.readerSourceAligned(data.chapterName))),
-        );
-      case ParseFailure<ReaderSourceSwitch>():
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.readerSourceFailed)));
-    }
+    setState(() {
+      _book = ReaderBook(
+        sourceUrl: outcome.sourceUrl,
+        bookUrl: outcome.bookUrl,
+        name: outcome.bookName,
+        tocUrl: outcome.tocUrl,
+      );
+      // 换源就是换一份目录：正文流程必须按新身份的章节重新定位（ADR-0085 §决策 4）。
+      _restoreNonce++;
+      _pendingJump = (chapterIndex: outcome.chapterIndex, charOffset: 0);
+      _lastBody = null;
+      // 旧源的正文不能带到新源：换源后重新预取相邻章。
+      _prefetchedBodies.clear();
+      _prefetching.clear();
+      _prefetchFailed.clear();
+      _laidOut.clear();
+      _measures.clear();
+      _resetWindow();
+      _prefetchGeneration++;
+    });
+    // 退出守护要按换源后的身份判断「在不在书架」，否则会拿旧 URL 再问一次。
+    ReaderBookScope.maybeOf(context)?.value = _book;
+    // 新身份上的会话从零开始：直接告诉它对齐到哪一章（进度也由它在新身份下落盘）。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(
+        ref
+            .read(readerSessionProvider(_book).notifier)
+            .selectChapter(outcome.chapterIndex),
+      );
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.readerSourceAligned(outcome.chapterName))),
+    );
   }
 
   /// Opens the brightness slider (an app-level overlay, ADR-0051 §决策 1 / ADR-0075 §决策 2).
@@ -1129,6 +1256,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         return _tapZones(
           child: switch (settings.pageMode) {
             ReaderPageMode.scroll => ReaderScrollFlow(
+              turn: _turn,
               key: const ValueKey<String>('reader-scroll'),
               table: table,
               restore: restore,
@@ -1142,6 +1270,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               onNeedChapter: _needChapter,
             ),
             ReaderPageMode.paged => ReaderPagedFlow(
+              turn: _turn,
               key: const ValueKey<String>('reader-paged'),
               table: table,
               restore: restore,
@@ -1371,10 +1500,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// Rebuilds the prefetch queue around [anchorIndex] and starts the first fetch.
   ///
-  /// Nearest first (`+1, -1, +2, -2, …`) inside the ±[_prefetchRadius] window, skipping what is
-  /// already in hand, already failed, or already in flight. The queue is only rebuilt when the
-  /// anchor chapter actually changed: the page rebuilds on every progress write, and reshuffling
-  /// thirty entries per frame would restart the reader's own next chapter for no reason.
+  /// **Forward first** (`+1 … +15`, then `-1 … -15`) inside the ±[_prefetchRadius] window, skipping
+  /// what is already in hand, already failed, or already in flight (ADR-0097 §决策 2 — the order was
+  /// «nearest first» in ADR-0088 §决策 2). The reader's next step is almost always forward, so filling
+  /// the next fifteen chapters first is what makes entering the reader feel cached.
+  ///
+  /// The queue is only rebuilt when the anchor chapter actually changed: the page rebuilds on every
+  /// progress write, and reshuffling thirty entries per frame would restart the reader's own next
+  /// chapter for no reason.
   void _queuePrefetches(int anchorIndex, int chapterCount) {
     if (_prefetchAnchor == anchorIndex && _prefetchCount == chapterCount) {
       return;
@@ -1382,12 +1515,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _prefetchAnchor = anchorIndex;
     _prefetchCount = chapterCount;
     _prefetchQueue.clear();
+    // 后 15 章先填满（ADR-0097 §决策 2），回翻的那 15 章排在后面。
     for (var distance = 1; distance <= _prefetchRadius; distance++) {
       final int after = anchorIndex + distance;
-      final int before = anchorIndex - distance;
       if (after < chapterCount) {
         _prefetchQueue.add(after);
       }
+    }
+    for (var distance = 1; distance <= _prefetchRadius; distance++) {
+      final int before = anchorIndex - distance;
       if (before >= 0) {
         _prefetchQueue.add(before);
       }
@@ -1513,7 +1649,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             bottom: 0,
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
-              onTap: _chromeVisible ? _hideChrome : _showChrome,
+              // 点正文就是「我要自己操作」：自动翻页停下（ADR-0093 §决策 3.2）。
+              onTap: () {
+                _stopAutoPage();
+                _chromeVisible ? _hideChrome() : _showChrome();
+              },
             ),
           ),
         ],
@@ -1553,11 +1693,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   double _paddingOf(ReaderSettings settings) =>
       readerPagePaddingOf(settings.pagePadding);
 
+  /// Opens the in-reader 替换净化 switches (ADR-0094 §决策 3).
+  void _openPurgeRules() {
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (BuildContext context) => ReaderPurgeSheet(book: _book),
+      ),
+    );
+  }
+
   /// Opens the read-aloud sheet and remembers its notifier for the exit rule.
   ///
   /// 用 [_book] 而不是路由里的 `widget.book`：换源之后朗读必须跟着新源走，否则它会用旧源的
   /// 章节地址去读正文。
   void _openTts() {
+    // 朗读与自动翻页抢同一个「自动前进」语义：起朗读就停自动翻页（ADR-0093 §决策 3.4）。
+    _stopAutoPage();
     _tts = ref.read(readerTtsProvider(_book).notifier);
     unawaited(
       showModalBottomSheet<void>(

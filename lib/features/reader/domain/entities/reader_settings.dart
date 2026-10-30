@@ -31,14 +31,14 @@ const int maxReaderEyeProtection = 100;
 /// The warm filter a reader starts with (off).
 const int defaultReaderEyeProtection = 0;
 
-/// The shortest auto-read interval, in seconds.
-const int minReaderAutoReadSeconds = 3;
+/// The shortest auto-page interval, in seconds (ADR-0093 §决策 1).
+const int minReaderAutoPageSeconds = 3;
 
-/// The longest auto-read interval, in seconds.
-const int maxReaderAutoReadSeconds = 60;
+/// The longest auto-page interval, in seconds.
+const int maxReaderAutoPageSeconds = 60;
 
-/// The auto-read interval a reader starts with (ADR-0086 §决策 3).
-const int defaultReaderAutoReadSeconds = 15;
+/// The auto-page interval a reader starts with (ADR-0093 §决策 1).
+const int defaultReaderAutoPageSeconds = 15;
 
 /// How the reader turns pages (`docs/dev/roadmap.md` 5.3, ADR-0044 §决策 4).
 enum ReaderPageMode {
@@ -144,6 +144,7 @@ final class ReaderSettings {
     required this.keepScreenAwake,
     required this.eyeProtection,
     required this.showReaderStatus,
+    required this.autoPageSeconds,
   });
 
   /// Creates reader settings, clamping both numeric values into their documented ranges.
@@ -165,6 +166,7 @@ final class ReaderSettings {
     bool keepScreenAwake = true,
     int eyeProtection = defaultReaderEyeProtection,
     bool showReaderStatus = true,
+    int autoPageSeconds = defaultReaderAutoPageSeconds,
   }) => ReaderSettings._(
     fontScale: fontScale.clamp(minReaderFontScale, maxReaderFontScale),
     lineHeight: lineHeight.clamp(minReaderLineHeight, maxReaderLineHeight),
@@ -184,6 +186,10 @@ final class ReaderSettings {
     keepScreenAwake: keepScreenAwake,
     eyeProtection: eyeProtection.clamp(0, maxReaderEyeProtection),
     showReaderStatus: showReaderStatus,
+    autoPageSeconds: autoPageSeconds.clamp(
+      minReaderAutoPageSeconds,
+      maxReaderAutoPageSeconds,
+    ),
   );
 
   /// What a reader that has stored nothing yet uses.
@@ -205,6 +211,7 @@ final class ReaderSettings {
     keepScreenAwake: true,
     eyeProtection: defaultReaderEyeProtection,
     showReaderStatus: true,
+    autoPageSeconds: defaultReaderAutoPageSeconds,
   );
 
   /// Body text multiplier, on top of the app's accessibility scale.
@@ -262,6 +269,9 @@ final class ReaderSettings {
   /// (ADR-0086 §决策 6).
   final bool showReaderStatus;
 
+  /// Seconds between two automatic page turns (ADR-0093 §决策 1).
+  final int autoPageSeconds;
+
   /// Returns a copy with the given values, clamped the same way the factory does.
   ReaderSettings copyWith({
     double? fontScale,
@@ -281,6 +291,7 @@ final class ReaderSettings {
     bool? keepScreenAwake,
     int? eyeProtection,
     bool? showReaderStatus,
+    int? autoPageSeconds,
     bool clearTtsVoice = false,
   }) => ReaderSettings(
     fontScale: fontScale ?? this.fontScale,
@@ -302,6 +313,7 @@ final class ReaderSettings {
     keepScreenAwake: keepScreenAwake ?? this.keepScreenAwake,
     eyeProtection: eyeProtection ?? this.eyeProtection,
     showReaderStatus: showReaderStatus ?? this.showReaderStatus,
+    autoPageSeconds: autoPageSeconds ?? this.autoPageSeconds,
   );
 
   @override

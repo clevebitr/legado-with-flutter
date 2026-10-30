@@ -98,6 +98,7 @@ final class BackupRepositoryImpl implements BackupRepository {
                   ? null
                   : groupNames[row.book.groupId],
               'customCoverPath': row.book.customCoverPath,
+              'customIntro': row.book.customIntro,
               'addedAt': dateToJson(row.book.addedAt),
               'updatedAt': dateToJson(row.book.updatedAt),
             },
@@ -286,6 +287,7 @@ final class BackupRepositoryImpl implements BackupRepository {
             coverUrl: optionalStringOf(row, 'coverUrl'),
             intro: optionalStringOf(row, 'intro'),
             lastChapter: optionalStringOf(row, 'lastChapter'),
+            customIntro: optionalStringOf(row, 'customIntro'),
             addedAt: optionalDateOf(row, 'addedAt'),
             updatedAt: optionalDateOf(row, 'updatedAt'),
           );
@@ -295,6 +297,7 @@ final class BackupRepositoryImpl implements BackupRepository {
             isPinned: optionalBoolOf(row, 'isPinned', fallback: false),
             groupId: groupId,
             customCoverPath: optionalStringOf(row, 'customCoverPath'),
+            customIntro: optionalStringOf(row, 'customIntro'),
           );
           counter.inserted += 1;
           continue;
@@ -313,6 +316,7 @@ final class BackupRepositoryImpl implements BackupRepository {
           customCoverPath:
               optionalStringOf(row, 'customCoverPath') ??
               existing.customCoverPath,
+          customIntro: optionalStringOf(row, 'customIntro'),
           tocUrl: existing.tocUrl == null
               ? optionalStringOf(row, 'tocUrl')
               : null,

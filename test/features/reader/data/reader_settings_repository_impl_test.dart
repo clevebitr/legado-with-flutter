@@ -92,6 +92,17 @@ void main() {
       expect((await repository.load()).brightness, minReaderBrightness);
     });
 
+    test('save_whenCalled_roundTripsTheAutoPageInterval', () async {
+      // ADR-0093 §决策 1：间隔是一条阅读轴，与字号/行距同一套持久化。
+      final ReaderSettingsRepositoryImpl repository = await _repository();
+
+      await repository.save(
+        ReaderSettings.defaults.copyWith(autoPageSeconds: 42),
+      );
+
+      expect((await repository.load()).autoPageSeconds, 42);
+    });
+
     test('load_givenAnUnknownEnumIndex_fallsBackToTheDefault', () async {
       // 新版写入的索引 / 手改的越界值：不索引越界（那会是 RangeError，越过 ParseResult 契约）。
       final ReaderSettingsRepositoryImpl repository = await _repository(

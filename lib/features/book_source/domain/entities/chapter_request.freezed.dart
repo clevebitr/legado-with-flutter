@@ -31,7 +31,11 @@ mixin _$ChapterRequest {
  bool get isVip;/// Whether the source marked this chapter as bought (`chapter.isPay`).
  bool get isPay;/// Whether this entry is a volume heading rather than a chapter (`chapter.isVolume`).
  bool get isVolume;/// The chapter's display update time, when the source had one (`chapter.updateTime`).
- String? get updateTime;
+ String? get updateTime;/// Whether the finished body should be cached **without** an expiry (ADR-0097 §决策 1).
+///
+/// The caller sets it when the book is on the shelf: its chapters then stay cached until the
+/// user clears that book's cache, instead of expiring after `chapterCacheTtl`.
+ bool get persistCache;
 /// Create a copy of ChapterRequest
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -43,20 +47,20 @@ $ChapterRequestCopyWith<ChapterRequest> get copyWith => _$ChapterRequestCopyWith
 @override
 bool operator ==(Object other) {
   final _this = this as ChapterRequest;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ChapterRequest&&(identical(other.url, _this.url) || other.url == _this.url)&&(identical(other.title, _this.title) || other.title == _this.title)&&(identical(other.bookName, _this.bookName) || other.bookName == _this.bookName)&&(identical(other.bookUrl, _this.bookUrl) || other.bookUrl == _this.bookUrl)&&(identical(other.tocUrl, _this.tocUrl) || other.tocUrl == _this.tocUrl)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.nextChapterUrl, _this.nextChapterUrl) || other.nextChapterUrl == _this.nextChapterUrl)&&(identical(other.isVip, _this.isVip) || other.isVip == _this.isVip)&&(identical(other.isPay, _this.isPay) || other.isPay == _this.isPay)&&(identical(other.isVolume, _this.isVolume) || other.isVolume == _this.isVolume)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ChapterRequest&&(identical(other.url, _this.url) || other.url == _this.url)&&(identical(other.title, _this.title) || other.title == _this.title)&&(identical(other.bookName, _this.bookName) || other.bookName == _this.bookName)&&(identical(other.bookUrl, _this.bookUrl) || other.bookUrl == _this.bookUrl)&&(identical(other.tocUrl, _this.tocUrl) || other.tocUrl == _this.tocUrl)&&(identical(other.author, _this.author) || other.author == _this.author)&&(identical(other.kind, _this.kind) || other.kind == _this.kind)&&(identical(other.intro, _this.intro) || other.intro == _this.intro)&&(identical(other.nextChapterUrl, _this.nextChapterUrl) || other.nextChapterUrl == _this.nextChapterUrl)&&(identical(other.isVip, _this.isVip) || other.isVip == _this.isVip)&&(identical(other.isPay, _this.isPay) || other.isPay == _this.isPay)&&(identical(other.isVolume, _this.isVolume) || other.isVolume == _this.isVolume)&&(identical(other.updateTime, _this.updateTime) || other.updateTime == _this.updateTime)&&(identical(other.persistCache, _this.persistCache) || other.persistCache == _this.persistCache));
 }
 
 
 @override
 int get hashCode {
   final _this = this as ChapterRequest;
-  return Object.hash(runtimeType,_this.url,_this.title,_this.bookName,_this.bookUrl,_this.tocUrl,_this.author,_this.kind,_this.intro,_this.nextChapterUrl,_this.isVip,_this.isPay,_this.isVolume,_this.updateTime);
+  return Object.hash(runtimeType,_this.url,_this.title,_this.bookName,_this.bookUrl,_this.tocUrl,_this.author,_this.kind,_this.intro,_this.nextChapterUrl,_this.isVip,_this.isPay,_this.isVolume,_this.updateTime,_this.persistCache);
 }
 
 @override
 String toString() {
   final _this = this as ChapterRequest;
-  return 'ChapterRequest(url: ${_this.url}, title: ${_this.title}, bookName: ${_this.bookName}, bookUrl: ${_this.bookUrl}, tocUrl: ${_this.tocUrl}, author: ${_this.author}, kind: ${_this.kind}, intro: ${_this.intro}, nextChapterUrl: ${_this.nextChapterUrl}, isVip: ${_this.isVip}, isPay: ${_this.isPay}, isVolume: ${_this.isVolume}, updateTime: ${_this.updateTime})';
+  return 'ChapterRequest(url: ${_this.url}, title: ${_this.title}, bookName: ${_this.bookName}, bookUrl: ${_this.bookUrl}, tocUrl: ${_this.tocUrl}, author: ${_this.author}, kind: ${_this.kind}, intro: ${_this.intro}, nextChapterUrl: ${_this.nextChapterUrl}, isVip: ${_this.isVip}, isPay: ${_this.isPay}, isVolume: ${_this.isVolume}, updateTime: ${_this.updateTime}, persistCache: ${_this.persistCache})';
 }
 
 
@@ -67,7 +71,7 @@ abstract mixin class $ChapterRequestCopyWith<$Res>  {
   factory $ChapterRequestCopyWith(ChapterRequest value, $Res Function(ChapterRequest) _then) = _$ChapterRequestCopyWithImpl;
 @useResult
 $Res call({
- String url, String title, String bookName, String bookUrl, String tocUrl, String author, String kind, String intro, String nextChapterUrl, bool isVip, bool isPay, bool isVolume, String? updateTime
+ String url, String title, String bookName, String bookUrl, String tocUrl, String author, String kind, String intro, String nextChapterUrl, bool isVip, bool isPay, bool isVolume, String? updateTime, bool persistCache
 });
 
 
@@ -84,7 +88,7 @@ class _$ChapterRequestCopyWithImpl<$Res>
 
 /// Create a copy of ChapterRequest
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? url = null,Object? title = null,Object? bookName = null,Object? bookUrl = null,Object? tocUrl = null,Object? author = null,Object? kind = null,Object? intro = null,Object? nextChapterUrl = null,Object? isVip = null,Object? isPay = null,Object? isVolume = null,Object? updateTime = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? url = null,Object? title = null,Object? bookName = null,Object? bookUrl = null,Object? tocUrl = null,Object? author = null,Object? kind = null,Object? intro = null,Object? nextChapterUrl = null,Object? isVip = null,Object? isPay = null,Object? isVolume = null,Object? updateTime = freezed,Object? persistCache = null,}) {
   return _then(ChapterRequest(
 url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -99,7 +103,8 @@ as String,isVip: null == isVip ? _self.isVip : isVip // ignore: cast_nullable_to
 as bool,isPay: null == isPay ? _self.isPay : isPay // ignore: cast_nullable_to_non_nullable
 as bool,isVolume: null == isVolume ? _self.isVolume : isVolume // ignore: cast_nullable_to_non_nullable
 as bool,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,persistCache: null == persistCache ? _self.persistCache : persistCache // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -184,10 +189,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String url,  String title,  String bookName,  String bookUrl,  String tocUrl,  String author,  String kind,  String intro,  String nextChapterUrl,  bool isVip,  bool isPay,  bool isVolume,  String? updateTime)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String url,  String title,  String bookName,  String bookUrl,  String tocUrl,  String author,  String kind,  String intro,  String nextChapterUrl,  bool isVip,  bool isPay,  bool isVolume,  String? updateTime,  bool persistCache)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ChapterRequest() when $default != null:
-return $default(_that.url,_that.title,_that.bookName,_that.bookUrl,_that.tocUrl,_that.author,_that.kind,_that.intro,_that.nextChapterUrl,_that.isVip,_that.isPay,_that.isVolume,_that.updateTime);case _:
+return $default(_that.url,_that.title,_that.bookName,_that.bookUrl,_that.tocUrl,_that.author,_that.kind,_that.intro,_that.nextChapterUrl,_that.isVip,_that.isPay,_that.isVolume,_that.updateTime,_that.persistCache);case _:
   return orElse();
 
 }
@@ -205,10 +210,10 @@ return $default(_that.url,_that.title,_that.bookName,_that.bookUrl,_that.tocUrl,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String url,  String title,  String bookName,  String bookUrl,  String tocUrl,  String author,  String kind,  String intro,  String nextChapterUrl,  bool isVip,  bool isPay,  bool isVolume,  String? updateTime)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String url,  String title,  String bookName,  String bookUrl,  String tocUrl,  String author,  String kind,  String intro,  String nextChapterUrl,  bool isVip,  bool isPay,  bool isVolume,  String? updateTime,  bool persistCache)  $default,) {final _that = this;
 switch (_that) {
 case _ChapterRequest():
-return $default(_that.url,_that.title,_that.bookName,_that.bookUrl,_that.tocUrl,_that.author,_that.kind,_that.intro,_that.nextChapterUrl,_that.isVip,_that.isPay,_that.isVolume,_that.updateTime);case _:
+return $default(_that.url,_that.title,_that.bookName,_that.bookUrl,_that.tocUrl,_that.author,_that.kind,_that.intro,_that.nextChapterUrl,_that.isVip,_that.isPay,_that.isVolume,_that.updateTime,_that.persistCache);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -225,10 +230,10 @@ return $default(_that.url,_that.title,_that.bookName,_that.bookUrl,_that.tocUrl,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String url,  String title,  String bookName,  String bookUrl,  String tocUrl,  String author,  String kind,  String intro,  String nextChapterUrl,  bool isVip,  bool isPay,  bool isVolume,  String? updateTime)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String url,  String title,  String bookName,  String bookUrl,  String tocUrl,  String author,  String kind,  String intro,  String nextChapterUrl,  bool isVip,  bool isPay,  bool isVolume,  String? updateTime,  bool persistCache)?  $default,) {final _that = this;
 switch (_that) {
 case _ChapterRequest() when $default != null:
-return $default(_that.url,_that.title,_that.bookName,_that.bookUrl,_that.tocUrl,_that.author,_that.kind,_that.intro,_that.nextChapterUrl,_that.isVip,_that.isPay,_that.isVolume,_that.updateTime);case _:
+return $default(_that.url,_that.title,_that.bookName,_that.bookUrl,_that.tocUrl,_that.author,_that.kind,_that.intro,_that.nextChapterUrl,_that.isVip,_that.isPay,_that.isVolume,_that.updateTime,_that.persistCache);case _:
   return null;
 
 }
@@ -240,7 +245,7 @@ return $default(_that.url,_that.title,_that.bookName,_that.bookUrl,_that.tocUrl,
 
 
 class _ChapterRequest implements ChapterRequest {
-  const _ChapterRequest({required this.url, this.title = '', this.bookName = '', this.bookUrl = '', this.tocUrl = '', this.author = '', this.kind = '', this.intro = '', this.nextChapterUrl = '', this.isVip = false, this.isPay = false, this.isVolume = false, this.updateTime});
+  const _ChapterRequest({required this.url, this.title = '', this.bookName = '', this.bookUrl = '', this.tocUrl = '', this.author = '', this.kind = '', this.intro = '', this.nextChapterUrl = '', this.isVip = false, this.isPay = false, this.isVolume = false, this.updateTime, this.persistCache = false});
   
 
 /// The chapter page URL — the same value that used to be the whole argument.
@@ -272,6 +277,11 @@ class _ChapterRequest implements ChapterRequest {
 @override@JsonKey() final  bool isVolume;
 /// The chapter's display update time, when the source had one (`chapter.updateTime`).
 @override final  String? updateTime;
+/// Whether the finished body should be cached **without** an expiry (ADR-0097 §决策 1).
+///
+/// The caller sets it when the book is on the shelf: its chapters then stay cached until the
+/// user clears that book's cache, instead of expiring after `chapterCacheTtl`.
+@override@JsonKey() final  bool persistCache;
 
 /// Create a copy of ChapterRequest
 /// with the given fields replaced by the non-null parameter values.
@@ -283,18 +293,18 @@ _$ChapterRequestCopyWith<_ChapterRequest> get copyWith => __$ChapterRequestCopyW
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChapterRequest&&(identical(other.url, url) || other.url == url)&&(identical(other.title, title) || other.title == title)&&(identical(other.bookName, bookName) || other.bookName == bookName)&&(identical(other.bookUrl, bookUrl) || other.bookUrl == bookUrl)&&(identical(other.tocUrl, tocUrl) || other.tocUrl == tocUrl)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.nextChapterUrl, nextChapterUrl) || other.nextChapterUrl == nextChapterUrl)&&(identical(other.isVip, isVip) || other.isVip == isVip)&&(identical(other.isPay, isPay) || other.isPay == isPay)&&(identical(other.isVolume, isVolume) || other.isVolume == isVolume)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChapterRequest&&(identical(other.url, url) || other.url == url)&&(identical(other.title, title) || other.title == title)&&(identical(other.bookName, bookName) || other.bookName == bookName)&&(identical(other.bookUrl, bookUrl) || other.bookUrl == bookUrl)&&(identical(other.tocUrl, tocUrl) || other.tocUrl == tocUrl)&&(identical(other.author, author) || other.author == author)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.intro, intro) || other.intro == intro)&&(identical(other.nextChapterUrl, nextChapterUrl) || other.nextChapterUrl == nextChapterUrl)&&(identical(other.isVip, isVip) || other.isVip == isVip)&&(identical(other.isPay, isPay) || other.isPay == isPay)&&(identical(other.isVolume, isVolume) || other.isVolume == isVolume)&&(identical(other.updateTime, updateTime) || other.updateTime == updateTime)&&(identical(other.persistCache, persistCache) || other.persistCache == persistCache));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,url,title,bookName,bookUrl,tocUrl,author,kind,intro,nextChapterUrl,isVip,isPay,isVolume,updateTime);
+    return Object.hash(runtimeType,url,title,bookName,bookUrl,tocUrl,author,kind,intro,nextChapterUrl,isVip,isPay,isVolume,updateTime,persistCache);
 }
 
 @override
 String toString() {
-    return 'ChapterRequest(url: $url, title: $title, bookName: $bookName, bookUrl: $bookUrl, tocUrl: $tocUrl, author: $author, kind: $kind, intro: $intro, nextChapterUrl: $nextChapterUrl, isVip: $isVip, isPay: $isPay, isVolume: $isVolume, updateTime: $updateTime)';
+    return 'ChapterRequest(url: $url, title: $title, bookName: $bookName, bookUrl: $bookUrl, tocUrl: $tocUrl, author: $author, kind: $kind, intro: $intro, nextChapterUrl: $nextChapterUrl, isVip: $isVip, isPay: $isPay, isVolume: $isVolume, updateTime: $updateTime, persistCache: $persistCache)';
 }
 
 
@@ -305,7 +315,7 @@ abstract mixin class _$ChapterRequestCopyWith<$Res> implements $ChapterRequestCo
   factory _$ChapterRequestCopyWith(_ChapterRequest value, $Res Function(_ChapterRequest) _then) = __$ChapterRequestCopyWithImpl;
 @override @useResult
 $Res call({
- String url, String title, String bookName, String bookUrl, String tocUrl, String author, String kind, String intro, String nextChapterUrl, bool isVip, bool isPay, bool isVolume, String? updateTime
+ String url, String title, String bookName, String bookUrl, String tocUrl, String author, String kind, String intro, String nextChapterUrl, bool isVip, bool isPay, bool isVolume, String? updateTime, bool persistCache
 });
 
 
@@ -322,7 +332,7 @@ class __$ChapterRequestCopyWithImpl<$Res>
 
 /// Create a copy of ChapterRequest
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? url = null,Object? title = null,Object? bookName = null,Object? bookUrl = null,Object? tocUrl = null,Object? author = null,Object? kind = null,Object? intro = null,Object? nextChapterUrl = null,Object? isVip = null,Object? isPay = null,Object? isVolume = null,Object? updateTime = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? url = null,Object? title = null,Object? bookName = null,Object? bookUrl = null,Object? tocUrl = null,Object? author = null,Object? kind = null,Object? intro = null,Object? nextChapterUrl = null,Object? isVip = null,Object? isPay = null,Object? isVolume = null,Object? updateTime = freezed,Object? persistCache = null,}) {
   return _then(_ChapterRequest(
 url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -337,7 +347,8 @@ as String,isVip: null == isVip ? _self.isVip : isVip // ignore: cast_nullable_to
 as bool,isPay: null == isPay ? _self.isPay : isPay // ignore: cast_nullable_to_non_nullable
 as bool,isVolume: null == isVolume ? _self.isVolume : isVolume // ignore: cast_nullable_to_non_nullable
 as bool,updateTime: freezed == updateTime ? _self.updateTime : updateTime // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,persistCache: null == persistCache ? _self.persistCache : persistCache // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

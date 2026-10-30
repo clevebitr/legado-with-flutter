@@ -352,6 +352,8 @@ final class FetchContent {
       body: _encode(content),
       // 章节正文知道它属于哪本书（`bookUrl` 本来就在请求上下文里），按书缓存因此不需要新参数。
       bookUrl: request.bookUrl,
+      // 在架书的正文不自动过期（ADR-0097 §决策 1）：由调用方在请求里说明。
+      persistent: request.persistCache,
     );
 
     return ParseSuccess<ChapterContent>(content);

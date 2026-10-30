@@ -197,6 +197,19 @@ final class BookshelfRepositoryImpl implements BookshelfRepository {
   }
 
   @override
+  Future<void> updateDetails({
+    required int id,
+    required String name,
+    required String? author,
+    required String? customIntro,
+  }) => _dao.updateDetails(
+    id: id,
+    name: name,
+    author: author,
+    customIntro: customIntro,
+  );
+
+  @override
   Future<ShelvedBook?> findByUrl({
     required String sourceUrl,
     required String bookUrl,
@@ -259,6 +272,7 @@ final class BookshelfRepositoryImpl implements BookshelfRepository {
     isPinned: row.book.isPinned,
     groupId: row.book.groupId,
     customCoverPath: row.book.customCoverPath,
+    customIntro: row.book.customIntro,
     addedAt: row.book.addedAt,
     progress: _toProgress(row.progress),
   );

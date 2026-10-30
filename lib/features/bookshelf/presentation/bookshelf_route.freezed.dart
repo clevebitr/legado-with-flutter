@@ -56,12 +56,13 @@ extension BookshelfRoutePatterns on BookshelfRoute {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ShelfRoute value)?  shelf,TResult Function( ShelfGroupsRoute value)?  groups,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ShelfRoute value)?  shelf,TResult Function( ShelfGroupsRoute value)?  groups,TResult Function( ShelfBookEditRoute value)?  editBook,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case ShelfRoute() when shelf != null:
 return shelf(_that);case ShelfGroupsRoute() when groups != null:
-return groups(_that);case _:
+return groups(_that);case ShelfBookEditRoute() when editBook != null:
+return editBook(_that);case _:
   return orElse();
 
 }
@@ -79,12 +80,13 @@ return groups(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ShelfRoute value)  shelf,required TResult Function( ShelfGroupsRoute value)  groups,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ShelfRoute value)  shelf,required TResult Function( ShelfGroupsRoute value)  groups,required TResult Function( ShelfBookEditRoute value)  editBook,}){
 final _that = this;
 switch (_that) {
 case ShelfRoute():
 return shelf(_that);case ShelfGroupsRoute():
-return groups(_that);}
+return groups(_that);case ShelfBookEditRoute():
+return editBook(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -98,12 +100,13 @@ return groups(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ShelfRoute value)?  shelf,TResult? Function( ShelfGroupsRoute value)?  groups,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ShelfRoute value)?  shelf,TResult? Function( ShelfGroupsRoute value)?  groups,TResult? Function( ShelfBookEditRoute value)?  editBook,}){
 final _that = this;
 switch (_that) {
 case ShelfRoute() when shelf != null:
 return shelf(_that);case ShelfGroupsRoute() when groups != null:
-return groups(_that);case _:
+return groups(_that);case ShelfBookEditRoute() when editBook != null:
+return editBook(_that);case _:
   return null;
 
 }
@@ -120,11 +123,12 @@ return groups(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  shelf,TResult Function()?  groups,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  shelf,TResult Function()?  groups,TResult Function( ShelvedBook book)?  editBook,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case ShelfRoute() when shelf != null:
 return shelf();case ShelfGroupsRoute() when groups != null:
-return groups();case _:
+return groups();case ShelfBookEditRoute() when editBook != null:
+return editBook(_that.book);case _:
   return orElse();
 
 }
@@ -142,11 +146,12 @@ return groups();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  shelf,required TResult Function()  groups,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  shelf,required TResult Function()  groups,required TResult Function( ShelvedBook book)  editBook,}) {final _that = this;
 switch (_that) {
 case ShelfRoute():
 return shelf();case ShelfGroupsRoute():
-return groups();}
+return groups();case ShelfBookEditRoute():
+return editBook(_that.book);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -160,11 +165,12 @@ return groups();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  shelf,TResult? Function()?  groups,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  shelf,TResult? Function()?  groups,TResult? Function( ShelvedBook book)?  editBook,}) {final _that = this;
 switch (_that) {
 case ShelfRoute() when shelf != null:
 return shelf();case ShelfGroupsRoute() when groups != null:
-return groups();case _:
+return groups();case ShelfBookEditRoute() when editBook != null:
+return editBook(_that.book);case _:
   return null;
 
 }
@@ -235,5 +241,82 @@ String toString() {
 
 
 
+
+/// @nodoc
+
+
+class ShelfBookEditRoute extends BookshelfRoute {
+  const ShelfBookEditRoute({required this.book}): super._();
+  
+
+ final  ShelvedBook book;
+
+/// Create a copy of BookshelfRoute
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ShelfBookEditRouteCopyWith<ShelfBookEditRoute> get copyWith => _$ShelfBookEditRouteCopyWithImpl<ShelfBookEditRoute>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ShelfBookEditRoute&&(identical(other.book, book) || other.book == book));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,book);
+}
+
+@override
+String toString() {
+    return 'BookshelfRoute.editBook(book: $book)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ShelfBookEditRouteCopyWith<$Res> implements $BookshelfRouteCopyWith<$Res> {
+  factory $ShelfBookEditRouteCopyWith(ShelfBookEditRoute value, $Res Function(ShelfBookEditRoute) _then) = _$ShelfBookEditRouteCopyWithImpl;
+@useResult
+$Res call({
+ ShelvedBook book
+});
+
+
+$ShelvedBookCopyWith<$Res> get book;
+
+}
+/// @nodoc
+class _$ShelfBookEditRouteCopyWithImpl<$Res>
+    implements $ShelfBookEditRouteCopyWith<$Res> {
+  _$ShelfBookEditRouteCopyWithImpl(this._self, this._then);
+
+  final ShelfBookEditRoute _self;
+  final $Res Function(ShelfBookEditRoute) _then;
+
+/// Create a copy of BookshelfRoute
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? book = null,}) {
+  return _then(ShelfBookEditRoute(
+book: null == book ? _self.book : book // ignore: cast_nullable_to_non_nullable
+as ShelvedBook,
+  ));
+}
+
+/// Create a copy of BookshelfRoute
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$ShelvedBookCopyWith<$Res> get book {
+  
+  return $ShelvedBookCopyWith<$Res>(_self.book, (value) {
+    return _then(_self.copyWith(book: value));
+  });
+}
+}
 
 // dart format on

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_reader/core/error/parse_result.dart';
 import 'package:flutter_reader/core/widgets/cover_image.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/explore_layout_store.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/pages/explore_page.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../support/fake_book_source_repository.dart';
+import '../../../../support/fake_explore_layout_store.dart';
 import '../../../../support/fake_http_client.dart';
 import '../../../../support/offline_corpus.dart';
 
@@ -267,6 +269,94 @@ void main() {
 
       expect(find.text('科幻'), findsOneWidget);
       expect(find.text('玄幻'), findsNothing);
+    });
+  });
+  group('ExplorePage layout', () {
+    /// The discover page of one category holding one book.
+    Future<FakeExploreLayoutStore> pumpLayout(
+      WidgetTester tester, {
+      ExploreLayout? initial,
+    }) async {
+      final FakeExploreLayoutStore store = FakeExploreLayoutStore(
+        initial: initial,
+      );
+      final FakeHttpClient http = FakeHttpClient()
+        ..serve(
+          'https://example-novel.test/list/c0.html',
+          '<ul class="result-list"><div class="result-item">'
+              '<div class="result-item-title"><a href="/book/1/">书名一</a></div>'
+              '<div class="result-item-author">作者甲</div>'
+              '</div></ul>',
+        );
+
+      await pumpBookSourcePage(
+        tester,
+        page: const ExplorePage(),
+        source: loadCorpusBookSource().copyWith(
+          exploreUrl: _exploreUrl(<String>['玄幻']),
+        ),
+        http: http,
+        exploreLayoutStore: store,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('玄幻'));
+      await tester.pumpAndSettle();
+
+      return store;
+    }
+
+    testWidgets('layout_whenToggled_showsTheGridAndRemembersIt', (
+      WidgetTester tester,
+    ) async {
+      // 上游有两种布局（`layoutState`）：列表 / 网格，切换记在偏好里（DECISIONS #77）。
+      final FakeExploreLayoutStore store = await pumpLayout(tester);
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(ExplorePage),
+      );
+
+      expect(find.byType(GridView), findsNothing);
+      await tester.tap(find.byTooltip(l10n.exploreLayoutGrid));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(GridView), findsOneWidget);
+      expect(find.text('书名一'), findsOneWidget);
+      expect(store.layout.isGrid, isTrue);
+    });
+
+    testWidgets('layout_whenStoredAsGrid_opensAsAGrid', (
+      WidgetTester tester,
+    ) async {
+      // 记忆是读盘的那一半：偏好里是网格，打开就是网格。
+      await pumpLayout(
+        tester,
+        initial: ExploreLayout.defaults.copyWith(isGrid: true),
+      );
+
+      expect(find.byType(GridView), findsOneWidget);
+    });
+
+    testWidgets('columns_whenTheSliderIsReleased_storesThatOrientation', (
+      WidgetTester tester,
+    ) async {
+      final FakeExploreLayoutStore store = await pumpLayout(
+        tester,
+        initial: ExploreLayout.defaults.copyWith(isGrid: true),
+      );
+      final AppLocalizations l10n = localizationOf(
+        tester,
+        find.byType(ExplorePage),
+      );
+
+      await tester.tap(find.byTooltip(l10n.exploreGridColumnsAction));
+      await tester.pumpAndSettle();
+      // 1–10 的分段滑块：往右拖到底是 10 列。
+      await tester.drag(find.byType(Slider), const Offset(400, 0));
+      await tester.pumpAndSettle();
+
+      expect(store.layout.portraitColumns, 10);
+      // 横屏那一份不动（两份分开记）。
+      expect(store.layout.landscapeColumns, 7);
     });
   });
 }

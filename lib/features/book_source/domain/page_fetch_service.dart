@@ -20,7 +20,14 @@ import 'package:flutter_reader/features/book_source/domain/url_template.dart';
 import 'package:html/parser.dart' as parser;
 
 // 翻页遍历的页数上限：到顶就停止并记录一条警告。
-const int _maxPagingPages = 50;
+/// How many pages one paged fetch may read before it gives up.
+///
+/// Upstream has **no fixed cap** (`BookChapterList.analyzeChapterList` walks `nextTocUrl` until it
+/// stops or repeats), and 50 truncated real tables of contents — the 2026-10-30 device log shows
+/// `m.bequ6.info`, `m.bingfengzw.net`, `wap.po18.in` and others hitting it, which means the last
+/// chapters of long books were missing. 500 keeps a runaway guard (a rule that always renders a new
+/// URL) while covering every corpus we have seen; the per-source budget still bounds the wait.
+const int _maxPagingPages = 500;
 
 // 翻页模板允许的 URL 变量。
 const Set<String> _pagingTemplateVariables = <String>{'page', 'baseUrl'};

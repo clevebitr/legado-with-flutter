@@ -321,6 +321,49 @@ void main() {
       expect((await repository.getAll()).single.customCoverPath, isNull);
     });
 
+    test('updateDetails_whenCalled_writesTitleAuthorAndCustomIntro', () async {
+      // 用户改过的三项：书名 / 作者 / 自己的简介（M33，ADR-0092）。
+      await repository.add(candidate());
+      final ShelvedBook book = (await repository.getAll()).single;
+
+      await repository.updateDetails(
+        id: book.id,
+        name: '朝花夕拾',
+        author: '鲁迅',
+        customIntro: '我自己写的简介',
+      );
+
+      final ShelvedBook updated = (await repository.getAll()).single;
+      expect(updated.name, '朝花夕拾');
+      expect(updated.author, '鲁迅');
+      expect(updated.customIntro, '我自己写的简介');
+      // 书源快照那一列不动：改的是「用户的副本」，不是把来源改掉。
+      expect(updated.intro, book.intro);
+    });
+
+    test(
+      'updateDetails_whenTheIntroIsCleared_fallsBackToTheSnapshot',
+      () async {
+        await repository.add(candidate());
+        final ShelvedBook book = (await repository.getAll()).single;
+        await repository.updateDetails(
+          id: book.id,
+          name: book.name,
+          author: book.author,
+          customIntro: '草稿',
+        );
+
+        await repository.updateDetails(
+          id: book.id,
+          name: book.name,
+          author: book.author,
+          customIntro: null,
+        );
+
+        expect((await repository.getAll()).single.customIntro, isNull);
+      },
+    );
+
     test('findByUrl_whenTheBookIsOnTheShelf_answersItsRow', () async {
       await repository.add(candidate());
 

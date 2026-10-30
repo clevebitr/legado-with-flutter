@@ -40,6 +40,9 @@ abstract class ShelvedBook with _$ShelvedBook {
 
     /// Absolute path of the cover the user picked, or `null` to use [coverUrl].
     String? customCoverPath,
+
+    /// The introduction the user wrote, which wins over [intro] when set (M33, ADR-0092).
+    String? customIntro,
     required DateTime addedAt,
     ReadingProgressPosition? progress,
   }) = _ShelvedBook;

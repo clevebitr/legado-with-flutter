@@ -9,8 +9,10 @@ import 'package:flutter_reader/features/book_source/domain/entities/book.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/book_source.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/explore_category.dart';
 import 'package:flutter_reader/features/book_source/domain/entities/stored_book_source.dart';
+import 'package:flutter_reader/features/book_source/domain/repositories/explore_layout_store.dart';
 import 'package:flutter_reader/features/book_source/presentation/book_source_route.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/book_source_list_notifier.dart';
+import 'package:flutter_reader/features/book_source/presentation/notifiers/explore_layout_notifier.dart';
 import 'package:flutter_reader/features/book_source/presentation/notifiers/explore_notifier.dart';
 import 'package:flutter_reader/l10n/generated/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,8 +88,34 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         .watch(selectedBookSourceProvider)
         .value;
 
+    final ExploreLayout layout =
+        ref.watch(exploreLayoutControllerProvider).value ??
+        ExploreLayout.defaults;
+
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.bookSourceExploreTitle)),
+      appBar: AppBar(
+        title: Text(l10n.bookSourceExploreTitle),
+        actions: <Widget>[
+          // 两种布局是上游的能力（`layoutState`），切换记在偏好里（DECISIONS #77）。
+          IconButton(
+            icon: Icon(
+              layout.isGrid ? Icons.view_list_outlined : Icons.grid_view,
+            ),
+            tooltip: layout.isGrid
+                ? l10n.exploreLayoutList
+                : l10n.exploreLayoutGrid,
+            onPressed: () => unawaited(
+              ref.read(exploreLayoutControllerProvider.notifier).toggle(),
+            ),
+          ),
+          if (layout.isGrid)
+            IconButton(
+              icon: const Icon(Icons.view_column_outlined),
+              tooltip: l10n.exploreGridColumnsAction,
+              onPressed: () => _openColumnsSheet(layout),
+            ),
+        ],
+      ),
       body: switch (stored) {
         null => StateMessage(
           message: l10n.bookSourceMissingSource,
@@ -210,29 +238,175 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     // 所以不能借用搜索的空态文案（它会说「没有匹配该关键词的书」）。
     ExploreBooksLoaded(:final List<Book> books) when books.isEmpty =>
       StateMessage(message: l10n.bookSourceExploreEmptyCategory),
-    ExploreBooksLoaded(:final List<Book> books) => ListView.builder(
-      itemCount: books.length,
-      itemBuilder: (BuildContext context, int index) {
-        final Book book = books[index];
-
-        return ListTile(
-          // 封面是 S1（roadmap §3.9）：书源给了 `coverUrl` 就显示，没给就是占位块。
-          leading: CoverImage(url: book.coverUrl, width: 48, height: 64),
-          title: Text(book.name),
-          // 空作者等于没有作者：不画一行空白，也不写「未知」。
-          subtitle: switch (book.author) {
-            final String author when author.isNotEmpty => Text(author),
-            _ => null,
-          },
-          onTap: () => pushBookSourceRoute(
-            context,
-            BookSourceRoute.bookDetail(book: book),
-          ),
-        );
-      },
-    ),
+    ExploreBooksLoaded(:final List<Book> books) => _books(l10n, books),
     // `ExploreCategories` 已在前面处理（提示选一个分类），这里只剩两个不可达的变体——
     // 列出来只为让这个 switch 穷尽。
     ExploreIdle() || ExploreCategoriesFailed() => const SizedBox.shrink(),
   };
+
+  /// The books of the chosen category: a list or a grid, whichever the user picked.
+  Widget _books(AppLocalizations l10n, List<Book> books) {
+    final ExploreLayout layout =
+        ref.watch(exploreLayoutControllerProvider).value ??
+        ExploreLayout.defaults;
+
+    return switch (layout.isGrid) {
+      true => _grid(l10n, books, layout),
+      false => _list(l10n, books),
+    };
+  }
+
+  /// The list layout: one row per book (the original shape).
+  Widget _list(AppLocalizations l10n, List<Book> books) => ListView.builder(
+    itemCount: books.length,
+    itemBuilder: (BuildContext context, int index) {
+      final Book book = books[index];
+
+      return ListTile(
+        // 封面是 S1（roadmap §3.9）：书源给了 `coverUrl` 就显示，没给就是占位块。
+        leading: CoverImage(url: book.coverUrl, width: 48, height: 64),
+        title: Text(book.name),
+        // 空作者等于没有作者：不画一行空白，也不写「未知」。
+        subtitle: switch (book.author) {
+          final String author when author.isNotEmpty => Text(author),
+          _ => null,
+        },
+        onTap: () => pushBookSourceRoute(
+          context,
+          BookSourceRoute.bookDetail(book: book),
+        ),
+      );
+    },
+  );
+
+  /// The grid layout: cover on top, title and author below, as many columns as the user chose.
+  Widget _grid(AppLocalizations l10n, List<Book> books, ExploreLayout layout) {
+    final M3ETheme tokens = context.m3e;
+    final Orientation orientation = MediaQuery.orientationOf(context);
+
+    return GridView.builder(
+      padding: EdgeInsets.all(tokens.spacing.md),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: layout.columnsFor(orientation),
+        crossAxisSpacing: tokens.spacing.sm,
+        mainAxisSpacing: tokens.spacing.sm,
+        childAspectRatio: 0.52,
+      ),
+      itemCount: books.length,
+      itemBuilder: (BuildContext context, int index) {
+        final Book book = books[index];
+
+        return InkWell(
+          onTap: () => pushBookSourceRoute(
+            context,
+            BookSourceRoute.bookDetail(book: book),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                // 封面的宽高由格子决定，不写死像素（C-UI-6）。
+                child: LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) =>
+                      CoverImage(
+                        url: book.coverUrl,
+                        width: constraints.maxWidth,
+                        height: constraints.maxHeight,
+                      ),
+                ),
+              ),
+              SizedBox(height: tokens.spacing.xs),
+              Text(
+                book.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: tokens.typography.base.bodySmall,
+              ),
+              if (book.author case final String author when author.isNotEmpty)
+                Text(
+                  author,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tokens.typography.base.labelSmall,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Lets the user pick the grid's column count for the **current** orientation.
+  ///
+  /// 1–10 like upstream (`DECISIONS.md` #77); the value is written on release of the slider, not on
+  /// every frame.
+  void _openColumnsSheet(ExploreLayout layout) {
+    final Orientation orientation = MediaQuery.orientationOf(context);
+
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (BuildContext context) => _ColumnsSheet(
+          initial: layout.columnsFor(orientation),
+          onChanged: (int columns) => unawaited(
+            ref
+                .read(exploreLayoutControllerProvider.notifier)
+                .setColumns(orientation, columns),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The columns sheet: a slider between [minExploreGridColumns] and [maxExploreGridColumns].
+class _ColumnsSheet extends StatefulWidget {
+  const _ColumnsSheet({required this.initial, required this.onChanged});
+
+  final int initial;
+  final void Function(int columns) onChanged;
+
+  @override
+  State<_ColumnsSheet> createState() => _ColumnsSheetState();
+}
+
+class _ColumnsSheetState extends State<_ColumnsSheet> {
+  late int _columns = widget.initial;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final M3ETheme tokens = context.m3e;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.all(tokens.spacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              l10n.exploreGridColumnsAction,
+              style: tokens.typography.base.titleMedium,
+            ),
+            SizedBox(height: tokens.spacing.sm),
+            Text(
+              l10n.exploreGridColumnsValue(_columns),
+              style: tokens.typography.base.bodySmall,
+            ),
+            Slider(
+              value: _columns.toDouble(),
+              min: minExploreGridColumns.toDouble(),
+              max: maxExploreGridColumns.toDouble(),
+              divisions: maxExploreGridColumns - minExploreGridColumns,
+              label: '$_columns',
+              onChanged: (double value) =>
+                  setState(() => _columns = value.round()),
+              onChangeEnd: (double value) => widget.onChanged(value.round()),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

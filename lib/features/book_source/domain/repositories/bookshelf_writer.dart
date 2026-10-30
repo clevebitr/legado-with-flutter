@@ -76,8 +76,10 @@ final class ShelfMembership {
   /// Creates a membership snapshot.
   const ShelfMembership({
     required this.onShelf,
+    this.id,
     this.groupId,
     this.customCoverPath,
+    this.customIntro,
     this.progressChapterName,
     this.groups = const <ShelfGroupOption>[],
   });
@@ -88,11 +90,17 @@ final class ShelfMembership {
   /// Whether the book has a shelf row at all.
   final bool onShelf;
 
+  /// The shelf row's id, or `null` when [onShelf] is false; editing the details needs it.
+  final int? id;
+
   /// The group the row is in, or `null` for 「未分组」.
   final int? groupId;
 
   /// Absolute path of the user's own cover, or `null` when the source's cover is shown.
   final String? customCoverPath;
+
+  /// The introduction the user wrote, or `null` to show the source's (M33, ADR-0092).
+  final String? customIntro;
 
   /// The chapter the user stopped at, or `null` when the row has no progress yet.
   ///

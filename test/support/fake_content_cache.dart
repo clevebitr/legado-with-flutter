@@ -27,6 +27,9 @@ final class FakeContentCache implements ContentCache {
   /// The `bookUrl` of every write, in order (`null` for an unscoped write).
   final List<String?> writeScopes = <String?>[];
 
+  /// Whether each write asked for a persistent (non-expiring) entry, in order (ADR-0097).
+  final List<bool> writePersistent = <bool>[];
+
   /// The per-book counts/clears asked for, in order.
   final List<String> scopeCalls = <String>[];
 
@@ -43,9 +46,11 @@ final class FakeContentCache implements ContentCache {
     required String url,
     required String body,
     String? bookUrl,
+    bool persistent = false,
   }) async {
     writes.add('$sourceId|$url');
     writeScopes.add(bookUrl);
+    writePersistent.add(persistent);
     entries['$sourceId|$url'] = body;
   }
 

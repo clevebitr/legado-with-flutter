@@ -90,6 +90,19 @@ abstract interface class BookshelfRepository {
   /// Remembers [path] as entry [id]'s own cover, or clears it with `null`.
   Future<void> saveCustomCover({required int id, required String? path});
 
+  /// Writes the details the user edited by hand: title, author and their own introduction
+  /// (M33, ADR-0092).
+  ///
+  /// [customIntro] replaces the source's snapshot in the UI; `null` means «show the source's
+  /// intro again». The rest of the row is untouched: a refresh of the book must not undo the edit,
+  /// and an edit must not overwrite the snapshot.
+  Future<void> updateDetails({
+    required int id,
+    required String name,
+    required String? author,
+    required String? customIntro,
+  });
+
   /// The entry of `(sourceUrl, bookUrl)`, or `null` when the book is not on the shelf.
   ///
   /// The detail page's group/cover sheet needs the stored row, and looking it up by identity keeps

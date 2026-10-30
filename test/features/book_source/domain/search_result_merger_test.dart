@@ -285,8 +285,61 @@ void main() {
       expect(book.origins, <String>['https://a.test']);
     });
 
+    test('fromHit_whenCalled_keepsThatOriginSnapshot', () {
+      final SearchBook book = SearchBook.fromHit(
+        _hit('剑来', author: '作者', url: 'https://a.test/1'),
+        sourceUrl: 'https://a.test',
+      );
+
+      expect(book.hits.single.sourceUrl, 'https://a.test');
+      expect(book.hits.single.url, 'https://a.test/1');
+      expect(book.hits.single.author, '作者');
+    });
+
     test('mergeKeyOf_whenCalled_trimsAndFoldsCase', () {
       expect(mergeKeyOf('  剑来 ABC '), '剑来 abc');
+    });
+  });
+
+  group('SearchResultMerger source snapshots', () {
+    test('add_givenTheSameBookInTwoSources_keepsBothSnapshots', () {
+      // 「4 个来源」要能按任意一个源打开：合并行必须保留每源自己的地址（ADR-0091 §决策 6）。
+      final SearchResultMerger merger = SearchResultMerger(
+        keyword: '剑来',
+        mode: SearchMatchMode.defaultMode,
+      );
+
+      merger.add(<Book>[
+        _hit('剑来', author: '作者', url: 'https://a.test/1'),
+      ], sourceUrl: 'https://a.test');
+      merger.add(<Book>[
+        _hit('剑来', author: '作者', url: 'https://b.test/2'),
+      ], sourceUrl: 'https://b.test');
+
+      final SearchBook merged = merger.books.single;
+      expect(merged.origins, <String>['https://a.test', 'https://b.test']);
+      expect(merged.hits.map((OriginHit hit) => hit.url), <String>[
+        'https://a.test/1',
+        'https://b.test/2',
+      ]);
+    });
+
+    test('add_givenTwoNamelessHits_keepsThemApart', () {
+      // 空书名的合并键曾经是 `('','')`，不同源的无名书会叠成一行（DECISIONS #75）。
+      final SearchResultMerger merger = SearchResultMerger(
+        keyword: '无关',
+        mode: SearchMatchMode.defaultMode,
+      );
+
+      merger.add(<Book>[
+        _hit('', url: 'https://a.test/1'),
+      ], sourceUrl: 'https://a.test');
+      merger.add(<Book>[
+        _hit('', url: 'https://b.test/2'),
+      ], sourceUrl: 'https://b.test');
+
+      expect(merger.books, hasLength(2));
+      expect(searchBookKeyOf(merger.books.first).url, 'https://a.test/1');
     });
   });
 }

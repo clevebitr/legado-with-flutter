@@ -38,6 +38,7 @@ import 'fake_book_source_view_store.dart';
 import 'fake_bookshelf_repository.dart';
 import 'fake_bookshelf_writer.dart';
 import 'fake_content_cache.dart';
+import 'fake_explore_layout_store.dart';
 import 'fake_http_client.dart';
 import 'fake_log_printer.dart';
 import 'fake_search_scope_store.dart';
@@ -150,6 +151,7 @@ Future<ProviderContainer?> pumpBookSourcePage(
   FakeBookSourceRepository? repository,
   FakeBookshelfWriter? writer,
   FakeContentCache? contentCache,
+  FakeExploreLayoutStore? exploreLayoutStore,
 }) async {
   _fixViewSize(tester);
 
@@ -184,6 +186,10 @@ Future<ProviderContainer?> pumpBookSourcePage(
         contentCache ?? FakeContentCache(),
       ),
       if (writer != null) bookshelfWriterProvider.overrideWithValue(writer),
+      // 发现页的布局偏好是 `shared_preferences`：页面测试用内存替身（C-NET-9 的轻量开关）。
+      exploreLayoutStoreProvider.overrideWith(
+        (Ref ref) async => exploreLayoutStore ?? FakeExploreLayoutStore(),
+      ),
       appLoggerProvider.overrideWithValue(_logger()),
     ],
   );

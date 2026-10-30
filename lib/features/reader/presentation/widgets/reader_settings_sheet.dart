@@ -209,6 +209,17 @@ class ReaderSettingsSheet extends StatelessWidget {
               onChanged: (bool value) =>
                   onChanged(settings.copyWith(showReaderStatus: value)),
             ),
+            // 自动翻页间隔（ADR-0093 §决策 1）：开关在工具条上，这里只调快慢。
+            _slider(
+              context,
+              label: l10n.readerAutoPageInterval(settings.autoPageSeconds),
+              value: settings.autoPageSeconds.toDouble(),
+              min: minReaderAutoPageSeconds.toDouble(),
+              max: maxReaderAutoPageSeconds.toDouble(),
+              divisions: maxReaderAutoPageSeconds - minReaderAutoPageSeconds,
+              onChanged: (double value) =>
+                  onChanged(settings.copyWith(autoPageSeconds: value.round())),
+            ),
           ],
         ),
       ),

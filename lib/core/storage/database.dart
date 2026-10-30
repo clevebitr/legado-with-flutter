@@ -33,7 +33,7 @@ class ReaderDatabase extends _$ReaderDatabase {
   ReaderDatabase(super.e);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -131,6 +131,11 @@ class ReaderDatabase extends _$ReaderDatabase {
       // 新列加进 v12 及更早的库，与对应 schema 比对时多出一列。
       if (from < 13 && to >= 13) {
         await _addColumnIfMissing(m, bookSources, bookSources.loginHeader);
+      }
+      // v14 给书架加「用户写的简介」列（M33，ADR-0092）：`intro` 仍是书源快照，用户编辑过的简介
+      // 单独存，重新加入书架时不会被刷新掉。
+      if (from < 14 && to >= 14) {
+        await _addColumnIfMissing(m, books, books.customIntro);
       }
     },
   );
