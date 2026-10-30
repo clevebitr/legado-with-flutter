@@ -1520,3 +1520,19 @@ M38 落地（ADR-0097），按用户口径「进入阅读页就缓存后面 15 �
 门禁：format / analyze 零警告 / 2875 用例全绿 / coverage 98.38% · 96.28% · 94.96% / 生成物二次构建无 diff。文档：`book-source.md` §4.2 缓存注记、`roadmap.md` §5.2 与新增 §3.15。
 
 **已知边界（写进 ADR）**：`persistent` 只在写时生效——一本书在加入书架之前写下的条目仍按 3 天过期，过期后下一次读取会重写为永久条目；不做「加架时批量改写」的全表更新（缓存可再生，多一次请求比一次全表更新划算）。
+
+## 2026-10-30 — 发布 v1.0.0：dev→main 的整理、冲突收编与发版结果
+
+发布 v1.0.0 的过程与结果（2026-10-30）。
+
+**提交**（dev）：`9b6f614` 代码（M29–M38，98 文件）/ `b3155e6` 文档（7 条 ADR + roadmap/ui-gap/architecture/book-source/engine-parity + DECISIONS/PLAN）/ `69aa443` .gitignore 收 `devtools_options.yaml` / `52a9154` 版本 1.0.0 + CHANGELOG / `5ccacef` 收编 main 血缘 / `a420417` 修「关于」页与本地回退版本号。
+
+**main 与 dev 的分岔**：main 比 dev 多两条提交（#45 三通道发布、#47 数据/主题/引擎重建），它们是同一条线更早的 squash；dev 已含其全部内容。main 独有文件只有 `redaction.dart`（ADR-0082 已取消脱敏）、旧换源 sheet/端口（ADR-0091 已退役）、三份被替代的测试（`book_source_view_notifier_test` / `book_source_list_page_batch_test` / `reader_page_audio_test`，dev 有对应覆盖）。因此用 **`git merge -s ours origin/main`** 记录合并、保留 dev 的树——156 个冲突一次清零，且 main 成为 dev 的祖先。合并提交里逐条写明了丢掉的 5 个文件与理由。
+
+**PR**：复用并整理既有 #48（原 `chore(release): 0.2.0`，一直未合），改标题为 `chore(release): 1.0.0`、按模板重写正文（门禁实测输出、影响范围、ADR 清单、待真机验收项）。checks 全绿（verify 9m10s、android 6m38s）后 **squash 合并** → main `8375e44`。
+
+**注意**：`gh pr merge --squash` 默认删除了 `dev` 远端分支，已立即 `git push origin dev` 重建（ADR-0079 要求 dev 长期存在）——后续用 merge 时记得 `--delete-branch=false`。
+
+**发版**：`git tag -a v1.0.0`（tag 消息含本版要点）+ push → Release workflow `41011633658` 全绿（meta / gate / android / windows / ios / publish），GitHub Release `v1.0.0` 已发布、非 pre-release，四个产物：windows-x64.zip 26.7 MB、android.apk 91.7 MB、android.aab 89.8 MB、ios-unsigned.xcarchive.zip 60.5 MB。
+
+**收尾状态**：`origin/main` 与 `origin/dev` 的树完全一致（squash 后无回灌差异），本地工作树回到 `dev`。
