@@ -5,44 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2026-10-27
+## [1.0.0] - 2026-10-30
 
-The engine-alignment milestone (M25) and the diagnostics foundation. 2 657 host tests, `flutter analyze`
-clean.
+第一个正式版：从 0.2.0 以来的阅读体验线、换源与搜索、书架编辑与缓存策略。2 875 条宿主测试，
+`flutter analyze` 零警告，覆盖率 98.38% / 96.28% / 94.96%（核心 / 领域 / 数据层）。
 
-### Added
+### Reading (M26–M38)
 
-- **`source` object completed (S5a).** The sandbox sees the fields the corpus reads (`key`,
-  `bookSourceUrl`, `bookSourceName`, `bookSourceComment`, `header`, `loginUrl`), the keyed `put`/`get`
-  store, upstream's no-argument whole-variable shape, `getLoginHeaderMap`/`removeLoginHeader` (log-out
-  also drops the source's cookies) and `putLoginInfo`/`removeLoginInfo` written through to the source row.
-- **XPath (S5b).** An in-repo subset (paths, node tests, eight axes, the predicates the corpus uses and a
-  union) replaces the named rejection; anything outside it reports `unsupported:xpath:<syntax>`.
-  ADR-0080 records why no dependency was usable.
-- **Rhino package shim (S5d).** `Packages.java.lang.String`/`System`/`Thread`, `java.util.UUID`/`Arrays`/
-  `HashMap`/`ArrayList`, `android.util.Base64`, `TextUtils`, hutool `DigestUtil`/`Base64` and Legado's
-  `StrResponse` work; every other member stays a named rejection (ADR-0081).
-- **`:regex` list rules (S5e).** A regex chain on `&&`, one item per match, `$N` templates on the item's
-  fields.
-- **File logging (ADR-0082).** Logs go to `app-YYYY-MM-DD.log` under the app's support directory (one file
-  per day, seven days kept, 20 MB cap), the level is switchable at runtime in Settings, and Dart-side
-  crashes are recorded with their stacks.
+- **连续阅读与单一页表.** 相邻章正文接成一条跨章阅读流（ADR-0085），页表由页面统一测量、widget 只画不量
+  （ADR-0087）；章标题成为章首章头，正文首行的重复标题被剥离。
+- **预取与滚动稳定.** ±15 章预取、队列化、同一时刻一个请求（ADR-0088）；跨章不换屏、不打断惯性、
+  上滑回上一章不跳到章首（ADR-0090），目录更新不挪动读者（ADR-0089）。**预取顺序改为后 15 章优先**
+  （ADR-0097）：进入阅读页就先把后面 15 章填好。
+- **自动翻页**（ADR-0093）：间隔 3–60 秒（默认 15，随阅读轴持久化），工具条开关，点正文 / 翻章 /
+  起朗读 / 说明书末都会停。
+- **阅读内净化开关**（ADR-0094）：工具条打开替换净化面板，逐条开关；改动后只清这本书的正文缓存并重读当前章。
+- **目录按卷折叠**（ADR-0095）：`isVolume` 渲染为可折叠组头，搜索时忽略折叠。
+- **键盘翻页**（ADR-0096）：→/↓/PageDown/空格 翻页，←/↑/PageUp 回页（Android 音量键登记未做）。
+- 阅读舒适度：常亮、护眼滤镜、常驻状态行（章节 / 进度 / 时间 / 电量）、亮度遮罩、8 条排版轴（ADR-0075/0086）。
 
-### Changed
+### Sources, search and cache
 
-- **Logs are no longer redacted** (release included): URLs, search keywords and raw error text are written
-  as-is. Request headers and page bodies are still never handed to the logger (C-SEC-4).
-- **Chapter bodies are plain text.** Every `content` match now participates (upstream's `getString` join)
-  and `@html`/`@all` markup is converted before `replaceRegex` and the purge rules run.
+- **换源重做**（ADR-0091）：阅读页与详情页弹出同一个面板，关键词可改、范围可选（全部 / 分组 / 点名，
+  独立记忆）、三个开关（校验作者 / 加载详情 / 加载目录）、进度条与计数、开始 / 暂停 / 恢复 / 停止，
+  点某个源后才进章节列表并自动对齐，确认后才写库。无名书不再被判死刑：标题读不到时按作者搜。
+- **搜索结果选源**（ADR-0091 §决策 6）：合并条目保留每个源的快照，点开先选来源再进详情。
+- **发现页两种布局**：列表 / 网格切换，网格列数 1–10 且横竖屏分别记忆（ADR-0097 记录口径）。
+- **正文缓存寿命**（ADR-0097）：非在架书 3 天，在架书写入为无过期、直到用户清掉这本书的缓存。
+- **目录翻页上限 50 → 500**：真机日志里多本长书的尾部章节曾被截断（ADR-0097 背景）。
 
-### Fixed
+### Shelf
 
-- A chapter whose `content` rule matches per paragraph no longer collapses to one line.
-- Chapters whose rule yields HTML no longer show `<p>`/`<br>` tags in the reader.
-- The corpus census counted leading `@css:` rules, `{{...}}` templates and `+@css:` prefixes as nested
-  extraction segments; matrix #30 is now correctly zero sources (S5c).
-
-## [Unreleased]
+- **编辑书籍详情**（ADR-0092）：书名 / 作者 / 封面 / 自己的简介；`books.custom_intro`（schemaVersion 13 → 14）、
+  备份格式带该键、旧备份缺键按「保留本地」合并。书架行菜单与详情页「编辑」两个入口。
 
 ### Mobile exports and log sharing (ADR-0083)
 
@@ -3327,3 +3322,40 @@ or handed back to the dev team (code and evidence).
 - `applicationId` is still the Flutter default `com.example.flutter_reader` and the release
   build reuses the debug signing config; both must be replaced before release
   (`docs/dev/platform.md` §8.2).
+
+## [0.2.0] - 2026-10-27
+
+The engine-alignment milestone (M25) and the diagnostics foundation. 2 657 host tests, `flutter analyze`
+clean.
+
+### Added
+
+- **`source` object completed (S5a).** The sandbox sees the fields the corpus reads (`key`,
+  `bookSourceUrl`, `bookSourceName`, `bookSourceComment`, `header`, `loginUrl`), the keyed `put`/`get`
+  store, upstream's no-argument whole-variable shape, `getLoginHeaderMap`/`removeLoginHeader` (log-out
+  also drops the source's cookies) and `putLoginInfo`/`removeLoginInfo` written through to the source row.
+- **XPath (S5b).** An in-repo subset (paths, node tests, eight axes, the predicates the corpus uses and a
+  union) replaces the named rejection; anything outside it reports `unsupported:xpath:<syntax>`.
+  ADR-0080 records why no dependency was usable.
+- **Rhino package shim (S5d).** `Packages.java.lang.String`/`System`/`Thread`, `java.util.UUID`/`Arrays`/
+  `HashMap`/`ArrayList`, `android.util.Base64`, `TextUtils`, hutool `DigestUtil`/`Base64` and Legado's
+  `StrResponse` work; every other member stays a named rejection (ADR-0081).
+- **`:regex` list rules (S5e).** A regex chain on `&&`, one item per match, `$N` templates on the item's
+  fields.
+- **File logging (ADR-0082).** Logs go to `app-YYYY-MM-DD.log` under the app's support directory (one file
+  per day, seven days kept, 20 MB cap), the level is switchable at runtime in Settings, and Dart-side
+  crashes are recorded with their stacks.
+
+### Changed
+
+- **Logs are no longer redacted** (release included): URLs, search keywords and raw error text are written
+  as-is. Request headers and page bodies are still never handed to the logger (C-SEC-4).
+- **Chapter bodies are plain text.** Every `content` match now participates (upstream's `getString` join)
+  and `@html`/`@all` markup is converted before `replaceRegex` and the purge rules run.
+
+### Fixed
+
+- A chapter whose `content` rule matches per paragraph no longer collapses to one line.
+- Chapters whose rule yields HTML no longer show `<p>`/`<br>` tags in the reader.
+- The corpus census counted leading `@css:` rules, `{{...}}` templates and `+@css:` prefixes as nested
+  extraction segments; matrix #30 is now correctly zero sources (S5c).
