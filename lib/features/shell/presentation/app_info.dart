@@ -15,7 +15,7 @@ const String appVersion = String.fromEnvironment(
 );
 
 /// `pubspec.yaml`'s `version:`, kept in sync by `app_info_test.dart`.
-const String _manifestVersion = '0.2.0';
+const String _manifestVersion = '1.0.0';
 
 /// Where the Corresponding Source of this build is published (GPL-3.0 §6, C-UI-9).
 const String appRepositoryUrl =
