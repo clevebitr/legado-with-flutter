@@ -61,7 +61,7 @@
 | `imageStyle`（`full`/`single`/`left`/`right`/居中） | `ContentRule.kt:20` | **够用**：`full` / `single` / 默认三分支；`left` / `right` 未实现（ADR-0069 G5） | **49 源声明，取值只有 `FULL`/`0`/`full`/`Full`**（§9.1） | 维持（`left`/`right` 语料命中 0） |
 | 正文 HTML → 纯文本（本仓**有意**与上游不同） | `BookContent.kt:207-216`、`HtmlFormatter.kt:151-195`（上游保留 HTML，由富文本视图渲染） | **已做**（2026-10-27）：`content` 的每个匹配都参与（上游 `getString` 的换行拼接），并在 `replaceRegex` 之前把 HTML 转成纯文本（块级标签→换行、行内剥掉、script/style 丢弃、实体解码、图片丢弃）。阅读端是纯文本，所以这是必要差异 | **83 / 249 条 `content` 规则产出 HTML**（2026-10-27 语料） | 有意差异（触发 = 阅读端支持富文本并需要内联图时改成上游口径） |
 | 正文分页并发（多值 `nextContentUrl`，≤4） | `BookContent.kt:113-141` | 串行 | | **已知热点**（M26 R4） |
-| ✅ 「下一页 == 下一章」提前停止 | `BookContent.kt:90-96`、`BookSourceCheckRepository.kt:222-230` | **已对齐**（M27 第二轮）：`walk` 比较下一页与 `nextChapterUrl`（两边绝对化）；校验阶段把目录第 2 章传下去 | 14 源跑满 50 页（本机 254 源） | 已对齐（`book-source.md` §4.1 注记） |
+| ✅ 「下一页 == 下一章」提前停止 | `BookContent.kt:90-96`、`BookSourceCheckRepository.kt:222-230` | **已对齐**（M27 第二轮）：`walk` 比较下一页与 `nextChapterUrl`（两边绝对化）；校验阶段把目录第 2 章传下去 | 14 源跑满旧 50 页上限（本机 254 源）；上限已抬到 500（`DECISIONS.md` #85） | 已对齐（`book-source.md` §4.1 注记） |
 
 ### 3.2 `ruleToc`
 

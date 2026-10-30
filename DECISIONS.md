@@ -1335,3 +1335,188 @@ Android 校验通知（用户裁决）：
 - `scroll_acrossAChapterBoundary_movesSmoothly` 改写：原用例在循环外抓一次 `ScrollPosition`，而重设位置会换掉这个对象（断言其实在读已脱离的对象）；现在每步读活的位置，容差从 ±120 收紧到「一步不超过拖动量」。
 
 门禁：format / analyze 零警告 / 2837 用例全绿 / coverage 98.52% · 96.55% · 95.71% / build_runner 生成物无 diff。提交 cc7754f。
+
+## 2026-10-30 — 换源重构：全屏两步页 + 渐进搜索（用户裁决）
+
+用户 2026-10-29 裁决：换源界面用**全屏两步页**（第一步源列表 + 进度 + 范围 + 选项，点某个源后同页切到章节列表）；只有点「开始搜索」才跑，之前它是一个按钮；换源过程必须有进度条与加载态；点新书源后才显示章节选择。
+
+默认值对齐上游 `ChangeSourceSettings`：校验作者 / 加载详情 / 加载目录 / 字数 **默认全关**（只跑搜索，请求最省），用户按需打开。范围**独立持久化**（对齐上游 changeSourceSettings.searchScope，与搜索页互不干扰），但复用 `BookSearchScope` + `resolveSearchSources` + 现有 scope 选择 sheet 组件。
+
+章节：默认自动对齐（同名 → 包含 → 同索引 clamp，沿用 `alignChapterIndex`），用户可在一屏里改选；「确认换源」才提交，提交期再有进度。迁移第一版固定为 阅读进度 / 分组 / 置顶 / 状态 / 自定义封面（浏览器式勾选表留后续）。
+
+页面归属：`book_source` 的 `ChangeSourcePage`；阅读器经 `AppNavigation` 新端口方法进入并只收 primitive 结果（C-ARCH-2），详情页直接 push。进度事件 = 已处理源 / 总源 / 已找到条数 / 当前源名，运行中可暂停与停止，停止保留已找出的行。
+
+## 2026-10-30 — 无名命中（标题取不到）的根因修复与合并键兜底
+
+现象：朝花夕拾这类书在详情/书架里有标题，但换源时提示「其他书源没有这本书」；有的书压根没标题。
+
+根因链（代码事实）：`book_list_fields.dart` 的 `readBooks` 对 `name` 字段用 `name.dataOrNull ?? ''`——规则失败或没命中时**静默变成空串**；`SearchResultMerger` 的合并键是 `(name, author)`，空名命中会全部塌进 `other` 桶并互相合并；`SwitchBookSource.candidates` 在 `bookName.trim().isEmpty` 时**直接返回空列表**，所以无名书永远换不了源。
+
+修法（三处）：
+1. `readBooks`：`name` 取不到时打**节流警告**并带上 `rulePath=$fieldPrefix.name` 与 sourceId（能定位到具体源的具体规则）；URL 有效的命中仍保留，不静默丢。
+2. 合并键：`searchBookKeyOf` 在 name 为空时回落到 `url`，避免不同源的无名命中被合并成一行（无名行仍显示，可点开）。
+3. 换源：关键词**可编辑**（默认书名）；书名为空时关键词回落作者；`candidates` 不再因空关键词短路；匹配接受「作者相同」的命中；排序仍需同名优先。
+
+验收：真机复跑用户报告的源，名字能解析出来，或日志能把失败钉到 `…name` 规则；无名书籍在换源页仍能出候选并完成切换。
+
+## 2026-10-30 — 搜索结果合并条目保留每源快照 + 点条目选源
+
+用户 2026-10-29 裁决：合并条目（朝花夕拾 / 4 个来源）点一下弹「来源选择」sheet，列出每个源的书名/作者/最新章，选哪个就按哪个源打开详情页；合并列表本身保持不变（不改上游式「按源分组」）。
+
+实现要点：`SearchBook` 现在只留**第一个源**的 `url/author/lastChapter/coverUrl`，`origins` 只是 URL 列表——选中第 2 个源没有任何地址可用。因此 `SearchBook` 增 `hits: List<OriginHit>`（每源快照：sourceUrl、url、author、lastChapter、kind、coverUrl、updateTime），merger 合并时保留；合并键与桶排序不变。sheet 的数据全部来自这条快照，**不重新发请求**；来源已被删除的行给出「来源已删除」而不是打开错书。
+
+## 2026-10-30 — 发现页两种布局（列表 / 网格 + 列数可调）
+
+用户 2026-10-29 裁决：发现页要支持上游的两种布局，**列表 + 网格**，网格**列数可调**（1–10），横竖屏分别记忆。
+
+对齐上游 `ExploreShowViewModel`：`layoutState`（0=列表 / 1=网格）+ `gridCount`（竖屏默认 3、横屏默认 7），均持久化；切换按钮在 AppBar，网格模式下再给一个列数入口。网格项 = 封面 + 标题(+作者)，与列表项共用同一 `Book` 数据，点击行为一致（打开详情页）。偏好写 `shared_preferences`（与上游一致的轻量开关；不进备份，因为它是设备相关外观偏好）。
+
+## 2026-10-30 — 书架编辑书籍详情：第一版字段与 custom_intro 新列
+
+用户 2026-10-29 裁决：书架里的书要能自由编辑详情，第一版覆盖 **书名 / 作者 / 封面 / 简介**（对齐上游 `BookInfoEditViewModel` 最常用的四项，其余备注/分类标签/阅读设置留后续）。
+
+要点：
+- `books` 表已有 `custom_cover_path`（M19 换封面）；`intro` 是**书源快照**，直接改会被下一次「加入书架」刷新覆盖 → 新增 `custom_intro` 列（schemaVersion 13 → 14，走 `_addColumnIfMissing`），显示时 custom 优先、回落快照。上游同形（`customIntro` vs `intro`）。
+- 备份 `books` 表写入/读取 `custom_intro`；旧备份缺这个键按 `null`，恢复不报错。
+- 书名/作者直接覆盖快照列（上游也是直接改 `book.name/author`）；保存后 `bookshelfProvider` 失效并让打开的阅读器换用新标题。
+- 入口：书架行长按菜单「编辑书籍」+ 书籍详情页菜单；一页表单（`TextFormField` + 封面预览/清除），空书名拒绝保存。
+
+## 2026-10-30 — M29 落地记录：换源内核换成渐进候选（三开关，字数登记未做）
+
+M29 落地（ADR-0091）。改动：新增 `change_source_search.dart`（ChangeSourceSearch + 请求/候选/进度/匹配档位）；`readBooks` 书名缺失改为按 sourceId+rulePath 节流告警并保留命中；`SearchBook` 增 `OriginHit`/`hits`，`SearchBookKey` 空名回落 URL；merger 合并时保留每源快照；`SwitchBookSource.candidates` 改为新用例的薄封装（旧 UI 立刻拿到修复，不留两份匹配逻辑）；详情页换源把 `info.author` 传下去，标题读不出来时按作者搜。
+
+**口径调整（对齐 ADR-0091 §决策 4）：** 换源选项从「四个开关」收敛为**三个**（校验作者 / 加载详情 / 加载目录）。上游的「字数」要多抓一次正文、且要在对齐章节之前知道章节索引，收益不成立 → 登记为有意不做，触发条件 = 用户要求候选列表显示字数。
+
+牙：`change_source_search_test.dart`（进度序列 1/2/3 与 total、空标题回落作者、空标题且作者不符不冒充、checkAuthor 拒绝、exact 排在 partial 前、loadInfo+loadToc 补字段、详情页失败仍保留候选、取消保留已得、全失败报失败、无关键词不发请求）；`search_result_merger_test.dart` 补「同书两源留两份快照」「两条无名命中不合并」；`explore_books_test.dart` 补「无名命中保留 + rulePath=exploreRule.name」。
+
+门禁：format / analyze 零警告 / 2851 用例全绿 / coverage 98.52% · 96.31% · 95.71% / 生成物二次构建无 diff。
+
+## 2026-10-30 — M30 落地记录：换源全屏两步页（含路由例外与旧 sheet 退役）
+
+M30 落地（ADR-0091 §决策 1/1b）。新增 `ChangeSourcePage`（全屏两步、进度/范围/三开关/开始-暂停-停止 → 章节选择 + 确认换源），状态在 `ChangeSourceController`（`@riverpod` 家族，key = `ChangeSourceTarget` 记录，离开即销毁）；范围独立存储 `bookSource.changeSourceScope`；范围选择器抽成 `source_scope_sheet.dart` 共享组件（`sourceScopeLabel` 也挪过去），搜索页同步换用。
+
+入口：详情页直接 `MaterialPageRoute<ChangeSourceSelection>`；阅读器经新端口 `AppNavigation.openChangeSource(ChangeSourceLaunch) → ChangeSourceOutcome?`（`core/router/change_source_contract.dart`），装配根负责「改写书架身份 + 切选中源」，阅读器只做就地重定位。**删除**：`ChangeBookSourceSheet`、`ReaderSourceSheet`、`BookSourceSwitcher` 端口与两个旧测试；`SwitchBookSource` 收敛成纯映射（`withChapters` / `alignChapterIndex`），不再持 I/O。
+
+两处口径记下：
+1. **页面表例外**：`AppRouter` 的表是 `Route<void>`，而这一页要把选择当结果返回；不为它泛化路由表（会改到所有已登记路由），等出现第二个带返回值页面再泛型化。回链写在 `architecture.md` §6。
+2. **无「提交中进度」**：序号迁移与选源都是本地写，真正耗时的详情/目录在「点源 → 章节列表」那一步完成（那里有 spinner）。页面 pop 之后才落库，用户看到的是章节列表 + 一次即时返回。
+
+牙：换源页 4 条 Widget（首帧零请求；开始后 `searchProgress(2,2)` 与「已找到 2 条」；点源后才出现章节并按同名自动对齐、把选中章作为结果返回；范围里没有可搜源时给「没得搜」且零请求）；`switch_book_source_test` 重写为 `withChapters`（身份/作者/封面/最新章/tocUrl 回落）+ 对齐三档与越界钳位。
+
+门禁：format / analyze 零警告 / 2845 用例全绿 / coverage 98.42% · 96.33% · 95.71% / 生成物二次构建无 diff。ARB 新增 13 键中英双语，`l10n_untranslated.json` 为空。
+
+## 2026-10-30 — M31 落地记录：搜索结果「选择来源」sheet
+
+M31 落地（ADR-0091 §决策 6）：`SearchBook.hits`（M29 已建的每源快照）现在被用起来了。新增 `book_source/presentation/widgets/search_source_sheet.dart`：点合并条目弹「选择来源」，每个来源一行 = 源名（从书源表现查）+ 作者 · 最新章 + 封面（全部取自该源快照，零请求）；被删除的源**保留但禁用**并标注「该书源在此期间被删除了」——藏起来会让「4 个来源」看起来在撒谎。只有一个来源时不弹 sheet，保持原来的直达路径（少一次点击）。
+
+选中后：先 `selectedBookSourceProvider.select`，再推详情页；书本地址/作者/封面/最新章全取该源快照的字段。`SearchBook.hits` 为空时（M29 之前的合并行兜底）用 `origins.first` + 行内字段合成一条。
+
+牙：`search_books_page_test` 新增「两源命中同一本书 → 来源数 2 → 点行弹 sheet → 选第二个源 → 详情页按 b.test 请求书籍页」；旧「单个来源直接打开详情页」用例保持通过（回归保护直达路径）。
+
+门禁：format / analyze 零警告 / 2846 用例全绿 / coverage 98.42% · 96.33% · 95.71% / 生成物二次构建无 diff。ARB 新增 1 键（`searchSourceSheetTitle`）中英双语。
+
+## 2026-10-30 — M32 落地记录：发现页列表/网格 + 列数分横竖屏记忆
+
+M32 落地（`DECISIONS.md` #77）：发现页支持**列表 / 网格**两种布局，AppBar 一个按钮切换（图标 + tooltip 都随当前布局翻），网格模式下多一个「网格列数」按钮开底部滑块（1–10，松手才落盘）。
+
+数据面：新端口 `ExploreLayoutStore`（`load` / `save`，total，坏值回落默认）+ 实体 `ExploreLayout`（`isGrid` + `portraitColumns` / `landscapeColumns`，默认 3 / 7，`copyWith` 里做 1–10 钳位——release 没有 assert，存坏值不能让 `GridView` 抛）+ `ExploreLayoutController`（keepAlive，唯一写入者）。偏好键 `bookSource.exploreIsGrid` / `explorePortraitColumns` / `exploreLandscapeColumns`（C-NET-9 的轻量开关，不进备份）。取列数用 `MediaQuery.orientationOf`，横竖屏各用各的。
+
+UI 面：网格项 = 封面（`LayoutBuilder` 取格子尺寸，不写死像素）+ 标题两行 + 作者，点击与列表同一路径推详情页；列表项保持原样。牙：发现页三条 Widget（切到网格并落盘、偏好为网格时打开即网格、把滑块拖到 10 只改竖屏那一份）。
+
+门禁：format / analyze 零警告 / 2849 用例全绿 / coverage 98.42% · 96.34% · 94.93% / 生成物二次构建无 diff。ARB 新增 4 键中英双语。
+
+**留给 M33 的已知点**：`data` 层覆盖率从 95.71% 降到 94.93%（新 store 的实现行只被 Widget 间接覆盖），仍高于 80% 门槛；M33 加迁移测试时顺带补一条 `ExploreLayoutStoreImpl` 的直接单测更稳。
+
+## 2026-10-30 — M33 落地记录：书架编辑书籍详情 + custom_intro（v14）
+
+M33 落地（ADR-0092，`DECISIONS.md` #78）：书架终于能改书源抓错的字段。
+
+**数据**：`books.custom_intro`（nullable，schemaVersion 13→14，`_addColumnIfMissing` 可重入），`drift_schema_v14.json` + `generated_migrations/schema_v14.dart` + v13→v14 迁移用例；仓储一次写入 `updateDetails(id, name, author, customIntro)`（三个字段同一次保存，避免两个 `updatedAt` 让书架顺序跳）；备份 `books` 表多一个 `customIntro` 键，旧备份缺键按 null 保留本地（合并语义，ADR-0073 §决策 3）。
+
+**归属与入口**：编辑页在 `bookshelf`（`ShelfBookEditPage`，路由 `BookshelfRoute.editBook(book:)`，整行随路由走以便填表）；书架行菜单「编辑书籍」；详情页多一个「编辑」按钮，经新端口 `AppNavigation.openShelfBookEdit(context, bookId)` 进入（`ShelfMembership` 增 `id` / `customIntro`）。详情页简介展示改为 `membership.customIntro ?? info.intro`——用户改过的简介立刻生效。
+
+**交互**：封面「选择/改用书源封面」各自立即落盘（取消不是失败）；书名空值拦下不保存；简介留空 = 存 null（回到书源简介）。
+
+**登记未做**：分类/标签、备注、阅读类型、固定类型、每本阅读设置——各自要先有列或动分书阅读设置，触发条件 = 用户点名。
+
+牙：迁移 15 条；仓储 `updateDetails` 两条（写入三项且不动快照 / 清空回落）；备份 `roundTrip_carriesTheUsersOwnIntro`；编辑页 Widget 三条（空书名拦下且不落库 / 三字段写入并关闭 / 留空存 null）。
+
+门禁：format / analyze 零警告 / 2856 用例全绿 / coverage 98.38% · 96.34% · 94.96% / 生成物二次构建无 diff（含 drift schema dump）。ARB 新增 10 键中英双语。
+
+## 2026-10-30 — 换源改回弹层 + 修真机崩溃（UnmountedRefException）
+
+① 修 P0 崩溃（真机日志 `app-2026-10-30.log` 12:07:23 与 12:08:20 两处 `UnmountedRefException` + ERROR CRASH，栈顶都是 `ChangeSourceController.start`）：用户搜索没跑完就关掉换源，`await` 回来后继续对**已销毁**的 provider 写状态。修法三条——`ref.onDispose` 里取消在跑的那批（worker 会在两个源之间退出）、每个 `await` 之后判 `ref.mounted`（书源表 / 搜索结束 / 目录结束）、`onProgress` 回调里也判。回归用例把请求按在 `FakeHttpClient.onRequest` 闸门上，关 sheet 再放行；**去掉任一条守卫该用例即红**。
+
+② 形态按用户要求改回**弹层**（ADR-0091 §决策 1b 修订）：删除全屏 `ChangeSourcePage`，改为 `ChangeSourceSheet` + `showChangeSourceSheet(context, target:)`（`isScrollControlled`、0.92 屏高、`FractionallySizedBox`、键盘 `viewInsets` 顶起），两步在同一个 sheet 内切换（点源后标题变源名 + 返回箭头），**功能一字未减**（关键词 / 范围 chip / 三开关 / 进度条与计数 / 开始-暂停-停止 / 章节选择 + 自动对齐 / 确认换源）。详情页与阅读器走同一个弹层；`architecture.md` §6 的「页面表例外」整条撤回。
+
+门禁：format / analyze 零警告 / 2857 用例全绿 / coverage 98.38% · 96.34% · 94.96% / 生成物二次构建无 diff。ARB 新增 `actionBack`（中英）。
+
+日志复查里另外两条**不是崩溃、但值得记**：
+- `Detail page yielded no book name`（linovel / zhulang / tiandizw / cthulhuclub / rouwen / po18 / yingyuxiaoshuo 等）：这些源的 `searchUrl` 会直接返回**详情页**，而 `ruleBookInfo.name` 读不到 → 按上游语义（`getInfoItem?.let`）就是「空结果」，不是失败。本仓已有一条警告；要不要进一步给用户「这个源搜不到」的提示，取决于是否愿意为此加一个候选空态标记（现在只是一行日志）。
+- `Paging stopped at 50 pages`（多数为 `ruleToc`）+ 同一源连续两次 50 页：目录翻页上限是保护，但这些源的目录确实超过 50 页，**最后几章会缺**。上游 `BookChapterList` 的上限也是 50（`chapterList` 翻页），所以行为一致，登记为已知边界。
+
+## 2026-10-30 — 日志复查：目录 50 页截断（已抬到 500）与三条「与上游一致」的告警
+
+日志复查（`app-2026-10-30.log` / `app-2026-10-29.log`）结论：
+
+**已修（本轮）**
+1. `UnmountedRefException` ×2（换源跑一半关页面）→ 见 #84。
+2. **目录翻页上限 50 → 500**：真机日志里 `m.bequ6.info` / `m.bingfengzw.net` / `wap.po18.in` / `23.224.242.55` / `www.mxjtedu.com` 都撞上 `Paging stopped at 50 pages`，意味着长书**尾部章节缺失**（读到最后跳不过去）。上游 `BookChapterList` 不设固定上限（靠 `nextTocUrl` 收敛 + `nextUrlList` 去重），本仓改成 500 只作失控保护；`book-source.md` §9 / §4.1 注记、`engine-parity.md` 对应行同步改。牙改成「51 页目录必须全部读到、且无 warning」。
+
+**判定为「与上游一致，不是 bug」**
+3. `Detail page yielded no book name`（linovel / zhulang / tiandizw / cthulhuclub / rouwen / po18 / yingyuxiaoshuo 等十余源）：这些源的 `searchUrl` 直接返回详情页，而 `ruleBookInfo.name` 读不到。上游 `getInfoItem()?.let{…}` 同样**不加条目**——所以我们只留一行 warning，不报失败。
+4. `Request failed / Retrying` 与 15s 超时：站点本身慢（`vikbook` / `kxwx`），已有重试 + 单源预算；换源整体 2–3 分钟是源数量的正常代价，界面有进度与停止。
+5. `Search hit without URL skipped` / `Chapter without URL reuses the toc page` / `Volume without URL gets a placeholder`：§7/§9 的既有降级语义，与上游一致。
+
+**未定位（旧日志，页面栈里没有 feature 帧）**
+6. `app-2026-10-29` 10:06 的 `RenderFlex overflowed by 31 pixels`（`RenderSliverMultiBoxAdaptor` → `RenderFlex`，即在某个列表项里）：出现 15 次、形状一致。10-29 的换源面板/阅读换源 sheet 已在 M30 删除，最可能是它们；新版需要复跑确认。若再现，按「列表项 Column 超过固定高度」定位（本仓列表项只有书源行 / 目录行 / 换源行三处）。
+
+**顺手清掉**：`reader_settings.dart` 里三个从未被引用的 `ReaderAutoReadSeconds` 常量（自动翻页未实现，留着就是死代码）。
+
+## 2026-10-30 — M34/M35 落地记录：自动翻页 + 阅读内净化开关
+
+M34 + M35 落地（ADR-0093 / ADR-0094），两项都不动数据库。
+
+**M34 自动翻页**：`ReaderSettings.autoPageSeconds`（3–60，默认 15，prefs 键 `reader.autoPageSeconds`，工厂里 clamp）；驱动是 `ReaderPageTurn`（`ChangeNotifier` 命令对象）——分页 flow `nextPage(300ms)`、滚动 flow `animateTo(+viewport, 300ms)`，因为两个 flow 的控制器会在帧内被替换（ADR-0087 §决策 2），从外面抓控制器必然抓到废弃实例；工具条加播放/暂停 toggle，并把整条工具条改成可横向滚动（10 个按钮在窄屏放不下）；六条停止条件（再点开关 / 点正文 / 翻章 / 起朗读 / 两拍无进展 / dispose）逐个接线。
+
+**M35 阅读内净化**：`reader` 声明 `PurgeRuleSwitches` 端口（`list` + `setEnabled`，原语），默认 unbound（空列表 + warning）；装配根绑到 `rules` 的 `RuleRepository`，写入后 `contentCache.clearForBook(sourceId, bookUrl)` **只清这本书**；面板 `ReaderPurgeSheet` 从工具条（`Icons.auto_fix_high`）打开，逐条开关，切换后 `ref.invalidate(readerContentProvider)` 让当前章与预取章按新规则重读；端口拒绝时给 snackbar 而不是假装开关动了。
+
+牙：M34 —— `ReaderSettings` clamp + prefs 往返；页面级三条（一拍翻一页、点正文停止并回到播放图标、滚动模式滚一屏）。M35 —— 面板四条（列表与开关状态、写这本、端口拒绝、空态）+ 阅读页「点按钮开面板」。
+
+门禁：format / analyze 零警告 / 2867 用例全绿 / coverage 98.38% · 96.28% · 94.96% / 生成物二次构建无 diff。ARB 新增 9 键中英双语。
+
+**仍有未做（登记在 roadmap §3.13）**：音量键/自定义翻页键位、日夜自动切换、目录按卷折叠、字体导入、进度实时云同步、换源「作为新书添加/冲突处理」。
+
+## 2026-10-30 — M36/M37 落地记录：目录按卷折叠 + 键盘翻页
+
+M36 + M37 落地（ADR-0095 / ADR-0096），两项都不动数据。
+
+**M36 目录按卷折叠**：`ReaderTocSheet` 的显示模型从「章节行」变成「组头 / 章节行」两种。`isVolume` 章节
+渲染成组头（展开箭头 + 加粗标题），`onTap` 只折叠、不回调 `onSelected`、不发正文请求；折叠按**原索引**记在
+`Set<int>`，只隐藏「本卷到下一卷之前」的章节，卷标题自身永远可见。默认全展开；**搜索忽略折叠**（命中项必须
+看得见）。倒序仍是整表反转（卷标题跟着走）。当前章居中的估算不受影响（`ListTile` 同高）。
+
+**M37 键盘翻页**：`ReaderPageTurn` 加方向（`next()` / `previous()` + `direction`），分页 flow 用
+`nextPage`/`previousPage`、滚动 flow 用 ±`viewportDimension`（夹到滚动范围）；阅读器用
+`CallbackShortcuts` + `Focus(autofocus: true)` 绑定 →/↓/PageDown/Space 与 ←/↑/PageUp；按键属手动输入，
+先停自动翻页（ADR-0093 §决策 3.2）。**Android 音量键登记未做**：系统先消费音量键，要平台通道拦截并处理
+「用户其实想调音量」的冲突与无障碍语义——触发条件 = 用户点名要音量键。**自定义键位**同样未做（要整套键位编辑器）。
+
+牙：M36 目录 sheet 三条（组头分组且点组头不跳转、折叠只隐藏本卷、折叠中搜索仍出命中）；M37 页面级两条
+（右箭头翻一页、左箭头回一页）。
+
+门禁：format / analyze 零警告 / 2872 用例全绿 / coverage 98.38% · 96.28% · 94.96% / 生成物二次构建无 diff。
+
+## 2026-10-30 — M38 落地记录：正文缓存 3 天 / 在架永久，预取改为后 15 章优先
+
+M38 落地（ADR-0097），按用户口径「进入阅读页就缓存后面 15 章；默认 3 天清；加入书架后一直保留到用户清这本书的缓存」。
+
+**缓存寿命分两档**：`chapterCacheTtl` 12 h → **3 天**；**在架书**写缓存时带 `persistent`，过期时间写哨兵 `DateTime.utc(9999)`（不新增列、不迁移：`expiresAt.isAfter(now)` 语义不变，`deleteExpired` 也不会误删）。「在架」的判定放在**装配根**的正文端口（`_ChapterContentSource`）：每次取正文前 `BookshelfRepository.findByUrl` 查一次（单行索引），结果经 `ChapterRequest.persistCache` → `FetchContent` → `ContentCache.write(persistent:)` 一路透传。每次查而不缓存判定，是因为一条错判成「永久」的条目只有用户手动清理才会消失。清除路径不变：详情页/缓存管理页的「本书缓存」与「全量清理」。
+
+**预取顺序**：`_queuePrefetches` 从「最近优先（+1, −1, +2, −2…）」改为**后 15 章优先**（`+1…+15`，再 `−1…−15`）。半径仍是 ±15、仍串行（ADR-0088 §决策 2 的礼貌性保留），只改顺序——这是「进入即缓存后面 15 章」的直接实现；ADR-0088 索引行标注「顺序已修订（ADR-0097）」。预取本来就在 build 里随会话与目录就绪立刻开始，所以不需要新的触发点。
+
+牙：缓存适配器两条（永久条目跨 10 天仍命中且 `clearExpired` 不动它 / 普通条目 3 天后未命中）；`FetchContent` 一条（`persistCache` 透传到 `write`）；阅读页预取用例改「前向递增、回翻整段排在前向之后」。顺手补了两处 fake 的签名（`FakeContentCache.writePersistent`、`_FailingCacheDao.put`、`tool/spot_check` 的 `_NoContentCache`）。
+
+门禁：format / analyze 零警告 / 2875 用例全绿 / coverage 98.38% · 96.28% · 94.96% / 生成物二次构建无 diff。文档：`book-source.md` §4.2 缓存注记、`roadmap.md` §5.2 与新增 §3.15。
+
+**已知边界（写进 ADR）**：`persistent` 只在写时生效——一本书在加入书架之前写下的条目仍按 3 天过期，过期后下一次读取会重写为永久条目；不做「加架时批量改写」的全表更新（缓存可再生，多一次请求比一次全表更新划算）。
